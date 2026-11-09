@@ -73,7 +73,7 @@ final class AssignmentV1Test extends TestCase
         return ['contract'=>$json,'signature'=>$this->sign($role,$domain,$json)];
     }
 
-    private function createAssignment():void
+    private function createAssignment(int $expectedTotal=1):void
     {
         $this->as('owner');
         $payload=[
@@ -97,7 +97,7 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('assignmentId',$this->assignmentId);
         $this->postJson('/assignments/v1',$input)->assertOk()
             ->assertJsonPath('unchanged',true);
-        $this->assertDatabaseCount('assignment_records_v1',1);
+        $this->assertDatabaseCount('assignment_records_v1',$expectedTotal);
     }
 
     private function invite():string
@@ -235,6 +235,82 @@ final class AssignmentV1Test extends TestCase
             'descriptionMinLength'=>$minDescription,
             'requiredGps'=>$gps,
         ]);
+    }
+
+    public function test_free_assignment_monthly_quota_is_authoritative_and_idempotent():void
+    {
+        $limit=config('plans.plans.free.assignment_creations_per_month');
+        $this->assertSame(3,$limit);
+        $this->as('owner');
+        $this->getJson('/assignments/v1/usage')
+            ->assertOk()->assertJsonPath('planId','free')
+            ->assertJsonPath('limit',3)
+            ->assertJsonPath('remaining',3)
+            ->assertJsonPath('used',0);
+
+        $acceptedIds=[];
+        for($i=1;$i<=3;$i++){
+            $this->assignmentId=(string)Str::uuid();
+            $this->createAssignment($i);
+            $acceptedIds[]=$this->assignmentId;
+            $this->getJson('/assignments/v1/usage')
+                ->assertOk()->assertJsonPath('used',$i)
+                ->assertJsonPath('remaining',3-$i);
+        }
+
+        $last=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $same=['contract'=>$last->contract_json,
+            'signature'=>$last->owner_signature];
+        // Retry signed operation after quota exhaustion: MUST ACK unchanged,
+        // including the same full signed request rather than a new operation.
+        $this->postJson('/assignments/v1',$same)
+            ->assertOk()->assertJsonPath('unchanged',true);
+
+        // Create a different valid signed operation: never count a new
+        // record, even when a client reuses its prior encrypted envelope.
+        $payload=json_decode($last->contract_json,true,32,JSON_THROW_ON_ERROR);
+        $payload['assignmentId']=(string)Str::uuid();
+        $payload['operationId']=(string)Str::uuid();
+        $payload['startsAt']=now()->getTimestampMs();
+        $other=$this->signed('owner','pb3.assignment.v1',$payload);
+        $this->postJson('/assignments/v1',$other)->assertForbidden()
+            ->assertJsonPath('error','assignment.monthly_quota_exceeded')
+            ->assertJsonPath('limit',3);
+        $this->assertDatabaseCount('assignment_records_v1',3);
+
+        // Owner's draft or server-visible state cannot reset billing usage:
+        // finished records are counted too; deleting is not an escape hatch.
+        DB::table('assignment_records_v1')->where('id',$acceptedIds[0])
+            ->update(['state'=>'finished']);
+        $this->getJson('/assignments/v1/usage')
+            ->assertJsonPath('used',3)->assertJsonPath('remaining',0);
+
+        $this->as('outsider');
+        $this->getJson('/assignments/v1/usage')
+            ->assertJsonPath('used',0)->assertJsonPath('remaining',3);
+        // Never expose another account's quota by an accountId query argument.
+        $this->getJson('/assignments/v1/usage?accountId='.
+            urlencode($this->people['owner']['account']))
+            ->assertJsonPath('used',0);
+    }
+
+    public function test_quota_uses_server_utc_month_not_signed_capture_timestamp():void
+    {
+        $this->createAssignment();
+        $url='/assignments/v1/usage';
+        $this->getJson($url)->assertJsonPath('used',1);
+        // A previous calendar month does not consume this month's Free
+        // quota. Records keep the actual original server-created date.
+        DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)
+            ->update(['created_at'=>now('UTC')->subMonth()->startOfMonth()]);
+        $this->getJson($url)->assertJsonPath('used',0)
+            ->assertJsonPath('remaining',3);
+        $this->assignmentId=(string)Str::uuid();
+        $this->createAssignment(2);
+        $this->getJson($url)->assertJsonPath('used',1)
+            ->assertJsonPath('remaining',2);
     }
 
     public function test_policy_history_is_signed_append_only_and_visible_only_after_consent():void
