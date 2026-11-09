@@ -443,6 +443,9 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     // A finishes without deleting contributor-owned ciphertext or old grants.
     await A.getByRole('button',{name:'Завершить задание'}).click()
     await A.getByRole('button',{name:'Синхронизировать'}).click()
+    // Finished assignments leave the Active tab but remain visible in All.
+    await expect(A.locator('.assignment-card')).toHaveCount(0)
+    await A.getByRole('button',{name:'Все',exact:true}).click()
     await expect(A.locator('.assignment-card').first()).toContainText('Завершено')
     await expect(A.getByText('Версия состояния: 2')).toBeVisible()
     await A.getByRole('button',{name:'Обновить материалы'}).click()
