@@ -17,6 +17,9 @@ vi.mock('../features/assignments/application/assignment-outbox', () => ({
   listServerAssignments: mocks.server,
   listVerifiedCapturePolicies: mocks.policies,
   signedCaptureBinding: mocks.binding,
+  signedPolicyRequirements: () => ({
+    requiredCategory:false,descriptionMinLength:0,requiredGps:false,
+  }),
 }))
 
 function deferred<T>() {
@@ -274,7 +277,9 @@ describe('camera session ownership and async permission lifecycle', () => {
     const session = await mount()
     const opened = media(); requests[0]!.resolve(opened.stream); await settle()
     button('Сделать снимок').click(); await settle()
-    expect(mocks.binding).toHaveBeenCalledWith('assignment-a', expect.any(Number))
+    expect(mocks.binding).toHaveBeenCalledWith('assignment-a',expect.any(Number),{
+      category:'',description:'',gps:null,
+    })
     activeSession.value = {...session, accountId: 'account-b'}
     binding.resolve({assignmentId: 'assignment-a', policyRevision: 1}); await settle()
     expect(mocks.capture).not.toHaveBeenCalled()
