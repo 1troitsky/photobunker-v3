@@ -1,0 +1,2234 @@
+{
+  "issue": 25,
+  "productSha": "039762d3bec173b767cbb8898bda92d01e413f26",
+  "qaBaselineSha": "07297a690265a362f8dbaa22f74976e2ebb74405",
+  "qaHarnessSha": "5675a30b4f25ac386d8bc13212e6bfc5665fe142",
+  "runId": "pb3-acceptance-bx6qhcce",
+  "startedUtcEpoch": 1794251557.932919,
+  "versions": {
+    "node": "v22.23.3",
+    "pnpm": "10.20.0",
+    "php": "8.4.27",
+    "composer": "2.10.3",
+    "postgres": "18.6",
+    "garage": "2.5.0",
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37",
+    "nativeSafari": "26.6.2",
+    "macOS": "26.6.2",
+    "laravel": "13.39.0"
+  },
+  "counts": {
+    "vitest": [
+      57
+    ],
+    "phpunit": [
+      44,
+      524
+    ]
+  },
+  "checks": [
+    {
+      "name": "git-head",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "log",
+        "-1",
+        "--format=%H %s"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/git-head.log",
+      "seconds": 0.012
+    },
+    {
+      "name": "source-boundaries",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "diff",
+        "--exit-code",
+        "039762d3bec173b767cbb8898bda92d01e413f26",
+        "--",
+        "apps/api",
+        "apps/web",
+        "tests/e2e",
+        "tests/playwright.config.ts",
+        "package.json",
+        "pnpm-lock.yaml",
+        "compose.p0.yml"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/source-boundaries.log",
+      "seconds": 0.012
+    },
+    {
+      "name": "node-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "node",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/node-version.log",
+      "seconds": 0.032
+    },
+    {
+      "name": "pnpm-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/pnpm-version.log",
+      "seconds": 0.391
+    },
+    {
+      "name": "pnpm-install",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "install",
+        "--frozen-lockfile"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/pnpm-install.log",
+      "seconds": 0.843
+    },
+    {
+      "name": "typecheck",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "typecheck"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/typecheck.log",
+      "seconds": 4.049
+    },
+    {
+      "name": "vitest",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "test:web"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/vitest.log",
+      "seconds": 5.613
+    },
+    {
+      "name": "production-build",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "build"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/production-build.log",
+      "seconds": 7.243
+    },
+    {
+      "name": "docker-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/docker-version.log",
+      "seconds": 0.34
+    },
+    {
+      "name": "isolation-contract",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "-B",
+        "tests/local-acceptance/test_isolation.py"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/isolation-contract.log",
+      "seconds": 0.287
+    },
+    {
+      "name": "compose-build",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "build",
+        "api"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose-build.log",
+      "seconds": 1.471
+    },
+    {
+      "name": "php-security-floor",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "-v",
+        "$PRODUCT:/source:ro",
+        "pb3-local-acceptance-php:8.4.27",
+        "php",
+        "/source/scripts/check-runtime.php"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/php-security-floor.log",
+      "seconds": 0.789
+    },
+    {
+      "name": "storage-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "--wait",
+        "postgres",
+        "garage"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/storage-up.log",
+      "seconds": 3.67
+    },
+    {
+      "name": "postgres-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "postgres",
+        "postgres",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/postgres-version.log",
+      "seconds": 0.188
+    },
+    {
+      "name": "garage-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/garage-version.log",
+      "seconds": 0.123
+    },
+    {
+      "name": "garage-assign",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "layout",
+        "assign",
+        "-z",
+        "ci-zone",
+        "-c",
+        "1G",
+        "2ebc861bbd386e3c33f8c53da799f4652a128cc67c17370c49a1beab001520e6"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/garage-assign.log",
+      "seconds": 0.193
+    },
+    {
+      "name": "garage-layout",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "layout",
+        "apply",
+        "--version",
+        "1"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/garage-layout.log",
+      "seconds": 0.235
+    },
+    {
+      "name": "garage-bucket",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "bucket",
+        "create",
+        "pb3-ci-p0"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/garage-bucket.log",
+      "seconds": 0.178
+    },
+    {
+      "name": "garage-key",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "key",
+        "create",
+        "pb3-ci-key"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/garage-key.log",
+      "seconds": 0.205
+    },
+    {
+      "name": "garage-allow",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "bucket",
+        "allow",
+        "--read",
+        "--write",
+        "--owner",
+        "pb3-ci-p0",
+        "--key",
+        "pb3-ci-key"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/garage-allow.log",
+      "seconds": 0.162
+    },
+    {
+      "name": "image-digests",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "image",
+        "inspect",
+        "php:8.4.27-cli-bookworm",
+        "postgres:18-alpine",
+        "dxflrs/garage:v2.5.0",
+        "--format",
+        "{{json .RepoTags}} {{json .RepoDigests}}"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/image-digests.log",
+      "seconds": 0.086
+    },
+    {
+      "name": "composer-install",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "install",
+        "--no-interaction",
+        "--no-progress",
+        "--prefer-dist"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/composer-install.log",
+      "seconds": 11.123
+    },
+    {
+      "name": "composer-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/composer-version.log",
+      "seconds": 0.698
+    },
+    {
+      "name": "composer-validate",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "validate",
+        "--strict",
+        "--no-check-publish"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/composer-validate.log",
+      "seconds": 0.681
+    },
+    {
+      "name": "plan-registry",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "/source/scripts/verify-plan-config.php"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/plan-registry.log",
+      "seconds": 0.557
+    },
+    {
+      "name": "php-lint",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "sh",
+        "-c",
+        "find app bootstrap config routes database tests /source/scripts -name '*.php' -type f -print0 | xargs -0 -n1 php -l"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/php-lint.log",
+      "seconds": 1.112
+    },
+    {
+      "name": "routes",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "artisan",
+        "route:list"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/routes.log",
+      "seconds": 0.623
+    },
+    {
+      "name": "phpunit",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "-v",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/api:/app",
+        "pb3-local-acceptance-php:8.4.27",
+        "php",
+        "vendor/bin/phpunit",
+        "--log-junit",
+        "/app/phpunit-junit.xml"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/phpunit.log",
+      "seconds": 1.759
+    },
+    {
+      "name": "migrate",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "artisan",
+        "migrate",
+        "--force"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/migrate.log",
+      "seconds": 0.745
+    },
+    {
+      "name": "garage-postgres-smoke",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "tests/integration/garage-postgres-smoke.php"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/garage-postgres-smoke.log",
+      "seconds": 0.944
+    },
+    {
+      "name": "lifecycle-garage-smoke",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "tests/integration/lifecycle-garage-smoke.php"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/lifecycle-garage-smoke.log",
+      "seconds": 0.753
+    },
+    {
+      "name": "api-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "api"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/api-up.log",
+      "seconds": 0.911
+    },
+    {
+      "name": "healthz",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/healthz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/healthz.log",
+      "seconds": 1.38
+    },
+    {
+      "name": "readyz",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/readyz.log",
+      "seconds": 0.123
+    },
+    {
+      "name": "chromium-install",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "install",
+        "chromium"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/chromium-install.log",
+      "seconds": 1.491
+    },
+    {
+      "name": "os-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "sw_vers"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/os-version.log",
+      "seconds": 0.021
+    },
+    {
+      "name": "safari-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/libexec/PlistBuddy",
+        "-c",
+        "Print :CFBundleShortVersionString",
+        "/Applications/Safari.app/Contents/Info.plist"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/safari-version.log",
+      "seconds": 0.009
+    },
+    {
+      "name": "playwright-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/playwright-version.log",
+      "seconds": 0.928
+    },
+    {
+      "name": "chromium-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "node",
+        "--input-type=module",
+        "-e",
+        "import {chromium} from \"@playwright/test\";const b=await chromium.launch();console.log(b.version());await b.close()"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/chromium-version.log",
+      "seconds": 1.319
+    },
+    {
+      "name": "vite-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:5173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/vite-ready.log",
+      "seconds": 1.19
+    },
+    {
+      "name": "preview-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:4173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/preview-ready.log",
+      "seconds": 0.118
+    },
+    {
+      "name": "performance-before",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$QA/tests/local-acceptance/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/performance-before",
+        "--reporter=line,json",
+        "performance.spec.ts"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/performance-before.log",
+      "seconds": 2.98
+    },
+    {
+      "name": "round3-boundaries",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$QA/tests/local-acceptance/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/round3-boundaries",
+        "--reporter=line,json",
+        "round3-boundaries.spec.ts",
+        "--repeat-each",
+        "3"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/round3-boundaries.log",
+      "seconds": 13.084
+    },
+    {
+      "name": "camera-reload",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$QA/tests/local-acceptance/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/camera-reload",
+        "--reporter=line,json",
+        "camera-reload.spec.ts",
+        "round3-camera.spec.ts"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/camera-reload.log",
+      "seconds": 5.487
+    },
+    {
+      "name": "product-e2e",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$PRODUCT/tests/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/product-e2e",
+        "--reporter=line,json"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/product-e2e.log",
+      "seconds": 32.663
+    },
+    {
+      "name": "round3-security",
+      "status": "FAIL",
+      "exit_code": 1,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$QA/tests/local-acceptance/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/round3-security",
+        "--reporter=line,json",
+        "round3-security.spec.ts"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/round3-security.log",
+      "seconds": 17.145
+    },
+    {
+      "name": "lost-ack-stability",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$QA/tests/local-acceptance/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/lost-ack-stability",
+        "--reporter=line,json",
+        "resilience.spec.ts",
+        "--grep",
+        "ciphertext survives",
+        "--repeat-each",
+        "3"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/lost-ack-stability.log",
+      "seconds": 11.262
+    },
+    {
+      "name": "acceptance-e2e",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$QA/tests/local-acceptance/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/acceptance-e2e",
+        "--reporter=line,json",
+        "resilience.spec.ts",
+        "--grep-invert",
+        "ciphertext survives|cold offline reload"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/acceptance-e2e.log",
+      "seconds": 6.332
+    },
+    {
+      "name": "offline-readiness",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$QA/tests/local-acceptance/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/offline-readiness",
+        "--reporter=line,json",
+        "offline-readiness.spec.ts"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/offline-readiness.log",
+      "seconds": 2.663
+    },
+    {
+      "name": "round3-security-recheck-1",
+      "status": "FAIL",
+      "exit_code": 1,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$QA/tests/local-acceptance/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/round3-security-recheck-1",
+        "--reporter=line,json",
+        "round3-security.spec.ts",
+        "--grep",
+        "^R3\\ no\\ additional\\ grant\\ or\\ DEK\\ envelope\\ before\\ failed\\ preflight;\\ personal\\ v1\\ explicit\\ consent$"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/round3-security-recheck-1.log",
+      "seconds": 1.412
+    },
+    {
+      "name": "safari",
+      "status": "NOT TESTED",
+      "exit_code": 77,
+      "command": [
+        "python3",
+        "$QA/scripts/local-acceptance/safari-smoke.py",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/safari.log",
+      "seconds": 1.891
+    },
+    {
+      "name": "physical-device-discovery",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "-c",
+        "import json,shutil,subprocess; p=subprocess.run(['system_profiler','SPUSBDataType','-json'],capture_output=True,text=True,timeout=20); raw=p.stdout.lower(); print(json.dumps({'usbInventoryExit':p.returncode,'iosUsbCandidate':'iphone' in raw or 'ipad' in raw,'adbAvailable':bool(shutil.which('adb'))}));"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/physical-device-discovery.log",
+      "seconds": 0.602
+    },
+    {
+      "name": "performance-after",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$QA/tests/local-acceptance/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/performance-after",
+        "--reporter=line,json",
+        "performance.spec.ts"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/performance-after.log",
+      "seconds": 4.351
+    },
+    {
+      "name": "round3-db-inspection",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "api",
+        "php",
+        "-r",
+        "if(getenv('APP_ENV')!=='testing'||getenv('DB_DATABASE')!=='pb3_ci_p0'||getenv('PB3_ISOLATED_STORAGE_SMOKE')!=='1')exit(1);require 'vendor/autoload.php';$app=require 'bootstrap/app.php';$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();echo json_encode(['events'=>Illuminate\\Support\\Facades\\DB::table('assignment_state_events_v1')->get(['assignment_id','state','occurred_at_ms']),'photos'=>Illuminate\\Support\\Facades\\DB::table('photo_records')->get(['id','account_id','state'])],JSON_THROW_ON_ERROR);"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/round3-db-inspection.log",
+      "seconds": 0.549
+    },
+    {
+      "name": "round3-trusted-boundaries",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "-c",
+        "import json,sys;x=json.load(open(sys.argv[1]));print(json.dumps(x));assert len(x)==3 and all(v['sameSecond'] and v['beforeFinish'] for v in x)",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/boundary-comparisons.json"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/round3-trusted-boundaries.log",
+      "seconds": 0.058
+    },
+    {
+      "name": "private-database-scan",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "postgres",
+        "pg_dump",
+        "-U",
+        "pb3_ci",
+        "--data-only",
+        "pb3_ci_p0"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/private-database-scan.log",
+      "seconds": 0.247
+    },
+    {
+      "name": "round3-private-canary-scan",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "-c",
+        "import json,sys;x=json.load(open(sys.argv[1]));print(json.dumps(x));assert all(x[k] for k in ['databaseScanExecuted','databasePlaintextAbsent','logsPlaintextAbsent']) and x['containerLogScanExit']==0",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/privacy-scan.json"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/round3-private-canary-scan.log",
+      "seconds": 0.043
+    },
+    {
+      "name": "container-logs",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "logs",
+        "--no-color"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/container-logs.log",
+      "seconds": 0.136
+    },
+    {
+      "name": "isolated-cleanup",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-104775b9cf",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "down",
+        "--remove-orphans"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-bx6qhcce/isolated-cleanup.log",
+      "seconds": 10.708
+    }
+  ],
+  "browsers": {
+    "acceptance-e2e": {
+      "stats": {
+        "startTime": "2026-11-09T19:14:54.471Z",
+        "duration": 5219.612,
+        "expected": 4,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "registration 503: busy feedback, retained operation ID, explicit retry succeeds",
+          "file": "resilience.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 644
+            }
+          ]
+        },
+        {
+          "title": "same browser account switch isolates the retained encrypted queue",
+          "file": "resilience.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 2155
+            }
+          ]
+        },
+        {
+          "title": "camera denial is visible and retryable; leaving camera stops its tracks",
+          "file": "resilience.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 720
+            }
+          ]
+        },
+        {
+          "title": "mobile widths, keyboard activation, route back and viewport evidence",
+          "file": "resilience.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 862
+            }
+          ]
+        }
+      ]
+    },
+    "camera-reload": {
+      "stats": {
+        "startTime": "2026-11-09T19:13:47.925Z",
+        "duration": 4360.066,
+        "expected": 3,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "PR14 regression: late camera permission must recover after session hydration",
+          "file": "camera-reload.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 1405,
+              "proofs": [
+                {
+                  "name": "camera-hydration-observation",
+                  "value": {
+                    "status": "PASS",
+                    "latePermissionAfterOnlineHydration": true,
+                    "automaticallyStarted": true,
+                    "cameraStartButtonEnabled": false
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "R3 real camera tracks stop on changed device identity",
+          "file": "round3-camera.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 1125,
+              "proofs": [
+                {
+                  "name": "round3-camera-proof",
+                  "value": {
+                    "changed": "device",
+                    "oldStoppedSynchronously": true,
+                    "previewDetached": true,
+                    "newStreamDistinct": true
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "R3 real camera tracks stop on changed key identity",
+          "file": "round3-camera.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 999,
+              "proofs": [
+                {
+                  "name": "round3-camera-proof",
+                  "value": {
+                    "changed": "key",
+                    "oldStoppedSynchronously": true,
+                    "previewDetached": true,
+                    "newStreamDistinct": true
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "lost-ack-stability": {
+      "stats": {
+        "startTime": "2026-11-09T19:14:43.241Z",
+        "duration": 10125.957999999999,
+        "expected": 3,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "ciphertext survives upload 503 and online reload; lost finalize ACK is idempotent",
+          "file": "resilience.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 2517,
+              "proofs": [
+                {
+                  "name": "lost-ack-proof",
+                  "value": {
+                    "stages": [
+                      "encrypted-local",
+                      "upload-503",
+                      "reload-after-503",
+                      "server-committed-ack-lost",
+                      "reload-after-lost-ack",
+                      "retry-confirmed",
+                      "duplicate-requests",
+                      "garage-download-decrypted"
+                    ],
+                    "lostAcknowledgements": 1,
+                    "signedReplays": 2,
+                    "serverPhotoCount": 1,
+                    "objectDownloads": 2,
+                    "ciphertextRetained": true,
+                    "cloudPlaintextMatchesLocal": true
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "ciphertext survives upload 503 and online reload; lost finalize ACK is idempotent",
+          "file": "resilience.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 2738,
+              "proofs": [
+                {
+                  "name": "lost-ack-proof",
+                  "value": {
+                    "stages": [
+                      "encrypted-local",
+                      "upload-503",
+                      "reload-after-503",
+                      "server-committed-ack-lost",
+                      "reload-after-lost-ack",
+                      "retry-confirmed",
+                      "duplicate-requests",
+                      "garage-download-decrypted"
+                    ],
+                    "lostAcknowledgements": 1,
+                    "signedReplays": 2,
+                    "serverPhotoCount": 1,
+                    "objectDownloads": 2,
+                    "ciphertextRetained": true,
+                    "cloudPlaintextMatchesLocal": true
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "ciphertext survives upload 503 and online reload; lost finalize ACK is idempotent",
+          "file": "resilience.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 2464,
+              "proofs": [
+                {
+                  "name": "lost-ack-proof",
+                  "value": {
+                    "stages": [
+                      "encrypted-local",
+                      "upload-503",
+                      "reload-after-503",
+                      "server-committed-ack-lost",
+                      "reload-after-lost-ack",
+                      "retry-confirmed",
+                      "duplicate-requests",
+                      "garage-download-decrypted"
+                    ],
+                    "lostAcknowledgements": 1,
+                    "signedReplays": 2,
+                    "serverPhotoCount": 1,
+                    "objectDownloads": 2,
+                    "ciphertextRetained": true,
+                    "cloudPlaintextMatchesLocal": true
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "offline-readiness": {
+      "stats": {
+        "startTime": "2026-11-09T19:15:00.790Z",
+        "duration": 1574.098,
+        "expected": 2,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "vite-development: observe cold offline readiness without registering a worker",
+          "file": "offline-readiness.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 434,
+              "proofs": [
+                {
+                  "name": "offline-bootstrap-observation",
+                  "value": {
+                    "mode": "vite-development",
+                    "before": {
+                      "secureContext": true,
+                      "controller": false,
+                      "registrations": 0,
+                      "cacheNames": [],
+                      "standalone": false,
+                      "scripts": [
+                        "/@vite/client",
+                        "/src/main.ts"
+                      ]
+                    },
+                    "reloadError": true,
+                    "failedNavigations": [
+                      "net::ERR_INTERNET_DISCONNECTED"
+                    ],
+                    "renderedOffline": false,
+                    "status": "BLOCKED BY DESIGN",
+                    "reason": "No controlling trusted worker or verified shell bootstrap"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "production-preview: observe cold offline readiness without registering a worker",
+          "file": "offline-readiness.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 335,
+              "proofs": [
+                {
+                  "name": "offline-bootstrap-observation",
+                  "value": {
+                    "mode": "production-preview",
+                    "before": {
+                      "secureContext": true,
+                      "controller": false,
+                      "registrations": 0,
+                      "cacheNames": [],
+                      "standalone": false,
+                      "scripts": [
+                        "/assets/index-BOzZnUXN.js"
+                      ]
+                    },
+                    "reloadError": true,
+                    "failedNavigations": [
+                      "net::ERR_INTERNET_DISCONNECTED"
+                    ],
+                    "renderedOffline": false,
+                    "status": "BLOCKED BY DESIGN",
+                    "reason": "No controlling trusted worker or verified shell bootstrap"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "performance-after": {
+      "stats": {
+        "startTime": "2026-11-09T19:15:08.301Z",
+        "duration": 2315.57,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "production preview: five warm navigations, laboratory timing only",
+          "file": "performance.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 678,
+              "proofs": [
+                {
+                  "name": "production-navigation-timings",
+                  "value": {
+                    "viewport": {
+                      "width": 390,
+                      "height": 844
+                    },
+                    "samples": [
+                      {
+                        "responseEnd": 1.7000000001862645,
+                        "domContentLoaded": 102.90000000037253,
+                        "load": 103.40000000037253,
+                        "transferSize": 300,
+                        "fcp": 116
+                      },
+                      {
+                        "responseEnd": 1.599999999627471,
+                        "domContentLoaded": 11.299999999813735,
+                        "load": 11.799999999813735,
+                        "transferSize": 300,
+                        "fcp": null
+                      },
+                      {
+                        "responseEnd": 1.400000000372529,
+                        "domContentLoaded": 11.200000000186265,
+                        "load": 11.700000000186265,
+                        "transferSize": 300,
+                        "fcp": null
+                      },
+                      {
+                        "responseEnd": 1.2999999998137355,
+                        "domContentLoaded": 10,
+                        "load": 10.600000000558794,
+                        "transferSize": 300,
+                        "fcp": null
+                      },
+                      {
+                        "responseEnd": 1.3999999994412065,
+                        "domContentLoaded": 11.599999999627471,
+                        "load": 12,
+                        "transferSize": 300,
+                        "fcp": null
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "performance-before": {
+      "stats": {
+        "startTime": "2026-11-09T19:13:32.137Z",
+        "duration": 1580.268,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "production preview: five warm navigations, laboratory timing only",
+          "file": "performance.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 730,
+              "proofs": [
+                {
+                  "name": "production-navigation-timings",
+                  "value": {
+                    "viewport": {
+                      "width": 390,
+                      "height": 844
+                    },
+                    "samples": [
+                      {
+                        "responseEnd": 2.099999999627471,
+                        "domContentLoaded": 100.8999999994412,
+                        "load": 101.3999999994412,
+                        "transferSize": 300,
+                        "fcp": 108
+                      },
+                      {
+                        "responseEnd": 1.5,
+                        "domContentLoaded": 11.899999999441206,
+                        "load": 12.299999999813735,
+                        "transferSize": 300,
+                        "fcp": null
+                      },
+                      {
+                        "responseEnd": 1.6000000005587935,
+                        "domContentLoaded": 10.800000000745058,
+                        "load": 11.200000000186265,
+                        "transferSize": 300,
+                        "fcp": null
+                      },
+                      {
+                        "responseEnd": 1.2999999998137355,
+                        "domContentLoaded": 10.5,
+                        "load": 11,
+                        "transferSize": 300,
+                        "fcp": 16
+                      },
+                      {
+                        "responseEnd": 1.5,
+                        "domContentLoaded": 11.900000000372529,
+                        "load": 12.300000000745058,
+                        "transferSize": 300,
+                        "fcp": null
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "product-e2e": {
+      "stats": {
+        "startTime": "2026-11-09T19:13:53.552Z",
+        "duration": 31395.388,
+        "expected": 10,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "late permission survives real online hydration with one live stream",
+          "file": "p1-camera-session.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 1084
+            }
+          ]
+        },
+        {
+          "title": "equivalent Session replacement keeps the existing stream",
+          "file": "p1-camera-session.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 888
+            }
+          ]
+        },
+        {
+          "title": "real account switch during permission stops the stale result before opening another",
+          "file": "p1-camera-session.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 850
+            }
+          ]
+        },
+        {
+          "title": "leaving before permission resolves releases every late track without reopening",
+          "file": "p1-camera-session.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 908
+            }
+          ]
+        },
+        {
+          "title": "denied permission is recoverable by a single explicit retry",
+          "file": "p1-camera-session.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 1024
+            }
+          ]
+        },
+        {
+          "title": "hydrated camera captures offline against an already verified signed assignment policy",
+          "file": "p1-camera-session.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 1728
+            }
+          ]
+        },
+        {
+          "title": "two browser identities: key-only account, encrypted camera photo, Garage recovery",
+          "file": "p1-identity-photo.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 4110
+            }
+          ]
+        },
+        {
+          "title": "P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke",
+          "file": "p1-identity-photo.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 5556
+            }
+          ]
+        },
+        {
+          "title": "P1-04: A creates encrypted assignment, B accepts and submits a photo grant, A decrypts",
+          "file": "p1-identity-photo.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 4250
+            }
+          ]
+        },
+        {
+          "title": "P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo",
+          "file": "p1-identity-photo.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 9099
+            }
+          ]
+        }
+      ]
+    },
+    "round3-boundaries": {
+      "stats": {
+        "startTime": "2026-11-09T19:13:34.799Z",
+        "duration": 12003.274,
+        "expected": 3,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "R2-01 exact subsecond offline capture, late reserve, finish/resume, revoke and post-finish denial",
+          "file": "round3-boundaries.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 3351,
+              "proofs": [
+                {
+                  "name": "round3-boundary-timing",
+                  "value": {
+                    "assignmentId": "ab3e7227-f37f-4e99-ab98-6d5a6c9be57c",
+                    "photoId": "7a36418d-fe5c-4eb2-837c-45db89360486",
+                    "capturedAt": 1794251618021
+                  }
+                },
+                {
+                  "name": "round3-boundary-proof",
+                  "value": {
+                    "assignmentId": "ab3e7227-f37f-4e99-ab98-6d5a6c9be57c",
+                    "photoId": "7a36418d-fe5c-4eb2-837c-45db89360486",
+                    "postFinishPhotoId": "9cedc5ef-6445-4a53-98f5-46c28e8bce86",
+                    "capturedAt": 1794251618021,
+                    "postFinishCapturedAt": 1794251618527,
+                    "version": 2,
+                    "lateReserveState": "synced",
+                    "finishedSubmitHttp": 409,
+                    "postFinishReserveHttp": 409,
+                    "resumedSubmissionCount": 1,
+                    "revokeHttp": 410,
+                    "contributorReadable": true,
+                    "unchangedCiphertext": true,
+                    "assets": [
+                      {
+                        "kind": "master",
+                        "digest": "b261be651d9d8ce1b8c131fc41078d7e1edbeece3cb68d22079947993968f378"
+                      },
+                      {
+                        "kind": "metadata",
+                        "digest": "8f7f9d084daf819ffa019694d06c7f09d61ab55a3f745c83b8b5b7ff9bba07eb"
+                      }
+                    ],
+                    "http": [
+                      {
+                        "path": "/photos/v1/reserve",
+                        "status": 200
+                      },
+                      {
+                        "path": "/photos/v1/7a36418d-fe5c-4eb2-837c-45db89360486/finalize",
+                        "status": 200
+                      },
+                      {
+                        "path": "/assignments/v1/ab3e7227-f37f-4e99-ab98-6d5a6c9be57c/submissions",
+                        "status": 409
+                      },
+                      {
+                        "path": "/photos/v1/reserve",
+                        "status": 409
+                      },
+                      {
+                        "path": "/assignments/v1/ab3e7227-f37f-4e99-ab98-6d5a6c9be57c/submissions",
+                        "status": 201
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "R2-01 exact subsecond offline capture, late reserve, finish/resume, revoke and post-finish denial",
+          "file": "round3-boundaries.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 2990,
+              "proofs": [
+                {
+                  "name": "round3-boundary-timing",
+                  "value": {
+                    "assignmentId": "e6145a83-6497-4655-8a5f-1198eaf5ca60",
+                    "photoId": "1da3ccda-ec26-4ff8-a489-32d9f7dbfe78",
+                    "capturedAt": 1794251622021
+                  }
+                },
+                {
+                  "name": "round3-boundary-proof",
+                  "value": {
+                    "assignmentId": "e6145a83-6497-4655-8a5f-1198eaf5ca60",
+                    "photoId": "1da3ccda-ec26-4ff8-a489-32d9f7dbfe78",
+                    "postFinishPhotoId": "603bd7a3-18a0-4149-bc37-22bd14eea50a",
+                    "capturedAt": 1794251622021,
+                    "postFinishCapturedAt": 1794251622307,
+                    "version": 2,
+                    "lateReserveState": "synced",
+                    "finishedSubmitHttp": 409,
+                    "postFinishReserveHttp": 409,
+                    "resumedSubmissionCount": 1,
+                    "revokeHttp": 410,
+                    "contributorReadable": true,
+                    "unchangedCiphertext": true,
+                    "assets": [
+                      {
+                        "kind": "master",
+                        "digest": "b1c9e34fb3f2d62ca6eaac2398080886d82441d11d4a2692213b7c083b08cffc"
+                      },
+                      {
+                        "kind": "metadata",
+                        "digest": "31e61906d5117b5203b9d7feca52c415693a03877ddb729d70c9e4c7ec71eb4c"
+                      }
+                    ],
+                    "http": [
+                      {
+                        "path": "/photos/v1/reserve",
+                        "status": 200
+                      },
+                      {
+                        "path": "/photos/v1/1da3ccda-ec26-4ff8-a489-32d9f7dbfe78/finalize",
+                        "status": 200
+                      },
+                      {
+                        "path": "/assignments/v1/e6145a83-6497-4655-8a5f-1198eaf5ca60/submissions",
+                        "status": 409
+                      },
+                      {
+                        "path": "/photos/v1/reserve",
+                        "status": 409
+                      },
+                      {
+                        "path": "/assignments/v1/e6145a83-6497-4655-8a5f-1198eaf5ca60/submissions",
+                        "status": 201
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "R2-01 exact subsecond offline capture, late reserve, finish/resume, revoke and post-finish denial",
+          "file": "round3-boundaries.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 3281,
+              "proofs": [
+                {
+                  "name": "round3-boundary-timing",
+                  "value": {
+                    "assignmentId": "530eb877-a4af-4353-86d8-adfb9f2a5fb4",
+                    "photoId": "daffc828-1f5e-4ca1-b459-7977d06fe0ed",
+                    "capturedAt": 1794251626023
+                  }
+                },
+                {
+                  "name": "round3-boundary-proof",
+                  "value": {
+                    "assignmentId": "530eb877-a4af-4353-86d8-adfb9f2a5fb4",
+                    "photoId": "daffc828-1f5e-4ca1-b459-7977d06fe0ed",
+                    "postFinishPhotoId": "e7829bd7-a86e-47b9-b88b-aace3e2d21af",
+                    "capturedAt": 1794251626023,
+                    "postFinishCapturedAt": 1794251626368,
+                    "version": 2,
+                    "lateReserveState": "synced",
+                    "finishedSubmitHttp": 409,
+                    "postFinishReserveHttp": 409,
+                    "resumedSubmissionCount": 1,
+                    "revokeHttp": 410,
+                    "contributorReadable": true,
+                    "unchangedCiphertext": true,
+                    "assets": [
+                      {
+                        "kind": "master",
+                        "digest": "e5d2811678a096dcaafe50de6d548b123e1bd19b52b1225d582cc229ab5be98a"
+                      },
+                      {
+                        "kind": "metadata",
+                        "digest": "38a270887f9f8fb0f00ae584ba731ed5713ca12f5473c40d44c5e0f29d44936c"
+                      }
+                    ],
+                    "http": [
+                      {
+                        "path": "/photos/v1/reserve",
+                        "status": 200
+                      },
+                      {
+                        "path": "/photos/v1/daffc828-1f5e-4ca1-b459-7977d06fe0ed/finalize",
+                        "status": 200
+                      },
+                      {
+                        "path": "/assignments/v1/530eb877-a4af-4353-86d8-adfb9f2a5fb4/submissions",
+                        "status": 409
+                      },
+                      {
+                        "path": "/photos/v1/reserve",
+                        "status": 409
+                      },
+                      {
+                        "path": "/assignments/v1/530eb877-a4af-4353-86d8-adfb9f2a5fb4/submissions",
+                        "status": 201
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "round3-security-recheck-1": {
+      "stats": {
+        "startTime": "2026-11-09T19:15:03.451Z",
+        "duration": 323.1859999999999,
+        "expected": 0,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": []
+    },
+    "round3-security": {
+      "stats": {
+        "startTime": "2026-11-09T19:14:26.148Z",
+        "duration": 15953.658999999998,
+        "expected": 2,
+        "skipped": 0,
+        "unexpected": 1,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "R3 signed historical v1/v2 reservation, local requirement gates and zero-knowledge metadata",
+          "file": "round3-security.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 4429,
+              "proofs": [
+                {
+                  "name": "round3-metadata-proof",
+                  "value": {
+                    "assignmentId": "dd700f70-1258-4c16-ab52-288ce3fd00cb",
+                    "historicalRevisions": [
+                      1,
+                      2
+                    ],
+                    "oldPhotosSynced": true,
+                    "failedCaptureErrors": [
+                      "assignment.category_required",
+                      "assignment.description_too_short",
+                      "assignment.gps_required"
+                    ],
+                    "noCiphertextBeforeRequirements": true,
+                    "localMetadataDecrypted": true,
+                    "cloudMetadataDecrypted": true,
+                    "plaintextAbsentFromRowContractWireGarage": true,
+                    "aesGcm": true,
+                    "unchangedCiphertext": true,
+                    "garageStatuses": [
+                      200,
+                      200
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "R3 no additional grant or DEK envelope before failed preflight; personal v1 explicit consent",
+          "file": "round3-security.spec.ts",
+          "status": "unexpected",
+          "results": [
+            {
+              "status": "failed",
+              "durationMs": 5255
+            }
+          ]
+        },
+        {
+          "title": "R3 policy-history ACL, complete signature chain and account-scoped offline cache fail closed",
+          "file": "round3-security.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 4562,
+              "proofs": [
+                {
+                  "name": "round3-history-proof",
+                  "value": {
+                    "assignmentId": "72782533-a577-4954-b87f-822113847e96",
+                    "outsiderHttp": 404,
+                    "unacceptedHttp": 404,
+                    "acceptedHttp": 200,
+                    "ownerHttp": 200,
+                    "revisions": [
+                      1,
+                      2,
+                      3
+                    ],
+                    "publicOnly": true,
+                    "rejections": {
+                      "signature": true,
+                      "predecessor": true,
+                      "rollback": true,
+                      "missing": true,
+                      "crossOwner": true
+                    },
+                    "offlineReverified": true,
+                    "corruptIndexedDbRejected": true,
+                    "crossAccountCacheUnavailable": true,
+                    "revokedHistoryHttp": 404,
+                    "revokedReserveDenied": true,
+                    "revocationSource": "isolated synthetic DB fixture; no product revoke API",
+                    "offlineHistoryIsFreshAclAuthority": false
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "qaFileSha256": {
+    "scripts/local-acceptance/round3-fixture.py": "8036c428abbb4fa46e2ca728ec657e00b481ba262c615f43051c8b5f84b6a84e",
+    "scripts/local-acceptance/round3.py": "3654a9aebd4e2fedfec1b39f34e93d4dbf6806566877c17a9ab9920c0e5d5f1c",
+    "tests/local-acceptance/round3-boundaries.spec.ts": "fd6cace11e671214851f8b6856a160a0f4b3195f8bb3307a19ac64dac870b949",
+    "tests/local-acceptance/round3-camera.spec.ts": "df2a332912c2221e8476e7857cba28ab908ed4ede367c958002921a4f8906921",
+    "tests/local-acceptance/round3-helpers.ts": "425bde6d9ab5dcca554a873a71f928d717ff0cf68891cd14c7ec70cf4137c924",
+    "tests/local-acceptance/round3-security.spec.ts": "24a99f6f5a604713d1e1c56e4de7c9a999d9458db499526b12d03cf5c53ae8e9"
+  },
+  "privacy": "Only allowlisted synthetic IDs, times, ciphertext hashes, states, counts and boolean checks. No errors, raw bodies, traces, images, GPS or keys.",
+  "boundary-comparisons": [
+    {
+      "assignmentId": "ab3e7227-f37f-4e99-ab98-6d5a6c9be57c",
+      "photoId": "7a36418d-fe5c-4eb2-837c-45db89360486",
+      "capturedAt": 1794251618021,
+      "occurredAtMs": 1794251618086,
+      "sameSecond": true,
+      "beforeFinish": true,
+      "personalPhotoAccountId": "94e85ff4-cc93-4af5-9db5-d630fea054c9",
+      "personalPhotoState": "active",
+      "postFinishCapturedAt": 1794251618527,
+      "postFinishPhotoPersisted": false
+    },
+    {
+      "assignmentId": "e6145a83-6497-4655-8a5f-1198eaf5ca60",
+      "photoId": "1da3ccda-ec26-4ff8-a489-32d9f7dbfe78",
+      "capturedAt": 1794251622021,
+      "occurredAtMs": 1794251622066,
+      "sameSecond": true,
+      "beforeFinish": true,
+      "personalPhotoAccountId": "45ef07a9-57df-44bf-a35b-07b5f07cf11e",
+      "personalPhotoState": "active",
+      "postFinishCapturedAt": 1794251622307,
+      "postFinishPhotoPersisted": false
+    },
+    {
+      "assignmentId": "530eb877-a4af-4353-86d8-adfb9f2a5fb4",
+      "photoId": "daffc828-1f5e-4ca1-b459-7977d06fe0ed",
+      "capturedAt": 1794251626023,
+      "occurredAtMs": 1794251626088,
+      "sameSecond": true,
+      "beforeFinish": true,
+      "personalPhotoAccountId": "5f255d9e-2100-4458-a037-cb62043b062a",
+      "personalPhotoState": "active",
+      "postFinishCapturedAt": 1794251626368,
+      "postFinishPhotoPersisted": false
+    }
+  ],
+  "privacy-scan": {
+    "databaseScanExecuted": true,
+    "containerLogScanExit": 0,
+    "databasePlaintextAbsent": true,
+    "logsPlaintextAbsent": true
+  },
+  "nativeSafari": {
+    "status": "NOT TESTED",
+    "phase": null,
+    "settingsChanged": false,
+    "remoteAutomationExplicitlyDisabled": true
+  },
+  "runExitCode": 1,
+  "pinVerification": {
+    "githubPrHeadSha": "039762d3bec173b767cbb8898bda92d01e413f26",
+    "githubBranchHeadSha": "039762d3bec173b767cbb8898bda92d01e413f26",
+    "freshGitFetchExitCode": 0,
+    "beforeExecution": true
+  },
+  "matrix": [
+    {
+      "scenario": "R2-01 same-second capture, finish, late reserve (3/3)",
+      "status": "PASS"
+    },
+    {
+      "scenario": "R2-02 Chromium lifecycle",
+      "status": "PASS"
+    },
+    {
+      "scenario": "historical signed policy/requirements/zero-knowledge metadata",
+      "status": "PASS"
+    },
+    {
+      "scenario": "pregrant privacy and personal consent (focused recheck)",
+      "status": "PASS"
+    },
+    {
+      "scenario": "policy history ACL/signatures/ancestry/rollback/offline/account scope",
+      "status": "PASS"
+    },
+    {
+      "scenario": "lost finalize ACK/replay/Garage (3/3)",
+      "status": "PASS"
+    },
+    {
+      "scenario": "TypeScript/Vitest/build/PHPUnit/PostgreSQL/Garage",
+      "status": "PASS"
+    },
+    {
+      "scenario": "cold offline dev/production/installed PWA",
+      "status": "BLOCKED BY DESIGN"
+    },
+    {
+      "scenario": "native Safari lifecycle",
+      "status": "NOT TESTED"
+    },
+    {
+      "scenario": "physical iOS/Android camera/GPS/gallery",
+      "status": "NOT TESTED"
+    }
+  ],
+  "diagnoses": [
+    {
+      "id": "QA-H1",
+      "classification": "QA harness error",
+      "initialCheck": "round3-security",
+      "resolvedBy": "pregrant-focused in second evidence",
+      "originalRetained": true
+    },
+    {
+      "id": "QA-H2",
+      "classification": "QA harness command error; no test executed",
+      "initialCheck": "round3-security-recheck-1",
+      "resolvedBy": "unanchored focused grep",
+      "originalRetained": true
+    }
+  ]
+}

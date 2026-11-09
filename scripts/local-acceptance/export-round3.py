@@ -43,12 +43,17 @@ for name,log,pattern in [
     versions[name]=(m.group(1) if m.lastindex else m.group()) if m else 'NOT VERIFIED'
 counts={}
 for name,pattern in [('vitest',r'Tests\s+(\d+) passed'),('phpunit',r'OK \((\d+) tests, (\d+) assertions\)')]:
-    m=re.search(pattern,(run/(name+'.log')).read_text());counts[name]=[int(v) for v in m.groups()] if m else None
+    p=run/(name+'.log');m=re.search(pattern,p.read_text()) if p.exists() else None;counts[name]=[int(v) for v in m.groups()] if m else None
+qa_sha=sys.argv[2] if len(sys.argv)>2 else subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip()
+assert re.fullmatch('[0-9a-f]{40}',qa_sha)
+subprocess.run(['git','cat-file','-e',qa_sha+'^{commit}'],cwd=root,check=True)
 files={}
 for directory in ['scripts/local-acceptance','tests/local-acceptance']:
     for p in sorted((root/directory).glob('*round3*')):
-        if p.is_file():files[str(p.relative_to(root))]=hashlib.sha256(p.read_bytes()).hexdigest()
-output={'issue':25,'productSha':TARGET,'qaBaselineSha':QA_BASE,'qaHarnessSha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True).strip(),
+        if p.is_file():
+            result=subprocess.run(['git','show',qa_sha+':'+str(p.relative_to(root))],cwd=root,capture_output=True)
+            if result.returncode==0:files[str(p.relative_to(root))]=hashlib.sha256(result.stdout).hexdigest()
+output={'issue':25,'productSha':TARGET,'qaBaselineSha':QA_BASE,'qaHarnessSha':qa_sha,
  'runId':run.name,'startedUtcEpoch':summary['started'],'versions':versions,'counts':counts,'checks':summary['results'],'browsers':reports,'qaFileSha256':files,
  'privacy':'Only allowlisted synthetic IDs, times, ciphertext hashes, states, counts and boolean checks. No errors, raw bodies, traces, images, GPS or keys.'}
 for name in ['boundary-comparisons','privacy-scan']:
@@ -57,5 +62,5 @@ for name in ['boundary-comparisons','privacy-scan']:
 safari=run/'safari.log'
 if safari.exists():
     text=safari.read_text()
-    output['nativeSafari']={'status':'NOT TESTED' if 'NOT TESTED' in text else 'SEE CHECK','phase':next((x for x in ['driver-status','session-creation','navigate-settings','indexeddb-webcrypto','resize-screenshot'] if x in text),None),'settingsChanged':False}
+    output['nativeSafari']={'status':'NOT TESTED' if 'NOT TESTED' in text else 'SEE CHECK','phase':next((x for x in ['driver-status','session-creation','navigate-settings','indexeddb-webcrypto','resize-screenshot'] if x in text),None),'settingsChanged':False,'remoteAutomationExplicitlyDisabled':'remote automation is disabled' in text.lower()}
 print(json.dumps(normalize(output),indent=2,ensure_ascii=False))

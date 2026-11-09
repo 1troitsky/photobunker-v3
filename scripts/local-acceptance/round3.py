@@ -56,9 +56,10 @@ class Round3(Acceptance):
         for name,cfg,product in failed:
             path=self.directory/(name+'.json')
             if not path.exists():continue
-            unique={s['title']:s for s in specs(json.loads(path.read_text())) if any(t['status']=='unexpected' for t in s['tests'])}
+            failed_specs=[s for s in specs(json.loads(path.read_text())) if any(t['status']=='unexpected' for t in s['tests'])]
+            unique={s['title']:s for s in failed_specs}
             for index,(title,spec) in enumerate(unique.items()):
-                if sum(t['status']=='unexpected' for t in spec['tests'])>=2:continue
+                if sum(s['title']==title for s in failed_specs)>=2:continue
                 self.browser(name+'-recheck-'+str(index+1),cfg,Path(spec['file']).name,'--grep',re.escape(title),product=product)
         self.command('safari',['python3',str(ROOT/'scripts/local-acceptance/safari-smoke.py'),str(self.directory)],timeout=90,optional=True)
         # Read-only device discovery; no pairing, permissions or owner prompts.
