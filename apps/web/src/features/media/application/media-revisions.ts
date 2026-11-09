@@ -94,6 +94,7 @@ export async function verifyMediaRevisionHistory(
     throw Error('media_revision.invalid_history')
   const signer=await importSpki(accountSpki)
   let head=history.rootMediaId
+  const seen=new Set([head])
   let previousHash=history.rootContractHash
   const versions=[{
     revision:1,mediaId:history.rootMediaId,
@@ -107,10 +108,11 @@ export async function verifyMediaRevisionHistory(
       ||c.fromRevision!==i+1||c.toRevision!==i+2
       ||c.rootContractHash!==history.rootContractHash
       ||c.previousContractHash!==previousHash
-      ||c.newMediaId===head
+      ||seen.has(c.newMediaId)
       ||await hash(ev.contract)!==ev.contractHash
       ||!await verify(signer,DOMAIN+ev.contract,ev.signature))
       throw Error('media_revision.invalid_history')
+    seen.add(c.newMediaId)
     head=c.newMediaId;previousHash=c.newContractHash
     versions.push({
       revision:c.toRevision,mediaId:head,contractHash:previousHash,
