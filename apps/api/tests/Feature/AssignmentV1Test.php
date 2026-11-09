@@ -213,6 +213,86 @@ final class AssignmentV1Test extends TestCase
         ]);
     }
 
+    private function signedCaptureRequirements(
+        string $role,int $from,int|null $goal,
+        bool $category,int $minDescription,bool $gps
+    ):array
+    {
+        $this->as($role);
+        $original=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->value('contract_json');
+        $latest=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->value('latest_policy_contract');
+        return $this->signed($role,'pb3.assignment-policy.v2',[
+            'version'=>2,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people[$role]['account'],
+            'rootPolicyHash'=>hash('sha256',$original),
+            'previousPolicyHash'=>hash('sha256',$latest??$original),
+            'fromPolicyRevision'=>$from,'toPolicyRevision'=>$from+1,
+            'photoGoal'=>$goal,'allowedMedia'=>['photo'],
+            'requiredCategory'=>$category,
+            'descriptionMinLength'=>$minDescription,
+            'requiredGps'=>$gps,
+        ]);
+    }
+
+    public function test_signed_v2_private_metadata_requirements_keep_original_goal_and_replay():void
+    {
+        $this->createAssignment();
+        $path='/assignments/v1/'.$this->assignmentId.'/policy';
+        $required=$this->signedCaptureRequirements('owner',1,30,true,12,true);
+        $this->postJson($path,$required)->assertOk()
+            ->assertJsonPath('policyRevision',2)->assertJsonPath('photoGoal',30);
+        $this->postJson($path,$required)->assertOk()->assertJsonPath('unchanged',true);
+        $this->getJson('/assignments/v1')->assertOk()
+            ->assertJsonPath('items.0.policyRevision',2)
+            ->assertJsonPath('items.0.policyAmendmentContract',$required['contract'])
+            ->assertJsonPath('items.0.policyAmendmentSignature',$required['signature']);
+        $this->assertDatabaseCount('assignment_policy_events_v1',1);
+        $old=$this->signedGoalPolicy('owner',2,45);
+        $this->postJson($path,$old)->assertConflict(); // no v2 -> v1 downgrade
+        $same=$this->signedCaptureRequirements('owner',2,30,true,12,true);
+        $this->postJson($path,$same)->assertConflict(); // no-op
+        $change=$this->signedCaptureRequirements('owner',2,45,true,12,true);
+        $this->postJson($path,$change)->assertOk()
+            ->assertJsonPath('policyRevision',3)->assertJsonPath('photoGoal',45);
+        $this->postJson($path,$required)->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertDatabaseCount('assignment_policy_events_v1',2);
+        $stored=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $this->assertSame(30,json_decode($stored->contract_json,true)['photoGoal']);
+        $this->assertSame(2,json_decode($stored->latest_policy_contract,true)['version']);
+        $this->assertStringNotContainsString('41.647849',$stored->latest_policy_contract);
+        $this->assertStringNotContainsString('private description',$stored->latest_policy_contract);
+    }
+
+    public function test_v2_requirements_reject_invalid_schema_forged_domain_and_min_length():void
+    {
+        $this->createAssignment();
+        $path='/assignments/v1/'.$this->assignmentId.'/policy';
+        $valid=$this->signedCaptureRequirements('owner',1,30,true,20,true);
+        $body=json_decode($valid['contract'],true);
+        foreach([-1,4001,1.5,'10'] as $bad){
+            $invalid=$body;
+            $invalid['descriptionMinLength']=$bad;
+            $this->postJson($path,$this->signed('owner',
+                'pb3.assignment-policy.v2',$invalid))->assertUnprocessable();
+        }
+        $invalid=$body;$invalid['requiredGps']='true';
+        $this->postJson($path,$this->signed('owner',
+            'pb3.assignment-policy.v2',$invalid))->assertUnprocessable();
+        $invalid=$body;$invalid['allowedMedia']=['video'];
+        $this->postJson($path,$this->signed('owner',
+            'pb3.assignment-policy.v2',$invalid))->assertUnprocessable();
+        $invalid=$body;$invalid['plainLocation']='41.6,41.7';
+        $this->postJson($path,$this->signed('owner',
+            'pb3.assignment-policy.v2',$invalid))->assertUnprocessable();
+        $this->postJson($path,$this->signed('owner',
+            'pb3.assignment-policy.v1',$body))->assertUnauthorized();
+        $this->assertDatabaseCount('assignment_policy_events_v1',0);
+    }
+
     public function test_owner_signed_goal_revisions_are_append_only_and_lost_ack_safe():void
     {
         $this->createAssignment();
