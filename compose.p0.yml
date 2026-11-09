@@ -1,0 +1,30 @@
+name: pb3-p0
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: pb3
+      POSTGRES_USER: pb3
+      POSTGRES_PASSWORD: ${PB3_DB_PASSWORD:?Set PB3_DB_PASSWORD for local development}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres18:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pb3 -d pb3"]
+      interval: 5s
+      retries: 12
+      timeout: 3s
+  garage:
+    image: dxflrs/garage:v2.5.0
+    command: /garage server
+    ports:
+      - "127.0.0.1:3900:3900"
+    volumes:
+      - ./infra/garage/.local/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+volumes:
+  postgres18:
+  garage-meta:
+  garage-data:
