@@ -795,7 +795,7 @@ async function flushPass():Promise<void>{
         // entitlement/ACL conflict. Never delete the draft on HTTP 403.
         const c=JSON.parse(op.contract) as {assignmentId:string}
         await db.assignments.update(c.assignmentId,{
-          state:/^api\\.http_(403|409|410|422)$/.test(reason)?'conflict':'retry',
+          state:/^api\.http_(403|409|410|422)$/.test(reason)?'conflict':'retry',
         })
       }
       if(!navigator.onLine)return
