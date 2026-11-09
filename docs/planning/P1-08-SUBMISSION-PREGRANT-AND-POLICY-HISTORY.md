@@ -49,13 +49,17 @@ No photo/grant bytes are deleted on failed preflight.
   continuity, no v2→v1 downgrade, media type and effective interval. The final
   event must byte-match the latest authenticated policy snapshot.
 - Original capture revisions and exact effective windows are preserved.
-  For a historical revision older than the latest, when an independently
-  verified full chain is not available, the official client **fails closed**
-  before grant issuance. Current implementation requests the full chain online;
-  first-time offline historical grant preflight (revision >1 and older than
-  latest) is not yet supported. This is a deliberate fail-closed Local-First
-  limitation, not a claim of current ACL freshness or permission to delete
-  an offline photo.
+  On first historical lookup the official client requires online
+  accepted-member access to the full chain; if unavailable, it fails
+  closed **before grant issuance**.
+- Once authenticated, only the PUBLIC owner-signed chain is saved in
+  account-scoped IndexedDB and can be reused during warm offline SPA use.
+  Every offline read re-verifies all signatures, hashes, revisions and
+  the independently pinned owner identity. No GPS, private title,
+  description, wrapping keys or recovery material are cached.
+  This does NOT prove current server membership or ACL freshness.
+  A new grant/submission must still pass server authorization when
+  transmitted. Cold offline document bootstrap remains BLOCKED BY DESIGN.
 - A valid signed timestamp still does not prove genuine device capture time:
   capture time remains an untrusted signed device-clock claim. Server retains
   independent membership, finalization, grant and event-window checks.
@@ -75,6 +79,9 @@ and are NOT implemented by this PR.
 - PHP feature test: no history for unaccepted invitee, outsider 404,
   accepted contributor/owner only, v1→v2 signed history and ms boundary,
   no plaintext in response.
+- IndexedDB regression: previously authenticated historical policies
+  remain usable offline for the same account only; changed latest revision,
+  tampered chain and another account cannot reuse stale entries.
 - Vitest: full root/previous hash/revision/signature chain; forged,
   truncated, time-reordered and cross-owner history; no retroactive required
   GPS on earlier photos; no wrong assignment or private metadata mismatch;
