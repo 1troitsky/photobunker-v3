@@ -6,6 +6,7 @@ import type { Session } from '../../identity/application/session'
 import {
   queueAssignmentCreation, listLocalAssignmentDrafts, listAssignmentOperations,
   verifySignedAssignmentPolicy, assertSignedPolicyProgress,
+  cachePrivateAssignment, readCachedPrivateAssignment,
 } from './assignment-outbox'
 
 afterEach(()=>{activeSession.value=null})
@@ -107,6 +108,41 @@ describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
     expect(()=>assertSignedPolicyProgress(listing,{
       ...listing,policyContract:'malicious replacement',
     })).toThrow('assignment.original_policy_changed')
+  })
+  it('caches only account-bound AEAD ciphertext and refuses wrong policy/account',async()=>{
+    const accountA='11111111-1111-4111-8111-111111111111'
+    const accountB='22222222-2222-4222-8222-222222222222'
+    const assignment='33333333-3333-4333-8333-333333333333'
+    const policy='{"signed":"immutable-policy-snapshot"}'
+    const confidential={
+      version:1 as const,
+      title:'Private offline title',
+      instructions:'Never store unencrypted contributor notes',
+    }
+    await account(accountA)
+    await cachePrivateAssignment(assignment,policy,confidential)
+    expect(await readCachedPrivateAssignment(assignment,policy)).toEqual(confidential)
+    expect(await readCachedPrivateAssignment(assignment,'{"signed":"tampered"}'))
+      .toBeNull()
+    const idb=await new Promise<IDBDatabase>((resolve,reject)=>{
+      const req=indexedDB.open('pb3-assignment-operation-outbox-v1')
+      req.onsuccess=()=>resolve(req.result)
+      req.onerror=()=>reject(req.error)
+    })
+    try{
+      const row=await new Promise<unknown>((resolve,reject)=>{
+        const tx=idb.transaction('privateSummaries','readonly')
+        const req=tx.objectStore('privateSummaries').get(accountA+'/'+assignment)
+        req.onsuccess=()=>resolve(req.result)
+        req.onerror=()=>reject(req.error)
+      })
+      expect(row).toBeDefined()
+      expect(JSON.stringify(row)).not.toContain('Private offline title')
+      expect(JSON.stringify(row)).not.toContain('Never store')
+      expect((row as {ciphertext:Blob}).ciphertext).toBeInstanceOf(Blob)
+    }finally{idb.close()}
+    await account(accountB)
+    expect(await readCachedPrivateAssignment(assignment,policy)).toBeNull()
   })
   it('isolates local draft listings per account and rejects invalid progress targets',async()=>{
     await account('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')

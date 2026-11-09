@@ -4,14 +4,16 @@ import { RouterLink } from 'vue-router'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
   queueAssignmentCreation, listLocalAssignmentDrafts,
-  listServerAssignments, listAssignmentInvites, listAssignmentOperations,
+  listServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
+  listCachedAssignmentInvites,
+  cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
   queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
   queueAssignmentStateTransition,
   verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
-  ReceivedAssignmentInvite, AssignmentOperation,
+  ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
 } from '../features/assignments/application/assignment-outbox'
 import {
   openOwnerAssignment, openRecipientAssignment,
@@ -49,6 +51,7 @@ const checkAgreed=ref(false)
 const incomingAgreed=ref(false)
 const busy=ref(false)
 const syncing=ref(false)
+const showingOfflineSnapshot=ref(false)
 const error=ref('')
 const notice=ref('')
 const search=ref('')
@@ -96,7 +99,7 @@ function cleanPreview():void{
 function resetSensitive():void {
   assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
   submissions.value=[];selectedId.value='';ownerCheck.value=null
-  contributorCheck.value=null;cleanPreview()
+  contributorCheck.value=null;showingOfflineSnapshot.value=false;cleanPreview()
 }
 function explain(e:unknown):string{
   return e instanceof Error?e.message:'assignment.operation_failed'
@@ -129,18 +132,40 @@ async function hydrate():Promise<void>{
   }))
   if(activeSession.value!==identity)return
   assignments.value=localRows
-  if(!identity.online||!navigator.onLine){
-    // Cached invitations can be shown as opaque, not as current ACL evidence.
-    invites.value=await listAssignmentInvites()
-    return
+  let offline=!identity.online||!navigator.onLine
+  showingOfflineSnapshot.value=offline
+  let snapshots:AssignmentListing[]
+  let received:ReceivedAssignmentInvite[]
+  if(offline){
+    // A warm offline route can read only previously authenticated, signed
+    // cached assignments. This is NOT proof of current server membership.
+    ;[snapshots,received]=await Promise.all([
+      listCachedAssignmentSnapshots(),listCachedAssignmentInvites(),
+    ])
+  }else{
+    try{
+      const [server,invitesFromServer]=await Promise.all([
+        listServerAssignments(),listAssignmentInvites(),
+      ])
+      snapshots=server.items
+      received=invitesFromServer
+    }catch(e){
+      // navigator.onLine may remain true during API/S3 outages or captive
+      // portals. Fall back to the previously verified encrypted cache, NEVER
+      // claim fresh grants/receipts, and surface the failed verification.
+      if(activeSession.value!==identity)return
+      offline=true
+      showingOfflineSnapshot.value=true
+      error.value=explain(e)
+      ;[snapshots,received]=await Promise.all([
+        listCachedAssignmentSnapshots(),listCachedAssignmentInvites(),
+      ])
+    }
   }
-  const [server,received]=await Promise.all([
-    listServerAssignments(),listAssignmentInvites(),
-  ])
   if(activeSession.value!==identity)return
   invites.value=received
   const rows=[...localRows]
-  for(const item of server.items){
+  for(const item of snapshots){
     const previous=rows.find(a=>a.id===item.assignmentId)
     let data=previous?.data??null
     if(!data){
@@ -150,15 +175,22 @@ async function hydrate():Promise<void>{
         }else{
           const invite=received.find(i=>i.assignmentId===item.assignmentId&&i.state==='accepted')
           if(invite){
-            await verifyAssignmentInvite(invite) // includes independently pinned owner SPKI
-            const contract=JSON.parse(invite.contract)
-            const own=await ensureOwnExchangeKey()
-            data=await openRecipientAssignment(own.privateKey,{
-              assignmentId:item.assignmentId,inviteId:invite.inviteId,
-              ownerAccountId:item.ownerAccountId,
-              recipientAccountId:identity.accountId,
-              role:'contributor',expiresAt:invite.expiresAt,
-            },contract.envelope,item.privateEnvelope)
+            await verifyAssignmentInvite(invite,offline) // local pin for stale snapshot; fresh check online
+            if(offline){
+              // No network key-directory access is attempted offline. Only
+              // an existing AEAD-encrypted account-scoped summary is opened.
+              data=await readCachedPrivateAssignment(item.assignmentId,item.policyContract)
+            }else{
+              const contract=JSON.parse(invite.contract)
+              const own=await ensureOwnExchangeKey()
+              data=await openRecipientAssignment(own.privateKey,{
+                assignmentId:item.assignmentId,inviteId:invite.inviteId,
+                ownerAccountId:item.ownerAccountId,
+                recipientAccountId:identity.accountId,
+                role:'contributor',expiresAt:invite.expiresAt,
+              },contract.envelope,item.privateEnvelope)
+              await cachePrivateAssignment(item.assignmentId,item.policyContract,data)
+            }
           }
         }
       }catch{/* unconfirmed peer or invalid ciphertext remains opaque */}
@@ -166,7 +198,7 @@ async function hydrate():Promise<void>{
     const row:VisibleAssignment={
       id:item.assignmentId,ownerAccountId:item.ownerAccountId,data,
       state:item.state,revision:item.revision,localState:previous?.localState,
-      goal:item.photoGoal,confirmedPhotos:item.confirmedPhotoCount,
+      goal:item.photoGoal,confirmedPhotos:offline?null:item.confirmedPhotoCount,
       createdAt:previous?.createdAt??item.startsAt,
       isOwner:item.ownerAccountId===identity.accountId,
       startsAt:item.startsAt,endsAt:item.endsAt,
@@ -362,6 +394,9 @@ onUnmounted(cleanPreview)
       </div>
     </div>
     <p class="subtitle">P1 · рабочий E2EE-сценарий · полный Fieldwork 5.0 / Editor 2.2 ещё не перенесён</p>
+    <p v-if="activeSession&&showingOfflineSnapshot" class="muted" role="status">
+      Офлайн: показаны последние проверенные подписью снимки заданий. Текущие права и количество подтверждённых материалов неизвестны до синхронизации.
+    </p>
 
     <div v-if="!activeSession" class="foundation-card">
       <p>Для управления зашифрованными заданиями необходим аккаунт.</p>

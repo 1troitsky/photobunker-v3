@@ -404,6 +404,34 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
       .toBeVisible({timeout:20000})
 
+    // navigator.onLine can be true during an actual API outage. A degraded
+    // online refresh must retain only previously verified private ciphertext
+    // and explicitly mark server authority/receipts as stale.
+    await B.route('**/assignments/v1',route=>route.fulfill({
+      status:503,contentType:'application/json',body:'{"error":"synthetic outage"}',
+    }))
+    await B.route('**/assignments/v1/invites/received',route=>route.fulfill({
+      status:503,contentType:'application/json',body:'{"error":"synthetic outage"}',
+    }))
+    await B.route('**/shares/v1/keys/*',route=>route.fulfill({
+      status:503,contentType:'application/json',body:'{"error":"synthetic key-directory outage"}',
+    }))
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(B.getByText(/Офлайн: показаны последние проверенные подписью/))
+      .toBeVisible()
+    await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
+      .toBeVisible()
+    // Even with the key directory unavailable, a cached owner-signed policy
+    // can bind a local-only camera capture. The server will validate later.
+    const outageBinding=await B.evaluate(async id=>{
+      const m=await import('/src/features/assignments/application/assignment-outbox.ts')
+      return m.signedCaptureBinding(id)
+    },assignmentId)
+    expect(outageBinding.policyHash).toMatch(/^[0-9a-f]{64}$/)
+    await B.unroute('**/assignments/v1')
+    await B.unroute('**/assignments/v1/invites/received')
+    await B.unroute('**/shares/v1/keys/*')
+
     // Verify assignment policy while online and cache its signed snapshot.
     await B.getByRole('navigation',{name:'Главная навигация'})
       .getByRole('link',{name:'Камера',exact:true}).click()
@@ -429,6 +457,19 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     expect(captured.version).toBe(2)
     expect(captured.policyHash).toMatch(/^[0-9a-f]{64}$/)
     expect(captured.signedCapture.assignmentId).toBe(assignmentId)
+
+    // Warm SPA navigation must work without HTTP after a previously accepted
+    // signed assignment was cached. This is NOT a cold offline document reload.
+    await B.getByRole('navigation',{name:'Главная навигация'})
+      .getByRole('link',{name:'Задания',exact:true}).click()
+    await expect(B.getByText(/Офлайн: показаны последние проверенные подписью/))
+      .toBeVisible()
+    await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
+      .toBeVisible()
+    await expect(B.locator('.assignment-card').first())
+      .toContainText('Локально ожидают отправки: 1')
+    await expect(B.locator('.assignment-card').first())
+      .toContainText('ожидает подтверждения')
     await bCtx.setOffline(false)
     await B.getByRole('navigation',{name:'Главная навигация'})
       .getByRole('link',{name:'Browser',exact:true}).click()
