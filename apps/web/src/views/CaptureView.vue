@@ -31,6 +31,8 @@ async function refreshPolicies():Promise<void> {
     const requested=route.query.assignmentId
     const preferred=typeof requested==='string'?requested:selectedAssignment.value
     selectedAssignment.value=found.some(x=>x.assignmentId===preferred)?preferred:''
+    if(typeof requested==='string'&&requested&&!selectedAssignment.value)
+      policyNotice.value='Для этого задания нет проверенной политики. Съёмка по нему заблокирована.'
   }catch(e){
     policyNotice.value=e instanceof Error?e.message:'assignment.policies_unavailable'
   }finally{policyLoading.value=false}
@@ -92,6 +94,11 @@ async function capture():Promise<void> {
         'image/jpeg',0.85)
     })
     // Canvas output strips source EXIF; no device gallery write occurs.
+    // Do not silently record a personal photograph when the user entered
+    // the camera via an assignment that has no authenticated policy.
+    const required=route.query.assignmentId
+    if(typeof required==='string'&&required&&selectedAssignment.value!==required)
+      throw new Error('assignment.policy_not_verified')
     // An offline photo carries an independently verified, versioned and
     // device-signed snapshot of the assignment policy. Personal v1 stays available.
     const binding=selectedAssignment.value
@@ -112,6 +119,7 @@ watch(activeSession,session=>{
 onMounted(()=>{
   if(activeSession.value){void refreshPolicies();void nextTick().then(openCamera)}
 })
+watch(()=>route.query.assignmentId,()=>{void refreshPolicies()})
 onUnmounted(()=>{disposed=true;closeCamera()})
 </script>
 
@@ -144,7 +152,9 @@ onUnmounted(()=>{disposed=true;closeCamera()})
       </div>
       <div class="action-row">
         <button type="button" :disabled="!!stream" @click="openCamera">Включить камеру</button>
-        <button type="button" :disabled="!stream||busy" @click="capture">
+        <button type="button"
+          :disabled="!stream||busy||(typeof route.query.assignmentId==='string'&&!!route.query.assignmentId&&selectedAssignment!==route.query.assignmentId)"
+          @click="capture">
           {{ busy ? 'Шифрование…' : 'Сделать снимок' }}
         </button>
         <button type="button" :disabled="!stream" @click="closeCamera">Отключить</button>
