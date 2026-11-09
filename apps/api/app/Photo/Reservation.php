@@ -14,7 +14,8 @@ final class Reservation
         $d=P::exact($request->json()->all(),['contract','signature']);
         abort_unless(is_string($d['contract'])&&is_string($d['signature']),422);
         $contract=$this->sync->validate($d['contract'],$d['signature'],$device->signing_spki);
-        abort_unless($contract['version']===1,422); // Assignment capture v2 remains explicitly closed until P2.
+        // Personal photographs use v1; assignment-scoped photos use v2.
+        abort_unless(in_array($contract['version'],[1,2],true),422);
         foreach($contract['assets'] as $a)abort_unless($a['manifest']['accountId']===$account->id,403);
         $hash=hash('sha256',$d['contract']);
         return DB::transaction(function()use($account,$device,$contract,$d,$hash){
@@ -33,6 +34,9 @@ final class Reservation
                 return $existing->state==='active'
                   ?['state'=>'active','receipt'=>json_decode($existing->receipt,true)]
                   :['state'=>'pending','photoId'=>$id,'expiresAt'=>(int)$existing->expires_at];
+            }
+            if($contract['version']===2){
+                $this->requireCaptureAuthority($contract['capture'],$account->id);
             }
             $need=array_sum(array_column($contract['assets'],'bytes'));
             $used=DB::table('photo_objects as o')->join('photo_records as p','o.photo_id','=','p.id')
@@ -70,5 +74,31 @@ final class Reservation
             }
             return ['state'=>'pending','photoId'=>$id,'expiresAt'=>$contract['expiresAt']];
         },3);
+    }
+    /**
+     * Check authoritative assignment state and membership on reservation.
+     * Device-signed capturedAt is not a trusted wall-clock oracle.
+     */
+    private function requireCaptureAuthority(array $capture,string $actor):void
+    {
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$capture['assignmentId'])->lockForUpdate()->first();
+        abort_unless($a,404);
+        abort_unless($a->state==='active'
+            &&$a->owner_account_id===$capture['ownerAccountId']
+            &&(int)$a->policy_revision===$capture['policyRevision']
+            &&hash_equals(hash('sha256',$a->contract_json),$capture['policyHash']),409);
+        $when=$capture['capturedAt'];
+        abort_unless($when>=$a->starts_at
+            &&($a->ends_at===null || $when<(int)$a->ends_at)
+            &&$when>=PhotoSync::nowMs()-14*86400000,409);
+        if($actor!==$a->owner_account_id){
+            $member=DB::table('assignment_invites_v1')
+                ->where('assignment_id',$a->id)
+                ->where('recipient_account_id',$actor)
+                ->where('role','contributor')
+                ->where('state','accepted')->exists();
+            abort_unless($member,403);
+        }
     }
 }

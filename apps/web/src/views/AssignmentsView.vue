@@ -64,6 +64,10 @@ const count=computed(()=>assignments.value.length)
 const activeCount=computed(()=>assignments.value.filter(a=>a.state==='active').length)
 const selectedOperations=computed(()=>operations.value.filter(op=>
   op.contract.includes(selectedId.value)&&!!selectedId.value))
+const eligiblePhotos=computed(()=>photos.value
+  .filter(p=>p.state==='synced'
+    &&(!p.capture||p.capture.assignmentId===selectedId.value))
+  .sort((a,b)=>Number(!!b.capture)-Number(!!a.capture)))
 
 function cleanPreview():void{
   if(previewUrl.value){URL.revokeObjectURL(previewUrl.value);previewUrl.value=''}
@@ -150,11 +154,26 @@ async function hydrate():Promise<void>{
   if(activeSession.value!==identity)return
   assignments.value=rows
 }
-async function refresh():Promise<void>{
-  if(syncing.value)return
-  syncing.value=true
-  try{await hydrate()}catch(e){error.value=explain(e)}
-  finally{syncing.value=false}
+// Coalesce overlapping initial offline hydration, subsequent online proof and
+// explicit refresh. Dropping a refresh while the old session is still being
+// hydrated can hide freshly accepted invitations until another navigation.
+let currentRefresh:Promise<void>|null=null
+let refreshRequested=false
+function refresh():Promise<void>{
+  if(currentRefresh){
+    refreshRequested=true
+    return currentRefresh
+  }
+  currentRefresh=(async()=>{
+    syncing.value=true
+    try{
+      do{
+        refreshRequested=false
+        try{await hydrate()}catch(e){error.value=explain(e)}
+      }while(refreshRequested)
+    }finally{syncing.value=false}
+  })().finally(()=>{currentRefresh=null})
+  return currentRefresh
 }
 async function synchronize():Promise<void>{
   await operate(async()=>{
@@ -360,6 +379,9 @@ onUnmounted(cleanPreview)
           <h2>{{ selected.data?.title||'Зашифрованное задание' }}</h2>
           <button type="button" @click="choose('')">Закрыть</button>
         </div>
+        <p v-if="selected.state==='active'&&selected.localState!=='queued'">
+          <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Снимать по заданию</RouterLink>
+        </p>
         <p v-if="selected.data" class="muted">{{ selected.data.instructions }}</p>
         <p><code>{{ selected.id }}</code></p>
         <p class="muted">Тип: фото · {{ selected.goal===null?'без цели':'Цель: '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
@@ -397,12 +419,15 @@ onUnmounted(cleanPreview)
           </button>
           <h3>Файлы · мои снимки</h3>
           <p class="muted">Выберите синхронизированный снимок. Передача создаст отдельное зашифрованное разрешение; участие в задании само по себе не раскрывает фото.</p>
-          <div v-for="photo in photos.filter(p=>p.state==='synced')" :key="photo.key" class="photo-row">
-            <div><strong>{{ photo.photoId.slice(0,8) }}</strong><small>{{ photo.state }}</small></div>
+          <div v-for="photo in eligiblePhotos" :key="photo.key" class="photo-row">
+            <div><strong>{{ photo.photoId.slice(0,8) }}</strong>
+              <small>{{ photo.capture?'Снято для этого задания':'Личный снимок · отдельная передача' }}</small>
+              <small>{{ photo.state }}</small>
+            </div>
             <button type="button" :disabled="busy||!contributorCheck?.confirmed" @click="submit(photo)">Отправить в задание</button>
           </div>
-          <p v-if="!photos.some(p=>p.state==='synced')" class="muted">Синхронизированных фотографий пока нет.</p>
-          <RouterLink to="/camera">Камера</RouterLink>
+          <p v-if="!eligiblePhotos.length" class="muted">Для этого задания нет подходящих синхронизированных фотографий.</p>
+          <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Камера задания</RouterLink>
         </template>
       </div>
 

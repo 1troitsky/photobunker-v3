@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import { activeSession, requireSession } from '../../identity/application/session'
 import { jsonApi } from '../../identity/infrastructure/api'
-import { importSigner, sign, verify, importSpki } from '../../identity/infrastructure/crypto'
+import { importSigner, sign, verify, importSpki, digest, hex } from '../../identity/infrastructure/crypto'
 import { pinnedPeer } from '../../sharing/key-directory'
 import { listOutgoingGrants } from '../../sharing/grant-flow'
 import { sealAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
@@ -35,9 +35,13 @@ export interface LocalAssignment {
 export type AssignmentListing={
   assignmentId:string
   ownerAccountId:string
+  ownerAccountSpki:string
   state:string
+  revision:number
   photoGoal:number|null
   policyRevision:number
+  policyContract:string
+  policySignature:string
   privateEnvelope:AssignmentEnvelope
   startsAt:number
   endsAt:number|null
@@ -54,17 +58,31 @@ export type ReceivedAssignmentInvite={
 }
 
 type CachedInvite=ReceivedAssignmentInvite & { cachedForAccountId:string }
+type CachedCapturePolicy={
+  key:string;accountId:string;listing:AssignmentListing;verifiedAt:number
+}
+export type SignedCaptureBinding={
+  assignmentId:string;ownerAccountId:string;policyRevision:number
+  policyHash:string;capturedAt:number
+}
 
 class AssignmentDB extends Dexie {
   operations!:Table<AssignmentOperation,string>
   assignments!:Table<LocalAssignment,string>
   invites!:Table<CachedInvite,string>
+  capturePolicies!:Table<CachedCapturePolicy,string>
   constructor(){
     super('pb3-assignment-operation-outbox-v1')
     this.version(1).stores({
       operations:'&id, accountId, [accountId+createdAt], [accountId+state]',
       assignments:'&id, ownerAccountId, [ownerAccountId+createdAt]',
       invites:'&inviteId, assignmentId, ownerAccountId, cachedForAccountId',
+    })
+    this.version(2).stores({
+      operations:'&id, accountId, [accountId+createdAt], [accountId+state]',
+      assignments:'&id, ownerAccountId, [ownerAccountId+createdAt]',
+      invites:'&inviteId, assignmentId, ownerAccountId, cachedForAccountId',
+      capturePolicies:'&key, accountId, [accountId+verifiedAt]',
     })
   }
 }
@@ -138,6 +156,37 @@ export async function listLocalAssignmentDrafts():Promise<LocalAssignment[]> {
   return db.assignments.where('ownerAccountId').equals(s.accountId).toArray()
 }
 
+/**
+ * Do not use server-declared assignment capture restrictions until the
+ * immutable owner-root-signed creation policy has been authenticated.
+ * For another account, the public key must already have been pinned via
+ * independent first-contact fingerprint verification.
+ */
+export async function verifySignedAssignmentPolicy(item:AssignmentListing):Promise<void>{
+  const s=requireSession()
+  const trustedSpki=item.ownerAccountId===s.accountId
+    ?s.pkg.accountSpki
+    :(await pinnedPeer(item.ownerAccountId)).accountSpki
+  if(!trustedSpki||item.ownerAccountSpki!==trustedSpki
+    ||!await verify(await importSpki(trustedSpki),
+      'pb3.assignment.v1\n'+item.policyContract,item.policySignature)){
+    throw new Error('assignment.untrusted_capture_policy')
+  }
+  let c:Record<string,unknown>
+  try{c=JSON.parse(item.policyContract) as Record<string,unknown>}
+  catch{throw new Error('assignment.invalid_capture_policy')}
+  if(c.version!==1||c.assignmentId!==item.assignmentId
+    ||c.ownerAccountId!==item.ownerAccountId||c.state!==item.state
+    ||c.revision!==item.revision||c.policyRevision!==item.policyRevision
+    ||c.photoGoal!==item.photoGoal||c.startsAt!==item.startsAt
+    ||c.endsAt!==item.endsAt||!Array.isArray(c.allowedMedia)
+    ||c.allowedMedia.length!==1||c.allowedMedia[0]!=='photo'
+    ||JSON.stringify(c.privateEnvelope)!==JSON.stringify(item.privateEnvelope)){
+    throw new Error('assignment.policy_snapshot_mismatch')
+  }
+  assertSame(s)
+}
+
 export async function listServerAssignments(after?:string):Promise<{
   items:AssignmentListing[];nextCursor:string|null
 }>{
@@ -147,7 +196,63 @@ export async function listServerAssignments(after?:string):Promise<{
   const result=await jsonApi<{items:AssignmentListing[];nextCursor:string|null}>(
     '/assignments/v1'+q)
   assertSame(s)
+  for(const item of result.items)await verifySignedAssignmentPolicy(item)
+  assertSame(s)
+  // Cache only signed, independently authenticated policy snapshots.
+  // No plaintext assignment name, DEK or recovery material is persisted.
+  await db.transaction('rw',db.capturePolicies,async()=>{
+    for(const item of result.items){
+      await db.capturePolicies.put({
+        key:s.accountId+'/'+item.assignmentId,accountId:s.accountId,
+        listing:item,verifiedAt:Date.now(),
+      })
+    }
+  })
+  assertSame(s)
   return result
+}
+
+/**
+ * A previously verified policy can be read offline for local-only capture.
+ * A server can still reject a later upload if membership or state changed.
+ */
+export async function listVerifiedCapturePolicies():Promise<AssignmentListing[]>{
+  const s=requireSession()
+  const rows=await db.capturePolicies.where('accountId').equals(s.accountId).toArray()
+  const usable:AssignmentListing[]=[]
+  for(const row of rows){
+    if(activeSession.value!==s)throw new Error('identity.changed')
+    try{
+      await verifySignedAssignmentPolicy(row.listing)
+      if(row.listing.state==='active'
+        &&row.listing.startsAt<=Date.now()
+        &&(row.listing.endsAt===null||row.listing.endsAt>Date.now())) {
+        usable.push(row.listing)
+      }
+    }catch{/* Invalid/unpinned snapshots are not available for capture. */}
+  }
+  return usable
+}
+
+export async function signedCaptureBinding(
+  assignmentId:string,capturedAt=Date.now(),
+):Promise<SignedCaptureBinding>{
+  const s=requireSession()
+  const row=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
+  if(!row)throw new Error('assignment.policy_not_cached')
+  const policy=row.listing
+  await verifySignedAssignmentPolicy(policy)
+  if(policy.state!=='active'||policy.policyRevision!==1
+    ||capturedAt<policy.startsAt
+    ||(policy.endsAt!==null&&capturedAt>=policy.endsAt)) {
+    throw new Error('assignment.capture_not_permitted')
+  }
+  const policyHash=hex(await digest(new TextEncoder().encode(policy.policyContract)))
+  assertSame(s)
+  return {
+    assignmentId:policy.assignmentId,ownerAccountId:policy.ownerAccountId,
+    policyRevision:policy.policyRevision,policyHash,capturedAt,
+  }
 }
 
 export async function queueAssignmentInvitation(

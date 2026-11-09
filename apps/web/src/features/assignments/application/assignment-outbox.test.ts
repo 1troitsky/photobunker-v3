@@ -5,6 +5,7 @@ import { activeSession } from '../../identity/application/session'
 import type { Session } from '../../identity/application/session'
 import {
   queueAssignmentCreation, listLocalAssignmentDrafts, listAssignmentOperations,
+  verifySignedAssignmentPolicy,
 } from './assignment-outbox'
 
 afterEach(()=>{activeSession.value=null})
@@ -39,6 +40,37 @@ describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
     const contract=JSON.parse(operation.contract)
     expect(contract.assignmentId).toBe(id)
     expect(contract.privateEnvelope.ciphertext).toMatch(/^[A-Za-z0-9_-]+$/)
+  })
+  it('authenticates owner-signed capture policy before trusting server flags',async()=>{
+    const id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
+    await account(id)
+    const current=activeSession.value
+    expect(current).not.toBeNull()
+    await queueAssignmentCreation({
+      title:'Verified offline capture',
+      instructions:'Private details are encrypted',
+      photoGoal:30,
+    })
+    const [op]=await listAssignmentOperations()
+    const c=JSON.parse(op.contract)
+    const listing={
+      assignmentId:c.assignmentId,ownerAccountId:id,
+      ownerAccountSpki:current!.pkg.accountSpki,
+      state:c.state,revision:c.revision,photoGoal:c.photoGoal,
+      policyRevision:c.policyRevision,
+      startsAt:c.startsAt,endsAt:c.endsAt,
+      privateEnvelope:c.privateEnvelope,
+      policyContract:op.contract,policySignature:op.signature,
+    }
+    await expect(verifySignedAssignmentPolicy(listing)).resolves.toBeUndefined()
+    await expect(verifySignedAssignmentPolicy({...listing,photoGoal:31}))
+      .rejects.toThrow('assignment.policy_snapshot_mismatch')
+    await expect(verifySignedAssignmentPolicy({...listing,policyContract:op.contract.replace(
+      '"photoGoal":30','"photoGoal":31')}))
+      .rejects.toThrow('assignment.untrusted_capture_policy')
+    await expect(verifySignedAssignmentPolicy({...listing,
+      ownerAccountSpki:'unexpected-key'}))
+      .rejects.toThrow('assignment.untrusted_capture_policy')
   })
   it('isolates local draft listings per account and rejects invalid progress targets',async()=>{
     await account('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')

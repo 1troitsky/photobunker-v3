@@ -1,10 +1,43 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { activeSession } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
+import {
+  listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
+} from '../features/assignments/application/assignment-outbox'
+import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
 
+const route=useRoute()
 const video=ref<HTMLVideoElement|null>(null)
+const policies=ref<AssignmentListing[]>([])
+const selectedAssignment=ref('')
+const policyNotice=ref('')
+const policyLoading=ref(false)
+async function refreshPolicies():Promise<void> {
+  const identity=activeSession.value
+  if(!identity){policies.value=[];selectedAssignment.value='';return}
+  if(policyLoading.value)return
+  policyLoading.value=true
+  policyNotice.value=''
+  try{
+    if(identity.online && navigator.onLine){
+      try{await listServerAssignments()}
+      catch{policyNotice.value='Не удалось обновить политики. Используются ранее проверенные.'}
+    }
+    const found=await listVerifiedCapturePolicies()
+    if(activeSession.value!==identity)return
+    policies.value=found
+    const requested=route.query.assignmentId
+    const preferred=typeof requested==='string'?requested:selectedAssignment.value
+    selectedAssignment.value=found.some(x=>x.assignmentId===preferred)?preferred:''
+    if(typeof requested==='string'&&requested&&!selectedAssignment.value)
+      policyNotice.value='Для этого задания нет проверенной политики. Съёмка по нему заблокирована.'
+  }catch(e){
+    policyNotice.value=e instanceof Error?e.message:'assignment.policies_unavailable'
+  }finally{policyLoading.value=false}
+}
+
 const stream=ref<MediaStream|null>(null)
 const busy=ref(false)
 const message=ref('')
@@ -61,7 +94,17 @@ async function capture():Promise<void> {
         'image/jpeg',0.85)
     })
     // Canvas output strips source EXIF; no device gallery write occurs.
-    const photo=await captureEncrypted(jpeg)
+    // Do not silently record a personal photograph when the user entered
+    // the camera via an assignment that has no authenticated policy.
+    const required=route.query.assignmentId
+    if(typeof required==='string'&&required&&selectedAssignment.value!==required)
+      throw new Error('assignment.policy_not_verified')
+    // An offline photo carries an independently verified, versioned and
+    // device-signed snapshot of the assignment policy. Personal v1 stays available.
+    const binding=selectedAssignment.value
+      ?await signedCaptureBinding(selectedAssignment.value,Date.now())
+      :undefined
+    const photo=await captureEncrypted(jpeg,binding)
     message.value='Зашифровано и сохранено локально: '+photo.photoId.slice(0,8)
   }catch(e){error.value=e instanceof Error?e.message:'camera.capture_failed'}
   finally{busy.value=false}
@@ -69,10 +112,14 @@ async function capture():Promise<void> {
 // Restoring a trusted device after a page load is asynchronous. The camera
 // must also start when that local identity appears, not just on first mount.
 watch(activeSession,session=>{
-  if(!session){closeCamera();return}
+  if(!session){closeCamera();policies.value=[];selectedAssignment.value='';return}
+  void refreshPolicies()
   void nextTick().then(()=>{if(!stream.value&&!starting)void openCamera()})
 },{flush:'post'})
-onMounted(()=>{if(activeSession.value)void nextTick().then(openCamera)})
+onMounted(()=>{
+  if(activeSession.value){void refreshPolicies();void nextTick().then(openCamera)}
+})
+watch(()=>route.query.assignmentId,()=>{void refreshPolicies()})
 onUnmounted(()=>{disposed=true;closeCamera()})
 </script>
 
@@ -85,12 +132,29 @@ onUnmounted(()=>{disposed=true;closeCamera()})
       <RouterLink to="/settings">Создать или восстановить аккаунт</RouterLink>
     </div>
     <template v-else>
+      <div class="foundation-card">
+        <label for="camera-assignment">Задание для съёмки</label>
+        <select id="camera-assignment" v-model="selectedAssignment" :disabled="busy">
+          <option value="">Личное фото (без задания)</option>
+          <option v-for="policy in policies" :key="policy.assignmentId"
+            :value="policy.assignmentId">
+            Задание {{ policy.assignmentId.slice(0,8) }} · политика {{ policy.policyRevision }}
+          </option>
+        </select>
+        <button type="button" :disabled="policyLoading||busy" @click="refreshPolicies">
+          {{ policyLoading?'Проверка…':'Обновить задания' }}
+        </button>
+        <p class="muted">Доступны только проверенные подписанные политики. При съёмке без сети используется последний подтверждённый снимок политики; сервер повторно проверит права при загрузке.</p>
+        <p v-if="policyNotice" class="muted" role="status">{{ policyNotice }}</p>
+      </div>
       <div class="video-frame">
         <video ref="video" playsinline muted autoplay aria-label="Предпросмотр камеры"/>
       </div>
       <div class="action-row">
         <button type="button" :disabled="!!stream" @click="openCamera">Включить камеру</button>
-        <button type="button" :disabled="!stream||busy" @click="capture">
+        <button type="button"
+          :disabled="!stream||busy||(typeof route.query.assignmentId==='string'&&!!route.query.assignmentId&&selectedAssignment!==route.query.assignmentId)"
+          @click="capture">
           {{ busy ? 'Шифрование…' : 'Сделать снимок' }}
         </button>
         <button type="button" :disabled="!stream" @click="closeCamera">Отключить</button>

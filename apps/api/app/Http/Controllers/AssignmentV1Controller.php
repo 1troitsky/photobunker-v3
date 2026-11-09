@@ -77,6 +77,7 @@ final class AssignmentV1Controller extends Controller
         $after=$r->query('after');
         if($after!==null){abort_unless(is_string($after),422);P::uuid($after);}
         $q=DB::table('assignment_records_v1 as a')
+          ->join('identity_accounts as owner','owner.id','=','a.owner_account_id')
           ->where(function($query)use($actor){
               $query->where('a.owner_account_id',$actor->id)
                 ->orWhereExists(function($sub)use($actor){
@@ -90,7 +91,8 @@ final class AssignmentV1Controller extends Controller
         $rows=$q->orderBy('a.id')->limit(51)->get([
             'a.id','a.owner_account_id','a.state','a.revision',
             'a.policy_revision','a.photo_goal','a.starts_at','a.ends_at',
-            'a.private_envelope_json',
+            'a.private_envelope_json','a.contract_json','a.owner_signature',
+            'owner.account_spki as owner_account_spki',
         ]);
         $more=$rows->count()>50;
         $items=$rows->take(50)->map(fn($x)=>[
@@ -101,6 +103,11 @@ final class AssignmentV1Controller extends Controller
             'startsAt'=>(int)$x->starts_at,
             'endsAt'=>$x->ends_at===null?null:(int)$x->ends_at,
             'privateEnvelope'=>json_decode($x->private_envelope_json,true,16,JSON_THROW_ON_ERROR),
+            // A client must verify this owner's original signed policy before
+            // trusting capture constraints. Server metadata alone is not a signature.
+            'policyContract'=>$x->contract_json,
+            'policySignature'=>$x->owner_signature,
+            'ownerAccountSpki'=>$x->owner_account_spki,
         ])->values()->all();
         return $this->sync->json(['items'=>$items,
             'nextCursor'=>$more&&$items?end($items)['assignmentId']:null]);
@@ -240,6 +247,17 @@ final class AssignmentV1Controller extends Controller
                 ->where('account_id',$actor->id)->first();
             abort_unless($photo&&$photo->state==='active'
                 &&$photo->expires_at>PhotoSync::nowMs(),404);
+            $photoContract=json_decode($photo->contract_json,true,32,JSON_THROW_ON_ERROR);
+            if(($photoContract['version']??null)===2){
+                // An assignment-scoped capture must never be re-bound to an
+                // unrelated assignment, even with an otherwise valid grant.
+                $capture=$photoContract['capture']??[];
+                abort_unless(($capture['assignmentId']??null)===$assignmentId
+                    &&($capture['ownerAccountId']??null)===$a->owner_account_id
+                    &&($capture['policyRevision']??null)===$c['policyRevision']
+                    &&hash_equals(hash('sha256',$a->contract_json),
+                        (string)($capture['policyHash']??'')),409);
+            }
             $grant=DB::table('photo_access_grants')
                 ->where('id',$c['photoGrantId'])->where('photo_id',$photo->id)
                 ->where('owner_account_id',$actor->id)

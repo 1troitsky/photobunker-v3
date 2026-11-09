@@ -37,9 +37,19 @@
 - [Version/security/tariffs floor](https://github.com/1troitsky/photobunker-v3/actions/runs/42603942480): **PASS**.
 - Real phone/hardware, final Fieldwork UI 5.0 / Editor 2.2 and the entire feature matrix have **NOT** been owner accepted.
 
-## Remaining before completion of #10
-- Client-side signed assignment create/invite/accept/submit **durable outbox and UI wiring**, explicit owner fingerprint confirmation, camera policy binding/snapshots and sender proposal (not automatic grant) UX. Client AES-GCM/ECDH primitives now exist but are not yet integrated into the user flow.
-- Real-phone manual A→B→A acceptance (Chromium with synthetic photos has passed) and full P1 owner/contributor signed camera-context policy; subsequent user-facing scopes and revocation UI.
-- Revision transitions, historical policies for captured-at offline replay, reviewer roles, full four-tab approved assignment editor, retention/paywall and media extensions; keep these as required future work.
+## Follow-up: signed capture policy integration (Draft PR #12)
 
-**No production access and no merges into main.**
+The original P1-04 UI and durable assignment operations listed above were implemented and CI-verified in PR #11. Earlier notes listing those same operations as pending were outdated and have been replaced.
+
+PR #12 adds account-authenticated owner-signed policy snapshots, per-account offline cache, camera assignment selection, device-signed photo v2 capture binding, server reservation and submission verification, and negative authorization tests. It also addresses an intermittent offline→online hydration refresh race seen in Chromium CI. See [the scoped protocol and acceptance gaps](P1-04-CAPTURE-POLICY-V2.md).
+
+**PR #12 is not yet accepted:** latest head must pass Chromium + PostgreSQL/Garage as well as PHP/TS/unit checks. The parallel QA agent is testing the fixed PR #11 baseline independently.
+
+## Remaining before completion of #10
+
+- Confirm latest PR #12 real-browser integration and independent local/hardware A→B→A acceptance (especially iOS Safari/PWA camera, IndexedDB and offline recovery).
+- Signed historical policy revisions, explicit revision transitions and authorization for offline captures under older policies; immutable per-capture evidence and clock/expiry semantics.
+- Full approved Camera 1.2 capture presets and required category/GPS/description; accepted four-tab Assignments 5.0 / Editor Media 2.2 and a final Assignment Detail design.
+- Owner/curator reviewer scopes, editor permissions, team/contact integration, retention/tariff enforcement and photo/video/audio extensions; account key rotation and security audit remain additional planned gates.
+
+**No production access, no merge into main, no production cleanup activation.**

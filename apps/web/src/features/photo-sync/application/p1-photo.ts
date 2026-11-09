@@ -4,6 +4,7 @@ import { jsonApi, putCiphertext, readCiphertext } from '../../identity/infrastru
 import { unwrapAssetDEK, wrapAssetDEK } from '../../identity/infrastructure/crypto'
 import { decryptAsset, encryptAsset, sha } from '../../local-storage/infrastructure/cipher'
 import type { CipherManifest, Scope } from '../../local-storage/domain/contracts'
+import type { SignedCaptureBinding } from '../../assignments/application/assignment-outbox'
 
 export type PhotoStatus = 'queued'|'retry'|'synced'|'conflict'
 export type StoredAsset = {
@@ -22,6 +23,7 @@ export type StoredPhoto = {
   expiresAt:number
   state:PhotoStatus
   lastError?:string
+  capture?:SignedCaptureBinding
   assets:StoredAsset[]
 }
 
@@ -64,25 +66,29 @@ async function makeAsset(kind:'master'|'metadata',plaintext:Blob,
   }
 }
 
-export async function captureEncrypted(jpeg:Blob):Promise<StoredPhoto> {
+export async function captureEncrypted(jpeg:Blob,capture?:SignedCaptureBinding):Promise<StoredPhoto> {
   const session=requireSession()
   if (jpeg.type!=='image/jpeg'||jpeg.size<128||jpeg.size>10*1024*1024)
     throw new Error('capture.invalid_jpeg')
   const photoId=crypto.randomUUID()
   const operationId=crypto.randomUUID()
-  const createdAt=Date.now()
+  const createdAt=capture?.capturedAt??Date.now()
+  if(capture &&(createdAt>Date.now()+120000||createdAt<Date.now()-120000))
+    throw new Error('assignment.capture_clock_invalid')
   // 13 days is an intentional conservative buffer against the initial 14-day
   // Free cap and unsynchronized browser clocks. Authoritative TTL needs P1 clock sync.
   const expiresAt=createdAt+13*86400000
   const metadata= new Blob([enc.encode(JSON.stringify({
     type:'image/jpeg',capturedAt:createdAt,source:'camera',version:1,
+    ...(capture?{assignmentCapture:capture}:{}),
   }))],{type:'application/json'})
   const main=await makeAsset('master',jpeg,photoId,expiresAt)
   const detail=await makeAsset('metadata',metadata,photoId,expiresAt)
   requireSame(session)
   const stored:StoredPhoto={
     key:session.accountId+'/'+photoId,accountId:session.accountId,
-    photoId,operationId,createdAt,expiresAt,state:'queued',assets:[main,detail],
+    photoId,operationId,createdAt,expiresAt,state:'queued',
+    ...(capture?{capture}:{}),assets:[main,detail],
   }
   // Durable, atomic ciphertext before any attempt to contact the server.
   await db.transaction('rw',db.photos,async()=>{await db.photos.put(stored)})
@@ -108,8 +114,9 @@ export function signedPhotoContract(p:StoredPhoto):string {
     sha256:a.sha256,manifest:serverManifest(a.manifest),
   })).sort((a,b)=>a.assetId.localeCompare(b.assetId))
   return JSON.stringify({
-    version:1,photoId:p.photoId,operationId:p.operationId,
+    version:p.capture?2:1,photoId:p.photoId,operationId:p.operationId,
     expiresAt:p.expiresAt,assets,
+    ...(p.capture?{capture:p.capture}:{}),
   })
 }
 
