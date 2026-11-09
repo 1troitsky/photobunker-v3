@@ -35,9 +35,13 @@ export interface LocalAssignment {
 export type AssignmentListing={
   assignmentId:string
   ownerAccountId:string
+  ownerAccountSpki:string
   state:string
+  revision:number
   photoGoal:number|null
   policyRevision:number
+  policyContract:string
+  policySignature:string
   privateEnvelope:AssignmentEnvelope
   startsAt:number
   endsAt:number|null
@@ -138,6 +142,37 @@ export async function listLocalAssignmentDrafts():Promise<LocalAssignment[]> {
   return db.assignments.where('ownerAccountId').equals(s.accountId).toArray()
 }
 
+/**
+ * Do not use server-declared assignment capture restrictions until the
+ * immutable owner-root-signed creation policy has been authenticated.
+ * For another account, the public key must already have been pinned via
+ * independent first-contact fingerprint verification.
+ */
+export async function verifySignedAssignmentPolicy(item:AssignmentListing):Promise<void>{
+  const s=requireSession()
+  const trustedSpki=item.ownerAccountId===s.accountId
+    ?s.pkg.accountSpki
+    :(await pinnedPeer(item.ownerAccountId)).accountSpki
+  if(!trustedSpki||item.ownerAccountSpki!==trustedSpki
+    ||!await verify(await importSpki(trustedSpki),
+      'pb3.assignment.v1\n'+item.policyContract,item.policySignature)){
+    throw new Error('assignment.untrusted_capture_policy')
+  }
+  let c:Record<string,unknown>
+  try{c=JSON.parse(item.policyContract) as Record<string,unknown>}
+  catch{throw new Error('assignment.invalid_capture_policy')}
+  if(c.version!==1||c.assignmentId!==item.assignmentId
+    ||c.ownerAccountId!==item.ownerAccountId||c.state!==item.state
+    ||c.revision!==item.revision||c.policyRevision!==item.policyRevision
+    ||c.photoGoal!==item.photoGoal||c.startsAt!==item.startsAt
+    ||c.endsAt!==item.endsAt||!Array.isArray(c.allowedMedia)
+    ||c.allowedMedia.length!==1||c.allowedMedia[0]!=='photo'
+    ||JSON.stringify(c.privateEnvelope)!==JSON.stringify(item.privateEnvelope)){
+    throw new Error('assignment.policy_snapshot_mismatch')
+  }
+  assertSame(s)
+}
+
 export async function listServerAssignments(after?:string):Promise<{
   items:AssignmentListing[];nextCursor:string|null
 }>{
@@ -146,6 +181,8 @@ export async function listServerAssignments(after?:string):Promise<{
   const q=after?'?after='+encodeURIComponent(after):''
   const result=await jsonApi<{items:AssignmentListing[];nextCursor:string|null}>(
     '/assignments/v1'+q)
+  assertSame(s)
+  for(const item of result.items)await verifySignedAssignmentPolicy(item)
   assertSame(s)
   return result
 }
