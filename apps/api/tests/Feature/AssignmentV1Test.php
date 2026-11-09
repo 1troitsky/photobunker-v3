@@ -151,7 +151,16 @@ final class AssignmentV1Test extends TestCase
     public function test_assignment_creation_is_signed_private_and_owner_scoped():void
     {
         $this->createAssignment();
-        $this->getJson('/assignments/v1')->assertJsonPath('items.0.photoGoal',30);
+        $record=DB::table('assignment_records_v1')->where('id',$this->assignmentId)->first();
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.photoGoal',30)
+            ->assertJsonPath('items.0.policyContract',$record->contract_json)
+            ->assertJsonPath('items.0.policySignature',$record->owner_signature)
+            ->assertJsonPath('items.0.ownerAccountSpki',$this->people['owner']['spki']);
+        // The client can independently authenticate the immutable signed
+        // capture policy instead of relying on unsigned server flags.
+        $this->assertTrue(P::verify($this->people['owner']['spki'],
+            'pb3.assignment.v1'."\n".$record->contract_json,$record->owner_signature));
         $this->as('outsider');
         $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
         $this->postJson('/assignments/v1',[
@@ -172,7 +181,10 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('items.0.inviteId',$invite);
         $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
         $this->accept($invite);
-        $this->getJson('/assignments/v1')->assertJsonPath('items.0.assignmentId',$this->assignmentId);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.assignmentId',$this->assignmentId)
+            ->assertJsonPath('items.0.ownerAccountSpki',$this->people['owner']['spki'])
+            ->assertJsonPath('items.0.policyRevision',1);
         // Invitation expiry governs acceptance only. After consent, the
         // participant must retain their sealed assignment-key envelope.
         DB::table('assignment_invites_v1')->where('id',$invite)
