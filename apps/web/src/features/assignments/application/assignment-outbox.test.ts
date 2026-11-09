@@ -5,7 +5,7 @@ import { activeSession } from '../../identity/application/session'
 import type { Session } from '../../identity/application/session'
 import {
   queueAssignmentCreation, listLocalAssignmentDrafts, listAssignmentOperations,
-  verifySignedAssignmentPolicy,
+  verifySignedAssignmentPolicy, assertSignedPolicyProgress,
 } from './assignment-outbox'
 
 afterEach(()=>{activeSession.value=null})
@@ -94,6 +94,15 @@ describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
       .rejects.toThrow('assignment.state_not_authenticated')
     await expect(verifySignedAssignmentPolicy({...listing,state:'finished'}))
       .rejects.toThrow('assignment.state_not_authenticated')
+    expect(()=>assertSignedPolicyProgress(listing,finished)).not.toThrow()
+    expect(()=>assertSignedPolicyProgress(finished,listing))
+      .toThrow('assignment.state_rollback')
+    expect(()=>assertSignedPolicyProgress(finished,{
+      ...finished,stateContract:op.contract,
+    })).toThrow('assignment.state_equivocation')
+    expect(()=>assertSignedPolicyProgress(listing,{
+      ...listing,policyContract:'malicious replacement',
+    })).toThrow('assignment.original_policy_changed')
   })
   it('isolates local draft listings per account and rejects invalid progress targets',async()=>{
     await account('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
