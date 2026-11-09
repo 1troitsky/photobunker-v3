@@ -14,6 +14,12 @@ return [
     ],
     // Per authenticated account, not per NAT/IP. Product monthly quotas are
     // separate from this technical abuse/load safeguard.
+    'media' => [
+        // Each 1 MiB chunk is an authorized, checksummed PUT. Keep transport
+        // capacity independent of the Free/paid product storage allowance.
+        'requests_per_minute_per_account' => 480,
+        'unauthenticated_requests_per_minute_per_ip' => 40,
+    ],
     'assignments' => [
         'requests_per_minute_per_account' => 40,
         'unauthenticated_requests_per_minute_per_ip' => 40,
