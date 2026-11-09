@@ -57,7 +57,7 @@ describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
       assignmentId:c.assignmentId,ownerAccountId:id,
       ownerAccountSpki:current!.pkg.accountSpki,
       state:c.state,revision:c.revision,photoGoal:c.photoGoal,
-      policyRevision:c.policyRevision,
+      confirmedPhotoCount:0,policyRevision:c.policyRevision,
       startsAt:c.startsAt,endsAt:c.endsAt,
       privateEnvelope:c.privateEnvelope,
       policyContract:op.contract,policySignature:op.signature,
@@ -66,6 +66,10 @@ describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
     await expect(verifySignedAssignmentPolicy(listing)).resolves.toBeUndefined()
     await expect(verifySignedAssignmentPolicy({...listing,photoGoal:31}))
       .rejects.toThrow('assignment.policy_snapshot_mismatch')
+    await expect(verifySignedAssignmentPolicy({...listing,confirmedPhotoCount:-1}))
+      .rejects.toThrow('assignment.invalid_receipt_count')
+    await expect(verifySignedAssignmentPolicy({...listing,confirmedPhotoCount:1.25}))
+      .rejects.toThrow('assignment.invalid_receipt_count')
     await expect(verifySignedAssignmentPolicy({...listing,policyContract:op.contract.replace(
       '"photoGoal":30','"photoGoal":31')}))
       .rejects.toThrow('assignment.untrusted_capture_policy')
