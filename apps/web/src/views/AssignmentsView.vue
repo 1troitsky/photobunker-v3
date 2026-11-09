@@ -5,6 +5,7 @@ import { activeSession, reauthenticate } from '../features/identity/application/
 import {
   queueAssignmentCreation, listLocalAssignmentDrafts,
   listServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
+  listCachedAssignmentInvites,
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
   queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
@@ -131,7 +132,7 @@ async function hydrate():Promise<void>{
   }))
   if(activeSession.value!==identity)return
   assignments.value=localRows
-  const offline=!identity.online||!navigator.onLine
+  let offline=!identity.online||!navigator.onLine
   showingOfflineSnapshot.value=offline
   let snapshots:AssignmentListing[]
   let received:ReceivedAssignmentInvite[]
@@ -139,14 +140,27 @@ async function hydrate():Promise<void>{
     // A warm offline route can read only previously authenticated, signed
     // cached assignments. This is NOT proof of current server membership.
     ;[snapshots,received]=await Promise.all([
-      listCachedAssignmentSnapshots(),listAssignmentInvites(),
+      listCachedAssignmentSnapshots(),listCachedAssignmentInvites(),
     ])
   }else{
-    const [server,invitesFromServer]=await Promise.all([
-      listServerAssignments(),listAssignmentInvites(),
-    ])
-    snapshots=server.items
-    received=invitesFromServer
+    try{
+      const [server,invitesFromServer]=await Promise.all([
+        listServerAssignments(),listAssignmentInvites(),
+      ])
+      snapshots=server.items
+      received=invitesFromServer
+    }catch(e){
+      // navigator.onLine may remain true during API/S3 outages or captive
+      // portals. Fall back to the previously verified encrypted cache, NEVER
+      // claim fresh grants/receipts, and surface the failed verification.
+      if(activeSession.value!==identity)return
+      offline=true
+      showingOfflineSnapshot.value=true
+      error.value=explain(e)
+      ;[snapshots,received]=await Promise.all([
+        listCachedAssignmentSnapshots(),listCachedAssignmentInvites(),
+      ])
+    }
   }
   if(activeSession.value!==identity)return
   invites.value=received
