@@ -25,7 +25,7 @@ test('two browser identities: key-only account, encrypted camera photo, Garage r
     await deviceA.goto('/browser')
     await expect(deviceA.locator('.photo-row').first()).toBeVisible()
     await deviceA.getByRole('button',{name:'Синхронизировать'}).click()
-    await expect(deviceA.getByText('synced', {exact:false}).first()).toBeVisible({timeout:30000})
+    await expect(deviceA.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
 
     // Retrieve the opaque ID through the genuine authenticated endpoint.
     const photoId=await deviceA.evaluate(async()=>{

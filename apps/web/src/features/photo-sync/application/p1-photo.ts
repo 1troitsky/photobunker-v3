@@ -114,9 +114,20 @@ export function signedPhotoContract(p:StoredPhoto):string {
 }
 
 let running:Promise<void>|null=null
+let rerunRequested=false
 export function flushOutbox():Promise<void> {
-  if(running)return running
-  running=flushLoop().finally(()=>{running=null})
+  if(running){
+    // A later authenticated session may have arrived during the first upload.
+    // Queue a new pass instead of silently returning the stale in-flight one.
+    rerunRequested=true
+    return running
+  }
+  running=(async()=>{
+    do {
+      rerunRequested=false
+      await flushLoop()
+    } while(rerunRequested && activeSession.value?.online && navigator.onLine)
+  })().finally(()=>{running=null})
   return running
 }
 async function flushLoop():Promise<void> {

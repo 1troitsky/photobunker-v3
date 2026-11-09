@@ -141,7 +141,13 @@ export async function restoreAccount(recoveryKey:string):Promise<Session> {
   return activate(pkg,device,true)
 }
 
-export async function resumeExistingDevice():Promise<Session|null> {
+let pendingSessionResume:Promise<Session|null>|null=null
+export function resumeExistingDevice():Promise<Session|null> {
+  if (pendingSessionResume) return pendingSessionResume
+  pendingSessionResume=resumeLocalDevice().finally(()=>{pendingSessionResume=null})
+  return pendingSessionResume
+}
+async function resumeLocalDevice():Promise<Session|null> {
   await probeCapabilities()
   const devices=await listDevices()
   let saved:LocalDevice|undefined
@@ -165,7 +171,11 @@ export async function resumeExistingDevice():Promise<Session|null> {
 }
 
 export async function reauthenticate():Promise<Session> {
+  // Do not race a second login/proof against the automatic session bootstrap:
+  // either proof can rotate the cookie/CSRF state while an S3 PUT is in flight.
+  if(pendingSessionResume) await pendingSessionResume
   const state=requireSession()
+  if(state.online) return state
   await prove('login',{accountId:state.accountId,deviceId:state.deviceId,purpose:'login'},state.device.deviceKey)
   return activate(state.pkg,state.device,true)
 }

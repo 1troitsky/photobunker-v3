@@ -82,7 +82,7 @@ onUnmounted(revokePreview)
         <h2>На этом устройстве</h2>
         <p v-if="!local.length" class="muted">Пока нет локально зашифрованных снимков.</p>
         <div v-for="p in local" :key="p.key" class="photo-row">
-          <div><strong>{{ p.photoId.slice(0,8) }}</strong><small>{{ p.state }} · {{ new Date(p.createdAt).toLocaleString() }}</small></div>
+          <div><strong>{{ p.photoId.slice(0,8) }}</strong><small>{{ p.state }} · {{ new Date(p.createdAt).toLocaleString() }}</small><small v-if="p.lastError" class="muted">Синхронизация: {{ p.lastError }}</small></div>
           <button type="button" @click="openLocal(p.photoId)">Открыть</button>
         </div>
       </div>
