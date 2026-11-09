@@ -323,7 +323,10 @@ export async function signedCaptureBinding(
   const row=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
   if(!row)throw new Error('assignment.policy_not_cached')
   const policy=row.listing
-  await verifySignedAssignmentPolicy(policy)
+  // Capture is deliberately Local-First. Recheck the cached owner signature
+  // against the independently pinned local key, not a live key-directory
+  // request that can fail during an API outage.
+  await verifySignedAssignmentPolicy(policy,true)
   if(policy.state!=='active'||policy.policyRevision!==1
     ||capturedAt<policy.startsAt
     ||(policy.endsAt!==null&&capturedAt>=policy.endsAt)) {
