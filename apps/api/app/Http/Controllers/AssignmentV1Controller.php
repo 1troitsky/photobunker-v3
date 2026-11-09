@@ -53,7 +53,8 @@ final class AssignmentV1Controller extends Controller
                 abort_unless($existing->owner_account_id===$actor->id
                   &&hash_equals($existing->contract_hash,$hash),409);
                 return $this->sync->json(['assignmentId'=>$existing->id,
-                  'state'=>'active','revision'=>1,'unchanged'=>true]);
+                  'state'=>$existing->state,'revision'=>(int)$existing->revision,
+                  'unchanged'=>true]);
             }
             abort_if(DB::table('assignment_records_v1')
               ->where('operation_id',$c['operationId'])->exists(),409);
@@ -68,6 +69,70 @@ final class AssignmentV1Controller extends Controller
             ]);
             return $this->sync->json(['assignmentId'=>$c['assignmentId'],
               'state'=>'active','revision'=>1,'unchanged'=>false],201);
+        },3);
+    }
+
+    /**
+     * A finish/resume command changes server permissions without changing the
+     * immutable owner-signed capture policy or deleting participants' media.
+     * Every transition has a signed, revision-locked, append-only operation.
+     */
+    public function changeState(Request $r,string $assignmentId)
+    {
+        $this->sync->origin($r);
+        [$actor]=$this->sync->actor($r);
+        $c=$this->signed($r,$actor,'pb3.assignment-state.v1',[
+            'version','operationId','assignmentId','ownerAccountId',
+            'policyHash','policyRevision','fromRevision','toRevision',
+            'action','state',
+        ]);
+        C::stateChange($c,$actor->id,$assignmentId);
+        $hash=hash('sha256',$r->json('contract'));
+        return DB::transaction(function()use($actor,$assignmentId,$c,$hash,$r){
+            $a=DB::table('assignment_records_v1')
+                ->where('id',$assignmentId)->lockForUpdate()->first();
+            abort_unless($a&&$a->owner_account_id===$actor->id,404);
+            abort_unless(hash_equals(hash('sha256',$a->contract_json),
+                $c['policyHash']),409);
+            $existing=DB::table('assignment_state_events_v1')
+                ->where('operation_id',$c['operationId'])->first();
+            if($existing){
+                abort_unless($existing->assignment_id===$a->id
+                    &&hash_equals($existing->contract_hash,$hash),409);
+                return $this->sync->json([
+                    'assignmentId'=>$a->id,'state'=>$a->state,
+                    'revision'=>(int)$a->revision,'unchanged'=>true,
+                ]);
+            }
+            abort_unless((int)$a->revision===$c['fromRevision']
+                &&$c['toRevision']===(int)$a->revision+1
+                &&(int)$a->policy_revision===$c['policyRevision'],409);
+            $expected=$c['action']==='finish'?'active':'finished';
+            abort_unless($a->state===$expected,409);
+            // A finished assignment cannot resume beyond its configured end.
+            if($c['action']==='resume'){
+                abort_if($a->ends_at!==null
+                    &&(int)$a->ends_at<=PhotoSync::nowMs(),409);
+            }
+            DB::table('assignment_state_events_v1')->insert([
+                'operation_id'=>$c['operationId'],'assignment_id'=>$a->id,
+                'from_revision'=>$c['fromRevision'],
+                'to_revision'=>$c['toRevision'],
+                'state'=>$c['state'],'contract_hash'=>$hash,
+                'contract_json'=>$r->json('contract'),
+                'owner_signature'=>$r->json('signature'),
+                'created_at'=>now(),
+            ]);
+            DB::table('assignment_records_v1')->where('id',$a->id)->update([
+                'state'=>$c['state'],'revision'=>$c['toRevision'],
+                'latest_state_contract'=>$r->json('contract'),
+                'latest_state_signature'=>$r->json('signature'),
+                'updated_at'=>now(),
+            ]);
+            return $this->sync->json([
+                'assignmentId'=>$a->id,'state'=>$c['state'],
+                'revision'=>$c['toRevision'],'unchanged'=>false,
+            ]);
         },3);
     }
 
@@ -92,6 +157,7 @@ final class AssignmentV1Controller extends Controller
             'a.id','a.owner_account_id','a.state','a.revision',
             'a.policy_revision','a.photo_goal','a.starts_at','a.ends_at',
             'a.private_envelope_json','a.contract_json','a.owner_signature',
+            'a.latest_state_contract','a.latest_state_signature',
             'owner.account_spki as owner_account_spki',
         ]);
         $more=$rows->count()>50;
@@ -107,6 +173,8 @@ final class AssignmentV1Controller extends Controller
             // trusting capture constraints. Server metadata alone is not a signature.
             'policyContract'=>$x->contract_json,
             'policySignature'=>$x->owner_signature,
+            'stateContract'=>$x->latest_state_contract,
+            'stateSignature'=>$x->latest_state_signature,
             'ownerAccountSpki'=>$x->owner_account_spki,
         ])->values()->all();
         return $this->sync->json(['items'=>$items,
@@ -127,21 +195,23 @@ final class AssignmentV1Controller extends Controller
             $a=DB::table('assignment_records_v1')
                 ->where('id',$assignmentId)->lockForUpdate()->first();
             abort_unless($a&&$a->owner_account_id===$actor->id,404);
-            abort_unless($a->state==='active',409);
-            $recipient=DB::table('identity_accounts')
-              ->where('id',$c['recipientAccountId'])->where('status','ready')->first();
-            abort_unless($recipient,404);
-            $key=DB::table('account_exchange_keys')->where('account_id',$recipient->id)->first();
-            abort_unless($key&&hash_equals($key->descriptor_hash,$c['recipientKeyDigest']),409);
+            // A lost ACK must remain replayable even after finish/expiry,
+            // recipient rotation or a later change to the key directory.
             $other=DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
-                ->where('recipient_account_id',$recipient->id)->first();
+                ->where('recipient_account_id',$c['recipientAccountId'])->first();
             if($other){
                 abort_unless($other->id===$c['inviteId']
                   &&hash_equals($other->contract_hash,$hash),409);
                 return $this->sync->json(['inviteId'=>$other->id,
                   'state'=>$other->state,'unchanged'=>true]);
             }
+            abort_unless($a->state==='active',409);
+            $recipient=DB::table('identity_accounts')
+              ->where('id',$c['recipientAccountId'])->where('status','ready')->first();
+            abort_unless($recipient,404);
+            $key=DB::table('account_exchange_keys')->where('account_id',$recipient->id)->first();
+            abort_unless($key&&hash_equals($key->descriptor_hash,$c['recipientKeyDigest']),409);
             DB::table('assignment_invites_v1')->insert([
                 'id'=>$c['inviteId'],'assignment_id'=>$assignmentId,
                 'owner_account_id'=>$actor->id,
@@ -167,10 +237,10 @@ final class AssignmentV1Controller extends Controller
             ->where(function($q):void {
                 $q->where('i.state','accepted')->orWhere(function($pending):void {
                     $pending->where('i.state','pending')
-                        ->where('i.expires_at','>',PhotoSync::nowMs());
+                        ->where('i.expires_at','>',PhotoSync::nowMs())
+                        ->where('a.state','active');
                 });
             })
-            ->where('a.state','active')
             ->orderBy('i.id')->limit(50)
             ->get(['i.id','i.assignment_id','i.state','i.role',
               'i.contract_json','i.owner_signature','i.expires_at',
@@ -196,12 +266,13 @@ final class AssignmentV1Controller extends Controller
         return DB::transaction(function()use($actor,$c,$assignmentId,$inviteId,$r){
             $a=DB::table('assignment_records_v1')
                 ->where('id',$assignmentId)->lockForUpdate()->first();
-            abort_unless($a&&$a->state==='active',404);
+            abort_unless($a,404);
             $invite=DB::table('assignment_invites_v1')
                 ->where('id',$inviteId)->where('assignment_id',$a->id)
                 ->where('recipient_account_id',$actor->id)->lockForUpdate()->first();
             abort_unless($invite,404);
-            abort_if($invite->expires_at<=PhotoSync::nowMs(),410);
+            // Accepted operation replay is idempotent even after the invite
+            // expired or the assignment was finished; new consent is not.
             if($invite->state==='accepted'){
                 abort_unless($invite->accepted_operation_id===$c['operationId']
                   &&hash_equals(hash('sha256',$invite->accepted_contract),
@@ -209,6 +280,8 @@ final class AssignmentV1Controller extends Controller
                 return $this->sync->json(['inviteId'=>$inviteId,
                   'state'=>'accepted','unchanged'=>true]);
             }
+            abort_unless($a->state==='active',409);
+            abort_if($invite->expires_at<=PhotoSync::nowMs(),410);
             abort_unless($invite->state==='pending',409);
             DB::table('assignment_invites_v1')->where('id',$inviteId)->update([
                 'state'=>'accepted','accepted_at'=>now(),
@@ -236,6 +309,17 @@ final class AssignmentV1Controller extends Controller
             $a=DB::table('assignment_records_v1')
                 ->where('id',$assignmentId)->lockForUpdate()->first();
             abort_unless($a,404);
+            // An already-committed signed submission must ACK after finish,
+            // expiry or later grant revocation. This returns only the caller's
+            // receipt; it never restores ciphertext or revoked read grants.
+            $existing=DB::table('assignment_submissions_v1')
+                ->where('id',$c['submissionId'])->first();
+            if($existing){
+                abort_unless($existing->assignment_id===$assignmentId
+                  &&$existing->contributor_account_id===$actor->id
+                  &&hash_equals($existing->contract_hash,$hash),409);
+                return $this->sync->json(['submissionId'=>$existing->id,'unchanged'=>true]);
+            }
             abort_unless($a->state==='active' && $a->policy_revision===$c['policyRevision']
                 && $a->starts_at<=PhotoSync::nowMs()
                 &&($a->ends_at===null || $a->ends_at>PhotoSync::nowMs()),409);
@@ -264,13 +348,6 @@ final class AssignmentV1Controller extends Controller
                 ->where('recipient_account_id',$a->owner_account_id)
                 ->where('state','active')->first();
             abort_unless($grant&&$grant->expires_at>PhotoSync::nowMs(),403);
-            $existing=DB::table('assignment_submissions_v1')
-                ->where('id',$c['submissionId'])->first();
-            if($existing){
-                abort_unless($existing->contributor_account_id===$actor->id
-                  &&hash_equals($existing->contract_hash,$hash),409);
-                return $this->sync->json(['submissionId'=>$existing->id,'unchanged'=>true]);
-            }
             abort_if(DB::table('assignment_submissions_v1')
                 ->where('photo_id',$c['photoId'])->orWhere('operation_id',$c['operationId'])
                 ->exists(),409);

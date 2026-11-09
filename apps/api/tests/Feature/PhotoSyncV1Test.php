@@ -70,6 +70,18 @@ final class PhotoSyncV1Test extends TestCase {
             'contract'=>$json,'signature'=>$this->signature("photobunker.photo-sync.v1\n".$json)],
             'content'=>$content];
     }
+    private function assignmentCaptureFixture(array $capture):array {
+        $f=$this->fixture();
+        $c=json_decode($f['body']['contract'],true,32,JSON_THROW_ON_ERROR);
+        $c['version']=2;
+        $c['capture']=$capture;
+        $json=json_encode($c,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $f['body']=[
+            'contract'=>$json,
+            'signature'=>$this->signature("photobunker.photo-sync.v1\n".$json),
+        ];
+        return $f;
+    }
     private function reserve(array $f){return $this->postJson('/photos/v1/reserve',$f['body']);}
     private function upload(array $f):void {
         foreach($f['assets'] as $asset){
@@ -138,6 +150,89 @@ final class PhotoSyncV1Test extends TestCase {
         $this->reserve($scoped($capture))->assertConflict();
     }
 
+    public function test_offline_capture_before_finish_can_sync_but_closed_interval_cannot():void {
+        $assignment=(string)Str::uuid();
+        $policy='{"version":1,"allowedMedia":["photo"]}';
+        $hash=hash('sha256',$policy);
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$assignment,'owner_account_id'=>$this->account,
+            'operation_id'=>(string)Str::uuid(),'contract_hash'=>$hash,
+            'contract_json'=>$policy,'owner_signature'=>'fixture',
+            'private_envelope_json'=>'{}','state'=>'finished',
+            'revision'=>2,'policy_revision'=>1,'photo_goal'=>30,
+            'starts_at'=>now()->subHour()->getTimestampMs(),
+            'ends_at'=>null,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $finishAt=now();
+        DB::table('assignment_state_events_v1')->insert([
+            'operation_id'=>(string)Str::uuid(),'assignment_id'=>$assignment,
+            'from_revision'=>1,'to_revision'=>2,'state'=>'finished',
+            'contract_hash'=>str_repeat('a',64),'contract_json'=>'{}',
+            'owner_signature'=>'fixture','created_at'=>$finishAt,
+        ]);
+        $base=[
+            'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
+            'policyRevision'=>1,'policyHash'=>$hash,
+            'capturedAt'=>now()->subMinute()->getTimestampMs(),
+        ];
+        // B's ciphertext can be reserved even if the owner finished while B
+        // was offline. It remains a private photo; submission is still gated.
+        $oldPhoto=$this->assignmentCaptureFixture($base);
+        $this->reserve($oldPhoto)->assertOk()->assertJsonPath('state','pending');
+        $afterFinish=$base;
+        $afterFinish['capturedAt']=$finishAt->getTimestampMs()+1000;
+        $this->reserve($this->assignmentCaptureFixture($afterFinish))
+            ->assertConflict();
+        // Explicit signed resume opens the next interval; it does not make
+        // previously forbidden captures inside the finished window valid.
+        $this->travel(3)->seconds();
+        DB::table('assignment_state_events_v1')->insert([
+            'operation_id'=>(string)Str::uuid(),'assignment_id'=>$assignment,
+            'from_revision'=>2,'to_revision'=>3,'state'=>'active',
+            'contract_hash'=>str_repeat('b',64),'contract_json'=>'{}',
+            'owner_signature'=>'fixture','created_at'=>now(),
+        ]);
+        DB::table('assignment_records_v1')->where('id',$assignment)
+            ->update(['state'=>'active','revision'=>3]);
+        $this->reserve($this->assignmentCaptureFixture($afterFinish))
+            ->assertConflict();
+        $afterResume=$base;
+        $afterResume['capturedAt']=now()->getTimestampMs();
+        $this->reserve($this->assignmentCaptureFixture($afterResume))
+            ->assertOk()->assertJsonPath('state','pending');
+    }
+
+    public function test_finish_then_resume_before_scheduled_start_keeps_future_capture_possible():void {
+        $assignment=(string)Str::uuid();
+        $policy='{"version":1,"allowedMedia":["photo"]}';
+        $hash=hash('sha256',$policy);
+        $start=now()->addSeconds(30)->getTimestampMs();
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$assignment,'owner_account_id'=>$this->account,
+            'operation_id'=>(string)Str::uuid(),'contract_hash'=>$hash,
+            'contract_json'=>$policy,'owner_signature'=>'fixture',
+            'private_envelope_json'=>'{}','state'=>'active',
+            'revision'=>3,'policy_revision'=>1,'photo_goal'=>null,
+            'starts_at'=>$start,'ends_at'=>null,
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        foreach([['finished',1,2],['active',2,3]] as [$state,$from,$to]){
+            DB::table('assignment_state_events_v1')->insert([
+                'operation_id'=>(string)Str::uuid(),'assignment_id'=>$assignment,
+                'from_revision'=>$from,'to_revision'=>$to,'state'=>$state,
+                'contract_hash'=>str_repeat('e',64),'contract_json'=>'{}',
+                'owner_signature'=>'fixture','created_at'=>now(),
+            ]);
+        }
+        $capture=[
+            'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
+            'policyRevision'=>1,'policyHash'=>$hash,
+            'capturedAt'=>$start+1000,
+        ];
+        $this->reserve($this->assignmentCaptureFixture($capture))
+            ->assertOk()->assertJsonPath('state','pending');
+    }
+
     public function test_unaccepted_contributor_cannot_reserve_assignment_capture():void {
         $assignment=(string)Str::uuid();
         $owner=(string)Str::uuid();
@@ -168,6 +263,27 @@ final class PhotoSyncV1Test extends TestCase {
             'signature'=>$this->signature("photobunker.photo-sync.v1\n".$json)];
         $this->reserve($f)->assertForbidden();
         $this->assertDatabaseMissing('photo_records',['id'=>$f['photo']]);
+        DB::table('assignment_invites_v1')->insert([
+            'id'=>(string)Str::uuid(),'assignment_id'=>$assignment,
+            'owner_account_id'=>$owner,'recipient_account_id'=>$this->account,
+            'role'=>'contributor','state'=>'accepted',
+            'recipient_key_digest'=>str_repeat('a',64),
+            'contract_hash'=>str_repeat('b',64),'contract_json'=>'{}',
+            'owner_signature'=>'fixture',
+            'expires_at'=>now()->addDay()->getTimestampMs(),
+            'accepted_at'=>now(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('assignment_records_v1')->where('id',$assignment)
+            ->update(['starts_at'=>now()->subHour()->getTimestampMs()]);
+        $tooEarly=$payload['capture'];
+        $tooEarly['capturedAt']=now()->subMinutes(10)->getTimestampMs();
+        $this->reserve($this->assignmentCaptureFixture($tooEarly))
+            ->assertForbidden(); // Claim predates the contributor consent.
+        $accepted=$payload['capture'];
+        $accepted['capturedAt']=now()->getTimestampMs();
+        $this->reserve($this->assignmentCaptureFixture($accepted))
+            ->assertOk()->assertJsonPath('state','pending');
     }
 
     public function test_signed_reserve_upload_readback_finalize_replay_and_private_read():void {

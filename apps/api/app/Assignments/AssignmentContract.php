@@ -101,6 +101,27 @@ final class AssignmentContract
             self::uuid($d,$key);
     }
 
+    /**
+     * Only a tiny signed lifecycle vertical: finish/resume. Never delete
+     * contributor-owned photos or mutate the original signed capture policy.
+     */
+    public static function stateChange(array $d,string $owner,string $assignment):void
+    {
+        abort_unless($d['version']===1
+            &&$d['assignmentId']===$assignment
+            &&$d['ownerAccountId']===$owner
+            &&$d['policyRevision']===1
+            &&is_int($d['fromRevision'])&&$d['fromRevision']>=1
+            &&$d['fromRevision']<1000000
+            &&$d['toRevision']===$d['fromRevision']+1,422);
+        foreach(['assignmentId','ownerAccountId','operationId'] as $key)
+            self::uuid($d,$key);
+        abort_unless(is_string($d['policyHash'])
+            &&preg_match('/^[a-f0-9]{64}$/D',$d['policyHash'])===1,422);
+        abort_unless(($d['action']==='finish'&&$d['state']==='finished')
+            ||($d['action']==='resume'&&$d['state']==='active'),422);
+    }
+
     public static function submission(array $d,string $contributor,string $assignment):void
     {
         abort_unless($d['version']===1&&$d['kind']==='photo'
