@@ -6,6 +6,7 @@ import { pinnedPeer } from '../../sharing/key-directory'
 import { listOutgoingGrants } from '../../sharing/grant-flow'
 import { listOutgoingMediaGrants } from '../../media/application/media-grants'
 import { listLocalMedia } from '../../media/application/media-outbox'
+import type { MediaCaptureIntent } from '../../media/application/media-outbox'
 import { sealAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
 import type { AssignmentEnvelope, AssignmentInviteEnvelope, PrivateAssignment } from '../infrastructure/assignment-crypto'
 import { preparePhotoMetadata } from '../../photo-sync/domain/capture-metadata'
@@ -788,6 +789,39 @@ export async function listAssignmentSubmissions(assignmentId:string):Promise<Arr
  * A previously approved recipient DEK grant is a strict prerequisite, not
  * automatically created by assignment membership.
  */
+/** Authenticated warm-offline recording context for audio/video.
+ * Snapshot is owner-signed and pinned. This is a CLIENT assertion of
+ * recording time, not hardware/timestamp/GPS attestation.
+ */
+export async function signedMediaCaptureIntent(
+  assignmentId:string,mediaType:'video'|'audio',startedAt=Date.now(),
+):Promise<Omit<MediaCaptureIntent,'finishedAt'>>{
+  const session=requireSession()
+  const row=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  if(!row)throw Error('assignment.policy_not_cached')
+  await verifySignedAssignmentPolicy(row.listing,true)
+  assertSame(session)
+  const policy=row.listing
+  const allowed=signedAllowedAssignmentMedia(policy)
+  if(policy.ownerAccountId===session.accountId
+    ||policy.state!=='active'
+    ||!allowed.includes(mediaType)
+    ||policy.policyRevision<2
+    ||startedAt<policy.startsAt
+    ||(policy.endsAt!==null&&startedAt>=policy.endsAt))
+    throw Error('assignment.media_recording_not_permitted')
+  const latest=policy.policyAmendmentContract
+  if(!latest||(JSON.parse(latest) as {version?:number}).version!==3)
+    throw Error('assignment.media_policy_v3_required')
+  const policyHash=hex(await digest(new TextEncoder().encode(latest)))
+  assertSame(session)
+  return {
+    assignmentId,ownerAccountId:policy.ownerAccountId,
+    contributorAccountId:session.accountId,policyRevision:policy.policyRevision,
+    policyHash,mediaType,startedAt,
+  }
+}
+
 export async function queueAssignmentMediaSubmission(
   assignmentId:string,mediaId:string,mediaGrantId:string,
 ):Promise<string>{
@@ -821,13 +855,33 @@ export async function queueAssignmentMediaSubmission(
   const policyHash=hex(await digest(new TextEncoder().encode(policy)))
   const mediaContractHash=hex(await digest(
     new TextEncoder().encode(JSON.stringify(media.contract))))
+  let captureContract:string|undefined
+  let captureSignature:string|undefined
+  if(media.capture){
+    captureContract=media.capture.contract
+    captureSignature=media.capture.signature
+    const c=JSON.parse(captureContract) as Record<string,unknown>
+    if(c.version!==1||c.assignmentId!==assignmentId
+      ||c.contributorAccountId!==session.accountId
+      ||c.ownerAccountId!==listing.ownerAccountId
+      ||c.policyRevision!==listing.policyRevision
+      ||c.policyHash!==policyHash
+      ||c.mediaContractHash!==mediaContractHash
+      ||c.mediaId!==mediaId||c.mediaType!==media.mediaType)
+      throw Error('assignment.recording_bound_to_different_policy')
+    if(!await verify(await importSpki(session.pkg.accountSpki),
+      'pb3.assignment-media-capture.v1\n'+captureContract,captureSignature))
+      throw Error('assignment.invalid_recording_signature')
+  }
   const op=await signedOperation('media-submit',
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/media-submissions',{
-      version:1,submissionId:crypto.randomUUID(),
+      version:media.capture?2:1,submissionId:crypto.randomUUID(),
       operationId:crypto.randomUUID(),assignmentId,
       contributorAccountId:session.accountId,
       mediaId,mediaGrantId,mediaContractHash,
       policyRevision:listing.policyRevision,policyHash,kind:media.mediaType,
+      ...(captureContract&&captureSignature
+        ?{captureContract,captureSignature}:{}),
     },mediaGrantId)
   await persist(op)
   return op.id
