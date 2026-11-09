@@ -1,13 +1,13 @@
 import Dexie, { type Table } from 'dexie'
-import { activeSession, requireSession, reauthenticate } from '../../identity/application/session'
-import { jsonApi, readCiphertext } from '../../identity/infrastructure/api'
+import { activeSession, requireSession } from '../identity/application/session'
+import { jsonApi, readCiphertext } from '../identity/infrastructure/api'
 import {
   b64, unb64, random, exchangeKey, exportECDHPublic,
   importSigner, sign, verify, importSpki, withTransientOwnerDEK,
-} from '../../identity/infrastructure/crypto'
-import { decryptAsset, sha } from '../../local-storage/infrastructure/cipher'
-import type { CipherManifest } from '../../local-storage/domain/contracts'
-import { listLocalPhotos } from '../../photo-sync/application/p1-photo'
+} from '../identity/infrastructure/crypto'
+import { decryptAsset, sha } from '../local-storage/infrastructure/cipher'
+import type { CipherManifest } from '../local-storage/domain/contracts'
+import { listLocalPhotos } from '../photo-sync/application/p1-photo'
 import { ensureOwnExchangeKey, pinnedPeer, inspectPeer } from './key-directory'
 
 const encoder=new TextEncoder()

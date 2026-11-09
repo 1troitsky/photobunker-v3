@@ -1,11 +1,11 @@
 import Dexie, { type Table } from 'dexie'
-import { activeSession, requireSession } from '../../identity/application/session'
-import { jsonApi } from '../../identity/infrastructure/api'
+import { activeSession, requireSession } from '../identity/application/session'
+import { jsonApi } from '../identity/infrastructure/api'
 import {
   b64, unb64, random, digest, hex, importSigner, importSpki,
   sign, verify,
-} from '../../identity/infrastructure/crypto'
-import type { PackageV2 } from '../../identity/infrastructure/crypto'
+} from '../identity/infrastructure/crypto'
+import type { PackageV2 } from '../identity/infrastructure/crypto'
 
 const encoder=new TextEncoder()
 const exchangeDomain='pb3.recipient-key.v1\n'
