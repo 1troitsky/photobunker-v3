@@ -3,7 +3,7 @@ name: P0 security floor and contract checks
 on:
   pull_request:
   push:
-    branches: [main, 'p0/**']
+    branches: [main, 'p0/**', 'p1/**']
 
 permissions:
   contents: read
