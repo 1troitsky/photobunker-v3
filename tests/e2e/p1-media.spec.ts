@@ -136,3 +136,141 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     await primary.close();await restored.close();await outsider.close()
   }
 })
+
+test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant, recipient decrypts and owner revokes without deleting original',async({browser})=>{
+  test.setTimeout(150000)
+  const ownerContext=await browser.newContext()
+  const recipientContext=await browser.newContext()
+  const owner=await ownerContext.newPage()
+  const recipient=await recipientContext.newPage()
+  try{
+    await owner.goto('/settings')
+    await owner.getByRole('button',{name:'Создать ключ'}).click()
+    await owner.getByLabel('Я сохранил ключ восстановления').check()
+    await owner.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(owner.getByText('Подтверждённая сессия')).toBeVisible()
+    const ownerId=await owner.evaluate(async()=>{
+      const s=await import('/src/features/identity/application/session.ts')
+      return s.requireSession().accountId
+    })
+    await owner.goto('/browser')
+    const ownerPanel=owner.locator('.media-import-p1')
+    await ownerPanel.getByTestId('media-import-file').setInputFiles({
+      name:'SENSITIVE-RECIPIENT-AUDIO.wav',mimeType:'audio/wav',
+      buffer:Buffer.alloc(16427,0x5e),
+    })
+    await ownerPanel.getByRole('button',{name:'Отправить медиа'}).click()
+    await expect.poll(()=>owner.evaluate(async()=>{
+      const m=await import('/src/features/media/application/media-outbox.ts')
+      return (await m.listLocalMedia())[0]?.state
+    }),{timeout:30000}).toBe('synced')
+    const mediaId=await owner.evaluate(async()=>{
+      const m=await import('/src/features/media/application/media-outbox.ts')
+      return (await m.listLocalMedia())[0]!.mediaId
+    })
+
+    await recipient.goto('/settings')
+    await recipient.getByRole('button',{name:'Создать ключ'}).click()
+    await recipient.getByLabel('Я сохранил ключ восстановления').check()
+    await recipient.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(recipient.getByText('Подтверждённая сессия')).toBeVisible()
+    const recipientId=await recipient.evaluate(async()=>{
+      const s=await import('/src/features/identity/application/session.ts')
+      return s.requireSession().accountId
+    })
+    await recipient.goto('/browser')
+    await expect(recipient.getByTestId('media-share-panel')).toBeVisible()
+    // Recipient publishes account-signed ECDH directory. No implicit TOFU.
+    await recipient.evaluate(async()=>{
+      const keys=await import('/src/features/sharing/key-directory.ts')
+      await keys.ensureOwnExchangeKey()
+    })
+
+    const share=owner.getByTestId('media-share-panel')
+    await share.locator('#media-share-peer-id').fill(recipientId)
+    await share.getByRole('button',{name:'Проверить получателя медиа'}).click()
+    await expect(share.getByTestId('media-recipient-fingerprint')).not.toBeEmpty()
+    await expect(share.getByText('Ключ получателя подтверждён')).toHaveCount(0)
+    await share.getByLabel('Я сверил отпечаток получателя медиа').check()
+    await share.getByRole('button',{name:'Подтвердить получателя медиа'}).click()
+    await expect(share.getByText('Ключ получателя подтверждён')).toBeVisible()
+    await share.getByRole('button',{name:'Передать медиа'}).click()
+    await expect(share.getByText(/Разрешение сохранено/)).toBeVisible()
+    const grantId=await owner.evaluate(async()=>{
+      const grants=await import('/src/features/media/application/media-grants.ts')
+      const [row]=await grants.listOutgoingMediaGrants()
+      if(!row||row.state!=='sent')throw Error('grant.not_confirmed')
+      return row.id
+    })
+    const rawGrant=await owner.evaluate(async id=>{
+      const x=await fetch('/media-shares/v1/grants/'+id,{
+        credentials:'same-origin',
+      })
+      return x.status
+    },grantId)
+    expect(rawGrant).toBe(404) // even owner is not recipient
+
+    const received=recipient.getByTestId('media-share-panel')
+    await received.getByRole('button',{name:'Обновить медиа-разрешения'}).click()
+    await expect(received.getByText(mediaId.slice(0,8))).toBeVisible()
+    await received.getByRole('button',{name:'Проверить отправителя медиа'}).click()
+    await expect(received.getByTestId('media-owner-fingerprint')).not.toBeEmpty()
+    await received.getByLabel('Я сверил отпечаток отправителя медиа').check()
+    await received.getByRole('button',{name:'Подтвердить отправителя медиа'}).click()
+    await received.getByRole('button',{name:'Открыть полученное медиа'}).click()
+    await expect(recipient.getByTestId('media-decrypted-preview'))
+      .toContainText('SENSITIVE-RECIPIENT-AUDIO.wav')
+    const result=await recipient.evaluate(async id=>{
+      const g=await import('/src/features/media/application/media-grants.ts')
+      const data=await g.readReceivedMediaGrant(id)
+      const bytes=new Uint8Array(await data.blob.arrayBuffer())
+      return {
+        name:data.metadata.fileName,size:bytes.length,
+        head:bytes[0],last:bytes[bytes.length-1],mime:data.blob.type,
+      }
+    },grantId)
+    expect(result).toEqual({
+      name:'SENSITIVE-RECIPIENT-AUDIO.wav',
+      size:16427,head:0x5e,last:0x5e,mime:'audio/wav',
+    })
+    const leaked=await recipient.evaluate(async id=>{
+      const r=await fetch('/media-shares/v1/grants/'+id,{
+        credentials:'same-origin',
+      })
+      const payload=JSON.stringify(await r.json())
+      return {
+        containsFilename:payload.includes('SENSITIVE-RECIPIENT-AUDIO'),
+        containsMime:payload.includes('audio/wav'),
+        hasRawSecret:payload.includes('akek'),
+      }
+    },grantId)
+    expect(leaked).toEqual({
+      containsFilename:false,containsMime:false,hasRawSecret:false,
+    })
+
+    await share.getByRole('button',{name:'Отозвать медиа'}).click()
+    const blocked=await recipient.evaluate(async id=>{
+      const [manifest,receivedList]=await Promise.all([
+        fetch('/media-shares/v1/grants/'+id,{credentials:'same-origin'}),
+        fetch('/media-shares/v1/received',{credentials:'same-origin'}),
+      ])
+      return {
+        status:manifest.status,
+        grants:(await receivedList.json()).items.length,
+      }
+    },grantId)
+    expect(blocked).toEqual({status:410,grants:0})
+    // Only server read ACL is revoked; local cleartext already viewed by
+    // recipient cannot be remotely unsent. The owner's file is intact.
+    const intact=await owner.evaluate(async id=>{
+      const m=await import('/src/features/media/application/media-outbox.ts')
+      const data=await m.readCloudMedia(id)
+      return {size:data.blob.size,type:data.blob.type}
+    },mediaId)
+    expect(intact).toEqual({size:16427,type:'audio/wav'})
+    expect(ownerId).not.toBe(recipientId)
+  }finally{
+    await ownerContext.close()
+    await recipientContext.close()
+  }
+})
