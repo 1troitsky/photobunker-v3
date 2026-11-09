@@ -2,7 +2,10 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['p1-identity-photo.spec.ts', 'p1-camera-session.spec.ts'],
+  // Every versioned P1 vertical is a mandatory real-browser gate.
+  // Explicit older-file allowlist accidentally skipped MediaFile E2E
+  // in PR28–30 while the two original suites remained green.
+  testMatch: ['p1-*.spec.ts'],
   workers: 1,
   retries: 0,
   timeout: 90_000,
