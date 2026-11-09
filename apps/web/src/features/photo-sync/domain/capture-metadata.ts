@@ -6,7 +6,7 @@ export type GPSFix=Readonly<{
   latitude:number
   longitude:number
   accuracyMeters:number
-  obtainedAt:number
+  recordedAt:number
 }>
 export type CaptureMetadataInput=Readonly<{
   category?:string
@@ -43,13 +43,13 @@ export function normalizeGPS(gps:GPSFix,capturedAt:number):GPSFix {
     ||gps.longitude< -180||gps.longitude>180
     ||!Number.isFinite(gps.accuracyMeters)
     ||gps.accuracyMeters<0||gps.accuracyMeters>100_000
-    ||!validMillis(gps.obtainedAt)
-    ||gps.obtainedAt>capturedAt+2_000
-    ||capturedAt-gps.obtainedAt>120_000)
+    ||!validMillis(gps.recordedAt)
+    ||gps.recordedAt>capturedAt+2_000
+    ||capturedAt-gps.recordedAt>120_000)
     throw Error('capture.invalid_or_stale_gps')
   return {
     latitude:gps.latitude,longitude:gps.longitude,
-    accuracyMeters:gps.accuracyMeters,obtainedAt:gps.obtainedAt,
+    accuracyMeters:gps.accuracyMeters,recordedAt:gps.recordedAt,
   }
 }
 export function preparePhotoMetadata(
@@ -58,7 +58,7 @@ export function preparePhotoMetadata(
 ):PhotoMetadata{
   if(!validMillis(capturedAt))throw Error('capture.invalid_time')
   const category=cleanText(privateInput.category,64,'category')
-  const description=cleanText(privateInput.description,2_000,'description')
+  const description=cleanText(privateInput.description,4_000,'description')
   const gps=privateInput.gps?normalizeGPS(privateInput.gps,capturedAt):undefined
   const anyPrivate=category!==undefined||description!==undefined||gps!==undefined
   return {
