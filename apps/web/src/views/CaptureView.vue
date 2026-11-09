@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { activeSession } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
@@ -9,17 +9,35 @@ const stream=ref<MediaStream|null>(null)
 const busy=ref(false)
 const message=ref('')
 const error=ref('')
+let starting=false
+let disposed=false
 
 async function openCamera():Promise<void> {
+  if(starting||stream.value||disposed)return
   error.value=''
   if(!activeSession.value){error.value='Сначала создайте или восстановите аккаунт';return}
   if(!navigator.mediaDevices?.getUserMedia){error.value='Браузер не поддерживает камеру';return}
+  starting=true
+  const identity=activeSession.value
+  let opened:MediaStream|null=null
   try{
-    stream.value=await navigator.mediaDevices.getUserMedia({
+    opened=await navigator.mediaDevices.getUserMedia({
       audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1280}},
     })
-    if(video.value){video.value.srcObject=stream.value;await video.value.play()}
-  }catch(e){error.value=e instanceof Error?e.message:'camera.unavailable'}
+    await nextTick()
+    // A late camera permission response cannot attach to a removed screen or account.
+    if(disposed||activeSession.value!==identity||!video.value){
+      opened.getTracks().forEach(track=>track.stop())
+      return
+    }
+    stream.value=opened
+    video.value.srcObject=opened
+    await video.value.play()
+  }catch(e){
+    if(opened)opened.getTracks().forEach(track=>track.stop())
+    if(stream.value===opened)stream.value=null
+    error.value=e instanceof Error?e.message:'camera.unavailable'
+  }finally{starting=false}
 }
 function closeCamera():void {
   stream.value?.getTracks().forEach(track=>track.stop())
@@ -48,8 +66,14 @@ async function capture():Promise<void> {
   }catch(e){error.value=e instanceof Error?e.message:'camera.capture_failed'}
   finally{busy.value=false}
 }
-onMounted(()=>{if(activeSession.value)void openCamera()})
-onUnmounted(closeCamera)
+// Restoring a trusted device after a page load is asynchronous. The camera
+// must also start when that local identity appears, not just on first mount.
+watch(activeSession,session=>{
+  if(!session){closeCamera();return}
+  void nextTick().then(()=>{if(!stream.value&&!starting)void openCamera()})
+},{flush:'post'})
+onMounted(()=>{if(activeSession.value)void nextTick().then(openCamera)})
+onUnmounted(()=>{disposed=true;closeCamera()})
 </script>
 
 <template>
