@@ -5,6 +5,7 @@ use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\PhotoSyncController;
 use App\Http\Controllers\MediaV1Controller;
 use App\Http\Controllers\MediaGrantController;
+use App\Http\Controllers\MediaRevisionController;
 use App\Http\Controllers\RecipientKeyController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
@@ -55,6 +56,9 @@ Route::prefix('photos/v1')->middleware('throttle:120,1')->group(function(){
 Route::prefix('media/v1')->middleware('throttle:pb3-media')->group(function(){
     Route::get('/',[MediaV1Controller::class,'index']);
     Route::post('/reserve',[MediaV1Controller::class,'reserve']);
+    Route::post('/revisions',[MediaRevisionController::class,'create']);
+    Route::get('/{rootMediaId}/revisions',[MediaRevisionController::class,'index'])
+        ->whereUuid('rootMediaId');
     Route::put('/{mediaId}/chunks/{chunkId}',[MediaV1Controller::class,'upload'])
         ->whereUuid('mediaId')->whereUuid('chunkId');
     Route::get('/{mediaId}/chunks/{chunkId}',[MediaV1Controller::class,'read'])
