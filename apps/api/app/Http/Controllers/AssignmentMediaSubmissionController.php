@@ -32,12 +32,18 @@ final class AssignmentMediaSubmissionController extends Controller
         $raw=P::exact($r->json()->all(),['contract','signature']);
         abort_unless(is_string($raw['contract'])
             &&is_string($raw['signature']),422);
+        $candidate=json_decode($raw['contract'],true,32);
+        $v2=is_array($candidate)&&($candidate['version']??null)===2;
+        $keys=[
+            'version','submissionId','operationId','assignmentId',
+            'contributorAccountId','mediaId','mediaGrantId',
+            'mediaContractHash','policyRevision','policyHash','kind',
+        ];
+        if($v2)array_push($keys,'captureContract','captureSignature');
         $d=C::signed($raw['contract'],$raw['signature'],
-            $actor->account_spki,'pb3.assignment-media-submit.v1',[
-                'version','submissionId','operationId','assignmentId',
-                'contributorAccountId','mediaId','mediaGrantId',
-                'mediaContractHash','policyRevision','policyHash','kind',
-            ]);
+            $actor->account_spki,$v2
+                ?'pb3.assignment-media-submit.v2'
+                :'pb3.assignment-media-submit.v1',$keys);
         C::mediaSubmission($d,$actor->id,$assignmentId);
         $hash=hash('sha256',$raw['contract']);
 
@@ -90,6 +96,40 @@ final class AssignmentMediaSubmissionController extends Controller
                 &&hash_equals($media->contract_hash,
                     $d['mediaContractHash']),409);
 
+            $capture=null;
+            if($d['version']===2){
+                abort_unless(is_string($d['captureContract']??null)
+                    &&is_string($d['captureSignature']??null),422);
+                $capture=C::signed($d['captureContract'],
+                    $d['captureSignature'],$actor->account_spki,
+                    'pb3.assignment-media-capture.v1',[
+                        'version','assignmentId','ownerAccountId',
+                        'contributorAccountId','policyRevision','policyHash',
+                        'mediaId','mediaContractHash','mediaType',
+                        'startedAt','finishedAt',
+                    ]);
+                C::mediaCapture($capture,$actor->id,$assignmentId);
+                abort_unless($capture['ownerAccountId']===$a->owner_account_id
+                    &&$capture['mediaId']===$media->id
+                    &&$capture['mediaType']===$media->media_type
+                    &&$capture['policyRevision']===$d['policyRevision']
+                    &&hash_equals($capture['policyHash'],$d['policyHash'])
+                    &&hash_equals($capture['mediaContractHash'],
+                        $media->contract_hash)
+                    &&$capture['startedAt']>=$a->starts_at
+                    &&($a->ends_at===null
+                        ||$capture['finishedAt']<=$a->ends_at),409);
+                // Server acceptance of the signed policy predates capture.
+                // Allow only bounded client clock skew. Neither this check
+                // nor the account signature attests real-world recording time.
+                $policyAccepted=DB::table('assignment_policy_events_v1')
+                    ->where('assignment_id',$assignmentId)
+                    ->where('to_revision',$d['policyRevision'])
+                    ->value('occurred_at_ms');
+                abort_unless($policyAccepted!==null
+                    &&$capture['startedAt']>=(int)$policyAccepted-120000,409);
+            }
+
             // A valid, live grant must be for THIS immutable ciphertext,
             // supplied by THIS contributor, and addressed to THIS owner.
             $grant=DB::table('media_recipient_grants_v1')
@@ -115,6 +155,10 @@ final class AssignmentMediaSubmissionController extends Controller
                 'policy_revision'=>$d['policyRevision'],
                 'policy_hash'=>$d['policyHash'],
                 'media_contract_hash'=>$media->contract_hash,
+                'capture_contract_json'=>$d['version']===2
+                    ?$d['captureContract']:null,
+                'capture_signature'=>$d['version']===2
+                    ?$d['captureSignature']:null,
                 'created_at'=>now(),
             ]);
             return $this->sync->json([
