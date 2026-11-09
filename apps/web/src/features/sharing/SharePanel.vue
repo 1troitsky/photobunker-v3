@@ -40,6 +40,10 @@ async function initialize():Promise<void> {
   try{
     await ensureOwnExchangeKey()
     keyStatus.value='Ключ обмена подготовлен'
+    // After a reload, an online/outbox watcher may already be delivering a
+    // previously queued grant. Observe the *settled* pass before rendering
+    // its state, otherwise the screen keeps showing "queued" after HTTP ACK.
+    await flushRecipientGrants()
     outgoing.value=await listOutgoingGrants()
     received.value=await listReceivedGrants()
   }catch(e){
