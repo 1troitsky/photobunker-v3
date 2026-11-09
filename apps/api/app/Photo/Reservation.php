@@ -130,8 +130,14 @@ final class Reservation
                 ->where('assignment_id',$a->id)
                 ->where('recipient_account_id',$actor)
                 ->where('role','contributor')
-                ->where('state','accepted')->exists();
-            abort_unless($member,403);
+                ->where('state','accepted')
+                ->first(['accepted_at']);
+            abort_unless($member&&$member->accepted_at,403);
+            // A contributor must have consented before capture. 120 seconds
+            // accommodates ordinary device clock skew; capturedAt is still
+            // an unaudited device claim, not trusted timestamp attestation.
+            $joinedAt=\Carbon\Carbon::parse($member->accepted_at)->getTimestampMs();
+            abort_unless($when>=$joinedAt-120000,403);
         }
     }
 }
