@@ -73,9 +73,17 @@ persisting plaintext on that device.
   reviewed signed contract, not by broadening old photo ACLs.
 - No cold-offline installed PWA claim. An already-loaded SPA can encrypt
   without network; signed Service Worker trust anchor remains unresolved.
-- No unconditional cleanup scheduling. Physical TTL/GC must use durable
-  tombstones, retryable verified S3 deletion and late-write sweeps; until
-  independent safety validation, destructive maintenance is feature-gated.
+- Physical TTL/GC is implemented in `MediaLifecycle`,
+  `MediaCleanupJob` and `pb3:media-maintain`: record deletion intent,
+  keep an **immutable permanent tombstone plus opaque S3 key list**,
+  perform provider deletion with independent absence checks, delete DB
+  placement pointers **only after every physical removal succeeds**,
+  regularly sweep tombstones to remove delayed in-flight S3 PUTs,
+  and reconcile stale unexpired chunk leases without deleting media.
+  Both scheduler AND worker are **DISABLED by default**, require explicit
+  `PB3_ENABLE_MEDIA_CLEANUP=true`, and need independent operator
+  acceptance before deployment. A successful in-process unit test does not
+  replace production S3 outage and recovery simulation.
 - This is a **functional P1 bootstrap vertical**, NOT Editor 3.2, Camera 1.2
   video/audio, large multi-gigabyte streaming, multi-replica BYO S3, billing,
   public downloads or a production-ready MediaFile service.
@@ -89,6 +97,10 @@ persisting plaintext on that device.
 - Vitest: actual AES-GCM photo/video/audio encrypted chunk roundtrip,
   1 MiB boundary, changing IV, corrupt block and foreign account fail closed,
   encrypted local-only filename/metadata and offline account isolation.
+- Lifecycle PHPUnit: default-off maintenance gate, two-stage
+  expiry + verified deletion, permanent no-resurrection tombstones,
+  late S3 write resweep, stale chunk reconciliation, and retryable
+  reference retention. No destructive production operations performed.
 - Playwright Chromium: offline 1+ MiB video, encrypted IndexedDB,
   real Laravel/PostgreSQL18/Garage2.5 chunk reserve/PUT/finalize, separate
   Recovery-Key device cloud decrypt, unrelated account 404, audio upload
