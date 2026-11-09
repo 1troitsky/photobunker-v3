@@ -221,6 +221,27 @@ export async function verifySignedAssignmentPolicy(item:AssignmentListing):Promi
   assertSame(s)
 }
 
+/**
+ * A correctly signed but stale state is still dangerous: a malicious/stale API
+ * could replay a previously valid "active" snapshot after a signed finish.
+ * Preserve the highest locally authenticated revision per account.
+ */
+export function assertSignedPolicyProgress(
+  previous:AssignmentListing|undefined,next:AssignmentListing,
+):void{
+  if(!previous)return
+  if(previous.policyContract!==next.policyContract
+    ||previous.policySignature!==next.policySignature)
+    throw new Error('assignment.original_policy_changed')
+  if(next.revision<previous.revision)
+    throw new Error('assignment.state_rollback')
+  if(next.revision===previous.revision
+    &&(next.state!==previous.state
+      ||next.stateContract!==previous.stateContract
+      ||next.stateSignature!==previous.stateSignature))
+    throw new Error('assignment.state_equivocation')
+}
+
 export async function listServerAssignments(after?:string):Promise<{
   items:AssignmentListing[];nextCursor:string|null
 }>{
@@ -236,8 +257,11 @@ export async function listServerAssignments(after?:string):Promise<{
   // No plaintext assignment name, DEK or recovery material is persisted.
   await db.transaction('rw',db.capturePolicies,async()=>{
     for(const item of result.items){
+      const key=s.accountId+'/'+item.assignmentId
+      const previous=await db.capturePolicies.get(key)
+      assertSignedPolicyProgress(previous?.listing,item)
       await db.capturePolicies.put({
-        key:s.accountId+'/'+item.assignmentId,accountId:s.accountId,
+        key,accountId:s.accountId,
         listing:item,verifiedAt:Date.now(),
       })
     }
