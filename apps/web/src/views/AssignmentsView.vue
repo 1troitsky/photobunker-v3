@@ -69,7 +69,9 @@ const filters=ref<'all'|'active'>('active')
 
 const selected=computed(()=>assignments.value.find(a=>a.id===selectedId.value)??null)
 const visible=computed(()=>assignments.value
-  .filter(a=>filters.value==='all'||a.state==='active'||a.localState==='queued')
+  .filter(a=>filters.value==='all'||a.state==='active'
+    ||a.localState==='queued'||a.localState==='retry'
+    ||a.localState==='conflict')
   .filter(a=>(a.data?.title??'').toLocaleLowerCase().includes(search.value.toLocaleLowerCase())
       ||a.id.toLowerCase().includes(search.value.toLowerCase()))
   .sort((a,b)=>b.createdAt-a.createdAt))
