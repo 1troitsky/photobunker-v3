@@ -41,7 +41,21 @@ final class PhotoSync
         self::exact($c,$version===2
             ?['version','photoId','operationId','expiresAt','assets','capture']
             :['version','photoId','operationId','expiresAt','assets']);
-        if($version===2)abort_unless(is_array($c['capture'])&&!array_is_list($c['capture']),422);
+        if($version===2){
+            $capture=$c['capture'];
+            abort_unless(is_array($capture)&&!array_is_list($capture),422);
+            self::exact($capture,[
+                'assignmentId','ownerAccountId','policyRevision','policyHash','capturedAt',
+            ]);
+            P::uuid($capture['assignmentId']);
+            P::uuid($capture['ownerAccountId']);
+            abort_unless($capture['policyRevision']===1
+                &&is_string($capture['policyHash'])
+                &&preg_match('/^[a-f0-9]{64}$/D',$capture['policyHash'])===1
+                &&is_int($capture['capturedAt'])
+                &&$capture['capturedAt']>1_500_000_000_000
+                &&$capture['capturedAt']<=self::nowMs()+120000,422);
+        }
         abort_unless(is_int($c['expiresAt'])&&
             $c['expiresAt']>self::nowMs()&&$c['expiresAt']<=self::nowMs()+(int)config('photo_sync.bootstrap_free_retention_days',14)*86400000,422);
         P::uuid($c['photoId']);P::uuid($c['operationId']);
