@@ -1,0 +1,74 @@
+<?php
+declare(strict_types=1);
+namespace App\Photo;
+use App\Identity\Protocol as P;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+final class Reservation
+{
+    public function __construct(private readonly PhotoSync $sync){}
+    public function reserve(Request $request):array {
+        $this->sync->origin($request);
+        [$account,$device]=$this->sync->actor($request);
+        $d=P::exact($request->json()->all(),['contract','signature']);
+        abort_unless(is_string($d['contract'])&&is_string($d['signature']),422);
+        $contract=$this->sync->validate($d['contract'],$d['signature'],$device->signing_spki);
+        abort_unless($contract['version']===1,422); // Assignment capture v2 remains explicitly closed until P2.
+        foreach($contract['assets'] as $a)abort_unless($a['manifest']['accountId']===$account->id,403);
+        $hash=hash('sha256',$d['contract']);
+        return DB::transaction(function()use($account,$device,$contract,$d,$hash){
+            DB::table('identity_accounts')->where('id',$account->id)->lockForUpdate()->first();
+            $id=$contract['photoId'];
+            abort_if(DB::table('photo_tombstones')->where('photo_id',$id)->exists(),410);
+            $row=DB::table('photo_records')->where('id',$id)->lockForUpdate()->first();
+            $byOperation=DB::table('photo_records')->where('account_id',$account->id)
+                ->where('operation_id',$contract['operationId'])->first();
+            if($row||$byOperation){
+                $existing=$row??$byOperation;
+                abort_unless($existing->id===$id&&$existing->account_id===$account->id,409);
+                abort_if($existing->expires_at<=PhotoSync::nowMs()||$existing->state==='deleting',410);
+                // Only personal contracts v1 are enabled at this phase.
+                abort_unless(hash_equals($existing->contract_hash,$hash),409);
+                return $existing->state==='active'
+                  ?['state'=>'active','receipt'=>json_decode($existing->receipt,true)]
+                  :['state'=>'pending','photoId'=>$id,'expiresAt'=>(int)$existing->expires_at];
+            }
+            $need=array_sum(array_column($contract['assets'],'bytes'));
+            $used=DB::table('photo_objects as o')->join('photo_records as p','o.photo_id','=','p.id')
+                ->where('p.account_id',$account->id)->where('p.state','!=','deleting')
+                ->where('p.expires_at','>',PhotoSync::nowMs())->sum('o.bytes');
+            abort_if((int)$used+$need>config('photo_sync.bootstrap_free_byte_cap'),413);
+            // Account row is locked above: quota/file reservations are serialized per account.
+            $count=DB::table('photo_records')->where('account_id',$account->id)
+                ->where('state','!=','deleting')->where('expires_at','>',PhotoSync::nowMs())->count();
+            abort_if($count>=(int)config('photo_sync.bootstrap_free_file_cap',50),413);
+            DB::table('photo_records')->insert([
+                'id'=>$id,'account_id'=>$account->id,'device_id'=>$device->id,
+                'operation_id'=>$contract['operationId'],'state'=>'pending',
+                'expires_at'=>$contract['expiresAt'],'contract_hash'=>$hash,
+                'contract_json'=>$d['contract'],'signature'=>$d['signature'],
+                'metadata_asset_id'=>collect($contract['assets'])->firstWhere('kind','metadata')['assetId'],
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            foreach($contract['assets'] as $a)DB::table('photo_objects')->insert([
+                'id'=>$a['assetId'],'photo_id'=>$id,'kind'=>$a['kind'],'revision'=>1,
+                'bytes'=>$a['bytes'],'sha256'=>$a['sha256'],
+                'manifest_json'=>json_encode($a['manifest'],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),
+                'object_key'=>$this->sync->objectKey($account->id,$id,$a['assetId']),
+                'state'=>'pending','created_at'=>now(),'updated_at'=>now(),
+            ]);
+            // Register logical asset placements before the first storage write.
+            foreach($contract['assets'] as $asset){
+                DB::table('storage_locations')->insert([
+                    'id'=>(string)\Illuminate\Support\Str::uuid(),
+                    'asset_id'=>$asset['assetId'],'provider'=>'app_s3',
+                    'object_key'=>$this->sync->objectKey($account->id,$id,$asset['assetId']),
+                    'sha256'=>$asset['sha256'],'bytes'=>$asset['bytes'],
+                    'state'=>'reserved','created_at'=>now(),'updated_at'=>now(),
+                ]);
+            }
+            return ['state'=>'pending','photoId'=>$id,'expiresAt'=>$contract['expiresAt']];
+        },3);
+    }
+}
