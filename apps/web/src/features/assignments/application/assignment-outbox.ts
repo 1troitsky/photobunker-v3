@@ -215,7 +215,7 @@ export async function verifySignedAssignmentPolicy(
   }
   const originalHash=hex(await digest(new TextEncoder().encode(item.policyContract)))
   if(!Number.isInteger(item.policyRevision)||item.policyRevision<1
-    ||item.policyRevision>1000000)throw new Error('assignment.invalid_policy_revision')
+    ||item.policyRevision>1001)throw new Error('assignment.invalid_policy_revision')
   if(item.policyRevision===1){
     if(item.photoGoal!==c.photoGoal||item.policyAmendmentContract!=null
       ||item.policyAmendmentSignature!=null)
@@ -462,6 +462,9 @@ export async function queueAssignmentGoalChange(
   const a=row.listing
   if(a.state!=='active'||a.photoGoal===photoGoal)
     throw new Error('assignment.invalid_policy_change')
+  if(a.policyRevision>=1001
+    ||(a.endsAt!==null&&a.endsAt<=Date.now()))
+    throw new Error('assignment.policy_edit_limit')
   const ops=await listAssignmentOperations()
   if(ops.some(op=>(op.kind==='policy'||op.kind==='state')
     &&(op.state==='queued'||op.state==='retry')
