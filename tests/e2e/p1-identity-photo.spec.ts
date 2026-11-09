@@ -340,3 +340,88 @@ test('P1-04: A creates encrypted assignment, B accepts and submits a photo grant
     await outsiderCtx.close()
   }
 })
+
+
+test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo',async({browser})=>{
+  test.setTimeout(150_000)
+  const aCtx=await browser.newContext()
+  const bCtx=await browser.newContext({permissions:['camera']})
+  const A=await aCtx.newPage(),B=await bCtx.newPage()
+  async function enroll(page:typeof A):Promise<string>{
+    await page.goto('/settings')
+    await page.getByRole('button',{name:'Создать ключ'}).click()
+    await page.getByLabel('Я сохранил ключ восстановления').check()
+    await page.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    const id=(await page.locator('.foundation-card code').first().textContent())?.trim()??''
+    expect(id).toMatch(/^[0-9a-f-]{36}$/)
+    await page.goto('/browser')
+    await expect(page.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
+    return id
+  }
+  try{
+    const aId=await enroll(A)
+    const bId=await enroll(B)
+
+    await A.goto('/assignments')
+    await A.getByRole('button',{name:'Создать задание'}).click()
+    await A.locator('#assignment-title').fill('Thirty camera images')
+    await A.locator('#assignment-instructions').fill('Send encrypted photos')
+    await A.locator('#assignment-goal').fill('30')
+    await A.getByRole('button',{name:'Создать зашифрованное задание'}).click()
+    await expect(A.locator('.assignment-card-name').getByText('Thirty camera images')).toBeVisible()
+    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await expect(A.locator('.assignment-card').first()).toContainText('Активно')
+    const assignmentId=(await A.locator('.assignment-detail code').first().textContent())?.trim()??''
+    expect(assignmentId).toMatch(/^[0-9a-f-]{36}$/)
+
+    await A.locator('#assignment-recipient-id').fill(bId)
+    await A.getByRole('button',{name:'Проверить ключ исполнителя'}).click()
+    await expect(A.getByText('Отпечаток исполнителя',{exact:true})).toBeVisible()
+    await A.getByLabel('Я сверил отпечаток исполнителя').check()
+    await A.getByRole('button',{name:'Подтвердить исполнителя'}).click()
+    await A.getByRole('button',{name:'Пригласить исполнителя'}).click()
+    await A.getByRole('button',{name:'Синхронизировать'}).click()
+
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(B.getByText('Приглашения',{exact:true})).toBeVisible()
+    await B.getByRole('button',{name:'Ключ владельца'}).click()
+    await expect(B.getByText('Отпечаток владельца задания')).toBeVisible()
+    await B.getByLabel('Я сверил отпечаток владельца').check()
+    await B.getByRole('button',{name:'Подтвердить владельца'}).click()
+    await B.getByRole('button',{name:'Принять задание'}).click()
+    await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
+      .toBeVisible({timeout:20000})
+
+    // Camera capture uses the regular UI and is entirely offline.
+    await bCtx.setOffline(true)
+    await B.getByRole('navigation',{name:'Главная навигация'})
+      .getByRole('link',{name:'Камера',exact:true}).click()
+    await expect.poll(()=>B.locator('video').evaluate(el=>(el as HTMLVideoElement).videoWidth))
+      .toBeGreaterThan(0)
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
+    await bCtx.setOffline(false)
+    await B.getByRole('navigation',{name:'Главная навигация'})
+      .getByRole('link',{name:'Browser',exact:true}).click()
+    await B.getByRole('button',{name:'Синхронизировать'}).click()
+    await expect(B.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
+    await B.getByRole('button',{name:'Проверить ключ владельца'}).click()
+    await expect(B.getByText('Владелец подтверждён')).toBeVisible()
+    await expect(B.getByRole('button',{name:'Отправить в задание'}).first()).toBeEnabled()
+    await B.getByRole('button',{name:'Отправить в задание'}).first().click()
+    await B.getByRole('button',{name:'Синхронизировать'}).click()
+
+    await A.getByRole('button',{name:'Обновить материалы'}).click()
+    await expect(A.getByRole('button',{name:'Просмотр'})).toBeVisible({timeout:20000})
+    await A.getByRole('button',{name:'Просмотр'}).click()
+    const decoded=A.locator('.assignment-detail ~ .foundation-card img.decrypted-preview')
+    await expect(decoded).toBeVisible({timeout:20000})
+    await expect.poll(()=>decoded.evaluate(el=>(el as HTMLImageElement).naturalWidth))
+      .toBeGreaterThan(0)
+    void aId
+  } finally { await aCtx.close();await bCtx.close() }
+})
