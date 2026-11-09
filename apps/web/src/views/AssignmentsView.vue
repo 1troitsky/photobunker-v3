@@ -16,6 +16,7 @@ import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
   CaptureRequirements,
 } from '../features/assignments/application/assignment-outbox'
+import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import {
   openOwnerAssignment, openRecipientAssignment,
 } from '../features/assignments/infrastructure/assignment-crypto'
@@ -386,10 +387,16 @@ async function submit(photo:StoredPhoto):Promise<void>{
     if(contributorCheck.value?.accountId!==target.ownerAccountId
       ||!contributorCheck.value.confirmed)
       throw Error('Подтвердите отпечаток владельца задания')
-    // The recipient never gains access merely through assignment membership.
+    // Verify owner-signed policy, actual photo scope, historical policy and
+    // decrypted private requirements BEFORE revealing ANY recipient DEK.
+    const checked=await preflightAssignmentPhotoGrant(
+      target.id,photo.photoId,target.ownerAccountId)
+    if(checked.personalPhoto&&!window.confirm(
+      'Это личное фото, снятое вне задания. Передать владельцу задания доступ к его содержимому?'
+    ))return
     const grantId=await queueRecipientGrant(photo.photoId,target.ownerAccountId)
     await queueAssignmentSubmission(target.id,photo.photoId,grantId,
-      photo.capture?.policyRevision??target.policyRevision)
+      checked.policyRevision)
     await flushRecipientGrants()
     await flushAssignmentOutbox()
     operations.value=await listAssignmentOperations()
@@ -594,7 +601,7 @@ onUnmounted(cleanPreview)
             Проверить ключ владельца
           </button>
           <h3>Файлы · мои снимки</h3>
-          <p class="muted">Выберите синхронизированный снимок. Передача создаст отдельное зашифрованное разрешение; участие в задании само по себе не раскрывает фото.</p>
+          <p class="muted">Перед передачей проверяются подпись правил, принадлежность фото заданию и обязательные приватные поля. Доступ к личному снимку вне задания требует отдельного подтверждения; файлы и координаты остаются зашифрованными.</p>
           <div v-for="photo in eligiblePhotos" :key="photo.key" class="photo-row">
             <div><strong>{{ photo.photoId.slice(0,8) }}</strong>
               <small>{{ photo.capture?'Снято для этого задания':'Личный снимок · отдельная передача' }}</small>
