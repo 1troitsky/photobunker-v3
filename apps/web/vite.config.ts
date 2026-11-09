@@ -32,7 +32,13 @@ export default defineConfig(({ mode }) => {
         },
       }),
     ],
-    server: { host: '127.0.0.1', port: 5173 },
+    server: {
+      host: '127.0.0.1', port: 5173,
+      proxy: {
+        '/identity/v2': { target:'http://127.0.0.1:8000', changeOrigin:false },
+        '/photos/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
+      },
+    },
     preview: { host: '127.0.0.1', port: 4173, strictPort: true },
     test: { environment: 'node', include: ['src/**/*.test.ts'] },
   }

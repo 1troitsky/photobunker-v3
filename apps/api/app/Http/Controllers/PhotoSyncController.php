@@ -11,6 +11,31 @@ use App\Storage\StorageManager;
 final class PhotoSyncController extends Controller
 {
     public function __construct(private readonly PhotoSync $sync,private readonly Reservation $reservation, private readonly StorageManager $storage){}
+    /** Owner-only, bounded cursor list for Recovery-Key enrollment on a new device. */
+    public function index(Request $r) {
+        [$account]=$this->sync->actor($r);
+        $after=$r->query('after');
+        if ($after!==null) {
+            abort_unless(is_string($after),422);
+            P::uuid($after);
+        }
+        $query=DB::table('photo_records')
+          ->where('account_id',$account->id)
+          ->where('state','active')->where('expires_at','>',PhotoSync::nowMs());
+        if ($after!==null) $query->where('id','>',$after);
+        $rows=$query->orderBy('id')->limit(51)
+          ->get(['id','expires_at','metadata_asset_id']);
+        $hasMore=$rows->count()>50;
+        $page=$rows->take(50)->map(static fn($photo)=>[
+          'photoId'=>$photo->id,'expiresAt'=>(int)$photo->expires_at,
+          'metadataAssetId'=>$photo->metadata_asset_id,
+        ])->values()->all();
+        return $this->sync->json([
+          'items'=>$page,
+          'nextCursor'=>$hasMore&&$page!==[] ? end($page)['photoId']:null,
+        ]);
+    }
+
     public function reserve(Request $r){
         return $this->sync->json($this->reservation->reserve($r));
     }

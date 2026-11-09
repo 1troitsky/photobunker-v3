@@ -30,6 +30,7 @@ Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function(){
 });
 
 Route::prefix('photos/v1')->middleware('throttle:120,1')->group(function(){
+    Route::get('/',[PhotoSyncController::class,'index']);
     Route::post('/reserve',[PhotoSyncController::class,'reserve']);
     Route::put('/{photoId}/objects/{assetId}',[PhotoSyncController::class,'upload'])
       ->whereUuid('photoId')->whereUuid('assetId');

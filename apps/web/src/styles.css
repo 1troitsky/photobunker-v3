@@ -51,3 +51,27 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .shell-dock svg { width: 23px; height: 23px; flex-shrink: 0; }
 .shell-dock small { font-size: 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; }
 @media (max-width: 355px) { .shell-dock small { font-size: 9px; } }
+
+/* P1 vertical flow; Fieldwork final screen components arrive in P2. */
+.foundation-content { padding-bottom: 40px; }
+.foundation-card h2 { margin: 0 0 12px; font-size: 16px; }
+.foundation-card label { display: block; margin: 14px 0 7px; font-weight: 600; }
+.foundation-card textarea { width: 100%; padding: 10px; margin: 7px 0 12px; resize: vertical; background: #141414; border: 1px solid #454545; border-radius: 7px; color: inherit; font: 12px/1.45 ui-monospace, monospace; }
+.foundation-content button { min-height: 42px; padding: 9px 12px; border: 1px solid #535353; border-radius: 8px; background: #333; color: inherit; font-size: 12px; cursor: pointer; }
+.foundation-content button:disabled { opacity: .45; cursor: not-allowed; }
+.foundation-content button:focus-visible, .foundation-content textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.foundation-content .action-row { display: flex; gap: 9px; margin: 18px 0; align-items: center; flex-wrap: wrap; }
+.foundation-content .action-row a { padding: 10px; }
+.foundation-content .key-area { margin-top: 18px; }
+.foundation-content .checkline { display: flex; gap: 10px; align-items: center; }
+.foundation-content .checkline input { width: 18px; height: 18px; }
+.foundation-content .status-text { color: var(--accent); padding: 8px 0; }
+.foundation-content .error-text { color: #ff7777; padding: 8px 0; overflow-wrap: anywhere; }
+.foundation-content code { font-size: 11px; overflow-wrap: anywhere; }
+.video-frame { width: 100%; aspect-ratio: 4 / 3; background: #080808; overflow: hidden; border: 1px solid #333; border-radius: 9px; }
+.video-frame video { width: 100%; height: 100%; object-fit: contain; }
+.photo-row { display: flex; justify-content: space-between; gap: 15px; align-items: center; padding: 12px 0; border-top: 1px solid #383838; }
+.photo-row div { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.photo-row strong { font-family: ui-monospace,monospace; }
+.photo-row small { color: #aaa; }
+.decrypted-preview { max-width: 100%; max-height: 65dvh; object-fit: contain; display: block; margin: 14px auto; }
