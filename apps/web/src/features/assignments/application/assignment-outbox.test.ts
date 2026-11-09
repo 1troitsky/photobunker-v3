@@ -109,6 +109,58 @@ describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
       ...listing,policyContract:'malicious replacement',
     })).toThrow('assignment.original_policy_changed')
   })
+  it('authenticates owner-signed policy revision, preserves root and rejects rollback',async()=>{
+    const owner='cccccccc-cccc-4ccc-8ccc-ccccccccccca'
+    await account(owner)
+    const session=activeSession.value!
+    await queueAssignmentCreation({
+      title:'Revision baseline',instructions:'This remains E2EE',photoGoal:30,
+    })
+    const [op]=await listAssignmentOperations()
+    const creation=JSON.parse(op.contract)
+    const initial={
+      assignmentId:creation.assignmentId,ownerAccountId:owner,
+      ownerAccountSpki:session.pkg.accountSpki,
+      state:'active',revision:1,photoGoal:30,confirmedPhotoCount:0,
+      policyRevision:1,startsAt:creation.startsAt,endsAt:null,
+      privateEnvelope:creation.privateEnvelope,policyContract:op.contract,
+      policySignature:op.signature,policyAmendmentContract:null,
+      policyAmendmentSignature:null,stateContract:null,stateSignature:null,
+    }
+    await expect(verifySignedAssignmentPolicy(initial)).resolves.toBeUndefined()
+    const originalHash=hex(await digest(new TextEncoder().encode(op.contract)))
+    const body=JSON.stringify({
+      version:1,operationId:crypto.randomUUID(),assignmentId:creation.assignmentId,
+      ownerAccountId:owner,rootPolicyHash:originalHash,
+      previousPolicyHash:originalHash,fromPolicyRevision:1,
+      toPolicyRevision:2,photoGoal:45,allowedMedia:['photo'],
+    })
+    const signature=await sign(await importSigner(session.pkg.accountPkcs8),
+      'pb3.assignment-policy.v1\n'+body)
+    const changed={...initial,policyRevision:2,photoGoal:45,
+      policyAmendmentContract:body,policyAmendmentSignature:signature}
+    await expect(verifySignedAssignmentPolicy(changed)).resolves.toBeUndefined()
+    expect(()=>assertSignedPolicyProgress(initial,changed)).not.toThrow()
+    expect(()=>assertSignedPolicyProgress(changed,initial))
+      .toThrow('assignment.policy_rollback')
+    await expect(verifySignedAssignmentPolicy({...changed,photoGoal:50}))
+      .rejects.toThrow('assignment.policy_revision_mismatch')
+    await expect(verifySignedAssignmentPolicy({...changed,
+      policyAmendmentSignature:op.signature}))
+      .rejects.toThrow('assignment.policy_revision_not_authenticated')
+    const forged=JSON.parse(body)
+    forged.rootPolicyHash='0'.repeat(64)
+    const forgedContract=JSON.stringify(forged)
+    const forgedSignature=await sign(await importSigner(session.pkg.accountPkcs8),
+      'pb3.assignment-policy.v1\n'+forgedContract)
+    await expect(verifySignedAssignmentPolicy({...changed,
+      policyAmendmentContract:forgedContract,
+      policyAmendmentSignature:forgedSignature,
+    })).rejects.toThrow('assignment.policy_revision_mismatch')
+    expect(()=>assertSignedPolicyProgress(changed,{
+      ...changed,policyAmendmentContract:forgedContract,
+    })).toThrow('assignment.policy_equivocation')
+  })
   it('caches only account-bound AEAD ciphertext and refuses wrong policy/account',async()=>{
     const accountA='11111111-1111-4111-8111-111111111111'
     const accountB='22222222-2222-4222-8222-222222222222'
