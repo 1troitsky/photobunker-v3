@@ -548,6 +548,33 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await A.locator('#assignment-gps-required').check()
     await A.getByRole('button',{name:'Подписать новые правила'}).click()
     await expect(A.getByText('Версия правил: 3')).toBeVisible({timeout:20000})
+
+    // An older personal v1 photo has no signed assignment capture scope.
+    // Although the product permits explicit personal-photo submissions,
+    // mandatory v2 metadata must be checked BEFORE sharing any DEK.
+    const personalPhotoId=await B.evaluate(async()=>{
+      const photos=await import('/src/features/photo-sync/application/p1-photo.ts')
+      const personal=await photos.captureEncrypted(
+        new Blob([new Uint8Array(1024).fill(17)],{type:'image/jpeg'}),
+      )
+      await photos.flushOutbox()
+      return personal.photoId
+    })
+    await B.getByRole('button',{name:'Синхронизировать'}).click()
+    const personalRow=B.locator('.photo-row')
+      .filter({hasText:personalPhotoId.slice(0,8)})
+    await expect(personalRow).toContainText('synced',{timeout:20000})
+    const grantsBefore=await B.evaluate(async()=>{
+      const share=await import('/src/features/sharing/grant-flow.ts')
+      return (await share.listOutgoingGrants()).length
+    })
+    await personalRow.getByRole('button',{name:'Отправить в задание'}).click()
+    await expect(B.getByText('assignment.category_required')).toBeVisible()
+    const grantsAfter=await B.evaluate(async()=>{
+      const share=await import('/src/features/sharing/grant-flow.ts')
+      return (await share.listOutgoingGrants()).length
+    })
+    expect(grantsAfter).toBe(grantsBefore)
     await B.goto('/camera')
     await B.getByRole('button',{name:'Обновить задания'}).click()
     await expect(B.locator('#camera-assignment option[value="'+assignmentId+'"]'))

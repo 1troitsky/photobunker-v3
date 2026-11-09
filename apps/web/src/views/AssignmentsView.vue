@@ -16,6 +16,7 @@ import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
   CaptureRequirements,
 } from '../features/assignments/application/assignment-outbox'
+import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import {
   openOwnerAssignment, openRecipientAssignment,
 } from '../features/assignments/infrastructure/assignment-crypto'
@@ -386,10 +387,16 @@ async function submit(photo:StoredPhoto):Promise<void>{
     if(contributorCheck.value?.accountId!==target.ownerAccountId
       ||!contributorCheck.value.confirmed)
       throw Error('Подтвердите отпечаток владельца задания')
-    // The recipient never gains access merely through assignment membership.
+    // Verify owner-signed policy, actual photo scope, historical policy and
+    // decrypted private requirements BEFORE revealing ANY recipient DEK.
+    const checked=await preflightAssignmentPhotoGrant(
+      target.id,photo.photoId,target.ownerAccountId)
+    if(checked.personalPhoto&&!window.confirm(
+      'Это личное фото, снятое вне задания. Дать владельцу задания доступ к фото и его приватным метаданным (включая описание и GPS, если они есть)?'
+    ))return
     const grantId=await queueRecipientGrant(photo.photoId,target.ownerAccountId)
     await queueAssignmentSubmission(target.id,photo.photoId,grantId,
-      photo.capture?.policyRevision??target.policyRevision)
+      checked.policyRevision)
     await flushRecipientGrants()
     await flushAssignmentOutbox()
     operations.value=await listAssignmentOperations()
@@ -594,7 +601,7 @@ onUnmounted(cleanPreview)
             Проверить ключ владельца
           </button>
           <h3>Файлы · мои снимки</h3>
-          <p class="muted">Выберите синхронизированный снимок. Передача создаст отдельное зашифрованное разрешение; участие в задании само по себе не раскрывает фото.</p>
+          <p class="muted">Перед передачей проверяются подпись правил, принадлежность фото заданию и обязательные поля. Подписанный E2EE grant даст владельцу задания возможность расшифровать и фото, и метаданные (включая описание и GPS, если указаны). Сервер их не видит. Для личного снимка потребуется отдельное подтверждение.</p>
           <div v-for="photo in eligiblePhotos" :key="photo.key" class="photo-row">
             <div><strong>{{ photo.photoId.slice(0,8) }}</strong>
               <small>{{ photo.capture?'Снято для этого задания':'Личный снимок · отдельная передача' }}</small>

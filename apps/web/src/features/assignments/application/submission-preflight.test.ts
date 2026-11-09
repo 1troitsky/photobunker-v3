@@ -1,0 +1,216 @@
+import 'fake-indexeddb/auto'
+import { afterEach, describe, expect, it } from 'vitest'
+import { activeSession } from '../../identity/application/session'
+import type { Session } from '../../identity/application/session'
+import { digest, freshPackage, hex, importSigner, sign } from '../../identity/infrastructure/crypto'
+import { preparePhotoMetadata } from '../../photo-sync/domain/capture-metadata'
+import type { StoredPhoto } from '../../photo-sync/application/p1-photo'
+import type { AssignmentListing, SignedCaptureBinding } from './assignment-outbox'
+import {
+  validatePhotoForGrant, verifySignedPolicyHistory,
+  rememberSignedPolicyHistory, readSignedPolicyHistoryCache,
+} from './submission-preflight'
+import type { SignedPolicyHistory, SignedPolicyHistoryEvent } from './submission-preflight'
+
+afterEach(()=>{ activeSession.value=null })
+const enc=new TextEncoder()
+async function hash(text:string):Promise<string>{
+  return hex(await digest(enc.encode(text)))
+}
+async function fixture(){
+  const accountId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const assignmentId='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  const {pkg}=await freshPackage(accountId)
+  activeSession.value={
+    accountId,deviceId:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    pkg,online:false,
+  } as Session
+  const startsAt=Date.now()-15000
+  const root={
+    version:1,assignmentId,operationId:crypto.randomUUID(),
+    ownerAccountId:accountId,revision:1,policyRevision:1,
+    state:'active',startsAt,endsAt:null,
+    photoGoal:30,allowedMedia:['photo'],
+    privateEnvelope:{version:1,iv:'opaque',ciphertext:'opaque'},
+  }
+  const rootContract=JSON.stringify(root)
+  const rootSignature=await sign(await importSigner(pkg.accountPkcs8),
+    'pb3.assignment.v1\n'+rootContract)
+  const originalHash=await hash(rootContract)
+  const change1={
+    version:1,operationId:crypto.randomUUID(),
+    assignmentId,ownerAccountId:accountId,
+    rootPolicyHash:originalHash,previousPolicyHash:originalHash,
+    fromPolicyRevision:1,toPolicyRevision:2,
+    photoGoal:45,allowedMedia:['photo'],
+  }
+  const contract1=JSON.stringify(change1)
+  const hash1=await hash(contract1)
+  const signature1=await sign(await importSigner(pkg.accountPkcs8),
+    'pb3.assignment-policy.v1\n'+contract1)
+  const change2={
+    version:2,operationId:crypto.randomUUID(),
+    assignmentId,ownerAccountId:accountId,
+    rootPolicyHash:originalHash,previousPolicyHash:hash1,
+    fromPolicyRevision:2,toPolicyRevision:3,
+    photoGoal:45,allowedMedia:['photo'],
+    requiredCategory:true,descriptionMinLength:12,requiredGps:true,
+  }
+  const contract2=JSON.stringify(change2)
+  const hash2=await hash(contract2)
+  const signature2=await sign(await importSigner(pkg.accountPkcs8),
+    'pb3.assignment-policy.v2\n'+contract2)
+  const event1:SignedPolicyHistoryEvent={
+    fromPolicyRevision:1,toPolicyRevision:2,
+    contract:contract1,signature:signature1,contractHash:hash1,
+    occurredAtMs:startsAt+2000,
+  }
+  const event2:SignedPolicyHistoryEvent={
+    fromPolicyRevision:2,toPolicyRevision:3,
+    contract:contract2,signature:signature2,contractHash:hash2,
+    occurredAtMs:startsAt+6000,
+  }
+  const listing:AssignmentListing={
+    assignmentId,ownerAccountId:accountId,ownerAccountSpki:pkg.accountSpki,
+    state:'active',revision:1,photoGoal:45,confirmedPhotoCount:0,
+    policyRevision:3,startsAt,endsAt:null,
+    privateEnvelope:root.privateEnvelope as AssignmentListing['privateEnvelope'],
+    policyContract:rootContract,policySignature:rootSignature,
+    policyAmendmentContract:contract2,policyAmendmentSignature:signature2,
+    stateContract:null,stateSignature:null,
+  }
+  const history:SignedPolicyHistory={
+    assignmentId,policyRevision:3,rootPolicyHash:originalHash,
+    events:[event1,event2],
+  }
+  return {assignmentId,accountId,listing,history,hash1,hash2,startsAt,contract1}
+}
+function localPhoto(capture:SignedCaptureBinding|undefined):StoredPhoto{
+  return {
+    key:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/'+crypto.randomUUID(),
+    accountId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    photoId:crypto.randomUUID(),operationId:crypto.randomUUID(),
+    createdAt:capture?.capturedAt??Date.now(),
+    expiresAt:Date.now()+86400000,state:'synced',
+    ...(capture?{capture}:{}),assets:[],
+  }
+}
+describe('P1-08 signed historical policy and E2EE grant preflight',()=>{
+  it('caches only public owner-signed history and re-verifies it offline per account',async()=>{
+    const f=await fixture()
+    const original=JSON.stringify(f.history)
+    expect(original).not.toContain('Confidential text')
+    expect(original).not.toContain('latitude')
+    const stored=await rememberSignedPolicyHistory(f.listing,f.history)
+    expect(stored).toHaveLength(3)
+    const recovered=await readSignedPolicyHistoryCache(f.listing)
+    expect(recovered?.map(x=>x.policyHash))
+      .toEqual(stored.map(x=>x.policyHash))
+    await expect(readSignedPolicyHistoryCache({
+      ...f.listing,policyRevision:2,
+    })).rejects.toThrow()
+    const another='dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    const {pkg}=await freshPackage(another)
+    activeSession.value={
+      accountId:another,deviceId:crypto.randomUUID(),pkg,online:false,
+    } as Session
+    expect(await readSignedPolicyHistoryCache(f.listing)).toBeNull()
+  })
+  it('verifies every intermediate owner signature and exact chain before trusting an old photo',async()=>{
+    const f=await fixture()
+    const chain=await verifySignedPolicyHistory(f.listing,f.history)
+    expect(chain).toHaveLength(3)
+    expect(chain[0]!.validUntil).toBe(f.startsAt+2000)
+    expect(chain[1]!.policyHash).toBe(f.hash1)
+    expect(chain[1]!.validFrom).toBe(f.startsAt+2000)
+    expect(chain[1]!.validUntil).toBe(f.startsAt+6000)
+    expect(chain[1]!.requirements.requiredGps).toBe(false)
+    expect(chain[2]!.requirements).toEqual({
+      requiredCategory:true,descriptionMinLength:12,requiredGps:true,
+    })
+    const time=f.startsAt+4000
+    const capture={
+      assignmentId:f.assignmentId,ownerAccountId:f.accountId,
+      policyRevision:2,policyHash:f.hash1,capturedAt:time,
+    }
+    const photo=localPhoto(capture)
+    const privateMetadata=preparePhotoMetadata(time,capture)
+    expect(()=>validatePhotoForGrant(
+      photo,privateMetadata,f.assignmentId,f.accountId,chain[1]!,
+    )).not.toThrow()
+    // New v2 rules must NOT retroactively reject the old captured bytes.
+    expect(()=>validatePhotoForGrant(
+      photo,privateMetadata,f.assignmentId,f.accountId,chain[2]!,
+    )).toThrow('assignment.capture_scope_mismatch')
+    const outsideTime={...capture,capturedAt:f.startsAt+8500}
+    expect(()=>validatePhotoForGrant(
+      localPhoto(outsideTime),preparePhotoMetadata(outsideTime.capturedAt,outsideTime),
+      f.assignmentId,f.accountId,chain[1]!,
+    )).toThrow('assignment.capture_policy_not_effective')
+  })
+  it('fails closed on modified history, missing event, forged signature or changed ancestry',async()=>{
+    const f=await fixture()
+    await expect(verifySignedPolicyHistory(f.listing,{
+      ...f.history,events:f.history.events.slice(1),
+    })).rejects.toThrow('assignment.policy_history_invalid')
+    await expect(verifySignedPolicyHistory(f.listing,{
+      ...f.history,events:[{...f.history.events[0]!,signature:'not-a-signature'},
+        f.history.events[1]!],
+    })).rejects.toThrow()
+    const fake=JSON.parse(f.contract1)
+    fake.previousPolicyHash='0'.repeat(64)
+    const bad=JSON.stringify(fake)
+    await expect(verifySignedPolicyHistory(f.listing,{
+      ...f.history,events:[{...f.history.events[0]!,
+        contract:bad,contractHash:await hash(bad)},f.history.events[1]!],
+    })).rejects.toThrow('assignment.policy_history_invalid')
+    await expect(verifySignedPolicyHistory(f.listing,{
+      ...f.history,events:[f.history.events[0]!,{
+        ...f.history.events[1]!,occurredAtMs:f.startsAt+1,
+      }],
+    })).rejects.toThrow('assignment.policy_history_invalid')
+  })
+  it('checks decrypted private requirements and forbids wrong-scope grants',async()=>{
+    const f=await fixture()
+    const chain=await verifySignedPolicyHistory(f.listing,f.history)
+    const time=f.startsAt+8500
+    const capture={
+      assignmentId:f.assignmentId,ownerAccountId:f.accountId,
+      policyRevision:3,policyHash:f.hash2,capturedAt:time,
+    }
+    const photo=localPhoto(capture)
+    expect(()=>validatePhotoForGrant(photo,preparePhotoMetadata(time,capture),
+      f.assignmentId,f.accountId,chain[2]!,
+    )).toThrow('assignment.category_required')
+    expect(()=>validatePhotoForGrant(photo,preparePhotoMetadata(time,capture,{
+      category:'Report',
+    }),f.assignmentId,f.accountId,chain[2]!,
+    )).toThrow('assignment.description_too_short')
+    expect(()=>validatePhotoForGrant(photo,preparePhotoMetadata(time,capture,{
+      category:'Report',description:'Confidential text',
+    }),f.assignmentId,f.accountId,chain[2]!,
+    )).toThrow('assignment.gps_required')
+    const complete=preparePhotoMetadata(time,capture,{
+      category:'Report',description:'Confidential text',
+      gps:{latitude:41.64,longitude:41.67,accuracyMeters:5,recordedAt:time-2000},
+    })
+    expect(()=>validatePhotoForGrant(photo,complete,
+      f.assignmentId,f.accountId,chain[2]!,
+    )).not.toThrow()
+    expect(()=>validatePhotoForGrant(photo,complete,
+      crypto.randomUUID(),f.accountId,chain[2]!,
+    )).toThrow('assignment.capture_scope_mismatch')
+    expect(()=>validatePhotoForGrant(photo,{
+      ...complete,capturedAt:time+1,
+    },f.assignmentId,f.accountId,chain[2]!,
+    )).toThrow('assignment.capture_metadata_mismatch')
+    const personal=localPhoto(undefined)
+    personal.createdAt=time
+    expect(()=>validatePhotoForGrant(personal,preparePhotoMetadata(time),
+      f.assignmentId,f.accountId,chain[2]!,
+    )).toThrow('assignment.category_required')
+    expect(()=>validatePhotoForGrant({...personal,state:'retry'},complete,
+      f.assignmentId,f.accountId,chain[2]!,
+    )).toThrow('assignment.photo_not_synced')
+  })
+})
