@@ -315,8 +315,16 @@ async function openSubmission(grantId:string):Promise<void>{
     notice.value='Фотография расшифрована только на этом устройстве'
   })
 }
-watch(activeSession,()=>{
-  resetSensitive()
+watch(activeSession,(next,previous)=>{
+  // Online reauthentication refreshes Session by replacing the object, even
+  // when account/device keys are unchanged. Only an identity boundary may
+  // clear selection, decrypted previews and peer confirmation state.
+  const identityChanged=!next||!previous
+    ||next.accountId!==previous.accountId
+    ||next.deviceId!==previous.deviceId
+    ||next.pkg.accountSpki!==previous.pkg.accountSpki
+    ||next.pkg.revision!==previous.pkg.revision
+  if(identityChanged)resetSensitive()
   void refresh()
 })
 onMounted(()=>{void refresh()})
