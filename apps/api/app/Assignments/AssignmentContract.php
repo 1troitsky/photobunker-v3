@@ -150,7 +150,8 @@ final class AssignmentContract
     {
         abort_unless($d['version']===1&&$d['kind']==='photo'
           &&$d['assignmentId']===$assignment&&$d['contributorAccountId']===$contributor
-          &&$d['policyRevision']===1,422);
+          &&is_int($d['policyRevision'])
+          &&$d['policyRevision']>=1&&$d['policyRevision']<=1000000,422);
         foreach(['submissionId','assignmentId','contributorAccountId','photoId',
                  'photoGrantId','operationId'] as $key)self::uuid($d,$key);
     }
