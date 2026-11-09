@@ -39,6 +39,7 @@ export type AssignmentListing={
   state:string
   revision:number
   photoGoal:number|null
+  confirmedPhotoCount:number // server-derived, never a signed capture-policy field
   policyRevision:number
   policyContract:string
   policySignature:string
@@ -169,6 +170,10 @@ export async function listLocalAssignmentDrafts():Promise<LocalAssignment[]> {
  */
 export async function verifySignedAssignmentPolicy(item:AssignmentListing):Promise<void>{
   const s=requireSession()
+  // A count is server-derived from authorized, finalized receipts, NOT part
+  // of the immutable owner signature and not a client ACL/crypto input.
+  if(!Number.isSafeInteger(item.confirmedPhotoCount)
+    ||item.confirmedPhotoCount<0)throw new Error('assignment.invalid_receipt_count')
   const trustedSpki=item.ownerAccountId===s.accountId
     ?s.pkg.accountSpki
     :(await pinnedPeer(item.ownerAccountId)).accountSpki
