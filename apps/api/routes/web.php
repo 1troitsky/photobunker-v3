@@ -9,6 +9,7 @@ use App\Http\Controllers\MediaRevisionController;
 use App\Http\Controllers\RecipientKeyController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
+use App\Http\Controllers\AssignmentMediaSubmissionController;
 use App\Photo\Finalization;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -112,4 +113,8 @@ Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(f
         [AssignmentV1Controller::class,'accept'])->whereUuid('assignmentId')->whereUuid('inviteId');
     Route::post('/{assignmentId}/submissions',[AssignmentV1Controller::class,'submit'])->whereUuid('assignmentId');
     Route::get('/{assignmentId}/submissions',[AssignmentV1Controller::class,'submissions'])->whereUuid('assignmentId');
+    Route::post('/{assignmentId}/media-submissions',
+        [AssignmentMediaSubmissionController::class,'create'])->whereUuid('assignmentId');
+    Route::get('/{assignmentId}/media-submissions',
+        [AssignmentMediaSubmissionController::class,'index'])->whereUuid('assignmentId');
 });
