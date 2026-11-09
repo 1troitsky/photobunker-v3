@@ -272,6 +272,16 @@ final class AssignmentV1Test extends TestCase
         $stale=$this->signedGoalPolicy('owner',1,50);
         $this->postJson($path,$stale)->assertConflict();
         $this->assertDatabaseCount('assignment_policy_events_v1',1);
+        // No 1001st event: otherwise historical capture's bounded walk
+        // would fail closed for every assignment photo after further edits.
+        $overCapacity=$this->signedGoalPolicy('owner',1001,50);
+        $this->postJson($path,$overCapacity)->assertUnprocessable();
+        DB::table('assignment_records_v1')->where('id',$this->assignmentId)
+            ->update(['ends_at'=>now()->subSecond()->getTimestampMs()]);
+        $expiredEdit=$this->signedGoalPolicy('owner',2,50);
+        $this->postJson($path,$expiredEdit)->assertConflict();
+        DB::table('assignment_records_v1')->where('id',$this->assignmentId)
+            ->update(['ends_at'=>null]);
         $finish=$this->signedState('owner','finish',1);
         $this->postJson('/assignments/v1/'.$this->assignmentId.'/state',$finish)
             ->assertOk();
