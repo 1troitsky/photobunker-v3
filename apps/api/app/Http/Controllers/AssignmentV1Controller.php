@@ -73,6 +73,70 @@ final class AssignmentV1Controller extends Controller
     }
 
     /**
+     * Owner-signed, append-only policy revisions. The immutable signed creation
+     * policy is the trust root; previous revision bindings remain verifiable.
+     */
+    public function changePolicy(Request $r,string $assignmentId)
+    {
+        $this->sync->origin($r);
+        [$actor]=$this->sync->actor($r);
+        $c=$this->signed($r,$actor,'pb3.assignment-policy.v1',[
+            'version','operationId','assignmentId','ownerAccountId',
+            'rootPolicyHash','previousPolicyHash',
+            'fromPolicyRevision','toPolicyRevision','photoGoal','allowedMedia',
+        ]);
+        C::policyAmendment($c,$actor->id,$assignmentId);
+        $hash=hash('sha256',$r->json('contract'));
+        return DB::transaction(function()use($c,$actor,$assignmentId,$r,$hash){
+            $a=DB::table('assignment_records_v1')
+                ->where('id',$assignmentId)->lockForUpdate()->first();
+            abort_unless($a&&$a->owner_account_id===$actor->id,404);
+            $root=hash('sha256',$a->contract_json);
+            abort_unless(hash_equals($root,$c['rootPolicyHash']),409);
+            $existing=DB::table('assignment_policy_events_v1')
+                ->where('operation_id',$c['operationId'])->first();
+            if($existing){
+                abort_unless($existing->assignment_id===$a->id
+                    &&hash_equals($existing->contract_hash,$hash),409);
+                return $this->sync->json([
+                    'assignmentId'=>$a->id,
+                    'policyRevision'=>(int)$a->policy_revision,
+                    'photoGoal'=>$a->photo_goal===null?null:(int)$a->photo_goal,
+                    'unchanged'=>true,
+                ]);
+            }
+            abort_unless($a->state==='active'
+                &&(int)$a->policy_revision===$c['fromPolicyRevision']
+                &&$c['toPolicyRevision']===(int)$a->policy_revision+1
+                &&($a->photo_goal===null?null:(int)$a->photo_goal)!==$c['photoGoal'],409);
+            $previous=hash('sha256',$a->latest_policy_contract??$a->contract_json);
+            abort_unless(hash_equals($previous,$c['previousPolicyHash']),409);
+            $at=PhotoSync::nowMs();
+            DB::table('assignment_policy_events_v1')->insert([
+                'operation_id'=>$c['operationId'],'assignment_id'=>$a->id,
+                'from_revision'=>$c['fromPolicyRevision'],
+                'to_revision'=>$c['toPolicyRevision'],
+                'contract_hash'=>$hash,'contract_json'=>$r->json('contract'),
+                'owner_signature'=>$r->json('signature'),
+                'occurred_at_ms'=>$at,
+                'created_at'=>\Carbon\CarbonImmutable::createFromTimestampMs($at,'UTC'),
+            ]);
+            DB::table('assignment_records_v1')->where('id',$a->id)->update([
+                'policy_revision'=>$c['toPolicyRevision'],
+                'photo_goal'=>$c['photoGoal'],
+                'latest_policy_contract'=>$r->json('contract'),
+                'latest_policy_signature'=>$r->json('signature'),
+                'updated_at'=>now(),
+            ]);
+            return $this->sync->json([
+                'assignmentId'=>$a->id,
+                'policyRevision'=>$c['toPolicyRevision'],
+                'photoGoal'=>$c['photoGoal'],'unchanged'=>false,
+            ]);
+        },3);
+    }
+
+    /**
      * A finish/resume command changes server permissions without changing the
      * immutable owner-signed capture policy or deleting participants' media.
      * Every transition has a signed, revision-locked, append-only operation.
@@ -106,7 +170,7 @@ final class AssignmentV1Controller extends Controller
             }
             abort_unless((int)$a->revision===$c['fromRevision']
                 &&$c['toRevision']===(int)$a->revision+1
-                &&(int)$a->policy_revision===$c['policyRevision'],409);
+                &&$c['policyRevision']===1,409);
             $expected=$c['action']==='finish'?'active':'finished';
             abort_unless($a->state===$expected,409);
             // A finished assignment cannot resume beyond its configured end.
@@ -164,6 +228,7 @@ final class AssignmentV1Controller extends Controller
             'a.policy_revision','a.photo_goal','a.starts_at','a.ends_at',
             'a.private_envelope_json','a.contract_json','a.owner_signature',
             'a.latest_state_contract','a.latest_state_signature',
+            'a.latest_policy_contract','a.latest_policy_signature',
             'owner.account_spki as owner_account_spki',
         ];
         $now=PhotoSync::nowMs();
@@ -198,6 +263,8 @@ final class AssignmentV1Controller extends Controller
             // trusting capture constraints. Server metadata alone is not a signature.
             'policyContract'=>$x->contract_json,
             'policySignature'=>$x->owner_signature,
+            'policyAmendmentContract'=>$x->latest_policy_contract,
+            'policyAmendmentSignature'=>$x->latest_policy_signature,
             'stateContract'=>$x->latest_state_contract,
             'stateSignature'=>$x->latest_state_signature,
             'ownerAccountSpki'=>$x->owner_account_spki,
