@@ -6,6 +6,35 @@ import { decryptAsset, encryptAsset, sha } from '../../local-storage/infrastruct
 import type { CipherManifest, Scope } from '../../local-storage/domain/contracts'
 import type { SignedCaptureBinding } from '../../assignments/application/assignment-outbox'
 
+export type EncryptedGpsPoint={
+  latitude:number;longitude:number;accuracyMeters:number;recordedAt:number
+}
+export type PrivateCaptureFields={
+  category?:string|null
+  description?:string|null
+  gps?:EncryptedGpsPoint|null
+}
+export type PhotoPrivateMetadata={
+  version:1|2;type:'image/jpeg';capturedAt:number;source:'camera'
+  assignmentCapture?:SignedCaptureBinding
+  category?:string|null;description?:string|null;gps?:EncryptedGpsPoint|null
+}
+
+function sanitizedCaptureFields(fields:PrivateCaptureFields):Required<PrivateCaptureFields>{
+  const category=(fields.category??'').trim()
+  const description=(fields.description??'').trim()
+  if(category.length>64||description.length>4000)
+    throw new Error('capture.metadata_too_long')
+  const gps=fields.gps??null
+  if(gps&&(!Number.isFinite(gps.latitude)||gps.latitude< -90||gps.latitude>90
+    ||!Number.isFinite(gps.longitude)||gps.longitude< -180||gps.longitude>180
+    ||!Number.isFinite(gps.accuracyMeters)||gps.accuracyMeters<0
+    ||gps.accuracyMeters>100000||!Number.isSafeInteger(gps.recordedAt)
+    ||gps.recordedAt<1500000000000||gps.recordedAt>Date.now()+120000))
+    throw new Error('capture.invalid_gps')
+  return {category:category||null,description:description||null,gps}
+}
+
 export type PhotoStatus = 'queued'|'retry'|'synced'|'conflict'
 export type StoredAsset = {
   assetId:string
@@ -66,7 +95,9 @@ async function makeAsset(kind:'master'|'metadata',plaintext:Blob,
   }
 }
 
-export async function captureEncrypted(jpeg:Blob,capture?:SignedCaptureBinding):Promise<StoredPhoto> {
+export async function captureEncrypted(
+  jpeg:Blob,capture?:SignedCaptureBinding,fields?:PrivateCaptureFields,
+):Promise<StoredPhoto> {
   const session=requireSession()
   if (jpeg.type!=='image/jpeg'||jpeg.size<128||jpeg.size>10*1024*1024)
     throw new Error('capture.invalid_jpeg')
@@ -78,9 +109,15 @@ export async function captureEncrypted(jpeg:Blob,capture?:SignedCaptureBinding):
   // 13 days is an intentional conservative buffer against the initial 14-day
   // Free cap and unsynchronized browser clocks. Authoritative TTL needs P1 clock sync.
   const expiresAt=createdAt+13*86400000
+  // All optional category/description/GPS fields stay *inside* the
+  // AEAD-encrypted metadata asset. The server sees only ciphertext length and
+  // hash, never plaintext coordinates, labels or free text.
+  const privateFields=fields?sanitizedCaptureFields(fields):null
   const metadata= new Blob([enc.encode(JSON.stringify({
-    type:'image/jpeg',capturedAt:createdAt,source:'camera',version:1,
+    type:'image/jpeg',capturedAt:createdAt,source:'camera',
+    version:privateFields?2:1,
     ...(capture?{assignmentCapture:capture}:{}),
+    ...(privateFields??{}),
   }))],{type:'application/json'})
   const main=await makeAsset('master',jpeg,photoId,expiresAt)
   const detail=await makeAsset('metadata',metadata,photoId,expiresAt)
@@ -186,6 +223,34 @@ export async function readLocalPhoto(photoId:string):Promise<Blob> {
   return decryptAsset(asset.manifest,asset.blob,key,scope(),()=>requireSame(s))
 }
 
+function parsePrivateMetadata(blob:Blob):Promise<PhotoPrivateMetadata>{
+  return blob.arrayBuffer().then(bytes=>{
+    const value=JSON.parse(new TextDecoder('utf-8',{fatal:true})
+      .decode(bytes)) as PhotoPrivateMetadata
+    if((value.version!==1&&value.version!==2)
+      ||value.type!=='image/jpeg'||value.source!=='camera'
+      ||!Number.isSafeInteger(value.capturedAt))
+      throw new Error('photo.invalid_private_metadata')
+    if(value.version===2)sanitizedCaptureFields(value)
+    return value
+  })
+}
+
+/** Decrypt private metadata only on the identity owner's device. */
+export async function readLocalPhotoMetadata(photoId:string):Promise<PhotoPrivateMetadata>{
+  const session=requireSession()
+  const row=await db.photos.get(session.accountId+'/'+photoId)
+  if(!row||row.expiresAt<=Date.now())throw new Error('photo.not_available')
+  const asset=row.assets.find(a=>a.kind==='metadata')
+  if(!asset)throw new Error('photo.missing_metadata')
+  const key=await unwrapAssetDEK(session.pkg,asset.assetId,
+    String(row.expiresAt),asset.manifest.wrappedDEK)
+  const plaintext=await decryptAsset(asset.manifest,asset.blob,key,scope(),
+    ()=>requireSame(session))
+  requireSame(session)
+  return parsePrivateMetadata(plaintext)
+}
+
 export interface CloudPhoto {photoId:string;expiresAt:number;metadataAssetId:string|null}
 export async function listCloudPhotos(after?:string):Promise<{items:CloudPhoto[];nextCursor:string|null}> {
   const s=requireSession()
@@ -201,13 +266,15 @@ type CloudManifest={
     manifest:Omit<CipherManifest,'backend'|'storageKey'>
   }>
 }
-export async function readCloudPhoto(photoId:string):Promise<Blob> {
+async function readCloudAsset(
+  photoId:string,kind:'master'|'metadata',
+):Promise<Blob> {
   const s=requireSession()
   if(!s.online)throw new Error('identity.offline')
   const result=await jsonApi<CloudManifest>(path(photoId)+'/manifests')
   if(result.photoId!==photoId||result.expiresAt<=Date.now())throw new Error('photo.expired')
-  const asset=result.assets.find(a=>a.kind==='master')
-  if(!asset)throw new Error('photo.no_master')
+  const asset=result.assets.find(a=>a.kind===kind)
+  if(!asset)throw new Error('photo.missing_'+kind)
   const download=await readCiphertext(path(photoId)+'/objects/'+asset.assetId)
   const digest=await sha(new Uint8Array(await download.blob.arrayBuffer()))
   if(digest!==asset.sha256||download.digest!==asset.sha256||download.blob.size!==asset.bytes)
@@ -218,4 +285,12 @@ export async function readCloudPhoto(photoId:string):Promise<Blob> {
   }
   const key=await unwrapAssetDEK(s.pkg,asset.assetId,String(result.expiresAt),manifest.wrappedDEK)
   return decryptAsset(manifest,download.blob,key,scope(),()=>requireSame(s))
+}
+
+export async function readCloudPhoto(photoId:string):Promise<Blob>{
+  return readCloudAsset(photoId,'master')
+}
+
+export async function readCloudPhotoMetadata(photoId:string):Promise<PhotoPrivateMetadata>{
+  return parsePrivateMetadata(await readCloudAsset(photoId,'metadata'))
 }
