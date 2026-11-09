@@ -98,7 +98,9 @@ final class Reservation
         // The device-signed capturedAt remains a *claim*, not a secure clock.
         $events=DB::table('assignment_state_events_v1')
             ->where('assignment_id',$a->id)->orderBy('to_revision')
-            ->limit(1001)->get(['from_revision','to_revision','state','created_at']);
+            ->limit(1001)->get([
+                'from_revision','to_revision','state','created_at','occurred_at_ms',
+            ]);
         abort_unless($events->count()<=1000,409);
         $revision=1;
         $state='active';
@@ -108,7 +110,23 @@ final class Reservation
         $lastEventAt=0;
         $validInterval=false;
         foreach($events as $event){
-            $at=\Carbon\Carbon::parse($event->created_at)->getTimestampMs();
+            $secondStart=\Carbon\CarbonImmutable::parse(
+                $event->created_at,'UTC')->getTimestampMs();
+            if($event->occurred_at_ms===null){
+                // Legacy events stored only at whole-second precision.
+                // A capture inside this ambiguous second cannot safely be
+                // classified as either pre-finish or post-finish. Fail closed
+                // without deleting its locally encrypted ciphertext.
+                abort_unless($when<$secondStart
+                    ||$when>=$secondStart+1000,409);
+                $at=$secondStart;
+            }else{
+                $at=(int)$event->occurred_at_ms;
+                // A mismatch indicates a corrupt or inconsistent DB row;
+                // do not grant access based on untrusted event timing.
+                abort_unless($at>=$secondStart
+                    &&$at<$secondStart+1000,409);
+            }
             abort_unless((int)$event->from_revision===$revision
                 &&(int)$event->to_revision===$revision+1
                 &&$at>=$lastEventAt,409);
