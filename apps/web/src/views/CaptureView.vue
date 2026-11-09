@@ -3,9 +3,13 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { activeSession, type Session } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
+import { enqueueEncryptedMedia } from '../features/media/application/media-outbox'
+import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
+import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
 import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import {
   listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
+  signedMediaCaptureIntent,signedAllowedAssignmentMedia,
   signedPolicyRequirements,
 } from '../features/assignments/application/assignment-outbox'
 import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
@@ -14,6 +18,23 @@ const route=useRoute()
 const video=ref<HTMLVideoElement|null>(null)
 const policies=ref<AssignmentListing[]>([])
 const selectedAssignment=ref('')
+const captureMode=ref<'photo'|'video'|'audio'>('photo')
+const recording=ref(false)
+const recordLimitMs=180000
+const recorder=ref<MediaRecorder|null>(null)
+const recordingStartedAt=ref<number|null>(null)
+let recordingTimer:ReturnType<typeof setTimeout>|null=null
+let recordingParts:Blob[]=[]
+let recordedSize=0
+let activeRecording:object|null=null
+const canCaptureType=computed(()=>{
+  const required=route.query.assignmentId
+  if(typeof required==='string'&&required
+    &&selectedAssignment.value!==required)return false
+  if(!selectedAssignment.value)return true
+  const policy=policies.value.find(p=>p.assignmentId===selectedAssignment.value)
+  return !!policy&&signedAllowedAssignmentMedia(policy).includes(captureMode.value)
+})
 const requiredFields=computed(()=>{
   const policy=policies.value.find(p=>p.assignmentId===selectedAssignment.value)
   return policy?signedPolicyRequirements(policy):null
@@ -87,10 +108,27 @@ function ownsCamera(identity:CameraIdentity,generation:number):boolean {
   return !disposed && cameraGeneration===generation
     &&sameIdentity(identity,cameraIdentity(activeSession.value))
 }
+function discardRecording():void {
+  const old=recorder.value
+  recorder.value=null
+  activeRecording=null
+  recording.value=false
+  recordingStartedAt.value=null
+  recordingParts=[]
+  recordedSize=0
+  if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
+  if(old&&old.state!=='inactive'){
+    old.ondataavailable=null
+    old.onstop=null
+    old.stop()
+  }
+}
+
 function stopTracks(opened:MediaStream):void {
   for(const track of opened.getTracks())if(track.readyState!=='ended')track.stop()
 }
 function releaseStream():void {
+  discardRecording()
   if(stream.value)stopTracks(stream.value)
   stream.value=null;streamIdentity=null
   if(video.value)video.value.srcObject=null
@@ -109,8 +147,11 @@ async function startCamera():Promise<void> {
   const identity=cameraIdentity(activeSession.value),generation=cameraGeneration
   let opened:MediaStream|null=null
   try{
+    const mode=captureMode.value
     opened=await navigator.mediaDevices.getUserMedia({
-      audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1280}},
+      audio:mode!=='photo',
+      video:mode!=='audio'
+        ?{facingMode:{ideal:'environment'},width:{ideal:1280}}:false,
     })
     await nextTick()
     if(!cameraWanted||!ownsCamera(identity,generation)||!video.value){
@@ -119,8 +160,10 @@ async function startCamera():Promise<void> {
     }
     stream.value=opened;streamIdentity=identity
     const preview=video.value
-    preview.srcObject=opened
-    await preview.play()
+    if(captureMode.value!=='audio'){
+      preview.srcObject=opened
+      await preview.play()
+    }
     if(!cameraWanted||!ownsCamera(identity,generation)||video.value!==preview){
       stopTracks(opened)
       if(stream.value===opened)releaseStream()
@@ -172,6 +215,106 @@ async function obtainGPS():Promise<void>{
     if(attempt===gpsAttempt)gpsLoading.value=false
   }
 }
+function mediaMime(kind:'video'|'audio'):string{
+  if(typeof MediaRecorder==='undefined')throw Error('camera.recorder_unavailable')
+  const formats=kind==='video'
+    ?['video/webm','video/mp4']
+    :['audio/webm','audio/mp4','audio/ogg']
+  const format=formats.find(mime=>MediaRecorder.isTypeSupported(mime))
+  if(!format)throw Error('camera.media_format_unsupported')
+  return format
+}
+async function beginRecording():Promise<void>{
+  const mode=captureMode.value
+  const identity=streamIdentity,generation=cameraGeneration
+  if(mode==='photo'||recording.value||busy.value||!canCaptureType.value
+    ||!stream.value||!ownsCamera(identity,generation))return
+  busy.value=true;error.value='';message.value=''
+  try{
+    const required=route.query.assignmentId
+    if(typeof required==='string'&&required&&selectedAssignment.value!==required)
+      throw Error('assignment.policy_not_verified')
+    const startedAt=Date.now()
+    // Snapshot verified owner policy BEFORE acquiring any recording bytes.
+    // MediaFile v1 stays opaque; an independent account-signed capture
+    // sidecar will later bind its exact ciphertext manifest digest.
+    const intent=selectedAssignment.value
+      ?await signedMediaCaptureIntent(selectedAssignment.value,mode,startedAt)
+      :undefined
+    if(!ownsCamera(identity,generation)||captureMode.value!==mode
+      ||(intent&&selectedAssignment.value!==intent.assignmentId))
+      throw Error('camera.identity_changed')
+    const mime=mediaMime(mode)
+    const streamRef=stream.value
+    if(!streamRef)throw Error('camera.stream_unavailable')
+    const worker=new MediaRecorder(streamRef,{mimeType:mime})
+    const token={identity,generation,mode,intent,startedAt,mime}
+    activeRecording=token
+    recordingParts=[]
+    recordedSize=0
+    recorder.value=worker
+    recording.value=true
+    recordingStartedAt.value=startedAt
+    worker.ondataavailable=event=>{
+      if(activeRecording!==token||!event.data.size)return
+      recordingParts.push(event.data)
+      recordedSize+=event.data.size
+      if(recordedSize>MAX_MEDIA_BYTES){
+        error.value='media.invalid_size'
+        discardRecording()
+      }
+    }
+    worker.onerror=()=>{error.value='camera.recording_failed';discardRecording()}
+    worker.onstop=()=>{
+      if(activeRecording!==token)return
+      if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
+      const parts=recordingParts
+      recordingParts=[]
+      recorder.value=null;recording.value=false;recordingStartedAt.value=null
+      activeRecording=null
+      const bytes=recordedSize;recordedSize=0
+      void (async()=>{
+        if(!ownsCamera(identity,generation)||captureMode.value!==mode
+          ||(intent&&selectedAssignment.value!==intent.assignmentId))return
+        busy.value=true
+        try{
+          if(bytes<128||bytes>MAX_MEDIA_BYTES)
+            throw Error('media.invalid_size')
+          const finishedAt=Date.now()
+          if(finishedAt<=startedAt||finishedAt-startedAt>recordLimitMs+2000)
+            throw Error('camera.recording_duration_invalid')
+          const suffix=mime.includes('webm')?'webm'
+            :mime.includes('ogg')?'ogg':'mp4'
+          const file=new File(parts,
+            'recording-'+new Date(startedAt).toISOString()+'.'+suffix,
+            {type:mime,lastModified:startedAt})
+          const capture:MediaCaptureIntent|undefined=intent
+            ?{...intent,finishedAt}:undefined
+          const id=await enqueueEncryptedMedia(file,capture)
+          if(!ownsCamera(identity,generation))return
+          message.value='Запись зашифрована и сохранена локально: '+id.slice(0,8)
+        }catch(e){
+          if(ownsCamera(identity,generation))
+            error.value=e instanceof Error?e.message:'camera.media_failed'
+        }finally{busy.value=false}
+      })()
+    }
+    worker.start(1000)
+    recordingTimer=setTimeout(()=>{
+      if(activeRecording===token&&worker.state==='recording')
+        worker.stop()
+    },recordLimitMs)
+  }catch(e){
+    discardRecording()
+    if(ownsCamera(identity,generation))
+      error.value=e instanceof Error?e.message:'camera.recording_failed'
+  }finally{busy.value=false}
+}
+function endRecording():void{
+  const worker=recorder.value
+  if(worker&&worker.state==='recording')worker.stop()
+}
+
 function closeCamera():void {
   cameraWanted=false;cameraGeneration++
   clearGPS()
@@ -241,7 +384,17 @@ watch(activeSession,session=>{
 onMounted(()=>{
   if(activeSession.value){void refreshPolicies();void nextTick().then(startCamera)}
 })
-watch(()=>route.query.assignmentId,()=>{void refreshPolicies()})
+watch(()=>route.query.assignmentId,()=>{
+  if(recording.value)discardRecording()
+  void refreshPolicies()
+})
+watch(captureMode,()=>{
+  closeCamera()
+  if(!disposed&&activeSession.value){
+    cameraWanted=true
+    void nextTick().then(startCamera)
+  }
+})
 onUnmounted(()=>{disposed=true;closeCamera()})
 </script>
 
