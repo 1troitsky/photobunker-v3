@@ -1061,7 +1061,7 @@ final class AssignmentV1Test extends TestCase
         $wrongPolicy=$this->signedRecordedSubmission($media,'video',[
             'policyRevision'=>1,
         ]);
-        $this->postJson($url,$wrongPolicy)->assertConflict();
+        $this->postJson($url,$wrongPolicy)->assertUnprocessable(); // malformed signed proof revision
         $foreign=$this->signedRecordedSubmission($media,'video',[
             'assignmentId'=>(string)Str::uuid(),
         ]);
