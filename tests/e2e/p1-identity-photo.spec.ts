@@ -476,7 +476,7 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await A.locator('#assignment-edited-goal').fill('45')
     await A.getByRole('button',{name:'Подписать новую цель'}).click()
     await expect(A.getByText('Версия правил: 2')).toBeVisible({timeout:20000})
-    await expect(A.locator('.assignment-card').first()).toContainText(/Фото:\\s*0\\s*\\/\\s*45/)
+    await expect(A.locator('.assignment-card').first()).toContainText(/Фото:\s*0\s*\/\s*45/)
     await bCtx.setOffline(false)
     await B.getByRole('navigation',{name:'Главная навигация'})
       .getByRole('link',{name:'Browser',exact:true}).click()
