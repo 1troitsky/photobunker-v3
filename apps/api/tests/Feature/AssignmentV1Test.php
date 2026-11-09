@@ -192,6 +192,94 @@ final class AssignmentV1Test extends TestCase
             ->where('assignment_id',$this->assignmentId)->value('occurred_at_ms'));
     }
 
+    private function signedGoalPolicy(
+        string $role,int $from,int|null $goal,string|null $previousHash=null,
+        string|null $operationId=null
+    ):array
+    {
+        $this->as($role);
+        $original=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->value('contract_json');
+        $latest=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->value('latest_policy_contract');
+        return $this->signed($role,'pb3.assignment-policy.v1',[
+            'version'=>1,'operationId'=>$operationId??(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people[$role]['account'],
+            'rootPolicyHash'=>hash('sha256',$original),
+            'previousPolicyHash'=>$previousHash??hash('sha256',$latest??$original),
+            'fromPolicyRevision'=>$from,'toPolicyRevision'=>$from+1,
+            'photoGoal'=>$goal,'allowedMedia'=>['photo'],
+        ]);
+    }
+
+    public function test_owner_signed_goal_revisions_are_append_only_and_lost_ack_safe():void
+    {
+        $this->createAssignment();
+        $this->invite();
+        $first=$this->signedGoalPolicy('owner',1,45);
+        $path='/assignments/v1/'.$this->assignmentId.'/policy';
+        $this->postJson($path,$first)->assertOk()
+            ->assertJsonPath('policyRevision',2)
+            ->assertJsonPath('photoGoal',45)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($path,$first)->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertDatabaseCount('assignment_policy_events_v1',1);
+        $this->getJson('/assignments/v1')->assertOk()
+            ->assertJsonPath('items.0.photoGoal',45)
+            ->assertJsonPath('items.0.policyRevision',2)
+            ->assertJsonPath('items.0.policyAmendmentContract',$first['contract'])
+            ->assertJsonPath('items.0.policyAmendmentSignature',$first['signature']);
+        $record=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $this->assertSame(30,json_decode($record->contract_json,true)['photoGoal']);
+        $second=$this->signedGoalPolicy('owner',2,null);
+        $this->postJson($path,$second)->assertOk()
+            ->assertJsonPath('policyRevision',3)->assertJsonPath('photoGoal',null);
+        $this->postJson($path,$first)->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertDatabaseCount('assignment_policy_events_v1',2);
+        // State revisions remain independent and anchored to the immutable root.
+        $finish=$this->signedState('owner','finish',1);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/state',$finish)
+            ->assertOk()->assertJsonPath('state','finished');
+        $this->postJson($path,$second)->assertOk()->assertJsonPath('unchanged',true);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.policyRevision',3)
+            ->assertJsonPath('items.0.revision',2)
+            ->assertJsonPath('items.0.state','finished');
+    }
+
+    public function test_policy_change_rejects_forgery_stale_revision_cross_owner_and_noop():void
+    {
+        $this->createAssignment();
+        $path='/assignments/v1/'.$this->assignmentId.'/policy';
+        $wrong=$this->signedGoalPolicy('outsider',1,40);
+        $this->postJson($path,$wrong)->assertNotFound();
+        $tampered=$this->signedGoalPolicy('owner',1,40);
+        $tampered['signature']=P::encode(random_bytes(64));
+        $this->postJson($path,$tampered)->assertUnauthorized();
+        $unchanged=$this->signedGoalPolicy('owner',1,30);
+        $this->postJson($path,$unchanged)->assertConflict();
+        $badPrevious=$this->signedGoalPolicy('owner',1,40,str_repeat('a',64));
+        $this->postJson($path,$badPrevious)->assertConflict();
+        $invalid=$this->signedGoalPolicy('owner',1,40);
+        $payload=json_decode($invalid['contract'],true);
+        $payload['allowedMedia']=['video'];
+        $this->postJson($path,$this->signed('owner',
+            'pb3.assignment-policy.v1',$payload))->assertUnprocessable();
+        $first=$this->signedGoalPolicy('owner',1,40);
+        $this->postJson($path,$first)->assertOk();
+        $stale=$this->signedGoalPolicy('owner',1,50);
+        $this->postJson($path,$stale)->assertConflict();
+        $this->assertDatabaseCount('assignment_policy_events_v1',1);
+        $finish=$this->signedState('owner','finish',1);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/state',$finish)
+            ->assertOk();
+        $later=$this->signedGoalPolicy('owner',2,50);
+        $this->postJson($path,$later)->assertConflict();
+        $this->assertDatabaseCount('assignment_policy_events_v1',1);
+    }
+
     public function test_owner_finish_resume_are_signed_versioned_idempotent_and_keep_invites():void
     {
         $this->createAssignment();
