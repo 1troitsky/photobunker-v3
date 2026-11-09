@@ -163,7 +163,7 @@ async function hydrate():Promise<void>{
       requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       allowedMedia:['photo'],
       localState:item.state,goal:item.photoGoal,
-      confirmedPhotos:null,
+      confirmedPhotos:null,confirmedVideos:null,confirmedAudio:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
     }
   }))
@@ -360,9 +360,9 @@ async function changeGoal():Promise<void>{
       descriptionMinLength:Number(editedDescriptionMin.value),
       requiredGps:editedRequiredGps.value,
       allowedMedia:[
-        'photo',...(editedAllowVideo.value?['video'] as const:[]),
-        ...(editedAllowAudio.value?['audio'] as const:[]),
-      ],
+        'photo',...(editedAllowVideo.value?['video']:[]),
+        ...(editedAllowAudio.value?['audio']:[]),
+      ] as AllowedAssignmentMedia,
     })
     if(activeSession.value?.online&&navigator.onLine)await flushAssignmentOutbox()
     await refresh()
@@ -451,6 +451,52 @@ async function submit(photo:StoredPhoto):Promise<void>{
     await flushAssignmentOutbox()
     operations.value=await listAssignmentOperations()
     notice.value='Зашифрованный grant и отправка задания поставлены в очередь'
+  })
+}
+async function submitMedia(media:StoredMedia):Promise<void>{
+  await operate(async()=>{
+    const target=selected.value
+    if(!target||target.isOwner||media.state!=='synced'
+      ||!['video','audio'].includes(media.mediaType))
+      throw Error('assignment.media_not_synced')
+    if(contributorCheck.value?.accountId!==target.ownerAccountId
+      ||!contributorCheck.value.confirmed)
+      throw Error('Подтвердите отпечаток владельца задания')
+    // Fresh signed owner permission must be checked BEFORE any recipient
+    // envelope is created. Offline queueing may use only signed cached
+    // policy; server always enforces its CURRENT revision on admission.
+    const online=!!activeSession.value?.online&&navigator.onLine
+    const snapshots=online
+      ?(await listServerAssignments()).items
+      :await listCachedAssignmentSnapshots()
+    const policy=snapshots.find(x=>x.assignmentId===target.id)
+    if(!policy)throw Error('assignment.policy_not_available')
+    await verifySignedAssignmentPolicy(policy,!online)
+    if(policy.state!=='active'
+      ||!signedAllowedAssignmentMedia(policy).includes(media.mediaType)
+      ||policy.startsAt>Date.now()
+      ||(policy.endsAt!==null&&policy.endsAt<=Date.now()))
+      throw Error('assignment.media_not_allowed')
+    if(!window.confirm(
+      'Это личное '+(media.mediaType==='video'?'видео':'аудио')
+      +'. Передать владельцу задания E2EE-ключ всего файла, включая исходное имя и приватные метаданные? Отзыв не удалит уже скачанные копии.'
+    ))return
+    const grantId=await queueMediaRecipientGrant(media.mediaId,target.ownerAccountId)
+    await queueAssignmentMediaSubmission(target.id,media.mediaId,grantId)
+    await flushMediaGrants()
+    await flushAssignmentOutbox()
+    operations.value=await listAssignmentOperations()
+    notice.value='Подписанный media-grant и отправка сохранены в очереди. Прогресс изменится только после серверного подтверждения.'
+  })
+}
+async function openMediaSubmission(grantId:string):Promise<void>{
+  await operate(async()=>{
+    // The owner must have independently pinned the contributor fingerprint.
+    const result=await readReceivedMediaGrant(grantId)
+    cleanPreview()
+    previewUrl.value=URL.createObjectURL(result.blob)
+    previewMime.value=result.metadata.mime
+    notice.value='Видео/аудио и приватные метаданные расшифрованы на устройстве'
   })
 }
 async function openSubmission(grantId:string):Promise<void>{
