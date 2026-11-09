@@ -148,6 +148,93 @@ final class AssignmentV1Test extends TestCase
         $this->postJson($url,$input)->assertOk()->assertJsonPath('unchanged',true);
     }
 
+    private function signedState(string $role,string $action,int $from,
+        ?string $operationId=null):array
+    {
+        $this->as($role);
+        $json=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->value('contract_json');
+        $payload=[
+            'version'=>1,
+            'operationId'=>$operationId??(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people[$role]['account'],
+            'policyHash'=>hash('sha256',$json),
+            'policyRevision'=>1,
+            'fromRevision'=>$from,'toRevision'=>$from+1,
+            'action'=>$action,
+            'state'=>$action==='finish'?'finished':'active',
+        ];
+        return $this->signed($role,'pb3.assignment-state.v1',$payload);
+    }
+
+    public function test_owner_finish_resume_are_signed_versioned_idempotent_and_keep_invites():void
+    {
+        $this->createAssignment();
+        $inviteId=$this->invite();
+        $this->accept($inviteId);
+        $url='/assignments/v1/'.$this->assignmentId.'/state';
+        $finish=$this->signedState('owner','finish',1);
+        $this->postJson($url,$finish)->assertOk()
+            ->assertJsonPath('state','finished')
+            ->assertJsonPath('revision',2)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$finish)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->assertDatabaseCount('assignment_state_events_v1',1);
+        $this->assertDatabaseHas('assignment_records_v1',[
+            'id'=>$this->assignmentId,'state'=>'finished','revision'=>2,
+        ]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.state','finished')
+            ->assertJsonPath('items.0.revision',2)
+            ->assertJsonPath('items.0.stateContract',$finish['contract'])
+            ->assertJsonPath('items.0.stateSignature',$finish['signature']);
+        $this->as('recipient');
+        // Accepted member retains their key envelope and can verify a
+        // signed finished state, but has no new capture authority.
+        $this->getJson('/assignments/v1/invites/received')
+            ->assertJsonPath('items.0.inviteId',$inviteId);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.state','finished');
+        $resume=$this->signedState('owner','resume',2);
+        $this->postJson($url,$resume)->assertOk()
+            ->assertJsonPath('state','active')
+            ->assertJsonPath('revision',3);
+        $this->assertDatabaseCount('assignment_state_events_v1',2);
+        $this->assertDatabaseHas('assignment_records_v1',[
+            'id'=>$this->assignmentId,'state'=>'active','revision'=>3,
+        ]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.stateContract',$resume['contract'])
+            ->assertJsonPath('items.0.stateSignature',$resume['signature']);
+    }
+
+    public function test_state_change_rejects_forgery_stale_revision_and_expired_resume():void
+    {
+        $this->createAssignment();
+        $url='/assignments/v1/'.$this->assignmentId.'/state';
+        $wrong=$this->signedState('outsider','finish',1);
+        $this->postJson($url,$wrong)->assertNotFound();
+        $finish=$this->signedState('owner','finish',1);
+        $tampered=$finish;
+        $tampered['signature']=P::encode(random_bytes(64));
+        $this->postJson($url,$tampered)->assertUnauthorized();
+        $this->postJson($url,$finish)->assertOk();
+        $stale=$this->signedState('owner','finish',1);
+        $this->postJson($url,$stale)->assertConflict();
+        // A completed assignment cannot be reopened after its hard end date,
+        // and a rejected command must not add to the append-only audit.
+        DB::table('assignment_records_v1')->where('id',$this->assignmentId)
+            ->update(['ends_at'=>now()->subMinute()->getTimestampMs()]);
+        $resume=$this->signedState('owner','resume',2);
+        $this->postJson($url,$resume)->assertConflict();
+        $this->assertDatabaseCount('assignment_state_events_v1',1);
+        $this->assertDatabaseHas('assignment_records_v1',[
+            'id'=>$this->assignmentId,'state'=>'finished',
+        ]);
+    }
+
     public function test_assignment_creation_is_signed_private_and_owner_scoped():void
     {
         $this->createAssignment();
