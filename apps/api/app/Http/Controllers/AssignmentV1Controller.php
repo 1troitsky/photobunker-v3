@@ -106,6 +106,7 @@ final class AssignmentV1Controller extends Controller
                 ]);
             }
             abort_unless($a->state==='active'
+                &&($a->ends_at===null||(int)$a->ends_at>PhotoSync::nowMs())
                 &&(int)$a->policy_revision===$c['fromPolicyRevision']
                 &&$c['toPolicyRevision']===(int)$a->policy_revision+1
                 &&($a->photo_goal===null?null:(int)$a->photo_goal)!==$c['photoGoal'],409);
