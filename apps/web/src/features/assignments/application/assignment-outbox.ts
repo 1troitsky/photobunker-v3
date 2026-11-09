@@ -7,7 +7,7 @@ import { listOutgoingGrants } from '../../sharing/grant-flow'
 import { sealAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
 import type { AssignmentEnvelope, AssignmentInviteEnvelope, PrivateAssignment } from '../infrastructure/assignment-crypto'
 
-export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'state'
+export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'state'|'policy'
 export type AssignmentOperationState='queued'|'retry'|'sent'|'conflict'
 
 export interface AssignmentOperation {
@@ -43,6 +43,8 @@ export type AssignmentListing={
   policyRevision:number
   policyContract:string
   policySignature:string
+  policyAmendmentContract?:string|null
+  policyAmendmentSignature?:string|null
   stateContract:string|null
   stateSignature:string|null
   privateEnvelope:AssignmentEnvelope
@@ -113,6 +115,7 @@ function domain(kind:AssignmentOperationKind):string{
     accept:'pb3.assignment-accept.v1\n',
     submit:'pb3.assignment-submit.v1\n',
     state:'pb3.assignment-state.v1\n',
+    policy:'pb3.assignment-policy.v1\n',
   }
   return signedDomains[kind]
 }
@@ -203,12 +206,41 @@ export async function verifySignedAssignmentPolicy(
   // is finished/resumed. Its current state MUST have a second signed command.
   if(c.version!==1||c.assignmentId!==item.assignmentId
     ||c.ownerAccountId!==item.ownerAccountId||c.state!=='active'
-    ||c.revision!==1||c.policyRevision!==item.policyRevision
-    ||c.photoGoal!==item.photoGoal||c.startsAt!==item.startsAt
+    ||c.revision!==1||c.policyRevision!==1
+    ||c.startsAt!==item.startsAt
     ||c.endsAt!==item.endsAt||!Array.isArray(c.allowedMedia)
     ||c.allowedMedia.length!==1||c.allowedMedia[0]!=='photo'
     ||JSON.stringify(c.privateEnvelope)!==JSON.stringify(item.privateEnvelope)){
     throw new Error('assignment.policy_snapshot_mismatch')
+  }
+  const originalHash=hex(await digest(new TextEncoder().encode(item.policyContract)))
+  if(!Number.isInteger(item.policyRevision)||item.policyRevision<1
+    ||item.policyRevision>1000000)throw new Error('assignment.invalid_policy_revision')
+  if(item.policyRevision===1){
+    if(item.photoGoal!==c.photoGoal||item.policyAmendmentContract!=null
+      ||item.policyAmendmentSignature!=null)
+      throw new Error('assignment.policy_snapshot_mismatch')
+  }else{
+    if(typeof item.policyAmendmentContract!=='string'
+      ||typeof item.policyAmendmentSignature!=='string'
+      ||!await verify(await importSpki(trustedSpki),
+        domain('policy')+item.policyAmendmentContract,
+        item.policyAmendmentSignature))
+      throw new Error('assignment.policy_revision_not_authenticated')
+    let edit:Record<string,unknown>
+    try{edit=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>}
+    catch{throw new Error('assignment.invalid_policy_revision')}
+    if(edit.version!==1||edit.assignmentId!==item.assignmentId
+      ||edit.ownerAccountId!==item.ownerAccountId
+      ||edit.rootPolicyHash!==originalHash
+      ||edit.toPolicyRevision!==item.policyRevision
+      ||edit.fromPolicyRevision!==item.policyRevision-1
+      ||!Array.isArray(edit.allowedMedia)||edit.allowedMedia.length!==1
+      ||edit.allowedMedia[0]!=='photo'
+      ||edit.photoGoal!==item.photoGoal
+      ||typeof edit.previousPolicyHash!=='string'
+      ||!/^[a-f0-9]{64}$/.test(edit.previousPolicyHash))
+      throw new Error('assignment.policy_revision_mismatch')
   }
   if(item.revision===1){
     if(item.state!=='active'||item.stateContract!==null
@@ -228,7 +260,7 @@ export async function verifySignedAssignmentPolicy(
     if(transition.version!==1||transition.assignmentId!==item.assignmentId
       ||transition.ownerAccountId!==item.ownerAccountId
       ||transition.policyHash!==hash
-      ||transition.policyRevision!==item.policyRevision
+      ||transition.policyRevision!==1
       ||transition.fromRevision!==item.revision-1
       ||transition.toRevision!==item.revision
       ||!((transition.action==='finish'&&transition.state==='finished')
@@ -254,6 +286,13 @@ export function assertSignedPolicyProgress(
     throw new Error('assignment.original_policy_changed')
   if(next.revision<previous.revision)
     throw new Error('assignment.state_rollback')
+  if(next.policyRevision<previous.policyRevision)
+    throw new Error('assignment.policy_rollback')
+  if(next.policyRevision===previous.policyRevision
+    &&(next.photoGoal!==previous.photoGoal
+      ||next.policyAmendmentContract!==previous.policyAmendmentContract
+      ||next.policyAmendmentSignature!==previous.policyAmendmentSignature))
+    throw new Error('assignment.policy_equivocation')
   if(next.revision===previous.revision
     &&(next.state!==previous.state
       ||next.stateContract!==previous.stateContract
@@ -327,12 +366,15 @@ export async function signedCaptureBinding(
   // against the independently pinned local key, not a live key-directory
   // request that can fail during an API outage.
   await verifySignedAssignmentPolicy(policy,true)
-  if(policy.state!=='active'||policy.policyRevision!==1
+  if(policy.state!=='active'
     ||capturedAt<policy.startsAt
     ||(policy.endsAt!==null&&capturedAt>=policy.endsAt)) {
     throw new Error('assignment.capture_not_permitted')
   }
-  const policyHash=hex(await digest(new TextEncoder().encode(policy.policyContract)))
+  const effectiveContract=policy.policyRevision===1
+    ?policy.policyContract:policy.policyAmendmentContract
+  if(!effectiveContract)throw new Error('assignment.policy_revision_not_authenticated')
+  const policyHash=hex(await digest(new TextEncoder().encode(effectiveContract)))
   assertSame(s)
   return {
     assignmentId:policy.assignmentId,ownerAccountId:policy.ownerAccountId,
@@ -403,6 +445,45 @@ export async function readCachedPrivateAssignment(
   return data
 }
 
+/**
+ * Owner-root-signed edits affect only the target count. Historical capture
+ * contracts stay immutable and are evaluated by the server at capture time.
+ */
+export async function queueAssignmentGoalChange(
+  assignmentId:string,photoGoal:number|null,
+):Promise<string>{
+  const s=requireSession()
+  if(photoGoal!==null&&(!Number.isInteger(photoGoal)||photoGoal<1||photoGoal>9999))
+    throw new Error('assignment.invalid_goal')
+  const row=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
+  if(!row||row.listing.ownerAccountId!==s.accountId)
+    throw new Error('assignment.policy_not_owned')
+  await verifySignedAssignmentPolicy(row.listing,true)
+  const a=row.listing
+  if(a.state!=='active'||a.photoGoal===photoGoal)
+    throw new Error('assignment.invalid_policy_change')
+  const ops=await listAssignmentOperations()
+  if(ops.some(op=>(op.kind==='policy'||op.kind==='state')
+    &&(op.state==='queued'||op.state==='retry')
+    &&(JSON.parse(op.contract) as {assignmentId:string}).assignmentId===assignmentId))
+    throw new Error('assignment.policy_change_pending')
+  const enc=new TextEncoder()
+  const rootPolicyHash=hex(await digest(enc.encode(a.policyContract)))
+  const previousContract=a.policyRevision===1?a.policyContract:a.policyAmendmentContract
+  if(!previousContract)throw new Error('assignment.policy_revision_not_authenticated')
+  const previousPolicyHash=hex(await digest(enc.encode(previousContract)))
+  const payload={
+    version:1,operationId:crypto.randomUUID(),assignmentId,
+    ownerAccountId:s.accountId,rootPolicyHash,previousPolicyHash,
+    fromPolicyRevision:a.policyRevision,toPolicyRevision:a.policyRevision+1,
+    photoGoal,allowedMedia:['photo'],
+  }
+  const op=await signedOperation('policy',
+    '/assignments/v1/'+encodeURIComponent(assignmentId)+'/policy',payload)
+  await persist(op)
+  return op.id
+}
+
 /** Signed owner lifecycle commands are durable and do not delete media. */
 export async function queueAssignmentStateTransition(
   assignmentId:string,action:'finish'|'resume',
@@ -427,7 +508,7 @@ export async function queueAssignmentStateTransition(
   const policyHash=hex(await digest(new TextEncoder().encode(a.policyContract)))
   const payload={
     version:1,operationId:crypto.randomUUID(),assignmentId,
-    ownerAccountId:s.accountId,policyHash,policyRevision:a.policyRevision,
+    ownerAccountId:s.accountId,policyHash,policyRevision:1,
     fromRevision:a.revision,toRevision:a.revision+1,action,
     state:action==='finish'?'finished':'active',
   }
@@ -531,15 +612,17 @@ export async function queueAssignmentAcceptance(
 
 /** A submission links ONLY an independently approved P1-03 E2EE grant. */
 export async function queueAssignmentSubmission(
-  assignmentId:string,photoId:string,photoGrantId:string,
+  assignmentId:string,photoId:string,photoGrantId:string,policyRevision=1,
 ):Promise<string>{
+  if(!Number.isInteger(policyRevision)||policyRevision<1||policyRevision>1000000)
+    throw new Error('assignment.invalid_policy_revision')
   const s=requireSession()
   const operationId=crypto.randomUUID()
   const op=await signedOperation('submit',
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/submissions',{
       version:1,submissionId:crypto.randomUUID(),operationId,
       assignmentId,contributorAccountId:s.accountId,
-      photoId,photoGrantId,policyRevision:1,kind:'photo',
+      photoId,photoGrantId,policyRevision,kind:'photo',
     },photoGrantId)
   await persist(op)
   return operationId
