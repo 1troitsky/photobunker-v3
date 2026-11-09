@@ -9,12 +9,15 @@ import {
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
   queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
+  queueAssignmentMediaSubmission, listAssignmentMediaSubmissions,
+  signedAllowedAssignmentMedia,verifySignedAssignmentPolicy,
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
   signedPolicyRequirements,verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
-  CaptureRequirements, AssignmentMonthlyUsage,
+  CaptureRequirements, AssignmentMonthlyUsage, AllowedAssignmentMedia,
+  AssignmentMediaSubmission,
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import {
@@ -27,12 +30,17 @@ import {
 import { queueRecipientGrant, flushRecipientGrants, readReceivedPhoto } from '../features/sharing/grant-flow'
 import { listLocalPhotos, flushOutbox } from '../features/photo-sync/application/p1-photo'
 import type { StoredPhoto } from '../features/photo-sync/application/p1-photo'
+import {listLocalMedia} from '../features/media/application/media-outbox'
+import type {StoredMedia} from '../features/media/application/media-outbox'
+import {queueMediaRecipientGrant,flushMediaGrants,readReceivedMediaGrant} from '../features/media/application/media-grants'
 
 type VisibleAssignment={
   id:string;ownerAccountId:string;data:PrivateAssignment|null
   state:string;revision:number;policyRevision:number
-  requirements:CaptureRequirements;localState?:string;goal:number|null
+  requirements:CaptureRequirements;allowedMedia:AllowedAssignmentMedia
+  localState?:string;goal:number|null
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
+  confirmedVideos:number|null;confirmedAudio:number|null
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
 }
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
@@ -43,6 +51,8 @@ const invites=ref<ReceivedAssignmentInvite[]>([])
 const operations=ref<AssignmentOperation[]>([])
 const monthlyUsage=ref<AssignmentMonthlyUsage|null>(null)
 const photos=ref<StoredPhoto[]>([])
+const mediaFiles=ref<StoredMedia[]>([])
+const mediaSubmissions=ref<AssignmentMediaSubmission[]>([])
 const submissions=ref<Submission[]>([])
 const selectedId=ref('')
 const title=ref('')
@@ -52,6 +62,8 @@ const editedGoal=ref<string|number>('')
 const editedRequiredCategory=ref(false)
 const editedDescriptionMin=ref<string|number>(0)
 const editedRequiredGps=ref(false)
+const editedAllowVideo=ref(false)
+const editedAllowAudio=ref(false)
 const recipientId=ref('')
 const ownerCheck=ref<SafetyCheck|null>(null)
 const contributorCheck=ref<SafetyCheck|null>(null)
@@ -65,6 +77,7 @@ const notice=ref('')
 const search=ref('')
 const showCreate=ref(false)
 const previewUrl=ref('')
+const previewMime=ref('image/jpeg')
 const filters=ref<'all'|'active'>('active')
 
 const selected=computed(()=>assignments.value.find(a=>a.id===selectedId.value)??null)
@@ -85,6 +98,10 @@ const pendingStateChange=computed(()=>selectedOperations.value.some(op=>
     &&(op.state==='queued'||op.state==='retry')))
 const pendingPolicyChange=computed(()=>selectedOperations.value.some(op=>
   op.kind==='policy'&&(op.state==='queued'||op.state==='retry')))
+const eligibleMedia=computed(()=>mediaFiles.value.filter(x=>
+  x.state==='synced'&&x.expiresAt>Date.now()
+  &&(x.mediaType==='video'||x.mediaType==='audio')
+  &&(selected.value?.allowedMedia.includes(x.mediaType)??false)))
 const eligiblePhotos=computed(()=>photos.value
   .filter(p=>p.state==='synced'
     &&(!p.capture||p.capture.assignmentId===selectedId.value))
@@ -97,7 +114,8 @@ function pendingReceiptCount(assignmentId:string):number{
   const queuedCaptures=photos.value.filter(p=>p.capture?.assignmentId===assignmentId
     &&(p.state==='queued'||p.state==='retry')).length
   const queuedSubmissions=operations.value.filter(op=>{
-    if(op.kind!=='submit'||(op.state!=='queued'&&op.state!=='retry'))return false
+    if(!['submit','media-submit'].includes(op.kind)
+      ||(op.state!=='queued'&&op.state!=='retry'))return false
     try{
       const body=JSON.parse(op.contract) as {assignmentId?:string}
       return body.assignmentId===assignmentId
@@ -111,6 +129,7 @@ function cleanPreview():void{
 }
 function resetSensitive():void {
   assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
+  mediaFiles.value=[];mediaSubmissions.value=[]
   monthlyUsage.value=null
   submissions.value=[];selectedId.value='';ownerCheck.value=null
   contributorCheck.value=null;showingOfflineSnapshot.value=false;cleanPreview()
@@ -128,11 +147,12 @@ async function hydrate():Promise<void>{
   const identity=activeSession.value
   if(!identity){resetSensitive();return}
   // Render durable local drafts and signed queued operations BEFORE any HTTP.
-  const [local,ops,localPhotos]=await Promise.all([
+  const [local,ops,localPhotos,localMedia]=await Promise.all([
     listLocalAssignmentDrafts(),listAssignmentOperations(),listLocalPhotos(),
+    listLocalMedia(),
   ])
   if(activeSession.value!==identity)return
-  operations.value=ops;photos.value=localPhotos
+  operations.value=ops;photos.value=localPhotos;mediaFiles.value=localMedia
   const localRows:VisibleAssignment[]=await Promise.all(local.map(async item=>{
     let data:PrivateAssignment|null=null
     try{data=await openOwnerAssignment(identity.pkg,item.id,item.privateEnvelope)}
@@ -141,6 +161,7 @@ async function hydrate():Promise<void>{
       id:item.id,ownerAccountId:item.ownerAccountId,data,
       state:'active',revision:1,policyRevision:1,
       requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
+      allowedMedia:['photo'],
       localState:item.state,goal:item.photoGoal,
       confirmedPhotos:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
@@ -228,6 +249,9 @@ async function hydrate():Promise<void>{
       state:item.state,revision:item.revision,policyRevision:item.policyRevision,
       requirements:signedPolicyRequirements(item),localState:previous?.localState,
       goal:item.photoGoal,confirmedPhotos:offline?null:item.confirmedPhotoCount,
+      confirmedVideos:offline?null:(item.confirmedVideoCount??null),
+      confirmedAudio:offline?null:(item.confirmedAudioCount??null),
+      allowedMedia:signedAllowedAssignmentMedia(item),
       createdAt:previous?.createdAt??item.startsAt,
       isOwner:item.ownerAccountId===identity.accountId,
       startsAt:item.startsAt,endsAt:item.endsAt,
@@ -290,9 +314,11 @@ function choose(assignmentId:string):void{
   editedRequiredCategory.value=chosen?.requirements.requiredCategory??false
   editedDescriptionMin.value=chosen?.requirements.descriptionMinLength??0
   editedRequiredGps.value=chosen?.requirements.requiredGps??false
+  editedAllowVideo.value=chosen?.allowedMedia.includes('video')??false
+  editedAllowAudio.value=chosen?.allowedMedia.includes('audio')??false
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
-  submissions.value=[];cleanPreview()
+  submissions.value=[];mediaSubmissions.value=[];cleanPreview()
   if(selected.value?.isOwner)void loadSubmissions()
 }
 async function loadSubmissions():Promise<void>{
@@ -300,8 +326,12 @@ async function loadSubmissions():Promise<void>{
   const owner=selected.value
   if(!owner?.isOwner||!activeSession.value?.online)return
   try{
-    const result=await listAssignmentSubmissions(id)
-    if(selectedId.value===id)submissions.value=result
+    const [result,mediaResult]=await Promise.all([
+      listAssignmentSubmissions(id),listAssignmentMediaSubmissions(id),
+    ])
+    if(selectedId.value===id){
+      submissions.value=result;mediaSubmissions.value=mediaResult.items
+    }
   }catch(e){error.value=explain(e)}
 }
 async function changeState(action:'finish'|'resume'):Promise<void>{
@@ -329,6 +359,10 @@ async function changeGoal():Promise<void>{
       photoGoal:value,requiredCategory:editedRequiredCategory.value,
       descriptionMinLength:Number(editedDescriptionMin.value),
       requiredGps:editedRequiredGps.value,
+      allowedMedia:[
+        'photo',...(editedAllowVideo.value?['video'] as const:[]),
+        ...(editedAllowAudio.value?['audio'] as const:[]),
+      ],
     })
     if(activeSession.value?.online&&navigator.onLine)await flushAssignmentOutbox()
     await refresh()
@@ -424,6 +458,7 @@ async function openSubmission(grantId:string):Promise<void>{
     const blob=await readReceivedPhoto(grantId) // verifies pinned owner + DEK and server ACL
     cleanPreview()
     previewUrl.value=URL.createObjectURL(blob)
+    previewMime.value='image/jpeg'
     notice.value='Фотография расшифрована только на этом устройстве'
   })
 }
