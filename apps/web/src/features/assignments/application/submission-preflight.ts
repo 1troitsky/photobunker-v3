@@ -1,3 +1,4 @@
+import Dexie, { type Table } from 'dexie'
 import { requireSession, activeSession } from '../../identity/application/session'
 import { jsonApi } from '../../identity/infrastructure/api'
 import { digest, hex } from '../../identity/infrastructure/crypto'
@@ -37,6 +38,55 @@ export type SignedPolicyHistory={
 type HistoricalEffectivePolicy={
   revision:number;policyHash:string;requirements:CaptureRequirements
   validFrom:number;validUntil:number
+}
+type CachedHistory={
+  key:string;accountId:string;assignmentId:string
+  history:SignedPolicyHistory;verifiedAt:number
+}
+class PolicyHistoryDatabase extends Dexie {
+  histories!:Table<CachedHistory,string>
+  constructor(){
+    super('pb3-verified-assignment-policy-history-v1')
+    this.version(1).stores({
+      histories:'&key, accountId, [accountId+assignmentId]',
+    })
+  }
+}
+const historyDb=new PolicyHistoryDatabase()
+
+/**
+ * Account-scoped cache of owner-signed PUBLIC amendment contracts only:
+ * never keys, assignment title, GPS or description. Validate every signature
+ * against the CURRENT pinned owner key whenever reading cached history.
+ */
+export async function rememberSignedPolicyHistory(
+  latest:AssignmentListing,history:SignedPolicyHistory,
+):Promise<HistoricalEffectivePolicy[]>{
+  const session=requireSession()
+  const chain=await verifySignedPolicyHistory(latest,history)
+  if(activeSession.value!==session)throw Error('identity.changed')
+  await historyDb.histories.put({
+    key:session.accountId+'/'+latest.assignmentId,
+    accountId:session.accountId,
+    assignmentId:latest.assignmentId,
+    history,verifiedAt:Date.now(),
+  })
+  if(activeSession.value!==session)throw Error('identity.changed')
+  return chain
+}
+export async function readSignedPolicyHistoryCache(
+  latest:AssignmentListing,
+):Promise<HistoricalEffectivePolicy[]|null>{
+  const session=requireSession()
+  const cached=await historyDb.histories.get(
+    session.accountId+'/'+latest.assignmentId)
+  if(!cached)return null
+  if(cached.accountId!==session.accountId
+    ||cached.assignmentId!==latest.assignmentId)
+    throw Error('assignment.policy_history_invalid')
+  const chain=await verifySignedPolicyHistory(latest,cached.history)
+  if(activeSession.value!==session)throw Error('identity.changed')
+  return chain
 }
 
 /**
@@ -187,15 +237,18 @@ export async function preflightAssignmentPhotoGrant(
       validFrom:latest.startsAt,validUntil:Number.POSITIVE_INFINITY,
     }
   }else{
-    // A historical revision (>1) is NOT guessable from a mutable latest
-    // snapshot. Require its full owner-signed chain on first access. No
-    // grant is created if the API is unavailable or history is incomplete.
-    if(!session.online||!navigator.onLine)
-      throw Error('assignment.policy_history_requires_connection')
-    const history=await jsonApi<SignedPolicyHistory>(
-      '/assignments/v1/'+encodeURIComponent(assignmentId)+'/policy-history')
-    if(activeSession.value!==session)throw Error('identity.changed')
-    const chain=await verifySignedPolicyHistory(latest,history)
+    // Historical revisions are never guessed. An already verified chain
+    // is readable offline; on first access use a fresh accepted-member API.
+    // Every read re-verifies every owner signature against the local pin.
+    let chain=await readSignedPolicyHistoryCache(latest)
+    if(!chain){
+      if(!session.online||!navigator.onLine)
+        throw Error('assignment.policy_history_requires_connection')
+      const history=await jsonApi<SignedPolicyHistory>(
+        '/assignments/v1/'+encodeURIComponent(assignmentId)+'/policy-history')
+      if(activeSession.value!==session)throw Error('identity.changed')
+      chain=await rememberSignedPolicyHistory(latest,history)
+    }
     const selected=chain.find(x=>x.revision===revision)
     if(!selected)throw Error('assignment.policy_history_invalid')
     effective=selected
