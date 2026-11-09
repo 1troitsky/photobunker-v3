@@ -48,7 +48,7 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     })
 
     await primary.setOffline(false)
-    await panel.getByRole('button',{name:'Синхронизировать файлы'}).click()
+    await panel.getByRole('button',{name:'Отправить медиа'}).click()
     await expect(panel.locator('.photo-row').filter({hasText:local.mediaId.slice(0,8)}).first())
       .toContainText('synced',{timeout:30000})
     const server=await A.evaluate(async mediaId=>{
@@ -114,7 +114,7 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
       name:'SENSITIVE-VOICE.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(4096,0x5a),
     })
-    await again.getByRole('button',{name:'Синхронизировать файлы'}).click()
+    await again.getByRole('button',{name:'Отправить медиа'}).click()
     await expect.poll(()=>A.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       return (await m.listLocalMedia()).filter(x=>x.state==='synced').length
