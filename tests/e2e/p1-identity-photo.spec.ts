@@ -173,3 +173,255 @@ test('P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke',as
     await outsiderContext.close()
   }
 })
+
+
+test('P1-04: A creates encrypted assignment, B accepts and submits a photo grant, A decrypts',async({browser})=>{
+  test.setTimeout(120_000)
+  const ownerCtx=await browser.newContext()
+  const contributorCtx=await browser.newContext({permissions:['camera']})
+  const outsiderCtx=await browser.newContext()
+  const A=await ownerCtx.newPage()
+  const B=await contributorCtx.newPage()
+  const C=await outsiderCtx.newPage()
+
+  async function register(page:typeof A):Promise<string>{
+    await page.goto('/settings')
+    await page.getByRole('button',{name:'Создать ключ'}).click()
+    await expect(page.locator('#generated-key')).toHaveValue(/^PB2\./)
+    await page.getByLabel('Я сохранил ключ восстановления').check()
+    await page.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    const id=(await page.locator('.foundation-card code').first().textContent())?.trim()??''
+    expect(id).toMatch(/^[a-f0-9-]{36}$/)
+    await page.goto('/browser')
+    await expect(page.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
+    return id
+  }
+  try{
+    const AId=await register(A)
+    const BId=await register(B)
+
+    // Test operator represents the explicit out-of-band fingerprint check;
+    // production UI MUST NOT silently pin first-contact keys.
+    await A.evaluate(async id=>{
+      const modulePath='/src/features/sharing/key-directory.ts'
+      const m=await import(modulePath)
+      const {directory}=await m.inspectPeer(id)
+      await m.confirmPeer(id,directory.safetyFingerprint)
+    },BId)
+    await B.evaluate(async id=>{
+      const modulePath='/src/features/sharing/key-directory.ts'
+      const m=await import(modulePath)
+      const {directory}=await m.inspectPeer(id)
+      await m.confirmPeer(id,directory.safetyFingerprint)
+    },AId)
+
+    const assignmentId=await A.evaluate(async()=>{
+      const modulePath='/src/features/assignments/application/assignment-outbox.ts'
+      const m=await import(modulePath)
+      const id=await m.queueAssignmentCreation({
+        title:'Thirty private photos',
+        instructions:'Capture 30 encrypted photographs',
+        photoGoal:30,
+      })
+      await m.flushAssignmentOutbox()
+      const local=(await m.listLocalAssignmentDrafts()).find((a:{id:string})=>a.id===id)
+      if(local?.state!=='sent')throw new Error('assignment.create_unconfirmed')
+      return id
+    })
+    expect(assignmentId).toMatch(/^[a-f0-9-]{36}$/)
+    await A.evaluate(async({assignmentId,recipientId})=>{
+      const modulePath='/src/features/assignments/application/assignment-outbox.ts'
+      const m=await import(modulePath)
+      await m.queueAssignmentInvitation(assignmentId,recipientId)
+      await m.flushAssignmentOutbox()
+      const ops=await m.listAssignmentOperations()
+      if(!ops.some((o:{kind:string;state:string})=>o.kind==='invite'&&o.state==='sent'))
+        throw new Error('assignment.invite_not_confirmed')
+    },{assignmentId,recipientId:BId})
+
+    const title=await B.evaluate(async({assignmentId,ownerId})=>{
+      const modulePath='/src/features/assignments/application/assignment-outbox.ts'
+      const cryptoPath='/src/features/assignments/infrastructure/assignment-crypto.ts'
+      const keysPath='/src/features/sharing/key-directory.ts'
+      const m=await import(modulePath)
+      const cryptoModule=await import(cryptoPath)
+      const keys=await import(keysPath)
+      const invite=(await m.listAssignmentInvites()).find((a:{assignmentId:string})=>a.assignmentId===assignmentId)
+      if(!invite)throw Error('assignment.invite_missing')
+      await m.verifyAssignmentInvite(invite)
+      await m.queueAssignmentAcceptance(invite)
+      await m.flushAssignmentOutbox()
+      const listing=(await m.listServerAssignments()).items.find((a:{assignmentId:string})=>a.assignmentId===assignmentId)
+      if(!listing)throw Error('assignment.not_visible_after_accept')
+      const contract=JSON.parse(invite.contract)
+      const own=await keys.ensureOwnExchangeKey()
+      const details=await cryptoModule.openRecipientAssignment(own.privateKey,{
+        assignmentId,inviteId:invite.inviteId,ownerAccountId:ownerId,
+        recipientAccountId:own.directory.accountId,
+        role:'contributor',expiresAt:invite.expiresAt,
+      },contract.envelope,listing.privateEnvelope)
+      return details.title
+    },{assignmentId,ownerId:AId})
+    expect(title).toBe('Thirty private photos')
+
+    // B captures without network; no plaintext or photo stored in device gallery.
+    await contributorCtx.setOffline(true)
+    await B.getByRole('navigation',{name:'Главная навигация'})
+      .getByRole('link',{name:'Камера',exact:true}).click()
+    await expect.poll(()=>B.locator('video').evaluate(el=>(el as HTMLVideoElement).videoWidth))
+      .toBeGreaterThan(0)
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
+    await contributorCtx.setOffline(false)
+    await B.getByRole('navigation',{name:'Главная навигация'})
+      .getByRole('link',{name:'Browser',exact:true}).click()
+    await B.getByRole('button',{name:'Синхронизировать'}).click()
+    await expect(B.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
+
+    const {grantId,photoId}=await B.evaluate(async recipientId=>{
+      const photosPath='/src/features/photo-sync/application/p1-photo.ts'
+      const sharePath='/src/features/sharing/grant-flow.ts'
+      const photos=await import(photosPath)
+      const share=await import(sharePath)
+      const photo=(await photos.listLocalPhotos()).find((p:{state:string})=>p.state==='synced')
+      if(!photo)throw new Error('assignment.no_synced_photo')
+      const grantId=await share.queueRecipientGrant(photo.photoId,recipientId)
+      await share.flushRecipientGrants()
+      const grant=(await share.listOutgoingGrants()).find((g:{id:string})=>g.id===grantId)
+      if(grant?.state!=='sent')throw new Error('assignment.photo_grant_unconfirmed')
+      return {grantId,photoId:photo.photoId}
+    },AId)
+    await B.evaluate(async({assignmentId,grantId,photoId})=>{
+      const modulePath='/src/features/assignments/application/assignment-outbox.ts'
+      const m=await import(modulePath)
+      await m.queueAssignmentSubmission(assignmentId,photoId,grantId)
+      await m.flushAssignmentOutbox()
+      if(!(await m.listAssignmentOperations()).some(
+        (o:{kind:string;state:string})=>o.kind==='submit'&&o.state==='sent'))
+        throw new Error('assignment.submit_unconfirmed')
+    },{assignmentId,grantId,photoId})
+
+    const submission=await A.evaluate(async id=>{
+      const modulePath='/src/features/assignments/application/assignment-outbox.ts'
+      const sharePath='/src/features/sharing/grant-flow.ts'
+      const m=await import(modulePath)
+      const shared=await import(sharePath)
+      const items=await m.listAssignmentSubmissions(id)
+      if(items.length!==1)throw new Error('assignment.submission_count_mismatch')
+      const blob=await shared.readReceivedPhoto(items[0].photoGrantId)
+      if(blob.size<128)throw new Error('assignment.decryption_failed')
+      return items[0]
+    },assignmentId)
+    expect(submission.photoId).toBe(photoId)
+    expect(submission.photoGrantId).toBe(grantId)
+
+    await register(C)
+    const unauthorized=await C.evaluate(async id=>{
+      const r=await fetch('/assignments/v1/'+id+'/submissions',{credentials:'same-origin'})
+      return r.status
+    },assignmentId)
+    expect(unauthorized).toBe(404)
+
+    await B.evaluate(async id=>{
+      const sharePath='/src/features/sharing/grant-flow.ts'
+      const share=await import(sharePath)
+      await share.revokeOutgoingGrant(id)
+    },grantId)
+    const afterRevoke=await A.evaluate(async id=>{
+      const modulePath='/src/features/assignments/application/assignment-outbox.ts'
+      const m=await import(modulePath)
+      return (await m.listAssignmentSubmissions(id)).length
+    },assignmentId)
+    expect(afterRevoke).toBe(0)
+  }finally{
+    await ownerCtx.close()
+    await contributorCtx.close()
+    await outsiderCtx.close()
+  }
+})
+
+
+test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo',async({browser})=>{
+  test.setTimeout(150_000)
+  const aCtx=await browser.newContext()
+  const bCtx=await browser.newContext({permissions:['camera']})
+  const A=await aCtx.newPage(),B=await bCtx.newPage()
+  async function enroll(page:typeof A):Promise<string>{
+    await page.goto('/settings')
+    await page.getByRole('button',{name:'Создать ключ'}).click()
+    await page.getByLabel('Я сохранил ключ восстановления').check()
+    await page.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    const id=(await page.locator('.foundation-card code').first().textContent())?.trim()??''
+    expect(id).toMatch(/^[0-9a-f-]{36}$/)
+    await page.goto('/browser')
+    await expect(page.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
+    return id
+  }
+  try{
+    const aId=await enroll(A)
+    const bId=await enroll(B)
+
+    await A.goto('/assignments')
+    await A.getByRole('button',{name:'Создать задание'}).click()
+    await A.locator('#assignment-title').fill('Thirty camera images')
+    await A.locator('#assignment-instructions').fill('Send encrypted photos')
+    await A.locator('#assignment-goal').fill('30')
+    await A.getByRole('button',{name:'Создать зашифрованное задание'}).click()
+    await expect(A.locator('.assignment-card-name').getByText('Thirty camera images')).toBeVisible()
+    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await expect(A.locator('.assignment-card').first()).toContainText('Активно')
+    const assignmentId=(await A.locator('.assignment-detail code').first().textContent())?.trim()??''
+    expect(assignmentId).toMatch(/^[0-9a-f-]{36}$/)
+
+    await A.locator('#assignment-recipient-id').fill(bId)
+    await A.getByRole('button',{name:'Проверить ключ исполнителя'}).click()
+    await expect(A.getByText('Отпечаток исполнителя',{exact:true})).toBeVisible()
+    await A.getByLabel('Я сверил отпечаток исполнителя').check()
+    await A.getByRole('button',{name:'Подтвердить исполнителя'}).click()
+    await A.getByRole('button',{name:'Пригласить исполнителя'}).click()
+    await A.getByRole('button',{name:'Синхронизировать'}).click()
+
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(B.getByText('Приглашения',{exact:true})).toBeVisible()
+    await B.getByRole('button',{name:'Ключ владельца'}).click()
+    await expect(B.getByText('Отпечаток владельца задания')).toBeVisible()
+    await B.getByLabel('Я сверил отпечаток владельца').check()
+    await B.getByRole('button',{name:'Подтвердить владельца'}).click()
+    await B.getByRole('button',{name:'Принять задание'}).click()
+    await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
+      .toBeVisible({timeout:20000})
+
+    // Camera capture uses the regular UI and is entirely offline.
+    await bCtx.setOffline(true)
+    await B.getByRole('navigation',{name:'Главная навигация'})
+      .getByRole('link',{name:'Камера',exact:true}).click()
+    await expect.poll(()=>B.locator('video').evaluate(el=>(el as HTMLVideoElement).videoWidth))
+      .toBeGreaterThan(0)
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
+    await bCtx.setOffline(false)
+    await B.getByRole('navigation',{name:'Главная навигация'})
+      .getByRole('link',{name:'Browser',exact:true}).click()
+    await B.getByRole('button',{name:'Синхронизировать'}).click()
+    await expect(B.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
+    await B.getByRole('button',{name:'Проверить ключ владельца'}).click()
+    await expect(B.getByText('Владелец подтверждён')).toBeVisible()
+    await expect(B.getByRole('button',{name:'Отправить в задание'}).first()).toBeEnabled()
+    await B.getByRole('button',{name:'Отправить в задание'}).first().click()
+    await B.getByRole('button',{name:'Синхронизировать'}).click()
+
+    await A.getByRole('button',{name:'Обновить материалы'}).click()
+    await expect(A.getByRole('button',{name:'Просмотр'})).toBeVisible({timeout:20000})
+    await A.getByRole('button',{name:'Просмотр'}).click()
+    const decoded=A.locator('.assignment-detail ~ .foundation-card img.decrypted-preview')
+    await expect(decoded).toBeVisible({timeout:20000})
+    await expect.poll(()=>decoded.evaluate(el=>(el as HTMLImageElement).naturalWidth))
+      .toBeGreaterThan(0)
+    void aId
+  } finally { await aCtx.close();await bCtx.close() }
+})

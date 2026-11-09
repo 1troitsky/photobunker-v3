@@ -5,6 +5,7 @@ use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\PhotoSyncController;
 use App\Http\Controllers\RecipientKeyController;
 use App\Http\Controllers\PhotoGrantController;
+use App\Http\Controllers\AssignmentV1Controller;
 use App\Photo\Finalization;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -59,4 +60,18 @@ Route::prefix('shares/v1')->middleware('throttle:40,1')->group(function(){
     Route::get('/grants/{grantId}/objects/{assetId}',[PhotoGrantController::class,'read'])
        ->whereUuid('grantId')->whereUuid('assetId');
     Route::post('/grants/{grantId}/revoke',[PhotoGrantController::class,'revoke'])->whereUuid('grantId');
+});
+
+
+// P1-04: signed, encrypted assignment + explicit recipient consent.
+// No grants arise automatically from contacts or team membership.
+Route::prefix('assignments/v1')->middleware('throttle:40,1')->group(function(){
+    Route::get('/',[AssignmentV1Controller::class,'index']);
+    Route::post('/',[AssignmentV1Controller::class,'create']);
+    Route::get('/invites/received',[AssignmentV1Controller::class,'inbox']);
+    Route::post('/{assignmentId}/invites',[AssignmentV1Controller::class,'invite'])->whereUuid('assignmentId');
+    Route::post('/{assignmentId}/invites/{inviteId}/accept',
+        [AssignmentV1Controller::class,'accept'])->whereUuid('assignmentId')->whereUuid('inviteId');
+    Route::post('/{assignmentId}/submissions',[AssignmentV1Controller::class,'submit'])->whereUuid('assignmentId');
+    Route::get('/{assignmentId}/submissions',[AssignmentV1Controller::class,'submissions'])->whereUuid('assignmentId');
 });
