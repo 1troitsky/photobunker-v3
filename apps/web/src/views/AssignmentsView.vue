@@ -39,7 +39,7 @@ const submissions=ref<Submission[]>([])
 const selectedId=ref('')
 const title=ref('')
 const instructions=ref('')
-const goal=ref('')
+const goal=ref<string|number>('')
 const recipientId=ref('')
 const ownerCheck=ref<SafetyCheck|null>(null)
 const contributorCheck=ref<SafetyCheck|null>(null)
@@ -170,7 +170,7 @@ async function create():Promise<void>{
   await operate(async()=>{
     const trimmed=title.value.trim()
     if(!trimmed)throw Error('Введите название задания')
-    const parsed=goal.value.trim()?Number(goal.value):null
+    const parsed=String(goal.value).trim()?Number(goal.value):null
     const id=await queueAssignmentCreation({
       title:trimmed,instructions:instructions.value,photoGoal:parsed,
     })
