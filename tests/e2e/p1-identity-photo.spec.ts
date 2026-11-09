@@ -404,6 +404,23 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
       .toBeVisible({timeout:20000})
 
+    // navigator.onLine can be true during an actual API outage. A degraded
+    // online refresh must retain only previously verified private ciphertext
+    // and explicitly mark server authority/receipts as stale.
+    await B.route('**/assignments/v1',route=>route.fulfill({
+      status:503,contentType:'application/json',body:'{"error":"synthetic outage"}',
+    }))
+    await B.route('**/assignments/v1/invites/received',route=>route.fulfill({
+      status:503,contentType:'application/json',body:'{"error":"synthetic outage"}',
+    }))
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(B.getByText(/Офлайн: показаны последние проверенные подписью/))
+      .toBeVisible()
+    await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
+      .toBeVisible()
+    await B.unroute('**/assignments/v1')
+    await B.unroute('**/assignments/v1/invites/received')
+
     // Verify assignment policy while online and cache its signed snapshot.
     await B.getByRole('navigation',{name:'Главная навигация'})
       .getByRole('link',{name:'Камера',exact:true}).click()
