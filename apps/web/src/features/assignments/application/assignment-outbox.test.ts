@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
-import { freshPackage } from '../../identity/infrastructure/crypto'
+import { freshPackage, importSigner, sign, digest, hex } from '../../identity/infrastructure/crypto'
 import { activeSession } from '../../identity/application/session'
 import type { Session } from '../../identity/application/session'
 import {
@@ -61,6 +61,7 @@ describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
       startsAt:c.startsAt,endsAt:c.endsAt,
       privateEnvelope:c.privateEnvelope,
       policyContract:op.contract,policySignature:op.signature,
+      stateContract:null,stateSignature:null,
     }
     await expect(verifySignedAssignmentPolicy(listing)).resolves.toBeUndefined()
     await expect(verifySignedAssignmentPolicy({...listing,photoGoal:31}))
@@ -71,6 +72,28 @@ describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
     await expect(verifySignedAssignmentPolicy({...listing,
       ownerAccountSpki:'unexpected-key'}))
       .rejects.toThrow('assignment.untrusted_capture_policy')
+    const state={
+      version:1,operationId:crypto.randomUUID(),
+      assignmentId:c.assignmentId,ownerAccountId:id,
+      policyHash:hex(await digest(new TextEncoder().encode(op.contract))),
+      policyRevision:1,fromRevision:1,toRevision:2,
+      action:'finish',state:'finished',
+    }
+    const stateContract=JSON.stringify(state)
+    const stateSignature=await sign(await importSigner(current!.pkg.accountPkcs8),
+      'pb3.assignment-state.v1\n'+stateContract)
+    const finished={...listing,state:'finished',revision:2,
+      stateContract,stateSignature}
+    await expect(verifySignedAssignmentPolicy(finished)).resolves.toBeUndefined()
+    await expect(verifySignedAssignmentPolicy({...finished,state:'active'}))
+      .rejects.toThrow('assignment.state_snapshot_mismatch')
+    await expect(verifySignedAssignmentPolicy({...finished,revision:3}))
+      .rejects.toThrow('assignment.state_snapshot_mismatch')
+    await expect(verifySignedAssignmentPolicy({...finished,
+      stateSignature:op.signature}))
+      .rejects.toThrow('assignment.state_not_authenticated')
+    await expect(verifySignedAssignmentPolicy({...listing,state:'finished'}))
+      .rejects.toThrow('assignment.state_not_authenticated')
   })
   it('isolates local draft listings per account and rejects invalid progress targets',async()=>{
     await account('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
