@@ -87,6 +87,12 @@ test('P1-12: immutable owner-signed media versions survive Garage+Recovery Key w
     await B.getByRole('button',{name:'Восстановить',exact:true}).click()
     await expect(B.getByText('Подтверждённая сессия')).toBeVisible()
     await B.goto('/browser')
+    // Recovery Key proof and trusted-device IndexedDB hydration are distinct
+    // async steps. Never run account-scoped local reads before unlock.
+    await expect.poll(()=>B.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      return identity.activeSession.value?.online===true
+    }),{timeout:20000}).toBe(true)
     const remotelyVerified=await B.evaluate(async idArray=>{
       const version=await import('/src/features/media/application/media-revisions.ts')
       const files=await import('/src/features/media/application/media-outbox.ts')

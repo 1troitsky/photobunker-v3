@@ -98,10 +98,16 @@ const pendingStateChange=computed(()=>selectedOperations.value.some(op=>
     &&(op.state==='queued'||op.state==='retry')))
 const pendingPolicyChange=computed(()=>selectedOperations.value.some(op=>
   op.kind==='policy'&&(op.state==='queued'||op.state==='retry')))
-const eligibleMedia=computed(()=>mediaFiles.value.filter(x=>
-  x.state==='synced'&&x.expiresAt>Date.now()
-  &&(x.mediaType==='video'||x.mediaType==='audio')
-  &&(selected.value?.allowedMedia.includes(x.mediaType)??false)))
+const eligibleMedia=computed(()=>mediaFiles.value.filter(x=>{
+  if(x.state!=='synced'||x.expiresAt<=Date.now()
+    ||(x.mediaType!=='video'&&x.mediaType!=='audio')
+    ||!selected.value?.allowedMedia.includes(x.mediaType))return false
+  if(!x.capture)return true // personal media requires distinct confirmation
+  try{
+    const proof=JSON.parse(x.capture.contract) as {assignmentId?:string}
+    return proof.assignmentId===selectedId.value
+  }catch{return false}
+}))
 const eligiblePhotos=computed(()=>photos.value
   .filter(p=>p.state==='synced'
     &&(!p.capture||p.capture.assignmentId===selectedId.value))
@@ -478,8 +484,10 @@ async function submitMedia(media:StoredMedia):Promise<void>{
       ||(policy.endsAt!==null&&policy.endsAt<=Date.now()))
       throw Error('assignment.media_not_allowed')
     if(!window.confirm(
-      'Это личное '+(media.mediaType==='video'?'видео':'аудио')
-      +'. Передать владельцу задания E2EE-ключ всего файла, включая исходное имя и приватные метаданные? Отзыв не удалит уже скачанные копии.'
+      (media.capture?'Эта запись была создана для задания. ':'Это личный файл вне задания. ')
+      +'Передать владельцу задания E2EE-ключ всего '
+      +(media.mediaType==='video'?'видео':'аудио')
+      +', включая исходное имя и приватные метаданные? Отзыв не удалит уже скачанные копии.'
     ))return
     const grantId=await queueMediaRecipientGrant(media.mediaId,target.ownerAccountId)
     await queueAssignmentMediaSubmission(target.id,media.mediaId,grantId)
@@ -720,6 +728,7 @@ onUnmounted(cleanPreview)
           <div v-for="entry in mediaSubmissions" :key="entry.submissionId" class="photo-row" data-testid="assignment-media-submission">
             <div>
               <strong>{{ entry.mediaType==='video'?'Видео':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
+              <small>{{ entry.capturedInAssignment?'Запись по заданию · подписана':'Личный файл · передан вручную' }}</small>
               <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
             </div>
             <button type="button" :disabled="busy" @click="openMediaSubmission(entry.mediaGrantId)">Открыть медиа задания</button>
@@ -747,6 +756,7 @@ onUnmounted(cleanPreview)
             <p class="muted">Понадобятся заранее загруженный зашифрованный файл, подписанное разрешение типа в задании и отдельное подтверждение передачи приватных метаданных. Для видео/аудио требования GPS, категории и описания, предназначенные для камеры фото, пока не заявляются как выполненные.</p>
             <div v-for="file in eligibleMedia" :key="file.key" class="photo-row">
               <div><strong>{{ file.mediaType==='video'?'Видео':'Аудио' }} · {{ file.mediaId.slice(0,8) }}</strong>
+                <small>{{ file.capture?'Снято по заданию · подписано':'Личный медиафайл · требуется согласие' }}</small>
                 <small>{{ file.state }} · {{ file.plainBytes.toLocaleString('ru-RU') }} байт</small>
               </div>
               <button type="button" :disabled="busy||!contributorCheck?.confirmed"
@@ -754,6 +764,7 @@ onUnmounted(cleanPreview)
             </div>
             <p v-if="!eligibleMedia.length" class="muted">Нет синхронизированных файлов разрешённого типа.</p>
             <RouterLink to="/browser">Импортировать видео или аудио</RouterLink>
+            <p><RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Записать видео/аудио по заданию</RouterLink></p>
           </template>
           <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Камера задания</RouterLink>
         </template>
