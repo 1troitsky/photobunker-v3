@@ -237,6 +237,23 @@ final class AssignmentV1Test extends TestCase
         ]);
     }
 
+    public function test_technical_request_limit_is_isolated_per_authenticated_account():void
+    {
+        // This operational limit is not the 3/month Free product entitlement.
+        config()->set('operational_limits.assignments.requests_per_minute_per_account',3);
+        $this->as('owner');
+        for($n=0;$n<3;$n++)$this->getJson('/assignments/v1/usage')->assertOk();
+        $this->getJson('/assignments/v1/usage')->assertStatus(429);
+
+        // Two legitimate accounts behind the same IP must have independent
+        // technical quotas. No owner id may be accepted from request data.
+        $this->as('recipient');
+        $this->getJson('/assignments/v1/usage')
+            ->assertOk()->assertJsonPath('used',0);
+        $this->as('owner');
+        $this->getJson('/assignments/v1/usage')->assertStatus(429);
+    }
+
     public function test_free_assignment_monthly_quota_is_authoritative_and_idempotent():void
     {
         $limit=config('plans.plans.free.assignment_creations_per_month');
