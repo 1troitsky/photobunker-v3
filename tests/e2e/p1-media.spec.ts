@@ -131,6 +131,10 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
       return (await m.listLocalMedia()).filter(x=>x.state==='synced').length
     }),{timeout:30000}).toBe(2)
     await B.goto('/browser')
+    await expect.poll(()=>B.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      return identity.activeSession.value?.online===true
+    }),{timeout:20000}).toBe(true)
     const audio=await B.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       const list=await m.listCloudMedia()
@@ -266,6 +270,9 @@ test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant
     })
 
     await share.getByRole('button',{name:'Отозвать медиа'}).click()
+    // Wait for the authenticated server ACK, not merely the UI click.
+    await expect(share.getByText('Серверный доступ отозван'))
+      .toBeVisible({timeout:15000})
     const blocked=await recipient.evaluate(async id=>{
       const [manifest,receivedList]=await Promise.all([
         fetch('/media-shares/v1/grants/'+id,{credentials:'same-origin'}),
