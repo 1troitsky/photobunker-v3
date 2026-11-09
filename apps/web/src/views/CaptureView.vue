@@ -3,6 +3,7 @@ import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { activeSession, type Session } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
+import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import {
   listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
 } from '../features/assignments/application/assignment-outbox'
@@ -12,6 +13,13 @@ const route=useRoute()
 const video=ref<HTMLVideoElement|null>(null)
 const policies=ref<AssignmentListing[]>([])
 const selectedAssignment=ref('')
+// Volatile capture form. These values never enter IndexedDB in plaintext.
+const category=ref('')
+const description=ref('')
+const gps=ref<GPSFix|null>(null)
+const gpsLoading=ref(false)
+const gpsError=ref('')
+let gpsAttempt=0
 const policyNotice=ref('')
 const policyLoading=ref(false)
 let refreshAgain=false
@@ -127,8 +135,41 @@ async function startCamera():Promise<void> {
       &&activeSession.value && !stream.value)void nextTick().then(startCamera)
   }
 }
+function clearGPS():void {
+  gpsAttempt++
+  gps.value=null
+  gpsLoading.value=false
+  gpsError.value=''
+}
+async function obtainGPS():Promise<void>{
+  const current=activeSession.value
+  if(!current){gpsError.value='Сначала создайте или восстановите аккаунт';return}
+  if(!navigator.geolocation){gpsError.value='Геолокация недоступна';return}
+  const generation=cameraGeneration,identity=cameraIdentity(current)
+  const attempt=++gpsAttempt
+  gpsLoading.value=true;gpsError.value=''
+  try{
+    // Explicit user action only. Never start a background location watcher.
+    const point=await new Promise<GeolocationPosition>((resolve,reject)=>{
+      navigator.geolocation.getCurrentPosition(resolve,reject,{
+        enableHighAccuracy:true,maximumAge:0,timeout:12000,
+      })
+    })
+    if(attempt!==gpsAttempt||!ownsCamera(identity,generation))return
+    gps.value={
+      latitude:point.coords.latitude,longitude:point.coords.longitude,
+      accuracyMeters:point.coords.accuracy,recordedAt:Math.round(point.timestamp),
+    }
+  }catch(e){
+    if(attempt===gpsAttempt&&ownsCamera(identity,generation))
+      gpsError.value=e instanceof Error?e.message:'camera.gps_unavailable'
+  }finally{
+    if(attempt===gpsAttempt)gpsLoading.value=false
+  }
+}
 function closeCamera():void {
   cameraWanted=false;cameraGeneration++
+  clearGPS()
   releaseStream()
 }
 async function capture():Promise<void> {
@@ -161,11 +202,14 @@ async function capture():Promise<void> {
       throw new Error('assignment.policy_not_verified')
     // An offline photo carries an independently verified, versioned and
     // device-signed snapshot of the assignment policy. Personal v1 stays available.
+    const capturedAt=Date.now()
     const binding=selectedAssignment.value
-      ?await signedCaptureBinding(selectedAssignment.value,Date.now())
+      ?await signedCaptureBinding(selectedAssignment.value,capturedAt)
       :undefined
     assertOwner()
-    const photo=await captureEncrypted(jpeg,binding)
+    const photo=await captureEncrypted(jpeg,binding,{
+      category:category.value,description:description.value,gps:gps.value,
+    })
     assertOwner()
     message.value='Зашифровано и сохранено локально: '+photo.photoId.slice(0,8)
   }catch(e){if(ownsCamera(identity,generation))error.value=e instanceof Error?e.message:'camera.capture_failed'}
@@ -179,6 +223,7 @@ watch(activeSession,session=>{
     observedIdentity=identity;cameraGeneration++
     releaseStream()
     policies.value=[];selectedAssignment.value='';policyNotice.value=''
+    category.value='';description.value='';clearGPS()
     message.value='';error.value=''
   }
   if(!session)return
@@ -216,13 +261,35 @@ onUnmounted(()=>{disposed=true;closeCamera()})
         <p class="muted">Доступны только проверенные подписанные политики. При съёмке без сети используется последний подтверждённый снимок политики; сервер повторно проверит права при загрузке.</p>
         <p v-if="policyNotice" class="muted" role="status">{{ policyNotice }}</p>
       </div>
+      <div class="foundation-card">
+        <h2>Приватная информация снимка</h2>
+        <label for="camera-category">Категория</label>
+        <input id="camera-category" v-model="category" type="text" maxlength="64"
+          autocomplete="off" placeholder="Например, репортаж">
+        <label for="camera-description">Описание</label>
+        <textarea id="camera-description" v-model="description" maxlength="4000"
+          rows="3" placeholder="Описание снимка (необязательно)"/>
+        <div class="action-row">
+          <button type="button" :disabled="gpsLoading||busy" @click="obtainGPS">
+            {{ gpsLoading?'Определение GPS…':'Получить GPS' }}
+          </button>
+          <button v-if="gps||gpsLoading" type="button" @click="clearGPS">
+            Убрать GPS
+          </button>
+        </div>
+        <p v-if="gps" role="status" class="muted">
+          GPS получен · точность ±{{ Math.round(gps.accuracyMeters) }} м
+        </p>
+        <p v-if="gpsError" role="alert" class="error-text">{{ gpsError }}</p>
+        <p class="muted">GPS запрашивается только по нажатию. Категория, описание и координаты шифруются на устройстве и не попадают на сервер открытым текстом.</p>
+      </div>
       <div class="video-frame">
         <video ref="video" playsinline muted autoplay aria-label="Предпросмотр камеры"/>
       </div>
       <div class="action-row">
         <button type="button" :disabled="!!stream||starting" @click="openCamera">Включить камеру</button>
         <button type="button"
-          :disabled="!stream||starting||busy||(typeof route.query.assignmentId==='string'&&!!route.query.assignmentId&&selectedAssignment!==route.query.assignmentId)"
+           :disabled="!stream||starting||busy||gpsLoading||(typeof route.query.assignmentId==='string'&&!!route.query.assignmentId&&selectedAssignment!==route.query.assignmentId)"
           @click="capture">
           {{ busy ? 'Шифрование…' : 'Сделать снимок' }}
         </button>
