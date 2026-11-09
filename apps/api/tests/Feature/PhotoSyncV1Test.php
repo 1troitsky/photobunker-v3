@@ -169,6 +169,7 @@ final class PhotoSyncV1Test extends TestCase {
             'from_revision'=>1,'to_revision'=>2,'state'=>'finished',
             'contract_hash'=>str_repeat('a',64),'contract_json'=>'{}',
             'owner_signature'=>'fixture','created_at'=>$finishAt,
+            'occurred_at_ms'=>$finishAt->getTimestampMs(),
         ]);
         $base=[
             'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
@@ -186,11 +187,13 @@ final class PhotoSyncV1Test extends TestCase {
         // Explicit signed resume opens the next interval; it does not make
         // previously forbidden captures inside the finished window valid.
         $this->travel(3)->seconds();
+        $resumeAt=now();
         DB::table('assignment_state_events_v1')->insert([
             'operation_id'=>(string)Str::uuid(),'assignment_id'=>$assignment,
             'from_revision'=>2,'to_revision'=>3,'state'=>'active',
             'contract_hash'=>str_repeat('b',64),'contract_json'=>'{}',
-            'owner_signature'=>'fixture','created_at'=>now(),
+            'owner_signature'=>'fixture','created_at'=>$resumeAt,
+            'occurred_at_ms'=>$resumeAt->getTimestampMs(),
         ]);
         DB::table('assignment_records_v1')->where('id',$assignment)
             ->update(['state'=>'active','revision'=>3]);
