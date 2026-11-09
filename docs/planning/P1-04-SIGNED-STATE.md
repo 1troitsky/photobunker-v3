@@ -17,7 +17,7 @@ The owner and accepted participants obtain the **latest owner-signed state** in 
 
 - Finishing does **not** delete contributor-owned photos, queued ciphertext, original encrypted assignment metadata, accepted invitation key envelopes, existing grants, or audit history.
 - Finishing prevents new invitations/consent, capture **during the finished interval**, and assignment submissions. A device-signed v2 photo with a claimed capture time in a previously active interval may still be reserved afterwards as contributor-owned ciphertext. Existing photos/grants remain subject to their own ACL and TTL; they are not silently revoked.
-- Offline devices retain ciphertext and previously verified signed state snapshots, but the server is authoritative. An offline photograph captured against a stale active policy may be refused on subsequent reservation. Refusal must never delete its local encrypted copy.
+- Offline devices retain ciphertext and previously verified signed state snapshots, but the server is authoritative. The server checks the claimed capture time against signed lifecycle state intervals and the contributor's acceptance timestamp (with a bounded 120-second clock-skew tolerance). It can accept a photo captured before finish after the finish event, but refuses capture claimed during a finished interval. These checks do not establish a tamper-proof device clock. Refusal never deletes the local encrypted copy.
 - Signed state operations are placed in the durable local outbox; `409` revision/state mismatch is a permanent conflict, **not** a silent retry loop. A later manual reconciliation with server is required.
 
 ## Verification / remaining gaps
