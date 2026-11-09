@@ -1,7 +1,7 @@
 import Dexie,{type Table} from 'dexie'
 import { activeSession, requireSession, reauthenticate } from '../../identity/application/session'
 import { jsonApi, putCiphertext, readCiphertext } from '../../identity/infrastructure/api'
-import { sign } from '../../identity/infrastructure/crypto'
+import { importSigner, sign } from '../../identity/infrastructure/crypto'
 import { sha } from '../../local-storage/infrastructure/cipher'
 import {
   encryptMediaFile,decryptMediaChunks,validateMediaContract,
@@ -10,6 +10,14 @@ import type {
   MediaContract,MediaMetadata,StoredMediaChunk,MediaType,
 } from '../domain/media-crypto'
 
+export type MediaCaptureIntent={
+  assignmentId:string;ownerAccountId:string;contributorAccountId:string
+  policyRevision:number;policyHash:string
+  mediaType:'video'|'audio';startedAt:number;finishedAt:number
+}
+export type SignedMediaCapture={
+  contract:string;signature:string
+}
 export type MediaState='queued'|'retry'|'synced'|'conflict'
 export type StoredMedia={
   key:string;accountId:string;mediaId:string
@@ -17,6 +25,7 @@ export type StoredMedia={
   mediaType:MediaType;plainBytes:number
   state:MediaState;lastError?:string
   contract:MediaContract;signature:string
+  capture?:SignedMediaCapture // signed opaque assignment scope, never raw GPS
   chunks:StoredMediaChunk[] // each Blob is AES-GCM ciphertext, never raw media
 }
 export type CloudMedia={
@@ -65,7 +74,9 @@ export async function verifyReceipt(contract:MediaContract,receipt:MediaReceipt)
  * filename, MIME or content is persisted. Offline creation is durable before
  * an optional network flush; an unapproved quota cannot erase the local row.
  */
-export async function enqueueEncryptedMedia(file:File):Promise<string>{
+export async function enqueueEncryptedMedia(
+  file:File,capture?:MediaCaptureIntent,
+):Promise<string>{
   const session=requireSession()
   const createdAt=Date.now()
   const expiresAt=createdAt+13*86400000
@@ -74,6 +85,35 @@ export async function enqueueEncryptedMedia(file:File):Promise<string>{
   same(session)
   const signed=JSON.stringify(contract)
   const signature=await sign(session.device.deviceKey,'pb3.media.v1\n'+signed)
+  let proof:SignedMediaCapture|undefined
+  if(capture){
+    if(capture.contributorAccountId!==session.accountId
+      ||capture.mediaType!==contract.mediaType
+      ||capture.ownerAccountId===session.accountId
+      ||!Number.isSafeInteger(capture.policyRevision)
+      ||capture.policyRevision<2||capture.policyRevision>1001
+      ||!/^[a-f0-9]{64}$/.test(capture.policyHash)
+      ||!Number.isSafeInteger(capture.startedAt)
+      ||!Number.isSafeInteger(capture.finishedAt)
+      ||capture.finishedAt<=capture.startedAt
+      ||capture.finishedAt-capture.startedAt>3*60*1000
+      ||capture.finishedAt>Date.now()+120000)
+      throw Error('media.invalid_capture_intent')
+    const contractHash=await sha(new TextEncoder().encode(signed))
+    const captureContract=JSON.stringify({
+      version:1,assignmentId:capture.assignmentId,
+      ownerAccountId:capture.ownerAccountId,
+      contributorAccountId:session.accountId,
+      policyRevision:capture.policyRevision,policyHash:capture.policyHash,
+      mediaId:contract.mediaId,mediaContractHash:contractHash,
+      mediaType:contract.mediaType,
+      startedAt:capture.startedAt,finishedAt:capture.finishedAt,
+    })
+    const captureSignature=await sign(
+      await importSigner(session.pkg.accountPkcs8),
+      'pb3.assignment-media-capture.v1\n'+captureContract)
+    proof={contract:captureContract,signature:captureSignature}
+  }
   same(session)
   const stored:StoredMedia={
     key:session.accountId+'/'+contract.mediaId,
@@ -81,7 +121,7 @@ export async function enqueueEncryptedMedia(file:File):Promise<string>{
     mediaId:contract.mediaId,operationId:contract.operationId,
     createdAt,expiresAt,mediaType:contract.mediaType,
     plainBytes:contract.plainBytes,
-    state:'queued',contract,signature,chunks,
+    state:'queued',contract,signature,capture:proof,chunks,
   }
   await db.transaction('rw',db.files,async()=>{await db.files.put(stored)})
   void flushMediaOutbox()
