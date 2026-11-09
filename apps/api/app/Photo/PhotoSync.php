@@ -49,7 +49,9 @@ final class PhotoSync
             ]);
             P::uuid($capture['assignmentId']);
             P::uuid($capture['ownerAccountId']);
-            abort_unless($capture['policyRevision']===1
+            abort_unless(is_int($capture['policyRevision'])
+                &&$capture['policyRevision']>=1
+                &&$capture['policyRevision']<=1000000
                 &&is_string($capture['policyHash'])
                 &&preg_match('/^[a-f0-9]{64}$/D',$capture['policyHash'])===1
                 &&is_int($capture['capturedAt'])

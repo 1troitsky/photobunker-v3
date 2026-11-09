@@ -73,6 +73,30 @@ final class AssignmentContract
         self::envelope($data['privateEnvelope']);
     }
 
+    /**
+     * A signed policy amendment changes only the public photo target.
+     * Capture requirements, dates, E2EE envelope and root policy stay fixed.
+     */
+    public static function policyAmendment(array $d,string $owner,string $assignment):void
+    {
+        abort_unless($d['version']===1
+            &&$d['assignmentId']===$assignment
+            &&$d['ownerAccountId']===$owner
+            &&is_int($d['fromPolicyRevision'])
+            &&$d['fromPolicyRevision']>=1&&$d['fromPolicyRevision']<1001
+            &&$d['toPolicyRevision']===$d['fromPolicyRevision']+1
+            &&$d['allowedMedia']===['photo'],422);
+        foreach(['assignmentId','ownerAccountId','operationId'] as $key)
+            self::uuid($d,$key);
+        foreach(['rootPolicyHash','previousPolicyHash'] as $key){
+            abort_unless(is_string($d[$key])
+                &&preg_match('/^[a-f0-9]{64}$/D',$d[$key])===1,422);
+        }
+        abort_unless($d['photoGoal']===null
+            ||(is_int($d['photoGoal'])&&$d['photoGoal']>=1
+                &&$d['photoGoal']<=9999),422);
+    }
+
     public static function invite(array $d,string $owner,string $assignment):void
     {
         abort_unless($d['version']===1&&$d['ownerAccountId']===$owner
@@ -126,7 +150,8 @@ final class AssignmentContract
     {
         abort_unless($d['version']===1&&$d['kind']==='photo'
           &&$d['assignmentId']===$assignment&&$d['contributorAccountId']===$contributor
-          &&$d['policyRevision']===1,422);
+          &&is_int($d['policyRevision'])
+          &&$d['policyRevision']>=1&&$d['policyRevision']<=1000000,422);
         foreach(['submissionId','assignmentId','contributorAccountId','photoId',
                  'photoGrantId','operationId'] as $key)self::uuid($d,$key);
     }

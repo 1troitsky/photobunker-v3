@@ -84,13 +84,62 @@ final class Reservation
         $a=DB::table('assignment_records_v1')
             ->where('id',$capture['assignmentId'])->lockForUpdate()->first();
         abort_unless($a,404);
-        abort_unless($a->owner_account_id===$capture['ownerAccountId']
-            &&(int)$a->policy_revision===$capture['policyRevision']
-            &&hash_equals(hash('sha256',$a->contract_json),$capture['policyHash']),409);
+        abort_unless($a->owner_account_id===$capture['ownerAccountId'],409);
         $when=$capture['capturedAt'];
         abort_unless($when>=(int)$a->starts_at
             &&($a->ends_at===null || $when<(int)$a->ends_at)
             &&$when>=PhotoSync::nowMs()-14*86400000,409);
+        // Historical owner-signed policy revisions are not retroactive:
+        // a photo taken before a policy edit can reserve its original signed
+        // contract after reconnection. Never trust the mutable current goal
+        // or silently relabel a previous capture as a new revision.
+        $policyEvents=DB::table('assignment_policy_events_v1')
+            ->where('assignment_id',$a->id)->orderBy('to_revision')
+            ->limit(1001)->get([
+                'from_revision','to_revision','contract_hash','contract_json',
+                'occurred_at_ms','created_at',
+            ]);
+        abort_unless($policyEvents->count()<=1000,409);
+        $rootHash=hash('sha256',$a->contract_json);
+        $policyRevision=1;
+        $policyHash=$rootHash;
+        $policyOpen=(int)$a->starts_at;
+        $previousPolicyAt=0;
+        $policyEligible=false;
+        foreach($policyEvents as $event){
+            $at=(int)$event->occurred_at_ms;
+            $second=\Carbon\CarbonImmutable::parse($event->created_at,'UTC')
+                ->getTimestampMs();
+            abort_unless($at>=$second&&$at<$second+1000
+                &&$at>=$previousPolicyAt
+                &&(int)$event->from_revision===$policyRevision
+                &&(int)$event->to_revision===$policyRevision+1
+                &&hash_equals(hash('sha256',$event->contract_json),
+                    $event->contract_hash),409);
+            $change=json_decode($event->contract_json,true,32,JSON_THROW_ON_ERROR);
+            abort_unless($change['version']===1
+                &&$change['assignmentId']===$a->id
+                &&$change['ownerAccountId']===$a->owner_account_id
+                &&$change['rootPolicyHash']===$rootHash
+                &&$change['previousPolicyHash']===$policyHash
+                &&$change['fromPolicyRevision']===$policyRevision
+                &&$change['toPolicyRevision']===$policyRevision+1,409);
+            if($capture['policyRevision']===$policyRevision
+                &&hash_equals($policyHash,$capture['policyHash'])
+                &&$when>=$policyOpen&&$when<$at)$policyEligible=true;
+            $policyRevision++;
+            $policyHash=$event->contract_hash;
+            $policyOpen=$at;
+            $previousPolicyAt=$at;
+        }
+        abort_unless($policyRevision===(int)$a->policy_revision
+            &&($policyRevision===1
+                ?$a->latest_policy_contract===null
+                :hash_equals(hash('sha256',$a->latest_policy_contract??''),$policyHash)),409);
+        if($capture['policyRevision']===$policyRevision
+            &&hash_equals($policyHash,$capture['policyHash'])
+            &&$when>=$policyOpen)$policyEligible=true;
+        abort_unless($policyEligible,409);
         // The server retains signed finish/resume events with authoritative
         // receipt timestamps. An offline photograph captured before finish
         // may still sync as contributor-owned ciphertext afterwards, but

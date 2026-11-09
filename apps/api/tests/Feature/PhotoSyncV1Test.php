@@ -144,10 +144,67 @@ final class PhotoSyncV1Test extends TestCase {
         $this->reserve($scoped($future))->assertStatus(422);
         $wrongRevision=$capture;
         $wrongRevision['policyRevision']=2;
+        // Revision 2 is now structurally valid, but this assignment has
+        // never committed that owner-signed amendment: historical ACL is 409.
+        $this->reserve($scoped($wrongRevision))->assertConflict();
+        $wrongRevision['policyRevision']=0;
         $this->reserve($scoped($wrongRevision))->assertStatus(422);
         // The owner can close an assignment without deleting contributor photos.
         DB::table('assignment_records_v1')->where('id',$assignment)->update(['state'=>'archived']);
         $this->reserve($scoped($capture))->assertConflict();
+    }
+
+    public function test_old_offline_capture_can_reserve_after_signed_goal_revision():void {
+        $this->travelTo(now()->startOfSecond()->addMilliseconds(750));
+        $changedAt=now()->getTimestampMs();
+        $assignment=(string)Str::uuid();
+        $original='{"version":1,"allowedMedia":["photo"],"photoGoal":30}';
+        $rootHash=hash('sha256',$original);
+        $revision=json_encode([
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
+            'rootPolicyHash'=>$rootHash,'previousPolicyHash'=>$rootHash,
+            'fromPolicyRevision'=>1,'toPolicyRevision'=>2,
+            'photoGoal'=>45,'allowedMedia'=>['photo'],
+        ],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $newHash=hash('sha256',$revision);
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$assignment,'owner_account_id'=>$this->account,
+            'operation_id'=>(string)Str::uuid(),
+            'contract_hash'=>$rootHash,'contract_json'=>$original,
+            'owner_signature'=>'fixture','private_envelope_json'=>'{}',
+            'state'=>'active','revision'=>1,'policy_revision'=>2,
+            'photo_goal'=>45,'starts_at'=>$changedAt-3600000,
+            'ends_at'=>null,'latest_policy_contract'=>$revision,
+            'latest_policy_signature'=>'fixture',
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('assignment_policy_events_v1')->insert([
+            'operation_id'=>(string)Str::uuid(),'assignment_id'=>$assignment,
+            'from_revision'=>1,'to_revision'=>2,'contract_hash'=>$newHash,
+            'contract_json'=>$revision,'owner_signature'=>'fixture',
+            'occurred_at_ms'=>$changedAt,'created_at'=>now(),
+        ]);
+        $capture=[
+            'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
+            'policyRevision'=>1,'policyHash'=>$rootHash,
+            'capturedAt'=>$changedAt-250,
+        ];
+        $this->reserve($this->assignmentCaptureFixture($capture))
+            ->assertOk()->assertJsonPath('state','pending');
+        // The same old signed revision cannot be used for a *new* capture.
+        $capture['capturedAt']=$changedAt+1;
+        $this->reserve($this->assignmentCaptureFixture($capture))
+            ->assertConflict();
+        // The new contract is recognized only after its exact start instant.
+        $capture['policyRevision']=2;
+        $capture['policyHash']=$newHash;
+        $this->reserve($this->assignmentCaptureFixture($capture))
+            ->assertOk()->assertJsonPath('state','pending');
+        $capture['policyHash']=$rootHash;
+        $this->reserve($this->assignmentCaptureFixture($capture))
+            ->assertConflict();
+        $this->assertDatabaseCount('photo_records',2);
     }
 
     public function test_offline_capture_before_finish_can_sync_but_closed_interval_cannot():void {
