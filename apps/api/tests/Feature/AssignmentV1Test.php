@@ -972,6 +972,12 @@ final class AssignmentV1Test extends TestCase
             ->where('id',$this->assignmentId)->first();
         $hash=hash('sha256',$a->latest_policy_contract);
         $now=now()->getTimestampMs();
+        $accepted=(int)DB::table('assignment_policy_events_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('to_revision',$a->policy_revision)
+            ->value('occurred_at_ms');
+        $start=max((int)$a->starts_at,$accepted,$now-1000);
+        $finish=max($now,$start+1000);
         $proof=array_merge([
             'version'=>1,'assignmentId'=>$this->assignmentId,
             'ownerAccountId'=>$this->people['owner']['account'],
@@ -980,7 +986,7 @@ final class AssignmentV1Test extends TestCase
             'policyHash'=>$hash,
             'mediaId'=>$media['id'],'mediaContractHash'=>$media['hash'],
             'mediaType'=>$kind,
-            'startedAt'=>$now-1200,'finishedAt'=>$now,
+            'startedAt'=>$start,'finishedAt'=>$finish,
         ],$changes);
         $signedCapture=$this->signed('recipient',
             'pb3.assignment-media-capture.v1',$proof);
