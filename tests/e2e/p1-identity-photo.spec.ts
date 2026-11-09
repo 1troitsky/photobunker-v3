@@ -16,14 +16,19 @@ test('two browser identities: key-only account, encrypted camera photo, Garage r
     await deviceA.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(deviceA.getByText('Подтверждённая сессия')).toBeVisible()
 
-    await deviceA.goto('/camera')
+    // The app shell is already loaded. Capture and navigate while the network
+    // is genuinely unavailable. There is no Service Worker yet, so this tests
+    // local-first interactions, not an unsupported cold offline page reload.
+    await first.setOffline(true)
+    await deviceA.getByRole('link',{name:'Камера',exact:true}).click()
     await expect(deviceA.locator('video')).toBeVisible()
     await expect.poll(()=>deviceA.locator('video').evaluate(el=>(el as HTMLVideoElement).videoWidth))
       .toBeGreaterThan(0)
     await deviceA.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(deviceA.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
-    await deviceA.goto('/browser')
-    await expect(deviceA.locator('.photo-row').first()).toBeVisible()
+    await deviceA.getByRole('link',{name:'Browser',exact:true}).click()
+    await expect(deviceA.locator('.photo-row').first()).toContainText('queued')
+    await first.setOffline(false)
     await deviceA.getByRole('button',{name:'Синхронизировать'}).click()
     await expect(deviceA.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
 
