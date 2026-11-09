@@ -370,8 +370,18 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await A.locator('#assignment-goal').fill('30')
     await A.getByRole('button',{name:'Создать зашифрованное задание'}).click()
     await expect(A.locator('.assignment-card-name').getByText('Thirty camera images')).toBeVisible()
+    await expect(A.locator('.assignment-detail code').first()).toBeVisible()
+    // Regression: identity proof can replace the Session object without an
+    // account/device change. That must not wipe the selected assignment.
+    await A.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      const current=identity.requireSession()
+      identity.activeSession.value={...current,online:true}
+    })
+    await expect(A.locator('.assignment-detail code').first()).toBeVisible()
     await A.getByRole('button',{name:'Синхронизировать'}).click()
     await expect(A.locator('.assignment-card').first()).toContainText('Активно')
+    await expect(A.locator('.assignment-detail code').first()).toBeVisible()
     const assignmentId=(await A.locator('.assignment-detail code').first().textContent())?.trim()??''
     expect(assignmentId).toMatch(/^[0-9a-f-]{36}$/)
 
