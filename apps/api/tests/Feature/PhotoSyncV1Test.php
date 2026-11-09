@@ -144,6 +144,10 @@ final class PhotoSyncV1Test extends TestCase {
         $this->reserve($scoped($future))->assertStatus(422);
         $wrongRevision=$capture;
         $wrongRevision['policyRevision']=2;
+        // Revision 2 is now structurally valid, but this assignment has
+        // never committed that owner-signed amendment: historical ACL is 409.
+        $this->reserve($scoped($wrongRevision))->assertConflict();
+        $wrongRevision['policyRevision']=0;
         $this->reserve($scoped($wrongRevision))->assertStatus(422);
         // The owner can close an assignment without deleting contributor photos.
         DB::table('assignment_records_v1')->where('id',$assignment)->update(['state'=>'archived']);
