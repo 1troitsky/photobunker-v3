@@ -15,6 +15,7 @@ An accepted participant should not lose sight of already-known encrypted assignm
 5. The encrypted summary is held in IndexedDB `pb3-assignment-operation-outbox-v1/privateSummaries` (schema version 3). No plaintext title/instructions, raw assignment DEK, recovery key or imported ECDH private key is persisted. Missing or corrupt summaries are displayed only as opaque assignment IDs.
 6. Changing accounts never uses a different account's summary; a changed signed policy invalidates the cached title. The existing session/account switch protection continues to clear visible sensitive state.
 7. The offline invite list is loaded directly from IndexedDB when the browser is offline, even if the last local session previously had `online=true`; it does **not** issue an HTTP request in this case.
+8. If the browser reports `navigator.onLine=true` but the assignment API fails (e.g. 503), the screen switches to the same signed/encrypted cached data, displays a verification error, and marks all cached receipts and grants **stale**. No failed server response is promoted to live ACL.
 
 ## UX and authorization
 
@@ -26,7 +27,7 @@ An accepted participant should not lose sight of already-known encrypted assignm
 ## Tests
 
 - Vitest checks AES-GCM encrypted IndexedDB summary (not plaintext), matching policy requirement and account isolation.
-- Chromium A→B→A E2E: after prior online pin/accept, B captures offline, navigates to Assignments **without full document reload**, sees the previously accepted private title and local pending count, then restores network and continues cloud synchronization.
+- Chromium A→B→A E2E: after prior online pin/accept, B survives a synthetic `/assignments/v1` and invites API 503 via a visibly stale encrypted snapshot; then B captures offline, navigates to Assignments **without full document reload**, sees the previously accepted private title and local pending count, restores network and completes cloud synchronization.
 - Existing P1 source E2E, PHP, TS, Vue build, and real PostgreSQL/Garage remain required CI gates.
 
 Do not conflate this warm offline navigation with cold offline reload. The independently trusted Service Worker activation remains a separate product/security gate; never silently turn on an unsigned SW to satisfy this feature.
