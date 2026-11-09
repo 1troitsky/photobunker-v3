@@ -247,6 +247,17 @@ final class AssignmentV1Controller extends Controller
                 ->where('account_id',$actor->id)->first();
             abort_unless($photo&&$photo->state==='active'
                 &&$photo->expires_at>PhotoSync::nowMs(),404);
+            $photoContract=json_decode($photo->contract_json,true,32,JSON_THROW_ON_ERROR);
+            if(($photoContract['version']??null)===2){
+                // An assignment-scoped capture must never be re-bound to an
+                // unrelated assignment, even with an otherwise valid grant.
+                $capture=$photoContract['capture']??[];
+                abort_unless(($capture['assignmentId']??null)===$assignmentId
+                    &&($capture['ownerAccountId']??null)===$a->owner_account_id
+                    &&($capture['policyRevision']??null)===$c['policyRevision']
+                    &&hash_equals(hash('sha256',$a->contract_json),
+                        (string)($capture['policyHash']??'')),409);
+            }
             $grant=DB::table('photo_access_grants')
                 ->where('id',$c['photoGrantId'])->where('photo_id',$photo->id)
                 ->where('owner_account_id',$actor->id)
