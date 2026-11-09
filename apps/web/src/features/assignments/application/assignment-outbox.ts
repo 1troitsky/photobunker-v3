@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import { activeSession, requireSession } from '../../identity/application/session'
 import { jsonApi } from '../../identity/infrastructure/api'
-import { importSigner, sign, verify, importSpki, digest, hex } from '../../identity/infrastructure/crypto'
+import { importSigner, sign, verify, importSpki, digest, hex, b64, unb64 } from '../../identity/infrastructure/crypto'
 import { pinnedPeer } from '../../sharing/key-directory'
 import { listOutgoingGrants } from '../../sharing/grant-flow'
 import { sealAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
@@ -64,6 +64,10 @@ type CachedInvite=ReceivedAssignmentInvite & { cachedForAccountId:string }
 type CachedCapturePolicy={
   key:string;accountId:string;listing:AssignmentListing;verifiedAt:number
 }
+type CachedPrivateAssignment={
+  key:string;accountId:string;assignmentId:string;policyHash:string
+  iv:string;ciphertext:Blob // AES-GCM ciphertext only, never plaintext
+}
 export type SignedCaptureBinding={
   assignmentId:string;ownerAccountId:string;policyRevision:number
   policyHash:string;capturedAt:number
@@ -74,6 +78,7 @@ class AssignmentDB extends Dexie {
   assignments!:Table<LocalAssignment,string>
   invites!:Table<CachedInvite,string>
   capturePolicies!:Table<CachedCapturePolicy,string>
+  privateSummaries!:Table<CachedPrivateAssignment,string>
   constructor(){
     super('pb3-assignment-operation-outbox-v1')
     this.version(1).stores({
@@ -86,6 +91,13 @@ class AssignmentDB extends Dexie {
       assignments:'&id, ownerAccountId, [ownerAccountId+createdAt]',
       invites:'&inviteId, assignmentId, ownerAccountId, cachedForAccountId',
       capturePolicies:'&key, accountId, [accountId+verifiedAt]',
+    })
+    this.version(3).stores({
+      operations:'&id, accountId, [accountId+createdAt], [accountId+state]',
+      assignments:'&id, ownerAccountId, [ownerAccountId+createdAt]',
+      invites:'&inviteId, assignmentId, ownerAccountId, cachedForAccountId',
+      capturePolicies:'&key, accountId, [accountId+verifiedAt]',
+      privateSummaries:'&key, accountId, assignmentId',
     })
   }
 }
@@ -279,22 +291,27 @@ export async function listServerAssignments(after?:string):Promise<{
  * A previously verified policy can be read offline for local-only capture.
  * A server can still reject a later upload if membership or state changed.
  */
-export async function listVerifiedCapturePolicies():Promise<AssignmentListing[]>{
+export async function listCachedAssignmentSnapshots():Promise<AssignmentListing[]>{
   const s=requireSession()
   const rows=await db.capturePolicies.where('accountId').equals(s.accountId).toArray()
-  const usable:AssignmentListing[]=[]
+  const verified:AssignmentListing[]=[]
   for(const row of rows){
-    if(activeSession.value!==s)throw new Error('identity.changed')
+    assertSame(s)
     try{
       await verifySignedAssignmentPolicy(row.listing)
-      if(row.listing.state==='active'
-        &&row.listing.startsAt<=Date.now()
-        &&(row.listing.endsAt===null||row.listing.endsAt>Date.now())) {
-        usable.push(row.listing)
-      }
-    }catch{/* Invalid/unpinned snapshots are not available for capture. */}
+      verified.push(row.listing)
+    }catch{/* A stale/corrupt/unpinned server snapshot grants no authority. */}
   }
-  return usable
+  assertSame(s)
+  // These are historical signed snapshots, NOT fresh server ACL or receipts.
+  return verified
+}
+
+export async function listVerifiedCapturePolicies():Promise<AssignmentListing[]>{
+  const rows=await listCachedAssignmentSnapshots()
+  return rows.filter(item=>item.state==='active'
+    &&item.startsAt<=Date.now()
+    &&(item.endsAt===null||item.endsAt>Date.now()))
 }
 
 export async function signedCaptureBinding(
@@ -316,6 +333,69 @@ export async function signedCaptureBinding(
     assignmentId:policy.assignmentId,ownerAccountId:policy.ownerAccountId,
     policyRevision:policy.policyRevision,policyHash,capturedAt,
   }
+}
+
+const summaryEncoder=new TextEncoder()
+function summaryContext(accountId:string,assignmentId:string,policyHash:string):Uint8Array<ArrayBuffer>{
+  return summaryEncoder.encode('pb3.assignment-cached-summary.v1\n'
+    +accountId+'\n'+assignmentId+'\n'+policyHash)
+}
+function checkSummary(data:PrivateAssignment):void{
+  if(data.version!==1||typeof data.title!=='string'
+    ||!data.title.trim()||data.title.length>120
+    ||typeof data.instructions!=='string'||data.instructions.length>4000)
+    throw new Error('assignment.invalid_cached_summary')
+}
+async function summaryKey(
+  s:ReturnType<typeof requireSession>,usage:'encrypt'|'decrypt',
+):Promise<CryptoKey>{
+  const raw=unb64(s.pkg.akek,32)
+  try{return await crypto.subtle.importKey('raw',raw,
+    {name:'AES-GCM'},false,[usage])}
+  finally{raw.fill(0)}
+}
+/**
+ * Cache ONLY an already-verified/decrypted assignment title/instructions as
+ * separate account-AKEK-encrypted ciphertext; never persist plaintext or raw
+ * assignment DEK. The signed policy hash is authenticated as AES-GCM AAD.
+ */
+export async function cachePrivateAssignment(
+  assignmentId:string,policyContract:string,data:PrivateAssignment,
+):Promise<void>{
+  const s=requireSession()
+  checkSummary(data)
+  const policyHash=hex(await digest(summaryEncoder.encode(policyContract)))
+  const iv=crypto.getRandomValues(new Uint8Array(12))
+  const key=await summaryKey(s,'encrypt')
+  const encrypted=await crypto.subtle.encrypt({
+    name:'AES-GCM',iv,
+    additionalData:summaryContext(s.accountId,assignmentId,policyHash),tagLength:128,
+  },key,summaryEncoder.encode(JSON.stringify(data)))
+  assertSame(s)
+  await db.privateSummaries.put({
+    key:s.accountId+'/'+assignmentId,accountId:s.accountId,
+    assignmentId,policyHash,iv:b64(iv),ciphertext:new Blob([encrypted]),
+  })
+  assertSame(s)
+}
+export async function readCachedPrivateAssignment(
+  assignmentId:string,policyContract:string,
+):Promise<PrivateAssignment|null>{
+  const s=requireSession()
+  const row=await db.privateSummaries.get(s.accountId+'/'+assignmentId)
+  if(!row)return null
+  const policyHash=hex(await digest(summaryEncoder.encode(policyContract)))
+  if(row.accountId!==s.accountId||row.assignmentId!==assignmentId
+    ||row.policyHash!==policyHash)return null
+  const key=await summaryKey(s,'decrypt')
+  const decrypted=await crypto.subtle.decrypt({
+    name:'AES-GCM',iv:unb64(row.iv,12),
+    additionalData:summaryContext(s.accountId,assignmentId,policyHash),tagLength:128,
+  },key,await row.ciphertext.arrayBuffer())
+  assertSame(s)
+  const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(decrypted)) as PrivateAssignment
+  checkSummary(data)
+  return data
 }
 
 /** Signed owner lifecycle commands are durable and do not delete media. */
@@ -380,7 +460,7 @@ export async function queueAssignmentInvitation(
 
 export async function listAssignmentInvites():Promise<ReceivedAssignmentInvite[]>{
   const s=requireSession()
-  if(s.online){
+  if(s.online&&(typeof navigator==='undefined'||navigator.onLine)){
     const response=await jsonApi<{items:ReceivedAssignmentInvite[]}>(
       '/assignments/v1/invites/received')
     assertSame(s)
