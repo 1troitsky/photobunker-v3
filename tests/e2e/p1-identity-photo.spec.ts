@@ -120,7 +120,7 @@ test('P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke',as
     // First-contact safety verification is explicit; there is no silent TOFU.
     await owner.locator('#recipient-account-id').fill(recipientId)
     await owner.getByRole('button',{name:'Проверить ключ'}).click()
-    await expect(owner.getByText('Отпечаток получателя')).toBeVisible()
+    await expect(owner.getByText('Отпечаток получателя',{exact:true})).toBeVisible()
     await owner.getByLabel('Я сверил отпечаток получателя').check()
     await owner.getByRole('button',{name:'Подтвердить отпечаток',exact:true}).click()
     await expect(owner.getByText('Ключ получателя подтверждён')).toBeVisible()
@@ -130,7 +130,7 @@ test('P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke',as
     await recipient.getByRole('button',{name:'Обновить полученные'}).click()
     await expect(recipient.getByRole('button',{name:'Ключ отправителя'})).toBeVisible()
     await recipient.getByRole('button',{name:'Ключ отправителя'}).click()
-    await expect(recipient.getByText('Отпечаток отправителя')).toBeVisible()
+    await expect(recipient.getByText('Отпечаток отправителя',{exact:true})).toBeVisible()
     await recipient.getByLabel('Я сверил отпечаток отправителя').check()
     await recipient.getByRole('button',{name:'Подтвердить отправителя'}).click()
     await recipient.getByRole('button',{name:'Открыть полученное'}).click()
