@@ -17,6 +17,8 @@ vi.mock('../features/assignments/application/assignment-outbox', () => ({
   listServerAssignments: mocks.server,
   listVerifiedCapturePolicies: mocks.policies,
   signedCaptureBinding: mocks.binding,
+  signedAllowedAssignmentMedia: () => ['photo'],
+  signedMediaCaptureIntent: vi.fn(),
   signedPolicyRequirements: () => ({
     requiredCategory:false,descriptionMinLength:0,requiredGps:false,
   }),
