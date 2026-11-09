@@ -48,7 +48,6 @@ final class MediaGrantV1Test extends TestCase
             $this->chunks[$id]=$body;
             $key='cipher/media/v1/'.$owner['id'].'/'.$this->mediaId.'/'.$id;
             Storage::disk('ciphertext')->put($key,$body);
-            DB::table('media_chunks_v1')->insertOrIgnore([]); // fixture below
         }
         $this->mediaContract=json_encode([
             'version'=>1,'accountId'=>$owner['id'],'mediaId'=>$this->mediaId,
