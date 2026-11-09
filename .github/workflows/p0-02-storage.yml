@@ -116,6 +116,46 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8099/api/healthz
           curl -fsS http://127.0.0.1:8099/api/readyz
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install frozen Vue and Chromium test dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+      - name: P1 real-browser two-device E2EE photo journey
+        shell: bash
+        env:
+          APP_URL: http://127.0.0.1:5173
+          SESSION_DRIVER: file
+          SESSION_SECURE_COOKIE: 'false'
+        run: |
+          set -euo pipefail
+          (cd apps/api && php artisan serve --host=127.0.0.1 --port=8000 > "$RUNNER_TEMP/p1-laravel.log" 2>&1) &
+          backend=$!
+          pnpm dev > "$RUNNER_TEMP/p1-vite.log" 2>&1 &
+          frontend=$!
+          trap 'kill "$backend" "$frontend" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8000/api/healthz >/dev/null &&
+               curl -fsS http://127.0.0.1:5173/settings >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/api/healthz
+          curl -fsS http://127.0.0.1:5173/settings >/dev/null
+          pnpm exec playwright test --config tests/playwright.config.ts
+      - name: Preserve P1 browser failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-browser-traces
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Stop disposable Garage
         if: always()
         run: docker rm -f pb3-p0-garage >/dev/null 2>&1 || true
