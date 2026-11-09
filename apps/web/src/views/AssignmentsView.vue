@@ -64,6 +64,10 @@ const count=computed(()=>assignments.value.length)
 const activeCount=computed(()=>assignments.value.filter(a=>a.state==='active').length)
 const selectedOperations=computed(()=>operations.value.filter(op=>
   op.contract.includes(selectedId.value)&&!!selectedId.value))
+const eligiblePhotos=computed(()=>photos.value
+  .filter(p=>p.state==='synced'
+    &&(!p.capture||p.capture.assignmentId===selectedId.value))
+  .sort((a,b)=>Number(!!b.capture)-Number(!!a.capture)))
 
 function cleanPreview():void{
   if(previewUrl.value){URL.revokeObjectURL(previewUrl.value);previewUrl.value=''}
@@ -415,12 +419,15 @@ onUnmounted(cleanPreview)
           </button>
           <h3>Файлы · мои снимки</h3>
           <p class="muted">Выберите синхронизированный снимок. Передача создаст отдельное зашифрованное разрешение; участие в задании само по себе не раскрывает фото.</p>
-          <div v-for="photo in photos.filter(p=>p.state==='synced')" :key="photo.key" class="photo-row">
-            <div><strong>{{ photo.photoId.slice(0,8) }}</strong><small>{{ photo.state }}</small></div>
+          <div v-for="photo in eligiblePhotos" :key="photo.key" class="photo-row">
+            <div><strong>{{ photo.photoId.slice(0,8) }}</strong>
+              <small>{{ photo.capture?'Снято для этого задания':'Личный снимок · отдельная передача' }}</small>
+              <small>{{ photo.state }}</small>
+            </div>
             <button type="button" :disabled="busy||!contributorCheck?.confirmed" @click="submit(photo)">Отправить в задание</button>
           </div>
-          <p v-if="!photos.some(p=>p.state==='synced')" class="muted">Синхронизированных фотографий пока нет.</p>
-          <RouterLink to="/camera">Камера</RouterLink>
+          <p v-if="!eligiblePhotos.length" class="muted">Для этого задания нет подходящих синхронизированных фотографий.</p>
+          <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Камера задания</RouterLink>
         </template>
       </div>
 
