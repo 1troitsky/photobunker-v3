@@ -633,7 +633,7 @@ onUnmounted(cleanPreview)
         </p>
         <p v-if="selected.data" class="muted">{{ selected.data.instructions }}</p>
         <p><code>{{ selected.id }}</code></p>
-        <p class="muted">Тип: фото · {{ selected.goal===null?'без цели':'Цель: '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
+        <p class="muted">Разрешённые типы: {{ selected.allowedMedia.join(', ') }} · {{ selected.goal===null?'Без цели по фото':'Фото: цель '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
         <p class="muted">
           Подписанные требования: категория {{ selected.requirements.requiredCategory?'обязательна':'необязательна' }};
           описание минимум {{ selected.requirements.descriptionMinLength }} символов;
@@ -642,6 +642,11 @@ onUnmounted(cleanPreview)
         <p v-if="selected.confirmedPhotos!==null" class="muted">
           Подтверждено сервером: {{ selected.confirmedPhotos }}
           <template v-if="selected.goal!==null"> / {{ selected.goal }} · {{ progressPercentage(selected) }}%</template>
+        </p>
+        <p v-if="selected.confirmedVideos!==null&&selected.confirmedAudio!==null"
+          class="muted" data-testid="assignment-media-counts">
+          Видео: {{ selected.confirmedVideos }} · Аудио: {{ selected.confirmedAudio }}
+          (только при действующих E2EE-разрешениях)
         </p>
         <p v-if="pendingReceiptCount(selected.id)>0" class="muted">
           Локально ожидают отправки: {{ pendingReceiptCount(selected.id) }} · не включены в прогресс
@@ -674,6 +679,15 @@ onUnmounted(cleanPreview)
               <input id="assignment-gps-required" v-model="editedRequiredGps" type="checkbox">
               GPS обязателен
             </label>
+            <p class="muted">Дополнительные типы — отдельное добровольное расширение подписанной политики. Ранее созданные задания разрешают только фото.</p>
+            <label class="checkline">
+              <input id="assignment-allow-video" v-model="editedAllowVideo" type="checkbox">
+              Разрешить видео (E2EE)
+            </label>
+            <label class="checkline">
+              <input id="assignment-allow-audio" v-model="editedAllowAudio" type="checkbox">
+              Разрешить аудио (E2EE)
+            </label>
             <button type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeGoal">Подписать новые правила</button>
@@ -698,10 +712,17 @@ onUnmounted(cleanPreview)
           <button v-if="ownerCheck?.confirmed" type="button" :disabled="busy||selected.localState==='queued'" @click="invite">Пригласить исполнителя</button>
           <h3>Подтверждённые материалы</h3>
           <button type="button" :disabled="busy" @click="loadSubmissions">Обновить материалы</button>
-          <p v-if="!submissions.length" class="muted">Нет подтверждённых отправок или доступа по E2EE grant.</p>
+          <p v-if="!submissions.length&&!mediaSubmissions.length" class="muted">Нет подтверждённых отправок или доступа по E2EE grant.</p>
           <div v-for="entry in submissions" :key="entry.submissionId" class="photo-row">
             <div><strong>{{ entry.photoId.slice(0,8) }}</strong><small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small></div>
             <button type="button" :disabled="busy" @click="openSubmission(entry.photoGrantId)">Просмотр</button>
+          </div>
+          <div v-for="entry in mediaSubmissions" :key="entry.submissionId" class="photo-row" data-testid="assignment-media-submission">
+            <div>
+              <strong>{{ entry.mediaType==='video'?'Видео':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
+              <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
+            </div>
+            <button type="button" :disabled="busy" @click="openMediaSubmission(entry.mediaGrantId)">Открыть медиа задания</button>
           </div>
         </template>
 
@@ -721,6 +742,19 @@ onUnmounted(cleanPreview)
             <button type="button" :disabled="busy||!contributorCheck?.confirmed" @click="submit(photo)">Отправить в задание</button>
           </div>
           <p v-if="!eligiblePhotos.length" class="muted">Для этого задания нет подходящих синхронизированных фотографий.</p>
+          <template v-if="selected.allowedMedia.some(kind=>kind==='video'||kind==='audio')">
+            <h3>Видео и аудио · из Browser</h3>
+            <p class="muted">Понадобятся заранее загруженный зашифрованный файл, подписанное разрешение типа в задании и отдельное подтверждение передачи приватных метаданных. Для видео/аудио требования GPS, категории и описания, предназначенные для камеры фото, пока не заявляются как выполненные.</p>
+            <div v-for="file in eligibleMedia" :key="file.key" class="photo-row">
+              <div><strong>{{ file.mediaType==='video'?'Видео':'Аудио' }} · {{ file.mediaId.slice(0,8) }}</strong>
+                <small>{{ file.state }} · {{ file.plainBytes.toLocaleString('ru-RU') }} байт</small>
+              </div>
+              <button type="button" :disabled="busy||!contributorCheck?.confirmed"
+                @click="submitMedia(file)">Отправить медиа в задание</button>
+            </div>
+            <p v-if="!eligibleMedia.length" class="muted">Нет синхронизированных файлов разрешённого типа.</p>
+            <RouterLink to="/browser">Импортировать видео или аудио</RouterLink>
+          </template>
           <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Камера задания</RouterLink>
         </template>
       </div>
@@ -756,7 +790,9 @@ onUnmounted(cleanPreview)
 
       <div v-if="previewUrl" class="foundation-card">
         <h2>Расшифровано на устройстве</h2>
-        <img :src="previewUrl" class="decrypted-preview" alt="Полученная зашифрованная фотография">
+        <img v-if="previewMime.startsWith('image/')" :src="previewUrl" class="decrypted-preview" alt="Полученная зашифрованная фотография">
+        <video v-else-if="previewMime.startsWith('video/')" :src="previewUrl" class="decrypted-preview" controls playsinline preload="metadata"/>
+        <audio v-else-if="previewMime.startsWith('audio/')" :src="previewUrl" controls preload="metadata"/>
         <button type="button" @click="cleanPreview">Закрыть</button>
       </div>
 
