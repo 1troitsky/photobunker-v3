@@ -97,10 +97,21 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     await C.getByRole('button',{name:'Создать ключ'}).click()
     await C.getByLabel('Я сохранил ключ восстановления').check()
     await C.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(C.getByText('Подтверждённая сессия')).toBeVisible()
+    // Browser's package display can precede asynchronous cookie/session
+    // confirmation. Verify the real enrolled account before asserting 404.
+    await C.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+    })
     const denied=await C.evaluate(async mediaId=>{
       const [manifest,list]=await Promise.all([
-        fetch('/media/v1/'+mediaId+'/manifests',{credentials:'same-origin'}),
-        fetch('/media/v1',{credentials:'same-origin'}),
+        fetch('/media/v1/'+mediaId+'/manifests',{
+          credentials:'same-origin',headers:{Accept:'application/json'},
+        }),
+        fetch('/media/v1',{
+          credentials:'same-origin',headers:{Accept:'application/json'},
+        }),
       ])
       return {code:manifest.status,visible:(await list.json()).items.length}
     },local.mediaId)
@@ -180,6 +191,12 @@ test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant
     })
     await recipient.goto('/browser')
     await expect(recipient.getByTestId('media-share-panel')).toBeVisible()
+    // Registration UI and online session proof complete independently.
+    // Verify the server account before publishing an account-signed ECDH key.
+    await recipient.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+    })
     // Recipient publishes account-signed ECDH directory. No implicit TOFU.
     await recipient.evaluate(async()=>{
       const keys=await import('/src/features/sharing/key-directory.ts')
