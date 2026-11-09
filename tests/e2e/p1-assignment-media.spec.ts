@@ -284,11 +284,11 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await A.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(A.getByTestId('assignment-media-counts'))
       .toContainText('Видео: 1 · Аудио: 2',{timeout:20000})
-    const videoReceipt=await A.evaluate(async id=>{
+    const videoReceipt=await A.evaluate(async({assignmentId,mediaId})=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
-      const res=await a.listAssignmentMediaSubmissions(id)
-      return res.items.find(x=>x.mediaId===id)
-    },videoRecording.id)
+      const res=await a.listAssignmentMediaSubmissions(assignmentId)
+      return res.items.find(x=>x.mediaId===mediaId)
+    },{assignmentId,mediaId:videoRecording.id})
     expect(videoReceipt?.capturedInAssignment).toBe(true)
     const videoVerified=await A.evaluate(async id=>{
       const grant=await import('/src/features/media/application/media-grants.ts')
