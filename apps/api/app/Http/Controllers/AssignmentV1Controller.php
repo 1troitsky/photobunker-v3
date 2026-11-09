@@ -153,19 +153,38 @@ final class AssignmentV1Controller extends Controller
                 });
           });
         if($after!==null)$q->where('a.id','>',$after);
-        $rows=$q->orderBy('a.id')->limit(51)->get([
+        $columns=[
             'a.id','a.owner_account_id','a.state','a.revision',
             'a.policy_revision','a.photo_goal','a.starts_at','a.ends_at',
             'a.private_envelope_json','a.contract_json','a.owner_signature',
             'a.latest_state_contract','a.latest_state_signature',
             'owner.account_spki as owner_account_spki',
-        ]);
+        ];
+        $now=PhotoSync::nowMs();
+        // An authoritative receipt must still have an active, contributor-
+        // owned photo and explicit E2EE grant to this assignment's owner.
+        // Counting the submissions endpoint's first 50 rows is WRONG:
+        // assignment targets can be 1..9999 with no upload limit from goals.
+        $rows=$q->select($columns)->selectSub(function($sub)use($now){
+            $sub->from('assignment_submissions_v1 as s')
+                ->join('photo_records as p','p.id','=','s.photo_id')
+                ->join('photo_access_grants as g','g.id','=','s.photo_grant_id')
+                ->whereColumn('s.assignment_id','a.id')
+                ->whereColumn('p.account_id','s.contributor_account_id')
+                ->whereColumn('g.photo_id','s.photo_id')
+                ->whereColumn('g.owner_account_id','s.contributor_account_id')
+                ->whereColumn('g.recipient_account_id','a.owner_account_id')
+                ->where('p.state','active')->where('p.expires_at','>',$now)
+                ->where('g.state','active')->where('g.expires_at','>',$now)
+                ->selectRaw('COUNT(*)');
+        },'confirmed_photo_count')->orderBy('a.id')->limit(51)->get();
         $more=$rows->count()>50;
         $items=$rows->take(50)->map(fn($x)=>[
             'assignmentId'=>$x->id,'ownerAccountId'=>$x->owner_account_id,
             'state'=>$x->state,'revision'=>(int)$x->revision,
             'policyRevision'=>(int)$x->policy_revision,
             'photoGoal'=>$x->photo_goal===null?null:(int)$x->photo_goal,
+            'confirmedPhotoCount'=>(int)$x->confirmed_photo_count,
             'startsAt'=>(int)$x->starts_at,
             'endsAt'=>$x->ends_at===null?null:(int)$x->ends_at,
             'privateEnvelope'=>json_decode($x->private_envelope_json,true,16,JSON_THROW_ON_ERROR),
@@ -373,6 +392,10 @@ final class AssignmentV1Controller extends Controller
             ->join('photo_records as p','p.id','=','s.photo_id')
             ->join('photo_access_grants as g','g.id','=','s.photo_grant_id')
             ->where('s.assignment_id',$assignmentId)
+            ->whereColumn('p.account_id','s.contributor_account_id')
+            ->whereColumn('g.photo_id','s.photo_id')
+            ->whereColumn('g.owner_account_id','s.contributor_account_id')
+            ->where('g.recipient_account_id',$assignment->owner_account_id)
             ->where('p.state','active')->where('p.expires_at','>',PhotoSync::nowMs())
             ->where('g.state','active')->where('g.expires_at','>',PhotoSync::nowMs())
             ->orderBy('s.id')->limit(50)
