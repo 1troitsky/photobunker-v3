@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { activeSession, type Session } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
@@ -20,8 +20,8 @@ const policies=ref<AssignmentListing[]>([])
 const selectedAssignment=ref('')
 const captureMode=ref<'photo'|'video'|'audio'>('photo')
 const recording=ref(false)
-const recordLimitMs=180000
-const recorder=ref<MediaRecorder|null>(null)
+const recordLimitMs=175000
+const recorder=shallowRef<MediaRecorder|null>(null)
 const recordingStartedAt=ref<number|null>(null)
 let recordingTimer:ReturnType<typeof setTimeout>|null=null
 let recordingParts:Blob[]=[]
@@ -408,9 +408,16 @@ onUnmounted(()=>{disposed=true;closeCamera()})
     </div>
     <template v-else>
       <div class="foundation-card">
+        <label for="camera-mode">Режим съёмки</label>
+        <select id="camera-mode" v-model="captureMode" :disabled="recording||busy"
+          data-testid="camera-mode">
+          <option value="photo">Фото</option>
+          <option value="video">Видео</option>
+          <option value="audio">Аудио</option>
+        </select>
         <label for="camera-assignment">Задание для съёмки</label>
-        <select id="camera-assignment" v-model="selectedAssignment" :disabled="busy">
-          <option value="">Личное фото (без задания)</option>
+        <select id="camera-assignment" v-model="selectedAssignment" :disabled="busy||recording">
+          <option value="">Личная запись (без задания)</option>
           <option v-for="policy in policies" :key="policy.assignmentId"
             :value="policy.assignmentId">
             Задание {{ policy.assignmentId.slice(0,8) }} · политика {{ policy.policyRevision }}
@@ -421,13 +428,19 @@ onUnmounted(()=>{disposed=true;closeCamera()})
         </button>
         <p class="muted">Доступны только проверенные подписанные политики. При съёмке без сети используется последний подтверждённый снимок политики; сервер повторно проверит права при загрузке.</p>
         <p v-if="policyNotice" class="muted" role="status">{{ policyNotice }}</p>
-        <p v-if="requiredFields" role="status" class="muted">
+        <p v-if="captureMode!=='photo'" class="muted">
+          Видео и аудио доступны только если владелец подписал разрешение
+          соответствующего типа. Подтверждение записи связывается с
+          версией правил и зашифрованным MediaFile; время — заявление
+          устройства, не аппаратная аттестация.
+        </p>
+        <p v-if="requiredFields&&captureMode==='photo'" role="status" class="muted">
           Подписанные требования: категория {{ requiredFields.requiredCategory?'обязательна':'необязательна' }},
           описание минимум {{ requiredFields.descriptionMinLength }} символов,
           GPS {{ requiredFields.requiredGps?'обязателен':'необязателен' }}.
         </p>
       </div>
-      <div class="foundation-card">
+      <div v-if="captureMode==='photo'" class="foundation-card">
         <h2>Приватная информация снимка</h2>
         <label for="camera-category">Категория</label>
         <input id="camera-category" v-model="category" type="text" maxlength="64"
@@ -449,19 +462,34 @@ onUnmounted(()=>{disposed=true;closeCamera()})
         <p v-if="gpsError" role="alert" class="error-text">{{ gpsError }}</p>
         <p class="muted">GPS запрашивается только по нажатию. Категория, описание и координаты шифруются на устройстве и не попадают на сервер открытым текстом.</p>
       </div>
-      <div class="video-frame">
+      <div class="video-frame" v-show="captureMode!=='audio'">
         <video ref="video" playsinline muted autoplay aria-label="Предпросмотр камеры"/>
       </div>
+      <p v-if="captureMode==='audio'" class="muted">
+        Аудиозапись использует только микрофон. Видеопоток не запрашивается.
+      </p>
       <div class="action-row">
         <button type="button" :disabled="!!stream||starting" @click="openCamera">Включить камеру</button>
-        <button type="button"
-           :disabled="!stream||starting||busy||gpsLoading||(typeof route.query.assignmentId==='string'&&!!route.query.assignmentId&&selectedAssignment!==route.query.assignmentId)"
+        <button v-if="captureMode==='photo'" type="button"
+          :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
           @click="capture">
           {{ busy ? 'Шифрование…' : 'Сделать снимок' }}
         </button>
-        <button type="button" :disabled="!stream&&!starting" @click="closeCamera">Отключить</button>
+        <button v-else-if="!recording" type="button"
+          data-testid="camera-start-recording"
+          :disabled="!stream||starting||busy||!canCaptureType"
+          @click="beginRecording">Начать запись {{ captureMode==='video'?'видео':'аудио' }}</button>
+        <button v-else type="button"
+          data-testid="camera-stop-recording"
+          @click="endRecording">Остановить запись</button>
+        <button type="button" :disabled="!stream&&!starting" @click="closeCamera">
+          {{ recording?'Отменить запись':'Отключить' }}
+        </button>
       </div>
-      <p class="muted">В системную медиатеку снимок не записывается. Сначала сохраняется только ciphertext; синхронизация выполняется отдельно.</p>
+      <p v-if="recording" role="status" class="status-text" data-testid="camera-recording-status">
+        Идёт запись с {{ recordingStartedAt?new Date(recordingStartedAt).toLocaleTimeString():'' }}. Максимум 175 секунд и 128 MiB.
+      </p>
+      <p class="muted">В системную медиатеку запись не сохраняется. Сначала создаётся только зашифрованный файл в локальном хранилище. Во время MediaRecorder исходные части находятся в оперативной памяти браузера; закрытие страницы до шифрования приведёт к потере несохранённой записи.</p>
     </template>
     <p v-if="message" role="status" class="status-text">{{ message }}</p>
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>
