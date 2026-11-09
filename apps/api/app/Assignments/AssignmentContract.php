@@ -74,18 +74,19 @@ final class AssignmentContract
     }
 
     /**
-     * A signed policy amendment changes only the public photo target.
-     * Capture requirements, dates, E2EE envelope and root policy stay fixed.
+     * Amendments retain the immutable root. v1 is photo-goal only;
+     * v2 adds photo capture requirements; v3 explicitly opts into video
+     * and/or audio. Never broaden older photo-only signed policy implicitly.
      */
     public static function policyAmendment(array $d,string $owner,string $assignment):void
     {
-        abort_unless(in_array($d['version'],[1,2],true)
+        abort_unless(in_array($d['version'],[1,2,3],true)
             &&$d['assignmentId']===$assignment
             &&$d['ownerAccountId']===$owner
             &&is_int($d['fromPolicyRevision'])
             &&$d['fromPolicyRevision']>=1&&$d['fromPolicyRevision']<1001
             &&$d['toPolicyRevision']===$d['fromPolicyRevision']+1
-            &&$d['allowedMedia']===['photo'],422);
+            &&self::allowedMedia($d['allowedMedia'],$d['version']===3),422);
         foreach(['assignmentId','ownerAccountId','operationId'] as $key)
             self::uuid($d,$key);
         foreach(['rootPolicyHash','previousPolicyHash'] as $key){
@@ -95,7 +96,7 @@ final class AssignmentContract
         abort_unless($d['photoGoal']===null
             ||(is_int($d['photoGoal'])&&$d['photoGoal']>=1
                 &&$d['photoGoal']<=9999),422);
-        if($d['version']===2){
+        if($d['version']>=2){
             // These are PUBLIC booleans and a length threshold, not
             // plaintext GPS, private description or actual category.
             abort_unless(is_bool($d['requiredCategory'])
@@ -104,6 +105,38 @@ final class AssignmentContract
                 &&$d['descriptionMinLength']>=0
                 &&$d['descriptionMinLength']<=4000,422);
         }
+    }
+
+    /**
+     * Current original policy is photo-only. Owner-signed v3 amendments may
+     * enable video/audio with a stable canonical order; the platform must
+     * not infer permission from an accepted invitation alone.
+     */
+    public static function allowedMedia(mixed $value,bool $extended):bool
+    {
+        if(!is_array($value)||!array_is_list($value))return false;
+        if(!$extended)return $value===['photo'];
+        return in_array($value,[
+            ['photo'],['photo','video'],['photo','audio'],
+            ['photo','video','audio'],
+        ],true);
+    }
+
+    public static function mediaSubmission(array $d,string $contributor,
+        string $assignment):void
+    {
+        abort_unless($d['version']===1
+            &&in_array($d['kind'],['video','audio'],true)
+            &&$d['assignmentId']===$assignment
+            &&$d['contributorAccountId']===$contributor
+            &&is_int($d['policyRevision'])
+            &&$d['policyRevision']>=2&&$d['policyRevision']<=1001,422);
+        foreach(['submissionId','operationId','assignmentId',
+            'contributorAccountId','mediaId','mediaGrantId'] as $field)
+            self::uuid($d,$field);
+        foreach(['policyHash','mediaContractHash'] as $field)
+            abort_unless(is_string($d[$field])
+                &&preg_match('/^[a-f0-9]{64}$/D',$d[$field])===1,422);
     }
 
     public static function invite(array $d,string $owner,string $assignment):void
