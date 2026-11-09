@@ -144,3 +144,39 @@ that diagnosis belongs in the reviewed audit.
 Current verification limits and the recovery test's final, unexecuted timing
 correction are recorded in `docs/audits/P1-LOCAL-ACCEPTANCE.md`. Do not infer a
 green full acceptance run from the presence of this harness.
+
+## Round 3 (Issue #25)
+
+Pinned product: `039762d3bec173b767cbb8898bda92d01e413f26` (PR #24).
+QA baseline: `qa/p1-acceptance-round2` at `07297a6`.
+Fetch the product ref fresh and confirm its full SHA matches the issue; stop on
+mismatch. Create a separate **detached** worktree at that SHA; install this QA
+checkout's locked dependencies as well as the product dependencies.
+
+```sh
+python3 -B scripts/local-acceptance/round3.py --source-root /absolute/detached-product
+```
+
+One integrated run checks the exact same-second boundary three times against a
+read-only disposable DB inspection, camera lifecycle, signed policy history,
+private metadata and pre-grant gating, then lost ACK three times, original
+product E2E and maintained QA probes. Only new QA files were added; baseline
+harness and old evidence are unchanged. The native Safari probe never changes
+permissions; unavailable native automation is NOT TESTED. Cold offline probes
+remain BLOCKED BY DESIGN. No SW is registered.
+
+Only one targeted recheck per failing test is allowed. The explicit
+`--recheck-pregrant` option runs just that corrected scenario in a new fixture;
+it must not be used as a loop until green. Initial failures remain in evidence.
+`round3-fixture.py` supports bounded grant-count reads and revoking one synthetic
+accepted membership in the currently running isolated fixture. This is test
+fault injection, not a product revocation API or customer data operation.
+
+Sanitized export (pass the **actual QA code SHA for that run**):
+
+```sh
+python3 -B scripts/local-acceptance/export-round3.py /PRIVATE/RUN FULL_QA_SHA
+```
+
+Review [the report](../../docs/audits/P1-ACCEPTANCE-ROUND3.md) and both evidence
+files. Do not publish raw artifacts, private canaries, GPS, image data or keys.
