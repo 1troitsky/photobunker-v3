@@ -4,6 +4,7 @@ declare(strict_types=1);
 use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\PhotoSyncController;
 use App\Http\Controllers\MediaV1Controller;
+use App\Http\Controllers\MediaGrantController;
 use App\Http\Controllers\RecipientKeyController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
@@ -62,6 +63,19 @@ Route::prefix('media/v1')->middleware('throttle:pb3-media')->group(function(){
         ->whereUuid('mediaId');
     Route::get('/{mediaId}/manifests',[MediaV1Controller::class,'manifests'])
         ->whereUuid('mediaId');
+});
+
+// P1-11: independently fingerprint-confirmed media recipient grants.
+// No implicit access from contacts, team membership or assignment invite.
+Route::prefix('media-shares/v1')->middleware('throttle:pb3-media')->group(function(){
+    Route::get('/received',[MediaGrantController::class,'received']);
+    Route::post('/grants',[MediaGrantController::class,'create']);
+    Route::get('/grants/{grantId}',[MediaGrantController::class,'show'])
+        ->whereUuid('grantId');
+    Route::get('/grants/{grantId}/chunks/{chunkId}',[MediaGrantController::class,'read'])
+        ->whereUuid('grantId')->whereUuid('chunkId');
+    Route::post('/grants/{grantId}/revoke',[MediaGrantController::class,'revoke'])
+        ->whereUuid('grantId');
 });
 
 // P1-03: all endpoints require an enrolled identity; mutating calls also

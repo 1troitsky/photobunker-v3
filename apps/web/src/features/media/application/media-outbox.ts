@@ -43,7 +43,7 @@ function same(session:ReturnType<typeof requireSession>):void{
 function apiPath(mediaId:string):string{
   return '/media/v1/'+encodeURIComponent(mediaId)
 }
-async function verifyReceipt(contract:MediaContract,receipt:MediaReceipt):Promise<void>{
+export async function verifyReceipt(contract:MediaContract,receipt:MediaReceipt):Promise<void>{
   const publicReceipt={
     mediaId:contract.mediaId,
     operationId:contract.operationId,
