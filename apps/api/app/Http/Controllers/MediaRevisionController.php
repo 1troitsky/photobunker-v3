@@ -157,6 +157,13 @@ final class MediaRevisionController extends Controller
                 ->orWhere('previous_media_id',$c['newMediaId'])
                 ->exists(),409);
             $history=$this->history($root->id);
+            // A file already serving as a successor cannot start a second
+            // independent root lineage. Otherwise one encrypted version
+            // could silently become the head of two conflicting histories.
+            if($history->isEmpty()){
+                abort_if(DB::table('media_revision_links_v1')
+                    ->where('new_media_id',$root->id)->exists(),409);
+            }
             $state=$this->assertChain($history,$root,$account);
             abort_unless($state['revision']===$c['fromRevision']
                 &&$state['headMediaId']===$head->id
