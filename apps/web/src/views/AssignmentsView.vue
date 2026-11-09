@@ -513,7 +513,8 @@ onUnmounted(cleanPreview)
 
         <template v-if="selected.isOwner">
           <div class="assignment-toolbar">
-            <span class="muted">Версия состояния: {{ selected.revision }} · правила: {{ selected.policyRevision }}</span>
+            <span class="muted">Версия состояния: {{ selected.revision }}</span>
+            <span class="muted">Версия правил: {{ selected.policyRevision }}</span>
             <button v-if="selected.state==='active'" type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeState('finish')">Завершить задание</button>
