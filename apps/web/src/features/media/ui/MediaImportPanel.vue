@@ -2,6 +2,7 @@
 import { onMounted,onUnmounted,ref,watch } from 'vue'
 import { activeSession } from '../../identity/application/session'
 import MediaSharePanel from './MediaSharePanel.vue'
+import MediaVersionPanel from './MediaVersionPanel.vue'
 import {
   enqueueEncryptedMedia,listLocalMedia,listCloudMedia,
   readLocalMedia,readCloudMedia,synchronizeMedia,
@@ -145,6 +146,7 @@ onUnmounted(()=>{detach();clearPreview()})
     </div>
     <button v-if="cursor" type="button" :disabled="busy" @click="more">Ещё файлы</button>
     <MediaSharePanel :local-media="local" @open-media="previewReceived"/>
+    <MediaVersionPanel :local-media="local"/>
     <div v-if="selectedUrl&&metadata" class="foundation-card" data-testid="media-decrypted-preview">
       <h3>Расшифровано локально: {{ metadata.fileName }}</h3>
       <img v-if="metadata.mime.startsWith('image/')" :src="selectedUrl" alt="Личный файл" class="decrypted-preview">
