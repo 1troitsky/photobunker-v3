@@ -8,3 +8,8 @@ use Illuminate\Support\Facades\Schedule;
 if (filter_var(env('PB3_ENABLE_PHOTO_CLEANUP',false),FILTER_VALIDATE_BOOL)){
   Schedule::command('pb3:photo-maintain')->everyMinute()->withoutOverlapping();
 }
+
+// Independent, default-OFF media TTL. Requires explicit operator approval.
+if(filter_var(env('PB3_ENABLE_MEDIA_CLEANUP',false),FILTER_VALIDATE_BOOL)){
+  Schedule::command('pb3:media-maintain')->everyMinute()->withoutOverlapping();
+}
