@@ -70,3 +70,28 @@ or effective-time boundaries changed.
   policy and old grants.
 
 No merge/deploy; `main` remains unchanged.
+
+## CI observations, 2026-11-09
+
+Initial code head `175a8f950f5b28259048f02f6f721c5fcf2081ba`:
+
+- **PASS:** PHP 8.4 and 8.5 security/config (push workflow
+  `42671565943`, 2/2 individual jobs).
+- **PASS:** Laravel/PHPUnit on PHP 8.4, Vue TypeScript/Vitest/build
+  (push workflow `42671565970`, existing 2/2 individual jobs).
+- **PASS:** disposable PostgreSQL 18/Garage 2.5 + Chromium full
+  two-account E2EE acceptance including required fields
+  (PR workflow `42671624762`).
+- **Workflow-level FAIL / environment inconclusive:** push Laravel
+  workflow and PR Laravel workflow lacked the PHP 8.5 Laravel job; PR
+  security workflow created **zero jobs**, and push storage workflow
+  created **zero jobs**. These runs returned GitHub workflow-level
+  failure despite successful separately checked jobs.
+  Attempts to re-run failed jobs through GitHub Actions API returned
+  `403: This workflow run cannot be retried`.
+  No unexecuted PHP 8.5 PHPUnit or missing workflow run is reported as
+  PASS. This may be a GitHub orchestration/runner issue; an independent
+  run must verify the absent checks before owner acceptance.
+
+Do not treat missing jobs as proof of a product test failure, nor silently
+treat the workflow-level failures as successful. `main` remains untouched.
