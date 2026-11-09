@@ -1,3 +1,4 @@
+import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { activeSession } from '../../identity/application/session'
 import type { Session } from '../../identity/application/session'
@@ -7,6 +8,7 @@ import type { StoredPhoto } from '../../photo-sync/application/p1-photo'
 import type { AssignmentListing, SignedCaptureBinding } from './assignment-outbox'
 import {
   validatePhotoForGrant, verifySignedPolicyHistory,
+  rememberSignedPolicyHistory, readSignedPolicyHistoryCache,
 } from './submission-preflight'
 import type { SignedPolicyHistory, SignedPolicyHistoryEvent } from './submission-preflight'
 
@@ -94,6 +96,26 @@ function localPhoto(capture:SignedCaptureBinding|undefined):StoredPhoto{
   }
 }
 describe('P1-08 signed historical policy and E2EE grant preflight',()=>{
+  it('caches only public owner-signed history and re-verifies it offline per account',async()=>{
+    const f=await fixture()
+    const original=JSON.stringify(f.history)
+    expect(original).not.toContain('Confidential text')
+    expect(original).not.toContain('latitude')
+    const stored=await rememberSignedPolicyHistory(f.listing,f.history)
+    expect(stored).toHaveLength(3)
+    const recovered=await readSignedPolicyHistoryCache(f.listing)
+    expect(recovered?.map(x=>x.policyHash))
+      .toEqual(stored.map(x=>x.policyHash))
+    await expect(readSignedPolicyHistoryCache({
+      ...f.listing,policyRevision:2,
+    })).rejects.toThrow()
+    const another='dddddddd-dddd-4ddd-8ddd-dddddddddddd'
+    const {pkg}=await freshPackage(another)
+    activeSession.value={
+      accountId:another,deviceId:crypto.randomUUID(),pkg,online:false,
+    } as Session
+    expect(await readSignedPolicyHistoryCache(f.listing)).toBeNull()
+  })
   it('verifies every intermediate owner signature and exact chain before trusting an old photo',async()=>{
     const f=await fixture()
     const chain=await verifySignedPolicyHistory(f.listing,f.history)
