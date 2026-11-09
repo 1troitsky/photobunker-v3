@@ -180,7 +180,9 @@ export async function listLocalAssignmentDrafts():Promise<LocalAssignment[]> {
  * For another account, the public key must already have been pinned via
  * independent first-contact fingerprint verification.
  */
-export async function verifySignedAssignmentPolicy(item:AssignmentListing):Promise<void>{
+export async function verifySignedAssignmentPolicy(
+  item:AssignmentListing,cachedOnly=false,
+):Promise<void>{
   const s=requireSession()
   // A count is server-derived from authorized, finalized receipts, NOT part
   // of the immutable owner signature and not a client ACL/crypto input.
@@ -188,7 +190,7 @@ export async function verifySignedAssignmentPolicy(item:AssignmentListing):Promi
     ||item.confirmedPhotoCount<0)throw new Error('assignment.invalid_receipt_count')
   const trustedSpki=item.ownerAccountId===s.accountId
     ?s.pkg.accountSpki
-    :(await pinnedPeer(item.ownerAccountId)).accountSpki
+    :(await pinnedPeer(item.ownerAccountId,!cachedOnly)).accountSpki
   if(!trustedSpki||item.ownerAccountSpki!==trustedSpki
     ||!await verify(await importSpki(trustedSpki),
       'pb3.assignment.v1\n'+item.policyContract,item.policySignature)){
@@ -298,7 +300,7 @@ export async function listCachedAssignmentSnapshots():Promise<AssignmentListing[
   for(const row of rows){
     assertSame(s)
     try{
-      await verifySignedAssignmentPolicy(row.listing)
+      await verifySignedAssignmentPolicy(row.listing,true)
       verified.push(row.listing)
     }catch{/* A stale/corrupt/unpinned server snapshot grants no authority. */}
   }
@@ -486,10 +488,10 @@ export async function listAssignmentInvites():Promise<ReceivedAssignmentInvite[]
 }
 
 export async function verifyAssignmentInvite(
-  invite:ReceivedAssignmentInvite,
+  invite:ReceivedAssignmentInvite,cachedOnly=false,
 ):Promise<void>{
   const s=requireSession()
-  const peer=await pinnedPeer(invite.ownerAccountId)
+  const peer=await pinnedPeer(invite.ownerAccountId,!cachedOnly)
   if(peer.accountSpki!==invite.ownerAccountSpki
     ||!await verify(await importSpki(peer.accountSpki),
       domain('invite')+invite.contract,invite.signature)) {
