@@ -105,17 +105,20 @@ final class AssignmentV1Controller extends Controller
         [$actor]=$this->sync->actor($r);
         $raw=$r->json('contract');
         $shape=is_string($raw)?json_decode($raw,true,32):null;
-        $v2=is_array($shape)&&($shape['version']??null)===2;
+        $policyVersion=is_array($shape)?($shape['version']??null):null;
+        $withRequirements=in_array($policyVersion,[2,3],true);
         $keys=[
             'version','operationId','assignmentId','ownerAccountId',
             'rootPolicyHash','previousPolicyHash',
             'fromPolicyRevision','toPolicyRevision','photoGoal','allowedMedia',
         ];
-        if($v2)$keys=array_merge($keys,[
+        if($withRequirements)$keys=array_merge($keys,[
             'requiredCategory','descriptionMinLength','requiredGps',
         ]);
-        $c=$this->signed($r,$actor,$v2
-            ?'pb3.assignment-policy.v2':'pb3.assignment-policy.v1',$keys);
+        $c=$this->signed($r,$actor,
+            $policyVersion===3?'pb3.assignment-policy.v3'
+                :($policyVersion===2?'pb3.assignment-policy.v2'
+                :'pb3.assignment-policy.v1'),$keys);
         C::policyAmendment($c,$actor->id,$assignmentId);
         $hash=hash('sha256',$r->json('contract'));
         return DB::transaction(function()use($c,$actor,$assignmentId,$r,$hash){
@@ -143,18 +146,21 @@ final class AssignmentV1Controller extends Controller
             $previousValues=$a->latest_policy_contract!==null
                 ?json_decode($a->latest_policy_contract,true,32,JSON_THROW_ON_ERROR)
                 :[];
-            $v2Already=(($previousValues['version']??null)===2);
-            // An old v1 client is not allowed to silently disable new v2
-            // required metadata by continuing to edit only the photo goal.
-            abort_unless(!$v2Already||$c['version']===2,409);
-            $currentCategory=$v2Already?$previousValues['requiredCategory']:false;
-            $currentMinLength=$v2Already?$previousValues['descriptionMinLength']:0;
-            $currentGps=$v2Already?$previousValues['requiredGps']:false;
-            $differentRules=$c['version']===2
+            $oldVersion=(int)($previousValues['version']??1);
+            // No signed client is allowed to downgrade away existing capture
+            // requirements or newly granted media capabilities.
+            abort_unless($c['version']>=$oldVersion,409);
+            $oldRules=$oldVersion>=2;
+            $currentCategory=$oldRules?$previousValues['requiredCategory']:false;
+            $currentMinLength=$oldRules?$previousValues['descriptionMinLength']:0;
+            $currentGps=$oldRules?$previousValues['requiredGps']:false;
+            $currentMedia=$oldVersion===3?$previousValues['allowedMedia']:['photo'];
+            $differentRules=$c['version']>=2
                 &&($c['requiredCategory']!==$currentCategory
                     ||$c['descriptionMinLength']!==$currentMinLength
                     ||$c['requiredGps']!==$currentGps);
-            abort_unless($differentRules
+            $differentMedia=$c['allowedMedia']!==$currentMedia;
+            abort_unless($differentRules||$differentMedia
                 ||($a->photo_goal===null?null:(int)$a->photo_goal)!==$c['photoGoal'],409);
             $previous=hash('sha256',$a->latest_policy_contract??$a->contract_json);
             abort_unless(hash_equals($previous,$c['previousPolicyHash']),409);
@@ -295,7 +301,27 @@ final class AssignmentV1Controller extends Controller
                 ->where('p.state','active')->where('p.expires_at','>',$now)
                 ->where('g.state','active')->where('g.expires_at','>',$now)
                 ->selectRaw('COUNT(*)');
-        },'confirmed_photo_count')->orderBy('a.id')->limit(51)->get();
+        },'confirmed_photo_count');
+        // Independent and full server-derived counts. Never infer progress
+        // from the first 50 paginated receipts or a client-reported count.
+        foreach(['video','audio'] as $kind){
+            $rows->selectSub(function($sub)use($now,$kind){
+                $sub->from('assignment_media_submissions_v1 as s')
+                    ->join('media_files_v1 as m','m.id','=','s.media_id')
+                    ->join('media_recipient_grants_v1 as g','g.id','=','s.media_grant_id')
+                    ->whereColumn('s.assignment_id','a.id')
+                    ->where('s.media_type',$kind)
+                    ->whereColumn('m.account_id','s.contributor_account_id')
+                    ->whereColumn('m.contract_hash','s.media_contract_hash')
+                    ->whereColumn('g.media_id','s.media_id')
+                    ->whereColumn('g.owner_account_id','s.contributor_account_id')
+                    ->whereColumn('g.recipient_account_id','a.owner_account_id')
+                    ->where('m.state','active')->where('m.expires_at','>',$now)
+                    ->where('g.state','active')->where('g.expires_at','>',$now)
+                    ->selectRaw('COUNT(*)');
+            },'confirmed_'.$kind.'_count');
+        }
+        $rows=$rows->orderBy('a.id')->limit(51)->get();
         $more=$rows->count()>50;
         $items=$rows->take(50)->map(fn($x)=>[
             'assignmentId'=>$x->id,'ownerAccountId'=>$x->owner_account_id,
@@ -303,6 +329,8 @@ final class AssignmentV1Controller extends Controller
             'policyRevision'=>(int)$x->policy_revision,
             'photoGoal'=>$x->photo_goal===null?null:(int)$x->photo_goal,
             'confirmedPhotoCount'=>(int)$x->confirmed_photo_count,
+            'confirmedVideoCount'=>(int)$x->confirmed_video_count,
+            'confirmedAudioCount'=>(int)$x->confirmed_audio_count,
             'startsAt'=>(int)$x->starts_at,
             'endsAt'=>$x->ends_at===null?null:(int)$x->ends_at,
             'privateEnvelope'=>json_decode($x->private_envelope_json,true,16,JSON_THROW_ON_ERROR),

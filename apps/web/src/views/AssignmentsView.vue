@@ -9,12 +9,15 @@ import {
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
   queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
+  queueAssignmentMediaSubmission, listAssignmentMediaSubmissions,
+  signedAllowedAssignmentMedia,verifySignedAssignmentPolicy,
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
   signedPolicyRequirements,verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
-  CaptureRequirements, AssignmentMonthlyUsage,
+  CaptureRequirements, AssignmentMonthlyUsage, AllowedAssignmentMedia,
+  AssignmentMediaSubmission,
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import {
@@ -27,12 +30,17 @@ import {
 import { queueRecipientGrant, flushRecipientGrants, readReceivedPhoto } from '../features/sharing/grant-flow'
 import { listLocalPhotos, flushOutbox } from '../features/photo-sync/application/p1-photo'
 import type { StoredPhoto } from '../features/photo-sync/application/p1-photo'
+import {listLocalMedia} from '../features/media/application/media-outbox'
+import type {StoredMedia} from '../features/media/application/media-outbox'
+import {queueMediaRecipientGrant,flushMediaGrants,readReceivedMediaGrant} from '../features/media/application/media-grants'
 
 type VisibleAssignment={
   id:string;ownerAccountId:string;data:PrivateAssignment|null
   state:string;revision:number;policyRevision:number
-  requirements:CaptureRequirements;localState?:string;goal:number|null
+  requirements:CaptureRequirements;allowedMedia:AllowedAssignmentMedia
+  localState?:string;goal:number|null
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
+  confirmedVideos:number|null;confirmedAudio:number|null
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
 }
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
@@ -43,6 +51,8 @@ const invites=ref<ReceivedAssignmentInvite[]>([])
 const operations=ref<AssignmentOperation[]>([])
 const monthlyUsage=ref<AssignmentMonthlyUsage|null>(null)
 const photos=ref<StoredPhoto[]>([])
+const mediaFiles=ref<StoredMedia[]>([])
+const mediaSubmissions=ref<AssignmentMediaSubmission[]>([])
 const submissions=ref<Submission[]>([])
 const selectedId=ref('')
 const title=ref('')
@@ -52,6 +62,8 @@ const editedGoal=ref<string|number>('')
 const editedRequiredCategory=ref(false)
 const editedDescriptionMin=ref<string|number>(0)
 const editedRequiredGps=ref(false)
+const editedAllowVideo=ref(false)
+const editedAllowAudio=ref(false)
 const recipientId=ref('')
 const ownerCheck=ref<SafetyCheck|null>(null)
 const contributorCheck=ref<SafetyCheck|null>(null)
@@ -65,6 +77,7 @@ const notice=ref('')
 const search=ref('')
 const showCreate=ref(false)
 const previewUrl=ref('')
+const previewMime=ref('image/jpeg')
 const filters=ref<'all'|'active'>('active')
 
 const selected=computed(()=>assignments.value.find(a=>a.id===selectedId.value)??null)
@@ -85,6 +98,10 @@ const pendingStateChange=computed(()=>selectedOperations.value.some(op=>
     &&(op.state==='queued'||op.state==='retry')))
 const pendingPolicyChange=computed(()=>selectedOperations.value.some(op=>
   op.kind==='policy'&&(op.state==='queued'||op.state==='retry')))
+const eligibleMedia=computed(()=>mediaFiles.value.filter(x=>
+  x.state==='synced'&&x.expiresAt>Date.now()
+  &&(x.mediaType==='video'||x.mediaType==='audio')
+  &&(selected.value?.allowedMedia.includes(x.mediaType)??false)))
 const eligiblePhotos=computed(()=>photos.value
   .filter(p=>p.state==='synced'
     &&(!p.capture||p.capture.assignmentId===selectedId.value))
@@ -97,7 +114,8 @@ function pendingReceiptCount(assignmentId:string):number{
   const queuedCaptures=photos.value.filter(p=>p.capture?.assignmentId===assignmentId
     &&(p.state==='queued'||p.state==='retry')).length
   const queuedSubmissions=operations.value.filter(op=>{
-    if(op.kind!=='submit'||(op.state!=='queued'&&op.state!=='retry'))return false
+    if(!['submit','media-submit'].includes(op.kind)
+      ||(op.state!=='queued'&&op.state!=='retry'))return false
     try{
       const body=JSON.parse(op.contract) as {assignmentId?:string}
       return body.assignmentId===assignmentId
@@ -111,6 +129,7 @@ function cleanPreview():void{
 }
 function resetSensitive():void {
   assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
+  mediaFiles.value=[];mediaSubmissions.value=[]
   monthlyUsage.value=null
   submissions.value=[];selectedId.value='';ownerCheck.value=null
   contributorCheck.value=null;showingOfflineSnapshot.value=false;cleanPreview()
@@ -128,11 +147,12 @@ async function hydrate():Promise<void>{
   const identity=activeSession.value
   if(!identity){resetSensitive();return}
   // Render durable local drafts and signed queued operations BEFORE any HTTP.
-  const [local,ops,localPhotos]=await Promise.all([
+  const [local,ops,localPhotos,localMedia]=await Promise.all([
     listLocalAssignmentDrafts(),listAssignmentOperations(),listLocalPhotos(),
+    listLocalMedia(),
   ])
   if(activeSession.value!==identity)return
-  operations.value=ops;photos.value=localPhotos
+  operations.value=ops;photos.value=localPhotos;mediaFiles.value=localMedia
   const localRows:VisibleAssignment[]=await Promise.all(local.map(async item=>{
     let data:PrivateAssignment|null=null
     try{data=await openOwnerAssignment(identity.pkg,item.id,item.privateEnvelope)}
@@ -141,8 +161,9 @@ async function hydrate():Promise<void>{
       id:item.id,ownerAccountId:item.ownerAccountId,data,
       state:'active',revision:1,policyRevision:1,
       requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
+      allowedMedia:['photo'],
       localState:item.state,goal:item.photoGoal,
-      confirmedPhotos:null,
+      confirmedPhotos:null,confirmedVideos:null,confirmedAudio:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
     }
   }))
@@ -228,6 +249,9 @@ async function hydrate():Promise<void>{
       state:item.state,revision:item.revision,policyRevision:item.policyRevision,
       requirements:signedPolicyRequirements(item),localState:previous?.localState,
       goal:item.photoGoal,confirmedPhotos:offline?null:item.confirmedPhotoCount,
+      confirmedVideos:offline?null:(item.confirmedVideoCount??null),
+      confirmedAudio:offline?null:(item.confirmedAudioCount??null),
+      allowedMedia:signedAllowedAssignmentMedia(item),
       createdAt:previous?.createdAt??item.startsAt,
       isOwner:item.ownerAccountId===identity.accountId,
       startsAt:item.startsAt,endsAt:item.endsAt,
@@ -290,9 +314,11 @@ function choose(assignmentId:string):void{
   editedRequiredCategory.value=chosen?.requirements.requiredCategory??false
   editedDescriptionMin.value=chosen?.requirements.descriptionMinLength??0
   editedRequiredGps.value=chosen?.requirements.requiredGps??false
+  editedAllowVideo.value=chosen?.allowedMedia.includes('video')??false
+  editedAllowAudio.value=chosen?.allowedMedia.includes('audio')??false
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
-  submissions.value=[];cleanPreview()
+  submissions.value=[];mediaSubmissions.value=[];cleanPreview()
   if(selected.value?.isOwner)void loadSubmissions()
 }
 async function loadSubmissions():Promise<void>{
@@ -300,8 +326,12 @@ async function loadSubmissions():Promise<void>{
   const owner=selected.value
   if(!owner?.isOwner||!activeSession.value?.online)return
   try{
-    const result=await listAssignmentSubmissions(id)
-    if(selectedId.value===id)submissions.value=result
+    const [result,mediaResult]=await Promise.all([
+      listAssignmentSubmissions(id),listAssignmentMediaSubmissions(id),
+    ])
+    if(selectedId.value===id){
+      submissions.value=result;mediaSubmissions.value=mediaResult.items
+    }
   }catch(e){error.value=explain(e)}
 }
 async function changeState(action:'finish'|'resume'):Promise<void>{
@@ -329,6 +359,10 @@ async function changeGoal():Promise<void>{
       photoGoal:value,requiredCategory:editedRequiredCategory.value,
       descriptionMinLength:Number(editedDescriptionMin.value),
       requiredGps:editedRequiredGps.value,
+      allowedMedia:[
+        'photo',...(editedAllowVideo.value?['video']:[]),
+        ...(editedAllowAudio.value?['audio']:[]),
+      ] as AllowedAssignmentMedia,
     })
     if(activeSession.value?.online&&navigator.onLine)await flushAssignmentOutbox()
     await refresh()
@@ -419,11 +453,58 @@ async function submit(photo:StoredPhoto):Promise<void>{
     notice.value='Зашифрованный grant и отправка задания поставлены в очередь'
   })
 }
+async function submitMedia(media:StoredMedia):Promise<void>{
+  await operate(async()=>{
+    const target=selected.value
+    if(!target||target.isOwner||media.state!=='synced'
+      ||!['video','audio'].includes(media.mediaType))
+      throw Error('assignment.media_not_synced')
+    if(contributorCheck.value?.accountId!==target.ownerAccountId
+      ||!contributorCheck.value.confirmed)
+      throw Error('Подтвердите отпечаток владельца задания')
+    // Fresh signed owner permission must be checked BEFORE any recipient
+    // envelope is created. Offline queueing may use only signed cached
+    // policy; server always enforces its CURRENT revision on admission.
+    const online=!!activeSession.value?.online&&navigator.onLine
+    const snapshots=online
+      ?(await listServerAssignments()).items
+      :await listCachedAssignmentSnapshots()
+    const policy=snapshots.find(x=>x.assignmentId===target.id)
+    if(!policy)throw Error('assignment.policy_not_available')
+    await verifySignedAssignmentPolicy(policy,!online)
+    if(policy.state!=='active'
+      ||!signedAllowedAssignmentMedia(policy).includes(media.mediaType)
+      ||policy.startsAt>Date.now()
+      ||(policy.endsAt!==null&&policy.endsAt<=Date.now()))
+      throw Error('assignment.media_not_allowed')
+    if(!window.confirm(
+      'Это личное '+(media.mediaType==='video'?'видео':'аудио')
+      +'. Передать владельцу задания E2EE-ключ всего файла, включая исходное имя и приватные метаданные? Отзыв не удалит уже скачанные копии.'
+    ))return
+    const grantId=await queueMediaRecipientGrant(media.mediaId,target.ownerAccountId)
+    await queueAssignmentMediaSubmission(target.id,media.mediaId,grantId)
+    await flushMediaGrants()
+    await flushAssignmentOutbox()
+    operations.value=await listAssignmentOperations()
+    notice.value='Подписанный media-grant и отправка сохранены в очереди. Прогресс изменится только после серверного подтверждения.'
+  })
+}
+async function openMediaSubmission(grantId:string):Promise<void>{
+  await operate(async()=>{
+    // The owner must have independently pinned the contributor fingerprint.
+    const result=await readReceivedMediaGrant(grantId)
+    cleanPreview()
+    previewUrl.value=URL.createObjectURL(result.blob)
+    previewMime.value=result.metadata.mime
+    notice.value='Видео/аудио и приватные метаданные расшифрованы на устройстве'
+  })
+}
 async function openSubmission(grantId:string):Promise<void>{
   await operate(async()=>{
     const blob=await readReceivedPhoto(grantId) // verifies pinned owner + DEK and server ACL
     cleanPreview()
     previewUrl.value=URL.createObjectURL(blob)
+    previewMime.value='image/jpeg'
     notice.value='Фотография расшифрована только на этом устройстве'
   })
 }
@@ -552,7 +633,7 @@ onUnmounted(cleanPreview)
         </p>
         <p v-if="selected.data" class="muted">{{ selected.data.instructions }}</p>
         <p><code>{{ selected.id }}</code></p>
-        <p class="muted">Тип: фото · {{ selected.goal===null?'без цели':'Цель: '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
+        <p class="muted">Разрешённые типы: {{ selected.allowedMedia.join(', ') }} · {{ selected.goal===null?'Без цели по фото':'Фото: цель '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
         <p class="muted">
           Подписанные требования: категория {{ selected.requirements.requiredCategory?'обязательна':'необязательна' }};
           описание минимум {{ selected.requirements.descriptionMinLength }} символов;
@@ -561,6 +642,11 @@ onUnmounted(cleanPreview)
         <p v-if="selected.confirmedPhotos!==null" class="muted">
           Подтверждено сервером: {{ selected.confirmedPhotos }}
           <template v-if="selected.goal!==null"> / {{ selected.goal }} · {{ progressPercentage(selected) }}%</template>
+        </p>
+        <p v-if="selected.confirmedVideos!==null&&selected.confirmedAudio!==null"
+          class="muted" data-testid="assignment-media-counts">
+          Видео: {{ selected.confirmedVideos }} · Аудио: {{ selected.confirmedAudio }}
+          (только при действующих E2EE-разрешениях)
         </p>
         <p v-if="pendingReceiptCount(selected.id)>0" class="muted">
           Локально ожидают отправки: {{ pendingReceiptCount(selected.id) }} · не включены в прогресс
@@ -593,6 +679,15 @@ onUnmounted(cleanPreview)
               <input id="assignment-gps-required" v-model="editedRequiredGps" type="checkbox">
               GPS обязателен
             </label>
+            <p class="muted">Дополнительные типы — отдельное добровольное расширение подписанной политики. Ранее созданные задания разрешают только фото.</p>
+            <label class="checkline">
+              <input id="assignment-allow-video" v-model="editedAllowVideo" type="checkbox">
+              Разрешить видео (E2EE)
+            </label>
+            <label class="checkline">
+              <input id="assignment-allow-audio" v-model="editedAllowAudio" type="checkbox">
+              Разрешить аудио (E2EE)
+            </label>
             <button type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeGoal">Подписать новые правила</button>
@@ -617,10 +712,17 @@ onUnmounted(cleanPreview)
           <button v-if="ownerCheck?.confirmed" type="button" :disabled="busy||selected.localState==='queued'" @click="invite">Пригласить исполнителя</button>
           <h3>Подтверждённые материалы</h3>
           <button type="button" :disabled="busy" @click="loadSubmissions">Обновить материалы</button>
-          <p v-if="!submissions.length" class="muted">Нет подтверждённых отправок или доступа по E2EE grant.</p>
+          <p v-if="!submissions.length&&!mediaSubmissions.length" class="muted">Нет подтверждённых отправок или доступа по E2EE grant.</p>
           <div v-for="entry in submissions" :key="entry.submissionId" class="photo-row">
             <div><strong>{{ entry.photoId.slice(0,8) }}</strong><small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small></div>
             <button type="button" :disabled="busy" @click="openSubmission(entry.photoGrantId)">Просмотр</button>
+          </div>
+          <div v-for="entry in mediaSubmissions" :key="entry.submissionId" class="photo-row" data-testid="assignment-media-submission">
+            <div>
+              <strong>{{ entry.mediaType==='video'?'Видео':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
+              <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
+            </div>
+            <button type="button" :disabled="busy" @click="openMediaSubmission(entry.mediaGrantId)">Открыть медиа задания</button>
           </div>
         </template>
 
@@ -640,6 +742,19 @@ onUnmounted(cleanPreview)
             <button type="button" :disabled="busy||!contributorCheck?.confirmed" @click="submit(photo)">Отправить в задание</button>
           </div>
           <p v-if="!eligiblePhotos.length" class="muted">Для этого задания нет подходящих синхронизированных фотографий.</p>
+          <template v-if="selected.allowedMedia.some(kind=>kind==='video'||kind==='audio')">
+            <h3>Видео и аудио · из Browser</h3>
+            <p class="muted">Понадобятся заранее загруженный зашифрованный файл, подписанное разрешение типа в задании и отдельное подтверждение передачи приватных метаданных. Для видео/аудио требования GPS, категории и описания, предназначенные для камеры фото, пока не заявляются как выполненные.</p>
+            <div v-for="file in eligibleMedia" :key="file.key" class="photo-row">
+              <div><strong>{{ file.mediaType==='video'?'Видео':'Аудио' }} · {{ file.mediaId.slice(0,8) }}</strong>
+                <small>{{ file.state }} · {{ file.plainBytes.toLocaleString('ru-RU') }} байт</small>
+              </div>
+              <button type="button" :disabled="busy||!contributorCheck?.confirmed"
+                @click="submitMedia(file)">Отправить медиа в задание</button>
+            </div>
+            <p v-if="!eligibleMedia.length" class="muted">Нет синхронизированных файлов разрешённого типа.</p>
+            <RouterLink to="/browser">Импортировать видео или аудио</RouterLink>
+          </template>
           <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Камера задания</RouterLink>
         </template>
       </div>
@@ -675,7 +790,9 @@ onUnmounted(cleanPreview)
 
       <div v-if="previewUrl" class="foundation-card">
         <h2>Расшифровано на устройстве</h2>
-        <img :src="previewUrl" class="decrypted-preview" alt="Полученная зашифрованная фотография">
+        <img v-if="previewMime.startsWith('image/')" :src="previewUrl" class="decrypted-preview" alt="Полученная зашифрованная фотография">
+        <video v-else-if="previewMime.startsWith('video/')" :src="previewUrl" class="decrypted-preview" controls playsinline preload="metadata"/>
+        <audio v-else-if="previewMime.startsWith('audio/')" :src="previewUrl" controls preload="metadata"/>
         <button type="button" @click="cleanPreview">Закрыть</button>
       </div>
 
