@@ -1,17 +1,39 @@
-# PB3 — configurable-brand privacy media application
+# PB3 — configurable-brand private media platform
 
-**Status: P0 / preparation.** This is a new, independent implementation repository, not a deployment or automatically merged copy of PB2.
+**Status:** P0 foundation in progress. New independent source tree with a real Laravel/Vue skeleton, **not** a production-ready photo application.
 
-**Start here:** [Normative specification](ts.md) · [engineering rules](AGENTS.md) · [P0 delivery](docs/planning/P0-DELIVERY.md) · [source provenance](docs/architecture/PB2-PROVENANCE.md).
+**Read:** [Specification](ts.md) · [Agent rules](AGENTS.md) · [P0 checklist](docs/planning/P0-DELIVERY.md) · [P0-02 bootstrap](docs/planning/P0-02-FOUNDATION.md) · [source provenance](docs/architecture/PB2-PROVENANCE.md).
 
-## Release scope
+## Mandatory development stages
 
-P0 setup, then **four mandatory phases**: P1 encrypted media/identity/storage; P2 accepted Fieldwork UI + Matrix Messenger; P3 Recovery Vault, payments, safety, admin, signed PWA; P4 personal/backup S3, Unlimited+ Matrix homeserver and full release readiness. IPFS is not included.
+P0 preparation, then four stages **P1–P4**: P1 identity/E2EE/media/storage; P2 accepted Fieldwork frontend + Matrix Messenger; P3 Recovery Vault, payments, security, admin and signed PWA; P4 BYO/replica S3 and release readiness. IPFS is excluded.
 
-Frontend and product name are configurable. Latest source UX: [PB2 PR #56, commit daca24a4](https://github.com/1troitsky/photobunker-new/tree/daca24a4a38c62473859b2b54b4999d50400c491/docs/ux). Do not copy demo UI code and claim production integration.
+Only the application *skeleton* is introduced at P0-02. Its screens contain intentionally neutral placeholders; real key-only identity, media, S3 lifecycles, backup, Matrix and billing are not implemented here.
 
-## Current execution state
+## Technology and reproducible baseline
 
-Only P0 guardrails, reference documents and configuration are being introduced. The Laravel/Vue application, database schema, real media sync, Matrix and production PWA are **not implemented in this repository yet**.
+- **PHP 8.4.27+ <8.5 OR PHP 8.5.12+ <8.6**, Laravel >=13.4 <14; locked framework currently **13.39.0**.
+- PostgreSQL 18; Garage 2.5 S3 (disposable local/CI), no production credentials.
+- Vue 3, Vite 7, strict TypeScript, frozen pnpm workspace.
+- Fieldwork shell 64px Header / 82px Dock; brand obtained from config rather than hardcoded app name.
+- PWA manifest only: **Service Worker intentionally not registered** until signed-build trust is reviewed.
 
-Backend security floor: **PHP 8.4.27+ before 8.5 or PHP 8.5.12+ before 8.6; Laravel >=13.4 <14.** Deployment must satisfy the same gate.
+## Local quick start
+
+Use **patched PHP**, Node 22+, pnpm 10.20.0. Refer to [P0-02](docs/planning/P0-02-FOUNDATION.md) for setup of PostgreSQL and Garage.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+
+cd apps/api
+composer install --no-interaction
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan serve --host=127.0.0.1 --port=8000
+```
+
+These commands are setup instructions, not a claim they were executed locally. CI verifies against compliant PHP, isolated DB/S3, and frontend build.
+
+**UX evidence:** original Fieldwork PR #56 at [`daca24a4`](https://github.com/1troitsky/photobunker-new/tree/daca24a4a38c62473859b2b54b4999d50400c491/docs/ux); do not copy mock frontend state into production business code.
