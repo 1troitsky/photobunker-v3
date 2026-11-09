@@ -7,7 +7,7 @@ import { listOutgoingGrants } from '../../sharing/grant-flow'
 import { sealAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
 import type { AssignmentEnvelope, AssignmentInviteEnvelope, PrivateAssignment } from '../infrastructure/assignment-crypto'
 
-export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'
+export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'state'
 export type AssignmentOperationState='queued'|'retry'|'sent'|'conflict'
 
 export interface AssignmentOperation {
@@ -42,6 +42,8 @@ export type AssignmentListing={
   policyRevision:number
   policyContract:string
   policySignature:string
+  stateContract:string|null
+  stateSignature:string|null
   privateEnvelope:AssignmentEnvelope
   startsAt:number
   endsAt:number|null
@@ -91,12 +93,15 @@ const db=new AssignmentDB()
 function assertSame(s:ReturnType<typeof requireSession>):void {
   if(activeSession.value!==s)throw new Error('identity.changed')
 }
-function signDomain(kind:AssignmentOperationKind):string {
-  return 'pb3.assignment-'+(
-    kind==='create'?'':kind==='invite'?'invite':kind==='accept'?'accept':'submit')+'.v1\n'
-}
 function domain(kind:AssignmentOperationKind):string{
-  return kind==='create'?'pb3.assignment.v1\n':signDomain(kind)
+  const signedDomains:Record<AssignmentOperationKind,string>={
+    create:'pb3.assignment.v1\n',
+    invite:'pb3.assignment-invite.v1\n',
+    accept:'pb3.assignment-accept.v1\n',
+    submit:'pb3.assignment-submit.v1\n',
+    state:'pb3.assignment-state.v1\n',
+  }
+  return signedDomains[kind]
 }
 
 async function signedOperation(
@@ -175,14 +180,43 @@ export async function verifySignedAssignmentPolicy(item:AssignmentListing):Promi
   let c:Record<string,unknown>
   try{c=JSON.parse(item.policyContract) as Record<string,unknown>}
   catch{throw new Error('assignment.invalid_capture_policy')}
+  // The owner's immutable creation policy never changes when an assignment
+  // is finished/resumed. Its current state MUST have a second signed command.
   if(c.version!==1||c.assignmentId!==item.assignmentId
-    ||c.ownerAccountId!==item.ownerAccountId||c.state!==item.state
-    ||c.revision!==item.revision||c.policyRevision!==item.policyRevision
+    ||c.ownerAccountId!==item.ownerAccountId||c.state!=='active'
+    ||c.revision!==1||c.policyRevision!==item.policyRevision
     ||c.photoGoal!==item.photoGoal||c.startsAt!==item.startsAt
     ||c.endsAt!==item.endsAt||!Array.isArray(c.allowedMedia)
     ||c.allowedMedia.length!==1||c.allowedMedia[0]!=='photo'
     ||JSON.stringify(c.privateEnvelope)!==JSON.stringify(item.privateEnvelope)){
     throw new Error('assignment.policy_snapshot_mismatch')
+  }
+  if(item.revision===1){
+    if(item.state!=='active'||item.stateContract!==null
+      ||item.stateSignature!==null)throw new Error('assignment.state_not_authenticated')
+  }else{
+    if(!Number.isInteger(item.revision)||item.revision<2
+      ||typeof item.stateContract!=='string'
+      ||typeof item.stateSignature!=='string'
+      ||!await verify(await importSpki(trustedSpki),
+        'pb3.assignment-state.v1\n'+item.stateContract,item.stateSignature)){
+      throw new Error('assignment.state_not_authenticated')
+    }
+    let transition:Record<string,unknown>
+    try{transition=JSON.parse(item.stateContract) as Record<string,unknown>}
+    catch{throw new Error('assignment.state_not_authenticated')}
+    const hash=hex(await digest(new TextEncoder().encode(item.policyContract)))
+    if(transition.version!==1||transition.assignmentId!==item.assignmentId
+      ||transition.ownerAccountId!==item.ownerAccountId
+      ||transition.policyHash!==hash
+      ||transition.policyRevision!==item.policyRevision
+      ||transition.fromRevision!==item.revision-1
+      ||transition.toRevision!==item.revision
+      ||!((transition.action==='finish'&&transition.state==='finished')
+        ||(transition.action==='resume'&&transition.state==='active'))
+      ||transition.state!==item.state){
+      throw new Error('assignment.state_snapshot_mismatch')
+    }
   }
   assertSame(s)
 }
@@ -253,6 +287,40 @@ export async function signedCaptureBinding(
     assignmentId:policy.assignmentId,ownerAccountId:policy.ownerAccountId,
     policyRevision:policy.policyRevision,policyHash,capturedAt,
   }
+}
+
+/** Signed owner lifecycle commands are durable and do not delete media. */
+export async function queueAssignmentStateTransition(
+  assignmentId:string,action:'finish'|'resume',
+):Promise<string>{
+  const s=requireSession()
+  const row=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
+  if(!row||row.listing.ownerAccountId!==s.accountId)
+    throw new Error('assignment.state_policy_not_cached')
+  await verifySignedAssignmentPolicy(row.listing)
+  const a=row.listing
+  if(!((action==='finish'&&a.state==='active')
+    ||(action==='resume'&&a.state==='finished')))
+    throw new Error('assignment.invalid_state_transition')
+  if(action==='resume'&&a.endsAt!==null&&a.endsAt<=Date.now())
+    throw new Error('assignment.assignment_expired')
+  const ops=await listAssignmentOperations()
+  if(ops.some(op=>op.kind==='state'
+    &&(op.state==='queued'||op.state==='retry')
+    &&(JSON.parse(op.contract) as {assignmentId:string}).assignmentId===assignmentId)){
+    throw new Error('assignment.state_change_pending')
+  }
+  const policyHash=hex(await digest(new TextEncoder().encode(a.policyContract)))
+  const payload={
+    version:1,operationId:crypto.randomUUID(),assignmentId,
+    ownerAccountId:s.accountId,policyHash,policyRevision:a.policyRevision,
+    fromRevision:a.revision,toRevision:a.revision+1,action,
+    state:action==='finish'?'finished':'active',
+  }
+  const op=await signedOperation('state',
+    '/assignments/v1/'+encodeURIComponent(assignmentId)+'/state',payload)
+  await persist(op)
+  return op.id
 }
 
 export async function queueAssignmentInvitation(
@@ -400,7 +468,7 @@ async function flushPass():Promise<void>{
     }catch(e){
       const reason=e instanceof Error?e.message:'assignment.network_error'
       await db.operations.update(op.id,{
-        state:/^api\.http_(401|403|410|422)$/.test(reason)?'conflict':'retry',
+        state:/^api\.http_(401|403|409|410|422)$/.test(reason)?'conflict':'retry',
         lastError:/^api\.http_\d+$/.test(reason)?reason:'assignment.retry_required',
       })
       if(!navigator.onLine)return
