@@ -168,6 +168,30 @@ final class AssignmentV1Test extends TestCase
         return $this->signed($role,'pb3.assignment-state.v1',$payload);
     }
 
+    public function test_r2_01_owner_state_transition_persists_exact_subsecond_receipt():void
+    {
+        $this->travelTo(now()->startOfSecond()->addMilliseconds(750));
+        $expected=now()->getTimestampMs();
+        $this->createAssignment();
+        $finish=$this->signedState('owner','finish',1);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/state',$finish)
+            ->assertOk()->assertJsonPath('state','finished');
+        $event=DB::table('assignment_state_events_v1')
+            ->where('assignment_id',$this->assignmentId)->first();
+        $this->assertNotNull($event);
+        $this->assertSame($expected,(int)$event->occurred_at_ms);
+        $createdSecond=\Carbon\CarbonImmutable::parse($event->created_at,'UTC')
+            ->getTimestampMs();
+        $this->assertSame(750,$expected%1000);
+        $this->assertSame($expected-750,$createdSecond);
+        // A lost-ACK replay must preserve the original event receipt.
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/state',$finish)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertDatabaseCount('assignment_state_events_v1',1);
+        $this->assertSame($expected,(int)DB::table('assignment_state_events_v1')
+            ->where('assignment_id',$this->assignmentId)->value('occurred_at_ms'));
+    }
+
     public function test_owner_finish_resume_are_signed_versioned_idempotent_and_keep_invites():void
     {
         $this->createAssignment();

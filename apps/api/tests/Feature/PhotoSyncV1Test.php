@@ -169,6 +169,7 @@ final class PhotoSyncV1Test extends TestCase {
             'from_revision'=>1,'to_revision'=>2,'state'=>'finished',
             'contract_hash'=>str_repeat('a',64),'contract_json'=>'{}',
             'owner_signature'=>'fixture','created_at'=>$finishAt,
+            'occurred_at_ms'=>$finishAt->getTimestampMs(),
         ]);
         $base=[
             'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
@@ -186,11 +187,13 @@ final class PhotoSyncV1Test extends TestCase {
         // Explicit signed resume opens the next interval; it does not make
         // previously forbidden captures inside the finished window valid.
         $this->travel(3)->seconds();
+        $resumeAt=now();
         DB::table('assignment_state_events_v1')->insert([
             'operation_id'=>(string)Str::uuid(),'assignment_id'=>$assignment,
             'from_revision'=>2,'to_revision'=>3,'state'=>'active',
             'contract_hash'=>str_repeat('b',64),'contract_json'=>'{}',
-            'owner_signature'=>'fixture','created_at'=>now(),
+            'owner_signature'=>'fixture','created_at'=>$resumeAt,
+            'occurred_at_ms'=>$resumeAt->getTimestampMs(),
         ]);
         DB::table('assignment_records_v1')->where('id',$assignment)
             ->update(['state'=>'active','revision'=>3]);
@@ -230,6 +233,90 @@ final class PhotoSyncV1Test extends TestCase {
             'capturedAt'=>$start+1000,
         ];
         $this->reserve($this->assignmentCaptureFixture($capture))
+            ->assertOk()->assertJsonPath('state','pending');
+    }
+
+    public function test_r2_01_subsecond_capture_preceding_finish_is_accepted():void {
+        // Reproduce Round 2 evidence: browser capture at XX.450, finish at
+        // XX.750. Laravel truncates created_at to XX.000 at SQL bind time.
+        $this->travelTo(now()->startOfSecond()->addMilliseconds(750));
+        $finishMs=now()->getTimestampMs();
+        $assignment=(string)Str::uuid();
+        $policy='{"version":1,"allowedMedia":["photo"]}';
+        $hash=hash('sha256',$policy);
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$assignment,'owner_account_id'=>$this->account,
+            'operation_id'=>(string)Str::uuid(),'contract_hash'=>$hash,
+            'contract_json'=>$policy,'owner_signature'=>'fixture',
+            'private_envelope_json'=>'{}','state'=>'finished',
+            'revision'=>2,'policy_revision'=>1,'photo_goal'=>30,
+            'starts_at'=>$finishMs-3600000,'ends_at'=>null,
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $operationId=(string)Str::uuid();
+        DB::table('assignment_state_events_v1')->insert([
+            'operation_id'=>$operationId,'assignment_id'=>$assignment,
+            'from_revision'=>1,'to_revision'=>2,'state'=>'finished',
+            'contract_hash'=>str_repeat('a',64),'contract_json'=>'{}',
+            'owner_signature'=>'fixture','created_at'=>now(),
+            'occurred_at_ms'=>$finishMs,
+        ]);
+        $record=DB::table('assignment_state_events_v1')
+            ->where('operation_id',$operationId)->first();
+        $storedSeconds=\Carbon\CarbonImmutable::parse($record->created_at,'UTC')
+            ->getTimestampMs();
+        $this->assertSame(750,$finishMs%1000);
+        $this->assertSame($finishMs-750,$storedSeconds);
+        $scope=[
+            'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
+            'policyRevision'=>1,'policyHash'=>$hash,
+            'capturedAt'=>$finishMs-300,
+        ];
+        $this->reserve($this->assignmentCaptureFixture($scope))
+            ->assertOk()->assertJsonPath('state','pending');
+        $scope['capturedAt']=$finishMs+100;
+        $this->reserve($this->assignmentCaptureFixture($scope))
+            ->assertConflict();
+        $scope['capturedAt']=$finishMs;
+        $this->reserve($this->assignmentCaptureFixture($scope))
+            ->assertConflict();
+        $this->assertDatabaseCount('photo_records',1);
+    }
+
+    public function test_r2_01_legacy_second_only_events_fail_closed_on_ambiguous_capture():void {
+        $this->travelTo(now()->startOfSecond()->addMilliseconds(750));
+        $finishMs=now()->getTimestampMs();
+        $assignment=(string)Str::uuid();
+        $policy='{"version":1,"allowedMedia":["photo"]}';
+        $hash=hash('sha256',$policy);
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$assignment,'owner_account_id'=>$this->account,
+            'operation_id'=>(string)Str::uuid(),'contract_hash'=>$hash,
+            'contract_json'=>$policy,'owner_signature'=>'fixture',
+            'private_envelope_json'=>'{}','state'=>'finished',
+            'revision'=>2,'policy_revision'=>1,'photo_goal'=>30,
+            'starts_at'=>$finishMs-3600000,'ends_at'=>null,
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        // Pre-migration data has no authoritative millisecond part. Never
+        // invent one or allow a photo ambiguously inside the boundary second.
+        DB::table('assignment_state_events_v1')->insert([
+            'operation_id'=>(string)Str::uuid(),
+            'assignment_id'=>$assignment,
+            'from_revision'=>1,'to_revision'=>2,'state'=>'finished',
+            'contract_hash'=>str_repeat('a',64),'contract_json'=>'{}',
+            'owner_signature'=>'fixture','created_at'=>now(),
+            'occurred_at_ms'=>null,
+        ]);
+        $scope=[
+            'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
+            'policyRevision'=>1,'policyHash'=>$hash,
+            'capturedAt'=>$finishMs-300,
+        ];
+        $this->reserve($this->assignmentCaptureFixture($scope))
+            ->assertConflict();
+        $scope['capturedAt']=$finishMs-1500;
+        $this->reserve($this->assignmentCaptureFixture($scope))
             ->assertOk()->assertJsonPath('state','pending');
     }
 

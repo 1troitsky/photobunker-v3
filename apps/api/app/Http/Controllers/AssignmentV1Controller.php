@@ -114,6 +114,10 @@ final class AssignmentV1Controller extends Controller
                 abort_if($a->ends_at!==null
                     &&(int)$a->ends_at<=PhotoSync::nowMs(),409);
             }
+            // The DB connection formats DateTime bindings to second precision.
+            // Store the authoritative receipt instant as an integer as well,
+            // derived from the same server clock/UTC instant as created_at.
+            $occurredAtMs=PhotoSync::nowMs();
             DB::table('assignment_state_events_v1')->insert([
                 'operation_id'=>$c['operationId'],'assignment_id'=>$a->id,
                 'from_revision'=>$c['fromRevision'],
@@ -121,7 +125,9 @@ final class AssignmentV1Controller extends Controller
                 'state'=>$c['state'],'contract_hash'=>$hash,
                 'contract_json'=>$r->json('contract'),
                 'owner_signature'=>$r->json('signature'),
-                'created_at'=>now(),
+                'occurred_at_ms'=>$occurredAtMs,
+                'created_at'=>\Carbon\CarbonImmutable::createFromTimestampMs(
+                    $occurredAtMs,'UTC'),
             ]);
             DB::table('assignment_records_v1')->where('id',$a->id)->update([
                 'state'=>$c['state'],'revision'=>$c['toRevision'],
