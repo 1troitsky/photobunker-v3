@@ -80,11 +80,19 @@ final class AssignmentV1Controller extends Controller
     {
         $this->sync->origin($r);
         [$actor]=$this->sync->actor($r);
-        $c=$this->signed($r,$actor,'pb3.assignment-policy.v1',[
+        $raw=$r->json('contract');
+        $shape=is_string($raw)?json_decode($raw,true,32):null;
+        $v2=is_array($shape)&&($shape['version']??null)===2;
+        $keys=[
             'version','operationId','assignmentId','ownerAccountId',
             'rootPolicyHash','previousPolicyHash',
             'fromPolicyRevision','toPolicyRevision','photoGoal','allowedMedia',
+        ];
+        if($v2)$keys=array_merge($keys,[
+            'requiredCategory','descriptionMinLength','requiredGps',
         ]);
+        $c=$this->signed($r,$actor,$v2
+            ?'pb3.assignment-policy.v2':'pb3.assignment-policy.v1',$keys);
         C::policyAmendment($c,$actor->id,$assignmentId);
         $hash=hash('sha256',$r->json('contract'));
         return DB::transaction(function()use($c,$actor,$assignmentId,$r,$hash){
@@ -108,8 +116,23 @@ final class AssignmentV1Controller extends Controller
             abort_unless($a->state==='active'
                 &&($a->ends_at===null||(int)$a->ends_at>PhotoSync::nowMs())
                 &&(int)$a->policy_revision===$c['fromPolicyRevision']
-                &&$c['toPolicyRevision']===(int)$a->policy_revision+1
-                &&($a->photo_goal===null?null:(int)$a->photo_goal)!==$c['photoGoal'],409);
+                &&$c['toPolicyRevision']===(int)$a->policy_revision+1,409);
+            $previousValues=$a->latest_policy_contract!==null
+                ?json_decode($a->latest_policy_contract,true,32,JSON_THROW_ON_ERROR)
+                :[];
+            $v2Already=(($previousValues['version']??null)===2);
+            // An old v1 client is not allowed to silently disable new v2
+            // required metadata by continuing to edit only the photo goal.
+            abort_unless(!$v2Already||$c['version']===2,409);
+            $currentCategory=$v2Already?$previousValues['requiredCategory']:false;
+            $currentMinLength=$v2Already?$previousValues['descriptionMinLength']:0;
+            $currentGps=$v2Already?$previousValues['requiredGps']:false;
+            $differentRules=$c['version']===2
+                &&($c['requiredCategory']!==$currentCategory
+                    ||$c['descriptionMinLength']!==$currentMinLength
+                    ||$c['requiredGps']!==$currentGps);
+            abort_unless($differentRules
+                ||($a->photo_goal===null?null:(int)$a->photo_goal)!==$c['photoGoal'],409);
             $previous=hash('sha256',$a->latest_policy_contract??$a->contract_json);
             abort_unless(hash_equals($previous,$c['previousPolicyHash']),409);
             $at=PhotoSync::nowMs();
