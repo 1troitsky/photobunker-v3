@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
-  queueAssignmentCreation, listLocalAssignmentDrafts,
+  queueAssignmentCreation, listLocalAssignmentDrafts, listServerAssignmentUsage,
   listServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
   listCachedAssignmentInvites,
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
@@ -14,7 +14,7 @@ import {
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
-  CaptureRequirements,
+  CaptureRequirements, AssignmentMonthlyUsage,
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import {
@@ -41,6 +41,7 @@ type Submission={submissionId:string;photoId:string;photoGrantId:string;contribu
 const assignments=ref<VisibleAssignment[]>([])
 const invites=ref<ReceivedAssignmentInvite[]>([])
 const operations=ref<AssignmentOperation[]>([])
+const monthlyUsage=ref<AssignmentMonthlyUsage|null>(null)
 const photos=ref<StoredPhoto[]>([])
 const submissions=ref<Submission[]>([])
 const selectedId=ref('')
@@ -108,6 +109,7 @@ function cleanPreview():void{
 }
 function resetSensitive():void {
   assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
+  monthlyUsage.value=null
   submissions.value=[];selectedId.value='';ownerCheck.value=null
   contributorCheck.value=null;showingOfflineSnapshot.value=false;cleanPreview()
 }
@@ -146,6 +148,18 @@ async function hydrate():Promise<void>{
   assignments.value=localRows
   let offline=!identity.online||!navigator.onLine
   showingOfflineSnapshot.value=offline
+  if(offline)monthlyUsage.value=null
+  else{
+    // Never block encrypted local draft rendering on an accounting request.
+    // Fresh account-scoped numbers are authoritative only when the server
+    // answered successfully; a failed network read does not mean "0 used".
+    void listServerAssignmentUsage().then(data=>{
+      if(activeSession.value===identity&&!showingOfflineSnapshot.value)
+        monthlyUsage.value=data
+    }).catch(()=>{
+      if(activeSession.value===identity)monthlyUsage.value=null
+    })
+  }
   let snapshots:AssignmentListing[]
   let received:ReceivedAssignmentInvite[]
   if(offline){
@@ -438,6 +452,20 @@ onUnmounted(cleanPreview)
       </div>
     </div>
     <p class="subtitle">P1 · рабочий E2EE-сценарий · полный Fieldwork 5.0 / Editor 2.2 ещё не перенесён</p>
+    <p v-if="activeSession&&monthlyUsage&&!showingOfflineSnapshot"
+      class="muted" role="status" data-testid="assignment-monthly-usage">
+      Тариф Free · создано заданий за месяц:
+      <strong>{{ monthlyUsage.used }} / {{ monthlyUsage.limit }}</strong>.
+      <template v-if="monthlyUsage.remaining>0">
+        Осталось {{ monthlyUsage.remaining }}.
+      </template>
+      <template v-else>
+        Месячная квота исчерпана. Сброс после {{ new Date(monthlyUsage.periodEnd).toLocaleDateString('ru-RU') }}.
+      </template>
+    </p>
+    <p v-else-if="activeSession&&!showingOfflineSnapshot" class="muted">
+      Текущая квота заданий будет уточнена после ответа сервера.
+    </p>
     <p v-if="activeSession&&showingOfflineSnapshot" class="muted" role="status">
       Офлайн: показаны последние проверенные подписью снимки заданий. Текущие права и количество подтверждённых материалов неизвестны до синхронизации.
     </p>
@@ -464,7 +492,7 @@ onUnmounted(cleanPreview)
         <textarea id="assignment-instructions" v-model="instructions" rows="4" maxlength="4000"/>
         <label for="assignment-goal">Нужно фотографий (необязательная цель)</label>
         <input id="assignment-goal" v-model="goal" type="number" min="1" max="9999" step="1" placeholder="Например, 30">
-        <p class="muted">Название и инструкции шифруются до сохранения. Цель нужна только для прогресса, не ограничивает число файлов.</p>
+        <p class="muted">Название и инструкции шифруются до сохранения. Цель нужна только для прогресса, не ограничивает число файлов. Офлайн-черновик сохраняется независимо от доступной квоты; сервер принимает создание только в пределах действующего лимита Free.</p>
         <button type="submit" :disabled="busy">Создать зашифрованное задание</button>
       </form>
 
@@ -488,7 +516,7 @@ onUnmounted(cleanPreview)
               <strong>{{ assignment.data?.title||'Зашифрованное задание' }}</strong>
               <small>{{ assignment.id.slice(0,8) }} · {{ assignment.isOwner?'Владелец':'Исполнитель' }}</small>
             </div>
-            <span class="assignment-state">{{ assignment.localState==='queued'?'В очереди':assignment.state==='active'?'Активно':assignment.state==='finished'?'Завершено':assignment.state }}</span>
+            <span class="assignment-state">{{ assignment.localState==='conflict'?'Не принято сервером':assignment.localState==='retry'?'Повтор отправки':assignment.localState==='queued'?'В очереди':assignment.state==='active'?'Активно':assignment.state==='finished'?'Завершено':assignment.state }}</span>
           </div>
           <p v-if="assignment.data?.instructions" class="assignment-description">{{ assignment.data.instructions }}</p>
           <div class="assignment-card-bottom">
