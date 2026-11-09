@@ -633,6 +633,47 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     },assignmentId)
     expect(newest.revision).toBe(3)
     expect(newest.hash).not.toBe(captured.policyHash)
+
+    // P1-09: Free entitlement is admitted by the backend calendar-month
+    // counter, not an untrusted client's signed startsAt. A already owns
+    // one assignment; two more are accepted, a fourth remains local only.
+    await A.goto('/assignments')
+    await expect(A.getByTestId('assignment-monthly-usage'))
+      .toContainText('1 / 3',{timeout:20000})
+    for(const count of [2,3]){
+      await A.getByRole('button',{name:'Создать задание',exact:true}).click()
+      await A.locator('#assignment-title').fill('Monthly quota verified '+count)
+      await A.getByRole('button',{name:'Создать зашифрованное задание'}).click()
+      await A.getByRole('button',{name:'Синхронизировать'}).click()
+      await expect(A.getByTestId('assignment-monthly-usage'))
+        .toContainText(count+' / 3',{timeout:20000})
+    }
+    await A.getByRole('button',{name:'Создать задание',exact:true}).click()
+    await A.locator('#assignment-title').fill('FOURTH-ENCRYPTED-LOCAL-DRAFT')
+    await A.getByRole('button',{name:'Создать зашифрованное задание'}).click()
+    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await expect(A.locator('.assignment-card').filter({
+      hasText:'FOURTH-ENCRYPTED-LOCAL-DRAFT',
+    })).toContainText('Не принято сервером',{timeout:20000})
+    const rejected=await A.evaluate(async()=>{
+      const mod=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const [usage,operations,local]=await Promise.all([
+        mod.listServerAssignmentUsage(),
+        mod.listAssignmentOperations(),mod.listLocalAssignmentDrafts(),
+      ])
+      const draft=local.find(x=>operations.some(op=>
+        op.kind==='create'&&op.state==='conflict'
+          &&JSON.parse(op.contract).assignmentId===x.id))
+      return {
+        used:usage.used,remaining:usage.remaining,
+        hasEncryptedDraft:!!draft,
+        leakedPlaintext:local.some(x=>JSON.stringify(x).includes(
+          'FOURTH-ENCRYPTED-LOCAL-DRAFT')),
+      }
+    })
+    expect(rejected).toEqual({
+      used:3,remaining:0,hasEncryptedDraft:true,leakedPlaintext:false,
+    })
     void aId
   } finally { await aCtx.close();await bCtx.close() }
 })
