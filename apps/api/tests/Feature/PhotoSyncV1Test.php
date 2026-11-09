@@ -232,6 +232,27 @@ final class PhotoSyncV1Test extends TestCase {
             'signature'=>$this->signature("photobunker.photo-sync.v1\n".$json)];
         $this->reserve($f)->assertForbidden();
         $this->assertDatabaseMissing('photo_records',['id'=>$f['photo']]);
+        DB::table('assignment_invites_v1')->insert([
+            'id'=>(string)Str::uuid(),'assignment_id'=>$assignment,
+            'owner_account_id'=>$owner,'recipient_account_id'=>$this->account,
+            'role'=>'contributor','state'=>'accepted',
+            'recipient_key_digest'=>str_repeat('a',64),
+            'contract_hash'=>str_repeat('b',64),'contract_json'=>'{}',
+            'owner_signature'=>'fixture',
+            'expires_at'=>now()->addDay()->getTimestampMs(),
+            'accepted_at'=>now(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('assignment_records_v1')->where('id',$assignment)
+            ->update(['starts_at'=>now()->subHour()->getTimestampMs()]);
+        $tooEarly=$payload['capture'];
+        $tooEarly['capturedAt']=now()->subMinutes(10)->getTimestampMs();
+        $this->reserve($this->assignmentCaptureFixture($tooEarly))
+            ->assertForbidden(); // Claim predates the contributor consent.
+        $accepted=$payload['capture'];
+        $accepted['capturedAt']=now()->getTimestampMs();
+        $this->reserve($this->assignmentCaptureFixture($accepted))
+            ->assertOk()->assertJsonPath('state','pending');
     }
 
     public function test_signed_reserve_upload_readback_finalize_replay_and_private_read():void {
