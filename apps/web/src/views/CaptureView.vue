@@ -26,7 +26,7 @@ const recordingStartedAt=ref<number|null>(null)
 let recordingTimer:ReturnType<typeof setTimeout>|null=null
 let recordingParts:Blob[]=[]
 let recordedSize=0
-let activeRecording:object|null=null
+let activeRecording:{saveOnStop:boolean}|null=null
 const canCaptureType=computed(()=>{
   const required=route.query.assignmentId
   if(typeof required==='string'&&required
@@ -248,7 +248,7 @@ async function beginRecording():Promise<void>{
     const streamRef=stream.value
     if(!streamRef)throw Error('camera.stream_unavailable')
     const worker=new MediaRecorder(streamRef,{mimeType:mime})
-    const token={identity,generation,mode,intent,startedAt,mime}
+    const token={identity,generation,mode,intent,startedAt,mime,saveOnStop:false}
     activeRecording=token
     recordingParts=[]
     recordedSize=0
@@ -261,18 +261,31 @@ async function beginRecording():Promise<void>{
       recordedSize+=event.data.size
       if(recordedSize>MAX_MEDIA_BYTES){
         error.value='media.invalid_size'
-        discardRecording()
+        closeCamera()
       }
     }
-    worker.onerror=()=>{error.value='camera.recording_failed';discardRecording()}
+    worker.onerror=()=>{error.value='camera.recording_failed';closeCamera()}
     worker.onstop=()=>{
       if(activeRecording!==token)return
+      // Automatic browser/permission interruption is never permission to
+      // persist a partial recording. Only user Stop or the bounded timer
+      // may turn this ephemeral MediaRecorder buffer into a new MediaFile.
+      if(!token.saveOnStop){closeCamera();return}
       if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
       const parts=recordingParts
       recordingParts=[]
       recorder.value=null;recording.value=false;recordingStartedAt.value=null
       activeRecording=null
       const bytes=recordedSize;recordedSize=0
+      // MediaRecorder.stop() by itself does NOT release the hardware.
+      // Release microphone and camera immediately before encryption; a
+      // second recording requires the explicit "Включить камеру" action.
+      if(stream.value===streamRef){
+        stopTracks(streamRef)
+        stream.value=null;streamIdentity=null
+        if(video.value)video.value.srcObject=null
+        cameraWanted=false
+      }
       void (async()=>{
         if(!ownsCamera(identity,generation)||captureMode.value!==mode
           ||(intent&&selectedAssignment.value!==intent.assignmentId))return
@@ -301,8 +314,10 @@ async function beginRecording():Promise<void>{
     }
     worker.start(1000)
     recordingTimer=setTimeout(()=>{
-      if(activeRecording===token&&worker.state==='recording')
+      if(activeRecording===token&&worker.state==='recording'){
+        token.saveOnStop=true
         worker.stop()
+      }
     },recordLimitMs)
   }catch(e){
     discardRecording()
@@ -312,7 +327,10 @@ async function beginRecording():Promise<void>{
 }
 function endRecording():void{
   const worker=recorder.value
-  if(worker&&worker.state==='recording')worker.stop()
+  if(worker&&worker.state==='recording'){
+    if(activeRecording)activeRecording.saveOnStop=true
+    worker.stop()
+  }
 }
 
 function closeCamera():void {
