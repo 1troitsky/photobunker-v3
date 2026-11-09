@@ -79,7 +79,7 @@ final class AssignmentContract
      */
     public static function policyAmendment(array $d,string $owner,string $assignment):void
     {
-        abort_unless($d['version']===1
+        abort_unless(in_array($d['version'],[1,2],true)
             &&$d['assignmentId']===$assignment
             &&$d['ownerAccountId']===$owner
             &&is_int($d['fromPolicyRevision'])
@@ -95,6 +95,15 @@ final class AssignmentContract
         abort_unless($d['photoGoal']===null
             ||(is_int($d['photoGoal'])&&$d['photoGoal']>=1
                 &&$d['photoGoal']<=9999),422);
+        if($d['version']===2){
+            // These are PUBLIC booleans and a length threshold, not
+            // plaintext GPS, private description or actual category.
+            abort_unless(is_bool($d['requiredCategory'])
+                &&is_bool($d['requiredGps'])
+                &&is_int($d['descriptionMinLength'])
+                &&$d['descriptionMinLength']>=0
+                &&$d['descriptionMinLength']<=4000,422);
+        }
     }
 
     public static function invite(array $d,string $owner,string $assignment):void
