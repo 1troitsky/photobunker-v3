@@ -429,6 +429,19 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     expect(captured.version).toBe(2)
     expect(captured.policyHash).toMatch(/^[0-9a-f]{64}$/)
     expect(captured.signedCapture.assignmentId).toBe(assignmentId)
+
+    // Warm SPA navigation must work without HTTP after a previously accepted
+    // signed assignment was cached. This is NOT a cold offline document reload.
+    await B.getByRole('navigation',{name:'Главная навигация'})
+      .getByRole('link',{name:'Задания',exact:true}).click()
+    await expect(B.getByText(/Офлайн: показаны последние проверенные подписью/))
+      .toBeVisible()
+    await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
+      .toBeVisible()
+    await expect(B.locator('.assignment-card').first())
+      .toContainText('Локально ожидают отправки: 1')
+    await expect(B.locator('.assignment-card').first())
+      .toContainText('ожидает подтверждения')
     await bCtx.setOffline(false)
     await B.getByRole('navigation',{name:'Главная навигация'})
       .getByRole('link',{name:'Browser',exact:true}).click()
