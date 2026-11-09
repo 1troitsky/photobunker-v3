@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\PhotoSyncController;
+use App\Http\Controllers\MediaV1Controller;
 use App\Http\Controllers\RecipientKeyController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
@@ -47,6 +48,21 @@ Route::prefix('photos/v1')->middleware('throttle:120,1')->group(function(){
     Route::get('/{photoId}/manifests',[PhotoSyncController::class,'manifests'])->whereUuid('photoId');
 });
 
+
+// P1-10: E2EE personal photo/video/audio files with idempotent ciphertext
+// chunk upload. No browser S3 credentials, public download or grant endpoints.
+Route::prefix('media/v1')->middleware('throttle:pb3-media')->group(function(){
+    Route::get('/',[MediaV1Controller::class,'index']);
+    Route::post('/reserve',[MediaV1Controller::class,'reserve']);
+    Route::put('/{mediaId}/chunks/{chunkId}',[MediaV1Controller::class,'upload'])
+        ->whereUuid('mediaId')->whereUuid('chunkId');
+    Route::get('/{mediaId}/chunks/{chunkId}',[MediaV1Controller::class,'read'])
+        ->whereUuid('mediaId')->whereUuid('chunkId');
+    Route::post('/{mediaId}/finalize',[MediaV1Controller::class,'finalize'])
+        ->whereUuid('mediaId');
+    Route::get('/{mediaId}/manifests',[MediaV1Controller::class,'manifests'])
+        ->whereUuid('mediaId');
+});
 
 // P1-03: all endpoints require an enrolled identity; mutating calls also
 // require exact Origin + Laravel CSRF and signed root-account commands.

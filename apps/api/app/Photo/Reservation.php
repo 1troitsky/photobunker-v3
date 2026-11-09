@@ -42,11 +42,24 @@ final class Reservation
             $used=DB::table('photo_objects as o')->join('photo_records as p','o.photo_id','=','p.id')
                 ->where('p.account_id',$account->id)->where('p.state','!=','deleting')
                 ->where('p.expires_at','>',PhotoSync::nowMs())->sum('o.bytes');
-            abort_if((int)$used+$need>config('photo_sync.bootstrap_free_byte_cap'),413);
+            // Media/v1 and photos/v1 consume ONE shared Free file+byte
+            // entitlement; both reserve under the same identity row lock.
+            $mediaBytes=DB::table('media_files_v1')
+                ->where('account_id',$account->id)
+                ->where('state','!=','deleting')
+                ->where('expires_at','>',PhotoSync::nowMs())
+                ->sum('cipher_bytes');
+            abort_if((int)$used+(int)$mediaBytes+$need
+                >config('photo_sync.bootstrap_free_byte_cap'),413);
             // Account row is locked above: quota/file reservations are serialized per account.
             $count=DB::table('photo_records')->where('account_id',$account->id)
                 ->where('state','!=','deleting')->where('expires_at','>',PhotoSync::nowMs())->count();
-            abort_if($count>=(int)config('photo_sync.bootstrap_free_file_cap',50),413);
+            $mediaCount=DB::table('media_files_v1')
+                ->where('account_id',$account->id)
+                ->where('state','!=','deleting')
+                ->where('expires_at','>',PhotoSync::nowMs())->count();
+            abort_if($count+$mediaCount
+                >=(int)config('photo_sync.bootstrap_free_file_cap',50),413);
             DB::table('photo_records')->insert([
                 'id'=>$id,'account_id'=>$account->id,'device_id'=>$device->id,
                 'operation_id'=>$contract['operationId'],'state'=>'pending',

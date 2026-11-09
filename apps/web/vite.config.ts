@@ -37,6 +37,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/identity/v2': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/photos/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
+        '/media/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/shares/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/assignments/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
       },
