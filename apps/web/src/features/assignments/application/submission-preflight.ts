@@ -88,7 +88,9 @@ export async function verifySignedPolicyHistory(
       ||contract.previousPolicyHash!==previousHash
       ||contract.fromPolicyRevision!==revision-1
       ||contract.toPolicyRevision!==revision
-      ||contract.allowedMedia?.[0]!=='photo')
+      ||!Array.isArray(contract.allowedMedia)
+      ||contract.allowedMedia.length!==1
+      ||contract.allowedMedia[0]!=='photo')
       throw Error('assignment.policy_history_invalid')
     const snapshot:AssignmentListing={
       ...latest,policyRevision:revision,
