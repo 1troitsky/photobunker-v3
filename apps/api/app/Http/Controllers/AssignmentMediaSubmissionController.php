@@ -193,6 +193,7 @@ final class AssignmentMediaSubmissionController extends Controller
         $rows=$q->orderBy('s.id')->limit(51)->get([
             's.id','s.media_id','s.media_grant_id',
             's.media_type','s.contributor_account_id',
+            's.capture_contract_json',
         ]);
         $more=$rows->count()>50;
         $items=$rows->take(50)->map(static fn($row)=>[
@@ -200,6 +201,7 @@ final class AssignmentMediaSubmissionController extends Controller
             'mediaGrantId'=>$row->media_grant_id,
             'mediaType'=>$row->media_type,
             'contributorAccountId'=>$row->contributor_account_id,
+            'capturedInAssignment'=>$row->capture_contract_json!==null,
         ])->values()->all();
         return $this->sync->json([
             'items'=>$items,'nextCursor'=>$more&&$items!==[]
