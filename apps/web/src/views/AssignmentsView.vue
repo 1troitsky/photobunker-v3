@@ -27,6 +27,7 @@ import type { StoredPhoto } from '../features/photo-sync/application/p1-photo'
 type VisibleAssignment={
   id:string;ownerAccountId:string;data:PrivateAssignment|null
   state:string;revision:number;localState?:string;goal:number|null
+  confirmedPhotos:number|null // null = no authenticated server receipt count yet
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
 }
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
@@ -63,6 +64,7 @@ const visible=computed(()=>assignments.value
   .sort((a,b)=>b.createdAt-a.createdAt))
 const count=computed(()=>assignments.value.length)
 const activeCount=computed(()=>assignments.value.filter(a=>a.state==='active').length)
+const finishedCount=computed(()=>assignments.value.filter(a=>a.state==='finished').length)
 const selectedOperations=computed(()=>operations.value.filter(op=>
   op.contract.includes(selectedId.value)&&!!selectedId.value))
 const pendingStateChange=computed(()=>selectedOperations.value.some(op=>
@@ -71,6 +73,22 @@ const eligiblePhotos=computed(()=>photos.value
   .filter(p=>p.state==='synced'
     &&(!p.capture||p.capture.assignmentId===selectedId.value))
   .sort((a,b)=>Number(!!b.capture)-Number(!!a.capture)))
+function progressPercentage(assignment:VisibleAssignment):number|null{
+  if(assignment.goal===null||assignment.confirmedPhotos===null)return null
+  return Math.min(100,Math.round(assignment.confirmedPhotos/assignment.goal*100))
+}
+function pendingReceiptCount(assignmentId:string):number{
+  const queuedCaptures=photos.value.filter(p=>p.capture?.assignmentId===assignmentId
+    &&(p.state==='queued'||p.state==='retry')).length
+  const queuedSubmissions=operations.value.filter(op=>{
+    if(op.kind!=='submit'||(op.state!=='queued'&&op.state!=='retry'))return false
+    try{
+      const body=JSON.parse(op.contract) as {assignmentId?:string}
+      return body.assignmentId===assignmentId
+    }catch{return false}
+  }).length
+  return queuedCaptures+queuedSubmissions
+}
 
 function cleanPreview():void{
   if(previewUrl.value){URL.revokeObjectURL(previewUrl.value);previewUrl.value=''}
@@ -105,6 +123,7 @@ async function hydrate():Promise<void>{
     return {
       id:item.id,ownerAccountId:item.ownerAccountId,data,
       state:'active',revision:1,localState:item.state,goal:item.photoGoal,
+      confirmedPhotos:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
     }
   }))
@@ -147,7 +166,8 @@ async function hydrate():Promise<void>{
     const row:VisibleAssignment={
       id:item.assignmentId,ownerAccountId:item.ownerAccountId,data,
       state:item.state,revision:item.revision,localState:previous?.localState,
-      goal:item.photoGoal,createdAt:previous?.createdAt??item.startsAt,
+      goal:item.photoGoal,confirmedPhotos:item.confirmedPhotoCount,
+      createdAt:previous?.createdAt??item.startsAt,
       isOwner:item.ownerAccountId===identity.accountId,
       startsAt:item.startsAt,endsAt:item.endsAt,
     }
@@ -338,7 +358,7 @@ onUnmounted(cleanPreview)
       <div class="assignment-counters" aria-label="Счётчики заданий">
         <span>Всего <strong>{{ count }}</strong></span>
         <span>Активных <strong>{{ activeCount }}</strong></span>
-        <span>Готово <strong>—</strong></span>
+        <span>Готово <strong>{{ finishedCount }}</strong></span>
       </div>
     </div>
     <p class="subtitle">P1 · рабочий E2EE-сценарий · полный Fieldwork 5.0 / Editor 2.2 ещё не перенесён</p>
@@ -393,7 +413,21 @@ onUnmounted(cleanPreview)
           </div>
           <p v-if="assignment.data?.instructions" class="assignment-description">{{ assignment.data.instructions }}</p>
           <div class="assignment-card-bottom">
-            <span>Фото: {{ assignment.goal===null?'без цели':'цель '+assignment.goal }}</span>
+            <div class="assignment-card-progress">
+              <span v-if="assignment.confirmedPhotos!==null">
+                Фото: {{ assignment.confirmedPhotos }}{{ assignment.goal===null?'':' / '+assignment.goal }}
+                <template v-if="progressPercentage(assignment)!==null">
+                  · {{ progressPercentage(assignment) }}%
+                </template>
+              </span>
+              <span v-else class="muted">Фото: цель {{ assignment.goal??'не задана' }} · ожидает подтверждения</span>
+              <progress v-if="assignment.goal!==null&&assignment.confirmedPhotos!==null"
+                :max="assignment.goal" :value="Math.min(assignment.confirmedPhotos,assignment.goal)"
+                :aria-label="'Подтверждённый прогресс по фото '+assignment.id"/>
+              <small v-if="pendingReceiptCount(assignment.id)>0" class="muted">
+                Локально ожидают отправки: {{ pendingReceiptCount(assignment.id) }}
+              </small>
+            </div>
             <button type="button" :disabled="busy" @click="choose(assignment.id)">Открыть</button>
           </div>
         </article>
@@ -410,6 +444,13 @@ onUnmounted(cleanPreview)
         <p v-if="selected.data" class="muted">{{ selected.data.instructions }}</p>
         <p><code>{{ selected.id }}</code></p>
         <p class="muted">Тип: фото · {{ selected.goal===null?'без цели':'Цель: '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
+        <p v-if="selected.confirmedPhotos!==null" class="muted">
+          Подтверждено сервером: {{ selected.confirmedPhotos }}
+          <template v-if="selected.goal!==null"> / {{ selected.goal }} · {{ progressPercentage(selected) }}%</template>
+        </p>
+        <p v-if="pendingReceiptCount(selected.id)>0" class="muted">
+          Локально ожидают отправки: {{ pendingReceiptCount(selected.id) }} · не включены в прогресс
+        </p>
 
         <template v-if="selected.isOwner">
           <div class="assignment-toolbar">
