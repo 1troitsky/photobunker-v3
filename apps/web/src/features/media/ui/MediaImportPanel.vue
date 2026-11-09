@@ -113,7 +113,7 @@ onUnmounted(()=>{detach();clearPreview()})
           accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,audio/mp4,audio/mpeg,audio/webm,audio/wav,audio/x-wav,audio/aac,audio/ogg"
           :disabled="busy" @change="chooseFile">
       </label>
-      <button type="button" :disabled="busy" @click="sync">Синхронизировать файлы</button>
+      <button type="button" :disabled="busy" @click="sync">Отправить медиа</button>
       <button type="button" :disabled="busy" @click="refresh">Обновить</button>
     </div>
     <p class="muted">Предел одного файла на этом этапе: 128 МиБ. Офлайн-файлы остаются в зашифрованной очереди при сбое сети или исчерпании квоты Free.</p>
