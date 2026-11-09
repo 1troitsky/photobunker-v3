@@ -360,6 +360,9 @@ onUnmounted(cleanPreview)
           <h2>{{ selected.data?.title||'Зашифрованное задание' }}</h2>
           <button type="button" @click="choose('')">Закрыть</button>
         </div>
+        <p v-if="selected.state==='active'&&selected.localState!=='queued'">
+          <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Снимать по заданию</RouterLink>
+        </p>
         <p v-if="selected.data" class="muted">{{ selected.data.instructions }}</p>
         <p><code>{{ selected.id }}</code></p>
         <p class="muted">Тип: фото · {{ selected.goal===null?'без цели':'Цель: '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
