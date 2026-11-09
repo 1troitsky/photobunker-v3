@@ -121,11 +121,18 @@ export async function confirmPeer(accountId:string,expectedFingerprint:string):P
   })
 }
 
-export async function pinnedPeer(accountId:string):Promise<SignedDirectory> {
+/**
+ * checkNetwork=false is only for redisplaying previously verified encrypted
+ * local data during API outage. New grants/authorization still use the
+ * default fresh independent pin+directory verification.
+ */
+export async function pinnedPeer(
+  accountId:string,checkNetwork=true,
+):Promise<SignedDirectory> {
   const s=requireSession()
   const pin=await trustDB.peers.get(s.accountId+'/'+accountId)
   if(!pin)throw new Error('share.peer_not_confirmed')
-  if(s.online && (typeof navigator==='undefined'||navigator.onLine)){
+  if(checkNetwork&&s.online&&(typeof navigator==='undefined'||navigator.onLine)){
     const checked=await inspectPeer(accountId)
     if(!checked.confirmed)throw new Error('share.peer_not_confirmed')
     return checked.directory
