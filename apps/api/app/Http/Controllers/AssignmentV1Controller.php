@@ -301,7 +301,27 @@ final class AssignmentV1Controller extends Controller
                 ->where('p.state','active')->where('p.expires_at','>',$now)
                 ->where('g.state','active')->where('g.expires_at','>',$now)
                 ->selectRaw('COUNT(*)');
-        },'confirmed_photo_count')->orderBy('a.id')->limit(51)->get();
+        },'confirmed_photo_count');
+        // Independent and full server-derived counts. Never infer progress
+        // from the first 50 paginated receipts or a client-reported count.
+        foreach(['video','audio'] as $kind){
+            $rows->selectSub(function($sub)use($now,$kind){
+                $sub->from('assignment_media_submissions_v1 as s')
+                    ->join('media_files_v1 as m','m.id','=','s.media_id')
+                    ->join('media_recipient_grants_v1 as g','g.id','=','s.media_grant_id')
+                    ->whereColumn('s.assignment_id','a.id')
+                    ->where('s.media_type',$kind)
+                    ->whereColumn('m.account_id','s.contributor_account_id')
+                    ->whereColumn('m.contract_hash','s.media_contract_hash')
+                    ->whereColumn('g.media_id','s.media_id')
+                    ->whereColumn('g.owner_account_id','s.contributor_account_id')
+                    ->whereColumn('g.recipient_account_id','a.owner_account_id')
+                    ->where('m.state','active')->where('m.expires_at','>',$now)
+                    ->where('g.state','active')->where('g.expires_at','>',$now)
+                    ->selectRaw('COUNT(*)');
+            },'confirmed_'.$kind.'_count');
+        }
+        $rows=$rows->orderBy('a.id')->limit(51)->get();
         $more=$rows->count()>50;
         $items=$rows->take(50)->map(fn($x)=>[
             'assignmentId'=>$x->id,'ownerAccountId'=>$x->owner_account_id,
@@ -309,6 +329,8 @@ final class AssignmentV1Controller extends Controller
             'policyRevision'=>(int)$x->policy_revision,
             'photoGoal'=>$x->photo_goal===null?null:(int)$x->photo_goal,
             'confirmedPhotoCount'=>(int)$x->confirmed_photo_count,
+            'confirmedVideoCount'=>(int)$x->confirmed_video_count,
+            'confirmedAudioCount'=>(int)$x->confirmed_audio_count,
             'startsAt'=>(int)$x->starts_at,
             'endsAt'=>$x->ends_at===null?null:(int)$x->ends_at,
             'privateEnvelope'=>json_decode($x->private_envelope_json,true,16,JSON_THROW_ON_ERROR),
