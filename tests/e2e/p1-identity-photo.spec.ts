@@ -394,14 +394,31 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
       .toBeVisible({timeout:20000})
 
-    // Camera capture uses the regular UI and is entirely offline.
-    await bCtx.setOffline(true)
+    // Verify assignment policy while online and cache its signed snapshot.
     await B.getByRole('navigation',{name:'Главная навигация'})
       .getByRole('link',{name:'Камера',exact:true}).click()
+    await expect(B.locator('#camera-assignment option[value="'+assignmentId+'"]'))
+      .toHaveCount(1,{timeout:20000})
+    await B.locator('#camera-assignment').selectOption(assignmentId)
+    // Camera captures after network loss, using the independently verified
+    // signed policy and durable encrypted v2 photo contract.
+    await bCtx.setOffline(true)
     await expect.poll(()=>B.locator('video').evaluate(el=>(el as HTMLVideoElement).videoWidth))
       .toBeGreaterThan(0)
     await B.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(B.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
+    const captured=await B.evaluate(async()=>{
+      const photos=await import('/src/features/photo-sync/application/p1-photo.ts')
+      const [row]=await photos.listLocalPhotos()
+      if(!row)throw new Error('capture.not_local')
+      const parsed=JSON.parse(photos.signedPhotoContract(row))
+      return {assignmentId:row.capture?.assignmentId,policyHash:row.capture?.policyHash,
+        version:parsed.version,signedCapture:parsed.capture}
+    })
+    expect(captured.assignmentId).toBe(assignmentId)
+    expect(captured.version).toBe(2)
+    expect(captured.policyHash).toMatch(/^[0-9a-f]{64}$/)
+    expect(captured.signedCapture.assignmentId).toBe(assignmentId)
     await bCtx.setOffline(false)
     await B.getByRole('navigation',{name:'Главная навигация'})
       .getByRole('link',{name:'Browser',exact:true}).click()
