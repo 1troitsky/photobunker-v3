@@ -439,6 +439,26 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await expect(decoded).toBeVisible({timeout:20000})
     await expect.poll(()=>decoded.evaluate(el=>(el as HTMLImageElement).naturalWidth))
       .toBeGreaterThan(0)
+
+    // A finishes without deleting contributor-owned ciphertext or old grants.
+    await A.getByRole('button',{name:'Завершить задание'}).click()
+    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await expect(A.locator('.assignment-card').first()).toContainText('Завершено')
+    await expect(A.getByText('Версия состояния: 2')).toBeVisible()
+    await A.getByRole('button',{name:'Обновить материалы'}).click()
+    await expect(A.getByRole('button',{name:'Просмотр'})).toBeVisible()
+    await B.goto('/camera')
+    await expect(B.locator('#camera-assignment option[value="'+assignmentId+'"]'))
+      .toHaveCount(0,{timeout:20000})
+    // Explicit owner-signed resume reopens capture for the unchanged rev1
+    // policy; no new invitation or media rewrite is required.
+    await A.getByRole('button',{name:'Возобновить задание'}).click()
+    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await expect(A.getByText('Версия состояния: 3')).toBeVisible()
+    await expect(A.locator('.assignment-card').first()).toContainText('Активно')
+    await B.getByRole('button',{name:'Обновить задания'}).click()
+    await expect(B.locator('#camera-assignment option[value="'+assignmentId+'"]'))
+      .toHaveCount(1,{timeout:20000})
     void aId
   } finally { await aCtx.close();await bCtx.close() }
 })
