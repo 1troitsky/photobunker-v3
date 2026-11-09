@@ -412,7 +412,8 @@ final class AssignmentV1Controller extends Controller
                   &&hash_equals($existing->contract_hash,$hash),409);
                 return $this->sync->json(['submissionId'=>$existing->id,'unchanged'=>true]);
             }
-            abort_unless($a->state==='active' && $a->policy_revision===$c['policyRevision']
+            abort_unless($a->state==='active'
+                &&$c['policyRevision']<=(int)$a->policy_revision
                 && $a->starts_at<=PhotoSync::nowMs()
                 &&($a->ends_at===null || $a->ends_at>PhotoSync::nowMs()),409);
             $joined=DB::table('assignment_invites_v1')->where('assignment_id',$a->id)
@@ -428,10 +429,17 @@ final class AssignmentV1Controller extends Controller
                 // An assignment-scoped capture must never be re-bound to an
                 // unrelated assignment, even with an otherwise valid grant.
                 $capture=$photoContract['capture']??[];
-                abort_unless(($capture['assignmentId']??null)===$assignmentId
+                $signedPolicy=$c['policyRevision']===1
+                    ?$a->contract_json
+                    :DB::table('assignment_policy_events_v1')
+                        ->where('assignment_id',$assignmentId)
+                        ->where('to_revision',$c['policyRevision'])
+                        ->value('contract_json');
+                abort_unless(is_string($signedPolicy)
+                    &&($capture['assignmentId']??null)===$assignmentId
                     &&($capture['ownerAccountId']??null)===$a->owner_account_id
                     &&($capture['policyRevision']??null)===$c['policyRevision']
-                    &&hash_equals(hash('sha256',$a->contract_json),
+                    &&hash_equals(hash('sha256',$signedPolicy),
                         (string)($capture['policyHash']??'')),409);
             }
             $grant=DB::table('photo_access_grants')
@@ -447,7 +455,7 @@ final class AssignmentV1Controller extends Controller
                 'id'=>$c['submissionId'],'assignment_id'=>$assignmentId,
                 'contributor_account_id'=>$actor->id,'photo_id'=>$photo->id,
                 'photo_grant_id'=>$grant->id,'operation_id'=>$c['operationId'],
-                'policy_revision'=>1,'contract_hash'=>$hash,
+                'policy_revision'=>$c['policyRevision'],'contract_hash'=>$hash,
                 'contract_json'=>$r->json('contract'),'contributor_signature'=>$r->json('signature'),
                 'created_at'=>now(),
             ]);
