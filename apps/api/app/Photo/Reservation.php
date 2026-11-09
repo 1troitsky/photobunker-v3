@@ -103,7 +103,9 @@ final class Reservation
         $revision=1;
         $state='active';
         $openedAt=(int)$a->starts_at;
-        $lastEventAt=$openedAt;
+        // Finish can precede a scheduled start. Keep event monotonicity
+        // independent of that start and intersect active intervals with it.
+        $lastEventAt=0;
         $validInterval=false;
         foreach($events as $event){
             $at=\Carbon\Carbon::parse($event->created_at)->getTimestampMs();
@@ -115,7 +117,7 @@ final class Reservation
             $next=$event->state;
             abort_unless(($state==='active'&&$next==='finished')
                 ||($state==='finished'&&$next==='active'),409);
-            if($next==='active')$openedAt=$at;
+            if($next==='active')$openedAt=max((int)$a->starts_at,$at);
             $state=$next;
             $revision++;
             $lastEventAt=$at;
