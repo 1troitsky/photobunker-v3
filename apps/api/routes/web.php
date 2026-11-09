@@ -70,6 +70,7 @@ Route::prefix('assignments/v1')->middleware('throttle:40,1')->group(function(){
     Route::post('/',[AssignmentV1Controller::class,'create']);
     Route::get('/invites/received',[AssignmentV1Controller::class,'inbox']);
     Route::post('/{assignmentId}/state',[AssignmentV1Controller::class,'changeState'])->whereUuid('assignmentId');
+    Route::post('/{assignmentId}/policy',[AssignmentV1Controller::class,'changePolicy'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/invites',[AssignmentV1Controller::class,'invite'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/invites/{inviteId}/accept',
         [AssignmentV1Controller::class,'accept'])->whereUuid('assignmentId')->whereUuid('inviteId');
