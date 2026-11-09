@@ -157,8 +157,12 @@ final class AssignmentV1Controller extends Controller
             ->join('assignment_records_v1 as a','a.id','=','i.assignment_id')
             ->join('identity_accounts as o','o.id','=','i.owner_account_id')
             ->where('i.recipient_account_id',$actor->id)
-            ->whereIn('i.state',['pending','accepted'])
-            ->where('i.expires_at','>',PhotoSync::nowMs())
+            ->where(function($q):void {
+                $q->where('i.state','accepted')->orWhere(function($pending):void {
+                    $pending->where('i.state','pending')
+                        ->where('i.expires_at','>',PhotoSync::nowMs());
+                });
+            })
             ->where('a.state','active')
             ->orderBy('i.id')->limit(50)
             ->get(['i.id','i.assignment_id','i.state','i.role',

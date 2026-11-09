@@ -173,6 +173,13 @@ final class AssignmentV1Test extends TestCase
         $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
         $this->accept($invite);
         $this->getJson('/assignments/v1')->assertJsonPath('items.0.assignmentId',$this->assignmentId);
+        // Invitation expiry governs acceptance only. After consent, the
+        // participant must retain their sealed assignment-key envelope.
+        DB::table('assignment_invites_v1')->where('id',$invite)
+            ->update(['expires_at'=>now()->subMinute()->getTimestampMs()]);
+        $this->getJson('/assignments/v1/invites/received')
+            ->assertJsonPath('items.0.inviteId',$invite)
+            ->assertJsonPath('items.0.state','accepted');
     }
 
     public function test_submission_requires_contributor_signed_bind_and_active_photo_grant():void
