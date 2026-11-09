@@ -231,6 +231,73 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(verified.mime).toMatch(/^audio\//)
     expect(verified.bytes).toBeGreaterThan(128)
     expect(verified.fileName).toMatch(/^recording-/)
+
+    // Verify the separate camera+microphone MediaRecorder branch as well.
+    await B.goto('/camera?assignmentId='+assignmentId)
+    await expect(B.locator('#camera-assignment'))
+      .toHaveValue(assignmentId,{timeout:20000})
+    await B.getByTestId('camera-mode').selectOption('video')
+    await expect(B.getByTestId('camera-start-recording'))
+      .toBeEnabled({timeout:20000})
+    await B.getByTestId('camera-start-recording').click()
+    await expect(B.getByTestId('camera-recording-status')).toBeVisible()
+    await B.waitForTimeout(1800) // actual camera+microphone recording
+    await B.getByTestId('camera-stop-recording').click()
+    await expect(B.getByText(/Запись зашифрована и сохранена локально/))
+      .toBeVisible({timeout:30000})
+    const videoRecording=await B.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      const row=(await media.listLocalMedia()).find(x=>
+        x.mediaType==='video'&&!!x.capture)
+      if(!row?.capture)throw Error('captured.video_missing')
+      const capture=JSON.parse(row.capture.contract)
+      return {id:row.mediaId,assignmentId:capture.assignmentId,
+        contractId:capture.mediaId,kind:capture.mediaType,
+        encrypted:row.chunks.every(c=>c.blob.type==='application/octet-stream')}
+    })
+    expect(videoRecording).toMatchObject({
+      assignmentId,contractId:videoRecording.id,
+      kind:'video',encrypted:true,
+    })
+    await B.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      await media.synchronizeMedia()
+    })
+    await expect.poll(()=>B.evaluate(async id=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      return (await media.listLocalMedia()).find(x=>x.mediaId===id)?.state
+    },videoRecording.id),{timeout:30000}).toBe('synced')
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
+    await B.getByRole('button',{name:'Проверить ключ владельца'}).click()
+    await expect(B.getByText('Владелец подтверждён')).toBeVisible()
+    const videoRow=B.locator('.assignment-detail .photo-row')
+      .filter({hasText:videoRecording.id.slice(0,8)})
+      .filter({hasText:'Снято по заданию'})
+    await expect(videoRow).toBeVisible()
+    await videoRow.getByRole('button',{name:'Отправить медиа в задание'}).click()
+    await expect.poll(()=>B.evaluate(async()=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      return (await a.listAssignmentOperations())
+        .filter(x=>x.kind==='media-submit'&&x.state==='sent').length
+    }),{timeout:30000}).toBe(4)
+    await A.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(A.getByTestId('assignment-media-counts'))
+      .toContainText('Видео: 1 · Аудио: 2',{timeout:20000})
+    const videoReceipt=await A.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const res=await a.listAssignmentMediaSubmissions(id)
+      return res.items.find(x=>x.mediaId===id)
+    },videoRecording.id)
+    expect(videoReceipt?.capturedInAssignment).toBe(true)
+    const videoVerified=await A.evaluate(async id=>{
+      const grant=await import('/src/features/media/application/media-grants.ts')
+      const data=await grant.readReceivedMediaGrant(id)
+      return {mime:data.blob.type,bytes:data.blob.size,name:data.metadata.fileName}
+    },videoReceipt!.mediaGrantId)
+    expect(videoVerified.mime).toMatch(/^video\//)
+    expect(videoVerified.bytes).toBeGreaterThan(128)
+    expect(videoVerified.name).toMatch(/^recording-/)
     expect(ownerId).not.toBe(contributorId)
   }finally{
     await ownerCtx.close();await contributorCtx.close()
