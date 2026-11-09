@@ -20,8 +20,10 @@ BASE = 'e72c350d8926bcac17c515acef6eb1dc884c6206'
 
 
 class Acceptance:
-    def __init__(self, frontend_only=False):
+    def __init__(self, frontend_only=False, source_root=ROOT, source_ref=BASE):
         self.frontend_only = frontend_only
+        self.source_root = Path(source_root).resolve()
+        self.source_ref = source_ref
         self.directory = Path(tempfile.mkdtemp(prefix='pb3-acceptance-'))
         self.directory.chmod(0o700)
         self.results = []
@@ -38,7 +40,8 @@ class Acceptance:
 
     def write_summary(self):
         (self.directory / 'summary.json').write_text(json.dumps({
-            'base': BASE, 'project': self.project, 'started': self.started,
+            'base': self.source_ref, 'source_root': str(self.source_root),
+            'qa_root': str(ROOT), 'project': self.project, 'started': self.started,
             'results': self.results,
         }, indent=2) + '\n')
 
@@ -127,13 +130,13 @@ class Acceptance:
         script = (ROOT / 'scripts/local-acceptance/compose.yml').exists()
         assert script
         runtime = self.directory / 'api'
-        shutil.copytree(ROOT / 'apps/api', runtime,
+        shutil.copytree(self.source_root / 'apps/api', runtime,
                         ignore=shutil.ignore_patterns('vendor', '.env', '.env.*', '.phpunit.cache'))
         password = secrets.token_hex(24)
         app_key = 'base64:' + base64.b64encode(secrets.token_bytes(32)).decode()
         self.secrets.extend([password, app_key])
         self.compose_values = {
-            'PB3_RUN_DIR': str(self.directory), 'PB3_REPO_ROOT': str(ROOT),
+            'PB3_RUN_DIR': str(self.directory), 'PB3_REPO_ROOT': str(self.source_root),
             'PB3_TEST_PASSWORD': password, 'PB3_TEST_APP_KEY': app_key,
         }
         self.save_env()
@@ -148,7 +151,7 @@ class Acceptance:
         if not self.dc('compose-build', 'build', 'api', timeout=1200)[0]:
             return False
         if not self.command('php-security-floor', ['docker', 'run', '--rm', '--network', 'none',
-                '-v', f'{ROOT}:/source:ro', 'pb3-local-acceptance-php:8.4.27',
+                '-v', f'{self.source_root}:/source:ro', 'pb3-local-acceptance-php:8.4.27',
                 'php', '/source/scripts/check-runtime.php'])[0]:
             return False
         self.compose_started = True
@@ -207,18 +210,21 @@ class Acceptance:
                      'import {chromium} from "@playwright/test"; const b=await chromium.launch(); '
                      'console.log(b.version()); await b.close();'])
         self.background('vite', ['pnpm', '--filter', '@pb3/web', 'exec', 'vite',
-                                 '--host', '127.0.0.1', '--port', '5173', '--strictPort'])
+                                 '--host', '127.0.0.1', '--port', '5173', '--strictPort'], cwd=self.source_root)
         self.background('preview', ['pnpm', '--filter', '@pb3/web', 'exec', 'vite',
-                                    'preview', '--host', '127.0.0.1', '--port', '4173', '--strictPort'])
+                                    'preview', '--host', '127.0.0.1', '--port', '4173', '--strictPort'], cwd=self.source_root)
         if not self.health('vite-ready', 'http://127.0.0.1:5173/settings'):
             self.skip('browser-tests', 'Vite not ready')
             return
         preview = self.health('preview-ready', 'http://127.0.0.1:4173/settings')
         def browser(name, config, extra=()):
+            if name == 'product-e2e':
+                config = self.source_root / 'tests/playwright.config.ts'
             return self.command(name, ['pnpm', 'exec', 'playwright', 'test', '--config', config,
                                       '--output', str(self.directory / name), '--reporter=line,json', *extra],
                                 env={'PLAYWRIGHT_JSON_OUTPUT_NAME': str(self.directory / (name + '.json')),
-                                     'PB3_ACCEPTANCE_ARTIFACTS': str(self.directory)}, timeout=1200)[0]
+                                     'PB3_ACCEPTANCE_ARTIFACTS': str(self.directory)},
+                                cwd=self.source_root if name == 'product-e2e' else ROOT, timeout=1200)[0]
         config = 'tests/local-acceptance/playwright.config.ts'
         if preview:
             browser('performance-before', config, ['performance.spec.ts'])
@@ -230,17 +236,17 @@ class Acceptance:
             browser('performance-after', config, ['performance.spec.ts'])
 
     def run(self):
-        self.command('git-head', ['git', 'log', '-1', '--format=%H %s'])
-        baseline = self.command('source-boundaries', ['git', 'diff', '--exit-code', BASE, '--',
+        self.command('git-head', ['git', 'log', '-1', '--format=%H %s'], cwd=self.source_root)
+        baseline = self.command('source-boundaries', ['git', 'diff', '--exit-code', self.source_ref, '--',
                                 'apps/api', 'apps/web', 'tests/e2e', 'tests/playwright.config.ts',
-                                'package.json', 'pnpm-lock.yaml', 'compose.p0.yml'])[0]
+                                'package.json', 'pnpm-lock.yaml', 'compose.p0.yml'], cwd=self.source_root)[0]
         node_ok = self.command('node-version', ['node', '--version'])[0]
         self.command('pnpm-version', ['pnpm', '--version'])
-        deps = self.command('pnpm-install', ['pnpm', 'install', '--frozen-lockfile'])[0] if node_ok else False
+        deps = self.command('pnpm-install', ['pnpm', 'install', '--frozen-lockfile'], cwd=self.source_root)[0] if node_ok else False
         if deps:
-            self.command('typecheck', ['pnpm', 'typecheck'])
-            self.command('vitest', ['pnpm', 'test:web'])
-            self.command('production-build', ['pnpm', 'build'])
+            self.command('typecheck', ['pnpm', 'typecheck'], cwd=self.source_root)
+            self.command('vitest', ['pnpm', 'test:web'], cwd=self.source_root)
+            self.command('production-build', ['pnpm', 'build'], cwd=self.source_root)
         if self.frontend_only:
             self.skip('backend-and-browser', '--frontend-only requested')
             return
@@ -313,6 +319,8 @@ class Acceptance:
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--frontend-only', action='store_true')
+    parser.add_argument('--source-root', type=Path, default=ROOT)
+    parser.add_argument('--source-ref', default=BASE)
     acceptance = Acceptance(**vars(parser.parse_args()))
     try:
         acceptance.run()
