@@ -32,9 +32,11 @@ select a higher plan with a request field.
   changed same-ID contracts still fail 409.
 - A new assignment over the Free monthly limit gets **403** with stable
   `assignment.monthly_quota_exceeded`, limit and UTC reset boundary. No
-  database mutation. Existing authoritative Laravel API per-minute throttle
-  remains a separate operational technical rate limit; it must never be
-  conflated with the monthly product entitlement.
+  database mutation. Independently, a named Laravel technical limiter uses
+  `config/operational_limits.php` (initial 40 requests/minute) keyed to
+  the authenticated server-side account, not a shared NAT/IP address.
+  Unauthenticated traffic falls back to an IP-keyed limiter. Technical 429
+  and plan quota 403 are intentionally distinct; neither bypasses the other.
 - A `(owner_account_id,created_at)` index supports bounded quota counting
   without rescanning other accounts.
 - `GET /assignments/v1/usage` reports only the authenticated caller's
@@ -64,7 +66,8 @@ retry UX will require a dedicated versioned command.
 - PHP 8.4/8.5 tests: initial Free three remaining, actual three accepted
   month-to-date, fourth rejected with no DB side effects, same signed
   operation ACK after exhaustion, finished assignments still count,
-  owner isolation, prior calendar month excluded, catalog values.
+  owner isolation, prior calendar month excluded, catalog values, and
+  independent per-account 429 technical limiter even behind a shared IP.
 - Frontend: typed validated usage, local-first nonblocking list, no
   plaintext persisted in local draft, conflict visible in Active list.
 - Chromium in disposable PostgreSQL18/Garage2.5: complete earlier
