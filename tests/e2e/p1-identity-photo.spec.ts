@@ -421,6 +421,13 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
       .toBeVisible()
     await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
       .toBeVisible()
+    // Even with the key directory unavailable, a cached owner-signed policy
+    // can bind a local-only camera capture. The server will validate later.
+    const outageBinding=await B.evaluate(async id=>{
+      const m=await import('/src/features/assignments/application/assignment-outbox.ts')
+      return m.signedCaptureBinding(id)
+    },assignmentId)
+    expect(outageBinding.policyHash).toMatch(/^[0-9a-f]{64}$/)
     await B.unroute('**/assignments/v1')
     await B.unroute('**/assignments/v1/invites/received')
     await B.unroute('**/shares/v1/keys/*')
