@@ -343,6 +343,34 @@ export function assertSignedPolicyProgress(
     throw new Error('assignment.state_equivocation')
 }
 
+export type AssignmentMonthlyUsage={
+  planId:'free';catalogVersion:string
+  periodStart:string;periodEnd:string
+  limit:number;used:number;remaining:number
+}
+/**
+ * Current server-authoritative account quota; it is informational only.
+ * Local encrypted assignment drafts are never blocked or dropped offline.
+ * Actual admission runs atomically in the backend on signed create.
+ */
+export async function listServerAssignmentUsage():Promise<AssignmentMonthlyUsage>{
+  const session=requireSession()
+  if(!session.online)throw Error('assignment.offline')
+  const usage=await jsonApi<AssignmentMonthlyUsage>('/assignments/v1/usage')
+  assertSame(session)
+  if(usage.planId!=='free'
+    ||!Number.isSafeInteger(usage.limit)||usage.limit<0
+    ||!Number.isSafeInteger(usage.used)||usage.used<0
+    ||!Number.isSafeInteger(usage.remaining)||usage.remaining<0
+    ||usage.remaining!==Math.max(0,usage.limit-usage.used)
+    ||!Number.isFinite(Date.parse(usage.periodEnd))
+    ||!Number.isFinite(Date.parse(usage.periodStart))
+    ||Date.parse(usage.periodEnd)<=Date.parse(usage.periodStart)
+    ||typeof usage.catalogVersion!=='string'||!usage.catalogVersion)
+    throw Error('assignment.usage_invalid')
+  return usage
+}
+
 export async function listServerAssignments(after?:string):Promise<{
   items:AssignmentListing[];nextCursor:string|null
 }>{
