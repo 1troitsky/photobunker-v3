@@ -9,7 +9,7 @@ import {
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
   queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
-  queueAssignmentStateTransition,
+  queueAssignmentStateTransition,queueAssignmentGoalChange,
   verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
@@ -28,7 +28,8 @@ import type { StoredPhoto } from '../features/photo-sync/application/p1-photo'
 
 type VisibleAssignment={
   id:string;ownerAccountId:string;data:PrivateAssignment|null
-  state:string;revision:number;localState?:string;goal:number|null
+  state:string;revision:number;policyRevision:number
+  localState?:string;goal:number|null
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
 }
@@ -44,6 +45,7 @@ const selectedId=ref('')
 const title=ref('')
 const instructions=ref('')
 const goal=ref<string|number>('')
+const editedGoal=ref<string|number>('')
 const recipientId=ref('')
 const ownerCheck=ref<SafetyCheck|null>(null)
 const contributorCheck=ref<SafetyCheck|null>(null)
@@ -71,7 +73,10 @@ const finishedCount=computed(()=>assignments.value.filter(a=>a.state==='finished
 const selectedOperations=computed(()=>operations.value.filter(op=>
   op.contract.includes(selectedId.value)&&!!selectedId.value))
 const pendingStateChange=computed(()=>selectedOperations.value.some(op=>
-  op.kind==='state'&&(op.state==='queued'||op.state==='retry')))
+  (op.kind==='state'||op.kind==='policy')
+    &&(op.state==='queued'||op.state==='retry')))
+const pendingPolicyChange=computed(()=>selectedOperations.value.some(op=>
+  op.kind==='policy'&&(op.state==='queued'||op.state==='retry')))
 const eligiblePhotos=computed(()=>photos.value
   .filter(p=>p.state==='synced'
     &&(!p.capture||p.capture.assignmentId===selectedId.value))
@@ -125,7 +130,8 @@ async function hydrate():Promise<void>{
     catch { /* a corrupted local envelope must never reveal plaintext */ }
     return {
       id:item.id,ownerAccountId:item.ownerAccountId,data,
-      state:'active',revision:1,localState:item.state,goal:item.photoGoal,
+      state:'active',revision:1,policyRevision:1,
+      localState:item.state,goal:item.photoGoal,
       confirmedPhotos:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
     }
@@ -197,7 +203,8 @@ async function hydrate():Promise<void>{
     }
     const row:VisibleAssignment={
       id:item.assignmentId,ownerAccountId:item.ownerAccountId,data,
-      state:item.state,revision:item.revision,localState:previous?.localState,
+      state:item.state,revision:item.revision,policyRevision:item.policyRevision,
+      localState:previous?.localState,
       goal:item.photoGoal,confirmedPhotos:offline?null:item.confirmedPhotoCount,
       createdAt:previous?.createdAt??item.startsAt,
       isOwner:item.ownerAccountId===identity.accountId,
@@ -255,7 +262,9 @@ async function create():Promise<void>{
   })
 }
 function choose(assignmentId:string):void{
-  selectedId.value=assignmentId;ownerCheck.value=null
+  selectedId.value=assignmentId
+  editedGoal.value=assignments.value.find(a=>a.id===assignmentId)?.goal??''
+  ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
   submissions.value=[];cleanPreview()
   if(selected.value?.isOwner)void loadSubmissions()
@@ -280,6 +289,20 @@ async function changeState(action:'finish'|'resume'):Promise<void>{
     notice.value=action==='finish'
       ?'Завершение задания подписано и поставлено в очередь. Личные файлы участников сохраняются.'
       :'Возобновление задания подписано и поставлено в очередь.'
+  })
+}
+
+async function changeGoal():Promise<void>{
+  await operate(async()=>{
+    const a=selected.value
+    if(!a?.isOwner||a.localState==='queued')
+      throw new Error('assignment.owner_required')
+    const input=String(editedGoal.value).trim()
+    const value=input===''?null:Number(input)
+    await queueAssignmentGoalChange(a.id,value)
+    if(activeSession.value?.online&&navigator.onLine)await flushAssignmentOutbox()
+    await refresh()
+    notice.value='Новая цель подписана и сохранена. До подтверждения сервером действует прежняя версия.'
   })
 }
 
@@ -352,7 +375,8 @@ async function submit(photo:StoredPhoto):Promise<void>{
       throw Error('Подтвердите отпечаток владельца задания')
     // The recipient never gains access merely through assignment membership.
     const grantId=await queueRecipientGrant(photo.photoId,target.ownerAccountId)
-    await queueAssignmentSubmission(target.id,photo.photoId,grantId)
+    await queueAssignmentSubmission(target.id,photo.photoId,grantId,
+      photo.capture?.policyRevision??target.policyRevision)
     await flushRecipientGrants()
     await flushAssignmentOutbox()
     operations.value=await listAssignmentOperations()
@@ -489,7 +513,7 @@ onUnmounted(cleanPreview)
 
         <template v-if="selected.isOwner">
           <div class="assignment-toolbar">
-            <span class="muted">Версия состояния: {{ selected.revision }}</span>
+            <span class="muted">Версия состояния: {{ selected.revision }} · правила: {{ selected.policyRevision }}</span>
             <button v-if="selected.state==='active'" type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeState('finish')">Завершить задание</button>
@@ -497,7 +521,15 @@ onUnmounted(cleanPreview)
               :disabled="busy||pendingStateChange||(selected.endsAt!==null&&selected.endsAt<=Date.now())"
               @click="changeState('resume')">Возобновить задание</button>
           </div>
-          <p v-if="pendingStateChange" class="muted" role="status">Подписанное изменение состояния ожидает подтверждения сервера.</p>
+          <p v-if="pendingStateChange" class="muted" role="status">Подписанное изменение состояния или правил ожидает подтверждения сервера.</p>
+          <div v-if="selected.state==='active'" class="assignment-toolbar">
+            <label for="assignment-edited-goal">Цель по фото (пусто — без цели)</label>
+            <input id="assignment-edited-goal" v-model="editedGoal" type="number" min="1" max="9999" placeholder="Без цели">
+            <button type="button"
+              :disabled="busy||selected.localState==='queued'||pendingStateChange"
+              @click="changeGoal">Подписать новую цель</button>
+          </div>
+          <p v-if="pendingPolicyChange" class="muted">Новая версия правил находится в локальной очереди. Старые снимки сохраняют исходную подписанную политику.</p>
           <p class="muted">Завершение прекращает новые отправки в задание и съёмку после закрытия, но не удаляет личные фотографии участников и выданные ранее разрешения.</p>
           <h3>Участники</h3>
           <label for="assignment-recipient-id">ID аккаунта исполнителя</label>
