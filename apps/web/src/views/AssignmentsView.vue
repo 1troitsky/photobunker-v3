@@ -150,11 +150,26 @@ async function hydrate():Promise<void>{
   if(activeSession.value!==identity)return
   assignments.value=rows
 }
-async function refresh():Promise<void>{
-  if(syncing.value)return
-  syncing.value=true
-  try{await hydrate()}catch(e){error.value=explain(e)}
-  finally{syncing.value=false}
+// Coalesce overlapping initial offline hydration, subsequent online proof and
+// explicit refresh. Dropping a refresh while the old session is still being
+// hydrated can hide freshly accepted invitations until another navigation.
+let currentRefresh:Promise<void>|null=null
+let refreshRequested=false
+function refresh():Promise<void>{
+  if(currentRefresh){
+    refreshRequested=true
+    return currentRefresh
+  }
+  currentRefresh=(async()=>{
+    syncing.value=true
+    try{
+      do{
+        refreshRequested=false
+        try{await hydrate()}catch(e){error.value=explain(e)}
+      }while(refreshRequested)
+    }finally{syncing.value=false}
+  })().finally(()=>{currentRefresh=null})
+  return currentRefresh
 }
 async function synchronize():Promise<void>{
   await operate(async()=>{
