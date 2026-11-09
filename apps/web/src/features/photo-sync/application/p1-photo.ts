@@ -5,35 +5,13 @@ import { unwrapAssetDEK, wrapAssetDEK } from '../../identity/infrastructure/cryp
 import { decryptAsset, encryptAsset, sha } from '../../local-storage/infrastructure/cipher'
 import type { CipherManifest, Scope } from '../../local-storage/domain/contracts'
 import type { SignedCaptureBinding } from '../../assignments/application/assignment-outbox'
+import { preparePhotoMetadata, parsePhotoMetadata } from '../domain/capture-metadata'
+import type { CaptureMetadataInput, PhotoMetadata } from '../domain/capture-metadata'
 
-export type EncryptedGpsPoint={
-  latitude:number;longitude:number;accuracyMeters:number;recordedAt:number
-}
-export type PrivateCaptureFields={
-  category?:string|null
-  description?:string|null
-  gps?:EncryptedGpsPoint|null
-}
-export type PhotoPrivateMetadata={
-  version:1|2;type:'image/jpeg';capturedAt:number;source:'camera'
-  assignmentCapture?:SignedCaptureBinding
-  category?:string|null;description?:string|null;gps?:EncryptedGpsPoint|null
-}
-
-function sanitizedCaptureFields(fields:PrivateCaptureFields):Required<PrivateCaptureFields>{
-  const category=(fields.category??'').trim()
-  const description=(fields.description??'').trim()
-  if(category.length>64||description.length>4000)
-    throw new Error('capture.metadata_too_long')
-  const gps=fields.gps??null
-  if(gps&&(!Number.isFinite(gps.latitude)||gps.latitude< -90||gps.latitude>90
-    ||!Number.isFinite(gps.longitude)||gps.longitude< -180||gps.longitude>180
-    ||!Number.isFinite(gps.accuracyMeters)||gps.accuracyMeters<0
-    ||gps.accuracyMeters>100000||!Number.isSafeInteger(gps.recordedAt)
-    ||gps.recordedAt<1500000000000||gps.recordedAt>Date.now()+120000))
-    throw new Error('capture.invalid_gps')
-  return {category:category||null,description:description||null,gps}
-}
+export type {
+  GPSFix as EncryptedGpsPoint,CaptureMetadataInput as PrivateCaptureFields,
+  PhotoMetadata as PhotoPrivateMetadata,
+} from '../domain/capture-metadata'
 
 export type PhotoStatus = 'queued'|'retry'|'synced'|'conflict'
 export type StoredAsset = {
@@ -96,7 +74,7 @@ async function makeAsset(kind:'master'|'metadata',plaintext:Blob,
 }
 
 export async function captureEncrypted(
-  jpeg:Blob,capture?:SignedCaptureBinding,fields?:PrivateCaptureFields,
+  jpeg:Blob,capture?:SignedCaptureBinding,fields?:CaptureMetadataInput,
 ):Promise<StoredPhoto> {
   const session=requireSession()
   if (jpeg.type!=='image/jpeg'||jpeg.size<128||jpeg.size>10*1024*1024)
@@ -112,13 +90,11 @@ export async function captureEncrypted(
   // All optional category/description/GPS fields stay *inside* the
   // AEAD-encrypted metadata asset. The server sees only ciphertext length and
   // hash, never plaintext coordinates, labels or free text.
-  const privateFields=fields?sanitizedCaptureFields(fields):null
-  const metadata= new Blob([enc.encode(JSON.stringify({
-    type:'image/jpeg',capturedAt:createdAt,source:'camera',
-    version:privateFields?2:1,
-    ...(capture?{assignmentCapture:capture}:{}),
-    ...(privateFields??{}),
-  }))],{type:'application/json'})
+  // Normalize before any crypto or durable write; sensitive fields then
+  // exist only in the authenticated encrypted metadata asset.
+  const metadata= new Blob([enc.encode(JSON.stringify(
+    preparePhotoMetadata(createdAt,capture,fields),
+  ))],{type:'application/json'})
   const main=await makeAsset('master',jpeg,photoId,expiresAt)
   const detail=await makeAsset('metadata',metadata,photoId,expiresAt)
   requireSame(session)
@@ -223,21 +199,13 @@ export async function readLocalPhoto(photoId:string):Promise<Blob> {
   return decryptAsset(asset.manifest,asset.blob,key,scope(),()=>requireSame(s))
 }
 
-function parsePrivateMetadata(blob:Blob):Promise<PhotoPrivateMetadata>{
-  return blob.arrayBuffer().then(bytes=>{
-    const value=JSON.parse(new TextDecoder('utf-8',{fatal:true})
-      .decode(bytes)) as PhotoPrivateMetadata
-    if((value.version!==1&&value.version!==2)
-      ||value.type!=='image/jpeg'||value.source!=='camera'
-      ||!Number.isSafeInteger(value.capturedAt))
-      throw new Error('photo.invalid_private_metadata')
-    if(value.version===2)sanitizedCaptureFields(value)
-    return value
-  })
+async function parsePrivateMetadata(blob:Blob):Promise<PhotoMetadata>{
+  const content=JSON.parse(await blob.text()) as unknown
+  return parsePhotoMetadata(content)
 }
 
 /** Decrypt private metadata only on the identity owner's device. */
-export async function readLocalPhotoMetadata(photoId:string):Promise<PhotoPrivateMetadata>{
+export async function readLocalPhotoMetadata(photoId:string):Promise<PhotoMetadata>{
   const session=requireSession()
   const row=await db.photos.get(session.accountId+'/'+photoId)
   if(!row||row.expiresAt<=Date.now())throw new Error('photo.not_available')
@@ -284,6 +252,7 @@ async function readCloudAsset(
     storageKey:[s.accountId,photoId,asset.assetId,asset.assetId].join('/'),
   }
   const key=await unwrapAssetDEK(s.pkg,asset.assetId,String(result.expiresAt),manifest.wrappedDEK)
+  requireSame(s)
   return decryptAsset(manifest,download.blob,key,scope(),()=>requireSame(s))
 }
 
@@ -291,6 +260,6 @@ export async function readCloudPhoto(photoId:string):Promise<Blob>{
   return readCloudAsset(photoId,'master')
 }
 
-export async function readCloudPhotoMetadata(photoId:string):Promise<PhotoPrivateMetadata>{
+export async function readCloudPhotoMetadata(photoId:string):Promise<PhotoMetadata>{
   return parsePrivateMetadata(await readCloudAsset(photoId,'metadata'))
 }
