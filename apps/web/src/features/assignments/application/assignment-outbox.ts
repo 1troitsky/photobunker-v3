@@ -676,7 +676,10 @@ async function flushPass():Promise<void>{
     }catch(e){
       const reason=e instanceof Error?e.message:'assignment.network_error'
       await db.operations.update(op.id,{
-        state:/^api\.http_(401|403|409|410|422)$/.test(reason)?'conflict':'retry',
+        // A 401 can be caused by online proof/cookie rotation racing an
+        // outbox request. Keep the signed operation retryable; a revoked
+        // device cannot bypass server authorization on a later attempt.
+        state:/^api\.http_(403|409|410|422)$/.test(reason)?'conflict':'retry',
         lastError:/^api\.http_\d+$/.test(reason)?reason:'assignment.retry_required',
       })
       if(!navigator.onLine)return
