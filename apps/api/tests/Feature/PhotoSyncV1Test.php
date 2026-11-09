@@ -79,6 +79,97 @@ final class PhotoSyncV1Test extends TestCase {
                 'CONTENT_TYPE'=>'application/octet-stream'],$bytes)->assertOk();
         }
     }
+    /**
+     * The v2 photo is device-signed exactly as the personal v1 photo, but
+     * its immutable capture snapshot must match the server-held owner policy.
+     */
+    public function test_assignment_capture_v2_requires_current_signed_policy_snapshot():void {
+        $assignment=(string)Str::uuid();
+        $policy='{"version":1,"allowedMedia":["photo"]}';
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$assignment,'owner_account_id'=>$this->account,
+            'operation_id'=>(string)Str::uuid(),'contract_hash'=>hash('sha256',$policy),
+            'contract_json'=>$policy,'owner_signature'=>'test-signed-policy',
+            'private_envelope_json'=>'{}','state'=>'active',
+            'revision'=>1,'policy_revision'=>1,'photo_goal'=>30,
+            'starts_at'=>now()->subHour()->getTimestampMs(),
+            'ends_at'=>now()->addHour()->getTimestampMs(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $capture=[
+            'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
+            'policyRevision'=>1,'policyHash'=>hash('sha256',$policy),
+            'capturedAt'=>now()->getTimestampMs(),
+        ];
+        $scoped=function(array $scope):array {
+            $f=$this->fixture();
+            $contract=json_decode($f['body']['contract'],true,32,JSON_THROW_ON_ERROR);
+            $contract['version']=2;
+            $contract['capture']=$scope;
+            $json=json_encode($contract,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+            $f['body']=[
+                'contract'=>$json,
+                'signature'=>$this->signature("photobunker.photo-sync.v1\n".$json),
+            ];
+            return $f;
+        };
+        $valid=$scoped($capture);
+        $this->reserve($valid)->assertOk()->assertJsonPath('state','pending');
+        $this->reserve($valid)->assertOk(); // Signed idempotent replay.
+        $this->upload($valid);
+        $this->postJson('/photos/v1/'.$valid['photo'].'/finalize',
+            ['operationId'=>$valid['operation']])->assertOk();
+        $this->assertDatabaseHas('photo_records',['id'=>$valid['photo'],'state'=>'active']);
+
+        $wrongHash=$capture;
+        $wrongHash['policyHash']=str_repeat('f',64);
+        $this->reserve($scoped($wrongHash))->assertConflict();
+        $wrongOwner=$capture;
+        $wrongOwner['ownerAccountId']=(string)Str::uuid();
+        $this->reserve($scoped($wrongOwner))->assertConflict();
+        $future=$capture;
+        $future['capturedAt']=now()->addHour()->getTimestampMs();
+        $this->reserve($scoped($future))->assertStatus(422);
+        $wrongRevision=$capture;
+        $wrongRevision['policyRevision']=2;
+        $this->reserve($scoped($wrongRevision))->assertStatus(422);
+        // The owner can close an assignment without deleting contributor photos.
+        DB::table('assignment_records_v1')->where('id',$assignment)->update(['state'=>'archived']);
+        $this->reserve($scoped($capture))->assertConflict();
+    }
+
+    public function test_unaccepted_contributor_cannot_reserve_assignment_capture():void {
+        $assignment=(string)Str::uuid();
+        $owner=(string)Str::uuid();
+        DB::table('identity_accounts')->insert([
+            'id'=>$owner,'operation_id'=>(string)Str::uuid(),
+            'prepare_hash'=>str_repeat('b',64),'status'=>'ready',
+            'reserved_until'=>now()->addDay(),'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $policy='{"version":1,"allowedMedia":["photo"]}';
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$assignment,'owner_account_id'=>$owner,'operation_id'=>(string)Str::uuid(),
+            'contract_hash'=>hash('sha256',$policy),'contract_json'=>$policy,
+            'owner_signature'=>'fixture','private_envelope_json'=>'{}',
+            'state'=>'active','revision'=>1,'policy_revision'=>1,'photo_goal'=>null,
+            'starts_at'=>now()->subMinute()->getTimestampMs(),'ends_at'=>null,
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $f=$this->fixture();
+        $payload=json_decode($f['body']['contract'],true);
+        $payload['version']=2;
+        $payload['capture']=[
+            'assignmentId'=>$assignment,'ownerAccountId'=>$owner,
+            'policyRevision'=>1,'policyHash'=>hash('sha256',$policy),
+            'capturedAt'=>now()->getTimestampMs(),
+        ];
+        $json=json_encode($payload,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $f['body']=['contract'=>$json,
+            'signature'=>$this->signature("photobunker.photo-sync.v1\n".$json)];
+        $this->reserve($f)->assertForbidden();
+        $this->assertDatabaseMissing('photo_records',['id'=>$f['photo']]);
+    }
+
     public function test_signed_reserve_upload_readback_finalize_replay_and_private_read():void {
         $f=$this->fixture();
         $this->reserve($f)->assertOk()->assertJsonPath('state','pending');
