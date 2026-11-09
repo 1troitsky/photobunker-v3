@@ -1,9 +1,9 @@
 name: P0-02 isolated PostgreSQL 18 and Garage 2.5
 on:
   pull_request:
-    branches: [main, 'p0/**']
+    branches: [main, 'p0/**', 'p1/**']
   push:
-    branches: ['p0/02-**']
+    branches: ['p0/02-**', 'p1/**']
 permissions:
   contents: read
 jobs:
@@ -102,6 +102,9 @@ jobs:
       - name: Real S3 digest readback and SQL connectivity
         working-directory: apps/api
         run: php tests/integration/garage-postgres-smoke.php
+      - name: P1-02 real Garage TTL deletion + repeated late-write sweep (synthetic only)
+        working-directory: apps/api
+        run: php tests/integration/lifecycle-garage-smoke.php
       - name: Verify real health and readiness HTTP
         working-directory: apps/api
         shell: bash

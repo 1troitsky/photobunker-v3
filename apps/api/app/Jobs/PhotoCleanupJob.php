@@ -24,6 +24,11 @@ final class PhotoCleanupJob implements ShouldQueue
     }
     public function handle(Lifecycle $lifecycle):void
     {
+        // A worker can receive jobs queued before cleanup was disabled.
+        // The operator gate must also protect direct queue execution.
+        if (!config('photo_sync.cleanup_enabled', false)) {
+            throw new \RuntimeException('photo.cleanup_disabled');
+        }
         try {
             $lifecycle->cleanup($this->photoId);
         } catch(\Throwable $error) {
