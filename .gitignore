@@ -1,0 +1,16 @@
+/vendor/
+/node_modules/
+/apps/api/vendor/
+/apps/web/node_modules/
+/apps/web/dist/
+/.env
+/**/.env
+!/.env.example
+/**/.env.*
+!/apps/api/.env.example
+!/apps/web/.env.example
+/.idea/
+/.DS_Store
+/.phpunit.cache/
+/coverage/
+/storage/*.key

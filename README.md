@@ -1,9 +1,17 @@
-# PB3 — application platform
+# PB3 — configurable-brand privacy media application
 
-This is the clean technical repository for the third-generation privacy-first media application.
+**Status: P0 / preparation.** This is a new, independent implementation repository, not a deployment or automatically merged copy of PB2.
 
-> **Bootstrap only.** The product name is configurable and may change before launch. Product UI, emails, manifests and public pages must use the brand configuration instead of a hard-coded historical name.
+**Start here:** [Normative specification](ts.md) · [engineering rules](AGENTS.md) · [P0 delivery](docs/planning/P0-DELIVERY.md) · [source provenance](docs/architecture/PB2-PROVENANCE.md).
 
-The normative specification, source provenance, implementation rules and P0 foundation will be introduced in a Draft PR. No runtime or security functionality is implied by this initial commit.
+## Release scope
 
-Development stages: **P0 preparation**, then **P1–P4**. Historical PB2 and Fieldwork PR #56 are read-only reference sources.
+P0 setup, then **four mandatory phases**: P1 encrypted media/identity/storage; P2 accepted Fieldwork UI + Matrix Messenger; P3 Recovery Vault, payments, safety, admin, signed PWA; P4 personal/backup S3, Unlimited+ Matrix homeserver and full release readiness. IPFS is not included.
+
+Frontend and product name are configurable. Latest source UX: [PB2 PR #56, commit daca24a4](https://github.com/1troitsky/photobunker-new/tree/daca24a4a38c62473859b2b54b4999d50400c491/docs/ux). Do not copy demo UI code and claim production integration.
+
+## Current execution state
+
+Only P0 guardrails, reference documents and configuration are being introduced. The Laravel/Vue application, database schema, real media sync, Matrix and production PWA are **not implemented in this repository yet**.
+
+Backend security floor: **PHP 8.4.27+ before 8.5 or PHP 8.5.12+ before 8.6; Laravel >=13.4 <14.** Deployment must satisfy the same gate.

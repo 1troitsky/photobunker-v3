@@ -1,0 +1,21 @@
+{
+  "name": "pb3/api",
+  "description": "PB3 backend: secure runtime dependency baseline; Laravel scaffold pending P0 integration.",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.4.27 <8.5.0 || >=8.5.12 <8.6.0",
+    "laravel/framework": "^13.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/"
+    }
+  },
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {}
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}
