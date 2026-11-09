@@ -185,6 +185,21 @@ export async function decryptMediaChunks(
   validate(chunks.length===contract.chunks.length,'media.missing_chunk')
   const key=await unwrapAssetDEK(pkg,contract.mediaId,
     String(contract.expiresAt),contract.wrappedDEK)
+  return decryptMediaChunksWithDEK(contract,chunks,key,assertCurrent)
+}
+
+/**
+ * Same authenticated data format for recipient playback. The recipient DEK
+ * must have been independently unwrapped from a pinned, owner-signed grant;
+ * never use an untrusted upload manifest as authorization.
+ */
+export async function decryptMediaChunksWithDEK(
+  contract:MediaContract,chunks:readonly Blob[],key:CryptoKey,
+  assertCurrent:()=>void,
+):Promise<{blob:Blob;metadata:MediaMetadata}>{
+  validateMediaContract(contract)
+  validate(contract.expiresAt>Date.now(),'media.expired')
+  validate(chunks.length===contract.chunks.length,'media.missing_chunk')
   const parts:BlobPart[]=[]
   let metadata:MediaMetadata|null=null
   for(const [index,entry]of contract.chunks.entries()){
