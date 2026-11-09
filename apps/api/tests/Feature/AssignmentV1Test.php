@@ -886,7 +886,7 @@ final class AssignmentV1Test extends TestCase
         $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
         $raw=$this->signedMediaSubmit($video,'video');
         $this->as('recipient');
-        $this->postJson($url,$raw)->assertConflict(); // photo-only root
+        $this->postJson($url,$raw)->assertUnprocessable(); // v1 photo-only root has no media revision
 
         $this->as('owner');
         $policy=$this->signedMediaPolicyV3(['photo','video','audio']);
@@ -899,7 +899,7 @@ final class AssignmentV1Test extends TestCase
             ->assertConflict();
 
         $this->as('recipient');
-        $this->postJson($url,$raw)->assertConflict(); // stale revision
+        $this->postJson($url,$raw)->assertUnprocessable(); // stale photo-only revision
         $valid=$this->signedMediaSubmit($video,'video');
         $this->postJson($url,$valid)->assertCreated()
             ->assertJsonPath('unchanged',false);
