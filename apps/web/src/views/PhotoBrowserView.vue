@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import SharePanel from '../features/sharing/SharePanel.vue'
+import MediaImportPanel from '../features/media/ui/MediaImportPanel.vue'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
   flushOutbox, listLocalPhotos, listCloudPhotos,
@@ -90,7 +91,7 @@ onUnmounted(revokePreview)
 <template>
   <section class="foundation-content">
     <h1>Browser</h1>
-    <p class="subtitle">P1 · зашифрованные личные фотографии</p>
+    <p class="subtitle">P1 · зашифрованные фото, видео и аудио; личные фото камеры сохраняют прежний протокол</p>
     <div v-if="!activeSession" class="foundation-card">
       <p>Список файлов доступен после входа.</p>
       <RouterLink to="/settings">Открыть доступ</RouterLink>
@@ -119,6 +120,7 @@ onUnmounted(revokePreview)
         </div>
         <button v-if="cursor" type="button" :disabled="busy" @click="loadMore">Ещё</button>
       </div>
+      <MediaImportPanel />
       <SharePanel :local-photos="local" @open-photo="showReceived" />
       <div v-if="selectedUrl" class="foundation-card">
         <h2>Расшифровано на устройстве</h2>
