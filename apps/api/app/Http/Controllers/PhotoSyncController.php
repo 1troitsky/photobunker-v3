@@ -42,7 +42,7 @@ final class PhotoSyncController extends Controller
             $stream=$r->getContent(true);abort_unless(is_resource($stream),422);
             try{$ok=$this->storage->writeAsset($assetId,$stream);}
             finally{fclose($stream);}
-            abort_unless($ok && $this->sync->verify($object->object_key,(int)$object->bytes,$object->sha256),503);
+            abort_unless($ok && $this->sync->verify($object->id,(int)$object->bytes,$object->sha256),503);
             DB::transaction(function()use($a,$photoId,$assetId){
                 $p=DB::table('photo_records')->where('id',$photoId)->lockForUpdate()->first();
                 abort_unless($p&&$p->account_id===$a->id,410);
