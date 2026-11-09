@@ -17,6 +17,7 @@ An accepted participant should not lose sight of already-known encrypted assignm
 7. The offline invite list is loaded directly from IndexedDB when the browser is offline, even if the last local session previously had `online=true`; it does **not** issue an HTTP request in this case.
 8. If the browser reports `navigator.onLine=true` but the assignment API fails (e.g. 503), the screen switches to the same signed/encrypted cached data, displays a verification error, and marks all cached receipts and grants **stale**. No failed server response is promoted to live ACL.
 9. Historical signature verification under degraded connectivity explicitly uses the **already locally pinned** owner key rather than trying to refresh a live key-directory record. Fresh online operations continue using the default directory check. This enables a full assignments + key-directory 503 without upgrading cached state to authority.
+10. `signedCaptureBinding()` uses that locally pinned signed snapshot too, so an API/key-directory outage cannot block **local-only** encrypted capture. The later cloud reservation still requires server membership, state, historical intervals and policy validation.
 
 ## UX and authorization
 
