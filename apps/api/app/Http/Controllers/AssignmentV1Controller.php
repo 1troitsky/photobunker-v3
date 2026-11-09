@@ -297,6 +297,42 @@ final class AssignmentV1Controller extends Controller
             'nextCursor'=>$more&&$items?end($items)['assignmentId']:null]);
     }
 
+    /**
+     * Read-only owner-signed public revision history. The account must be the
+     * owner or an accepted invitee, never merely a named recipient. No private
+     * assignment fields, media bytes, keys or GPS are returned.
+     */
+    public function policyHistory(Request $r,string $assignmentId)
+    {
+        [$actor]=$this->sync->actor($r);
+        $a=$this->assignment($assignmentId);
+        if($a->owner_account_id!==$actor->id){
+            abort_unless(DB::table('assignment_invites_v1')
+                ->where('assignment_id',$assignmentId)
+                ->where('recipient_account_id',$actor->id)
+                ->where('state','accepted')->exists(),404);
+        }
+        $events=DB::table('assignment_policy_events_v1')
+            ->where('assignment_id',$assignmentId)
+            ->orderBy('to_revision')->limit(1001)
+            ->get(['from_revision','to_revision','contract_hash',
+                'contract_json','owner_signature','occurred_at_ms']);
+        abort_unless($events->count()===(int)$a->policy_revision-1,409);
+        return $this->sync->json([
+            'assignmentId'=>$assignmentId,
+            'policyRevision'=>(int)$a->policy_revision,
+            'rootPolicyHash'=>hash('sha256',$a->contract_json),
+            'events'=>$events->map(fn($e)=>[
+                'fromPolicyRevision'=>(int)$e->from_revision,
+                'toPolicyRevision'=>(int)$e->to_revision,
+                'contractHash'=>$e->contract_hash,
+                'contract'=>$e->contract_json,
+                'signature'=>$e->owner_signature,
+                'occurredAtMs'=>(int)$e->occurred_at_ms,
+            ])->values()->all(),
+        ]);
+    }
+
     public function invite(Request $r,string $assignmentId)
     {
         $this->sync->origin($r);
