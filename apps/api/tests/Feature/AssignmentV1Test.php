@@ -317,6 +317,65 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('items.0.state','accepted');
     }
 
+    public function test_confirmed_receipt_count_is_not_capped_by_fifty_item_page():void
+    {
+        $this->createAssignment();
+        $invite=$this->invite();
+        $this->accept($invite);
+        $owner=$this->people['owner']['account'];
+        $contributor=$this->people['recipient']['account'];
+        $device=$this->people['recipient']['device'];
+        $ids=[];
+        for($i=0;$i<51;$i++){
+            $photo=(string)Str::uuid();
+            $grant=(string)Str::uuid();
+            $ids[]=$grant;
+            DB::table('photo_records')->insert([
+                'id'=>$photo,'account_id'=>$contributor,'device_id'=>$device,
+                'operation_id'=>(string)Str::uuid(),
+                'state'=>'active','expires_at'=>now()->addDay()->getTimestampMs(),
+                'contract_hash'=>str_repeat('d',64),'contract_json'=>'{}',
+                'signature'=>'fixture','created_at'=>now(),'updated_at'=>now(),
+            ]);
+            DB::table('photo_access_grants')->insert([
+                'id'=>$grant,'photo_id'=>$photo,'owner_account_id'=>$contributor,
+                'recipient_account_id'=>$owner,'recipient_key_digest'=>str_repeat('a',64),
+                'expires_at'=>now()->addDay()->getTimestampMs(),
+                'state'=>'active','contract_hash'=>str_repeat('c',64),
+                'contract_json'=>'{}','account_signature'=>'fixture',
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            DB::table('assignment_submissions_v1')->insert([
+                'id'=>(string)Str::uuid(),
+                'assignment_id'=>$this->assignmentId,
+                'contributor_account_id'=>$contributor,'photo_id'=>$photo,
+                'photo_grant_id'=>$grant,'operation_id'=>(string)Str::uuid(),
+                'contract_hash'=>str_repeat('b',64),'contract_json'=>'{}',
+                'contributor_signature'=>'fixture','policy_revision'=>1,
+                'created_at'=>now(),
+            ]);
+        }
+        // Goal=30 does not cap receipt count. List endpoint is limited to 50
+        // rows, whereas the independent authenticated aggregate stays 51.
+        $this->as('owner');
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.photoGoal',30)
+            ->assertJsonPath('items.0.confirmedPhotoCount',51);
+        $this->assertCount(50,$this->getJson('/assignments/v1/'
+            .$this->assignmentId.'/submissions')->assertOk()->json('items'));
+        $this->as('recipient');
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',51);
+        DB::table('photo_access_grants')->where('id',$ids[0])
+            ->update(['state'=>'revoked']);
+        DB::table('photo_access_grants')->where('id',$ids[1])
+            ->update(['expires_at'=>now()->subMinute()->getTimestampMs()]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',49);
+        $this->as('outsider');
+        $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
+    }
+
     public function test_submission_requires_contributor_signed_bind_and_active_photo_grant():void
     {
         $this->createAssignment();
@@ -377,6 +436,8 @@ final class AssignmentV1Test extends TestCase
             ->assertOk()->assertJsonPath('unchanged',true);
 
         $this->as('owner');
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',1);
         $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
             ->assertJsonPath('items.0.photoId',$photo);
         $this->as('outsider');
@@ -388,6 +449,8 @@ final class AssignmentV1Test extends TestCase
         $this->as('owner');
         $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
             ->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',0);
         $this->assertDatabaseHas('photo_records',['id'=>$photo,'state'=>'active']);
         // An accepted submission may be retried after finish AND after its
         // separate E2EE grant is revoked. ACK must not reactivate the grant.
