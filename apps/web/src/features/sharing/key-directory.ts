@@ -147,10 +147,21 @@ async function importSecret(pkg:PackageV2,exchangeSpki:string,
     try{
       const ecdh=await crypto.subtle.importKey('pkcs8',encoded,
         {name:'ECDH',namedCurve:'P-256'},false,['deriveBits'])
-      // Verify that the sealed key really corresponds to signed exchange SPKI.
-      // WebCrypto has no direct export of non-extractable private public pair;
-      // deriveBits with a known valid peer checks the key type, while the
-      // AES-GCM AAD and signed sealedDigest bind the key to this descriptor.
+      // Prove the decrypted private key corresponds to the SIGNED ECDH
+      // public key. The stored seal/AAD alone does not prove key-pair match.
+      const signedPublic=await crypto.subtle.importKey('spki',unb64(exchangeSpki),
+        {name:'ECDH',namedCurve:'P-256'},false,[])
+      const probe=await crypto.subtle.generateKey(
+        {name:'ECDH',namedCurve:'P-256'},false,['deriveBits'])
+      const [one,two]=await Promise.all([
+        crypto.subtle.deriveBits({name:'ECDH',public:probe.publicKey},ecdh,256),
+        crypto.subtle.deriveBits({name:'ECDH',public:signedPublic},probe.privateKey,256),
+      ])
+      const first=new Uint8Array(one),second=new Uint8Array(two)
+      let mismatch=0
+      for(let i=0;i<first.length;i++)mismatch|=first[i]!^second[i]!
+      first.fill(0);second.fill(0)
+      if(mismatch!==0)throw new Error('share.exchange_key_pair_mismatch')
       return ecdh
     } finally {encoded.fill(0)}
   } finally {akek.fill(0)}
@@ -160,6 +171,10 @@ async function createKey(s:ReturnType<typeof requireSession>):Promise<OwnExchang
   const pair=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits'])
   const exchangeSpki=b64(await crypto.subtle.exportKey('spki',pair.publicKey))
   const raw=new Uint8Array(await crypto.subtle.exportKey('pkcs8',pair.privateKey))
+  // Never keep the extractable generated private key in application state.
+  // Only a non-extractable imported key may be used for ECDH after sealing.
+  const privateKey=await crypto.subtle.importKey('pkcs8',raw,
+    {name:'ECDH',namedCurve:'P-256'},false,['deriveBits'])
   const akek=unb64(s.pkg.akek,32)
   let encrypted:ArrayBuffer
   let iv:Uint8Array<ArrayBuffer>
@@ -184,7 +199,7 @@ async function createKey(s:ReturnType<typeof requireSession>):Promise<OwnExchang
     accountId:s.accountId,accountSpki:s.pkg.accountSpki,
     descriptor,signature,descriptorHash:await shaString(descriptor),
   })
-  return {privateKey:pair.privateKey,directory}
+  return {privateKey,directory}
 }
 
 let ongoing:Promise<OwnExchangeKey>|null=null
