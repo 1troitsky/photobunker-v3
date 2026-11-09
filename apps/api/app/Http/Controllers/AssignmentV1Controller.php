@@ -105,17 +105,20 @@ final class AssignmentV1Controller extends Controller
         [$actor]=$this->sync->actor($r);
         $raw=$r->json('contract');
         $shape=is_string($raw)?json_decode($raw,true,32):null;
-        $v2=is_array($shape)&&($shape['version']??null)===2;
+        $policyVersion=is_array($shape)?($shape['version']??null):null;
+        $withRequirements=in_array($policyVersion,[2,3],true);
         $keys=[
             'version','operationId','assignmentId','ownerAccountId',
             'rootPolicyHash','previousPolicyHash',
             'fromPolicyRevision','toPolicyRevision','photoGoal','allowedMedia',
         ];
-        if($v2)$keys=array_merge($keys,[
+        if($withRequirements)$keys=array_merge($keys,[
             'requiredCategory','descriptionMinLength','requiredGps',
         ]);
-        $c=$this->signed($r,$actor,$v2
-            ?'pb3.assignment-policy.v2':'pb3.assignment-policy.v1',$keys);
+        $c=$this->signed($r,$actor,
+            $policyVersion===3?'pb3.assignment-policy.v3'
+                :($policyVersion===2?'pb3.assignment-policy.v2'
+                :'pb3.assignment-policy.v1'),$keys);
         C::policyAmendment($c,$actor->id,$assignmentId);
         $hash=hash('sha256',$r->json('contract'));
         return DB::transaction(function()use($c,$actor,$assignmentId,$r,$hash){
@@ -143,18 +146,21 @@ final class AssignmentV1Controller extends Controller
             $previousValues=$a->latest_policy_contract!==null
                 ?json_decode($a->latest_policy_contract,true,32,JSON_THROW_ON_ERROR)
                 :[];
-            $v2Already=(($previousValues['version']??null)===2);
-            // An old v1 client is not allowed to silently disable new v2
-            // required metadata by continuing to edit only the photo goal.
-            abort_unless(!$v2Already||$c['version']===2,409);
-            $currentCategory=$v2Already?$previousValues['requiredCategory']:false;
-            $currentMinLength=$v2Already?$previousValues['descriptionMinLength']:0;
-            $currentGps=$v2Already?$previousValues['requiredGps']:false;
-            $differentRules=$c['version']===2
+            $oldVersion=(int)($previousValues['version']??1);
+            // No signed client is allowed to downgrade away existing capture
+            // requirements or newly granted media capabilities.
+            abort_unless($c['version']>=$oldVersion,409);
+            $oldRules=$oldVersion>=2;
+            $currentCategory=$oldRules?$previousValues['requiredCategory']:false;
+            $currentMinLength=$oldRules?$previousValues['descriptionMinLength']:0;
+            $currentGps=$oldRules?$previousValues['requiredGps']:false;
+            $currentMedia=$oldVersion===3?$previousValues['allowedMedia']:['photo'];
+            $differentRules=$c['version']>=2
                 &&($c['requiredCategory']!==$currentCategory
                     ||$c['descriptionMinLength']!==$currentMinLength
                     ||$c['requiredGps']!==$currentGps);
-            abort_unless($differentRules
+            $differentMedia=$c['allowedMedia']!==$currentMedia;
+            abort_unless($differentRules||$differentMedia
                 ||($a->photo_goal===null?null:(int)$a->photo_goal)!==$c['photoGoal'],409);
             $previous=hash('sha256',$a->latest_policy_contract??$a->contract_json);
             abort_unless(hash_equals($previous,$c['previousPolicyHash']),409);
