@@ -6,6 +6,7 @@ import CaptureView from './CaptureView.vue'
 
 const mocks = vi.hoisted(() => ({
   capture: vi.fn(), policies: vi.fn(), server: vi.fn(), binding: vi.fn(),
+  mediaEnqueue: vi.fn(),
   route: {query: {} as Record<string, string>},
 }))
 vi.mock('vue-router', () => ({
@@ -13,6 +14,7 @@ vi.mock('vue-router', () => ({
   RouterLink: {template: '<a><slot /></a>'},
 }))
 vi.mock('../features/photo-sync/application/p1-photo', () => ({captureEncrypted: mocks.capture}))
+vi.mock('../features/media/application/media-outbox', () => ({enqueueEncryptedMedia: mocks.mediaEnqueue}))
 vi.mock('../features/assignments/application/assignment-outbox', () => ({
   listServerAssignments: mocks.server,
   listVerifiedCapturePolicies: mocks.policies,
@@ -84,6 +86,56 @@ afterEach(async () => {
   await settle()
   host?.remove(); activeSession.value = null
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
+describe('P1-14 MediaRecorder cancellation and plaintext safety',()=>{
+  it('stops microphone and drops unsaved parts when the account changes during audio recording',async()=>{
+    class FakeRecorder{
+      static isTypeSupported(_mime:string){return true}
+      state:'inactive'|'recording'='inactive'
+      ondataavailable:((event:{data:Blob})=>void)|null=null
+      onstop:(()=>void)|null=null
+      onerror:(()=>void)|null=null
+      stopCount=0
+      constructor(_stream:MediaStream,_options:{mimeType:string}){}
+      start(){this.state='recording' as const}
+      stop(){this.state='inactive' as const;this.stopCount++;this.onstop?.()}
+    }
+    const created:FakeRecorder[]=[]
+    class RecorderFactory extends FakeRecorder{
+      constructor(stream:MediaStream,options:{mimeType:string}){
+        super(stream,options)
+        created.push(this)
+      }
+    }
+    vi.stubGlobal('MediaRecorder',RecorderFactory)
+    const session=await mount()
+    const original=media();requests[0]!.resolve(original.stream);await settle()
+    const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    mode.value='audio'
+    mode.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(original.track.stop).toHaveBeenCalledTimes(1)
+    expect(requests.length).toBe(2)
+    const microphone=media();requests[1]!.resolve(microphone.stream);await settle()
+    expect(getUserMedia).toHaveBeenLastCalledWith({audio:true,video:false})
+    button('Начать запись аудио').click();await settle()
+    expect(created).toHaveLength(1)
+    expect(created[0]!.state).toBe('recording')
+    // Simulate parts still present in browser RAM; they must never be
+    // durable or assigned to a subsequent identity.
+    created[0]!.ondataavailable?.({data:new Blob([new Uint8Array(256)])})
+    activeSession.value={
+      ...session,accountId:'account-changed',
+      pkg:{...session.pkg,accountId:'account-changed'},
+    }
+    await settle()
+    expect(created[0]!.stopCount).toBe(1)
+    expect(microphone.track.stop).toHaveBeenCalledTimes(1)
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(host.querySelector('[data-testid="camera-recording-status"]')).toBeNull()
+  })
 })
 
 describe('camera session ownership and async permission lifecycle', () => {
