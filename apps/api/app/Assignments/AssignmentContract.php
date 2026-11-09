@@ -125,7 +125,7 @@ final class AssignmentContract
     public static function mediaSubmission(array $d,string $contributor,
         string $assignment):void
     {
-        abort_unless($d['version']===1
+        abort_unless(in_array($d['version'],[1,2],true)
             &&in_array($d['kind'],['video','audio'],true)
             &&$d['assignmentId']===$assignment
             &&$d['contributorAccountId']===$contributor
@@ -137,6 +137,31 @@ final class AssignmentContract
         foreach(['policyHash','mediaContractHash'] as $field)
             abort_unless(is_string($d[$field])
                 &&preg_match('/^[a-f0-9]{64}$/D',$d[$field])===1,422);
+    }
+
+    /**
+     * Recording context is signed by the contributor's ACCOUNT before
+     * durable ciphertext upload. The clock remains client-declared; it
+     * does NOT attest real time, hardware origin or location.
+     */
+    public static function mediaCapture(array $d,string $account,
+        string $assignment):void
+    {
+        abort_unless(($d['version']??null)===1
+            &&($d['contributorAccountId']??null)===$account
+            &&($d['assignmentId']??null)===$assignment
+            &&in_array($d['mediaType']??null,['video','audio'],true)
+            &&is_int($d['policyRevision']??null)
+            &&$d['policyRevision']>=2&&$d['policyRevision']<=1001,422);
+        foreach(['assignmentId','ownerAccountId','contributorAccountId',
+            'mediaId'] as $key)self::uuid($d,$key);
+        foreach(['policyHash','mediaContractHash'] as $key)
+            abort_unless(is_string($d[$key])
+                &&preg_match('/^[a-f0-9]{64}$/D',$d[$key])===1,422);
+        $start=self::millis($d['startedAt']);
+        $end=self::millis($d['finishedAt']);
+        abort_unless($end>$start &&$end-$start<=3*60000
+            &&$end<=PhotoSync::nowMs()+120000,422);
     }
 
     public static function invite(array $d,string $owner,string $assignment):void
