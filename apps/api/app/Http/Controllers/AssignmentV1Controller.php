@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Assignments\AssignmentContract as C;
+use App\Assignments\MonthlyCreationQuota;
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
 use Illuminate\Http\Request;
@@ -15,7 +16,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class AssignmentV1Controller extends Controller
 {
-    public function __construct(private readonly PhotoSync $sync) {}
+    public function __construct(
+        private readonly PhotoSync $sync,
+        private readonly MonthlyCreationQuota $quota,
+    ) {}
 
     private function signed(Request $r,object $account,string $domain,array $keys): array
     {
@@ -31,6 +35,13 @@ final class AssignmentV1Controller extends Controller
         $a=DB::table('assignment_records_v1')->where('id',$id)->first();
         abort_unless($a,404);
         return $a;
+    }
+
+    /** Authenticated and current, never based on a browser-supplied month. */
+    public function usage(Request $r)
+    {
+        [$actor]=$this->sync->actor($r);
+        return $this->sync->json($this->quota->usage($actor->id));
     }
 
     public function create(Request $r)
@@ -58,6 +69,18 @@ final class AssignmentV1Controller extends Controller
             }
             abort_if(DB::table('assignment_records_v1')
               ->where('operation_id',$c['operationId'])->exists(),409);
+            // A signed create replay above must still ACK after monthly quota
+            // exhaustion. A genuinely NEW create is gated under the SAME
+            // account row lock used by all concurrent create transactions.
+            // The user's signed startsAt is never used to choose the month.
+            $usage=$this->quota->usage($actor->id);
+            if($usage['remaining']===0){
+                return $this->sync->json([
+                    'error'=>'assignment.monthly_quota_exceeded',
+                    'limit'=>$usage['limit'],
+                    'periodEnd'=>$usage['periodEnd'],
+                ],403);
+            }
             DB::table('assignment_records_v1')->insert([
                 'id'=>$c['assignmentId'],'owner_account_id'=>$actor->id,
                 'operation_id'=>$c['operationId'],'contract_hash'=>$hash,

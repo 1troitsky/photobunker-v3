@@ -1,5 +1,64 @@
 import { test, expect } from '@playwright/test'
 
+test('P1-09: Free monthly quota accepts three signed creates, rejects fourth without deleting local ciphertext',async({browser})=>{
+  const ctx=await browser.newContext()
+  const page=await ctx.newPage()
+  try{
+    await page.goto('/settings')
+    await page.getByRole('button',{name:'Создать ключ'}).click()
+    await page.getByLabel('Я сохранил ключ восстановления').check()
+    await page.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await page.goto('/assignments')
+    await expect(page.getByTestId('assignment-monthly-usage'))
+      .toContainText('0 / 3',{timeout:20000})
+
+    // Use genuine encrypted signed Local-First creation and durable outbox,
+    // but avoid extra list/refresh requests which would incorrectly test
+    // technical 40/min API throttling instead of monthly entitlements.
+    for(const count of [1,2,3,4]){
+      const outcome=await page.evaluate(async n=>{
+        const mod=await import('/src/features/assignments/application/assignment-outbox.ts')
+        const id=await mod.queueAssignmentCreation({
+          title:n===4?'FOURTH-ENCRYPTED-LOCAL-DRAFT':'Quota test '+n,
+          instructions:'Local-First ciphertext',photoGoal:null,
+        })
+        await mod.flushAssignmentOutbox()
+        const op=(await mod.listAssignmentOperations()).find(x=>
+          x.kind==='create'&&JSON.parse(x.contract).assignmentId===id)
+        return {state:op?.state,lastError:op?.lastError??null}
+      },count)
+      if(count<=3)expect(outcome).toEqual({state:'sent',lastError:null})
+      else expect(outcome).toEqual({state:'conflict',lastError:'api.http_403'})
+    }
+    await page.reload()
+    await expect(page.getByTestId('assignment-monthly-usage'))
+      .toContainText('3 / 3',{timeout:20000})
+    await expect(page.locator('.assignment-card').filter({
+      hasText:'FOURTH-ENCRYPTED-LOCAL-DRAFT',
+    })).toContainText('Не принято сервером',{timeout:20000})
+    const rejected=await page.evaluate(async()=>{
+      const mod=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const [usage,operations,local]=await Promise.all([
+        mod.listServerAssignmentUsage(),
+        mod.listAssignmentOperations(),mod.listLocalAssignmentDrafts(),
+      ])
+      const draft=local.find(x=>operations.some(op=>
+        op.kind==='create'&&op.state==='conflict'
+          &&JSON.parse(op.contract).assignmentId===x.id))
+      return {
+        used:usage.used,remaining:usage.remaining,
+        hasEncryptedDraft:!!draft,
+        leakedPlaintext:local.some(x=>JSON.stringify(x).includes(
+          'FOURTH-ENCRYPTED-LOCAL-DRAFT')),
+      }
+    })
+    expect(rejected).toEqual({
+      used:3,remaining:0,hasEncryptedDraft:true,leakedPlaintext:false,
+    })
+  }finally{await ctx.close()}
+})
+
 test('two browser identities: key-only account, encrypted camera photo, Garage recovery', async ({browser}) => {
   const first = await browser.newContext({permissions:['camera']})
   const deviceA = await first.newPage()
@@ -633,6 +692,7 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     },assignmentId)
     expect(newest.revision).toBe(3)
     expect(newest.hash).not.toBe(captured.policyHash)
+
     void aId
   } finally { await aCtx.close();await bCtx.close() }
 })

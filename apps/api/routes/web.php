@@ -65,8 +65,9 @@ Route::prefix('shares/v1')->middleware('throttle:40,1')->group(function(){
 
 // P1-04: signed, encrypted assignment + explicit recipient consent.
 // No grants arise automatically from contacts or team membership.
-Route::prefix('assignments/v1')->middleware('throttle:40,1')->group(function(){
+Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(function(){
     Route::get('/',[AssignmentV1Controller::class,'index']);
+    Route::get('/usage',[AssignmentV1Controller::class,'usage']);
     Route::post('/',[AssignmentV1Controller::class,'create']);
     Route::get('/invites/received',[AssignmentV1Controller::class,'inbox']);
     Route::post('/{assignmentId}/state',[AssignmentV1Controller::class,'changeState'])->whereUuid('assignmentId');
