@@ -413,6 +413,9 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await B.route('**/assignments/v1/invites/received',route=>route.fulfill({
       status:503,contentType:'application/json',body:'{"error":"synthetic outage"}',
     }))
+    await B.route('**/shares/v1/keys/*',route=>route.fulfill({
+      status:503,contentType:'application/json',body:'{"error":"synthetic key-directory outage"}',
+    }))
     await B.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(B.getByText(/Офлайн: показаны последние проверенные подписью/))
       .toBeVisible()
@@ -420,6 +423,7 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
       .toBeVisible()
     await B.unroute('**/assignments/v1')
     await B.unroute('**/assignments/v1/invites/received')
+    await B.unroute('**/shares/v1/keys/*')
 
     // Verify assignment policy while online and cache its signed snapshot.
     await B.getByRole('navigation',{name:'Главная навигация'})
