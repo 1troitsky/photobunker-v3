@@ -1,9 +1,9 @@
 import {test,expect} from '@playwright/test'
 
 test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts',async({browser})=>{
-  test.setTimeout(180000)
+  test.setTimeout(240000)
   const ownerCtx=await browser.newContext()
-  const contributorCtx=await browser.newContext()
+  const contributorCtx=await browser.newContext({permissions:['camera','microphone']})
   const A=await ownerCtx.newPage()
   const B=await contributorCtx.newPage()
   async function enroll(page:typeof A):Promise<string>{
@@ -153,6 +153,84 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
         .filter(x=>x.state==='synced').length
     })
     expect(intact).toBe(2)
+
+    // P1-14: actual Chromium MediaRecorder microphone stream (not a fake
+    // uploaded audio file) while the accepted signed policy is cached.
+    await B.goto('/camera?assignmentId='+assignmentId)
+    await expect(B.locator('#camera-assignment'))
+      .toHaveValue(assignmentId,{timeout:20000})
+    await B.getByTestId('camera-mode').selectOption('audio')
+    await expect(B.getByTestId('camera-start-recording'))
+      .toBeEnabled({timeout:20000})
+    await B.getByTestId('camera-start-recording').click()
+    await expect(B.getByTestId('camera-recording-status')).toBeVisible()
+    await B.waitForTimeout(1600) // actual microphone media data, not debounce
+    await B.getByTestId('camera-stop-recording').click()
+    await expect(B.getByText(/Запись зашифрована и сохранена локально/))
+      .toBeVisible({timeout:30000})
+    const recorded=await B.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      const row=(await media.listLocalMedia()).find(x=>!!x.capture)
+      if(!row?.capture)throw Error('captured.audio_missing')
+      const proof=JSON.parse(row.capture.contract)
+      const ciphertextOnly=row.chunks.every(c=>c.blob.type==='application/octet-stream')
+      return {
+        id:row.mediaId,
+        type:row.mediaType,
+        capturePolicy:proof.policyRevision,
+        captureMediaId:proof.mediaId,
+        captureAssignment:proof.assignmentId,
+        captureKind:proof.mediaType,
+        hasPrivateFilename:row.capture.contract.includes('recording-'),
+        signed:row.capture.signature.length>64,
+        ciphertextOnly,
+      }
+    })
+    expect(recorded).toMatchObject({
+      type:'audio',capturePolicy:2,captureMediaId:recorded.id,
+      captureAssignment:assignmentId,captureKind:'audio',
+      hasPrivateFilename:false,signed:true,ciphertextOnly:true,
+    })
+    await B.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      await media.synchronizeMedia()
+    })
+    await expect.poll(()=>B.evaluate(async id=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      return (await media.listLocalMedia()).find(x=>x.mediaId===id)?.state
+    },recorded.id),{timeout:30000}).toBe('synced')
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
+    await B.getByRole('button',{name:'Проверить ключ владельца'}).click()
+    await expect(B.getByText('Владелец подтверждён')).toBeVisible()
+    const recordedRow=B.locator('.assignment-detail .photo-row')
+      .filter({hasText:recorded.id.slice(0,8)})
+      .filter({hasText:'Снято по заданию'})
+    await expect(recordedRow).toBeVisible()
+    await recordedRow.getByRole('button',{name:'Отправить медиа в задание'}).click()
+    await expect.poll(()=>B.evaluate(async()=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      return (await a.listAssignmentOperations())
+        .filter(x=>x.kind==='media-submit'&&x.state==='sent').length
+    }),{timeout:30000}).toBe(3)
+    await A.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(A.getByTestId('assignment-media-counts'))
+      .toContainText('Видео: 0 · Аудио: 2',{timeout:20000})
+    const capturedReceipt=await A.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const res=await a.listAssignmentMediaSubmissions(id)
+      return res.items.find(x=>x.capturedInAssignment===true)
+    },assignmentId)
+    expect(capturedReceipt?.mediaId).toBe(recorded.id)
+    const verified=await A.evaluate(async id=>{
+      const grant=await import('/src/features/media/application/media-grants.ts')
+      const data=await grant.readReceivedMediaGrant(id)
+      return {mime:data.blob.type,bytes:data.blob.size,
+        fileName:data.metadata.fileName}
+    },capturedReceipt!.mediaGrantId)
+    expect(verified.mime).toMatch(/^audio\//)
+    expect(verified.bytes).toBeGreaterThan(128)
+    expect(verified.fileName).toMatch(/^recording-/)
     expect(ownerId).not.toBe(contributorId)
   }finally{
     await ownerCtx.close();await contributorCtx.close()
