@@ -13,21 +13,30 @@ test('P1-09: Free monthly quota accepts three signed creates, rejects fourth wit
     await expect(page.getByTestId('assignment-monthly-usage'))
       .toContainText('0 / 3',{timeout:20000})
 
+    // Use genuine encrypted signed Local-First creation and durable outbox,
+    // but avoid extra list/refresh requests which would incorrectly test
+    // technical 40/min API throttling instead of monthly entitlements.
     for(const count of [1,2,3,4]){
-      await page.getByRole('button',{name:'Создать задание',exact:true}).click()
-      await page.locator('#assignment-title')
-        .fill(count===4?'FOURTH-ENCRYPTED-LOCAL-DRAFT':'Quota test '+count)
-      await page.getByRole('button',{name:'Создать зашифрованное задание'}).click()
-      await page.getByRole('button',{name:'Синхронизировать'}).click()
-      if(count<=3){
-        await expect(page.getByTestId('assignment-monthly-usage'))
-          .toContainText(count+' / 3',{timeout:20000})
-      }else{
-        await expect(page.locator('.assignment-card').filter({
-          hasText:'FOURTH-ENCRYPTED-LOCAL-DRAFT',
-        })).toContainText('Не принято сервером',{timeout:20000})
-      }
+      const outcome=await page.evaluate(async n=>{
+        const mod=await import('/src/features/assignments/application/assignment-outbox.ts')
+        const id=await mod.queueAssignmentCreation({
+          title:n===4?'FOURTH-ENCRYPTED-LOCAL-DRAFT':'Quota test '+n,
+          instructions:'Local-First ciphertext',photoGoal:null,
+        })
+        await mod.flushAssignmentOutbox()
+        const op=(await mod.listAssignmentOperations()).find(x=>
+          x.kind==='create'&&JSON.parse(x.contract).assignmentId===id)
+        return {state:op?.state,lastError:op?.lastError??null}
+      },count)
+      if(count<=3)expect(outcome).toEqual({state:'sent',lastError:null})
+      else expect(outcome).toEqual({state:'conflict',lastError:'api.http_403'})
     }
+    await page.reload()
+    await expect(page.getByTestId('assignment-monthly-usage'))
+      .toContainText('3 / 3',{timeout:20000})
+    await expect(page.locator('.assignment-card').filter({
+      hasText:'FOURTH-ENCRYPTED-LOCAL-DRAFT',
+    })).toContainText('Не принято сервером',{timeout:20000})
     const rejected=await page.evaluate(async()=>{
       const mod=await import('/src/features/assignments/application/assignment-outbox.ts')
       const [usage,operations,local]=await Promise.all([
