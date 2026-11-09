@@ -85,7 +85,7 @@ export async function inspectPeer(accountId:string):Promise<{
 }> {
   const s=requireSession()
   if(s.accountId===accountId)throw new Error('share.cannot_share_self')
-  if(!s.online) {
+  if(!s.online || (typeof navigator!=='undefined'&&!navigator.onLine)) {
     const cached=await trustDB.peers.get(s.accountId+'/'+accountId)
     if(!cached)throw new Error('share.peer_requires_online_verification')
     return {directory:cached.directory,confirmed:true}
@@ -125,7 +125,7 @@ export async function pinnedPeer(accountId:string):Promise<SignedDirectory> {
   const s=requireSession()
   const pin=await trustDB.peers.get(s.accountId+'/'+accountId)
   if(!pin)throw new Error('share.peer_not_confirmed')
-  if(s.online){
+  if(s.online && (typeof navigator==='undefined'||navigator.onLine)){
     const checked=await inspectPeer(accountId)
     if(!checked.confirmed)throw new Error('share.peer_not_confirmed')
     return checked.directory

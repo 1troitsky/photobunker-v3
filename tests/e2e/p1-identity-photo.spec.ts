@@ -124,7 +124,13 @@ test('P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke',as
     await owner.getByLabel('Я сверил отпечаток получателя').check()
     await owner.getByRole('button',{name:'Подтвердить отпечаток',exact:true}).click()
     await expect(owner.getByText('Ключ получателя подтверждён')).toBeVisible()
+    // Grant construction must remain local-first after the peer's fingerprint
+    // has been explicitly pinned. Outbox stores encrypted key envelopes only.
+    await ownerContext.setOffline(true)
     await owner.getByRole('button',{name:'Передать',exact:true}).first().click()
+    await expect(owner.getByText(/ · queued/).first()).toBeVisible()
+    await ownerContext.setOffline(false)
+    await owner.reload() // IndexedDB outbox survives a normal online reload.
     await expect(owner.getByText(/ · sent/).first()).toBeVisible({timeout:30000})
 
     await recipient.getByRole('button',{name:'Обновить полученные'}).click()
