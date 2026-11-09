@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted,onUnmounted,ref,watch } from 'vue'
 import { activeSession } from '../../identity/application/session'
+import MediaSharePanel from './MediaSharePanel.vue'
 import {
   enqueueEncryptedMedia,listLocalMedia,listCloudMedia,
   readLocalMedia,readCloudMedia,synchronizeMedia,
@@ -64,6 +65,11 @@ async function sync():Promise<void>{
     notice.value='Очередь проверена. Только статус «synced» подтверждён сервером.'
   }catch(e){error.value=explanation(e)}
   finally{busy.value=false}
+}
+function previewReceived(blob:Blob,privateMetadata:MediaMetadata):void{
+  clearPreview()
+  selectedUrl.value=URL.createObjectURL(blob)
+  metadata.value=privateMetadata
 }
 async function preview(id:string,source:'local'|'cloud'):Promise<void>{
   error.value='';busy.value=true
@@ -138,6 +144,7 @@ onUnmounted(()=>{detach();clearPreview()})
       <button type="button" :disabled="busy" @click="preview(row.mediaId,'cloud')">Проверить из облака</button>
     </div>
     <button v-if="cursor" type="button" :disabled="busy" @click="more">Ещё файлы</button>
+    <MediaSharePanel :local-media="local" @open-media="previewReceived"/>
     <div v-if="selectedUrl&&metadata" class="foundation-card" data-testid="media-decrypted-preview">
       <h3>Расшифровано локально: {{ metadata.fileName }}</h3>
       <img v-if="metadata.mime.startsWith('image/')" :src="selectedUrl" alt="Личный файл" class="decrypted-preview">
