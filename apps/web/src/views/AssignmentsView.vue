@@ -392,7 +392,7 @@ async function submit(photo:StoredPhoto):Promise<void>{
     const checked=await preflightAssignmentPhotoGrant(
       target.id,photo.photoId,target.ownerAccountId)
     if(checked.personalPhoto&&!window.confirm(
-      'Это личное фото, снятое вне задания. Передать владельцу задания доступ к его содержимому?'
+      'Это личное фото, снятое вне задания. Дать владельцу задания доступ к фото и его приватным метаданным (включая описание и GPS, если они есть)?'
     ))return
     const grantId=await queueRecipientGrant(photo.photoId,target.ownerAccountId)
     await queueAssignmentSubmission(target.id,photo.photoId,grantId,
@@ -601,7 +601,7 @@ onUnmounted(cleanPreview)
             Проверить ключ владельца
           </button>
           <h3>Файлы · мои снимки</h3>
-          <p class="muted">Перед передачей проверяются подпись правил, принадлежность фото заданию и обязательные приватные поля. Доступ к личному снимку вне задания требует отдельного подтверждения; файлы и координаты остаются зашифрованными.</p>
+          <p class="muted">Перед передачей проверяются подпись правил, принадлежность фото заданию и обязательные поля. Подписанный E2EE grant даст владельцу задания возможность расшифровать и фото, и метаданные (включая описание и GPS, если указаны). Сервер их не видит. Для личного снимка потребуется отдельное подтверждение.</p>
           <div v-for="photo in eligiblePhotos" :key="photo.key" class="photo-row">
             <div><strong>{{ photo.photoId.slice(0,8) }}</strong>
               <small>{{ photo.capture?'Снято для этого задания':'Личный снимок · отдельная передача' }}</small>
