@@ -11,4 +11,10 @@ export function resolveBrand(source: { VITE_APP_NAME?: string; VITE_APP_SHORT_NA
     mark: source.VITE_APP_MARK?.trim() || 'app',
   }
 }
-export const brand = resolveBrand(import.meta.env)
+
+// Explicit keys satisfy TypeScript's structural check for optional-only inputs.
+export const brand = resolveBrand({
+  VITE_APP_NAME: import.meta.env.VITE_APP_NAME,
+  VITE_APP_SHORT_NAME: import.meta.env.VITE_APP_SHORT_NAME,
+  VITE_APP_MARK: import.meta.env.VITE_APP_MARK,
+})
