@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Identity\Protocol as P;
+use App\Media\MediaLifecycle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -189,6 +190,85 @@ final class MediaV1Test extends TestCase
             'identity_device'=>(string)Str::uuid(),'identity_issued'=>time()]);
         $this->getJson('/media/v1/'.$f['contract']['mediaId'].'/manifests')
             ->assertUnauthorized();
+    }
+
+    public function test_gated_ttl_tombstones_survive_cleanup_and_resweep_late_s3_writes():void
+    {
+        $f=$this->fixture('audio',1024);
+        $c=$f['contract'];$id=$c['mediaId'];
+        $this->postJson('/media/v1/reserve',[
+            'contract'=>$f['json'],'signature'=>$f['signature'],
+        ])->assertCreated();
+        foreach($c['chunks'] as $index=>$_)$this->send($f,$index)->assertOk();
+        $this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$c['operationId'],
+        ])->assertOk();
+        // A disabled destructive scheduler must not delete existing media.
+        config()->set('media_sync.cleanup_enabled',false);
+        $this->artisan('pb3:media-maintain')->assertExitCode(1);
+        $this->assertDatabaseHas('media_files_v1',['id'=>$id,'state'=>'active']);
+
+        DB::table('media_files_v1')->where('id',$id)->update([
+            'expires_at'=>now()->subMinute()->getTimestampMs(),
+        ]);
+        $lifecycle=app(MediaLifecycle::class);
+        $lifecycle->mark($id);
+        $lifecycle->mark($id); // one permanent tombstone only
+        $this->assertDatabaseCount('media_tombstones_v1',1);
+        $this->assertDatabaseHas('media_files_v1',['id'=>$id,'state'=>'deleting']);
+        $keys=DB::table('media_chunk_locations_v1')
+            ->orderBy('object_key')->pluck('object_key')->all();
+        $this->assertCount(2,$keys);
+        foreach($keys as $key)$this->assertTrue(Storage::disk('ciphertext')->exists($key));
+
+        $lifecycle->cleanup($id);
+        $lifecycle->cleanup($id);
+        $this->assertDatabaseCount('media_files_v1',0);
+        $this->assertDatabaseCount('media_chunks_v1',0);
+        $this->assertDatabaseCount('media_chunk_locations_v1',0);
+        $this->assertDatabaseCount('media_tombstones_v1',1);
+        $this->assertSame([],Storage::disk('ciphertext')->allFiles());
+        $this->postJson('/media/v1/reserve',[
+            'contract'=>$f['json'],'signature'=>$f['signature'],
+        ])->assertGone();
+        $this->getJson('/media/v1/'.$id.'/manifests')->assertGone();
+
+        // A late S3 write after deletion is never allowed to resurrect data.
+        Storage::disk('ciphertext')->put($keys[0],random_bytes(512));
+        DB::table('media_tombstones_v1')->where('media_id',$id)
+            ->update(['next_sweep_at'=>now()->subSecond()]);
+        $this->assertSame(1,$lifecycle->sweepTombstones(10));
+        $this->assertFalse(Storage::disk('ciphertext')->exists($keys[0]));
+        $this->assertDatabaseCount('media_tombstones_v1',1);
+    }
+
+    public function test_stalled_media_chunk_is_reconciled_without_deleting_valid_ciphertext():void
+    {
+        $f=$this->fixture('photo',1024);
+        $c=$f['contract'];
+        $this->postJson('/media/v1/reserve',[
+            'contract'=>$f['json'],'signature'=>$f['signature'],
+        ])->assertCreated();
+        $first=$c['chunks'][0];$second=$c['chunks'][1];
+        $key=DB::table('media_chunk_locations_v1')
+            ->where('chunk_id',$first['chunkId'])->value('object_key');
+        Storage::disk('ciphertext')->put($key,$f['chunks'][$first['chunkId']]);
+        DB::table('media_chunks_v1')->where('id',$first['chunkId'])
+            ->update(['state'=>'uploading','updated_at'=>now()->subDays(2)]);
+        DB::table('media_chunks_v1')->where('id',$second['chunkId'])
+            ->update(['state'=>'uploading','updated_at'=>now()->subDays(2)]);
+        $lifecycle=app(MediaLifecycle::class);
+        $result=$lifecycle->reconcileStalledChunks(10);
+        $this->assertSame(1,$result['verified']);
+        $this->assertSame(1,$result['reset']);
+        $this->assertSame(0,$result['errors']);
+        $this->assertDatabaseHas('media_chunks_v1',[
+            'id'=>$first['chunkId'],'state'=>'verified',
+        ]);
+        $this->assertDatabaseHas('media_chunks_v1',[
+            'id'=>$second['chunkId'],'state'=>'pending',
+        ]);
+        $this->assertTrue(Storage::disk('ciphertext')->exists($key));
     }
 
     public function test_shared_free_file_quota_and_expired_reservations_fail_closed():void
