@@ -1,5 +1,62 @@
 # Local acceptance of P1-04
 
+## Round 2
+
+QA base: `5d6116ae222b0694344f42f2b9a8d5a853682dc4`. From the QA checkout:
+
+```sh
+python3 -B scripts/local-acceptance/round2.py
+```
+
+To test a **separate detached worktree**, without merging or copying QA into it:
+
+```sh
+python3 -B scripts/local-acceptance/round2.py \
+  --source-root /absolute/path/to/detached-worktree \
+  --source-ref FULL_40_CHARACTER_TESTED_COMMIT_SHA
+```
+
+The worktree HEAD must match the explicit SHA and its protected product files
+must be unchanged. The runner installs/builds that checkout and copies its API
+to a fresh private runtime. Original product E2E run with that worktree's own
+Playwright installation; QA tests stay in this QA checkout and connect to the
+worktree's Vite server. Only one fixture runs at a time on the fixed ports.
+
+Round 2 repeats the complete lost-finalize-ACK test **three times**, without
+retries and with at most two failures before stopping that suite. Each sample
+checks immutable IndexedDB identifiers and ciphertext bytes/digests at eight
+boundaries, aborts a genuinely committed response, reloads, sends the exact
+signed operation twice, verifies one server photo, downloads it through the
+real Garage-backed API, decrypts it and compares plaintext hashes locally.
+No raw plaintext/key leaves the browser in the exported proof.
+
+Dev and production offline readiness are separate **observation probes**. Their
+test process may pass while the attached readiness status is `BLOCKED BY DESIGN`.
+That process exit is not offline acceptance. No worker is registered by QA.
+The state suite additionally checks policy tampering, signed state replay,
+rollback after local observation, offline capture v2 synchronized after finish,
+submission refusal while finished, resume, grant revocation and ciphertext
+retention. The controlled camera hydration regression is a real failing gate
+if a late camera response cannot recover automatically; it is not retried.
+
+For a bounded diagnostic rerun, use `--browser-suite product`, `state`,
+`late-capture` or `lost-ack`. `state` also runs the separate camera regression;
+`late-capture` runs the lifecycle tests without repeating that known camera
+failure and records read-only fixture state-event timestamps. Immediate-finish
+and server-aged (at least 1.5 seconds) capture cases are separate tests; the latter
+uses a real server-time fence, never an edited capture timestamp. The lifecycle
+fixture uses a synthetic canvas JPEG through the genuine crypto/outbox APIs;
+the original E2E and separate regression exercise camera UI. Other browser suites
+are explicitly `NOT TESTED` in that targeted run. The normal PHP/frontend/storage
+checks still run on the pinned checkout. Safari is probed only in the full mode;
+settings are never changed, and an unavailable native session is not a WebKit
+substitute. Review actual statuses and transport errors in the audit.
+
+Round 2 report: `docs/audits/P1-ACCEPTANCE-ROUND2.md`; trust proposal:
+`docs/audits/P1-OFFLINE-BOOTSTRAP-PROPOSAL.md`.
+
+## Original PR #13 harness
+
 Baseline: `p1/04-assignment-e2ee-capture` at
 `e72c350d8926bcac17c515acef6eb1dc884c6206`. Work branch:
 `qa/p1-local-acceptance`. Product files and original E2E tests stay unchanged.

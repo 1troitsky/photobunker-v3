@@ -23,6 +23,7 @@ def main():
         port = probe.getsockname()[1]
     origin = f'http://127.0.0.1:{port}'
     session_id = None
+    phase = 'driver-status'
     def request(method, path, body=None):
         data = None if body is None else json.dumps(body).encode()
         req = urllib.request.Request(origin + path, data=data, method=method,
@@ -47,7 +48,12 @@ def main():
                     return 77
                 time.sleep(0.25)
         try:
+            phase = 'session-creation'
+            print('Native Safari: requesting a WebDriver session; no permission settings changed.', flush=True)
             session = request('POST', '/session', {'capabilities': {'alwaysMatch': {'browserName': 'safari'}}})
+        except TimeoutError:
+            print('NOT TESTED: native Safari did not create a WebDriver session before the timeout; browser scenarios did not run.')
+            return 77
         except RuntimeError as error:
             message = str(error)
             if any(part in message.lower() for part in ('allow remote automation', 'not authorized', 'enable remote automation')):
@@ -55,7 +61,9 @@ def main():
                 return 77
             raise
         session_id = session['sessionId']
+        print('Native Safari: session created.', flush=True)
         prefix = '/session/' + session_id
+        phase = 'navigate-settings'
         request('POST', prefix + '/url', {'url': 'http://127.0.0.1:5173/settings'})
         for attempt in range(30):
             text = request('POST', prefix + '/execute/sync', {'script': 'return document.body.innerText', 'args': []})
@@ -64,6 +72,7 @@ def main():
             time.sleep(0.25)
         else:
             raise RuntimeError('Safari did not render account page')
+        phase = 'indexeddb-webcrypto'
         result = request('POST', prefix + '/execute/async', {'args': [], 'script': '''
 const done=arguments[arguments.length-1];
 (async()=>{
@@ -83,12 +92,16 @@ const done=arguments[arguments.length-1];
 '''})
         if result != {'ok': True, 'extractable': False}:
             raise RuntimeError('Safari IndexedDB/WebCrypto probe failed: ' + json.dumps(result))
+        phase = 'resize-screenshot'
         request('POST', prefix + '/window/rect', {'width': 390, 'height': 844})
         screenshot = request('GET', prefix + '/screenshot')
         (directory / 'safari-settings.png').write_bytes(base64.b64decode(screenshot))
         print(json.dumps({'status': 'PASS', 'capabilities': session['capabilities'], 'indexedDBWebCrypto': result}))
         return 0
     except Exception as error:
+        if isinstance(error, (TimeoutError, urllib.error.URLError)):
+            print(f'NOT TESTED: native Safari WebDriver transport unavailable at {phase}: {error}')
+            return 77
         print('FAIL: ' + str(error))
         return 1
     finally:

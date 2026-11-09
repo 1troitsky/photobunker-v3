@@ -1,0 +1,1027 @@
+{
+  "baseline": "fa6fabd103956942e602fa1124fc62ea3e858567",
+  "testedHead": "fa6fabd103956942e602fa1124fc62ea3e858567",
+  "sourceRoot": "$SOURCE",
+  "startedUtcEpoch": 1794234485.318141,
+  "versions": {
+    "node": "v22.23.3",
+    "pnpm": "10.20.0",
+    "php": "8.4.27",
+    "composer": "2.10.3",
+    "postgresql": "18.6",
+    "garage": "2.5.0",
+    "playwright": "1.56.1",
+    "chromium": "141.0.7390.37"
+  },
+  "checks": [
+    {
+      "name": "git-head",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "log",
+        "-1",
+        "--format=%H %s"
+      ],
+      "cwd": "$SOURCE",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/git-head.log",
+      "seconds": 0.008
+    },
+    {
+      "name": "source-boundaries",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "diff",
+        "--exit-code",
+        "fa6fabd103956942e602fa1124fc62ea3e858567",
+        "--",
+        "apps/api",
+        "apps/web",
+        "tests/e2e",
+        "tests/playwright.config.ts",
+        "package.json",
+        "pnpm-lock.yaml",
+        "compose.p0.yml"
+      ],
+      "cwd": "$SOURCE",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/source-boundaries.log",
+      "seconds": 0.026
+    },
+    {
+      "name": "node-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "node",
+        "--version"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/node-version.log",
+      "seconds": 0.027
+    },
+    {
+      "name": "pnpm-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "--version"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/pnpm-version.log",
+      "seconds": 0.242
+    },
+    {
+      "name": "pnpm-install",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "install",
+        "--frozen-lockfile"
+      ],
+      "cwd": "$SOURCE",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/pnpm-install.log",
+      "seconds": 0.766
+    },
+    {
+      "name": "typecheck",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "typecheck"
+      ],
+      "cwd": "$SOURCE",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/typecheck.log",
+      "seconds": 3.101
+    },
+    {
+      "name": "vitest",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "test:web"
+      ],
+      "cwd": "$SOURCE",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/vitest.log",
+      "seconds": 1.862
+    },
+    {
+      "name": "production-build",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "build"
+      ],
+      "cwd": "$SOURCE",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/production-build.log",
+      "seconds": 4.432
+    },
+    {
+      "name": "docker-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "version"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/docker-version.log",
+      "seconds": 0.227
+    },
+    {
+      "name": "isolation-contract",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "-B",
+        "tests/local-acceptance/test_isolation.py"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/isolation-contract.log",
+      "seconds": 0.202
+    },
+    {
+      "name": "compose-build",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "build",
+        "api"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose-build.log",
+      "seconds": 1.07
+    },
+    {
+      "name": "php-security-floor",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "-v",
+        "$SOURCE:/source:ro",
+        "pb3-local-acceptance-php:8.4.27",
+        "php",
+        "/source/scripts/check-runtime.php"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/php-security-floor.log",
+      "seconds": 0.571
+    },
+    {
+      "name": "storage-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "--wait",
+        "postgres",
+        "garage"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/storage-up.log",
+      "seconds": 3.939
+    },
+    {
+      "name": "postgres-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "postgres",
+        "postgres",
+        "--version"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/postgres-version.log",
+      "seconds": 0.155
+    },
+    {
+      "name": "garage-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "--version"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/garage-version.log",
+      "seconds": 0.086
+    },
+    {
+      "name": "garage-assign",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "layout",
+        "assign",
+        "-z",
+        "ci-zone",
+        "-c",
+        "1G",
+        "8bc2fe4e56743b5cbff9b1c4a810021fccdf9090552b3175d66242ecca184d5a"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/garage-assign.log",
+      "seconds": 0.14
+    },
+    {
+      "name": "garage-layout",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "layout",
+        "apply",
+        "--version",
+        "1"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/garage-layout.log",
+      "seconds": 0.207
+    },
+    {
+      "name": "garage-bucket",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "bucket",
+        "create",
+        "pb3-ci-p0"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/garage-bucket.log",
+      "seconds": 0.135
+    },
+    {
+      "name": "garage-key",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "key",
+        "create",
+        "pb3-ci-key"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/garage-key.log",
+      "seconds": 0.137
+    },
+    {
+      "name": "garage-allow",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "bucket",
+        "allow",
+        "--read",
+        "--write",
+        "--owner",
+        "pb3-ci-p0",
+        "--key",
+        "pb3-ci-key"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/garage-allow.log",
+      "seconds": 0.133
+    },
+    {
+      "name": "image-digests",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "image",
+        "inspect",
+        "php:8.4.27-cli-bookworm",
+        "postgres:18-alpine",
+        "dxflrs/garage:v2.5.0",
+        "--format",
+        "{{json .RepoTags}} {{json .RepoDigests}}"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/image-digests.log",
+      "seconds": 0.064
+    },
+    {
+      "name": "composer-install",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "install",
+        "--no-interaction",
+        "--no-progress",
+        "--prefer-dist"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/composer-install.log",
+      "seconds": 8.921
+    },
+    {
+      "name": "composer-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "--version"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/composer-version.log",
+      "seconds": 0.532
+    },
+    {
+      "name": "composer-validate",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "validate",
+        "--strict",
+        "--no-check-publish"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/composer-validate.log",
+      "seconds": 0.507
+    },
+    {
+      "name": "plan-registry",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "/source/scripts/verify-plan-config.php"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/plan-registry.log",
+      "seconds": 0.464
+    },
+    {
+      "name": "php-lint",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "sh",
+        "-c",
+        "find app bootstrap config routes database tests /source/scripts -name '*.php' -type f -print0 | xargs -0 -n1 php -l"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/php-lint.log",
+      "seconds": 0.988
+    },
+    {
+      "name": "routes",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "artisan",
+        "route:list"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/routes.log",
+      "seconds": 0.721
+    },
+    {
+      "name": "phpunit",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "-v",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/api:/app",
+        "pb3-local-acceptance-php:8.4.27",
+        "php",
+        "vendor/bin/phpunit",
+        "--log-junit",
+        "/app/phpunit-junit.xml"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/phpunit.log",
+      "seconds": 1.055
+    },
+    {
+      "name": "migrate",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "artisan",
+        "migrate",
+        "--force"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/migrate.log",
+      "seconds": 0.611
+    },
+    {
+      "name": "garage-postgres-smoke",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "tests/integration/garage-postgres-smoke.php"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/garage-postgres-smoke.log",
+      "seconds": 0.68
+    },
+    {
+      "name": "lifecycle-garage-smoke",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "tests/integration/lifecycle-garage-smoke.php"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/lifecycle-garage-smoke.log",
+      "seconds": 0.586
+    },
+    {
+      "name": "api-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "api"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/api-up.log",
+      "seconds": 0.882
+    },
+    {
+      "name": "healthz",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/healthz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/healthz.log",
+      "seconds": 1.221
+    },
+    {
+      "name": "readyz",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/readyz.log",
+      "seconds": 0.1
+    },
+    {
+      "name": "chromium-install",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "install",
+        "chromium"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/chromium-install.log",
+      "seconds": 0.633
+    },
+    {
+      "name": "playwright-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "--version"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/playwright-version.log",
+      "seconds": 0.571
+    },
+    {
+      "name": "chromium-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "node",
+        "--input-type=module",
+        "-e",
+        "import {chromium} from \"@playwright/test\"; const b=await chromium.launch(); console.log(b.version()); await b.close();"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/chromium-version.log",
+      "seconds": 1.078
+    },
+    {
+      "name": "vite-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:5173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/vite-ready.log",
+      "seconds": 1.12
+    },
+    {
+      "name": "preview-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:4173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/preview-ready.log",
+      "seconds": 0.076
+    },
+    {
+      "name": "state-integration",
+      "status": "FAIL",
+      "exit_code": 1,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "$REPO/tests/local-acceptance/playwright.config.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/state-integration",
+        "--reporter=line,json",
+        "state-integration.spec.ts",
+        "--max-failures",
+        "2"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/state-integration.log",
+      "seconds": 25.289
+    },
+    {
+      "name": "state-timestamps",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "-r",
+        "if (getenv('APP_ENV')!=='testing'||getenv('DB_DATABASE')!=='pb3_ci_p0'||getenv('PB3_ISOLATED_STORAGE_SMOKE')!=='1') exit(1); require 'vendor/autoload.php'; $app=require 'bootstrap/app.php'; $app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap(); $rows=Illuminate\\Support\\Facades\\DB::table('assignment_state_events_v1')->orderBy('created_at')->limit(100)->get(['assignment_id','from_revision','to_revision','state','created_at']); echo json_encode($rows,JSON_THROW_ON_ERROR),PHP_EOL;"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/state-timestamps.log",
+      "seconds": 0.757
+    },
+    {
+      "name": "other-browser-suites",
+      "status": "NOT TESTED",
+      "reason": "Targeted --browser-suite=late-capture",
+      "command": null,
+      "exit_code": null
+    },
+    {
+      "name": "container-logs",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "logs",
+        "--no-color"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/container-logs.log",
+      "seconds": 0.107
+    },
+    {
+      "name": "isolated-cleanup",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-a677828101",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/compose.env",
+        "-f",
+        "$REPO/scripts/local-acceptance/compose.yml",
+        "down",
+        "--remove-orphans"
+      ],
+      "cwd": "$REPO",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-fcha42jk/isolated-cleanup.log",
+      "seconds": 10.48
+    }
+  ],
+  "browsers": {
+    "state-integration": {
+      "stats": {
+        "startTime": "2026-11-09T14:28:44.425Z",
+        "duration": 24573.84,
+        "expected": 2,
+        "skipped": 0,
+        "unexpected": 1,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "PR14: authentic policy, forged state rejection, idempotent replay and observed-state rollback protection",
+          "file": "state-integration.spec.ts",
+          "line": 29,
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "duration": 1233
+            }
+          ],
+          "proofs": [
+            {
+              "status": "PASS",
+              "policyTamperRejected": true,
+              "forgedSignatureHttp": 401,
+              "staleRevisionHttp": 409,
+              "replayUnchanged": true,
+              "observedStateRollbackRejected": true,
+              "finalRevision": 3
+            }
+          ]
+        },
+        {
+          "title": "PR14: offline capture v2 syncs after finish; finish/resume and grant revoke preserve contributor ciphertext (immediate finish)",
+          "file": "state-integration.spec.ts",
+          "line": 80,
+          "status": "unexpected",
+          "results": [
+            {
+              "status": "failed",
+              "duration": 17178
+            }
+          ],
+          "proofs": [
+            {
+              "status": "FAIL",
+              "assignmentId": "e90457b2-a43c-4030-b3fb-99a3f0137eaf",
+              "capturedAt": 1794234528100,
+              "minimumCaptureAgeMs": 0,
+              "captureBeforeFinishRequest": true,
+              "stateAfterFinish": "conflict",
+              "apiError": "api.http_409",
+              "ciphertextRetained": true
+            }
+          ]
+        },
+        {
+          "title": "PR14: offline capture v2 syncs after finish; finish/resume and grant revoke preserve contributor ciphertext (aged capture)",
+          "file": "state-integration.spec.ts",
+          "line": 80,
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "duration": 5016
+            }
+          ],
+          "proofs": [
+            {
+              "status": "PASS",
+              "assignmentId": "074b8349-a704-4945-9474-1b3173fd43bc",
+              "capturedAt": 1794234545945,
+              "minimumCaptureAgeMs": 1500,
+              "captureBeforeFinishRequest": true,
+              "stateAfterFinish": "synced",
+              "apiError": null,
+              "ciphertextRetained": true
+            },
+            {
+              "status": "PASS",
+              "photoContractVersion": 2,
+              "capturedOfflineBeforeFinish": true,
+              "synchronizedAfterFinish": true,
+              "finishedSubmissionHttp": 409,
+              "resumedRevision": 3,
+              "recipientDecrypted": true,
+              "revokedReadHttp": 410,
+              "revokedSubmissionCount": 0,
+              "contributorCloudReadable": true,
+              "ciphertextRetainedAcrossFinishResumeRevokeReload": true,
+              "input": "synthetic-canvas-jpeg",
+              "minimumCaptureAgeMs": 1500
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "privacy": "No raw traces, screenshots, credential files, request bodies, errors or user media exported.",
+  "stateEventTimestamps": [
+    {
+      "assignment_id": "15ff114f-4277-463c-986f-aff211f852f2",
+      "from_revision": 1,
+      "to_revision": 2,
+      "state": "finished",
+      "created_at": "2026-11-09 14:28:46+00"
+    },
+    {
+      "assignment_id": "15ff114f-4277-463c-986f-aff211f852f2",
+      "from_revision": 2,
+      "to_revision": 3,
+      "state": "active",
+      "created_at": "2026-11-09 14:28:46+00"
+    },
+    {
+      "assignment_id": "e90457b2-a43c-4030-b3fb-99a3f0137eaf",
+      "from_revision": 1,
+      "to_revision": 2,
+      "state": "finished",
+      "created_at": "2026-11-09 14:28:48+00"
+    },
+    {
+      "assignment_id": "074b8349-a704-4945-9474-1b3173fd43bc",
+      "from_revision": 1,
+      "to_revision": 2,
+      "state": "finished",
+      "created_at": "2026-11-09 14:29:08+00"
+    },
+    {
+      "assignment_id": "074b8349-a704-4945-9474-1b3173fd43bc",
+      "from_revision": 2,
+      "to_revision": 3,
+      "state": "active",
+      "created_at": "2026-11-09 14:29:08+00"
+    }
+  ],
+  "captureTimingComparisons": [
+    {
+      "capturedAtMs": 1794234528100,
+      "storedFinishAt": "2026-11-09 14:28:48+00",
+      "storedFinishAtMs": 1794234528000,
+      "capturedMinusStoredFinishMs": 100,
+      "minimumCaptureAgeMs": 0,
+      "status": "FAIL"
+    },
+    {
+      "capturedAtMs": 1794234545945,
+      "storedFinishAt": "2026-11-09 14:29:08+00",
+      "storedFinishAtMs": 1794234548000,
+      "capturedMinusStoredFinishMs": -2055,
+      "minimumCaptureAgeMs": 1500,
+      "status": "PASS"
+    }
+  ]
+}
