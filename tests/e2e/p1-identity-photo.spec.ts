@@ -502,7 +502,7 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     // Owner changes the goal AFTER B's offline capture but BEFORE B can
     // reserve it. Revision 1 ciphertext must remain valid historically.
     await A.locator('#assignment-edited-goal').fill('45')
-    await A.getByRole('button',{name:'Подписать новую цель'}).click()
+    await A.getByRole('button',{name:'Подписать новые правила'}).click()
     await expect(A.getByText('Версия правил: 2')).toBeVisible({timeout:20000})
     await expect(A.locator('.assignment-card').first()).toContainText(/Фото:\s*0\s*\/\s*45/)
     await bCtx.setOffline(false)
@@ -541,6 +541,37 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await expect.poll(()=>decoded.evaluate(el=>(el as HTMLImageElement).naturalWidth))
       .toBeGreaterThan(0)
 
+    // A now adds stronger signed v2 capture requirements; B's already
+    // uploaded private photo stays valid and contributor-owned.
+    await A.locator('#assignment-category-required').check()
+    await A.locator('#assignment-description-min').fill('12')
+    await A.locator('#assignment-gps-required').check()
+    await A.getByRole('button',{name:'Подписать новые правила'}).click()
+    await expect(A.getByText('Версия правил: 3')).toBeVisible({timeout:20000})
+    await B.goto('/camera')
+    await B.getByRole('button',{name:'Обновить задания'}).click()
+    await expect(B.locator('#camera-assignment option[value="'+assignmentId+'"]'))
+      .toHaveCount(1,{timeout:20000})
+    await B.locator('#camera-assignment').selectOption(assignmentId)
+    await expect(B.getByText(/Подписанные требования:/))
+      .toContainText('описание минимум 12 символов')
+    await expect.poll(()=>B.locator('video').evaluate(el=>(el as HTMLVideoElement).videoWidth))
+      .toBeGreaterThan(0)
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText('assignment.category_required')).toBeVisible()
+    await B.locator('#camera-category').fill('Репортаж')
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText('assignment.description_too_short')).toBeVisible()
+    await B.locator('#camera-description').fill('Confidential description')
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText('assignment.gps_required')).toBeVisible()
+    await B.getByRole('button',{name:'Получить GPS'}).click()
+    await expect(B.getByText(/GPS получен/)).toBeVisible({timeout:12000})
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
+    await expect(A.locator('.assignment-card').first())
+      .toContainText(/Фото:\s*1\s*\/\s*45/)
+
     // A finishes without deleting contributor-owned ciphertext or old grants.
     await A.getByRole('button',{name:'Завершить задание'}).click()
     await A.getByRole('button',{name:'Синхронизировать'}).click()
@@ -565,10 +596,15 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
       .toHaveCount(1,{timeout:20000})
     const newest=await B.evaluate(async id=>{
       const m=await import('/src/features/assignments/application/assignment-outbox.ts')
-      const binding=await m.signedCaptureBinding(id)
+      const now=Date.now()
+      const binding=await m.signedCaptureBinding(id,now,{
+        category:'Репортаж',description:'Valid description after resume',
+        gps:{latitude:41.647849,longitude:41.639411,
+          accuracyMeters:6,recordedAt:now},
+      })
       return {revision:binding.policyRevision,hash:binding.policyHash}
     },assignmentId)
-    expect(newest.revision).toBe(2)
+    expect(newest.revision).toBe(3)
     expect(newest.hash).not.toBe(captured.policyHash)
     void aId
   } finally { await aCtx.close();await bCtx.close() }
