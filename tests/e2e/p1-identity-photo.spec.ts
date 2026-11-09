@@ -108,7 +108,7 @@ test('P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke',as
     const recipientId=await enroll(recipient)
     const ownerId=await enroll(owner)
 
-    await owner.getByRole('link',{name:'Камера',exact:true}).click()
+    await owner.getByRole('navigation',{name:'Главная навигация'}).getByRole('link',{name:'Камера',exact:true}).click()
     await expect.poll(()=>owner.locator('video').evaluate(el=>(el as HTMLVideoElement).videoWidth))
       .toBeGreaterThan(0)
     await owner.getByRole('button',{name:'Сделать снимок'}).click()
