@@ -5,6 +5,13 @@ import { unwrapAssetDEK, wrapAssetDEK } from '../../identity/infrastructure/cryp
 import { decryptAsset, encryptAsset, sha } from '../../local-storage/infrastructure/cipher'
 import type { CipherManifest, Scope } from '../../local-storage/domain/contracts'
 import type { SignedCaptureBinding } from '../../assignments/application/assignment-outbox'
+import { preparePhotoMetadata, parsePhotoMetadata } from '../domain/capture-metadata'
+import type { CaptureMetadataInput, PhotoMetadata } from '../domain/capture-metadata'
+
+export type {
+  GPSFix as EncryptedGpsPoint,CaptureMetadataInput as PrivateCaptureFields,
+  PhotoMetadata as PhotoPrivateMetadata,
+} from '../domain/capture-metadata'
 
 export type PhotoStatus = 'queued'|'retry'|'synced'|'conflict'
 export type StoredAsset = {
@@ -66,7 +73,9 @@ async function makeAsset(kind:'master'|'metadata',plaintext:Blob,
   }
 }
 
-export async function captureEncrypted(jpeg:Blob,capture?:SignedCaptureBinding):Promise<StoredPhoto> {
+export async function captureEncrypted(
+  jpeg:Blob,capture?:SignedCaptureBinding,fields?:CaptureMetadataInput,
+):Promise<StoredPhoto> {
   const session=requireSession()
   if (jpeg.type!=='image/jpeg'||jpeg.size<128||jpeg.size>10*1024*1024)
     throw new Error('capture.invalid_jpeg')
@@ -78,10 +87,14 @@ export async function captureEncrypted(jpeg:Blob,capture?:SignedCaptureBinding):
   // 13 days is an intentional conservative buffer against the initial 14-day
   // Free cap and unsynchronized browser clocks. Authoritative TTL needs P1 clock sync.
   const expiresAt=createdAt+13*86400000
-  const metadata= new Blob([enc.encode(JSON.stringify({
-    type:'image/jpeg',capturedAt:createdAt,source:'camera',version:1,
-    ...(capture?{assignmentCapture:capture}:{}),
-  }))],{type:'application/json'})
+  // All optional category/description/GPS fields stay *inside* the
+  // AEAD-encrypted metadata asset. The server sees only ciphertext length and
+  // hash, never plaintext coordinates, labels or free text.
+  // Normalize before any crypto or durable write; sensitive fields then
+  // exist only in the authenticated encrypted metadata asset.
+  const metadata= new Blob([enc.encode(JSON.stringify(
+    preparePhotoMetadata(createdAt,capture,fields),
+  ))],{type:'application/json'})
   const main=await makeAsset('master',jpeg,photoId,expiresAt)
   const detail=await makeAsset('metadata',metadata,photoId,expiresAt)
   requireSame(session)
@@ -186,6 +199,26 @@ export async function readLocalPhoto(photoId:string):Promise<Blob> {
   return decryptAsset(asset.manifest,asset.blob,key,scope(),()=>requireSame(s))
 }
 
+async function parsePrivateMetadata(blob:Blob):Promise<PhotoMetadata>{
+  const content=JSON.parse(await blob.text()) as unknown
+  return parsePhotoMetadata(content)
+}
+
+/** Decrypt private metadata only on the identity owner's device. */
+export async function readLocalPhotoMetadata(photoId:string):Promise<PhotoMetadata>{
+  const session=requireSession()
+  const row=await db.photos.get(session.accountId+'/'+photoId)
+  if(!row||row.expiresAt<=Date.now())throw new Error('photo.not_available')
+  const asset=row.assets.find(a=>a.kind==='metadata')
+  if(!asset)throw new Error('photo.missing_metadata')
+  const key=await unwrapAssetDEK(session.pkg,asset.assetId,
+    String(row.expiresAt),asset.manifest.wrappedDEK)
+  const plaintext=await decryptAsset(asset.manifest,asset.blob,key,scope(),
+    ()=>requireSame(session))
+  requireSame(session)
+  return parsePrivateMetadata(plaintext)
+}
+
 export interface CloudPhoto {photoId:string;expiresAt:number;metadataAssetId:string|null}
 export async function listCloudPhotos(after?:string):Promise<{items:CloudPhoto[];nextCursor:string|null}> {
   const s=requireSession()
@@ -201,13 +234,15 @@ type CloudManifest={
     manifest:Omit<CipherManifest,'backend'|'storageKey'>
   }>
 }
-export async function readCloudPhoto(photoId:string):Promise<Blob> {
+async function readCloudAsset(
+  photoId:string,kind:'master'|'metadata',
+):Promise<Blob> {
   const s=requireSession()
   if(!s.online)throw new Error('identity.offline')
   const result=await jsonApi<CloudManifest>(path(photoId)+'/manifests')
   if(result.photoId!==photoId||result.expiresAt<=Date.now())throw new Error('photo.expired')
-  const asset=result.assets.find(a=>a.kind==='master')
-  if(!asset)throw new Error('photo.no_master')
+  const asset=result.assets.find(a=>a.kind===kind)
+  if(!asset)throw new Error('photo.missing_'+kind)
   const download=await readCiphertext(path(photoId)+'/objects/'+asset.assetId)
   const digest=await sha(new Uint8Array(await download.blob.arrayBuffer()))
   if(digest!==asset.sha256||download.digest!==asset.sha256||download.blob.size!==asset.bytes)
@@ -217,5 +252,14 @@ export async function readCloudPhoto(photoId:string):Promise<Blob> {
     storageKey:[s.accountId,photoId,asset.assetId,asset.assetId].join('/'),
   }
   const key=await unwrapAssetDEK(s.pkg,asset.assetId,String(result.expiresAt),manifest.wrappedDEK)
+  requireSame(s)
   return decryptAsset(manifest,download.blob,key,scope(),()=>requireSame(s))
+}
+
+export async function readCloudPhoto(photoId:string):Promise<Blob>{
+  return readCloudAsset(photoId,'master')
+}
+
+export async function readCloudPhotoMetadata(photoId:string):Promise<PhotoMetadata>{
+  return parsePrivateMetadata(await readCloudAsset(photoId,'metadata'))
 }

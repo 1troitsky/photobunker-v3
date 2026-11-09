@@ -179,6 +179,58 @@ describe('camera session ownership and async permission lifecycle', () => {
     expect(getUserMedia).toHaveBeenCalledTimes(1)
     expect(host.querySelector('video')!.srcObject).toBe(opened.stream)
   })
+  it('requests GPS only by explicit action and passes private fields to encryption',async()=>{
+    const coordinates={
+      latitude:41.647849,longitude:41.639411,accuracy:6,
+    }
+    const getCurrentPosition=vi.fn((success:PositionCallback)=>{
+      success({coords:coordinates,timestamp:Date.now()} as GeolocationPosition)
+    })
+    Object.defineProperty(navigator,'geolocation',{
+      configurable:true,value:{getCurrentPosition},
+    })
+    await mount()
+    expect(getCurrentPosition).not.toHaveBeenCalled()
+    const camera=media();requests[0]!.resolve(camera.stream);await settle()
+    const cat=host.querySelector<HTMLInputElement>('#camera-category')!
+    cat.value='Репортаж';cat.dispatchEvent(new Event('input',{bubbles:true}))
+    const description=host.querySelector<HTMLTextAreaElement>('#camera-description')!
+    description.value='CONFIDENTIAL-CATEGORY-GPS'
+    description.dispatchEvent(new Event('input',{bubbles:true}))
+    await settle()
+    button('Получить GPS').click();await settle()
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+    expect(host.textContent).toContain('GPS получен')
+    button('Сделать снимок').click();await settle()
+    expect(mocks.capture).toHaveBeenCalledWith(
+      expect.any(Blob),undefined,{
+        category:'Репортаж',description:'CONFIDENTIAL-CATEGORY-GPS',
+        gps:expect.objectContaining({
+          latitude:41.647849,longitude:41.639411,accuracyMeters:6,
+        }),
+      })
+  })
+  it('discards a late GPS result after a genuine identity switch',async()=>{
+    let deliver!:PositionCallback
+    const getCurrentPosition=vi.fn((success:PositionCallback)=>{deliver=success})
+    Object.defineProperty(navigator,'geolocation',{
+      configurable:true,value:{getCurrentPosition},
+    })
+    const session=await mount()
+    const opened=media();requests[0]!.resolve(opened.stream);await settle()
+    button('Получить GPS').click();await settle()
+    expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+    activeSession.value={...session,accountId:'account-b'}
+    await settle()
+    deliver({
+      coords:{latitude:41.65,longitude:41.64,accuracy:9},
+      timestamp:Date.now(),
+    } as GeolocationPosition)
+    await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+    expect(host.querySelector<HTMLInputElement>('#camera-category')?.value).toBe('')
+    expect(host.querySelector<HTMLTextAreaElement>('#camera-description')?.value).toBe('')
+  })
   it('drops a frame if identity changes while JPEG encoding is pending', async () => {
     const session = await mount()
     const opened = media(); requests[0]!.resolve(opened.stream); await settle()

@@ -5,19 +5,21 @@ import SharePanel from '../features/sharing/SharePanel.vue'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
   flushOutbox, listLocalPhotos, listCloudPhotos,
-  readLocalPhoto, readCloudPhoto,
+  readLocalPhoto, readCloudPhoto, readLocalPhotoMetadata, readCloudPhotoMetadata,
 } from '../features/photo-sync/application/p1-photo'
-import type { StoredPhoto, CloudPhoto } from '../features/photo-sync/application/p1-photo'
+import type { StoredPhoto, CloudPhoto, PhotoPrivateMetadata } from '../features/photo-sync/application/p1-photo'
 
 const local=ref<StoredPhoto[]>([])
 const cloud=ref<CloudPhoto[]>([])
 const cursor=ref<string|null>(null)
 const selectedUrl=ref('')
+const selectedMetadata=ref<PhotoPrivateMetadata|null>(null)
 const busy=ref(false)
 const status=ref('')
 const error=ref('')
 
 function revokePreview():void {
+  selectedMetadata.value=null
   if(selectedUrl.value){URL.revokeObjectURL(selectedUrl.value);selectedUrl.value=''}
 }
 async function refresh():Promise<void> {
@@ -43,8 +45,16 @@ async function sync():Promise<void> {
 }
 async function openLocal(photoId:string):Promise<void> {
   error.value=''
-  try{revokePreview();selectedUrl.value=URL.createObjectURL(await readLocalPhoto(photoId))}
-  catch(e){error.value=e instanceof Error?e.message:'photo.unavailable'}
+  try{
+    const identity=activeSession.value
+    const [photo,metadata]=await Promise.all([
+      readLocalPhoto(photoId),readLocalPhotoMetadata(photoId),
+    ])
+    if(activeSession.value!==identity)return
+    revokePreview()
+    selectedMetadata.value=metadata
+    selectedUrl.value=URL.createObjectURL(photo)
+  }catch(e){error.value=e instanceof Error?e.message:'photo.unavailable'}
 }
 function showReceived(blob:Blob):void {
   revokePreview()
@@ -52,8 +62,16 @@ function showReceived(blob:Blob):void {
 }
 async function openCloud(photoId:string):Promise<void> {
   error.value=''
-  try{revokePreview();selectedUrl.value=URL.createObjectURL(await readCloudPhoto(photoId))}
-  catch(e){error.value=e instanceof Error?e.message:'photo.unavailable'}
+  try{
+    const identity=activeSession.value
+    const [photo,metadata]=await Promise.all([
+      readCloudPhoto(photoId),readCloudPhotoMetadata(photoId),
+    ])
+    if(activeSession.value!==identity)return
+    revokePreview()
+    selectedMetadata.value=metadata
+    selectedUrl.value=URL.createObjectURL(photo)
+  }catch(e){error.value=e instanceof Error?e.message:'photo.unavailable'}
 }
 async function loadMore():Promise<void> {
   if(!cursor.value||busy.value)return
@@ -105,6 +123,16 @@ onUnmounted(revokePreview)
       <div v-if="selectedUrl" class="foundation-card">
         <h2>Расшифровано на устройстве</h2>
         <img :src="selectedUrl" class="decrypted-preview" alt="Личный снимок"/>
+        <div v-if="selectedMetadata" class="muted">
+          <p>Снято: {{ new Date(selectedMetadata.capturedAt).toLocaleString() }}</p>
+          <p v-if="selectedMetadata.category">Категория: {{ selectedMetadata.category }}</p>
+          <p v-if="selectedMetadata.description">Описание: {{ selectedMetadata.description }}</p>
+          <p v-if="selectedMetadata.gps">
+            GPS: {{ selectedMetadata.gps.latitude }}, {{ selectedMetadata.gps.longitude }}
+            · точность ±{{ Math.round(selectedMetadata.gps.accuracyMeters) }} м
+          </p>
+          <p class="muted">Поля расшифрованы локально, без передачи координат в картографический сервис.</p>
+        </div>
         <button type="button" @click="revokePreview">Закрыть</button>
       </div>
     </template>

@@ -345,7 +345,10 @@ test('P1-04: A creates encrypted assignment, B accepts and submits a photo grant
 test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo',async({browser})=>{
   test.setTimeout(150_000)
   const aCtx=await browser.newContext()
-  const bCtx=await browser.newContext({permissions:['camera']})
+  const bCtx=await browser.newContext({
+    permissions:['camera','geolocation'],
+    geolocation:{latitude:41.647849,longitude:41.639411,accuracy:6},
+  })
   const A=await aCtx.newPage(),B=await bCtx.newPage()
   async function enroll(page:typeof A):Promise<string>{
     await page.goto('/settings')
@@ -446,6 +449,10 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await expect(B.locator('#camera-assignment option[value="'+assignmentId+'"]'))
       .toHaveCount(1,{timeout:20000})
     await B.locator('#camera-assignment').selectOption(assignmentId)
+    await B.locator('#camera-category').fill('Репортаж')
+    await B.locator('#camera-description').fill('PRIVATE-E2E-METADATA-NOT-FOR-SERVER')
+    await B.getByRole('button',{name:'Получить GPS'}).click()
+    await expect(B.getByText(/GPS получен/)).toBeVisible({timeout:12000})
     // Camera captures after network loss, using the independently verified
     // signed policy and durable encrypted v2 photo contract.
     await bCtx.setOffline(true)
@@ -458,9 +465,22 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
       const [row]=await photos.listLocalPhotos()
       if(!row)throw new Error('capture.not_local')
       const parsed=JSON.parse(photos.signedPhotoContract(row))
-      return {assignmentId:row.capture?.assignmentId,policyHash:row.capture?.policyHash,
-        version:parsed.version,signedCapture:parsed.capture}
+      const encrypted=JSON.stringify(row)+photos.signedPhotoContract(row)
+      const metadata=await photos.readLocalPhotoMetadata(row.photoId)
+      return {
+        photoId:row.photoId,
+        assignmentId:row.capture?.assignmentId,policyHash:row.capture?.policyHash,
+        version:parsed.version,signedCapture:parsed.capture,
+        metadata,
+        plaintextLeaked:encrypted.includes('PRIVATE-E2E-METADATA-NOT-FOR-SERVER')
+          ||encrypted.includes('41.647849'),
+      }
     })
+    expect(captured.plaintextLeaked).toBe(false)
+    expect(captured.metadata.category).toBe('Репортаж')
+    expect(captured.metadata.description).toBe('PRIVATE-E2E-METADATA-NOT-FOR-SERVER')
+    expect(captured.metadata.gps.latitude).toBe(41.647849)
+    expect(captured.metadata.gps.longitude).toBe(41.639411)
     expect(captured.assignmentId).toBe(assignmentId)
     expect(captured.version).toBe(2)
     expect(captured.policyHash).toMatch(/^[0-9a-f]{64}$/)
@@ -490,6 +510,15 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
       .getByRole('link',{name:'Browser',exact:true}).click()
     await B.getByRole('button',{name:'Синхронизировать'}).click()
     await expect(B.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
+    const cloudMetadata=await B.evaluate(async photoId=>{
+      const photos=await import('/src/features/photo-sync/application/p1-photo.ts')
+      return photos.readCloudPhotoMetadata(photoId)
+    },captured.photoId)
+    expect(cloudMetadata.description).toBe('PRIVATE-E2E-METADATA-NOT-FOR-SERVER')
+    expect(cloudMetadata.gps.longitude).toBe(41.639411)
+    await B.getByRole('button',{name:'Проверить из облака'}).first().click()
+    await expect(B.getByText(/Категория: Репортаж/)).toBeVisible()
+    await expect(B.getByText(/PRIVATE-E2E-METADATA-NOT-FOR-SERVER/)).toBeVisible()
     await B.goto('/assignments')
     await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
     await B.getByRole('button',{name:'Проверить ключ владельца'}).click()
