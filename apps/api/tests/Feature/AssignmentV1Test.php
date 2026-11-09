@@ -231,6 +231,23 @@ final class AssignmentV1Test extends TestCase
         $this->postJson('/assignments/v1/'.$this->assignmentId.'/submissions',$input)
             ->assertUnauthorized(); // valid contract signature belongs to recipient
         $this->as('recipient');
+        // A signed v2 capture for another assignment must not be laundered
+        // through a valid photo grant into the current assignment.
+        DB::table('photo_records')->where('id',$photo)->update([
+            'contract_json'=>json_encode(['version'=>2,'capture'=>[
+                'assignmentId'=>(string)Str::uuid(),
+                'ownerAccountId'=>$owner,
+                'policyRevision'=>1,
+                'policyHash'=>hash('sha256','unrelated'),
+                'capturedAt'=>now()->getTimestampMs(),
+            ]],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),
+        ]);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/submissions',$input)
+            ->assertConflict();
+        // A personal v1 photo may still be explicitly granted and submitted.
+        DB::table('photo_records')->where('id',$photo)->update([
+            'contract_json'=>'{}',
+        ]);
         $this->postJson('/assignments/v1/'.$this->assignmentId.'/submissions',$input)
             ->assertCreated();
         $this->postJson('/assignments/v1/'.$this->assignmentId.'/submissions',$input)
