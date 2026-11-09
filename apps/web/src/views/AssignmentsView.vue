@@ -10,8 +10,7 @@ import {
   verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
-  AssignmentListing, ReceivedAssignmentInvite, AssignmentOperation,
-  LocalAssignment,
+  ReceivedAssignmentInvite, AssignmentOperation,
 } from '../features/assignments/application/assignment-outbox'
 import {
   openOwnerAssignment, openRecipientAssignment,
@@ -66,7 +65,6 @@ const activeCount=computed(()=>assignments.value.filter(a=>a.state==='active').l
 const selectedOperations=computed(()=>operations.value.filter(op=>
   op.contract.includes(selectedId.value)&&!!selectedId.value))
 
-function currentAccount():string|null { return activeSession.value?.accountId??null }
 function cleanPreview():void{
   if(previewUrl.value){URL.revokeObjectURL(previewUrl.value);previewUrl.value=''}
 }
