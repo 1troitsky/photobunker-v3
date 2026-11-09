@@ -4,7 +4,6 @@ import {jsonApi} from '../../identity/infrastructure/api'
 import {importSigner,importSpki,sign,verify} from '../../identity/infrastructure/crypto'
 import {sha} from '../../local-storage/infrastructure/cipher'
 import {listLocalMedia} from './media-outbox'
-import type {StoredMedia} from './media-outbox'
 
 const enc=new TextEncoder()
 const DOMAIN='pb3.media-revision.v1\n'
