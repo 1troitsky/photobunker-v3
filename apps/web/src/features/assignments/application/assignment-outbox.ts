@@ -804,7 +804,7 @@ export async function queueAssignmentMediaSubmission(
     throw Error('assignment.not_accepting_submissions')
   const media=(await listLocalMedia()).find(x=>x.mediaId===mediaId)
   if(!media||media.state!=='synced'||media.expiresAt<=Date.now()
-    ||!['video','audio'].includes(media.mediaType))
+    ||(media.mediaType!=='video'&&media.mediaType!=='audio'))
     throw Error('assignment.media_not_synced')
   if(!signedAllowedAssignmentMedia(listing).includes(media.mediaType))
     throw Error('assignment.media_type_not_allowed')
