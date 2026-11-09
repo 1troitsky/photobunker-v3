@@ -377,8 +377,16 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
       const identity=await import('/src/features/identity/application/session.ts')
       const current=identity.requireSession()
       identity.activeSession.value={...current,online:true}
+      // A synthetic Session replacement does NOT guarantee the server's
+      // asynchronous login proof/cookie rotation has finished.
+      await identity.resumeExistingDevice()
     })
     await expect(A.locator('.assignment-detail code').first()).toBeVisible()
+    // Explicitly assert the real API session, not merely client online=true.
+    await expect.poll(()=>A.evaluate(async()=>{
+      const result=await fetch('/identity/v2/me',{credentials:'same-origin'})
+      return result.status
+    }),{timeout:20000}).toBe(200)
     await A.getByRole('button',{name:'Синхронизировать'}).click()
     await expect(A.locator('.assignment-card').first()).toContainText('Активно')
     await expect(A.locator('.assignment-detail code').first()).toBeVisible()
