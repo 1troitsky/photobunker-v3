@@ -783,6 +783,73 @@ export async function listAssignmentSubmissions(assignmentId:string):Promise<Arr
   return result.items
 }
 
+/** Media submission is not a legacy photo capture. The owner must
+ * explicitly opt into video/audio via a signed policy v3 amendment.
+ * A previously approved recipient DEK grant is a strict prerequisite, not
+ * automatically created by assignment membership.
+ */
+export async function queueAssignmentMediaSubmission(
+  assignmentId:string,mediaId:string,mediaGrantId:string,
+):Promise<string>{
+  const session=requireSession()
+  const cache=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  if(!cache)throw Error('assignment.policy_not_cached')
+  const listing=cache.listing
+  await verifySignedAssignmentPolicy(listing,true)
+  assertSame(session)
+  if(listing.ownerAccountId===session.accountId
+    ||listing.state!=='active'
+    ||listing.startsAt>Date.now()
+    ||(listing.endsAt!==null&&listing.endsAt<=Date.now()))
+    throw Error('assignment.not_accepting_submissions')
+  const media=(await listLocalMedia()).find(x=>x.mediaId===mediaId)
+  if(!media||media.state!=='synced'||media.expiresAt<=Date.now()
+    ||!['video','audio'].includes(media.mediaType))
+    throw Error('assignment.media_not_synced')
+  if(!signedAllowedAssignmentMedia(listing).includes(media.mediaType))
+    throw Error('assignment.media_type_not_allowed')
+  const grant=(await listOutgoingMediaGrants()).find(x=>
+    x.id===mediaGrantId&&x.mediaId===mediaId
+    &&x.recipientAccountId===listing.ownerAccountId
+    &&x.ownerAccountId===session.accountId
+    &&x.state!=='conflict')
+  if(!grant)throw Error('assignment.media_grant_required')
+  const policy=listing.policyAmendmentContract
+  if(!policy)throw Error('assignment.media_policy_v3_required')
+  const activePolicy=JSON.parse(policy) as {version?:number}
+  if(activePolicy.version!==3)throw Error('assignment.media_policy_v3_required')
+  const policyHash=hex(await digest(new TextEncoder().encode(policy)))
+  const mediaContractHash=hex(await digest(
+    new TextEncoder().encode(JSON.stringify(media.contract))))
+  const op=await signedOperation('media-submit',
+    '/assignments/v1/'+encodeURIComponent(assignmentId)+'/media-submissions',{
+      version:1,submissionId:crypto.randomUUID(),
+      operationId:crypto.randomUUID(),assignmentId,
+      contributorAccountId:session.accountId,
+      mediaId,mediaGrantId,mediaContractHash,
+      policyRevision:listing.policyRevision,policyHash,kind:media.mediaType,
+    },mediaGrantId)
+  await persist(op)
+  return op.id
+}
+export type AssignmentMediaSubmission={
+  submissionId:string;mediaId:string;mediaGrantId:string
+  mediaType:'video'|'audio';contributorAccountId:string
+}
+export async function listAssignmentMediaSubmissions(
+  assignmentId:string,after?:string,
+):Promise<{items:AssignmentMediaSubmission[];nextCursor:string|null}>{
+  const session=requireSession()
+  if(!session.online)throw Error('assignment.offline')
+  const path='/assignments/v1/'+encodeURIComponent(assignmentId)
+    +'/media-submissions'+(after?'?after='+encodeURIComponent(after):'')
+  const result=await jsonApi<{
+    items:AssignmentMediaSubmission[];nextCursor:string|null
+  }>(path)
+  assertSame(session)
+  return result
+}
+
 export async function listAssignmentOperations():Promise<AssignmentOperation[]>{
   const s=requireSession()
   return db.operations.where('accountId').equals(s.accountId).sortBy('createdAt')
