@@ -235,6 +235,42 @@ final class AssignmentV1Test extends TestCase
         ]);
     }
 
+    public function test_lost_ack_invite_and_accept_replay_after_finish_and_expiry():void
+    {
+        $this->createAssignment();
+        $inviteId=$this->invite();
+        $this->accept($inviteId);
+        $row=DB::table('assignment_invites_v1')->where('id',$inviteId)->first();
+        $finish=$this->signedState('owner','finish',1);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/state',$finish)
+            ->assertOk()->assertJsonPath('state','finished');
+
+        // A previously committed invite remains idempotent when the owner
+        // retries after finishing: a lost HTTP ACK must not create another row.
+        $this->as('owner');
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/invites',[
+            'contract'=>$row->contract_json,'signature'=>$row->owner_signature,
+        ])->assertOk()->assertJsonPath('unchanged',true);
+
+        // But a DIFFERENT signed invite is forbidden, even for that recipient.
+        $newInvite=json_decode($row->contract_json,true,32,JSON_THROW_ON_ERROR);
+        $newInvite['inviteId']=(string)Str::uuid();
+        $different=$this->signed('owner','pb3.assignment-invite.v1',$newInvite);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/invites',$different)
+            ->assertConflict();
+
+        DB::table('assignment_invites_v1')->where('id',$inviteId)
+            ->update(['expires_at'=>now()->subMinute()->getTimestampMs()]);
+        $this->as('recipient');
+        $this->postJson('/assignments/v1/'.$this->assignmentId
+            .'/invites/'.$inviteId.'/accept',[
+                'contract'=>$row->accepted_contract,
+                'signature'=>$row->accepted_signature,
+            ])->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertDatabaseCount('assignment_invites_v1',1);
+        $this->assertDatabaseCount('assignment_state_events_v1',1);
+    }
+
     public function test_assignment_creation_is_signed_private_and_owner_scoped():void
     {
         $this->createAssignment();
@@ -353,5 +389,17 @@ final class AssignmentV1Test extends TestCase
         $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
             ->assertJsonPath('items',[]);
         $this->assertDatabaseHas('photo_records',['id'=>$photo,'state'=>'active']);
+        // An accepted submission may be retried after finish AND after its
+        // separate E2EE grant is revoked. ACK must not reactivate the grant.
+        $finish=$this->signedState('owner','finish',1);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/state',$finish)
+            ->assertOk()->assertJsonPath('state','finished');
+        $this->as('recipient');
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/submissions',$input)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertDatabaseCount('assignment_submissions_v1',1);
+        $this->assertDatabaseHas('photo_access_grants',[
+            'id'=>$grant,'state'=>'revoked',
+        ]);
     }
 }
