@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import SharePanel from '../features/sharing/SharePanel.vue'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
   flushOutbox, listLocalPhotos, listCloudPhotos,
@@ -44,6 +45,10 @@ async function openLocal(photoId:string):Promise<void> {
   error.value=''
   try{revokePreview();selectedUrl.value=URL.createObjectURL(await readLocalPhoto(photoId))}
   catch(e){error.value=e instanceof Error?e.message:'photo.unavailable'}
+}
+function showReceived(blob:Blob):void {
+  revokePreview()
+  selectedUrl.value=URL.createObjectURL(blob)
 }
 async function openCloud(photoId:string):Promise<void> {
   error.value=''
@@ -96,6 +101,7 @@ onUnmounted(revokePreview)
         </div>
         <button v-if="cursor" type="button" :disabled="busy" @click="loadMore">Ещё</button>
       </div>
+      <SharePanel :local-photos="local" @open-photo="showReceived" />
       <div v-if="selectedUrl" class="foundation-card">
         <h2>Расшифровано на устройстве</h2>
         <img :src="selectedUrl" class="decrypted-preview" alt="Личный снимок"/>
