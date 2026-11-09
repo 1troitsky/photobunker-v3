@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
-  testMatch: 'p1-identity-photo.spec.ts',
+  testMatch: ['p1-identity-photo.spec.ts', 'p1-camera-session.spec.ts'],
   workers: 1,
   retries: 0,
   timeout: 90_000,

@@ -1,0 +1,914 @@
+{
+  "base": "3b6454f079d750994a022f8b85e8ae4dc07c3bb4",
+  "date": "2026-11-09",
+  "testedSourceSHA256": {
+    "apps/web/src/views/CaptureView.vue": "f2d795c1a6833a2b6242334ee35f67780d90840ab1143ed371d90e4d0294cb31",
+    "apps/web/src/views/CaptureView.test.ts": "541bef776170c2935a6125ca9cb2901a4be9e0ad7e74e22b42798b9ecf6ae1d2",
+    "tests/e2e/p1-camera-session.spec.ts": "c95af0680e57fde8d8405cd1e9d6d2fb12f2aeb51e5a70f4a595ca99b638584b",
+    "tests/playwright.config.ts": "15f198eb7cedc71a9b791d3545aee2c983ce1ae638c69ce1ad0246051f0481a5"
+  },
+  "checks": [
+    {
+      "name": "api-boundaries",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "diff",
+        "--exit-code",
+        "3b6454f079d750994a022f8b85e8ae4dc07c3bb4",
+        "--",
+        "apps/api",
+        "ts.md"
+      ],
+      "cwd": "$FIX",
+      "log": "$RUN/api-boundaries.log",
+      "seconds": 0.029
+    },
+    {
+      "name": "node-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "node",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/node-version.log",
+      "seconds": 0.02
+    },
+    {
+      "name": "pnpm-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/pnpm-version.log",
+      "seconds": 0.2
+    },
+    {
+      "name": "git-head",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "log",
+        "-1",
+        "--format=%H %s"
+      ],
+      "cwd": "$FIX",
+      "log": "$RUN/git-head.log",
+      "seconds": 0.008
+    },
+    {
+      "name": "baseline-build",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "build"
+      ],
+      "cwd": "$BASELINE",
+      "log": "$RUN/baseline-build.log",
+      "seconds": 4.907
+    },
+    {
+      "name": "baseline-preview-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:4173/camera',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/baseline-preview-ready.log",
+      "seconds": 1.097
+    },
+    {
+      "name": "navigation-before",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "node",
+        "--input-type=module",
+        "-e",
+        "import {chromium} from '@playwright/test';\nconst browser=await chromium.launch(); const page=await browser.newPage({viewport:{width:390,height:844}});\nawait page.goto('http://127.0.0.1:4173/camera'); await page.getByRole('heading',{name:'Камера',exact:true}).waitFor();\nconst samples=[];for(let i=0;i<5;i++){\n await page.goto('http://127.0.0.1:4173/camera');await page.getByRole('heading',{name:'Камера',exact:true}).waitFor();\n samples.push(await page.evaluate(()=>{const n=performance.getEntriesByType('navigation')[0];\n return {responseEnd:n.responseEnd,domContentLoaded:n.domContentLoadedEventEnd,load:n.loadEventEnd}}));\n}console.log(JSON.stringify({viewport:{width:390,height:844},samples}));await browser.close();"
+      ],
+      "cwd": "$FIX",
+      "log": "$RUN/navigation-before.log",
+      "seconds": 1.046
+    },
+    {
+      "name": "typecheck",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "typecheck"
+      ],
+      "cwd": "$FIX",
+      "log": "$RUN/typecheck.log",
+      "seconds": 2.666
+    },
+    {
+      "name": "production-build",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "build"
+      ],
+      "cwd": "$FIX",
+      "log": "$RUN/production-build.log",
+      "seconds": 4.112
+    },
+    {
+      "name": "fixed-preview-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:4173/camera',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/fixed-preview-ready.log",
+      "seconds": 1.126
+    },
+    {
+      "name": "navigation-after",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "node",
+        "--input-type=module",
+        "-e",
+        "import {chromium} from '@playwright/test';\nconst browser=await chromium.launch(); const page=await browser.newPage({viewport:{width:390,height:844}});\nawait page.goto('http://127.0.0.1:4173/camera'); await page.getByRole('heading',{name:'Камера',exact:true}).waitFor();\nconst samples=[];for(let i=0;i<5;i++){\n await page.goto('http://127.0.0.1:4173/camera');await page.getByRole('heading',{name:'Камера',exact:true}).waitFor();\n samples.push(await page.evaluate(()=>{const n=performance.getEntriesByType('navigation')[0];\n return {responseEnd:n.responseEnd,domContentLoaded:n.domContentLoadedEventEnd,load:n.loadEventEnd}}));\n}console.log(JSON.stringify({viewport:{width:390,height:844},samples}));await browser.close();"
+      ],
+      "cwd": "$FIX",
+      "log": "$RUN/navigation-after.log",
+      "seconds": 0.948
+    },
+    {
+      "name": "compose-build",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "build",
+        "api"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/compose-build.log",
+      "seconds": 1.5
+    },
+    {
+      "name": "php-security-floor",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "-v",
+        "$FIX:/source:ro",
+        "pb3-local-acceptance-php:8.4.27",
+        "php",
+        "/source/scripts/check-runtime.php"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/php-security-floor.log",
+      "seconds": 0.528
+    },
+    {
+      "name": "storage-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "--wait",
+        "postgres",
+        "garage"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/storage-up.log",
+      "seconds": 3.599
+    },
+    {
+      "name": "postgres-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "postgres",
+        "postgres",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/postgres-version.log",
+      "seconds": 0.224
+    },
+    {
+      "name": "garage-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/garage-version.log",
+      "seconds": 0.101
+    },
+    {
+      "name": "garage-assign",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "layout",
+        "assign",
+        "-z",
+        "ci-zone",
+        "-c",
+        "1G",
+        "17239fad12ef78d542ad7a89bee5b3bf04122583e6d2ef4859774a54cd8ca4a4"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/garage-assign.log",
+      "seconds": 0.168
+    },
+    {
+      "name": "garage-layout",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "layout",
+        "apply",
+        "--version",
+        "1"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/garage-layout.log",
+      "seconds": 0.227
+    },
+    {
+      "name": "garage-bucket",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "bucket",
+        "create",
+        "pb3-ci-p0"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/garage-bucket.log",
+      "seconds": 0.132
+    },
+    {
+      "name": "garage-key",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "key",
+        "create",
+        "pb3-ci-key"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/garage-key.log",
+      "seconds": 0.138
+    },
+    {
+      "name": "garage-allow",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "bucket",
+        "allow",
+        "--read",
+        "--write",
+        "--owner",
+        "pb3-ci-p0",
+        "--key",
+        "pb3-ci-key"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/garage-allow.log",
+      "seconds": 0.146
+    },
+    {
+      "name": "composer-install",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "install",
+        "--no-interaction",
+        "--no-progress",
+        "--prefer-dist"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/composer-install.log",
+      "seconds": 9.007
+    },
+    {
+      "name": "composer-validate",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "validate",
+        "--strict",
+        "--no-check-publish"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/composer-validate.log",
+      "seconds": 0.576
+    },
+    {
+      "name": "phpunit",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "-v",
+        "$RUN/api:/app",
+        "pb3-local-acceptance-php:8.4.27",
+        "php",
+        "vendor/bin/phpunit",
+        "--log-junit",
+        "/app/phpunit-junit.xml"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/phpunit.log",
+      "seconds": 1.136
+    },
+    {
+      "name": "migrate",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "artisan",
+        "migrate",
+        "--force"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/migrate.log",
+      "seconds": 0.579
+    },
+    {
+      "name": "garage-postgres-smoke",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "tests/integration/garage-postgres-smoke.php"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/garage-postgres-smoke.log",
+      "seconds": 0.66
+    },
+    {
+      "name": "lifecycle-garage-smoke",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "tests/integration/lifecycle-garage-smoke.php"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/lifecycle-garage-smoke.log",
+      "seconds": 0.57
+    },
+    {
+      "name": "api-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "api"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/api-up.log",
+      "seconds": 0.85
+    },
+    {
+      "name": "healthz",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/healthz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/healthz.log",
+      "seconds": 0.304
+    },
+    {
+      "name": "readyz",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/readyz.log",
+      "seconds": 0.085
+    },
+    {
+      "name": "vite-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:5173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/vite-ready.log",
+      "seconds": 1.126
+    },
+    {
+      "name": "product-e2e",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "tests/playwright.config.ts",
+        "--output",
+        "$RUN/product-e2e",
+        "--reporter=line,json"
+      ],
+      "cwd": "$FIX",
+      "log": "$RUN/product-e2e.log",
+      "seconds": 25.295
+    },
+    {
+      "name": "container-logs",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "logs",
+        "--no-color"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/container-logs.log",
+      "seconds": 0.247
+    },
+    {
+      "name": "isolated-cleanup",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-b9de1f4e60",
+        "--env-file",
+        "$RUN/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "down",
+        "--remove-orphans"
+      ],
+      "cwd": "$QA",
+      "log": "$RUN/isolated-cleanup.log",
+      "seconds": 10.533
+    }
+  ],
+  "vitest": {
+    "command": [
+      "pnpm",
+      "test:web"
+    ],
+    "cwd": "$FIX",
+    "exit_code": 0,
+    "files": 7,
+    "tests": 43,
+    "cameraComponentCases": 24,
+    "artifact": "/tmp/pb3-camera-vitest.log"
+  },
+  "baselineRegression": {
+    "command": [
+      "pnpm",
+      "--filter",
+      "@pb3/web",
+      "exec",
+      "vitest",
+      "run",
+      "src/views/CaptureView.test.ts",
+      "-t",
+      "attaches late permission"
+    ],
+    "exit_code": 1,
+    "expected_failure": true,
+    "artifact": "/tmp/pb3-camera-baseline-unit.log"
+  },
+  "phpunit": {
+    "tests": 35,
+    "assertions": 355,
+    "artifact": "$RUN/phpunit.log"
+  },
+  "chromium": {
+    "stats": {
+      "startTime": "2026-11-09T15:45:13.669Z",
+      "duration": 24454.181999999997,
+      "expected": 10,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "tests": [
+      {
+        "title": "late permission survives real online hydration with one live stream",
+        "file": "p1-camera-session.spec.ts",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 1818
+          }
+        ]
+      },
+      {
+        "title": "equivalent Session replacement keeps the existing stream",
+        "file": "p1-camera-session.spec.ts",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 555
+          }
+        ]
+      },
+      {
+        "title": "real account switch during permission stops the stale result before opening another",
+        "file": "p1-camera-session.spec.ts",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 1092
+          }
+        ]
+      },
+      {
+        "title": "leaving before permission resolves releases every late track without reopening",
+        "file": "p1-camera-session.spec.ts",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 850
+          }
+        ]
+      },
+      {
+        "title": "denied permission is recoverable by a single explicit retry",
+        "file": "p1-camera-session.spec.ts",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 923
+          }
+        ]
+      },
+      {
+        "title": "hydrated camera captures offline against an already verified signed assignment policy",
+        "file": "p1-camera-session.spec.ts",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 1570
+          }
+        ]
+      },
+      {
+        "title": "two browser identities: key-only account, encrypted camera photo, Garage recovery",
+        "file": "p1-identity-photo.spec.ts",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 3114
+          }
+        ]
+      },
+      {
+        "title": "P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke",
+        "file": "p1-identity-photo.spec.ts",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 4058
+          }
+        ]
+      },
+      {
+        "title": "P1-04: A creates encrypted assignment, B accepts and submits a photo grant, A decrypts",
+        "file": "p1-identity-photo.spec.ts",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 3275
+          }
+        ]
+      },
+      {
+        "title": "P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo",
+        "file": "p1-identity-photo.spec.ts",
+        "status": "expected",
+        "results": [
+          {
+            "status": "passed",
+            "duration": 5689
+          }
+        ]
+      }
+    ]
+  },
+  "performance": {
+    "navigation-before": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "samples": [
+        {
+          "responseEnd": 1.699999988079071,
+          "domContentLoaded": 9.099999964237213,
+          "load": 9.5
+        },
+        {
+          "responseEnd": 1.2000000476837158,
+          "domContentLoaded": 8,
+          "load": 8.300000011920929
+        },
+        {
+          "responseEnd": 1.199999988079071,
+          "domContentLoaded": 7.800000011920929,
+          "load": 8.099999964237213
+        },
+        {
+          "responseEnd": 1.100000023841858,
+          "domContentLoaded": 7.100000023841858,
+          "load": 7.400000035762787
+        },
+        {
+          "responseEnd": 1.199999988079071,
+          "domContentLoaded": 8.699999988079071,
+          "load": 9.099999964237213
+        }
+      ],
+      "mediansMs": {
+        "responseEnd": 1.199999988079071,
+        "domContentLoaded": 8,
+        "load": 8.300000011920929
+      }
+    },
+    "navigation-after": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "samples": [
+        {
+          "responseEnd": 2.300000011920929,
+          "domContentLoaded": 10.899999976158142,
+          "load": 11.300000011920929
+        },
+        {
+          "responseEnd": 1.100000023841858,
+          "domContentLoaded": 8,
+          "load": 8.400000035762787
+        },
+        {
+          "responseEnd": 1.699999988079071,
+          "domContentLoaded": 8.600000023841858,
+          "load": 8.900000035762787
+        },
+        {
+          "responseEnd": 1.199999988079071,
+          "domContentLoaded": 7.100000023841858,
+          "load": 7.300000011920929
+        },
+        {
+          "responseEnd": 1.2999999523162842,
+          "domContentLoaded": 7.099999964237213,
+          "load": 7.399999976158142
+        }
+      ],
+      "mediansMs": {
+        "responseEnd": 1.2999999523162842,
+        "domContentLoaded": 8,
+        "load": 8.400000035762787
+      }
+    }
+  },
+  "bundleKB": {
+    "before": 291.86,
+    "after": 292.95,
+    "gzipBefore": 95.65,
+    "gzipAfter": 96.09
+  },
+  "limitations": [
+    "Chromium uses synthetic media; jsdom uses controllable MediaStream/video mocks.",
+    "Native Safari, physical iOS/Android, OS camera permission dialogs, background behavior and system gallery NOT TESTED.",
+    "Navigation timings measure the anonymous production /camera shell, not hardware camera/permission latency; not Lighthouse or RUM."
+  ],
+  "privacy": "No raw Recovery Keys, account packages, private keys, request bodies, decrypted media or fixture credentials exported."
+}
