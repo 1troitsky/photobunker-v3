@@ -12,6 +12,12 @@ return [
         'max_concurrent_per_account' => 1,
         'failed_backup_consumes_product_quota' => false,
     ],
+    // Per authenticated account, not per NAT/IP. Product monthly quotas are
+    // separate from this technical abuse/load safeguard.
+    'assignments' => [
+        'requests_per_minute_per_account' => 40,
+        'unauthenticated_requests_per_minute_per_ip' => 40,
+    ],
     'upload' => [
         'max_concurrent_per_account' => null, // OPEN: load tests determine bound
         'max_chunk_bytes' => null,            // OPEN: tune for mobile/large files
