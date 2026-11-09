@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { activeSession } from '../features/identity/application/session'
+import { activeSession, type Session } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
 import {
   listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
@@ -14,19 +14,22 @@ const policies=ref<AssignmentListing[]>([])
 const selectedAssignment=ref('')
 const policyNotice=ref('')
 const policyLoading=ref(false)
+let refreshAgain=false
 async function refreshPolicies():Promise<void> {
-  const identity=activeSession.value
-  if(!identity){policies.value=[];selectedAssignment.value='';return}
-  if(policyLoading.value)return
+  if(disposed)return
+  const session=activeSession.value
+  if(!session){policies.value=[];selectedAssignment.value='';return}
+  if(policyLoading.value){refreshAgain=true;return}
+  const identity=cameraIdentity(session),generation=cameraGeneration
   policyLoading.value=true
   policyNotice.value=''
   try{
-    if(identity.online && navigator.onLine){
+    if(session.online && navigator.onLine){
       try{await listServerAssignments()}
-      catch{policyNotice.value='Не удалось обновить политики. Используются ранее проверенные.'}
+      catch{if(ownsCamera(identity,generation))policyNotice.value='Не удалось обновить политики. Используются ранее проверенные.'}
     }
     const found=await listVerifiedCapturePolicies()
-    if(activeSession.value!==identity)return
+    if(!ownsCamera(identity,generation))return
     policies.value=found
     const requested=route.query.assignmentId
     const preferred=typeof requested==='string'?requested:selectedAssignment.value
@@ -34,52 +37,108 @@ async function refreshPolicies():Promise<void> {
     if(typeof requested==='string'&&requested&&!selectedAssignment.value)
       policyNotice.value='Для этого задания нет проверенной политики. Съёмка по нему заблокирована.'
   }catch(e){
-    policyNotice.value=e instanceof Error?e.message:'assignment.policies_unavailable'
-  }finally{policyLoading.value=false}
+    if(ownsCamera(identity,generation))policyNotice.value=e instanceof Error?e.message:'assignment.policies_unavailable'
+  }finally{
+    policyLoading.value=false
+    if(refreshAgain){refreshAgain=false;if(!disposed)void refreshPolicies()}
+  }
 }
 
 const stream=ref<MediaStream|null>(null)
 const busy=ref(false)
 const message=ref('')
 const error=ref('')
-let starting=false
+const starting=ref(false)
 let disposed=false
+let cameraWanted=true
+let cameraGeneration=0
+
+// Session.online and JS object identity are not camera ownership. Snapshot all
+// account/device/key material so genuine changes cancel even an A -> B -> A
+// transition; never serialize or persist this in-memory comparison.
+function cameraIdentity(session:Session|null) {
+  if(!session)return null
+  return [session.accountId,session.deviceId,session.device.accountId,
+    session.device.deviceId,session.device.deviceSpki,session.device.deviceKey,
+    session.device.encryptionKey,session.pkg.v,session.pkg.accountId,
+    session.pkg.accountSpki,session.pkg.accountPkcs8,session.pkg.akek,
+    session.pkg.signingKeyId,session.pkg.wrappingKeyId,session.pkg.revision] as const
+}
+type CameraIdentity=ReturnType<typeof cameraIdentity>
+function sameIdentity(a:CameraIdentity,b:CameraIdentity):boolean {
+  return a!==null && b!==null && a.length===b.length && a.every((value,index)=>value===b[index])
+}
+let observedIdentity=cameraIdentity(activeSession.value)
+let streamIdentity:CameraIdentity=null
+function ownsCamera(identity:CameraIdentity,generation:number):boolean {
+  return !disposed && cameraGeneration===generation
+    &&sameIdentity(identity,cameraIdentity(activeSession.value))
+}
+function stopTracks(opened:MediaStream):void {
+  for(const track of opened.getTracks())if(track.readyState!=='ended')track.stop()
+}
+function releaseStream():void {
+  if(stream.value)stopTracks(stream.value)
+  stream.value=null;streamIdentity=null
+  if(video.value)video.value.srcObject=null
+}
 
 async function openCamera():Promise<void> {
-  if(starting||stream.value||disposed)return
+  cameraWanted=true
+  await startCamera()
+}
+async function startCamera():Promise<void> {
+  if(starting.value||stream.value||disposed||!cameraWanted)return
   error.value=''
   if(!activeSession.value){error.value='Сначала создайте или восстановите аккаунт';return}
   if(!navigator.mediaDevices?.getUserMedia){error.value='Браузер не поддерживает камеру';return}
-  starting=true
-  const identity=activeSession.value
+  starting.value=true
+  const identity=cameraIdentity(activeSession.value),generation=cameraGeneration
   let opened:MediaStream|null=null
   try{
     opened=await navigator.mediaDevices.getUserMedia({
       audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1280}},
     })
     await nextTick()
-    // A late camera permission response cannot attach to a removed screen or account.
-    if(disposed||activeSession.value!==identity||!video.value){
-      opened.getTracks().forEach(track=>track.stop())
+    if(!cameraWanted||!ownsCamera(identity,generation)||!video.value){
+      stopTracks(opened)
       return
     }
-    stream.value=opened
-    video.value.srcObject=opened
-    await video.value.play()
+    stream.value=opened;streamIdentity=identity
+    const preview=video.value
+    preview.srcObject=opened
+    await preview.play()
+    if(!cameraWanted||!ownsCamera(identity,generation)||video.value!==preview){
+      stopTracks(opened)
+      if(stream.value===opened)releaseStream()
+    }
   }catch(e){
-    if(opened)opened.getTracks().forEach(track=>track.stop())
-    if(stream.value===opened)stream.value=null
-    error.value=e instanceof Error?e.message:'camera.unavailable'
-  }finally{starting=false}
+    if(opened)stopTracks(opened)
+    if(stream.value===opened)releaseStream()
+    if(ownsCamera(identity,generation)){
+      cameraWanted=false // Denial/play errors require an explicit retry.
+      error.value=e instanceof Error?e.message:'camera.unavailable'
+    }
+  }finally{
+    starting.value=false
+    // Serialize requests. Only an intervening ownership/cancel event can
+    // schedule this follow-up; ordinary errors cannot create a retry loop.
+    if(cameraWanted && !disposed && cameraGeneration!==generation
+      &&activeSession.value && !stream.value)void nextTick().then(startCamera)
+  }
 }
 function closeCamera():void {
-  stream.value?.getTracks().forEach(track=>track.stop())
-  stream.value=null
-  if(video.value)video.value.srcObject=null
+  cameraWanted=false;cameraGeneration++
+  releaseStream()
 }
 async function capture():Promise<void> {
   const v=video.value
-  if(busy.value||!v||!stream.value||v.videoWidth<1||v.videoHeight<1)return
+  const identity=streamIdentity,generation=cameraGeneration
+  if(busy.value||starting.value||!v||!stream.value||!ownsCamera(identity,generation)
+    ||v.videoWidth<1||v.videoHeight<1)return
+  const assertOwner=()=>{
+    if(!cameraWanted||!ownsCamera(identity,generation))throw new Error('camera.identity_changed')
+  }
   busy.value=true;error.value='';message.value=''
   try{
     const ratio=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight))
@@ -93,6 +152,7 @@ async function capture():Promise<void> {
       canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('camera.jpeg_failed')),
         'image/jpeg',0.85)
     })
+    assertOwner()
     // Canvas output strips source EXIF; no device gallery write occurs.
     // Do not silently record a personal photograph when the user entered
     // the camera via an assignment that has no authenticated policy.
@@ -104,20 +164,29 @@ async function capture():Promise<void> {
     const binding=selectedAssignment.value
       ?await signedCaptureBinding(selectedAssignment.value,Date.now())
       :undefined
+    assertOwner()
     const photo=await captureEncrypted(jpeg,binding)
+    assertOwner()
     message.value='Зашифровано и сохранено локально: '+photo.photoId.slice(0,8)
-  }catch(e){error.value=e instanceof Error?e.message:'camera.capture_failed'}
+  }catch(e){if(ownsCamera(identity,generation))error.value=e instanceof Error?e.message:'camera.capture_failed'}
   finally{busy.value=false}
 }
 // Restoring a trusted device after a page load is asynchronous. The camera
 // must also start when that local identity appears, not just on first mount.
 watch(activeSession,session=>{
-  if(!session){closeCamera();policies.value=[];selectedAssignment.value='';return}
+  const identity=cameraIdentity(session)
+  if(!sameIdentity(observedIdentity,identity)){
+    observedIdentity=identity;cameraGeneration++
+    releaseStream()
+    policies.value=[];selectedAssignment.value='';policyNotice.value=''
+    message.value='';error.value=''
+  }
+  if(!session)return
   void refreshPolicies()
-  void nextTick().then(()=>{if(!stream.value&&!starting)void openCamera()})
-},{flush:'post'})
+  void nextTick().then(startCamera)
+},{flush:'sync'})
 onMounted(()=>{
-  if(activeSession.value){void refreshPolicies();void nextTick().then(openCamera)}
+  if(activeSession.value){void refreshPolicies();void nextTick().then(startCamera)}
 })
 watch(()=>route.query.assignmentId,()=>{void refreshPolicies()})
 onUnmounted(()=>{disposed=true;closeCamera()})
@@ -151,13 +220,13 @@ onUnmounted(()=>{disposed=true;closeCamera()})
         <video ref="video" playsinline muted autoplay aria-label="Предпросмотр камеры"/>
       </div>
       <div class="action-row">
-        <button type="button" :disabled="!!stream" @click="openCamera">Включить камеру</button>
+        <button type="button" :disabled="!!stream||starting" @click="openCamera">Включить камеру</button>
         <button type="button"
-          :disabled="!stream||busy||(typeof route.query.assignmentId==='string'&&!!route.query.assignmentId&&selectedAssignment!==route.query.assignmentId)"
+          :disabled="!stream||starting||busy||(typeof route.query.assignmentId==='string'&&!!route.query.assignmentId&&selectedAssignment!==route.query.assignmentId)"
           @click="capture">
           {{ busy ? 'Шифрование…' : 'Сделать снимок' }}
         </button>
-        <button type="button" :disabled="!stream" @click="closeCamera">Отключить</button>
+        <button type="button" :disabled="!stream&&!starting" @click="closeCamera">Отключить</button>
       </div>
       <p class="muted">В системную медиатеку снимок не записывается. Сначала сохраняется только ciphertext; синхронизация выполняется отдельно.</p>
     </template>
