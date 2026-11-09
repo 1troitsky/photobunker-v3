@@ -83,7 +83,7 @@ final class AssignmentContract
             &&$d['assignmentId']===$assignment
             &&$d['ownerAccountId']===$owner
             &&is_int($d['fromPolicyRevision'])
-            &&$d['fromPolicyRevision']>=1&&$d['fromPolicyRevision']<1000000
+            &&$d['fromPolicyRevision']>=1&&$d['fromPolicyRevision']<1001
             &&$d['toPolicyRevision']===$d['fromPolicyRevision']+1
             &&$d['allowedMedia']===['photo'],422);
         foreach(['assignmentId','ownerAccountId','operationId'] as $key)
