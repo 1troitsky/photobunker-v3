@@ -84,14 +84,47 @@ final class Reservation
         $a=DB::table('assignment_records_v1')
             ->where('id',$capture['assignmentId'])->lockForUpdate()->first();
         abort_unless($a,404);
-        abort_unless($a->state==='active'
-            &&$a->owner_account_id===$capture['ownerAccountId']
+        abort_unless($a->owner_account_id===$capture['ownerAccountId']
             &&(int)$a->policy_revision===$capture['policyRevision']
             &&hash_equals(hash('sha256',$a->contract_json),$capture['policyHash']),409);
         $when=$capture['capturedAt'];
-        abort_unless($when>=$a->starts_at
+        abort_unless($when>=(int)$a->starts_at
             &&($a->ends_at===null || $when<(int)$a->ends_at)
             &&$when>=PhotoSync::nowMs()-14*86400000,409);
+        // The server retains signed finish/resume events with authoritative
+        // receipt timestamps. An offline photograph captured before finish
+        // may still sync as contributor-owned ciphertext afterwards, but
+        // capture during a closed interval must not be silently relabelled.
+        // The device-signed capturedAt remains a *claim*, not a secure clock.
+        $events=DB::table('assignment_state_events_v1')
+            ->where('assignment_id',$a->id)->orderBy('to_revision')
+            ->limit(1001)->get(['from_revision','to_revision','state','created_at']);
+        abort_unless($events->count()<=1000,409);
+        $revision=1;
+        $state='active';
+        $openedAt=(int)$a->starts_at;
+        $lastEventAt=$openedAt;
+        $validInterval=false;
+        foreach($events as $event){
+            $at=\Carbon\Carbon::parse($event->created_at)->getTimestampMs();
+            abort_unless((int)$event->from_revision===$revision
+                &&(int)$event->to_revision===$revision+1
+                &&$at>=$lastEventAt,409);
+            if($state==='active'&&$when>=$openedAt&&$when<$at)
+                $validInterval=true;
+            $next=$event->state;
+            abort_unless(($state==='active'&&$next==='finished')
+                ||($state==='finished'&&$next==='active'),409);
+            if($next==='active')$openedAt=$at;
+            $state=$next;
+            $revision++;
+            $lastEventAt=$at;
+        }
+        abort_unless($state===$a->state
+            &&$revision===(int)$a->revision,409);
+        if($state==='active'&&$when>=$openedAt)
+            $validInterval=true;
+        abort_unless($validInterval,409);
         if($actor!==$a->owner_account_id){
             $member=DB::table('assignment_invites_v1')
                 ->where('assignment_id',$a->id)
