@@ -175,7 +175,7 @@ async function hydrate():Promise<void>{
         }else{
           const invite=received.find(i=>i.assignmentId===item.assignmentId&&i.state==='accepted')
           if(invite){
-            await verifyAssignmentInvite(invite) // independently pinned owner SPKI
+            await verifyAssignmentInvite(invite,offline) // local pin for stale snapshot; fresh check online
             if(offline){
               // No network key-directory access is attempted offline. Only
               // an existing AEAD-encrypted account-scoped summary is opened.
