@@ -65,6 +65,8 @@ const count=computed(()=>assignments.value.length)
 const activeCount=computed(()=>assignments.value.filter(a=>a.state==='active').length)
 const selectedOperations=computed(()=>operations.value.filter(op=>
   op.contract.includes(selectedId.value)&&!!selectedId.value))
+const pendingStateChange=computed(()=>selectedOperations.value.some(op=>
+  op.kind==='state'&&(op.state==='queued'||op.state==='retry')))
 const eligiblePhotos=computed(()=>photos.value
   .filter(p=>p.state==='synced'
     &&(!p.capture||p.capture.assignmentId===selectedId.value))
@@ -405,13 +407,14 @@ onUnmounted(cleanPreview)
           <div class="assignment-toolbar">
             <span class="muted">Версия состояния: {{ selected.revision }}</span>
             <button v-if="selected.state==='active'" type="button"
-              :disabled="busy||selected.localState==='queued'"
+              :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeState('finish')">Завершить задание</button>
             <button v-else-if="selected.state==='finished'" type="button"
-              :disabled="busy||(selected.endsAt!==null&&selected.endsAt<=Date.now())"
+              :disabled="busy||pendingStateChange||(selected.endsAt!==null&&selected.endsAt<=Date.now())"
               @click="changeState('resume')">Возобновить задание</button>
           </div>
-          <p class="muted">Завершение прекращает новые приёмы снимков, но не удаляет личные фотографии участников и выданные ранее разрешения.</p>
+          <p v-if="pendingStateChange" class="muted" role="status">Подписанное изменение состояния ожидает подтверждения сервера.</p>
+          <p class="muted">Завершение прекращает новые отправки в задание и съёмку после закрытия, но не удаляет личные фотографии участников и выданные ранее разрешения.</p>
           <h3>Участники</h3>
           <label for="assignment-recipient-id">ID аккаунта исполнителя</label>
           <input id="assignment-recipient-id" v-model="recipientId" autocomplete="off" spellcheck="false" placeholder="UUID аккаунта">
