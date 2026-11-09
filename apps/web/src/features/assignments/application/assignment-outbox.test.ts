@@ -7,6 +7,7 @@ import {
   queueAssignmentCreation, listLocalAssignmentDrafts, listAssignmentOperations,
   verifySignedAssignmentPolicy, assertSignedPolicyProgress,
   cachePrivateAssignment, readCachedPrivateAssignment,
+  signedCaptureBinding,signedPolicyRequirements,queueAssignmentGoalChange,
 } from './assignment-outbox'
 
 afterEach(()=>{activeSession.value=null})
@@ -160,6 +161,91 @@ describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
     expect(()=>assertSignedPolicyProgress(changed,{
       ...changed,policyAmendmentContract:forgedContract,
     })).toThrow('assignment.policy_equivocation')
+  })
+  it('enforces signed v2 required metadata before offline capture and preserves rules on goal edits',async()=>{
+    const owner='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab'
+    await account(owner)
+    const session=activeSession.value!
+    const id=await queueAssignmentCreation({
+      title:'Required private metadata',instructions:'Never disclose raw GPS',
+      photoGoal:30,
+    })
+    const creation=(await listAssignmentOperations()).find(op=>op.kind==='create')!
+    const raw=JSON.parse(creation.contract)
+    const originalHash=hex(await digest(new TextEncoder().encode(creation.contract)))
+    const amendment={
+      version:2,operationId:crypto.randomUUID(),assignmentId:id,
+      ownerAccountId:owner,rootPolicyHash:originalHash,
+      previousPolicyHash:originalHash,fromPolicyRevision:1,
+      toPolicyRevision:2,photoGoal:30,allowedMedia:['photo'],
+      requiredCategory:true,descriptionMinLength:12,requiredGps:true,
+    }
+    const signed=JSON.stringify(amendment)
+    const signature=await sign(await importSigner(session.pkg.accountPkcs8),
+      'pb3.assignment-policy.v2\n'+signed)
+    const listing={
+      assignmentId:id,ownerAccountId:owner,ownerAccountSpki:session.pkg.accountSpki,
+      state:'active',revision:1,photoGoal:30,confirmedPhotoCount:0,
+      policyRevision:2,startsAt:raw.startsAt,endsAt:null,
+      privateEnvelope:raw.privateEnvelope,policyContract:creation.contract,
+      policySignature:creation.signature,policyAmendmentContract:signed,
+      policyAmendmentSignature:signature,stateContract:null,stateSignature:null,
+    }
+    await expect(verifySignedAssignmentPolicy(listing)).resolves.toBeUndefined()
+    expect(signedPolicyRequirements(listing)).toEqual({
+      requiredCategory:true,descriptionMinLength:12,requiredGps:true,
+    })
+    const idb=await new Promise<IDBDatabase>((resolve,reject)=>{
+      const req=indexedDB.open('pb3-assignment-operation-outbox-v1')
+      req.onsuccess=()=>resolve(req.result)
+      req.onerror=()=>reject(req.error)
+    })
+    await new Promise<void>((resolve,reject)=>{
+      const tx=idb.transaction('capturePolicies','readwrite')
+      tx.objectStore('capturePolicies').put({
+        key:owner+'/'+id,accountId:owner,listing,verifiedAt:Date.now(),
+      })
+      tx.oncomplete=()=>resolve()
+      tx.onerror=()=>reject(tx.error)
+    })
+    idb.close()
+    const when=Date.now()
+    const base={latitude:41.647849,longitude:41.639411,
+      accuracyMeters:4,recordedAt:when-1500}
+    await expect(signedCaptureBinding(id,when))
+      .rejects.toThrow('assignment.category_required')
+    await expect(signedCaptureBinding(id,when,{category:'Report'}))
+      .rejects.toThrow('assignment.description_too_short')
+    await expect(signedCaptureBinding(id,when,{
+      category:'Report',description:'Only ten',
+    })).rejects.toThrow('assignment.description_too_short')
+    await expect(signedCaptureBinding(id,when,{
+      category:'Report',description:'Confidential description',
+    })).rejects.toThrow('assignment.gps_required')
+    const valid=await signedCaptureBinding(id,when,{
+      category:'Report',description:'Confidential description',gps:base,
+    })
+    expect(valid).toMatchObject({
+      assignmentId:id,policyRevision:2,
+      policyHash:hex(await digest(new TextEncoder().encode(signed))),
+    })
+    await expect(verifySignedAssignmentPolicy({
+      ...listing,policyAmendmentSignature:creation.signature,
+    })).rejects.toThrow('assignment.policy_revision_not_authenticated')
+    const tampered={...amendment,descriptionMinLength:0}
+    const tamperedText=JSON.stringify(tampered)
+    await expect(verifySignedAssignmentPolicy({
+      ...listing,policyAmendmentContract:tamperedText,
+    })).rejects.toThrow('assignment.policy_revision_not_authenticated')
+    await queueAssignmentGoalChange(id,45)
+    const pending=(await listAssignmentOperations()).find(op=>op.kind==='policy')!
+    const changed=JSON.parse(pending.contract)
+    expect(changed).toMatchObject({
+      version:2,photoGoal:45,requiredCategory:true,
+      descriptionMinLength:12,requiredGps:true,
+    })
+    expect(pending.contract).not.toContain('Confidential description')
+    expect(pending.contract).not.toContain('41.647849')
   })
   it('caches only account-bound AEAD ciphertext and refuses wrong policy/account',async()=>{
     const accountA='11111111-1111-4111-8111-111111111111'
