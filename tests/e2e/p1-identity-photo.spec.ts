@@ -442,6 +442,12 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await B.getByRole('button',{name:'Отправить в задание'}).first().click()
     await B.getByRole('button',{name:'Синхронизировать'}).click()
 
+    // Server-derived progress counts only authorized finalized submissions;
+    // the target of 30 is not an upload cap.
+    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await expect(A.locator('.assignment-card').first())
+      .toContainText(/Фото:\s*1\s*\/\s*30/)
+
     await A.getByRole('button',{name:'Обновить материалы'}).click()
     await expect(A.getByRole('button',{name:'Просмотр'})).toBeVisible({timeout:20000})
     await A.getByRole('button',{name:'Просмотр'}).click()
