@@ -1,5 +1,5 @@
 import Dexie,{type Table} from 'dexie'
-import {activeSession,requireSession} from '../../identity/application/session'
+import {activeSession,requireSession,reauthenticate} from '../../identity/application/session'
 import {jsonApi} from '../../identity/infrastructure/api'
 import {importSigner,importSpki,sign,verify} from '../../identity/infrastructure/crypto'
 import {sha} from '../../local-storage/infrastructure/cipher'
@@ -141,8 +141,16 @@ export async function fetchVerifiedMediaHistory(rootMediaId:string):Promise<{
   history:MediaRevisionHistory
   versions:Array<{revision:number;mediaId:string;contractHash:string}>
 }>{
-  const session=requireSession()
   if(!UUID.test(rootMediaId))throw Error('media_revision.invalid_root')
+  // A restored device may have its Recovery Key unlocked while the initial
+  // session proof is still pending. A user-requested online history read
+  // should re-check server authorization rather than misclassifying the
+  // device as warm-offline with no cached history.
+  if(!activeSession.value?.online&&navigator.onLine){
+    try{await reauthenticate()}
+    catch{/* Fall back to independently verified warm-offline history only. */}
+  }
+  const session=requireSession()
   const localRoot=(await listLocalMedia()).find(x=>x.mediaId===rootMediaId)
   const rootHash=localRoot?await hash(JSON.stringify(localRoot.contract)):undefined
   let history:MediaRevisionHistory
