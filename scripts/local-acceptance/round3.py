@@ -41,11 +41,11 @@ class Round3(Acceptance):
         config=ROOT/'tests/local-acceptance/playwright.config.ts'
         if preview:self.browser('performance-before',config,'performance.spec.ts')
         suites=[
-          ('round3-boundaries',config,['round3-boundaries.spec.ts','--repeat-each','3'],False),
+          ('round3-boundaries',config,['round3-boundaries.spec.ts','--repeat-each','3','--max-failures','2'],False),
           ('camera-reload',config,['camera-reload.spec.ts','round3-camera.spec.ts'],False),
           ('product-e2e',self.source_root/'tests/playwright.config.ts',[],True),
           ('round3-security',config,['round3-security.spec.ts'],False),
-          ('lost-ack-stability',config,['resilience.spec.ts','--grep','ciphertext survives','--repeat-each','3'],False),
+          ('lost-ack-stability',config,['resilience.spec.ts','--grep','ciphertext survives','--repeat-each','3','--max-failures','2'],False),
           ('acceptance-e2e',config,['resilience.spec.ts','--grep-invert','ciphertext survives|cold offline reload'],False),
           ('offline-readiness',config,['offline-readiness.spec.ts'],False),
         ]
@@ -58,13 +58,27 @@ class Round3(Acceptance):
             if not path.exists():continue
             unique={s['title']:s for s in specs(json.loads(path.read_text())) if any(t['status']=='unexpected' for t in s['tests'])}
             for index,(title,spec) in enumerate(unique.items()):
-                self.browser(name+'-recheck-'+str(index+1),cfg,Path(spec['file']).name,'--grep','^'+re.escape(title)+'$',product=product)
+                if sum(t['status']=='unexpected' for t in spec['tests'])>=2:continue
+                self.browser(name+'-recheck-'+str(index+1),cfg,Path(spec['file']).name,'--grep',re.escape(title),product=product)
         self.command('safari',['python3',str(ROOT/'scripts/local-acceptance/safari-smoke.py'),str(self.directory)],timeout=90,optional=True)
         # Read-only device discovery; no pairing, permissions or owner prompts.
         code="import json,shutil,subprocess; p=subprocess.run(['system_profiler','SPUSBDataType','-json'],capture_output=True,text=True,timeout=20); raw=p.stdout.lower(); print(json.dumps({'usbInventoryExit':p.returncode,'iosUsbCandidate':'iphone' in raw or 'ipad' in raw,'adbAvailable':bool(shutil.which('adb'))}));"
         self.command('physical-device-discovery',['python3','-c',code])
         if preview:self.browser('performance-after',config,'performance.spec.ts')
         self.inspect()
+    def targeted_pregrant(self):
+        self.command('git-head',['git','log','-1','--format=%H %s'],cwd=self.source_root)
+        if not self.command('source-boundaries',['git','diff','--exit-code',TARGET],cwd=self.source_root)[0]:return
+        if not all(self.available(p) for p in (8000,5173,4173)):raise RuntimeError('Fixture ports occupied')
+        if not self.command('isolation-contract',['python3','-B','tests/local-acceptance/test_isolation.py'])[0]:return
+        if not self.provision():return
+        if not self.php('composer-install','composer','install','--no-interaction','--no-progress','--prefer-dist',timeout=900)[0]:return
+        if not self.php('migrate','php','artisan','migrate','--force')[0]:return
+        if not self.dc('api-up','up','-d','api')[0]:return
+        if not self.health('healthz','http://127.0.0.1:8000/api/healthz'):return
+        self.background('vite',['pnpm','--filter','@pb3/web','exec','vite','--host','127.0.0.1','--port','5173','--strictPort'],cwd=self.source_root)
+        if self.health('vite-ready','http://127.0.0.1:5173/settings'):
+            self.browser('pregrant-focused',ROOT/'tests/local-acceptance/playwright.config.ts','round3-security.spec.ts','--grep','no additional grant')
     def inspect(self):
         bootstrap="if(getenv('APP_ENV')!=='testing'||getenv('DB_DATABASE')!=='pb3_ci_p0'||getenv('PB3_ISOLATED_STORAGE_SMOKE')!=='1')exit(1);require 'vendor/autoload.php';$app=require 'bootstrap/app.php';$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();"
         code=bootstrap+"echo json_encode(['events'=>Illuminate\\Support\\Facades\\DB::table('assignment_state_events_v1')->get(['assignment_id','state','occurred_at_ms']),'photos'=>Illuminate\\Support\\Facades\\DB::table('photo_records')->get(['id','account_id','state'])],JSON_THROW_ON_ERROR);"
@@ -86,11 +100,13 @@ class Round3(Acceptance):
             self.command('round3-private-canary-scan',['python3','-c',"import json,sys;x=json.load(open(sys.argv[1]));print(json.dumps(x));assert all(x[k] for k in ['databaseScanExecuted','databasePlaintextAbsent','logsPlaintextAbsent']) and x['containerLogScanExit']==0",str(self.directory/'privacy-scan.json')])
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--source-root',required=True,type=Path);args=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--source-root',required=True,type=Path);p.add_argument('--recheck-pregrant',action='store_true');args=p.parse_args()
     if subprocess.check_output(['git','-C',str(args.source_root),'rev-parse','HEAD'],text=True).strip()!=TARGET:p.error('Pinned product HEAD mismatch; STOP')
     if subprocess.check_output(['git','-C',str(args.source_root),'status','--porcelain'],text=True).strip():p.error('Product worktree is dirty; STOP')
     a=Round3(source_root=args.source_root,source_ref=TARGET)
-    try:a.run()
+    try:
+        if args.recheck_pregrant:a.targeted_pregrant()
+        else:a.run()
     except (Exception,KeyboardInterrupt) as e:
         a.results.append({'name':'runner','status':'FAIL','exit_code':1,'reason':str(e)});print('Runner interrupted:',e,flush=True)
     finally:a.cleanup()

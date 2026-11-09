@@ -137,11 +137,14 @@ test('R3 no additional grant or DEK envelope before failed preflight; personal v
     const row=B.locator('.photo-row').filter({hasText:good.photoId.slice(0,8)})
     await expect(row).toContainText('synced')
     const prompts:string[]=[]
-    B.once('dialog',async d=>{prompts.push(d.message());await d.dismiss()})
+    const cancelled=new Promise<void>(resolve=>B.once('dialog',async d=>{prompts.push(d.message());await d.dismiss();resolve()}))
     await row.getByRole('button',{name:'Отправить в задание'}).click()
+    await cancelled
+    await expect(row.getByRole('button',{name:'Отправить в задание'})).toBeEnabled()
     expect(await grantCount()).toBe(before);expect(fixture('grant-count',bId)).toBe(serverBefore);expect(uploads).toBe(0)
-    B.once('dialog',async d=>{prompts.push(d.message());await d.accept()})
+    const consented=new Promise<void>(resolve=>B.once('dialog',async d=>{prompts.push(d.message());await d.accept();resolve()}))
     await row.getByRole('button',{name:'Отправить в задание'}).click()
+    await consented
     await expect.poll(grantCount).toBe(before+1)
     await B.getByRole('button',{name:'Синхронизировать'}).click()
     await expect.poll(()=>fixture('grant-count',bId)).toBe(serverBefore+1)
