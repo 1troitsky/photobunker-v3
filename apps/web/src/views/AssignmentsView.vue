@@ -7,6 +7,7 @@ import {
   listServerAssignments, listAssignmentInvites, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
   queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
+  queueAssignmentStateTransition,
   verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
@@ -25,7 +26,7 @@ import type { StoredPhoto } from '../features/photo-sync/application/p1-photo'
 
 type VisibleAssignment={
   id:string;ownerAccountId:string;data:PrivateAssignment|null
-  state:string;localState?:string;goal:number|null
+  state:string;revision:number;localState?:string;goal:number|null
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
 }
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
@@ -101,7 +102,7 @@ async function hydrate():Promise<void>{
     catch { /* a corrupted local envelope must never reveal plaintext */ }
     return {
       id:item.id,ownerAccountId:item.ownerAccountId,data,
-      state:'active',localState:item.state,goal:item.photoGoal,
+      state:'active',revision:1,localState:item.state,goal:item.photoGoal,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
     }
   }))
@@ -143,7 +144,7 @@ async function hydrate():Promise<void>{
     }
     const row:VisibleAssignment={
       id:item.assignmentId,ownerAccountId:item.ownerAccountId,data,
-      state:item.state,localState:previous?.localState,
+      state:item.state,revision:item.revision,localState:previous?.localState,
       goal:item.photoGoal,createdAt:previous?.createdAt??item.startsAt,
       isOwner:item.ownerAccountId===identity.accountId,
       startsAt:item.startsAt,endsAt:item.endsAt,
@@ -214,6 +215,20 @@ async function loadSubmissions():Promise<void>{
     if(selectedId.value===id)submissions.value=result
   }catch(e){error.value=explain(e)}
 }
+async function changeState(action:'finish'|'resume'):Promise<void>{
+  await operate(async()=>{
+    const assignment=selected.value
+    if(!assignment?.isOwner||assignment.localState==='queued')
+      throw new Error('assignment.owner_required')
+    await queueAssignmentStateTransition(assignment.id,action)
+    if(activeSession.value?.online&&navigator.onLine)await flushAssignmentOutbox()
+    await refresh()
+    notice.value=action==='finish'
+      ?'Завершение задания подписано и поставлено в очередь. Личные файлы участников сохраняются.'
+      :'Возобновление задания подписано и поставлено в очередь.'
+  })
+}
+
 async function inspectRecipient():Promise<void>{
   await operate(async()=>{
     const id=recipientId.value.trim().toLowerCase()
@@ -364,7 +379,7 @@ onUnmounted(cleanPreview)
               <strong>{{ assignment.data?.title||'Зашифрованное задание' }}</strong>
               <small>{{ assignment.id.slice(0,8) }} · {{ assignment.isOwner?'Владелец':'Исполнитель' }}</small>
             </div>
-            <span class="assignment-state">{{ assignment.localState==='queued'?'В очереди':assignment.state==='active'?'Активно':assignment.state }}</span>
+            <span class="assignment-state">{{ assignment.localState==='queued'?'В очереди':assignment.state==='active'?'Активно':assignment.state==='finished'?'Завершено':assignment.state }}</span>
           </div>
           <p v-if="assignment.data?.instructions" class="assignment-description">{{ assignment.data.instructions }}</p>
           <div class="assignment-card-bottom">
@@ -387,6 +402,16 @@ onUnmounted(cleanPreview)
         <p class="muted">Тип: фото · {{ selected.goal===null?'без цели':'Цель: '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
 
         <template v-if="selected.isOwner">
+          <div class="assignment-toolbar">
+            <span class="muted">Версия состояния: {{ selected.revision }}</span>
+            <button v-if="selected.state==='active'" type="button"
+              :disabled="busy||selected.localState==='queued'"
+              @click="changeState('finish')">Завершить задание</button>
+            <button v-else-if="selected.state==='finished'" type="button"
+              :disabled="busy||(selected.endsAt!==null&&selected.endsAt<=Date.now())"
+              @click="changeState('resume')">Возобновить задание</button>
+          </div>
+          <p class="muted">Завершение прекращает новые приёмы снимков, но не удаляет личные фотографии участников и выданные ранее разрешения.</p>
           <h3>Участники</h3>
           <label for="assignment-recipient-id">ID аккаунта исполнителя</label>
           <input id="assignment-recipient-id" v-model="recipientId" autocomplete="off" spellcheck="false" placeholder="UUID аккаунта">
