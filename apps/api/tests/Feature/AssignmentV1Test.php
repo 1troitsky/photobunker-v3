@@ -963,4 +963,120 @@ final class AssignmentV1Test extends TestCase
         $this->assertDatabaseCount('assignment_media_submissions_v1',0);
     }
 
+
+    private function signedRecordedSubmission(
+        array $media,string $kind,array $changes=[]
+    ):array
+    {
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $hash=hash('sha256',$a->latest_policy_contract);
+        $now=now()->getTimestampMs();
+        $proof=array_merge([
+            'version'=>1,'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'contributorAccountId'=>$this->people['recipient']['account'],
+            'policyRevision'=>(int)$a->policy_revision,
+            'policyHash'=>$hash,
+            'mediaId'=>$media['id'],'mediaContractHash'=>$media['hash'],
+            'mediaType'=>$kind,
+            'startedAt'=>$now-1200,'finishedAt'=>$now,
+        ],$changes);
+        $signedCapture=$this->signed('recipient',
+            'pb3.assignment-media-capture.v1',$proof);
+        return $this->signed('recipient','pb3.assignment-media-submit.v2',[
+            'version'=>2,'submissionId'=>(string)Str::uuid(),
+            'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'contributorAccountId'=>$this->people['recipient']['account'],
+            'mediaId'=>$media['id'],'mediaGrantId'=>$media['grantId'],
+            'mediaContractHash'=>$media['hash'],
+            'policyRevision'=>(int)$a->policy_revision,'policyHash'=>$hash,
+            'kind'=>$kind,
+            'captureContract'=>$signedCapture['contract'],
+            'captureSignature'=>$signedCapture['signature'],
+        ]);
+    }
+
+    public function test_signed_v2_recording_links_exact_media_policy_and_stable_ack():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $this->as('owner');
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/policy',
+            $this->signedMediaPolicyV3(['photo','video','audio']))->assertOk();
+        $media=$this->mediaAndGrant('video');
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $this->as('recipient');
+        $valid=$this->signedRecordedSubmission($media,'video');
+        $this->postJson($url,$valid)->assertCreated()
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$valid)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('assignment_media_submissions_v1',[
+            'media_id'=>$media['id'],
+            'capture_contract_json'=>json_decode($valid['contract'],true)['captureContract'],
+        ]);
+        $this->as('owner');
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('items.0.capturedInAssignment',true)
+            ->assertJsonPath('items.0.mediaId',$media['id']);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedVideoCount',1);
+        DB::table('media_recipient_grants_v1')->where('id',$media['grantId'])
+            ->update(['state'=>'revoked']);
+        $this->getJson($url)->assertJsonPath('items',[]);
+        $this->as('recipient');
+        $this->postJson($url,$valid)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$media['id'],'state'=>'active',
+        ]);
+    }
+
+    public function test_recording_v2_rejects_cross_policy_wrong_media_and_tampered_capture_signature():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $this->as('owner');
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/policy',
+            $this->signedMediaPolicyV3(['photo','video']))->assertOk();
+        $media=$this->mediaAndGrant('video');
+        $this->as('recipient');
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $wrongId=$this->signedRecordedSubmission($media,'video',[
+            'mediaId'=>(string)Str::uuid(),
+        ]);
+        $this->postJson($url,$wrongId)->assertConflict();
+        $wrongHash=$this->signedRecordedSubmission($media,'video',[
+            'mediaContractHash'=>str_repeat('f',64),
+        ]);
+        $this->postJson($url,$wrongHash)->assertConflict();
+        $wrongPolicy=$this->signedRecordedSubmission($media,'video',[
+            'policyRevision'=>1,
+        ]);
+        $this->postJson($url,$wrongPolicy)->assertConflict();
+        $foreign=$this->signedRecordedSubmission($media,'video',[
+            'assignmentId'=>(string)Str::uuid(),
+        ]);
+        $this->postJson($url,$foreign)->assertUnprocessable();
+        $future=$this->signedRecordedSubmission($media,'video',[
+            'startedAt'=>now()->addMinutes(10)->getTimestampMs(),
+            'finishedAt'=>now()->addMinutes(11)->getTimestampMs(),
+        ]);
+        $this->postJson($url,$future)->assertUnprocessable();
+        $long=$this->signedRecordedSubmission($media,'video',[
+            'startedAt'=>now()->subMinutes(10)->getTimestampMs(),
+            'finishedAt'=>now()->getTimestampMs(),
+        ]);
+        $this->postJson($url,$long)->assertUnprocessable();
+        $tampered=$this->signedRecordedSubmission($media,'video');
+        $data=json_decode($tampered['contract'],true);
+        $data['captureSignature']=P::encode(random_bytes(64));
+        $tampered=$this->signed('recipient',
+            'pb3.assignment-media-submit.v2',$data);
+        $this->postJson($url,$tampered)->assertUnauthorized();
+        $this->assertDatabaseCount('assignment_media_submissions_v1',0);
+    }
+
 }
