@@ -789,6 +789,15 @@ async function flushPass():Promise<void>{
         state:/^api\.http_(403|409|410|422)$/.test(reason)?'conflict':'retry',
         lastError:/^api\.http_\d+$/.test(reason)?reason:'assignment.retry_required',
       })
+      if(op.kind==='create'){
+        // An unaccepted signed draft stays encrypted and available locally;
+        // its card must not misleadingly remain "in queue" after a terminal
+        // entitlement/ACL conflict. Never delete the draft on HTTP 403.
+        const c=JSON.parse(op.contract) as {assignmentId:string}
+        await db.assignments.update(c.assignmentId,{
+          state:/^api\\.http_(403|409|410|422)$/.test(reason)?'conflict':'retry',
+        })
+      }
       if(!navigator.onLine)return
     }
   }
