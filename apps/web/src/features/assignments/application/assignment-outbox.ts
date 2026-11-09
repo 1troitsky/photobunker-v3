@@ -458,6 +458,17 @@ export async function queueAssignmentInvitation(
   return inviteId
 }
 
+/** Display-only cached invitations; never use them as current server ACL. */
+export async function listCachedAssignmentInvites():Promise<ReceivedAssignmentInvite[]>{
+  const s=requireSession()
+  const cached=await db.invites.where('cachedForAccountId').equals(s.accountId).toArray()
+  assertSame(s)
+  return cached.map(({cachedForAccountId:_account,...item})=>{
+    void _account
+    return item
+  })
+}
+
 export async function listAssignmentInvites():Promise<ReceivedAssignmentInvite[]>{
   const s=requireSession()
   if(s.online&&(typeof navigator==='undefined'||navigator.onLine)){
@@ -471,7 +482,7 @@ export async function listAssignmentInvites():Promise<ReceivedAssignmentInvite[]
   }
   // No authority is claimed for stale local grants; these are display-only
   // ciphertext invitations until a fresh server-authenticated accept.
-  return (await db.invites.where('cachedForAccountId').equals(s.accountId).toArray())
+  return listCachedAssignmentInvites()
 }
 
 export async function verifyAssignmentInvite(
