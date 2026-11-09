@@ -237,6 +237,54 @@ final class AssignmentV1Test extends TestCase
         ]);
     }
 
+    public function test_policy_history_is_signed_append_only_and_visible_only_after_consent():void
+    {
+        $this->createAssignment();
+        $url='/assignments/v1/'.$this->assignmentId.'/policy-history';
+        $root=DB::table('assignment_records_v1')->where('id',$this->assignmentId)
+            ->value('contract_json');
+        $this->as('owner');
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('assignmentId',$this->assignmentId)
+            ->assertJsonPath('policyRevision',1)
+            ->assertJsonPath('rootPolicyHash',hash('sha256',$root))
+            ->assertJsonPath('events',[]);
+        $this->as('outsider');
+        $this->getJson($url)->assertNotFound();
+        $this->as('recipient');
+        $this->getJson($url)->assertNotFound();
+        $invite=$this->invite();
+        $this->as('recipient');
+        $this->getJson($url)->assertNotFound();
+        $first=$this->signedGoalPolicy('owner',1,45);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/policy',$first)
+            ->assertOk();
+        $second=$this->signedCaptureRequirements('owner',2,45,true,12,true);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/policy',$second)
+            ->assertOk();
+        $this->accept($invite);
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('policyRevision',3)
+            ->assertJsonPath('rootPolicyHash',hash('sha256',$root))
+            ->assertJsonCount(2,'events')
+            ->assertJsonPath('events.0.contract',$first['contract'])
+            ->assertJsonPath('events.0.signature',$first['signature'])
+            ->assertJsonPath('events.0.fromPolicyRevision',1)
+            ->assertJsonPath('events.0.toPolicyRevision',2)
+            ->assertJsonPath('events.0.contractHash',hash('sha256',$first['contract']))
+            ->assertJsonPath('events.1.contract',$second['contract'])
+            ->assertJsonPath('events.1.signature',$second['signature'])
+            ->assertJsonPath('events.1.toPolicyRevision',3);
+        $payload=$this->getJson($url)->assertOk()->json();
+        $this->assertIsInt($payload['events'][0]['occurredAtMs']);
+        $this->assertGreaterThanOrEqual($payload['events'][0]['occurredAtMs'],
+            $payload['events'][1]['occurredAtMs']);
+        $this->assertArrayNotHasKey('privateEnvelope',$payload);
+        $this->assertStringNotContainsString('latitude',json_encode($payload));
+        $this->as('outsider');
+        $this->getJson($url)->assertNotFound();
+    }
+
     public function test_signed_v2_private_metadata_requirements_keep_original_goal_and_replay():void
     {
         $this->createAssignment();
