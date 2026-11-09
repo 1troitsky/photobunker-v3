@@ -31,7 +31,7 @@ final class AppServiceProvider extends ServiceProvider
                 ?'operational_limits.assignments.requests_per_minute_per_account'
                 :'operational_limits.assignments.unauthenticated_requests_per_minute_per_ip';
             $max=config($configKey);
-            if(!is_int($max)||$max<1)throw new \\RuntimeException('assignments.operational_limit_unconfigured');
+            if(!is_int($max)||$max<1)throw new \RuntimeException('assignments.operational_limit_unconfigured');
             return Limit::perMinute($max)->by(
                 $authenticated?'account:'.$account:'ip:'.($request->ip()??'unknown'));
         });
