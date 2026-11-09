@@ -202,6 +202,37 @@ final class PhotoSyncV1Test extends TestCase {
             ->assertOk()->assertJsonPath('state','pending');
     }
 
+    public function test_finish_then_resume_before_scheduled_start_keeps_future_capture_possible():void {
+        $assignment=(string)Str::uuid();
+        $policy='{"version":1,"allowedMedia":["photo"]}';
+        $hash=hash('sha256',$policy);
+        $start=now()->addSeconds(30)->getTimestampMs();
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$assignment,'owner_account_id'=>$this->account,
+            'operation_id'=>(string)Str::uuid(),'contract_hash'=>$hash,
+            'contract_json'=>$policy,'owner_signature'=>'fixture',
+            'private_envelope_json'=>'{}','state'=>'active',
+            'revision'=>3,'policy_revision'=>1,'photo_goal'=>null,
+            'starts_at'=>$start,'ends_at'=>null,
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        foreach([['finished',1,2],['active',2,3]] as [$state,$from,$to]){
+            DB::table('assignment_state_events_v1')->insert([
+                'operation_id'=>(string)Str::uuid(),'assignment_id'=>$assignment,
+                'from_revision'=>$from,'to_revision'=>$to,'state'=>$state,
+                'contract_hash'=>str_repeat('e',64),'contract_json'=>'{}',
+                'owner_signature'=>'fixture','created_at'=>now(),
+            ]);
+        }
+        $capture=[
+            'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
+            'policyRevision'=>1,'policyHash'=>$hash,
+            'capturedAt'=>$start+1000,
+        ];
+        $this->reserve($this->assignmentCaptureFixture($capture))
+            ->assertOk()->assertJsonPath('state','pending');
+    }
+
     public function test_unaccepted_contributor_cannot_reserve_assignment_capture():void {
         $assignment=(string)Str::uuid();
         $owner=(string)Str::uuid();
