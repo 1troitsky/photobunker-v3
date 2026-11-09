@@ -808,4 +808,159 @@ final class AssignmentV1Test extends TestCase
             'id'=>$grant,'state'=>'revoked',
         ]);
     }
+
+    private function signedMediaPolicyV3(array $allowed,int $from=1):array
+    {
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $root=$a->contract_json;
+        $previous=$a->latest_policy_contract??$root;
+        return $this->signed('owner','pb3.assignment-policy.v3',[
+            'version'=>3,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'rootPolicyHash'=>hash('sha256',$root),
+            'previousPolicyHash'=>hash('sha256',$previous),
+            'fromPolicyRevision'=>$from,'toPolicyRevision'=>$from+1,
+            'photoGoal'=>30,'allowedMedia'=>$allowed,
+            'requiredCategory'=>false,'descriptionMinLength'=>0,
+            'requiredGps'=>false,
+        ]);
+    }
+    private function mediaAndGrant(string $kind):array
+    {
+        $contributor=$this->people['recipient']['account'];
+        $owner=$this->people['owner']['account'];
+        $id=(string)Str::uuid();
+        $grantId=(string)Str::uuid();
+        $mediaHash=hash('sha256',random_bytes(40));
+        DB::table('media_files_v1')->insert([
+            'id'=>$id,'account_id'=>$contributor,
+            'device_id'=>$this->people['recipient']['device'],
+            'operation_id'=>(string)Str::uuid(),
+            'media_type'=>$kind,'state'=>'active',
+            'expires_at'=>now()->addDay()->getTimestampMs(),
+            'plain_bytes'=>256,'cipher_bytes'=>288,
+            'contract_hash'=>$mediaHash,'contract_json'=>'{}',
+            'signature'=>'fixture','receipt'=>'{}',
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('media_recipient_grants_v1')->insert([
+            'id'=>$grantId,'media_id'=>$id,
+            'owner_account_id'=>$contributor,
+            'recipient_account_id'=>$owner,
+            'recipient_key_digest'=>str_repeat('a',64),
+            'media_contract_hash'=>$mediaHash,
+            'expires_at'=>now()->addHour()->getTimestampMs(),
+            'state'=>'active','contract_hash'=>str_repeat('b',64),
+            'contract_json'=>'{}','account_signature'=>'fixture',
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        return ['id'=>$id,'grantId'=>$grantId,'hash'=>$mediaHash];
+    }
+    private function signedMediaSubmit(array $media,string $kind,
+        ?int $policyRevision=null,?string $policyHash=null):array
+    {
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        return $this->signed('recipient','pb3.assignment-media-submit.v1',[
+            'version'=>1,'submissionId'=>(string)Str::uuid(),
+            'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'contributorAccountId'=>$this->people['recipient']['account'],
+            'mediaId'=>$media['id'],'mediaGrantId'=>$media['grantId'],
+            'mediaContractHash'=>$media['hash'],
+            'policyRevision'=>$policyRevision??(int)$a->policy_revision,
+            'policyHash'=>$policyHash??hash('sha256',
+                $a->latest_policy_contract??$a->contract_json),
+            'kind'=>$kind,
+        ]);
+    }
+
+    public function test_media_submission_requires_explicit_v3_signed_policy_and_live_grant():void
+    {
+        $this->createAssignment();
+        $invite=$this->invite();
+        $this->accept($invite);
+        $video=$this->mediaAndGrant('video');
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $raw=$this->signedMediaSubmit($video,'video');
+        $this->as('recipient');
+        $this->postJson($url,$raw)->assertConflict(); // photo-only root
+
+        $this->as('owner');
+        $policy=$this->signedMediaPolicyV3(['photo','video','audio']);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/policy',$policy)
+            ->assertOk()->assertJsonPath('policyRevision',2);
+        // An outdated v1 policy amendment must never silently downgrade
+        // user permissions or erase capture requirements.
+        $old=$this->signedGoalPolicy('owner',2,31);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/policy',$old)
+            ->assertConflict();
+
+        $this->as('recipient');
+        $this->postJson($url,$raw)->assertConflict(); // stale revision
+        $valid=$this->signedMediaSubmit($video,'video');
+        $this->postJson($url,$valid)->assertCreated()
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$valid)->assertOk()
+            ->assertJsonPath('unchanged',true); // lost ACK
+
+        $audio=$this->mediaAndGrant('audio');
+        $validAudio=$this->signedMediaSubmit($audio,'audio');
+        $this->postJson($url,$validAudio)->assertCreated();
+        $this->as('owner');
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',0)
+            ->assertJsonPath('items.0.confirmedVideoCount',1)
+            ->assertJsonPath('items.0.confirmedAudioCount',1);
+        $this->getJson($url)->assertOk()->assertJsonCount(2,'items');
+        $this->as('outsider');
+        $this->getJson($url)->assertNotFound();
+
+        DB::table('media_recipient_grants_v1')
+            ->where('id',$video['grantId'])->update(['state'=>'revoked']);
+        $this->as('owner');
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedVideoCount',0)
+            ->assertJsonPath('items.0.confirmedAudioCount',1);
+        $this->getJson($url)->assertJsonCount(1,'items');
+        $this->as('recipient');
+        $this->postJson($url,$valid)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$video['id'],'state'=>'active',
+        ]);
+        $this->assertDatabaseCount('assignment_media_submissions_v1',2);
+    }
+
+    public function test_media_submission_rejects_wrong_type_revoked_grant_and_forged_signature():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $this->as('owner');
+        $policy=$this->signedMediaPolicyV3(['photo','video']);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/policy',$policy)
+            ->assertOk();
+        $video=$this->mediaAndGrant('video');
+        $audio=$this->mediaAndGrant('audio');
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $this->as('recipient');
+        $audioInput=$this->signedMediaSubmit($audio,'audio');
+        $this->postJson($url,$audioInput)->assertConflict();
+        $videoInput=$this->signedMediaSubmit($video,'video');
+        $fake=$videoInput;
+        $fake['signature']=P::encode(random_bytes(64));
+        $this->postJson($url,$fake)->assertUnauthorized();
+        DB::table('media_recipient_grants_v1')
+            ->where('id',$video['grantId'])->update(['state'=>'revoked']);
+        $this->postJson($url,$videoInput)->assertForbidden();
+        DB::table('media_recipient_grants_v1')
+            ->where('id',$video['grantId'])->update(['state'=>'active']);
+        DB::table('media_files_v1')->where('id',$video['id'])
+            ->update(['contract_hash'=>str_repeat('e',64)]);
+        $this->postJson($url,$videoInput)->assertConflict();
+        $this->assertDatabaseCount('assignment_media_submissions_v1',0);
+    }
+
 }
