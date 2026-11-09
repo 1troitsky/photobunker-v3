@@ -6,6 +6,8 @@ import { pinnedPeer } from '../../sharing/key-directory'
 import { listOutgoingGrants } from '../../sharing/grant-flow'
 import { sealAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
 import type { AssignmentEnvelope, AssignmentInviteEnvelope, PrivateAssignment } from '../infrastructure/assignment-crypto'
+import { preparePhotoMetadata } from '../../photo-sync/domain/capture-metadata'
+import type { CaptureMetadataInput } from '../../photo-sync/domain/capture-metadata'
 
 export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'state'|'policy'
 export type AssignmentOperationState='queued'|'retry'|'sent'|'conflict'
@@ -74,6 +76,33 @@ export type SignedCaptureBinding={
   assignmentId:string;ownerAccountId:string;policyRevision:number
   policyHash:string;capturedAt:number
 }
+export type CaptureRequirements={
+  requiredCategory:boolean;descriptionMinLength:number;requiredGps:boolean
+}
+const NO_CAPTURE_REQUIREMENTS:CaptureRequirements={
+  requiredCategory:false,descriptionMinLength:0,requiredGps:false,
+}
+/**
+ * Extracts requirements only from an owner-signed snapshot that the caller
+ * has already authenticated with verifySignedAssignmentPolicy().
+ */
+export function signedPolicyRequirements(item:AssignmentListing):CaptureRequirements{
+  if(item.policyRevision===1)return {...NO_CAPTURE_REQUIREMENTS}
+  if(!item.policyAmendmentContract)throw Error('assignment.policy_revision_not_authenticated')
+  const amend=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>
+  if(amend.version===1)return {...NO_CAPTURE_REQUIREMENTS}
+  if(amend.version!==2||typeof amend.requiredCategory!=='boolean'
+    ||typeof amend.requiredGps!=='boolean'
+    ||!Number.isInteger(amend.descriptionMinLength)
+    ||(amend.descriptionMinLength as number)<0
+    ||(amend.descriptionMinLength as number)>4000)
+    throw Error('assignment.invalid_capture_requirements')
+  return {
+    requiredCategory:amend.requiredCategory,
+    descriptionMinLength:amend.descriptionMinLength as number,
+    requiredGps:amend.requiredGps,
+  }
+}
 
 class AssignmentDB extends Dexie {
   operations!:Table<AssignmentOperation,string>
@@ -126,7 +155,9 @@ async function signedOperation(
 ):Promise<AssignmentOperation>{
   const s=requireSession()
   const contract=JSON.stringify(payload)
-  const signature=await sign(await importSigner(s.pkg.accountPkcs8),domain(kind)+contract)
+  const signingDomain=kind==='policy'&&payload.version===2
+    ?'pb3.assignment-policy.v2\n':domain(kind)
+  const signature=await sign(await importSigner(s.pkg.accountPkcs8),signingDomain+contract)
   assertSame(s)
   return {
     id:crypto.randomUUID(),accountId:s.accountId,kind,path,
@@ -222,15 +253,26 @@ export async function verifySignedAssignmentPolicy(
       throw new Error('assignment.policy_snapshot_mismatch')
   }else{
     if(typeof item.policyAmendmentContract!=='string'
-      ||typeof item.policyAmendmentSignature!=='string'
-      ||!await verify(await importSpki(trustedSpki),
-        domain('policy')+item.policyAmendmentContract,
-        item.policyAmendmentSignature))
+      ||typeof item.policyAmendmentSignature!=='string')
       throw new Error('assignment.policy_revision_not_authenticated')
     let edit:Record<string,unknown>
     try{edit=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>}
     catch{throw new Error('assignment.invalid_policy_revision')}
-    if(edit.version!==1||edit.assignmentId!==item.assignmentId
+    const type=edit.version
+    if(type!==1&&type!==2)throw Error('assignment.invalid_policy_revision')
+    const expected=[
+      'version','operationId','assignmentId','ownerAccountId',
+      'rootPolicyHash','previousPolicyHash','fromPolicyRevision',
+      'toPolicyRevision','photoGoal','allowedMedia',
+      ...(type===2?['requiredCategory','descriptionMinLength','requiredGps']:[]),
+    ]
+    if(Object.keys(edit).sort().join('|')!==expected.sort().join('|')
+      ||!await verify(await importSpki(trustedSpki),
+        (type===2?'pb3.assignment-policy.v2\n':domain('policy'))
+          +item.policyAmendmentContract,
+        item.policyAmendmentSignature))
+      throw new Error('assignment.policy_revision_not_authenticated')
+    if(edit.assignmentId!==item.assignmentId
       ||edit.ownerAccountId!==item.ownerAccountId
       ||edit.rootPolicyHash!==originalHash
       ||edit.toPolicyRevision!==item.policyRevision
@@ -241,6 +283,7 @@ export async function verifySignedAssignmentPolicy(
       ||typeof edit.previousPolicyHash!=='string'
       ||!/^[a-f0-9]{64}$/.test(edit.previousPolicyHash))
       throw new Error('assignment.policy_revision_mismatch')
+    signedPolicyRequirements(item) // hard-fail invalid owner-signed v2 flags
   }
   if(item.revision===1){
     if(item.state!=='active'||item.stateContract!==null
@@ -357,6 +400,7 @@ export async function listVerifiedCapturePolicies():Promise<AssignmentListing[]>
 
 export async function signedCaptureBinding(
   assignmentId:string,capturedAt=Date.now(),
+  privateFields:CaptureMetadataInput={},
 ):Promise<SignedCaptureBinding>{
   const s=requireSession()
   const row=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
@@ -371,6 +415,18 @@ export async function signedCaptureBinding(
     ||(policy.endsAt!==null&&capturedAt>=policy.endsAt)) {
     throw new Error('assignment.capture_not_permitted')
   }
+  // Enforce authenticated requirements before creating any ciphertext.
+  // The backend cannot inspect private GPS/category/description bytes, and
+  // does not claim to prove that a compromised client obeyed these rules.
+  const meta=preparePhotoMetadata(capturedAt,undefined,privateFields)
+  const rules=signedPolicyRequirements(policy)
+  if(rules.requiredCategory&&!meta.category)
+    throw Error('assignment.category_required')
+  if(rules.descriptionMinLength>0
+    &&(meta.description?.length??0)<rules.descriptionMinLength)
+    throw Error('assignment.description_too_short')
+  if(rules.requiredGps&&!meta.gps)
+    throw Error('assignment.gps_required')
   const effectiveContract=policy.policyRevision===1
     ?policy.policyContract:policy.policyAmendmentContract
   if(!effectiveContract)throw new Error('assignment.policy_revision_not_authenticated')
@@ -449,42 +505,62 @@ export async function readCachedPrivateAssignment(
  * Owner-root-signed edits affect only the target count. Historical capture
  * contracts stay immutable and are evaluated by the server at capture time.
  */
-export async function queueAssignmentGoalChange(
-  assignmentId:string,photoGoal:number|null,
+export async function queueAssignmentPolicyChange(
+  assignmentId:string,
+  next:{photoGoal:number|null}&CaptureRequirements,
 ):Promise<string>{
   const s=requireSession()
+  const {photoGoal,requiredCategory,descriptionMinLength,requiredGps}=next
   if(photoGoal!==null&&(!Number.isInteger(photoGoal)||photoGoal<1||photoGoal>9999))
-    throw new Error('assignment.invalid_goal')
+    throw Error('assignment.invalid_goal')
+  if(typeof requiredCategory!=='boolean'||typeof requiredGps!=='boolean'
+    ||!Number.isInteger(descriptionMinLength)||descriptionMinLength<0
+    ||descriptionMinLength>4000)
+    throw Error('assignment.invalid_capture_requirements')
   const row=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
   if(!row||row.listing.ownerAccountId!==s.accountId)
-    throw new Error('assignment.policy_not_owned')
+    throw Error('assignment.policy_not_owned')
   await verifySignedAssignmentPolicy(row.listing,true)
   const a=row.listing
-  if(a.state!=='active'||a.photoGoal===photoGoal)
-    throw new Error('assignment.invalid_policy_change')
-  if(a.policyRevision>=1001
-    ||(a.endsAt!==null&&a.endsAt<=Date.now()))
-    throw new Error('assignment.policy_edit_limit')
+  const previousRules=signedPolicyRequirements(a)
+  if(a.state!=='active'||(a.photoGoal===photoGoal
+    &&previousRules.requiredCategory===requiredCategory
+    &&previousRules.descriptionMinLength===descriptionMinLength
+    &&previousRules.requiredGps===requiredGps))
+    throw Error('assignment.invalid_policy_change')
+  if(a.policyRevision>=1001||(a.endsAt!==null&&a.endsAt<=Date.now()))
+    throw Error('assignment.policy_edit_limit')
   const ops=await listAssignmentOperations()
   if(ops.some(op=>(op.kind==='policy'||op.kind==='state')
     &&(op.state==='queued'||op.state==='retry')
     &&(JSON.parse(op.contract) as {assignmentId:string}).assignmentId===assignmentId))
-    throw new Error('assignment.policy_change_pending')
+    throw Error('assignment.policy_change_pending')
   const enc=new TextEncoder()
   const rootPolicyHash=hex(await digest(enc.encode(a.policyContract)))
   const previousContract=a.policyRevision===1?a.policyContract:a.policyAmendmentContract
-  if(!previousContract)throw new Error('assignment.policy_revision_not_authenticated')
+  if(!previousContract)throw Error('assignment.policy_revision_not_authenticated')
   const previousPolicyHash=hex(await digest(enc.encode(previousContract)))
   const payload={
-    version:1,operationId:crypto.randomUUID(),assignmentId,
+    version:2,operationId:crypto.randomUUID(),assignmentId,
     ownerAccountId:s.accountId,rootPolicyHash,previousPolicyHash,
     fromPolicyRevision:a.policyRevision,toPolicyRevision:a.policyRevision+1,
     photoGoal,allowedMedia:['photo'],
+    requiredCategory,descriptionMinLength,requiredGps,
   }
   const op=await signedOperation('policy',
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/policy',payload)
   await persist(op)
   return op.id
+}
+export async function queueAssignmentGoalChange(
+  assignmentId:string,photoGoal:number|null,
+):Promise<string>{
+  const s=requireSession()
+  const row=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
+  if(!row)throw Error('assignment.policy_not_cached')
+  await verifySignedAssignmentPolicy(row.listing,true)
+  const rules=signedPolicyRequirements(row.listing)
+  return queueAssignmentPolicyChange(assignmentId,{photoGoal,...rules})
 }
 
 /** Signed owner lifecycle commands are durable and do not delete media. */

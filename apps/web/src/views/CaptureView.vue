@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { activeSession, type Session } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
 import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import {
   listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
+  signedPolicyRequirements,
 } from '../features/assignments/application/assignment-outbox'
 import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
 
@@ -13,6 +14,10 @@ const route=useRoute()
 const video=ref<HTMLVideoElement|null>(null)
 const policies=ref<AssignmentListing[]>([])
 const selectedAssignment=ref('')
+const requiredFields=computed(()=>{
+  const policy=policies.value.find(p=>p.assignmentId===selectedAssignment.value)
+  return policy?signedPolicyRequirements(policy):null
+})
 // Volatile capture form. These values never enter IndexedDB in plaintext.
 const category=ref('')
 const description=ref('')
@@ -203,13 +208,16 @@ async function capture():Promise<void> {
     // An offline photo carries an independently verified, versioned and
     // device-signed snapshot of the assignment policy. Personal v1 stays available.
     const capturedAt=Date.now()
+    // Snapshot these fields once. Validation and the encrypted metadata
+    // must refer to the same input even if UI changes during async binding.
+    const privateFields={
+      category:category.value,description:description.value,gps:gps.value,
+    }
     const binding=selectedAssignment.value
-      ?await signedCaptureBinding(selectedAssignment.value,capturedAt)
+      ?await signedCaptureBinding(selectedAssignment.value,capturedAt,privateFields)
       :undefined
     assertOwner()
-    const photo=await captureEncrypted(jpeg,binding,{
-      category:category.value,description:description.value,gps:gps.value,
-    })
+    const photo=await captureEncrypted(jpeg,binding,privateFields)
     assertOwner()
     message.value='Зашифровано и сохранено локально: '+photo.photoId.slice(0,8)
   }catch(e){if(ownsCamera(identity,generation))error.value=e instanceof Error?e.message:'camera.capture_failed'}
@@ -260,6 +268,11 @@ onUnmounted(()=>{disposed=true;closeCamera()})
         </button>
         <p class="muted">Доступны только проверенные подписанные политики. При съёмке без сети используется последний подтверждённый снимок политики; сервер повторно проверит права при загрузке.</p>
         <p v-if="policyNotice" class="muted" role="status">{{ policyNotice }}</p>
+        <p v-if="requiredFields" role="status" class="muted">
+          Подписанные требования: категория {{ requiredFields.requiredCategory?'обязательна':'необязательна' }},
+          описание минимум {{ requiredFields.descriptionMinLength }} символов,
+          GPS {{ requiredFields.requiredGps?'обязателен':'необязателен' }}.
+        </p>
       </div>
       <div class="foundation-card">
         <h2>Приватная информация снимка</h2>

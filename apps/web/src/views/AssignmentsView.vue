@@ -9,11 +9,12 @@ import {
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
   queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
-  queueAssignmentStateTransition,queueAssignmentGoalChange,
-  verifyAssignmentInvite,
+  queueAssignmentStateTransition,queueAssignmentPolicyChange,
+  signedPolicyRequirements,verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
+  CaptureRequirements,
 } from '../features/assignments/application/assignment-outbox'
 import {
   openOwnerAssignment, openRecipientAssignment,
@@ -29,7 +30,7 @@ import type { StoredPhoto } from '../features/photo-sync/application/p1-photo'
 type VisibleAssignment={
   id:string;ownerAccountId:string;data:PrivateAssignment|null
   state:string;revision:number;policyRevision:number
-  localState?:string;goal:number|null
+  requirements:CaptureRequirements;localState?:string;goal:number|null
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
 }
@@ -46,6 +47,9 @@ const title=ref('')
 const instructions=ref('')
 const goal=ref<string|number>('')
 const editedGoal=ref<string|number>('')
+const editedRequiredCategory=ref(false)
+const editedDescriptionMin=ref<string|number>(0)
+const editedRequiredGps=ref(false)
 const recipientId=ref('')
 const ownerCheck=ref<SafetyCheck|null>(null)
 const contributorCheck=ref<SafetyCheck|null>(null)
@@ -131,6 +135,7 @@ async function hydrate():Promise<void>{
     return {
       id:item.id,ownerAccountId:item.ownerAccountId,data,
       state:'active',revision:1,policyRevision:1,
+      requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       localState:item.state,goal:item.photoGoal,
       confirmedPhotos:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
@@ -204,7 +209,7 @@ async function hydrate():Promise<void>{
     const row:VisibleAssignment={
       id:item.assignmentId,ownerAccountId:item.ownerAccountId,data,
       state:item.state,revision:item.revision,policyRevision:item.policyRevision,
-      localState:previous?.localState,
+      requirements:signedPolicyRequirements(item),localState:previous?.localState,
       goal:item.photoGoal,confirmedPhotos:offline?null:item.confirmedPhotoCount,
       createdAt:previous?.createdAt??item.startsAt,
       isOwner:item.ownerAccountId===identity.accountId,
@@ -263,7 +268,11 @@ async function create():Promise<void>{
 }
 function choose(assignmentId:string):void{
   selectedId.value=assignmentId
-  editedGoal.value=assignments.value.find(a=>a.id===assignmentId)?.goal??''
+  const chosen=assignments.value.find(a=>a.id===assignmentId)
+  editedGoal.value=chosen?.goal??''
+  editedRequiredCategory.value=chosen?.requirements.requiredCategory??false
+  editedDescriptionMin.value=chosen?.requirements.descriptionMinLength??0
+  editedRequiredGps.value=chosen?.requirements.requiredGps??false
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
   submissions.value=[];cleanPreview()
@@ -299,10 +308,14 @@ async function changeGoal():Promise<void>{
       throw new Error('assignment.owner_required')
     const input=String(editedGoal.value).trim()
     const value=input===''?null:Number(input)
-    await queueAssignmentGoalChange(a.id,value)
+    await queueAssignmentPolicyChange(a.id,{
+      photoGoal:value,requiredCategory:editedRequiredCategory.value,
+      descriptionMinLength:Number(editedDescriptionMin.value),
+      requiredGps:editedRequiredGps.value,
+    })
     if(activeSession.value?.online&&navigator.onLine)await flushAssignmentOutbox()
     await refresh()
-    notice.value='Новая цель подписана и сохранена. До подтверждения сервером действует прежняя версия.'
+    notice.value='Новые правила подписаны и сохранены. До подтверждения сервером действует прежняя версия.'
   })
 }
 
@@ -503,6 +516,11 @@ onUnmounted(cleanPreview)
         <p v-if="selected.data" class="muted">{{ selected.data.instructions }}</p>
         <p><code>{{ selected.id }}</code></p>
         <p class="muted">Тип: фото · {{ selected.goal===null?'без цели':'Цель: '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
+        <p class="muted">
+          Подписанные требования: категория {{ selected.requirements.requiredCategory?'обязательна':'необязательна' }};
+          описание минимум {{ selected.requirements.descriptionMinLength }} символов;
+          GPS {{ selected.requirements.requiredGps?'обязателен':'необязателен' }}.
+        </p>
         <p v-if="selected.confirmedPhotos!==null" class="muted">
           Подтверждено сервером: {{ selected.confirmedPhotos }}
           <template v-if="selected.goal!==null"> / {{ selected.goal }} · {{ progressPercentage(selected) }}%</template>
@@ -523,12 +541,25 @@ onUnmounted(cleanPreview)
               @click="changeState('resume')">Возобновить задание</button>
           </div>
           <p v-if="pendingStateChange" class="muted" role="status">Подписанное изменение состояния или правил ожидает подтверждения сервера.</p>
-          <div v-if="selected.state==='active'" class="assignment-toolbar">
+          <div v-if="selected.state==='active'" class="foundation-card">
+            <h3>Подписанные правила съёмки</h3>
             <label for="assignment-edited-goal">Цель по фото (пусто — без цели)</label>
             <input id="assignment-edited-goal" v-model="editedGoal" type="number" min="1" max="9999" placeholder="Без цели">
+            <label class="checkline">
+              <input id="assignment-category-required" v-model="editedRequiredCategory" type="checkbox">
+              Категория обязательна
+            </label>
+            <label for="assignment-description-min">Описание: минимум символов (0 — необязательно)</label>
+            <input id="assignment-description-min" v-model="editedDescriptionMin"
+              type="number" min="0" max="4000">
+            <label class="checkline">
+              <input id="assignment-gps-required" v-model="editedRequiredGps" type="checkbox">
+              GPS обязателен
+            </label>
             <button type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
-              @click="changeGoal">Подписать новую цель</button>
+              @click="changeGoal">Подписать новые правила</button>
+            <p class="muted">Требования подписываются владельцем. Содержимое категории, описания и точные координаты остаются зашифрованными; сервер не может подтвердить физическое присутствие по GPS.</p>
           </div>
           <p v-if="pendingPolicyChange" class="muted">Новая версия правил находится в локальной очереди. Старые снимки сохраняют исходную подписанную политику.</p>
           <p class="muted">Завершение прекращает новые отправки в задание и съёмку после закрытия, но не удаляет личные фотографии участников и выданные ранее разрешения.</p>

@@ -154,18 +154,19 @@ final class PhotoSyncV1Test extends TestCase {
         $this->reserve($scoped($capture))->assertConflict();
     }
 
-    public function test_old_offline_capture_can_reserve_after_signed_goal_revision():void {
+    public function test_old_offline_capture_can_reserve_after_stricter_signed_requirements():void {
         $this->travelTo(now()->startOfSecond()->addMilliseconds(750));
         $changedAt=now()->getTimestampMs();
         $assignment=(string)Str::uuid();
         $original='{"version":1,"allowedMedia":["photo"],"photoGoal":30}';
         $rootHash=hash('sha256',$original);
         $revision=json_encode([
-            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'version'=>2,'operationId'=>(string)Str::uuid(),
             'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
             'rootPolicyHash'=>$rootHash,'previousPolicyHash'=>$rootHash,
             'fromPolicyRevision'=>1,'toPolicyRevision'=>2,
             'photoGoal'=>45,'allowedMedia'=>['photo'],
+            'requiredCategory'=>true,'descriptionMinLength'=>12,'requiredGps'=>true,
         ],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
         $newHash=hash('sha256',$revision);
         DB::table('assignment_records_v1')->insert([
