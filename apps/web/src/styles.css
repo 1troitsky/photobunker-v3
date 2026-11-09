@@ -75,3 +75,17 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .photo-row strong { font-family: ui-monospace,monospace; }
 .photo-row small { color: #aaa; }
 .decrypted-preview { max-width: 100%; max-height: 65dvh; object-fit: contain; display: block; margin: 14px auto; }
+
+/* P1-03 recipient grants technical surface; Fieldwork final UI comes in P2. */
+.share-panel h3 { margin: 22px 0 10px; font-size: 13px; }
+.share-panel input[type="text"], .share-panel input:not([type]) {
+  width: 100%; padding: 12px 10px; margin: 3px 0 12px;
+  border-radius: 8px; background: #121212; color: inherit;
+  border: 1px solid #505050; font-size: 12px; font-family: ui-monospace,monospace;
+}
+.fingerprint-panel { padding: 13px 10px; margin: 14px 0;
+  border: 1px solid #3b3b3b; border-radius: 8px; }
+.fingerprint-panel code { display: block; padding: 10px 0; overflow-wrap: anywhere;
+  user-select: all; }
+.share-actions { display: flex; gap: 7px; flex-wrap: wrap; justify-content: end; }
+.share-panel .photo-row { flex-wrap: wrap; }
