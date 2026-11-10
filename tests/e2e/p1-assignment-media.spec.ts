@@ -37,6 +37,12 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
         name,mimeType:mime,buffer:Buffer.alloc(2048,byte),
       })
       await mediaPanel.getByRole('button',{name:'Отправить медиа'}).click()
+      // Explicitly drain the durable encrypted outbox. Clicking Sync while
+      // the upload started by chooseFile is still running is safe/idempotent.
+      await B.evaluate(async()=>{
+        const m=await import('/src/features/media/application/media-outbox.ts')
+        await m.synchronizeMedia()
+      })
       await expect.poll(()=>B.evaluate(async()=>{
         const m=await import('/src/features/media/application/media-outbox.ts')
         return (await m.listLocalMedia()).filter(x=>x.state==='synced').length
