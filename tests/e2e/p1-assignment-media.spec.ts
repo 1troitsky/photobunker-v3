@@ -618,8 +618,12 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await B.locator('#camera-mode').selectOption('audio')
     await expect(B.getByTestId('camera-media-instruction'))
       .toContainText('PRIVATE AUDIO NOTES 1')
-    await B.goto('/assignments')
+    // Keep the already restored account alive during this warm-offline
+    // assertion. A full page navigation immediately before setOffline()
+    // races the asynchronous key-only session bootstrap.
     await B.context().setOffline(true)
+    await expect(B.getByTestId('camera-media-instruction'))
+      .toContainText('PRIVATE AUDIO NOTES 1')
     const cached=await B.evaluate(async id=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
       const row=(await a.listCachedAssignmentSnapshots())
