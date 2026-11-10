@@ -84,6 +84,10 @@ export async function readSignedPolicyHistoryCache(
   if(cached.accountId!==session.accountId
     ||cached.assignmentId!==latest.assignmentId)
     throw Error('assignment.policy_history_invalid')
+  // A correctly signed newer policy makes an older cached chain incomplete,
+  // not forged. Refresh it online BEFORE exposing a recipient DEK.
+  // A cached history ahead of the latest verified snapshot is still suspect.
+  if(cached.history.policyRevision<latest.policyRevision)return null
   const chain=await verifySignedPolicyHistory(latest,cached.history)
   if(activeSession.value!==session)throw Error('identity.changed')
   return chain
