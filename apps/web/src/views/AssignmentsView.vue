@@ -770,6 +770,8 @@ onUnmounted(cleanPreview)
 
         <template v-if="selected.isOwner">
           <div class="assignment-toolbar">
+            <RouterLink :to="'/assignments/'+encodeURIComponent(selected.id)+'/edit'"
+              class="fieldwork-editor-link" data-testid="open-fieldwork-editor">Редактор · 4 вкладки</RouterLink>
             <span class="muted">Версия состояния: {{ selected.revision }}</span>
             <span class="muted">Версия правил: {{ selected.policyRevision }}</span>
             <button v-if="selected.state==='active'" type="button"
