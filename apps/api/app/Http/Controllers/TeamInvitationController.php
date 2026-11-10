@@ -121,7 +121,8 @@ final class TeamInvitationController extends Controller
             ->join('team_records_v1 as t','t.id','=','i.team_id')
             ->where('i.recipient_account_id',$actor->id);
         if($after!==null)$q->where('i.id','>',$after);
-        $rows=$q->select(['i.*','a.account_spki','t.rotation_required'])
+        $rows=$q->select(['i.*','a.account_spki','t.rotation_required',
+                't.key_epoch as current_epoch'])
             ->orderBy('i.id')
             ->limit(51)->get();
         $items=$rows->take(50)->map(function($i){
@@ -135,12 +136,21 @@ final class TeamInvitationController extends Controller
                 ];
             }
             if($i->rotation_required){
-                // All historical ECDH envelopes are suspended while an
-                // exclusion awaits cryptographic re-key. Keep survivor cache
-                // but mark its live ACL unavailable until the new epoch.
+                // Never distribute the stale ECDH envelope during quarantine.
                 return [
                     'inviteId'=>$i->id,'teamId'=>$i->team_id,
                     'state'=>'suspended',
+                ];
+            }
+            if((int)$i->current_epoch>1){
+                // The original v1 envelope must not be re-delivered after a
+                // new DEK is published. An active recipient independently
+                // verifies the *current* signed epoch and individual grant.
+                return [
+                    'inviteId'=>$i->id,'teamId'=>$i->team_id,
+                    'state'=>'superseded',
+                    'ownerAccountId'=>$i->owner_account_id,
+                    'ownerAccountSpki'=>$i->account_spki,
                 ];
             }
             return [

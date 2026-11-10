@@ -148,11 +148,23 @@ final class TeamEpochInvitationController extends Controller
             'o.account_spki'])->orderBy('i.id')->limit(51)->get();
         $items=$rows->take(50)->map(static function($i){
             // After exclusion or next epoch, no old ECDH envelope is served.
-            if($i->state==='revoked'||$i->state==='suspended'
-                ||(int)$i->current_epoch!==(int)$i->key_epoch
-                ||$i->rotation_required){
+            if($i->state==='revoked'){
                 return ['inviteId'=>$i->id,'teamId'=>$i->team_id,
-                    'state'=>$i->state==='revoked'?'revoked':'suspended'];
+                    'state'=>'revoked'];
+            }
+            if($i->rotation_required){
+                return ['inviteId'=>$i->id,'teamId'=>$i->team_id,
+                    'state'=>'suspended'];
+            }
+            if((int)$i->current_epoch!==(int)$i->key_epoch){
+                // No stale epoch ECDH envelope, but signed current epoch can
+                // be reached through the member-only authority endpoint.
+                return [
+                    'inviteId'=>$i->id,'teamId'=>$i->team_id,
+                    'ownerAccountId'=>$i->owner_account_id,
+                    'ownerAccountSpki'=>$i->account_spki,
+                    'state'=>'superseded',
+                ];
             }
             return [
                 'inviteId'=>$i->id,'teamId'=>$i->team_id,
