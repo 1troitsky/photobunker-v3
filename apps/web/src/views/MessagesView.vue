@@ -209,7 +209,7 @@ onUnmounted(()=>{
     <div class="messages-heading">
       <div class="messages-title">
         <h1>Сообщения</h1>
-        <span class="messages-count" aria-label="Непрочитанные">0</span>
+        <span class="messages-local-tag">Локальные черновики</span>
       </div>
       <div class="messages-tools">
         <button type="button" aria-label="Поиск" title="Поиск"
