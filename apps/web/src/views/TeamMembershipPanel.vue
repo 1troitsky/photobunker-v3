@@ -14,16 +14,26 @@ import type {
 } from '../features/people/application/team-invitations'
 import {
   openAnyJoinedTeam, ownerEpochStatus, queueTeamKeyRotation,
-  syncTeamKeyRotations,
+  syncTeamKeyRotations, openVerifiedCurrentEpochMember,
 } from '../features/people/application/team-epochs'
+import {
+  listEpochInvites, listOwnerEpochRoster,
+  queueEpochInvitation, queueEpochAcceptance,
+  queueEpochMembershipChange, syncEpochInvitationOperations,
+  openJoinedEpochInvite,
+} from '../features/people/application/team-epoch-invitations'
+import type {
+  EpochTeamInvite, EpochRosterMember,
+} from '../features/people/application/team-epoch-invitations'
+import {pinnedPeer} from '../features/sharing/key-directory'
 
 defineProps<{ ownedTeams:TeamView[]; contacts:ConfirmedContact[] }>()
 const emit=defineEmits<{ refresh:[] }>()
 const selectedTeam=ref('')
 const selectedContact=ref('')
 const selectedRole=ref<TeamRole>('contributor')
-const roster=ref<TeamRosterMember[]>([])
-const incoming=ref<TeamInvitation[]>([])
+const roster=ref<Array<TeamRosterMember|EpochRosterMember>>([])
+const incoming=ref<Array<TeamInvitation|EpochTeamInvite>>([])
 const joined=ref<JoinedTeam[]>([])
 const revokedTeamIds=ref<string[]>([])
 const suspendedTeamIds=ref<string[]>([])
@@ -43,6 +53,14 @@ function identity():string{
 }
 function current(expected:string,token:number):boolean{
   return identity()===expected&&token===generation
+}
+function isEpochInvite(item:TeamInvitation|EpochTeamInvite):item is EpochTeamInvite{
+  return 'version' in item&&item.version===2
+}
+function isEpochMember(
+  item:TeamRosterMember|EpochRosterMember,
+):item is EpochRosterMember{
+  return 'protocolVersion' in item&&item.protocolVersion===2
 }
 function roleText(role:TeamRole):string{
   return role==='curator'?'Куратор':role==='viewer'?'Наблюдатель':'Исполнитель'
@@ -67,24 +85,52 @@ async function reload():Promise<void>{
   loading.value=true
   try{
     await syncTeamMemberOperations()
-    const response=await listIncomingTeamInvites()
+    await syncEpochInvitationOperations()
+    const [legacy,epoch]=await Promise.all([
+      listIncomingTeamInvites(),listEpochInvites(),
+    ])
     if(!current(scope,token))return
-    const results=response.invites
-    incoming.value=results
-    revokedTeamIds.value=response.revokedTeamIds
-    suspendedTeamIds.value=response.suspendedTeamIds
-    for(const id of response.revokedTeamIds)await dropRevokedJoinedTeam(id)
-    if(!current(scope,token))return
-    const verified=await Promise.all(results.filter(x=>
-      x.state==='accepted'&&x.trustedOwner).map(async x=>{
-        try{return await openAnyJoinedTeam(x)}catch{return null}
+    const entries=[...legacy.invites,...epoch.invites]
+    incoming.value=entries
+    const signedVerified=await Promise.all(entries.filter(x=>
+      x.state==='accepted'&&x.trustedOwner).map(async item=>{
+        try{
+          return isEpochInvite(item)
+            ?await openJoinedEpochInvite(item)
+            :await openAnyJoinedTeam(item)
+        }catch{return null}
       }))
-    if(current(scope,token)){
-      const known=verified.filter((x):x is JoinedTeam=>x!==null)
-      const revoked=new Set(response.revokedTeamIds)
-      joined.value=[...known,...joined.value.filter(x=>
-        !known.some(y=>y.teamId===x.teamId)&&!revoked.has(x.teamId))]
+    // Once a member has moved to a newer epoch, inboxes never re-send the
+    // historical ECDH key. A signed active Team epoch grant is mandatory.
+    const superseded=[...legacy.superseded,...epoch.superseded]
+    const newVerified=await Promise.all(superseded.map(async item=>{
+      try{
+        const pin=await pinnedPeer(item.ownerAccountId)
+        if(pin.accountSpki!==item.ownerAccountSpki)return null
+        return await openVerifiedCurrentEpochMember(
+          item.teamId,item.ownerAccountId)
+      }catch{return null}
+    }))
+    if(!current(scope,token))return
+    const known=new Map<string,JoinedTeam>()
+    for(const item of [...signedVerified,...newVerified]){
+      if(item)known.set(item.teamId,item)
     }
+    const suspended=new Set([
+      ...legacy.suspendedTeamIds,...epoch.suspendedTeamIds,
+    ])
+    const revoked=new Set([
+      ...legacy.revokedTeamIds,...epoch.revokedTeamIds,
+    ].filter(id=>!known.has(id)))
+    revokedTeamIds.value=[...revoked]
+    suspendedTeamIds.value=[...suspended].filter(id=>!known.has(id))
+    for(const id of revoked)await dropRevokedJoinedTeam(id)
+    if(!current(scope,token))return
+    joined.value=[
+      ...known.values(),
+      ...joined.value.filter(x=>!known.has(x.teamId)&&!revoked.has(x.teamId))
+        .map(x=>({...x,verifiedOnline:false})),
+    ]
   }catch(e){
     if(current(scope,token))
       error.value=e instanceof Error?e.message:'teams.membership_error'
@@ -98,15 +144,28 @@ async function reloadRoster():Promise<void>{
   if(!hasNetwork()){error.value='teams.roster_requires_online';return}
   try{
     await syncTeamKeyRotations()
-    const [members,history,epoch]=await Promise.all([
+    await syncEpochInvitationOperations()
+    const epoch=await ownerEpochStatus(id)
+    const [oldMembers,history]=await Promise.all([
       listOwnerTeamRoster(id),verifiedTeamMembershipHistory(id),
-      ownerEpochStatus(id),
     ])
+    // Do not introduce v2 roster/network dependencies into an unchanged
+    // original-epoch Team (P1-28 remains an independently working flow).
+    const epochMembers=epoch.keyEpoch>=2
+      ?await listOwnerEpochRoster(id):[]
     if(epoch.membershipRevision!==history.revision
       ||epoch.rotationRequired!==history.rotationRequired)
       throw Error('teams.membership_epoch_mismatch')
     if(identity()===scope&&selectedTeam.value===id){
-      roster.value=members
+      const activeFirst=new Map<string,TeamRosterMember|EpochRosterMember>()
+      for(const person of [...oldMembers,...epochMembers]){
+        const prior=activeFirst.get(person.recipientAccountId)
+        if(!prior||person.state==='accepted'
+          ||(prior.state!=='accepted'
+            &&isEpochMember(person)))
+          activeFirst.set(person.recipientAccountId,person)
+      }
+      roster.value=[...activeFirst.values()]
       rotationRequired.value=history.rotationRequired
       keyEpoch.value=epoch.keyEpoch
     }
@@ -154,12 +213,16 @@ async function memberAction(
   const scope=identity()
   try{
     const id=selectedTeam.value
-    await queueTeamMembershipChange(id,person,action,nextRole)
+    if(isEpochMember(person))
+      await queueEpochMembershipChange(id,person,action,nextRole)
+    else await queueTeamMembershipChange(id,person,action,nextRole)
     if(identity()!==scope)return
     notice.value='Изменение подписано и сохранено в очереди.'
     roleEditId.value=null
     try{
-      await syncTeamMemberOperations()
+      if(isEpochMember(person))
+        await syncEpochInvitationOperations()
+      else await syncTeamMemberOperations()
       if(identity()!==scope)return
       await reloadRoster()
       notice.value=action==='remove'
@@ -181,12 +244,15 @@ async function sendInvite():Promise<void>{
   busy.value=true;notice.value='';error.value=''
   const scope=identity()
   try{
-    await queueTeamInvitation(selectedTeam.value,selectedContact.value,selectedRole.value)
+    if(keyEpoch.value>1)
+      await queueEpochInvitation(selectedTeam.value,selectedContact.value,selectedRole.value)
+    else await queueTeamInvitation(selectedTeam.value,selectedContact.value,selectedRole.value)
     if(identity()!==scope)return
     notice.value='Приглашение сохранено в зашифрованной очереди.'
     showInvite.value=false
     try{
-      await syncTeamMemberOperations()
+      if(keyEpoch.value>1)await syncEpochInvitationOperations()
+      else await syncTeamMemberOperations()
       if(identity()===scope){
         notice.value='Приглашение отправлено; согласие получателя ещё требуется.'
         await reloadRoster()
@@ -201,16 +267,20 @@ async function sendInvite():Promise<void>{
       error.value=e instanceof Error?e.message:'teams.invite_error'
   }finally{busy.value=false}
 }
-async function acceptInvite(item:TeamInvitation):Promise<void>{
+async function acceptInvite(item:TeamInvitation|EpochTeamInvite):Promise<void>{
   if(busy.value||!item.trustedOwner||item.expired)return
   busy.value=true;notice.value='';error.value=''
   const scope=identity()
   try{
-    await queueTeamAcceptance(item)
+    if(isEpochInvite(item))
+      await queueEpochAcceptance(item)
+    else await queueTeamAcceptance(item)
     if(identity()!==scope)return
     notice.value='Согласие подписано и сохранено в очереди.'
     try{
-      await syncTeamMemberOperations()
+      if(isEpochInvite(item))
+        await syncEpochInvitationOperations()
+      else await syncTeamMemberOperations()
       if(identity()===scope){
         await reload()
         notice.value='Участие подтверждено сервером.'
@@ -263,7 +333,7 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
         <p v-if="keyEpoch>1&&!rotationRequired" class="muted"
           data-testid="team-key-epoch">
           Ключ команды обновлён (эпоха {{ keyEpoch }}).
-          Новые приглашения пока требуют обновлённого протокола приглашений.
+          Новые приглашения защищены ключом этой эпохи.
         </p>
         <div v-for="person in roster" :key="person.inviteId"
           class="contacts-list-row"
@@ -292,7 +362,7 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
           </div>
         </div>
         <button type="button" class="contacts-full-button"
-          :disabled="!hasNetwork()||rotationRequired||keyEpoch>1" @click="showInvite=!showInvite">
+          :disabled="!hasNetwork()||rotationRequired" @click="showInvite=!showInvite">
           Добавить участника
         </button>
         <form v-if="showInvite" data-testid="team-invite-form"
