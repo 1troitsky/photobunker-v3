@@ -333,7 +333,7 @@ describe('camera session ownership and async permission lifecycle', () => {
     const opened = media(); requests[0]!.resolve(opened.stream); await settle()
     button('Сделать снимок').click(); await settle()
     expect(mocks.binding).toHaveBeenCalledWith('assignment-a',expect.any(Number),{
-      category:'',description:'',gps:null,
+      category:'',description:'',gps:null,tags:[],
     })
     activeSession.value = {...session, accountId: 'account-b'}
     binding.resolve({assignmentId: 'assignment-a', policyRevision: 1}); await settle()
