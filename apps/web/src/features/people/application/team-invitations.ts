@@ -687,8 +687,12 @@ export async function openJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
  * Previously exported plaintext and offline devices cannot be retracted. */
 /** Only invoke after independently signed current server epoch, member ACL,
  * decrypted ciphertext and role binding have all been checked. */
-export async function cacheVerifiedJoinedTeam(team:JoinedTeam):Promise<void>{
+export async function cacheVerifiedJoinedTeam(
+  team:JoinedTeam,expectedRecipientAccountId:string,
+):Promise<void>{
   const s=requireSession()
+  if(s.accountId!==expectedRecipientAccountId)
+    throw Error('identity.changed')
   if(!uuidPattern.test(team.teamId)||!uuidPattern.test(team.ownerAccountId)
     ||!['curator','contributor','viewer'].includes(team.role)
     ||!team.verifiedOnline)

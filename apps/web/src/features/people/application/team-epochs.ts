@@ -431,7 +431,14 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
   catch{throw Error('teams.bad_member_invite')}
   if(original.teamId!==invite.teamId
     ||original.ownerAccountId!==invite.ownerAccountId
-    ||!hashPattern.test(original.teamContractHash))
+    ||!hashPattern.test(original.teamContractHash)
+    ||!('recipientAccountId' in original)
+    ||original.recipientAccountId!==s.accountId
+    ||!('inviteId' in original)
+    ||original.inviteId!==invite.inviteId
+    ||await hash(invite.contract)!==invite.contractHash
+    ||!await verify(await importSpki(peer.accountSpki),
+      'pb3.team-invite.v1\n'+invite.contract,invite.signature))
     throw Error('teams.bad_member_invite')
   const chain=await verifyEpochHistory(invite.teamId,invite.ownerAccountId,
     peer.accountSpki,original.teamContractHash)
@@ -442,6 +449,9 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
     ||chain.membershipRevision!==response.membershipRevision
     ||response.ownerAccountId!==invite.ownerAccountId
     ||response.contract!==JSON.stringify(c)
+    ||response.signature!==undefined
+      &&!await verify(await importSpki(peer.accountSpki),
+        epochDomain+response.contract,response.signature)
     ||response.recipient?.accountId!==s.accountId
     ||!['curator','contributor','viewer'].includes(response.effectiveRole))
     throw Error('teams.untrusted_member_epoch')
@@ -490,8 +500,11 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
     if(event.action!=='change_role'
       ||event.teamId!==c.teamId||event.ownerAccountId!==c.ownerAccountId
       ||event.targetAccountId!==s.accountId
+      ||event.inviteId!==invite.inviteId
+      ||!['curator','contributor','viewer'].includes(event.nextRole)
       ||!Number.isInteger(event.toRevision)
       ||event.toRevision>response.membershipRevision
+      ||event.toRevision<=c.membershipRevision&&event.nextRole!==r.role
       ||!await verify(await importSpki(peer.accountSpki),
         roleDomain+response.latestRoleEvent.contract,
         response.latestRoleEvent.signature))
@@ -506,6 +519,6 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
     name:profile.name,description:profile.description,
     role,verifiedOnline:true,
   }
-  await cacheVerifiedJoinedTeam(joined)
+  await cacheVerifiedJoinedTeam(joined,s.accountId)
   return joined
 }
