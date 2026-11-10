@@ -76,7 +76,7 @@ async function cryptoKey(akek:string,usage:KeyUsage):Promise<CryptoKey>{
   finally{bytes.fill(0)}
 }
 async function openRow(
-  row:ContactCipherRow,expectedOwnerScope:string,key:CryptoKey,
+  row:ContactCipherRow,expectedOwnerScope:string,accountId:string,key:CryptoKey,
 ):Promise<ConfirmedContact>{
   if(row.ownerScope!==expectedOwnerScope
     ||!row.key||!/^[a-f0-9]{64}$/.test(row.key))
@@ -94,7 +94,7 @@ async function openRow(
   const expected=await rowIds(
     // The account ID is intentionally NOT in the indexed ciphertext row.
     // The caller validates row ownership through ownerScope and AEAD.
-    requireSession().accountId,value.peerAccountId)
+    accountId,value.peerAccountId)
   if(expected.key!==row.key)throw Error('contacts.invalid_record_scope')
   return value
 }
@@ -108,7 +108,7 @@ export async function listConfirmedContacts():Promise<ConfirmedContact[]>{
   const contacts:ConfirmedContact[]=[]
   for(const row of rows){
     currentIdentity(s)
-    const item=await openRow(row,ownerScope,key)
+    const item=await openRow(row,ownerScope,s.accountId,key)
     const pin=await pinnedPeer(item.peerAccountId,false)
     currentIdentity(s)
     if(pin.safetyFingerprint!==item.safetyFingerprint)
@@ -142,7 +142,7 @@ export async function saveConfirmedContact(
   let createdAt=now
   if(old){
     const oldKey=await cryptoKey(s.pkg.akek,'decrypt')
-    const existing=await openRow(old,ids.ownerScope,oldKey)
+    const existing=await openRow(old,ids.ownerScope,s.accountId,oldKey)
     if(existing.peerAccountId!==id
       ||existing.safetyFingerprint!==safetyFingerprint)
       throw Error('contacts.trusted_key_changed')
