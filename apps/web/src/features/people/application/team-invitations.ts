@@ -301,7 +301,8 @@ export async function verifiedTeamMembershipHistory(teamId:string):Promise<{
     quarantined=page.rotationRequired
     for(const row of page.items){
       const c=decodeMembershipContract(row.contract)
-      if(c.teamId!==teamId||c.ownerAccountId!==s.accountId
+      if(c.teamId!==teamId||c.teamId!==row.teamId
+        ||c.ownerAccountId!==s.accountId
         ||c.operationId!==row.operationId||c.inviteId!==row.inviteId
         ||c.targetAccountId!==row.targetAccountId
         ||c.action!==row.action||c.previousRole!==row.previousRole
