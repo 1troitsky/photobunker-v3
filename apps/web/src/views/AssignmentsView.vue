@@ -201,7 +201,10 @@ async function hydrate():Promise<void>{
   ])
   if(activeSession.value!==identity)return
   operations.value=ops;photos.value=localPhotos;mediaFiles.value=localMedia
-  const localRows:VisibleAssignment[]=await Promise.all(local.map(async item=>{
+  // Once a create is ACKed, its signed, independently verified snapshot
+  // (not a stale local plaintext summary) is the ONLY render authority.
+  const localRows:VisibleAssignment[]=await Promise.all(
+    local.filter(item=>item.state!=='sent').map(async item=>{
     let data:PrivateAssignment|null=null
     try{data=await openOwnerAssignment(identity.pkg,item.id,item.privateEnvelope)}
     catch { /* a corrupted local envelope must never reveal plaintext */ }
@@ -269,6 +272,7 @@ async function hydrate():Promise<void>{
   invites.value=received
   const rows=[...localRows]
   for(const item of snapshots){
+    if(!assignmentOpenAt(item,Date.now()))continue
     const previous=rows.find(a=>a.id===item.assignmentId)
     // A fresh signed private revision must invalidate prior root/plaintext
     // previews. Never show an outdated title from a locally queued draft.
@@ -318,9 +322,12 @@ async function hydrate():Promise<void>{
       localState:previous?.localState,
       goal:item.photoGoal,videoGoal:signedPolicyGoals(item).videoGoal,
       audioGoal:signedPolicyGoals(item).audioGoal,
-      confirmedPhotos:offline?null:item.confirmedPhotoCount,
-      confirmedVideos:offline?null:(item.confirmedVideoCount??null),
-      confirmedAudio:offline?null:(item.confirmedAudioCount??null),
+      confirmedPhotos:offline?null:assignmentFilesOpenAt(item,Date.now())
+        ?item.confirmedPhotoCount:0,
+      confirmedVideos:offline?null:assignmentFilesOpenAt(item,Date.now())
+        ?(item.confirmedVideoCount??null):0,
+      confirmedAudio:offline?null:assignmentFilesOpenAt(item,Date.now())
+        ?(item.confirmedAudioCount??null):0,
       allowedMedia:signedAllowedAssignmentMedia(item),
       createdAt:previous?.createdAt??item.startsAt,
       filesAccessUntil:item.filesAccessUntil??null,
