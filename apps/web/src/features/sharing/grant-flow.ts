@@ -8,6 +8,8 @@ import {
 import { decryptAsset, sha } from '../local-storage/infrastructure/cipher'
 import type { CipherManifest } from '../local-storage/domain/contracts'
 import { listLocalPhotos } from '../photo-sync/application/p1-photo'
+import { parsePhotoMetadata } from '../photo-sync/domain/capture-metadata'
+import type { PhotoMetadata } from '../photo-sync/domain/capture-metadata'
 import { ensureOwnExchangeKey, pinnedPeer, inspectPeer } from './key-directory'
 
 const encoder=new TextEncoder()
@@ -167,7 +169,7 @@ type ReceivedDetail={
   expiresAt:number;contract:string;signature:string;assets:ReceivedAsset[]
 }
 
-export async function readReceivedPhoto(grantId:string):Promise<Blob> {
+async function readReceivedAsset(grantId:string,kind:'master'|'metadata'):Promise<Blob> {
   const s=requireSession()
   if(!s.online)throw new Error('share.online_acl_required')
   const detail=await jsonApi<ReceivedDetail>(path+'/grants/'+encodeURIComponent(grantId))
@@ -189,16 +191,20 @@ export async function readReceivedPhoto(grantId:string):Promise<Blob> {
   const own=await ensureOwnExchangeKey()
   if(own.directory.descriptorHash!==contract.recipientKeyDigest)
     throw new Error('share.wrong_recipient_key')
-  const master=detail.assets.find(a=>a.kind==='master')
-  if(!master)throw new Error('share.missing_master')
-  const envelope=contract.assets.find(e=>e.assetId===master.assetId)
-  if(!envelope||contract.assets.length!==detail.assets.length)
+  const asset=detail.assets.find(a=>a.kind===kind)
+  if(!asset)throw new Error('share.missing_asset')
+  const envelope=contract.assets.find(e=>e.assetId===asset.assetId)
+  const actualIds=detail.assets.map(a=>a.assetId).sort()
+  const authorizedIds=contract.assets.map(a=>a.assetId).sort()
+  if(!envelope||actualIds.length!==authorizedIds.length
+    ||new Set(actualIds).size!==actualIds.length
+    ||actualIds.some((id,i)=>id!==authorizedIds[i]))
     throw new Error('share.missing_asset_envelopes')
 
   const info=wrapInfo({
     ownerAccountId:contract.ownerAccountId,
     recipientAccountId:contract.recipientAccountId,
-    photoId:contract.photoId,grantId,assetId:master.assetId,
+    photoId:contract.photoId,grantId,assetId:asset.assetId,
     expiresAt:contract.expiresAt,
   })
   const wrappingKey=await exchangeKey(
@@ -215,19 +221,29 @@ export async function readReceivedPhoto(grantId:string):Promise<Blob> {
 
   // Check active ACL at the server again on the actual physical object read.
   const downloaded=await readCiphertext(path+'/grants/'+encodeURIComponent(grantId)
-    +'/objects/'+encodeURIComponent(master.assetId))
-  if(downloaded.blob.size!==master.bytes
-    ||await sha(new Uint8Array(await downloaded.blob.arrayBuffer()))!==master.sha256
-    ||downloaded.digest!==master.sha256)throw new Error('share.ciphertext_corrupt')
+    +'/objects/'+encodeURIComponent(asset.assetId))
+  if(downloaded.blob.size!==asset.bytes
+    ||await sha(new Uint8Array(await downloaded.blob.arrayBuffer()))!==asset.sha256
+    ||downloaded.digest!==asset.sha256)throw new Error('share.ciphertext_corrupt')
   still(s)
   const manifest:CipherManifest={
-    ...master.manifest,backend:'idb-blob',
-    storageKey:[contract.ownerAccountId,contract.photoId,master.assetId,master.assetId].join('/'),
+    ...asset.manifest,backend:'idb-blob',
+    storageKey:[contract.ownerAccountId,contract.photoId,asset.assetId,asset.assetId].join('/'),
   }
   const clear=await decryptAsset(manifest,downloaded.blob,dek,
     {accountId:contract.ownerAccountId,deviceId:s.deviceId,generation:0},()=>still(s))
   still(s)
-  return new Blob([await clear.arrayBuffer()],{type:'image/jpeg'})
+  return clear
+}
+
+/** Photo grants already carry independent envelopes for master AND metadata. */
+export async function readReceivedPhoto(grantId:string):Promise<Blob>{
+  const blob=await readReceivedAsset(grantId,'master')
+  return new Blob([await blob.arrayBuffer()],{type:'image/jpeg'})
+}
+export async function readReceivedPhotoMetadata(grantId:string):Promise<PhotoMetadata>{
+  const blob=await readReceivedAsset(grantId,'metadata')
+  return parsePhotoMetadata(JSON.parse(await blob.text()) as unknown)
 }
 
 export async function revokeOutgoingGrant(grantId:string):Promise<void> {
