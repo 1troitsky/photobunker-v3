@@ -190,6 +190,7 @@ async function readReceivedAsset(grantId:string,kind:'master'|'metadata'):Promis
     ||contract.scope!=='read'
     ||(contract.version===2
       ?typeof contract.assignmentId!=='string'
+        ||!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(contract.assignmentId)
       :contract.assignmentId!==undefined)
     ||Object.keys(contract).sort().join('|')!==[
       'version','grantId','photoId','ownerAccountId','recipientAccountId',
