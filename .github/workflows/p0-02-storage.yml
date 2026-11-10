@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main, 'p0/**', 'p1/**']
   push:
-    branches: ['p0/02-**', 'p1/**']
+    branches: [main, 'p0/02-**', 'p1/**']
 permissions:
   contents: read
 jobs:
