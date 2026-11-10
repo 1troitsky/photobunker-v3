@@ -7,6 +7,8 @@ import {
   queueAssignmentCreation, listLocalAssignmentDrafts, listAssignmentOperations,
   verifySignedAssignmentPolicy, assertSignedPolicyProgress,
   cachePrivateAssignment, readCachedPrivateAssignment,
+  effectiveAssignmentEnvelope,assignmentPrivateCacheScope,
+  queueAssignmentPrivateTextChange,
   signedCaptureBinding,signedPolicyRequirements,queueAssignmentGoalChange,
 } from './assignment-outbox'
 
@@ -19,6 +21,86 @@ async function account(id:string):Promise<void>{
     pkg,online:false,
   } as unknown as Session
 }
+
+
+describe('P1-19 signed AEAD private text snapshot and historical cache safety',()=>{
+  it('binds encrypted text to owner's root hash, rejects signature and revision rollback',async()=>{
+    const owner='99999999-9999-4999-8999-999999999999'
+    await account(owner)
+    const session=activeSession.value!
+    const id=await queueAssignmentCreation({
+      title:'FIRST CONFIDENTIAL TITLE',instructions:'Private A',photoGoal:30,
+    })
+    const rootOp=(await listAssignmentOperations()).find(x=>x.kind==='create')!
+    const root=JSON.parse(rootOp.contract) as {privateEnvelope:{
+      version:1;iv:string;ciphertext:string;
+      wrappedKey:{iv:string;ciphertext:string}
+    };startsAt:number}
+    const row={
+      assignmentId:id,ownerAccountId:owner,
+      ownerAccountSpki:session.pkg.accountSpki,
+      state:'active',revision:1,photoGoal:30,confirmedPhotoCount:0,
+      policyRevision:1,privateRevision:1,
+      startsAt:root.startsAt,endsAt:null,
+      privateEnvelope:root.privateEnvelope,
+      policyContract:rootOp.contract,policySignature:rootOp.signature,
+      policyAmendmentContract:null,policyAmendmentSignature:null,
+      privateAmendmentContract:null,privateAmendmentSignature:null,
+      stateContract:null,stateSignature:null,
+    }
+    await verifySignedAssignmentPolicy(row)
+    const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+      const request=indexedDB.open('pb3-assignment-operation-outbox-v1')
+      request.onsuccess=()=>resolve(request.result)
+      request.onerror=()=>reject(request.error)
+    })
+    await new Promise<void>((resolve,reject)=>{
+      const tx=db.transaction('capturePolicies','readwrite')
+      tx.objectStore('capturePolicies').put({
+        key:owner+'/'+id,accountId:owner,listing:row,verifiedAt:Date.now(),
+      })
+      tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)
+    })
+    db.close()
+    const text={version:1 as const,title:'UPDATED CONFIDENTIAL TITLE',instructions:'Private B'}
+    const opId=await queueAssignmentPrivateTextChange(id,text)
+    const operation=(await listAssignmentOperations()).find(x=>x.id===opId)!
+    const body=JSON.parse(operation.contract)
+    expect(operation.kind).toBe('private')
+    expect(operation.state).toBe('queued')
+    expect(operation.path).toBe('/assignments/v1/'+id+'/private')
+    expect(operation.contract).not.toContain('UPDATED CONFIDENTIAL TITLE')
+    expect(operation.contract).not.toContain('Private B')
+    expect(body.fromPrivateRevision).toBe(1)
+    expect(body.toPrivateRevision).toBe(2)
+    expect(body.privateEnvelope.wrappedKey).toEqual(root.privateEnvelope.wrappedKey)
+    expect(body.privateEnvelope.iv).not.toBe(root.privateEnvelope.iv)
+    const changed={...row,privateRevision:2,
+      privateAmendmentContract:operation.contract,
+      privateAmendmentSignature:operation.signature}
+    await expect(verifySignedAssignmentPolicy(changed)).resolves.toBeUndefined()
+    expect(effectiveAssignmentEnvelope(changed)).toEqual(body.privateEnvelope)
+    expect(assignmentPrivateCacheScope(changed)).toBe(operation.contract)
+    expect(()=>assertSignedPolicyProgress(row,changed)).not.toThrow()
+    expect(()=>assertSignedPolicyProgress(changed,row))
+      .toThrow('assignment.private_rollback')
+    expect(()=>assertSignedPolicyProgress(changed,{
+      ...changed,privateAmendmentContract:'tampered',
+    })).toThrow('assignment.private_equivocation')
+    await expect(verifySignedAssignmentPolicy({
+      ...changed,privateAmendmentSignature:rootOp.signature,
+    })).rejects.toThrow('assignment.private_revision_not_authenticated')
+    await expect(verifySignedAssignmentPolicy({
+      ...changed,privateRevision:3,
+    })).rejects.toThrow('assignment.private_revision_not_authenticated')
+    await expect(queueAssignmentPrivateTextChange(id,text))
+      .rejects.toThrow('assignment.private_edit_pending')
+    expect(()=>assertSignedPolicyProgress(row,{
+      ...row,privateRevision:1,
+      privateAmendmentContract:null,privateAmendmentSignature:null,
+    })).not.toThrow()
+  })
+})
 
 describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
   it('stores only signed ciphertext before any HTTP acknowledgement',async()=>{
