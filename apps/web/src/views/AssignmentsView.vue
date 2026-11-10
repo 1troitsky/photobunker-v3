@@ -12,7 +12,7 @@ import {
   queueAssignmentMediaSubmission, listAssignmentMediaSubmissions,
   signedAllowedAssignmentMedia,verifySignedAssignmentPolicy,
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
-  signedPolicyRequirements,verifyAssignmentInvite,
+  signedPolicyRequirements,signedPolicyGoals,verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
@@ -38,7 +38,7 @@ type VisibleAssignment={
   id:string;ownerAccountId:string;data:PrivateAssignment|null
   state:string;revision:number;policyRevision:number
   requirements:CaptureRequirements;allowedMedia:AllowedAssignmentMedia
-  localState?:string;goal:number|null
+  localState?:string;goal:number|null;videoGoal:number|null;audioGoal:number|null
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
   confirmedVideos:number|null;confirmedAudio:number|null
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
@@ -59,6 +59,8 @@ const title=ref('')
 const instructions=ref('')
 const goal=ref<string|number>('')
 const editedGoal=ref<string|number>('')
+const editedVideoGoal=ref<string|number>('')
+const editedAudioGoal=ref<string|number>('')
 const editedRequiredCategory=ref(false)
 const editedDescriptionMin=ref<string|number>(0)
 const editedRequiredGps=ref(false)
@@ -113,8 +115,17 @@ const eligiblePhotos=computed(()=>photos.value
     &&(!p.capture||p.capture.assignmentId===selectedId.value))
   .sort((a,b)=>Number(!!b.capture)-Number(!!a.capture)))
 function progressPercentage(assignment:VisibleAssignment):number|null{
-  if(assignment.goal===null||assignment.confirmedPhotos===null)return null
-  return Math.min(100,Math.round(assignment.confirmedPhotos/assignment.goal*100))
+  const targeted=[
+    {goal:assignment.goal,count:assignment.confirmedPhotos},
+    {goal:assignment.videoGoal,count:assignment.confirmedVideos},
+    {goal:assignment.audioGoal,count:assignment.confirmedAudio},
+  ].filter(x=>x.goal!==null)
+  // Only live, server-confirmed E2EE receipts count. No goals => no percent.
+  // Offline counts are unknown: never invent progress from pending captures.
+  if(!targeted.length||targeted.some(x=>x.count===null))return null
+  const total=targeted.reduce((sum,x)=>sum+x.goal!,0)
+  const done=targeted.reduce((sum,x)=>sum+Math.min(x.goal!,x.count!),0)
+  return Math.min(100,Math.round(100*done/total))
 }
 function pendingReceiptCount(assignmentId:string):number{
   const queuedCaptures=photos.value.filter(p=>p.capture?.assignmentId===assignmentId
@@ -168,7 +179,7 @@ async function hydrate():Promise<void>{
       state:'active',revision:1,policyRevision:1,
       requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       allowedMedia:['photo'],
-      localState:item.state,goal:item.photoGoal,
+      localState:item.state,goal:item.photoGoal,videoGoal:null,audioGoal:null,
       confirmedPhotos:null,confirmedVideos:null,confirmedAudio:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
     }
@@ -254,7 +265,9 @@ async function hydrate():Promise<void>{
       id:item.assignmentId,ownerAccountId:item.ownerAccountId,data,
       state:item.state,revision:item.revision,policyRevision:item.policyRevision,
       requirements:signedPolicyRequirements(item),localState:previous?.localState,
-      goal:item.photoGoal,confirmedPhotos:offline?null:item.confirmedPhotoCount,
+      goal:item.photoGoal,videoGoal:signedPolicyGoals(item).videoGoal,
+      audioGoal:signedPolicyGoals(item).audioGoal,
+      confirmedPhotos:offline?null:item.confirmedPhotoCount,
       confirmedVideos:offline?null:(item.confirmedVideoCount??null),
       confirmedAudio:offline?null:(item.confirmedAudioCount??null),
       allowedMedia:signedAllowedAssignmentMedia(item),
@@ -317,6 +330,8 @@ function choose(assignmentId:string):void{
   selectedId.value=assignmentId
   const chosen=assignments.value.find(a=>a.id===assignmentId)
   editedGoal.value=chosen?.goal??''
+  editedVideoGoal.value=chosen?.videoGoal??''
+  editedAudioGoal.value=chosen?.audioGoal??''
   editedRequiredCategory.value=chosen?.requirements.requiredCategory??false
   editedDescriptionMin.value=chosen?.requirements.descriptionMinLength??0
   editedRequiredGps.value=chosen?.requirements.requiredGps??false
@@ -361,8 +376,13 @@ async function changeGoal():Promise<void>{
       throw new Error('assignment.owner_required')
     const input=String(editedGoal.value).trim()
     const value=input===''?null:Number(input)
+    const videoInput=String(editedVideoGoal.value).trim()
+    const audioInput=String(editedAudioGoal.value).trim()
     await queueAssignmentPolicyChange(a.id,{
-      photoGoal:value,requiredCategory:editedRequiredCategory.value,
+      photoGoal:value,
+      videoGoal:editedAllowVideo.value&&videoInput!==''?Number(videoInput):null,
+      audioGoal:editedAllowAudio.value&&audioInput!==''?Number(audioInput):null,
+      requiredCategory:editedRequiredCategory.value,
       descriptionMinLength:Number(editedDescriptionMin.value),
       requiredGps:editedRequiredGps.value,
       allowedMedia:[
