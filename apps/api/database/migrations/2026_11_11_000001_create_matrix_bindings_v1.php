@@ -21,7 +21,7 @@ return new class extends Migration {
         });
         Schema::create('matrix_device_bindings_v1',static function(Blueprint $t):void {
             $t->foreignUuid('pb3_device_id')->primary()->constrained('identity_devices');
-            $t->foreignUuid('account_id')->constrained('matrix_account_bindings_v1');
+            $t->foreignUuid('account_id')->references('account_id')->on('matrix_account_bindings_v1');
             $t->string('matrix_device_id',128);
             $t->uuid('operation_id')->unique();
             $t->char('contract_hash',64);
