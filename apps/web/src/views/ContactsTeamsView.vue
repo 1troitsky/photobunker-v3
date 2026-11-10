@@ -140,13 +140,7 @@ onUnmounted(()=>{++run;candidate.value=null;contacts.value=[]})
 
 <template>
   <section class="foundation-content contacts-page" data-testid="contacts-teams">
-    <div class="contacts-heading">
-      <h1>Контакты и Команды</h1>
-      <button type="button" disabled aria-label="Blacklist — пока недоступен"
-        title="Блокировка будет доступна после серверной модели отзыва доступа">
-        Blacklist
-      </button>
-    </div>
+    <div class="contacts-heading"><h1>Контакты и Команды</h1></div>
     <nav class="contacts-tabs" aria-label="Контакты и команды">
       <button type="button" :class="{selected:activeTab==='teams'}"
         :aria-current="activeTab==='teams'?'page':undefined"
