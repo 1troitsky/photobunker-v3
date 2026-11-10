@@ -487,6 +487,74 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(videoVerified.mime).toMatch(/^video\//)
     expect(videoVerified.bytes).toBeGreaterThan(128)
     expect(videoVerified.name).toMatch(/^recording-/)
+
+    // P1-19: owner can edit E2EE private text AFTER the contributor accepted
+    // the original invitation. The same old ECDH invitation decrypts the
+    // new, independently signed AEAD envelope with the original shared DEK.
+    await A.goto('/assignments/'+assignmentId+'/edit')
+    await expect(A.locator('#editor-private-title'))
+      .toHaveValue('Media v3 opt-in assignment',{timeout:20000})
+    await A.locator('#editor-private-title').fill('PRIVATE UPDATED TITLE 1')
+    await A.locator('#editor-private-instructions')
+      .fill('NEW CONFIDENTIAL INSTRUCTIONS 1')
+    await A.getByRole('button',{name:'Подписать и сохранить'}).click()
+    await expect(A.getByText('Изменение подписано и принято сервером.'))
+      .toBeVisible({timeout:20000})
+    const firstPrivate=await A.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const row=(await a.listServerAssignments()).items.find(x=>x.assignmentId===id)!
+      const event=row.privateAmendmentContract!
+      const contract=JSON.parse(event)
+      return {
+        rev:row.privateRevision,root:row.privateEnvelope,
+        sameWrappedKey:JSON.stringify(contract.privateEnvelope.wrappedKey)
+          ===JSON.stringify(row.privateEnvelope.wrappedKey),
+        leakTitle:event.includes('PRIVATE UPDATED TITLE 1'),
+        leakInstructions:event.includes('NEW CONFIDENTIAL INSTRUCTIONS 1'),
+      }
+    },assignmentId)
+    expect(firstPrivate.rev).toBe(2)
+    expect(firstPrivate.sameWrappedKey).toBe(true)
+    expect(firstPrivate.leakTitle).toBe(false)
+    expect(firstPrivate.leakInstructions).toBe(false)
+    await B.goto('/assignments')
+    await expect(B.locator('.assignment-card-name'))
+      .toContainText('PRIVATE UPDATED TITLE 1',{timeout:20000})
+    await expect(B.locator('.assignment-card'))
+      .toContainText('NEW CONFIDENTIAL INSTRUCTIONS 1')
+    await A.locator('#editor-private-title').fill('PRIVATE UPDATED TITLE 2')
+    await A.locator('#editor-private-instructions')
+      .fill('SECOND CONFIDENTIAL INSTRUCTIONS 2')
+    await A.getByRole('button',{name:'Подписать и сохранить'}).click()
+    await expect(A.getByText('Изменение подписано и принято сервером.'))
+      .toBeVisible({timeout:20000})
+    const history=await A.evaluate(async id=>{
+      const r=await fetch('/assignments/v1/'+id+'/private-history')
+      const data=await r.json()
+      return {status:r.status,privateRevision:data.privateRevision,
+        events:data.events?.length}
+    },assignmentId)
+    expect(history).toEqual({status:200,privateRevision:3,events:2})
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(B.locator('.assignment-card-name'))
+      .toContainText('PRIVATE UPDATED TITLE 2',{timeout:20000})
+    await expect(B.locator('.assignment-card'))
+      .toContainText('SECOND CONFIDENTIAL INSTRUCTIONS 2')
+    await B.context().setOffline(true)
+    const cached=await B.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const row=(await a.listCachedAssignmentSnapshots())
+        .find(x=>x.assignmentId===id)!
+      const opened=await a.readCachedPrivateAssignment(id,
+        a.assignmentPrivateCacheScope(row))
+      return {rev:row.privateRevision,title:opened?.title,instructions:opened?.instructions}
+    },assignmentId)
+    expect(cached).toEqual({
+      rev:3,title:'PRIVATE UPDATED TITLE 2',
+      instructions:'SECOND CONFIDENTIAL INSTRUCTIONS 2',
+    })
+    await B.context().setOffline(false)
+
     expect(ownerId).not.toBe(contributorId)
   }finally{
     await ownerCtx.close();await contributorCtx.close()
