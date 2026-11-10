@@ -245,7 +245,16 @@ export async function retryMatrixRecoveryEscrow():Promise<void>{
 /** PB3 Recovery Key yields the same AKEK on an enrolled NEW PB3 device. */
 export async function recoverMatrixSecretStorageKey():Promise<Uint8Array<ArrayBuffer>|null>{
   const s=online()
-  const b=await binding(s)
+  // A brand-new PB3 device cannot possess its Matrix access token or
+  // per-device binding yet. Requiring getBoundMatrixCredentials() here
+  // would deadlock Recovery-Key-only enrollment. /me returns the existing
+  // ACCOUNT-level Matrix binding to an authenticated PB3 root session.
+  const own=await jsonApi<{
+    configured:boolean;homeserverUrl:string;matrixUserId:string|null
+  }>('/matrix/v1/me')
+  same(s)
+  if(!own.configured||!own.homeserverUrl||!own.matrixUserId)
+    throw Error('matrix.recovery_account_binding_missing')
   const row=await jsonApi<{
     present:boolean;contract?:string;signature?:string
   }>('/matrix/v1/recovery/ssss')
@@ -254,8 +263,8 @@ export async function recoverMatrixSecretStorageKey():Promise<Uint8Array<ArrayBu
   const c=await checkSigned({
     contract:row.contract??'',signature:row.signature??'',
   },s)
-  if(c.homeserverUrl!==b.homeserverUrl
-    ||c.matrixUserId!==b.matrixUserId)
+  if(c.homeserverUrl!==own.homeserverUrl
+    ||c.matrixUserId!==own.matrixUserId)
     throw Error('matrix.recovery_binding_mismatch')
   let key:ArrayBuffer
   try{
