@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest'
 import {
-  validAllowedMedia,signedAllowedAssignmentMedia,signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,
+  validAllowedMedia,signedAllowedAssignmentMedia,signedPolicyRequirements,signedPolicyGoals,signedAdvancedRequirements,signedMediaRequirements,
 } from './assignment-outbox'
 import type {AssignmentListing} from './assignment-outbox'
 
@@ -143,5 +143,44 @@ describe('P1-16 owner-signed per-kind media requirements',()=>{
       videoRequirements:mandatory,audioRequirements:mandatory,
     }),'video')).toThrow('assignment.invalid_media_requirements')
     expect(signedMediaRequirements(p,'audio')).toEqual(mandatory)
+  })
+})
+
+describe('P1-17 owner-signed category allowlists and required tag vocabularies',()=>{
+  const empty={allowedCategories:[],requiredTags:[]}
+  const photo={allowedCategories:['Report','Interview'],requiredTags:['evidence']}
+  const audio={allowedCategories:['Interview'],requiredTags:['recorded']}
+  it('older signed policies intentionally have no restrictions',()=>{
+    expect(signedAdvancedRequirements(policy(1),'photo')).toEqual(empty)
+    expect(signedAdvancedRequirements(policy(2,{
+      version:5,allowedMedia:['photo','video','audio'],
+    }),'audio')).toEqual(empty)
+  })
+  it('each type has independent exact signed required tags and category list',()=>{
+    const p=policy(2,{version:6,allowedMedia:['photo','video','audio'],
+      photoAdvanced:photo,videoAdvanced:empty,audioAdvanced:audio,
+    })
+    expect(signedAdvancedRequirements(p,'photo')).toEqual(photo)
+    expect(signedAdvancedRequirements(p,'video')).toEqual(empty)
+    expect(signedAdvancedRequirements(p,'audio')).toEqual(audio)
+  })
+  it('fails closed on malformed or missing v6 rules and disabled media',()=>{
+    for(const invalid of [
+      {allowedCategories:['Report','Report'],requiredTags:[]},
+      {allowedCategories:[' Report'],requiredTags:[]},
+      {allowedCategories:[],requiredTags:['tag,other']},
+      {allowedCategories:[],requiredTags:[42]},
+      {allowedCategories:['Report'],requiredTags:[],extra:'tamper'},
+    ]){
+      const p=policy(2,{version:6,allowedMedia:['photo','audio'],
+        photoAdvanced:empty,videoAdvanced:empty,audioAdvanced:invalid,
+      })
+      expect(()=>signedAdvancedRequirements(p,'audio')).toThrow()
+    }
+    const bad=policy(2,{version:6,allowedMedia:['photo','audio'],
+      photoAdvanced:empty,videoAdvanced:photo,audioAdvanced:audio,
+    })
+    expect(()=>signedAdvancedRequirements(bad,'video'))
+      .toThrow('assignment.rules_for_disabled_type')
   })
 })
