@@ -54,6 +54,26 @@ test('P2-01: verified contact → real encrypted message draft → fullscreen ov
 
     const content='PRIVATE_DRAFT_NOT_A_MATRIX_EVENT'
     await A.getByTestId('messages-editor').fill(content)
+
+    // A real encryption failure must not dismiss or wipe the composer.
+    // Unlike native IDBTransaction monkeypatches, rejecting the AEAD write
+    // is deterministic across Dexie's internal transaction implementations.
+    await A.evaluate(()=>{
+      const native=SubtleCrypto.prototype.encrypt
+      const testWindow=window as Window & {restoreDraftCrypto?:()=>void}
+      testWindow.restoreDraftCrypto=()=>{SubtleCrypto.prototype.encrypt=native}
+      SubtleCrypto.prototype.encrypt=function(){
+        return Promise.reject(new DOMException('Test AEAD refused','OperationError'))
+      }
+    })
+    await A.getByTestId('messages-close').click()
+    await expect(overlay.getByRole('alert')).toBeVisible()
+    await expect(overlay).toBeVisible()
+    await expect(A.getByTestId('messages-editor')).toHaveValue(content)
+    await A.evaluate(()=>{
+      const testWindow=window as Window & {restoreDraftCrypto?:()=>void}
+      testWindow.restoreDraftCrypto?.()
+    })
     await A.getByTestId('messages-close').click()
     await expect(overlay).toHaveCount(0)
     await expect(A.getByTestId('messages-draft-'+peerId))
@@ -86,6 +106,19 @@ test('P2-01: verified contact → real encrypted message draft → fullscreen ov
     await A.keyboard.press('Escape')
     await expect(A.getByTestId('messages-thread')).toHaveCount(0)
     await expect(A.getByTestId('messages-draft-'+peerId)).toBeFocused()
+
+    // A SPA route change while the fullscreen dialog is open acts like Back:
+    // close only after durable storage ACK; keep /messages mounted.
+    await A.getByTestId('messages-draft-'+peerId).click()
+    await A.getByTestId('messages-editor').fill(content+' VIA ROUTE')
+    await A.evaluate(async()=>{
+      const {router}=await import('/src/router.ts')
+      await router.push('/settings')
+    })
+    await expect(A).toHaveURL(/\/messages$/)
+    await expect(A.getByTestId('messages-thread')).toHaveCount(0)
+    await expect(A.getByTestId('messages-draft-'+peerId))
+      .toContainText('VIA ROUTE')
 
     // Draft edits continue offline, with no simulated Matrix network ACK.
     await ctxA.setOffline(true)
