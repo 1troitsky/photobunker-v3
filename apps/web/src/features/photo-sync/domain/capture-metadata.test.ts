@@ -59,6 +59,28 @@ describe('P1-06 private capture metadata validation',()=>{
       ...preparePhotoMetadata(now),version:2,
     })).toThrow('capture.invalid_metadata')
   })
+  it('uses v3 only for private tags; rejects extra fields and noncanonical metadata',()=>{
+    const now=Date.now()
+    const valid=preparePhotoMetadata(now,undefined,{
+      category:'Report',tags:[' evidence ','field'],
+    })
+    expect(valid).toMatchObject({
+      version:3,category:'Report',tags:['evidence','field'],
+    })
+    expect(parsePhotoMetadata(valid)).toEqual(valid)
+    expect(()=>parsePhotoMetadata({
+      ...valid,tags:['evidence','evidence'],
+    })).toThrow('assignment.duplicate_rule_label')
+    expect(()=>parsePhotoMetadata({
+      ...valid,tags:[' evidence ','field'],
+    })).toThrow()
+    expect(()=>parsePhotoMetadata({...valid,version:2}))
+      .toThrow('capture.invalid_metadata')
+    expect(()=>parsePhotoMetadata({...valid,tags:['evidence','field'],public:true}))
+      .toThrow('capture.invalid_metadata')
+    expect(preparePhotoMetadata(now,undefined,{category:'Report'}).version).toBe(2)
+    expect(preparePhotoMetadata(now).version).toBe(1)
+  })
   it('rejects metadata with a different capturedAt than the signed scope',()=>{
     const now=Date.now()
     const binding={
