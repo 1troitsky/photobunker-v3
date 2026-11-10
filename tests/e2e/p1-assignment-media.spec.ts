@@ -576,6 +576,12 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     // P1-20: edit a REAL owner-signed schedule with an accepted contributor
     // still using the original ECDH invitation and the original root policy.
     await A.goto('/assignments/'+assignmentId+'/edit')
+    // Route renders an authenticated *local* snapshot immediately. Wait for
+    // the network session proof before demanding fresh server authority.
+    await A.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+    })
     await expect(A.locator('#editor-schedule-start'))
       .toBeVisible({timeout:20000})
     await expect(A.locator('#editor-schedule-start')).not.toHaveValue('')
