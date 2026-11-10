@@ -620,11 +620,14 @@ export async function readCachedPrivateAssignment(
  */
 export async function queueAssignmentPolicyChange(
   assignmentId:string,
-  next:{photoGoal:number|null;allowedMedia?:AllowedAssignmentMedia}&CaptureRequirements,
+  next:{photoGoal:number|null;videoGoal?:number|null;audioGoal?:number|null;
+    allowedMedia?:AllowedAssignmentMedia}&CaptureRequirements,
 ):Promise<string>{
   const s=requireSession()
   const {photoGoal,requiredCategory,descriptionMinLength,requiredGps}=next
-  if(photoGoal!==null&&(!Number.isInteger(photoGoal)||photoGoal<1||photoGoal>9999))
+  if(!progressGoal(photoGoal,9999)
+    ||(next.videoGoal!==undefined&&!progressGoal(next.videoGoal,999))
+    ||(next.audioGoal!==undefined&&!progressGoal(next.audioGoal,999)))
     throw Error('assignment.invalid_goal')
   if(typeof requiredCategory!=='boolean'||typeof requiredGps!=='boolean'
     ||!Number.isInteger(descriptionMinLength)||descriptionMinLength<0
@@ -637,10 +640,18 @@ export async function queueAssignmentPolicyChange(
   const a=row.listing
   const previousRules=signedPolicyRequirements(a)
   const previousMedia=signedAllowedAssignmentMedia(a)
+  const previousGoals=signedPolicyGoals(a)
   const allowedMedia=next.allowedMedia??previousMedia
   if(!validAllowedMedia(allowedMedia))throw Error('assignment.invalid_allowed_media')
+  const videoGoal=next.videoGoal===undefined?previousGoals.videoGoal:next.videoGoal
+  const audioGoal=next.audioGoal===undefined?previousGoals.audioGoal:next.audioGoal
+  if((videoGoal!==null&&!allowedMedia.includes('video'))
+    ||(audioGoal!==null&&!allowedMedia.includes('audio')))
+    throw Error('assignment.goal_for_disabled_type')
   const mediaChanged=JSON.stringify(allowedMedia)!==JSON.stringify(previousMedia)
   if(a.state!=='active'||(a.photoGoal===photoGoal&&!mediaChanged
+    &&videoGoal===previousGoals.videoGoal
+    &&audioGoal===previousGoals.audioGoal
     &&previousRules.requiredCategory===requiredCategory
     &&previousRules.descriptionMinLength===descriptionMinLength
     &&previousRules.requiredGps===requiredGps))
@@ -657,15 +668,15 @@ export async function queueAssignmentPolicyChange(
   const previousContract=a.policyRevision===1?a.policyContract:a.policyAmendmentContract
   if(!previousContract)throw Error('assignment.policy_revision_not_authenticated')
   const previousPolicyHash=hex(await digest(enc.encode(previousContract)))
-  const previousVersion=a.policyAmendmentContract
-    ?(JSON.parse(a.policyAmendmentContract) as {version:number}).version:1
-  const version=allowedMedia.length>1||previousVersion===3?3:2
+  // Always publish new edits as v4. Historical v1-v3 contracts
+  // remain immutable and are still verified at their original revision.
   const payload={
-    version,operationId:crypto.randomUUID(),assignmentId,
+    version:4,operationId:crypto.randomUUID(),assignmentId,
     ownerAccountId:s.accountId,rootPolicyHash,previousPolicyHash,
     fromPolicyRevision:a.policyRevision,toPolicyRevision:a.policyRevision+1,
     photoGoal,allowedMedia,
     requiredCategory,descriptionMinLength,requiredGps,
+    videoGoal,audioGoal,
   }
   const op=await signedOperation('policy',
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/policy',payload)
@@ -680,7 +691,10 @@ export async function queueAssignmentGoalChange(
   if(!row)throw Error('assignment.policy_not_cached')
   await verifySignedAssignmentPolicy(row.listing,true)
   const rules=signedPolicyRequirements(row.listing)
-  return queueAssignmentPolicyChange(assignmentId,{photoGoal,...rules})
+  const targets=signedPolicyGoals(row.listing)
+  return queueAssignmentPolicyChange(assignmentId,{
+    photoGoal,videoGoal:targets.videoGoal,audioGoal:targets.audioGoal,...rules,
+  })
 }
 
 /** Signed owner lifecycle commands are durable and do not delete media. */
