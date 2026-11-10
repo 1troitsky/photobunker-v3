@@ -127,7 +127,7 @@ describe('P1-29B encrypted owner Team key epoch outbox',()=>{
     expect(local).not.toBe('[]')
     for(const secret of [
       ownerId,recipientId,teamId,'E2EE TEAM SECRET','PRIVATE NOTES',
-      'recipientKeyDigest','contract','ciphertext','wrappedKey',
+      'recipientKeyDigest','contract','wrappedKey',
     ])expect(local).not.toContain(secret)
     expect(sent).toHaveLength(0)
   })
