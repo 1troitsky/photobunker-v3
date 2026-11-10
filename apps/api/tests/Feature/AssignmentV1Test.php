@@ -1763,4 +1763,44 @@ final class AssignmentV1Test extends TestCase
         $this->assertDatabaseCount('assignment_media_submissions_v1',0);
     }
 
+    public function test_owner_only_participant_roster_is_bounded_signed_and_authoritative():void
+    {
+        $this->createAssignment();
+        $inviteId=$this->invite();
+        $url='/assignments/v1/'.$this->assignmentId.'/participants';
+        $this->as('recipient');
+        $this->getJson($url)->assertNotFound(); // accepted member is not owner
+        $this->as('outsider');
+        $this->getJson($url)->assertNotFound(); // no recipient-graph disclosure
+        $this->as('owner');
+        $first=$this->getJson($url)->assertOk()
+            ->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.inviteId',$inviteId)
+            ->assertJsonPath('items.0.recipientAccountId',$this->people['recipient']['account'])
+            ->assertJsonPath('items.0.role','contributor')
+            ->assertJsonPath('items.0.state','pending')
+            ->assertJsonPath('items.0.expired',false)
+            ->assertJsonPath('nextCursor',null)->json();
+        $this->assertIsInt($first['serverNowMs']);
+        $this->assertSame(
+            $this->people['owner']['account'],
+            json_decode($first['items'][0]['contract'],true)['ownerAccountId'],
+        );
+        $this->assertSame(
+            $this->people['recipient']['account'],
+            json_decode($first['items'][0]['contract'],true)['recipientAccountId'],
+        );
+        $this->assertNotEmpty($first['items'][0]['signature']);
+        $this->getJson($url.'?after='.$inviteId)->assertOk()
+            ->assertJsonPath('items',[])
+            ->assertJsonPath('nextCursor',null);
+        $this->getJson($url.'?after=not-a-uuid')->assertStatus(422);
+        $this->accept($inviteId);
+        $this->as('owner');
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('items.0.state','accepted')
+            ->assertJsonPath('items.0.expired',false);
+        $this->as('recipient');
+        $this->getJson($url)->assertNotFound();
+    }
 }
