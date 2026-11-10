@@ -126,14 +126,20 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       status:200,revision:3,version:6,descriptionMinLength:1,
       advanced:{allowedCategories:['Report'],requiredTags:['photo-evidence']},
     })
+    // P1-18: real participants tab verifies the peer fingerprint before
+    // signing and delivering a contributor invitation, never a media DEK.
+    await A.getByRole('tab',{name:'Участники'}).click()
+    await A.locator('#editor-recipient-id').fill(contributorId)
+    await A.getByRole('button',{name:'Проверить ключ исполнителя'}).click()
+    await A.getByLabel('Я независимо сверил отпечаток').check()
+    await A.getByRole('button',{name:'Подтвердить ключ'}).click()
+    await expect(A.getByText('Отпечаток независимо подтверждён на этом устройстве.'))
+      .toBeVisible()
+    await A.getByRole('button',{name:'Отправить подписанное приглашение'}).click()
+    await expect(A.getByText(/Подписанное приглашение в очереди:/))
+      .toBeVisible({timeout:20000})
     await A.getByRole('link',{name:'Назад к заданиям'}).click()
     await A.getByRole('button',{name:'Открыть',exact:true}).first().click()
-
-    await A.locator('#assignment-recipient-id').fill(contributorId)
-    await A.getByRole('button',{name:'Проверить ключ исполнителя'}).click()
-    await A.getByLabel('Я сверил отпечаток исполнителя').check()
-    await A.getByRole('button',{name:'Подтвердить исполнителя'}).click()
-    await A.getByRole('button',{name:'Пригласить исполнителя'}).click()
     await A.getByRole('button',{name:'Синхронизировать'}).click()
 
     await B.goto('/assignments')
