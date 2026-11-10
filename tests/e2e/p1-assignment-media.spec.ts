@@ -224,7 +224,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     }),{timeout:30000}).toBe(3)
     await A.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(A.getByTestId('assignment-media-counts'))
-      .toContainText('Видео: 0 · Аудио: 2',{timeout:20000})
+      .toContainText('Видео: 0 / 2 · Аудио: 2 / 1',{timeout:20000})
     const capturedReceipt=await A.evaluate(async id=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
       const res=await a.listAssignmentMediaSubmissions(id)
@@ -292,7 +292,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     }),{timeout:30000}).toBe(4)
     await A.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(A.getByTestId('assignment-media-counts'))
-      .toContainText('Видео: 1 · Аудио: 2',{timeout:20000})
+      .toContainText('Видео: 1 / 2 · Аудио: 2 / 1',{timeout:20000})
     const videoReceipt=await A.evaluate(async({assignmentId,mediaId})=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
       const res=await a.listAssignmentMediaSubmissions(assignmentId)
