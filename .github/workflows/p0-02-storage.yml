@@ -1,7 +1,7 @@
 name: P0-02 isolated PostgreSQL 18 and Garage 2.5
 on:
+  # All stacked phase PRs (P2/P3/P4 included) must run real gates.
   pull_request:
-    branches: [main, 'p0/**', 'p1/**']
   push:
     branches: [main, 'p0/02-**', 'p1/**']
 permissions:
