@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Assignments\AssignmentContract as C;
+use App\Assignments\AssignmentSchedule as S;
 use App\Assignments\MonthlyCreationQuota;
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
@@ -148,7 +149,8 @@ final class AssignmentV1Controller extends Controller
                 ]);
             }
             abort_unless($a->state==='active'
-                &&($a->ends_at===null||(int)$a->ends_at>PhotoSync::nowMs())
+                &&(!S::current($a)['blockAfterEnd']
+                    ||S::current($a)['endsAt']>PhotoSync::nowMs())
                 &&(int)$a->policy_revision===$c['fromPolicyRevision']
                 &&$c['toPolicyRevision']===(int)$a->policy_revision+1,409);
             $previousValues=$a->latest_policy_contract!==null
@@ -246,7 +248,8 @@ final class AssignmentV1Controller extends Controller
                 ]);
             }
             abort_unless($a->state==='active'
-                &&($a->ends_at===null||(int)$a->ends_at>PhotoSync::nowMs())
+                &&(!S::current($a)['blockAfterEnd']
+                    ||S::current($a)['endsAt']>PhotoSync::nowMs())
                 &&(int)$a->private_revision===$c['fromPrivateRevision'],409);
             $previous=$a->latest_private_contract??$a->private_envelope_json;
             abort_unless(hash_equals(hash('sha256',$previous),
@@ -319,6 +322,110 @@ final class AssignmentV1Controller extends Controller
     }
 
     /**
+     * Owner-signed, independently versioned schedule changes. Root creation
+     * timestamps are immutable and always remain verifiable by recipients.
+     * A schedule edit never expires or deletes stored media.
+     */
+    public function changeSchedule(Request $r,string $assignmentId)
+    {
+        $this->sync->origin($r);
+        [$actor]=$this->sync->actor($r);
+        $c=$this->signed($r,$actor,'pb3.assignment-schedule.v1',[
+            'version','operationId','assignmentId','ownerAccountId',
+            'rootPolicyHash','previousScheduleHash',
+            'fromScheduleRevision','toScheduleRevision',
+            'startsAt','endsAt','blockBeforeStart','blockAfterEnd',
+        ]);
+        S::validate($c,$actor->id,$assignmentId);
+        $hash=hash('sha256',$r->json('contract'));
+        return DB::transaction(function()use($r,$actor,$c,$assignmentId,$hash){
+            $a=DB::table('assignment_records_v1')->where('id',$assignmentId)
+                ->lockForUpdate()->first();
+            abort_unless($a&&$a->owner_account_id===$actor->id,404);
+            abort_unless(hash_equals(hash('sha256',$a->contract_json),
+                $c['rootPolicyHash']),409);
+            // Lost-ACK replay is idempotent even if the assignment was
+            // subsequently finished, rescheduled, or another device changed it.
+            $existing=DB::table('assignment_schedule_events_v1')
+                ->where('operation_id',$c['operationId'])->first();
+            if($existing){
+                abort_unless($existing->assignment_id===$a->id
+                    &&hash_equals($existing->contract_hash,$hash),409);
+                return $this->sync->json([
+                    'assignmentId'=>$a->id,
+                    'scheduleRevision'=>(int)$a->schedule_revision,
+                    'unchanged'=>true,
+                ]);
+            }
+            abort_unless($a->state==='active'
+                &&(int)$a->schedule_revision===$c['fromScheduleRevision'],409);
+            $previous=$a->latest_schedule_contract??$a->contract_json;
+            abort_unless(hash_equals(hash('sha256',$previous),
+                $c['previousScheduleHash']),409);
+            $old=S::current($a);
+            abort_unless($old!==[
+                'startsAt'=>$c['startsAt'],'endsAt'=>$c['endsAt'],
+                'blockBeforeStart'=>$c['blockBeforeStart'],
+                'blockAfterEnd'=>$c['blockAfterEnd'],
+            ],409);
+            $now=PhotoSync::nowMs();
+            DB::table('assignment_schedule_events_v1')->insert([
+                'operation_id'=>$c['operationId'],
+                'assignment_id'=>$a->id,
+                'from_revision'=>$c['fromScheduleRevision'],
+                'to_revision'=>$c['toScheduleRevision'],
+                'contract_hash'=>$hash,'contract_json'=>$r->json('contract'),
+                'owner_signature'=>$r->json('signature'),
+                'occurred_at_ms'=>$now,
+                'created_at'=>\Carbon\CarbonImmutable::createFromTimestampMs($now,'UTC'),
+            ]);
+            DB::table('assignment_records_v1')->where('id',$a->id)->update([
+                'schedule_revision'=>$c['toScheduleRevision'],
+                'latest_schedule_contract'=>$r->json('contract'),
+                'latest_schedule_signature'=>$r->json('signature'),
+                'updated_at'=>now(),
+            ]);
+            return $this->sync->json([
+                'assignmentId'=>$a->id,
+                'scheduleRevision'=>$c['toScheduleRevision'],
+                'unchanged'=>false,
+            ]);
+        },3);
+    }
+
+    /** Owner or previously accepted contributor; unsigned viewers get 404. */
+    public function scheduleHistory(Request $r,string $assignmentId)
+    {
+        [$actor]=$this->sync->actor($r);
+        $a=$this->assignment($assignmentId);
+        if($a->owner_account_id!==$actor->id){
+            abort_unless(DB::table('assignment_invites_v1')
+                ->where('assignment_id',$assignmentId)
+                ->where('recipient_account_id',$actor->id)
+                ->where('state','accepted')->exists(),404);
+        }
+        $events=DB::table('assignment_schedule_events_v1')
+            ->where('assignment_id',$assignmentId)
+            ->orderBy('to_revision')->limit(1001)
+            ->get(['from_revision','to_revision','contract_hash',
+                'contract_json','owner_signature','occurred_at_ms']);
+        abort_unless($events->count()===(int)$a->schedule_revision-1,409);
+        return $this->sync->json([
+            'assignmentId'=>$assignmentId,
+            'scheduleRevision'=>(int)$a->schedule_revision,
+            'rootPolicyHash'=>hash('sha256',$a->contract_json),
+            'events'=>$events->map(fn($e)=>[
+                'fromScheduleRevision'=>(int)$e->from_revision,
+                'toScheduleRevision'=>(int)$e->to_revision,
+                'contractHash'=>$e->contract_hash,
+                'contract'=>$e->contract_json,
+                'signature'=>$e->owner_signature,
+                'occurredAtMs'=>(int)$e->occurred_at_ms,
+            ])->values()->all(),
+        ]);
+    }
+
+    /**
      * A finish/resume command changes server permissions without changing the
      * immutable owner-signed capture policy or deleting participants' media.
      * Every transition has a signed, revision-locked, append-only operation.
@@ -357,8 +464,10 @@ final class AssignmentV1Controller extends Controller
             abort_unless($a->state===$expected,409);
             // A finished assignment cannot resume beyond its configured end.
             if($c['action']==='resume'){
-                abort_if($a->ends_at!==null
-                    &&(int)$a->ends_at<=PhotoSync::nowMs(),409);
+                $schedule=S::current($a);
+                abort_if($schedule['blockAfterEnd']
+                    &&$schedule['endsAt']!==null
+                    &&$schedule['endsAt']<=PhotoSync::nowMs(),409);
             }
             // The DB connection formats DateTime bindings to second precision.
             // Store the authoritative receipt instant as an integer as well,
@@ -412,6 +521,7 @@ final class AssignmentV1Controller extends Controller
             'a.latest_state_contract','a.latest_state_signature',
             'a.latest_policy_contract','a.latest_policy_signature',
             'a.private_revision','a.latest_private_contract','a.latest_private_signature',
+            'a.schedule_revision','a.latest_schedule_contract','a.latest_schedule_signature',
             'owner.account_spki as owner_account_spki',
         ];
         $now=PhotoSync::nowMs();
@@ -477,6 +587,9 @@ final class AssignmentV1Controller extends Controller
             'privateRevision'=>(int)$x->private_revision,
             'privateAmendmentContract'=>$x->latest_private_contract,
             'privateAmendmentSignature'=>$x->latest_private_signature,
+            'scheduleRevision'=>(int)$x->schedule_revision,
+            'scheduleAmendmentContract'=>$x->latest_schedule_contract,
+            'scheduleAmendmentSignature'=>$x->latest_schedule_signature,
             // A client must verify this owner's original signed policy before
             // trusting capture constraints. Server metadata alone is not a signature.
             'policyContract'=>$x->contract_json,
@@ -668,8 +781,7 @@ final class AssignmentV1Controller extends Controller
             }
             abort_unless($a->state==='active'
                 &&$c['policyRevision']<=(int)$a->policy_revision
-                && $a->starts_at<=PhotoSync::nowMs()
-                &&($a->ends_at===null || $a->ends_at>PhotoSync::nowMs()),409);
+                &&S::permitsNow($a),409);
             $joined=DB::table('assignment_invites_v1')->where('assignment_id',$a->id)
                 ->where('recipient_account_id',$actor->id)->where('role','contributor')
                 ->where('state','accepted')->first();
