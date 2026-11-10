@@ -40,7 +40,7 @@ export function normalizeAdvancedRules(value:unknown,strict=true):AdvancedRules{
     throw Error('assignment.invalid_advanced_rules')
   const v=value as Record<string,unknown>
   return {
-    allowedCategories:labels(v.allowedCategories,16,96,strict),
+    allowedCategories:labels(v.allowedCategories,16,64,strict),
     requiredTags:labels(v.requiredTags,12,48,strict),
   }
 }
