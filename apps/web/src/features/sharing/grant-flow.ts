@@ -14,6 +14,7 @@ import { ensureOwnExchangeKey, pinnedPeer, inspectPeer } from './key-directory'
 
 const encoder=new TextEncoder()
 const grantDomain='pb3.photo-grant.v1\n'
+const scopedGrantDomain='pb3.photo-grant.v2\n'
 const revokeDomain='pb3.photo-revoke.v1\n'
 const path='/shares/v1'
 
@@ -24,8 +25,9 @@ export type Envelope={
   assetId:string;ephemeralSpki:string;salt:string;iv:string;ciphertext:string
 }
 export type GrantContract={
-  version:1;grantId:string;photoId:string
+  version:1|2;grantId:string;photoId:string
   ownerAccountId:string;recipientAccountId:string
+  assignmentId?:string
   recipientKeyDigest:string;scope:'read';expiresAt:number
   assets:Envelope[]
 }
@@ -50,14 +52,21 @@ function still(s:ReturnType<typeof requireSession>):void {
 
 function wrapInfo(context:{
   ownerAccountId:string;recipientAccountId:string;photoId:string;grantId:string
-  assetId:string;expiresAt:number
+  assetId:string;expiresAt:number;assignmentId?:string
 }):string {
-  return 'pb3.recipient-dek.v1\n'+JSON.stringify({
-    version:1,scope:'read',...context,
-  })
+  const {assignmentId,...base}=context
+  return assignmentId
+    ?'pb3.recipient-dek.v2\n'+JSON.stringify({
+      version:2,scope:'read',...base,assignmentId,
+    })
+    :'pb3.recipient-dek.v1\n'+JSON.stringify({
+      version:1,scope:'read',...base,
+    })
 }
 
-export async function queueRecipientGrant(photoId:string,recipientAccountId:string):Promise<string> {
+export async function queueRecipientGrant(
+  photoId:string,recipientAccountId:string,assignmentId?:string,
+):Promise<string> {
   const s=requireSession()
   if(s.accountId===recipientAccountId)throw new Error('share.cannot_share_self')
   // Only explicitly, independently fingerprint-confirmed peers may receive keys.
@@ -74,6 +83,7 @@ export async function queueRecipientGrant(photoId:string,recipientAccountId:stri
     const scope={
       ownerAccountId:s.accountId,recipientAccountId,photoId,grantId,
       assetId:asset.assetId,expiresAt,
+      ...(assignmentId?{assignmentId}:{}),
     }
     const info=wrapInfo(scope)
     const ephemeral=await crypto.subtle.generateKey(
@@ -92,12 +102,14 @@ export async function queueRecipientGrant(photoId:string,recipientAccountId:stri
     })
   }
   const contract:GrantContract={
-    version:1,grantId,photoId,ownerAccountId:s.accountId,
-    recipientAccountId,recipientKeyDigest:peer.descriptorHash,
+    version:assignmentId?2:1,grantId,photoId,ownerAccountId:s.accountId,
+    recipientAccountId,...(assignmentId?{assignmentId}:{}),
+    recipientKeyDigest:peer.descriptorHash,
     scope:'read',expiresAt,assets,
   }
   const json=JSON.stringify(contract)
-  const signature=await sign(await importSigner(s.pkg.accountPkcs8),grantDomain+json)
+  const signature=await sign(await importSigner(s.pkg.accountPkcs8),
+    (assignmentId?scopedGrantDomain:grantDomain)+json)
   still(s)
   const draft:OutgoingGrant={
     id:grantId,ownerAccountId:s.accountId,recipientAccountId,photoId,
@@ -174,7 +186,16 @@ async function readReceivedAsset(grantId:string,kind:'master'|'metadata'):Promis
   if(!s.online)throw new Error('share.online_acl_required')
   const detail=await jsonApi<ReceivedDetail>(path+'/grants/'+encodeURIComponent(grantId))
   const contract=JSON.parse(detail.contract) as GrantContract
-  if(contract.version!==1||contract.scope!=='read'
+  if((contract.version!==1&&contract.version!==2)
+    ||contract.scope!=='read'
+    ||(contract.version===2
+      ?typeof contract.assignmentId!=='string'
+      :contract.assignmentId!==undefined)
+    ||Object.keys(contract).sort().join('|')!==[
+      'version','grantId','photoId','ownerAccountId','recipientAccountId',
+      ...(contract.version===2?['assignmentId']:[]),
+      'recipientKeyDigest','scope','expiresAt','assets',
+    ].sort().join('|')
     ||contract.grantId!==grantId||contract.photoId!==detail.photoId
     ||contract.ownerAccountId!==detail.ownerAccountId
     ||contract.recipientAccountId!==s.accountId
@@ -185,7 +206,8 @@ async function readReceivedAsset(grantId:string,kind:'master'|'metadata'):Promis
   // Signed identity directory pinned to a fingerprint; no silent TOFU.
   if(peer.accountSpki!==detail.ownerAccountSpki
     ||!await verify(await importSpki(peer.accountSpki),
-      grantDomain+detail.contract,detail.signature)){
+      (contract.version===2?scopedGrantDomain:grantDomain)
+        +detail.contract,detail.signature)){
     throw new Error('share.unauthenticated_owner')
   }
   const own=await ensureOwnExchangeKey()
@@ -206,6 +228,7 @@ async function readReceivedAsset(grantId:string,kind:'master'|'metadata'):Promis
     recipientAccountId:contract.recipientAccountId,
     photoId:contract.photoId,grantId,assetId:asset.assetId,
     expiresAt:contract.expiresAt,
+    ...(contract.version===2?{assignmentId:contract.assignmentId}:{}),
   })
   const wrappingKey=await exchangeKey(
     own.privateKey,envelope.ephemeralSpki,info,unb64(envelope.salt,16))
