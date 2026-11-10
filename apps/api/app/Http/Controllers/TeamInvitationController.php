@@ -26,23 +26,6 @@ final class TeamInvitationController extends Controller
         return [$input,$contract,hash('sha256',$input['contract'])];
     }
 
-    private static function invitePayload(object $i,object $owner):array
-    {
-        return [
-            'inviteId'=>$i->id,
-            'teamId'=>$i->team_id,
-            'ownerAccountId'=>$i->owner_account_id,
-            'ownerAccountSpki'=>$owner->account_spki,
-            'recipientAccountId'=>$i->recipient_account_id,
-            'role'=>$i->role,
-            'state'=>$i->state,
-            'expiresAt'=>(int)$i->expires_at,
-            'contract'=>$i->contract_json,
-            'signature'=>$i->owner_signature,
-            'contractHash'=>$i->contract_hash,
-        ];
-    }
-
     public function invite(Request $r,string $teamId)
     {
         $this->sync->origin($r);
@@ -50,7 +33,7 @@ final class TeamInvitationController extends Controller
         P::uuid($teamId);
         [$input,$c,$hash]=$this->signed($r,$actor,'pb3.team-invite.v1',[
             'version','inviteId','operationId','teamId','ownerAccountId',
-            'recipientAccountId','role','fileAccess','recipientKeyDigest',
+            'teamContractHash','recipientAccountId','role','fileAccess','recipientKeyDigest',
             'expiresAt','envelope',
         ]);
         abort_unless(($c['version']??null)===1
@@ -63,6 +46,8 @@ final class TeamInvitationController extends Controller
             'recipientAccountId'] as $field)C::uuid($c,$field);
         abort_unless(is_string($c['recipientKeyDigest'])
             &&preg_match('/^[a-f0-9]{64}$/D',$c['recipientKeyDigest'])===1,422);
+        abort_unless(is_string($c['teamContractHash'])
+            &&preg_match('/^[a-f0-9]{64}$/D',$c['teamContractHash'])===1,422);
         C::millis($c['expiresAt']);
         abort_unless($c['expiresAt']>PhotoSync::nowMs()
             &&$c['expiresAt']<=PhotoSync::nowMs()+7*86400000,422);
@@ -92,7 +77,8 @@ final class TeamInvitationController extends Controller
                     'unchanged'=>true,
                 ]);
             }
-            abort_unless($team->state==='active',409);
+            abort_unless($team->state==='active'
+                &&hash_equals($team->contract_hash,$c['teamContractHash']),409);
             abort_if(DB::table('team_invites_v1')
                 ->where('operation_id',$c['operationId'])->exists(),409);
             abort_if(DB::table('team_invites_v1')
