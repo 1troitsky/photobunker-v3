@@ -2,7 +2,7 @@ import {describe,it,expect} from 'vitest'
 import {freshPackage} from '../../identity/infrastructure/crypto'
 import {
   encryptMediaFile,decryptMediaChunks,validateMediaContract,
-  MEDIA_CHUNK,
+  MEDIA_CHUNK,prepareMediaPrivateFields,validateMediaPrivateRequirements,
 } from './media-crypto'
 import type {MediaContract} from './media-crypto'
 
@@ -82,5 +82,64 @@ describe('P1-10 multi-media E2EE authenticated chunks',()=>{
     expect(()=>validateMediaContract({
       ...f.contract,extra:'clear' ,
     } as MediaContract)).toThrow('media.contract_fields')
+  })
+})
+
+describe('P1-16 encrypted private video/audio metadata',()=>{
+  it('roundtrips category, description and fresh GPS inside AES-GCM metadata ONLY',async()=>{
+    const {pkg}=await freshPackage(crypto.randomUUID())
+    const data=new Uint8Array(512).fill(37)
+    const file=new File([data],'PRIVATE-RECORDING.wav',{type:'audio/wav'})
+    const capturedAt=Date.now()
+    const fields={
+      category:'Field report',description:'SECRET-PRIVATE-DESCRIPTION',
+      gps:{latitude:41.647849,longitude:41.639411,
+        accuracyMeters:5,recordedAt:capturedAt-500},
+    }
+    const {contract,chunks}=await encryptMediaFile(
+      file,pkg,Date.now()+86400000,check,fields,capturedAt)
+    const wire=JSON.stringify(contract)
+    expect(wire).not.toContain('SECRET-PRIVATE-DESCRIPTION')
+    expect(wire).not.toContain('Field report')
+    expect(wire).not.toContain('41.647849')
+    expect(wire).not.toContain('PRIVATE-RECORDING')
+    for(const chunk of chunks){
+      const raw=new TextDecoder().decode(await chunk.blob.arrayBuffer())
+      expect(raw).not.toContain('SECRET-PRIVATE-DESCRIPTION')
+    }
+    const output=await decryptMediaChunks(pkg,contract,chunks.map(x=>x.blob),check)
+    expect(output.metadata).toMatchObject({
+      version:2,category:'Field report',description:'SECRET-PRIVATE-DESCRIPTION',
+      gps:fields.gps,createdAt:capturedAt,
+    })
+    expect(new Uint8Array(await output.blob.arrayBuffer())).toEqual(data)
+    validateMediaPrivateRequirements(output.metadata,{
+      requiredCategory:true,descriptionMinLength:12,requiredGps:true,
+    })
+    const bytes=new Uint8Array(await chunks.at(-1)!.blob.arrayBuffer())
+    bytes[0]^=1
+    await expect(decryptMediaChunks(pkg,contract,[
+      chunks[0]!.blob,new Blob([bytes]),
+    ],check)).rejects.toThrow('media.chunk_corrupt')
+  })
+  it('rejects missing, empty, malformed and stale private evidence before encryption',async()=>{
+    const rules={requiredCategory:true,descriptionMinLength:12,requiredGps:true}
+    expect(()=>validateMediaPrivateRequirements({},rules))
+      .toThrow('assignment.category_required')
+    expect(()=>validateMediaPrivateRequirements({category:'Report'},rules))
+      .toThrow('assignment.description_too_short')
+    expect(()=>validateMediaPrivateRequirements({
+      category:'Report',description:'Long enough text',
+    },rules)).toThrow('assignment.gps_required')
+    const now=Date.now()
+    expect(()=>prepareMediaPrivateFields({gps:{
+      latitude:41.6,longitude:41.7,accuracyMeters:5,recordedAt:now-180000,
+    }},now)).toThrow('capture.invalid_or_stale_gps')
+    expect(()=>prepareMediaPrivateFields({description:'\u0001 control'}))
+      .toThrow('media.invalid_description')
+    expect(()=>prepareMediaPrivateFields({category:' '.repeat(80)}))
+      .toEqual({})
+    expect(()=>prepareMediaPrivateFields({description:'x'.repeat(4001)}))
+      .toThrow('media.invalid_description')
   })
 })
