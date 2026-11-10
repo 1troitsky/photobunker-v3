@@ -112,7 +112,8 @@ async function openRows<T>(s:Session,kind:'operations'|'joined'):Promise<T[]>{
       parsed=JSON.parse(dec.decode(bytes)) as T
     }catch{throw Error('teams.member_cache_unreadable')}
     if(!parsed||typeof parsed!=='object')throw Error('teams.member_cache_invalid')
-    const id=kind==='operations'?(parsed as Op).operationId:(parsed as JoinedTeam).teamId
+    const record=parsed as unknown as {operationId?:unknown;teamId?:unknown}
+    const id=kind==='operations'?record.operationId:record.teamId
     if(typeof id!=='string'||(await rowId(s,kind,id)).key!==row.key)
       throw Error('teams.member_cache_scope_invalid')
     values.push(parsed)
