@@ -378,6 +378,115 @@ final class AssignmentV1Test extends TestCase
         $this->getJson($url)->assertNotFound();
     }
 
+    private function signedPrivateText(int $from=1,?array $envelope=null,
+        ?string $operationId=null):array
+    {
+        $row=DB::table('assignment_records_v1')->where('id',$this->assignmentId)->first();
+        $root=json_decode($row->private_envelope_json,true,16,JSON_THROW_ON_ERROR);
+        $new=$envelope??$root;
+        if($envelope===null){
+            $new['iv']=P::encode(random_bytes(12));
+            $new['ciphertext']=P::encode(random_bytes(420));
+        }
+        return $this->signed('owner','pb3.assignment-private.v2',[
+            'version'=>2,'operationId'=>$operationId??(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'rootPrivateHash'=>hash('sha256',$row->private_envelope_json),
+            'previousPrivateHash'=>hash('sha256',
+                $row->latest_private_contract??$row->private_envelope_json),
+            'fromPrivateRevision'=>$from,'toPrivateRevision'=>$from+1,
+            'privateEnvelope'=>$new,
+        ]);
+    }
+
+    public function test_p1_19_signed_private_text_preserves_root_invites_and_acl():void
+    {
+        $this->createAssignment();
+        $base='/assignments/v1/'.$this->assignmentId;
+        $this->as('owner');
+        $root=$this->getJson('/assignments/v1')->assertOk()
+            ->assertJsonPath('items.0.privateRevision',1)
+            ->assertJsonPath('items.0.privateAmendmentContract',null)
+            ->json('items.0.privateEnvelope');
+        $this->as('outsider');
+        $this->getJson($base.'/private-history')->assertNotFound();
+        $this->postJson($base.'/private',$this->signed('outsider',
+            'pb3.assignment-private.v2',['version'=>2]))->assertStatus(422);
+        $this->as('owner');
+        $new=$this->signedPrivateText();
+        $this->postJson($base.'/private',$new)->assertOk()
+            ->assertJsonPath('privateRevision',2)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($base.'/private',$new)->assertOk()
+            ->assertJsonPath('privateRevision',2)
+            ->assertJsonPath('unchanged',true); // lost ACK
+        $this->assertDatabaseCount('assignment_private_events_v1',1);
+        $ownerList=$this->getJson('/assignments/v1')->assertOk()
+            ->assertJsonPath('items.0.privateRevision',2)
+            ->assertJsonPath('items.0.privateAmendmentContract',$new['contract']);
+        $this->assertSame($root,$ownerList->json('items.0.privateEnvelope'));
+        $this->assertNotSame($root,$ownerList->json('items.0.privateAmendmentContract'));
+        $this->assertStringNotContainsString('secret-title',$new['contract']);
+        $this->getJson($base.'/private-history')->assertOk()
+            ->assertJsonPath('privateRevision',2)
+            ->assertJsonPath('events.0.contractHash',hash('sha256',$new['contract']))
+            ->assertJsonCount(1,'events');
+        $invite=$this->invite();
+        $this->as('recipient');
+        $this->getJson($base.'/private-history')->assertNotFound(); // pending is not ACL
+        $this->accept($invite);
+        $this->getJson($base.'/private-history')->assertOk()->assertJsonCount(1,'events');
+        $this->getJson('/assignments/v1')->assertOk()
+            ->assertJsonPath('items.0.privateRevision',2)
+            ->assertJsonPath('items.0.privateAmendmentContract',$new['contract']);
+        $this->as('owner');
+        $second=$this->signedPrivateText(2);
+        $this->postJson($base.'/private',$second)->assertOk()
+            ->assertJsonPath('privateRevision',3);
+        $this->getJson($base.'/private-history')->assertOk()->assertJsonCount(2,'events');
+        $this->postJson($base.'/private',$new)->assertOk()
+            ->assertJsonPath('privateRevision',3)
+            ->assertJsonPath('unchanged',true); // historical ACK at current revision
+        $this->assertDatabaseCount('assignment_private_events_v1',2);
+        $this->assertDatabaseCount('assignment_records_v1',1);
+    }
+
+    public function test_p1_19_private_text_rejects_stale_forged_rotated_and_reused_nonce():void
+    {
+        $this->createAssignment();
+        $base='/assignments/v1/'.$this->assignmentId.'/private';
+        $this->as('owner');
+        $row=DB::table('assignment_records_v1')->where('id',$this->assignmentId)->first();
+        $root=json_decode($row->private_envelope_json,true,16,JSON_THROW_ON_ERROR);
+        $reused=$this->signedPrivateText(1,$root);
+        $this->postJson($base,$reused)->assertConflict(); // creation IV
+        $rotated=$root;
+        $rotated['iv']=P::encode(random_bytes(12));
+        $rotated['wrappedKey']['ciphertext']=P::encode(random_bytes(48));
+        $this->postJson($base,$this->signedPrivateText(1,$rotated))->assertConflict();
+        $wrong=$this->signedPrivateText();
+        $this->postJson($base,[
+            'contract'=>$wrong['contract'],
+            'signature'=>P::encode(random_bytes(64)),
+        ])->assertUnauthorized();
+        $bad=json_decode($wrong['contract'],true,32,JSON_THROW_ON_ERROR);
+        $bad['plaintext']='do not persist';
+        $this->postJson($base,$this->signed('owner','pb3.assignment-private.v2',$bad))
+            ->assertUnprocessable();
+        $first=$this->signedPrivateText();
+        $this->postJson($base,$first)->assertOk()->assertJsonPath('privateRevision',2);
+        $this->postJson($base,$this->signedPrivateText(1))->assertConflict();
+        $old=json_decode($first['contract'],true,32,JSON_THROW_ON_ERROR);
+        $this->postJson($base,$this->signedPrivateText(2,$old['privateEnvelope']))
+            ->assertConflict(); // same IV with unchanged DEK
+        $this->as('outsider');
+        $this->postJson($base,$first)->assertUnauthorized();
+        $this->as('owner');
+        $this->postJson($base,$this->signedPrivateText(2))->assertOk();
+        $this->postJson($base,$this->signedPrivateText(2))->assertConflict();
+    }
+
     public function test_signed_v2_private_metadata_requirements_keep_original_goal_and_replay():void
     {
         $this->createAssignment();
