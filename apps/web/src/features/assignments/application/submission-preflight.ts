@@ -11,7 +11,7 @@ import {
   listCachedAssignmentSnapshots, listServerAssignments,
   signedPolicyRequirements, signedAdvancedRequirements,
   verifySignedAssignmentPolicy, validAllowedMedia, schedulePermitsAt,
-  assignmentFilesOpenAt,
+  assignmentFilesOpenAt,assignmentGrantExpiryCap,
 } from './assignment-outbox'
 import type {
   AssignmentListing, CaptureRequirements, SignedCaptureBinding,
