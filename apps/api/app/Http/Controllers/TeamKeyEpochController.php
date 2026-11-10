@@ -283,6 +283,11 @@ final class TeamKeyEpochController extends Controller
                     'created_at'=>now(),'updated_at'=>now(),
                 ]);
             }
+            // Outstanding v1 invitations carry the old Team DEK and cannot
+            // be accepted once the new epoch has been committed.
+            DB::table('team_invites_v1')->where('team_id',$teamId)
+                ->where('state','pending')
+                ->update(['state'=>'revoked','updated_at'=>now()]);
             DB::table('team_records_v1')->where('id',$teamId)->update([
                 'key_epoch'=>$c['toEpoch'],'rotation_required'=>false,
                 'updated_at'=>now(),

@@ -118,9 +118,11 @@ final class TeamInvitationController extends Controller
         if($after!==null)P::uuid($after);
         $q=DB::table('team_invites_v1 as i')
             ->join('identity_accounts as a','a.id','=','i.owner_account_id')
+            ->join('team_records_v1 as t','t.id','=','i.team_id')
             ->where('i.recipient_account_id',$actor->id);
         if($after!==null)$q->where('i.id','>',$after);
-        $rows=$q->select(['i.*','a.account_spki'])->orderBy('i.id')
+        $rows=$q->select(['i.*','a.account_spki','t.rotation_required'])
+            ->orderBy('i.id')
             ->limit(51)->get();
         $items=$rows->take(50)->map(function($i){
             if($i->state==='revoked'){
@@ -130,6 +132,15 @@ final class TeamInvitationController extends Controller
                 return [
                     'inviteId'=>$i->id,'teamId'=>$i->team_id,
                     'state'=>'revoked',
+                ];
+            }
+            if($i->rotation_required){
+                // All historical ECDH envelopes are suspended while an
+                // exclusion awaits cryptographic re-key. Keep survivor cache
+                // but mark its live ACL unavailable until the new epoch.
+                return [
+                    'inviteId'=>$i->id,'teamId'=>$i->team_id,
+                    'state'=>'suspended',
                 ];
             }
             return [

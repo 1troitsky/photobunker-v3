@@ -219,7 +219,7 @@ final class TeamKeyEpochTest extends TestCase
         $bad=$this->epoch();$bad['membershipRevision']=1;
         $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
             $this->signed('owner','pb3.team-key-epoch.v1',$bad))
-            ->assertConflict();
+            ->assertUnprocessable();
         $bad=$this->epoch();
         $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
             $this->signed('owner','pb3.assignment-invite.v1',$bad))

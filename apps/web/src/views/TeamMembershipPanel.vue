@@ -26,6 +26,7 @@ const roster=ref<TeamRosterMember[]>([])
 const incoming=ref<TeamInvitation[]>([])
 const joined=ref<JoinedTeam[]>([])
 const revokedTeamIds=ref<string[]>([])
+const suspendedTeamIds=ref<string[]>([])
 const showInvite=ref(false)
 const rotationRequired=ref(false)
 const keyEpoch=ref(1)
@@ -52,7 +53,8 @@ function hasNetwork():boolean{
 }
 async function reload():Promise<void>{
   const scope=identity(),token=++generation
-  incoming.value=[];joined.value=[];revokedTeamIds.value=[];error.value=''
+  incoming.value=[];joined.value=[];revokedTeamIds.value=[]
+  suspendedTeamIds.value=[];error.value=''
   if(!scope)return
   try{
     const cached=await listCachedJoinedTeams()
@@ -70,6 +72,7 @@ async function reload():Promise<void>{
     const results=response.invites
     incoming.value=results
     revokedTeamIds.value=response.revokedTeamIds
+    suspendedTeamIds.value=response.suspendedTeamIds
     for(const id of response.revokedTeamIds)await dropRevokedJoinedTeam(id)
     if(!current(scope,token))return
     const verified=await Promise.all(results.filter(x=>
@@ -316,6 +319,11 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
         </form>
       </template>
     </template>
+    <p v-if="suspendedTeamIds.length" role="status"
+      data-testid="team-suspended-notice">
+      Команда ожидает ротацию ключа после изменения состава.
+      Старые ключевые конверты временно не выдаются.
+    </p>
     <p v-if="revokedTeamIds.length" role="status"
       data-testid="team-revoked-notice">
       Доступ к команде отозван. Зашифрованный локальный снимок удалён.
