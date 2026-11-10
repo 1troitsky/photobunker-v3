@@ -54,6 +54,14 @@ function identity():string{
 function current(expected:string,token:number):boolean{
   return identity()===expected&&token===generation
 }
+function isEpochInvite(item:TeamInvitation|EpochTeamInvite):item is EpochTeamInvite{
+  return 'version' in item&&item.version===2
+}
+function isEpochMember(
+  item:TeamRosterMember|EpochRosterMember,
+):item is EpochRosterMember{
+  return 'protocolVersion' in item&&item.protocolVersion===2
+}
 function roleText(role:TeamRole):string{
   return role==='curator'?'Куратор':role==='viewer'?'Наблюдатель':'Исполнитель'
 }
@@ -87,7 +95,7 @@ async function reload():Promise<void>{
     const signedVerified=await Promise.all(entries.filter(x=>
       x.state==='accepted'&&x.trustedOwner).map(async item=>{
         try{
-          return 'version' in item&&item.version===2
+          return isEpochInvite(item)
             ?await openJoinedEpochInvite(item)
             :await openAnyJoinedTeam(item)
         }catch{return null}
@@ -150,7 +158,7 @@ async function reloadRoster():Promise<void>{
         const prior=activeFirst.get(person.recipientAccountId)
         if(!prior||person.state==='accepted'
           ||(prior.state!=='accepted'
-            &&'protocolVersion' in person&&person.protocolVersion===2))
+            &&isEpochMember(person)))
           activeFirst.set(person.recipientAccountId,person)
       }
       roster.value=[...activeFirst.values()]
@@ -201,14 +209,14 @@ async function memberAction(
   const scope=identity()
   try{
     const id=selectedTeam.value
-    if('protocolVersion' in person&&person.protocolVersion===2)
+    if(isEpochMember(person))
       await queueEpochMembershipChange(id,person,action,nextRole)
     else await queueTeamMembershipChange(id,person,action,nextRole)
     if(identity()!==scope)return
     notice.value='Изменение подписано и сохранено в очереди.'
     roleEditId.value=null
     try{
-      if('protocolVersion' in person&&person.protocolVersion===2)
+      if(isEpochMember(person))
         await syncEpochInvitationOperations()
       else await syncTeamMemberOperations()
       if(identity()!==scope)return
@@ -260,13 +268,13 @@ async function acceptInvite(item:TeamInvitation|EpochTeamInvite):Promise<void>{
   busy.value=true;notice.value='';error.value=''
   const scope=identity()
   try{
-    if('version' in item&&item.version===2)
+    if(isEpochInvite(item))
       await queueEpochAcceptance(item)
     else await queueTeamAcceptance(item)
     if(identity()!==scope)return
     notice.value='Согласие подписано и сохранено в очереди.'
     try{
-      if('version' in item&&item.version===2)
+      if(isEpochInvite(item))
         await syncEpochInvitationOperations()
       else await syncTeamMemberOperations()
       if(identity()===scope){
