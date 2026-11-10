@@ -10,7 +10,7 @@ import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import {
   listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
   signedMediaCaptureIntent,signedAllowedAssignmentMedia,
-  signedPolicyRequirements,
+  signedPolicyRequirements,signedMediaRequirements,
 } from '../features/assignments/application/assignment-outbox'
 import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
 
@@ -37,7 +37,9 @@ const canCaptureType=computed(()=>{
 })
 const requiredFields=computed(()=>{
   const policy=policies.value.find(p=>p.assignmentId===selectedAssignment.value)
-  return policy?signedPolicyRequirements(policy):null
+  return policy?(captureMode.value==='photo'
+    ?signedPolicyRequirements(policy)
+    :signedMediaRequirements(policy,captureMode.value)):null
 })
 // Volatile capture form. These values never enter IndexedDB in plaintext.
 const category=ref('')
@@ -235,11 +237,17 @@ async function beginRecording():Promise<void>{
     if(typeof required==='string'&&required&&selectedAssignment.value!==required)
       throw Error('assignment.policy_not_verified')
     const startedAt=Date.now()
+    // Snapshot values BEFORE recording. Both policy preflight and AES-GCM
+    // metadata encryption use these values, never mutable form state.
+    const privateFields={
+      category:category.value,description:description.value,gps:gps.value,
+    }
     // Snapshot verified owner policy BEFORE acquiring any recording bytes.
     // MediaFile v1 stays opaque; an independent account-signed capture
     // sidecar will later bind its exact ciphertext manifest digest.
     const intent=selectedAssignment.value
-      ?await signedMediaCaptureIntent(selectedAssignment.value,mode,startedAt)
+      ?await signedMediaCaptureIntent(
+        selectedAssignment.value,mode,startedAt,privateFields)
       :undefined
     if(!ownsCamera(identity,generation)||captureMode.value!==mode
       ||(intent&&selectedAssignment.value!==intent.assignmentId))
@@ -248,7 +256,8 @@ async function beginRecording():Promise<void>{
     const streamRef=stream.value
     if(!streamRef)throw Error('camera.stream_unavailable')
     const worker=new MediaRecorder(streamRef,{mimeType:mime})
-    const token={identity,generation,mode,intent,startedAt,mime,saveOnStop:false}
+    const token={identity,generation,mode,intent,startedAt,mime,
+      privateFields,saveOnStop:false}
     activeRecording=token
     recordingParts=[]
     recordedSize=0
@@ -303,7 +312,7 @@ async function beginRecording():Promise<void>{
             {type:mime,lastModified:startedAt})
           const capture:MediaCaptureIntent|undefined=intent
             ?{...intent,finishedAt}:undefined
-          const id=await enqueueEncryptedMedia(file,capture)
+          const id=await enqueueEncryptedMedia(file,capture,token.privateFields)
           if(!ownsCamera(identity,generation))return
           message.value='Запись зашифрована и сохранена локально: '+id.slice(0,8)
         }catch(e){
@@ -452,20 +461,20 @@ onUnmounted(()=>{disposed=true;closeCamera()})
           версией правил и зашифрованным MediaFile; время — заявление
           устройства, не аппаратная аттестация.
         </p>
-        <p v-if="requiredFields&&captureMode==='photo'" role="status" class="muted">
+        <p v-if="requiredFields" role="status" class="muted" data-testid="camera-media-requirements">
           Подписанные требования: категория {{ requiredFields.requiredCategory?'обязательна':'необязательна' }},
           описание минимум {{ requiredFields.descriptionMinLength }} символов,
           GPS {{ requiredFields.requiredGps?'обязателен':'необязателен' }}.
         </p>
       </div>
-      <div v-if="captureMode==='photo'" class="foundation-card">
-        <h2>Приватная информация снимка</h2>
+      <div class="foundation-card">
+        <h2>Приватная информация {{ captureMode==='photo'?'снимка':captureMode==='video'?'видео':'аудио' }}</h2>
         <label for="camera-category">Категория</label>
         <input id="camera-category" v-model="category" type="text" maxlength="64"
           autocomplete="off" placeholder="Например, репортаж">
         <label for="camera-description">Описание</label>
         <textarea id="camera-description" v-model="description" maxlength="4000"
-          rows="3" placeholder="Описание снимка (необязательно)"/>
+          rows="3" placeholder="Приватное описание (необязательно)"/>
         <div class="action-row">
           <button type="button" :disabled="gpsLoading||busy" @click="obtainGPS">
             {{ gpsLoading?'Определение GPS…':'Получить GPS' }}
@@ -495,7 +504,7 @@ onUnmounted(()=>{disposed=true;closeCamera()})
         </button>
         <button v-else-if="!recording" type="button"
           data-testid="camera-start-recording"
-          :disabled="!stream||starting||busy||!canCaptureType"
+          :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
           @click="beginRecording">Начать запись {{ captureMode==='video'?'видео':'аудио' }}</button>
         <button v-else type="button"
           data-testid="camera-stop-recording"
