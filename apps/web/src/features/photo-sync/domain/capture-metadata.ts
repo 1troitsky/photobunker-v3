@@ -1,4 +1,5 @@
 import type { SignedCaptureBinding } from '../../assignments/application/assignment-outbox'
+import { normalizePrivateTags } from '../../assignments/domain/advanced-rules'
 
 /** Client-only private fields. Never put these in signed photo contracts,
  * public manifests, API bodies, URLs, logs or unencrypted IndexedDB rows. */
@@ -12,9 +13,10 @@ export type CaptureMetadataInput=Readonly<{
   category?:string
   description?:string
   gps?:GPSFix|null
+  tags?:string[]
 }>
 export type PhotoMetadata=Readonly<{
-  version:1|2
+  version:1|2|3
   type:'image/jpeg'
   source:'camera'
   capturedAt:number
@@ -22,6 +24,7 @@ export type PhotoMetadata=Readonly<{
   category?:string
   description?:string
   gps?:GPSFix
+  tags?:string[]
 }>
 
 function validMillis(ms:number):boolean{
@@ -60,14 +63,16 @@ export function preparePhotoMetadata(
   const category=cleanText(privateInput.category,64,'category')
   const description=cleanText(privateInput.description,4_000,'description')
   const gps=privateInput.gps?normalizeGPS(privateInput.gps,capturedAt):undefined
+  const tags=normalizePrivateTags(privateInput.tags??[])
   const anyPrivate=category!==undefined||description!==undefined||gps!==undefined
   return {
-    version:anyPrivate?2:1,
+    version:tags.length?3:anyPrivate?2:1,
     type:'image/jpeg',capturedAt,source:'camera',
     ...(assignmentCapture?{assignmentCapture}:{}),
     ...(category?{category}:{}),
     ...(description?{description}:{}),
     ...(gps?{gps}:{}),
+    ...(tags.length?{tags}:{}),
   }
 }
 /** Parse only already decrypted metadata. Reject corrupt data, never persist it. */
@@ -75,7 +80,7 @@ export function parsePhotoMetadata(value:unknown):PhotoMetadata{
   if(!value||typeof value!=='object'||Array.isArray(value))
     throw Error('capture.invalid_metadata')
   const row=value as Record<string,unknown>
-  if((row.version!==1&&row.version!==2)||row.type!=='image/jpeg'
+  if((row.version!==1&&row.version!==2&&row.version!==3)||row.type!=='image/jpeg'
     ||row.source!=='camera'||!validMillis(row.capturedAt as number))
     throw Error('capture.invalid_metadata')
   const capture=row.assignmentCapture as SignedCaptureBinding|undefined
@@ -90,7 +95,8 @@ export function parsePhotoMetadata(value:unknown):PhotoMetadata{
       throw Error('capture.invalid_metadata')
   }
   const allowed=['version','type','source','capturedAt','assignmentCapture']
-  if(row.version===2)allowed.push('category','description','gps')
+  if(row.version>=2)allowed.push('category','description','gps')
+  if(row.version===3)allowed.push('tags')
   if(Object.keys(row).some(k=>!allowed.includes(k)))
     throw Error('capture.invalid_metadata')
   const normalized=preparePhotoMetadata(
@@ -98,9 +104,11 @@ export function parsePhotoMetadata(value:unknown):PhotoMetadata{
       category:row.category as string|undefined,
       description:row.description as string|undefined,
       gps:row.gps as GPSFix|undefined,
+      tags:row.tags as string[]|undefined,
     },
   )
-  if(normalized.version!==row.version)
+  if(normalized.version!==row.version
+    ||(row.version===3 && JSON.stringify(normalized.tags)!==JSON.stringify(row.tags)))
     throw Error('capture.invalid_metadata')
   return normalized
 }
