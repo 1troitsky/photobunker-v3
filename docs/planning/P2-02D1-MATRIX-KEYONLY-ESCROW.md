@@ -11,7 +11,7 @@
 4. **Local-First durable intent:** before the first POST, the entire signed and sealed envelope is itself AES-GCM-encrypted to an account-scoped IndexedDB pending record (hash-indexed; no plaintext UUID/MXID/Matrix seed in row). A failed POST or lost ACK leaves the same operation for retry. Account/key revision changes fail closed.
 5. Server `POST /matrix/v1/recovery/ssss` requires session, CSRF+Origin, current PB3 root account signature and current account revision, a matching existing Matrix account binding, canonical fixed fields/lengths, exactly 48 bytes ciphertext, and a transactional account row lock. It stores **only** immutable `contract_json`, `account_signature`, `contract_hash`, UUID operation and revision; never token, plaintext SSSS seed, PB3 Recovery Key or AKEK. Identical retries are idempotent; differing payloads or cross-account reuse conflict.
 6. After write, browser independently GETs `/matrix/v1/recovery/ssss` and compares exact signed bytes. Only that explicit receipt permits deletion of its encrypted pending intent.
-7. On a **different PB3 device**, the same PB3 Recovery Key provides the same account package/akek; `recoverMatrixSecretStorageKey()` checks authenticated server response, verifies the root signature against the current PB3 account signing key, validates immutable binding/identity revision, derives the same HKDF key and decrypts the seed locally. Caller must zero the returned raw buffer after handing it to Matrix SDK's `CryptoCallbacks.getSecretStorageKey` / 4S flow.
+7. On a **different PB3 device without any Matrix token**, the same PB3 Recovery Key provides the same account package/AKEK; `recoverMatrixSecretStorageKey()` first obtains **account-level** Matrix identity through the PB3-authenticated `/matrix/v1/me` (it intentionally accepts `bound:false` for this device). It independently checks that identity against the authenticated recovery-envelope response and the root signature/current PB3 identity revision, then derives the same HKDF key and decrypts the seed locally. **Requiring a new-device Matrix token before this recovery would be a circular dependency and is explicitly forbidden.** Caller must zero the returned raw buffer after handing it to Matrix SDK's `CryptoCallbacks.getSecretStorageKey` / 4S flow.
 
 ## Important limits / fail-closed behavior
 
@@ -25,7 +25,7 @@
 
 PHP: 2 independent PB3 accounts, signed owner-only stored envelope, exact replay, wrong signature, wrong MXID, ciphertext length, immutable conflict, new registered PB3 device reading encrypted envelope, revision/revoked device denial, non-destructive migration.
 
-Frontend: actual 32-byte seed sealed/unsealed on a new PB3 device with the *same* recovered account package; stored API and IndexedDB contain no raw seed, AKEK or Matrix token; Lost-ACK replay is identical; wrong account/key revision/signature/ciphertext fails closed.
+Frontend: actual PB3 Recovery Key envelope is opened to recover the same AKEK and the 32-byte Matrix seed on a new PB3 device **before Matrix login**; stored API and IndexedDB contain no raw seed, AKEK or Matrix token; Lost-ACK replay is identical; wrong account/key revision/signature/ciphertext fails closed.
 
 Full existing PostgreSQL 18/Garage 2.5/Chromium and disposable actual Synapse + RustCrypto two-user E2EE integration must remain green at exact HEAD.
 
