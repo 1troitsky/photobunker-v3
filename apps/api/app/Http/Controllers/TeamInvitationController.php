@@ -78,6 +78,7 @@ final class TeamInvitationController extends Controller
                 ]);
             }
             abort_unless($team->state==='active'&&!$team->rotation_required
+                &&(int)$team->key_epoch===1
                 &&hash_equals($team->contract_hash,$c['teamContractHash']),409);
             abort_if(DB::table('team_invites_v1')
                 ->where('operation_id',$c['operationId'])->exists(),409);
@@ -231,6 +232,7 @@ final class TeamInvitationController extends Controller
                 ]);
             }
             abort_unless($team->state==='active'&&!$team->rotation_required
+                &&(int)$team->key_epoch===1
                 &&$invite->state==='pending'
                 &&(int)$invite->expires_at>PhotoSync::nowMs(),409);
             $directory=DB::table('account_exchange_keys')
@@ -280,7 +282,8 @@ final class TeamInvitationController extends Controller
         abort_unless($team,404);
         // Never serve the old Team DEK once any member is excluded.
         // The surviving member gets 409 until a new key epoch is committed.
-        abort_unless(!$team->rotation_required,409);
+        abort_unless(!$team->rotation_required
+            &&(int)$team->key_epoch===1,409);
         // Member's own accepted invite is required to unwrap the team DEK.
         $invite=DB::table('team_invites_v1')
             ->where('team_id',$teamId)
