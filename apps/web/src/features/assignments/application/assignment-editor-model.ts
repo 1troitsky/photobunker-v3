@@ -1,4 +1,4 @@
-import { signedAllowedAssignmentMedia, signedAdvancedRequirements,
+import { queueAssignmentPolicyChange, signedAllowedAssignmentMedia, signedAdvancedRequirements,
   signedMediaRequirements, signedPolicyGoals, signedPolicyRequirements } from './assignment-outbox'
 import type { AssignmentListing, AllowedAssignmentMedia } from './assignment-outbox'
 import { parseRulesCsv } from '../domain/advanced-rules'
