@@ -736,6 +736,14 @@ onUnmounted(cleanPreview)
           описание минимум {{ selected.audioRequirements.descriptionMinLength }} символов,
           GPS {{ selected.audioRequirements.requiredGps?'обязателен':'необязателен' }}.
         </p>
+        <p v-for="item in [
+          {name:'Фото',allowed:selected.allowedMedia.includes('photo'),rules:selected.photoAdvanced},
+          {name:'Видео',allowed:selected.allowedMedia.includes('video'),rules:selected.videoAdvanced},
+          {name:'Аудио',allowed:selected.allowedMedia.includes('audio'),rules:selected.audioAdvanced},
+        ]" :key="item.name" v-show="item.allowed" class="muted">
+          {{ item.name }} — допустимые категории: {{ item.rules.allowedCategories.join(', ')||'любые' }};
+          обязательные теги: {{ item.rules.requiredTags.join(', ')||'нет' }}.
+        </p>
         <p v-if="selected.confirmedPhotos!==null" class="muted">
           Подтверждено сервером: Фото {{ selected.confirmedPhotos }}
           <template v-if="selected.goal!==null"> / {{ selected.goal }}</template>
@@ -779,6 +787,10 @@ onUnmounted(cleanPreview)
               <input id="assignment-gps-required" v-model="editedRequiredGps" type="checkbox">
               GPS обязателен
             </label>
+            <label for="assignment-photo-allowed">Фото · допустимые категории (через запятую; пусто — любые)</label>
+            <textarea id="assignment-photo-allowed" v-model="editedPhotoAllowed" rows="2" maxlength="1500"/>
+            <label for="assignment-photo-required-tags">Фото · обязательные теги (через запятую; пусто — нет)</label>
+            <textarea id="assignment-photo-required-tags" v-model="editedPhotoTags" rows="2" maxlength="600"/>
             <p class="muted">Дополнительные типы — отдельное добровольное расширение подписанной политики. Ранее созданные задания разрешают только фото.</p>
             <label class="checkline">
               <input id="assignment-allow-video" v-model="editedAllowVideo" type="checkbox">
@@ -803,6 +815,10 @@ onUnmounted(cleanPreview)
                 type="number" min="0" max="4000" step="1">
               <label class="checkline"><input id="assignment-video-required-gps"
                 v-model="editedVideoReqGps" type="checkbox">GPS обязателен</label>
+              <label for="assignment-video-allowed">Допустимые категории видео (через запятую)</label>
+              <textarea id="assignment-video-allowed" v-model="editedVideoAllowed" rows="2" maxlength="1500"/>
+              <label for="assignment-video-required-tags">Обязательные теги видео (через запятую)</label>
+              <textarea id="assignment-video-required-tags" v-model="editedVideoTags" rows="2" maxlength="600"/>
             </div>
             <div v-if="editedAllowAudio" class="foundation-card">
               <h4>Обязательные приватные поля аудио</h4>
@@ -813,12 +829,16 @@ onUnmounted(cleanPreview)
                 type="number" min="0" max="4000" step="1">
               <label class="checkline"><input id="assignment-audio-required-gps"
                 v-model="editedAudioReqGps" type="checkbox">GPS обязателен</label>
+              <label for="assignment-audio-allowed">Допустимые категории аудио (через запятую)</label>
+              <textarea id="assignment-audio-allowed" v-model="editedAudioAllowed" rows="2" maxlength="1500"/>
+              <label for="assignment-audio-required-tags">Обязательные теги аудио (через запятую)</label>
+              <textarea id="assignment-audio-required-tags" v-model="editedAudioTags" rows="2" maxlength="600"/>
             </div>
             <p class="muted">Цели — только для подсчёта подтверждённого прогресса. При отключении типа его цель и требования сбрасываются в следующей подписанной версии.</p>
             <button type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeGoal">Подписать новые правила</button>
-            <p class="muted">Требования подписываются владельцем. Содержимое категории, описания и точные координаты остаются зашифрованными; сервер не может подтвердить физическое присутствие по GPS.</p>
+            <p class="muted">Допустимые категории и обязательные названия тегов — открытая часть подписанной политики и видны серверу. Фактически выбранная категория, применённые теги, описание и GPS шифруются на устройстве. Это проверка клиента, а не независимое подтверждение происхождения файла или GPS.</p>
           </div>
           <p v-if="pendingPolicyChange" class="muted">Новая версия правил находится в локальной очереди. Старые снимки сохраняют исходную подписанную политику.</p>
           <p class="muted">Завершение прекращает новые отправки в задание и съёмку после закрытия, но не удаляет личные фотографии участников и выданные ранее разрешения.</p>
