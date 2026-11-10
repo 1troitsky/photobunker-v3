@@ -7,7 +7,7 @@ import { listOutgoingGrants } from '../../sharing/grant-flow'
 import { listOutgoingMediaGrants } from '../../media/application/media-grants'
 import { listLocalMedia } from '../../media/application/media-outbox'
 import type { MediaCaptureIntent } from '../../media/application/media-outbox'
-import { sealAssignment, resealOwnerAssignment, openOwnerAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
+import { sealAssignment, resealOwnerAssignment, openOwnerAssignment, wrapAssignmentForRecipient, validatePrivateAssignment, upgradePrivateAssignment } from '../infrastructure/assignment-crypto'
 import type { AssignmentEnvelope, AssignmentInviteEnvelope, PrivateAssignment } from '../infrastructure/assignment-crypto'
 import { preparePhotoMetadata } from '../../photo-sync/domain/capture-metadata'
 import type { CaptureMetadataInput } from '../../photo-sync/domain/capture-metadata'
@@ -1088,10 +1088,8 @@ function summaryContext(accountId:string,assignmentId:string,policyHash:string):
     +accountId+'\n'+assignmentId+'\n'+policyHash)
 }
 function checkSummary(data:PrivateAssignment):void{
-  if(data.version!==1||typeof data.title!=='string'
-    ||!data.title.trim()||data.title.length>120
-    ||typeof data.instructions!=='string'||data.instructions.length>4000)
-    throw new Error('assignment.invalid_cached_summary')
+  try{validatePrivateAssignment(data)}
+  catch{throw Error('assignment.invalid_cached_summary')}
 }
 async function summaryKey(
   s:ReturnType<typeof requireSession>,usage:'encrypt'|'decrypt',
@@ -1273,10 +1271,15 @@ export async function queueAssignmentPrivateTextChange(
     throw Error('assignment.private_edit_pending')
   const old=await openOwnerAssignment(session.pkg,assignmentId,
     listing.privateEnvelope,effectiveAssignmentEnvelope(listing))
-  const validated:PrivateAssignment={
-    version:1,title:next.title.trim(),instructions:next.instructions,
-  }
-  if(old.title===validated.title&&old.instructions===validated.instructions)
+  // A v1 client must never silently discard newer encrypted media instructions.
+  if(old.version===2&&next.version!==2)
+    throw Error('assignment.private_text_downgrade')
+  const validated:PrivateAssignment=next.version===2
+    ?{...upgradePrivateAssignment(next),title:next.title.trim()}
+    :{version:1,title:next.title.trim(),instructions:next.instructions}
+  validatePrivateAssignment(validated)
+  if(JSON.stringify(upgradePrivateAssignment(old))
+    ===JSON.stringify(upgradePrivateAssignment(validated)))
     throw Error('assignment.private_text_unchanged')
   const newEnvelope=await resealOwnerAssignment(session.pkg,assignmentId,
     listing.privateEnvelope,validated)
