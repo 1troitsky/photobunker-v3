@@ -152,6 +152,15 @@ final class MatrixRecoveryEscrowTest extends TestCase
             "pb3.matrix-ssss-escrow.v1\n".$wrong['contract']);
         $this->postJson('/matrix/v1/recovery/ssss',$wrong)
             ->assertUnprocessable();
+        $wrongType=$valid;
+        $malformed=json_decode($wrongType['contract'],true);
+        $malformed['operationId']=42;
+        $wrongType['contract']=json_encode($malformed,JSON_UNESCAPED_SLASHES);
+        $wrongType['signature']=$this->rawSignature(
+            $this->people['alice']['key'],
+            "pb3.matrix-ssss-escrow.v1\n".$wrongType['contract']);
+        $this->postJson('/matrix/v1/recovery/ssss',$wrongType)
+            ->assertUnprocessable();
         $this->postJson('/matrix/v1/recovery/ssss',$valid)
             ->assertCreated();
         $this->postJson('/matrix/v1/recovery/ssss',$this->payload('alice'))
