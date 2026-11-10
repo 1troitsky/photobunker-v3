@@ -587,6 +587,13 @@ export function assignmentFilesOpenAt(item:AssignmentListing,at:number):boolean{
   return assignmentOpenAt(item,at)
     &&(r.filesAccessUntil===null||at<r.filesAccessUntil)
 }
+/** Signer-verified maximum expiry of new Fieldwork-only E2EE recipient grants. */
+export function assignmentGrantExpiryCap(item:AssignmentListing):number|null{
+  const r=signedAssignmentRetention(item)
+  const dates=[r.filesAccessUntil,r.assignmentAccessUntil]
+    .filter((value):value is number=>value!==null)
+  return dates.length?Math.min(...dates):null
+}
 function parseRetentionEvent(raw:string):Record<string,unknown>{
   let e:Record<string,unknown>
   try{e=JSON.parse(raw) as Record<string,unknown>}

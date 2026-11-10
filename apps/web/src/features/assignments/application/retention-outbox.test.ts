@@ -4,7 +4,7 @@ import {freshPackage,digest,hex} from '../../identity/infrastructure/crypto'
 import {activeSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
 import {
-  assertSignedPolicyProgress,assignmentFilesOpenAt,
+  assertSignedPolicyProgress,assignmentFilesOpenAt,assignmentGrantExpiryCap,
   listAssignmentOperations,queueAssignmentCreation,queueAssignmentRetentionChange,
   signedAssignmentRetention,verifySignedAssignmentPolicy,
 } from './assignment-outbox'
@@ -87,6 +87,10 @@ describe('P1-21 owner-signed durable assignment retention',()=>{
     }
     await expect(verifySignedAssignmentPolicy(changed,true)).resolves.toBeUndefined()
     expect(signedAssignmentRetention(changed)).toEqual(next)
+    // New contributor-signed assignment-only grants must not outlive the
+    // earliest owner-signed access cutoff (independent v1 shares unchanged).
+    expect(assignmentGrantExpiryCap(row)).toBeNull()
+    expect(assignmentGrantExpiryCap(changed)).toBe(files)
     expect(assignmentFilesOpenAt(changed,files)).toBe(false)
     expect(()=>assertSignedPolicyProgress(row,changed)).not.toThrow()
     expect(()=>assertSignedPolicyProgress(changed,row))

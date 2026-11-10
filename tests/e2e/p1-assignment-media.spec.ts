@@ -247,6 +247,18 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       return (await a.listAssignmentOperations()).some(x=>x.kind==='submit'&&x.state==='sent')
     }),{timeout:30000}).toBe(true)
     await A.getByRole('button',{name:'Обновить материалы'}).click()
+    // P1-22: every newly submitted assignment photo uses contributor-signed
+    // v2, never a general-purpose v1 personal share.
+    const photoScope=await A.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const submission=(await a.listAssignmentSubmissions(id))[0]!
+      const res=await fetch('/shares/v1/grants/'+submission.photoGrantId)
+      const detail=await res.json()
+      const grant=JSON.parse(detail.contract)
+      return {status:res.status,version:grant.version,
+        assignmentId:grant.assignmentId,scope:grant.scope}
+    },assignmentId)
+    expect(photoScope).toEqual({status:200,version:2,assignmentId,scope:'read'})
     await expect(A.getByRole('button',{name:'Просмотр'})).toHaveCount(1)
     await A.getByRole('button',{name:'Просмотр'}).click()
     await expect(A.getByTestId('assignment-decrypted-private-metadata'))
@@ -278,6 +290,23 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       return m.items.map(x=>({type:x.mediaType,grantId:x.mediaGrantId}))
     },assignmentId)
     expect(entries.map(x=>x.type).sort()).toEqual(['audio','video'])
+    // Both signed v2 media grants bind their DEK-wrapping context to the
+    // same accepted assignment ID, not just to their media owner/recipient.
+    const scopes=await A.evaluate(async grants=>{
+      const checks=[]
+      for(const id of grants){
+        const res=await fetch('/media-shares/v1/grants/'+id)
+        const detail=await res.json()
+        const grant=JSON.parse(detail.contract)
+        checks.push({status:res.status,version:grant.version,
+          assignmentId:grant.assignmentId,scope:grant.scope})
+      }
+      return checks
+    },entries.map(x=>x.grantId))
+    expect(scopes).toEqual([
+      {status:200,version:2,assignmentId,scope:'read'},
+      {status:200,version:2,assignmentId,scope:'read'},
+    ])
     for(const item of entries){
       // Owner's independent recipient grant verification, original media
       // receipt, every SHA and AES-GCM tag checked before plaintext return.

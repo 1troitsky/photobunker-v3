@@ -6,7 +6,7 @@ import { validateAdvancedFields } from '../domain/advanced-rules'
 import {
   listServerAssignments,signedAllowedAssignmentMedia,
   signedMediaRequirements,signedAdvancedRequirements,verifySignedAssignmentPolicy,
-  schedulePermitsAt,assignmentFilesOpenAt,
+  schedulePermitsAt,assignmentFilesOpenAt,assignmentGrantExpiryCap,
 } from './assignment-outbox'
 import type { AssignmentListing } from './assignment-outbox'
 
@@ -19,7 +19,7 @@ const enc=new TextEncoder()
  */
 export async function preflightAssignmentMediaGrant(
   assignmentId:string,mediaId:string,expectedOwnerAccountId:string,
-):Promise<{mediaType:'video'|'audio';personalMedia:boolean}>{
+):Promise<{mediaType:'video'|'audio';personalMedia:boolean;grantExpiresAtCap:number|null}>{
   const session=requireSession()
   if(!session.online||!navigator.onLine)
     throw Error('assignment.media_grant_requires_connection')
@@ -73,5 +73,6 @@ export async function preflightAssignmentMediaGrant(
       throw Error('assignment.recording_bound_to_different_policy')
   }
   if(activeSession.value!==session)throw Error('identity.changed')
-  return {mediaType:media.mediaType,personalMedia:!media.capture}
+  return {mediaType:media.mediaType,personalMedia:!media.capture,
+    grantExpiresAtCap:assignmentGrantExpiryCap(policy)}
 }

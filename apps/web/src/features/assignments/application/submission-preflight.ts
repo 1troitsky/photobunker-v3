@@ -11,7 +11,7 @@ import {
   listCachedAssignmentSnapshots, listServerAssignments,
   signedPolicyRequirements, signedAdvancedRequirements,
   verifySignedAssignmentPolicy, validAllowedMedia, schedulePermitsAt,
-  assignmentFilesOpenAt,
+  assignmentFilesOpenAt,assignmentGrantExpiryCap,
 } from './assignment-outbox'
 import type {
   AssignmentListing, CaptureRequirements, SignedCaptureBinding,
@@ -220,7 +220,7 @@ export function validatePhotoForGrant(
  */
 export async function preflightAssignmentPhotoGrant(
   assignmentId:string,photoId:string,expectedOwner:string,
-):Promise<{policyRevision:number;personalPhoto:boolean}>{
+):Promise<{policyRevision:number;personalPhoto:boolean;grantExpiresAtCap:number|null}>{
   const session=requireSession()
   // A local signed snapshot is suitable for OFFLINE capture, not
   // automatically current owner authorization at an ONLINE E2EE grant.
@@ -291,5 +291,6 @@ export async function preflightAssignmentPhotoGrant(
   }
   validatePhotoForGrant(photo,metadata,assignmentId,expectedOwner,effective)
   if(activeSession.value!==session)throw Error('identity.changed')
-  return {policyRevision:revision,personalPhoto:!photo.capture}
+  return {policyRevision:revision,personalPhoto:!photo.capture,
+    grantExpiresAtCap:assignmentGrantExpiryCap(latest)}
 }
