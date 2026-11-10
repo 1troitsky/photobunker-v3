@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 test('P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read',async({browser})=>{
-  test.setTimeout(330000)
+  test.setTimeout(390000)
   const ctxA=await browser.newContext(),ctxB=await browser.newContext()
   const ctxC=await browser.newContext(),ctxD=await browser.newContext()
   const A=await ctxA.newPage(),B=await ctxB.newPage()
@@ -324,6 +324,96 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
       timeout:30000,
     })
     await expect(panel.getByTestId('team-rotation-required')).toHaveCount(0)
+
+    // P1-29C: excluded B must receive only a fresh v2 epoch-scoped ECDH
+    // grant and explicitly sign consent. No historical v1 grant re-use.
+    await panel.getByRole('button',{name:'Добавить участника'}).click()
+    await panel.getByTestId('team-invite-contact').selectOption(accountB)
+    await panel.getByTestId('team-invite-role').selectOption('viewer')
+    await panel.getByTestId('team-invite-submit').click()
+    await expect(panel.getByText('Приглашение отправлено',{exact:false}))
+      .toBeVisible({timeout:30000})
+    await inbox.getByRole('button',{name:'Обновить'}).click()
+    await expect(inbox.getByTestId('team-incoming-invites'))
+      .toContainText('Наблюдатель',{timeout:30000})
+    await inbox.getByRole('button',{name:'Принять'}).click()
+    await expect(inbox.getByTestId('team-joined-list'))
+      .toContainText('TEAM SECRET PROOF',{timeout:30000})
+    await expect(inbox.getByTestId('team-joined-list'))
+      .toContainText('E2EE profile visible only to accepted users')
+    const v2Outbox=await A.evaluate(async()=>{
+      return new Promise<string>((resolve,reject)=>{
+        const req=indexedDB.open('pb3-encrypted-team-invites-v2')
+        req.onerror=()=>reject(req.error)
+        req.onsuccess=()=>{
+          const db=req.result,tx=db.transaction('operations','readonly')
+          const rows=tx.objectStore('operations').getAll()
+          rows.onerror=()=>reject(rows.error)
+          tx.oncomplete=()=>{resolve(JSON.stringify(rows.result));db.close()}
+        }
+      })
+    })
+    expect(v2Outbox).not.toBe('[]')
+    for(const value of [
+      accountA,accountB,teamId,'recipientAccountId',
+      'rootContractHash','TEAM SECRET PROOF','privateEnvelope',
+    ])expect(v2Outbox).not.toContain(value)
+
+    // An independently signed membership change after v2 consent may
+    // update B's role. B must still decrypt/re-read the authenticated epoch.
+    await panel.getByTestId('team-member-selector').selectOption('')
+    await panel.getByTestId('team-member-selector').selectOption({
+      label:'TEAM SECRET PROOF',
+    })
+    const memberB2=panel.getByTestId('team-member-'+accountB)
+    await expect(memberB2).toContainText('Принято',{timeout:30000})
+    await memberB2.getByRole('button',{name:'Роль'}).click()
+    await memberB2.getByRole('combobox',{name:'Роль '+accountB})
+      .selectOption('contributor')
+    A.once('dialog',dialog=>{void dialog.accept()})
+    await memberB2.getByRole('button',{name:'Применить'}).click()
+    await expect(memberB2).toContainText('Исполнитель',{timeout:30000})
+    await inbox.getByRole('button',{name:'Обновить'}).click()
+    await expect(inbox.getByTestId('team-joined-list'))
+      .toContainText('Исполнитель',{timeout:30000})
+
+    // D's v2 invitation remains pending when B is removed. Epoch 4 must
+    // automatically revoke it ONLY because that exact UUID appears in the
+    // owner-signed retirement set. D must not receive a stale ECDH envelope.
+    await panel.getByRole('button',{name:'Добавить участника'}).click()
+    await panel.getByTestId('team-invite-contact').selectOption(accountD)
+    await panel.getByTestId('team-invite-role').selectOption('viewer')
+    await panel.getByTestId('team-invite-submit').click()
+    await expect(panel.getByTestId('team-member-'+accountD))
+      .toContainText('Ожидает согласия',{timeout:30000})
+    A.once('dialog',dialog=>{void dialog.accept()})
+    await memberB2.getByRole('button',{name:'Исключить'}).click()
+    await expect(panel.getByTestId('team-rotation-required'))
+      .toBeVisible({timeout:30000})
+    A.once('dialog',dialog=>{void dialog.accept()})
+    await panel.getByTestId('team-rotate-key').click()
+    await expect(panel.getByTestId('team-key-epoch')).toContainText('эпоха 4',{
+      timeout:30000,
+    })
+    await expect(panel.getByTestId('team-rotation-required')).toHaveCount(0)
+    await expect(panel.getByTestId('team-member-'+accountD))
+      .toContainText('Исключён',{timeout:30000})
+    const dV2Notices=await D.evaluate(async()=>{
+      const r=await fetch('/teams/v2/invites/received',{
+        credentials:'include',headers:{Accept:'application/json'},
+      })
+      if(!r.ok)throw Error('epoch v2 inbox unavailable')
+      return r.json() as Promise<{
+        items:Array<Record<string,unknown>>
+      }>
+    })
+    expect(dV2Notices.items.some(x=>x.state==='revoked')).toBe(true)
+    expect(dV2Notices.items.some(x=>
+      x.state==='revoked'&&('envelope' in x||'contract' in x),
+    )).toBe(false)
+    await inbox.getByRole('button',{name:'Обновить'}).click()
+    await expect(inbox.getByTestId('team-revoked-notice'))
+      .toBeVisible({timeout:30000})
 
     // Explicit server authorization of a removed recipient fails even
     // after key rotation has re-enabled access to remaining members.
