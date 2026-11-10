@@ -11,6 +11,7 @@ import {
   listCachedAssignmentSnapshots, listServerAssignments,
   signedPolicyRequirements, signedAdvancedRequirements,
   verifySignedAssignmentPolicy, validAllowedMedia, schedulePermitsAt,
+  assignmentFilesOpenAt,
 } from './assignment-outbox'
 import type {
   AssignmentListing, CaptureRequirements, SignedCaptureBinding,
@@ -241,6 +242,7 @@ export async function preflightAssignmentPhotoGrant(
   if(activeSession.value!==session)throw Error('identity.changed')
   if(!latest||latest.ownerAccountId!==expectedOwner
     ||latest.state!=='active'
+    ||!assignmentFilesOpenAt(latest,Date.now())
     ||!schedulePermitsAt(latest,Date.now()))
     throw Error('assignment.policy_not_authenticated')
   const photos=await listLocalPhotos()
