@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpyPhoto Logo Animation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #0b0f19;
+      color: #f3f4f6;
+    }
+
+    /* SVG Elements Initial States & Animations */
+    .anim-outer-ring {
+      stroke-dasharray: 283;
+      stroke-dashoffset: 283;
+      animation: drawRing 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .anim-s-shape-1 {
+      opacity: 0;
+      transform: scale(0.3) rotate(-90deg);
+      transform-origin: center;
+      animation: popShape 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s forwards;
+    }
+
+    .anim-s-shape-2 {
+      opacity: 0;
+      transform: scale(0.3) rotate(90deg);
+      transform-origin: center;
+      animation: popShape 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) 0.4s forwards;
+    }
+
+    .anim-lens-body {
+      opacity: 0;
+      transform: scale(0);
+      transform-origin: center;
+      animation: zoomInLens 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s forwards;
+    }
+
+    .anim-aperture {
+      opacity: 0;
+      transform: scale(0.5) rotate(-180deg);
+      transform-origin: center;
+      animation: spinAperture 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards;
+    }
+
+    .anim-glare {
+      opacity: 0;
+      animation: fadeInGlare 0.4s ease-out 1.2s forwards;
+    }
+
+    /* Text Animation starting EXACTLY at 1.5s */
+    .anim-text {
+      opacity: 0;
+      transform: translateY(16px);
+      animation: fadeInUpText 0.6s cubic-bezier(0.16, 1, 0.3, 1) 1.5s forwards;
+    }
+
+    .anim-subtext {
+      opacity: 0;
+      animation: fadeIn 0.5s ease-out 1.9s forwards;
+    }
+
+    /* Keyframe definitions */
+    @keyframes drawRing {
+      to {
+        stroke-dashoffset: 0;
+      }
+    }
+
+    @keyframes popShape {
+      to {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+      }
+    }
+
+    @keyframes zoomInLens {
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    @keyframes spinAperture {
+      to {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+      }
+    }
+
+    @keyframes fadeInGlare {
+      to {
+        opacity: 0.6;
+      }
+    }
+
+    @keyframes fadeInUpText {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      to {
+        opacity: 0.6;
+      }
+    }
+
+    /* Glow backdrop filter effect */
+    .glow-effect {
+      box-shadow: 0 0 80px -10px rgba(56, 189, 248, 0.15);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+  <!-- Main Container -->
+  <div class="w-full max-w-md bg-gray-900/60 border border-gray-800 backdrop-blur-xl rounded-3xl p-8 flex flex-col items-center justify-center relative glow-effect overflow-hidden">
+    
+    <!-- Background Grid Decor -->
+    <div class="absolute inset-0 bg-[linear-gradient(to_right,#1f293710_1px,transparent_1px),linear-gradient(to_bottom,#1f293710_1px,transparent_1px)] bg-[size:2rem_2rem] pointer-events-none"></div>
+
+    <!-- Timer Indicator (Visualizer) -->
+    <div class="absolute top-4 right-5 text-xs font-mono text-gray-500 flex items-center gap-1.5">
+      <span class="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></span>
+      <span id="timer">0.0s</span>
+    </div>
+
+    <!-- Animated Logo Canvas Container -->
+    <div id="logoContainer" class="relative w-48 h-48 my-6 flex items-center justify-center">
+      
+      <svg class="w-full h-full" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+        
+        <!-- Outer Glowing Accent Circle -->
+        <circle cx="100" cy="100" r="90" stroke="url(#cyan-grad)" stroke-width="2" stroke-linecap="round" class="anim-outer-ring" opacity="0.4" />
+
+        <!-- Outer Framing Circle -->
+        <circle cx="100" cy="100" r="82" stroke="#1e293b" stroke-width="6" />
+
+        <!-- S-Shape Top Curve -->
+        <path d="M 100,22 A 78,78 0 0,1 178,100 A 35,35 0 0,1 143,135 A 43,43 0 0,0 100,92" 
+              fill="none" stroke="#38bdf8" stroke-width="12" stroke-linecap="round" class="anim-s-shape-1" />
+
+        <!-- S-Shape Bottom Curve -->
+        <path d="M 100,178 A 78,78 0 0,1 22,100 A 35,35 0 0,1 57,65 A 43,43 0 0,0 100,108" 
+              fill="none" stroke="#0284c7" stroke-width="12" stroke-linecap="round" class="anim-s-shape-2" />
+
+        <!-- Lens Outer Base -->
+        <circle cx="100" cy="100" r="42" fill="#0f172a" stroke="#38bdf8" stroke-width="4" class="anim-lens-body" />
+        <circle cx="100" cy="100" r="34" fill="#0284c7" opacity="0.2" class="anim-lens-body" />
+
+        <!-- Aperture Blades Center -->
+        <g class="anim-aperture">
+          <circle cx="100" cy="100" r="24" fill="#090d16" stroke="#0284c7" stroke-width="2" />
+          <!-- Inner Camera Shutter Detail -->
+          <polygon points="100,80 115,92 108,112 92,112 85,92" fill="#0284c7" opacity="0.5" />
+          <circle cx="100" cy="100" r="10" fill="#38bdf8" />
+          <circle cx="100" cy="100" r="4" fill="#ffffff" />
+        </g>
+
+        <!-- Lens Glare Reflection -->
+        <path d="M 85,80 A 24,24 0 0,1 115,80" stroke="#ffffff" stroke-width="3" stroke-linecap="round" class="anim-glare" />
+
+        <!-- Gradient Definitions -->
+        <defs>
+          <linearGradient id="cyan-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#38bdf8" />
+            <stop offset="100%" stop-color="#0369a1" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+    </div>
+
+    <!-- Brand Typography Container -->
+    <div class="text-center z-10 min-h-[70px]">
+      <h1 class="anim-text text-4xl font-extrabold tracking-tight text-white flex items-center justify-center gap-1">
+        Spy<span class="text-sky-400">Photo</span>
+      </h1>
+      <p class="anim-subtext text-xs text-gray-400 mt-2 tracking-widest uppercase font-semibold">
+        Secure Camera & Editor
+      </p>
+    </div>
+
+    <!-- Action Controls -->
+    <div class="mt-8 w-full">
+      <button onclick="replayAnimation()" class="w-full py-3.5 px-6 rounded-xl bg-sky-500/10 border border-sky-500/30 hover:bg-sky-500/20 active:scale-95 text-sky-400 font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Воспроизвести снова (Replay)
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    let startTime = performance.now();
+    let timerInterval = null;
+
+    function updateTimer() {
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+      const timerEl = document.getElementById('timer');
+      if (timerEl) {
+        timerEl.innerText = `${Math.min(elapsed, 3.0)}s`;
+      }
+    }
+
+    function replayAnimation() {
+      const container = document.getElementById('logoContainer');
+      const textBlock = document.querySelector('.anim-text');
+      const subtextBlock = document.querySelector('.anim-subtext');
+
+      // Force DOM Reflow to restart CSS Animations
+      const htmlBackup = container.innerHTML;
+      container.innerHTML = '';
+      
+      textBlock.classList.remove('anim-text');
+      subtextBlock.classList.remove('anim-subtext');
+
+      void container.offsetWidth; // trigger reflow
+
+      container.innerHTML = htmlBackup;
+      
+      setTimeout(() => {
+        textBlock.classList.add('anim-text');
+        subtextBlock.classList.add('anim-subtext');
+      }, 10);
+
+      // Reset timer display
+      startTime = performance.now();
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(updateTimer, 100);
+    }
+
+    // Start timer on page load
+    window.onload = () => {
+      startTime = performance.now();
+      timerInterval = setInterval(updateTimer, 100);
+    };
+  </script>
+</body>
+</html>

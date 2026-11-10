@@ -11,7 +11,7 @@
 !/apps/web/.env.example
 /infra/garage/.local/
 /.idea/
-/.DS_Store
+.DS_Store
 /.phpunit.cache/
 /apps/api/.phpunit.cache/
 /coverage/
