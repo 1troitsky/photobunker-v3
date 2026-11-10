@@ -6,6 +6,7 @@ namespace Tests\Feature;
 use App\Identity\Protocol as P;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -172,6 +173,33 @@ final class PhotoGrantTest extends TestCase
             'signature'=>$this->signature('owner',
                 "pb3.photo-grant.v2\n".$json),
         ];
+    }
+
+    public function test_scoped_photo_grant_blocks_migration_rollback_even_if_revoked():void
+    {
+        $digest=$this->publishRecipientKey();
+        $assignmentId=$this->acceptedAssignment();
+        $this->become('owner');
+        $input=$this->scopePhotoGrant($this->contract($digest),$assignmentId);
+        $id=json_decode($input['contract'],true,32,JSON_THROW_ON_ERROR)['grantId'];
+        $this->postJson('/shares/v1/grants',$input)->assertCreated();
+        // Revocation is not permission to erase immutable scope history.
+        DB::table('photo_access_grants')->where('id',$id)
+            ->update(['state'=>'revoked']);
+        $migration=require database_path(
+            'migrations/2026_11_10_000006_add_assignment_scoped_recipient_grants.php'
+        );
+        try{
+            $migration->down();
+            $this->fail('Rollback must reject even revoked scoped grants.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.scoped_grants.rollback_forbidden',$e->getMessage());
+        }
+        $this->assertTrue(Schema::hasColumn('photo_access_grants','assignment_id'));
+        $this->assertTrue(Schema::hasColumn('media_recipient_grants_v1','assignment_id'));
+        $this->assertDatabaseHas('photo_access_grants',[
+            'id'=>$id,'assignment_id'=>$assignmentId,'state'=>'revoked',
+        ]);
     }
 
     public function test_p1_22_scoped_grant_expires_with_fieldwork_but_personal_v1_survives():void
