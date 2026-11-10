@@ -86,6 +86,90 @@ export type ReceivedAssignmentInvite={
   expiresAt:number
 }
 
+/** P1-23: freshly fetched owner-only roster; never an offline entitlement. */
+export type AssignmentParticipant={
+  inviteId:string;recipientAccountId:string;role:'contributor'
+  state:'pending'|'accepted';expiresAt:number;expired:boolean
+  contract:string;signature:string
+}
+type AssignmentParticipantsPage={
+  items:AssignmentParticipant[];nextCursor:string|null;serverNowMs:number
+}
+/**
+ * Verify each identity/role/expiry against its original owner signature.
+ * State and expired are SERVER observations; never claim client-signed consent.
+ */
+export async function verifyAssignmentParticipantRoster(
+  page:AssignmentParticipantsPage,assignmentId:string,
+  ownerAccountId:string,ownerSpki:string,
+):Promise<void>{
+  if(!page||!Array.isArray(page.items)||page.items.length>50
+    ||!Number.isSafeInteger(page.serverNowMs)||page.serverNowMs<0)
+    throw Error('assignment.roster_invalid')
+  const signer=await importSpki(ownerSpki)
+  const ids=new Set<string>()
+  for(const item of page.items){
+    if(!item||typeof item.inviteId!=='string'
+      ||typeof item.recipientAccountId!=='string'
+      ||ids.has(item.inviteId)
+      ||item.role!=='contributor'
+      ||!['pending','accepted'].includes(item.state)
+      ||!Number.isSafeInteger(item.expiresAt)
+      ||item.expired!==(item.state==='pending'&&item.expiresAt<=page.serverNowMs)
+      ||typeof item.contract!=='string'||typeof item.signature!=='string')
+      throw Error('assignment.roster_invalid')
+    ids.add(item.inviteId)
+    let signed:Record<string,unknown>
+    try{signed=JSON.parse(item.contract) as Record<string,unknown>}
+    catch{throw Error('assignment.roster_invalid')}
+    if(!signed||typeof signed!=='object'||Array.isArray(signed)
+      ||signed.version!==1||signed.inviteId!==item.inviteId
+      ||signed.assignmentId!==assignmentId
+      ||signed.ownerAccountId!==ownerAccountId
+      ||signed.recipientAccountId!==item.recipientAccountId
+      ||signed.role!==item.role||signed.expiresAt!==item.expiresAt
+      ||!await verify(signer,domain('invite')+item.contract,item.signature))
+      throw Error('assignment.roster_untrusted_invite')
+  }
+  if(page.nextCursor!==null
+    &&(typeof page.nextCursor!=='string'
+      ||page.items.length!==50
+      ||page.items[49]?.inviteId!==page.nextCursor))
+    throw Error('assignment.roster_invalid_cursor')
+}
+
+/** Live owner-only verified roster. No optimistic or cached "accepted" states. */
+export async function listAssignmentParticipants(
+  assignmentId:string,
+):Promise<AssignmentParticipant[]>{
+  const s=requireSession()
+  if(!s.online||(typeof navigator!=='undefined'&&!navigator.onLine))
+    throw Error('assignment.roster_requires_online')
+  const local=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
+  if(!local||local.listing.ownerAccountId!==s.accountId)
+    throw Error('assignment.roster_owner_required')
+  await verifySignedAssignmentPolicy(local.listing,true)
+  if(local.listing.ownerAccountSpki!==s.pkg.accountSpki)
+    throw Error('assignment.roster_untrusted_owner')
+  assertSame(s)
+  const items:AssignmentParticipant[]=[]
+  let after:string|null=null
+  for(let pageNum=0;pageNum<100;pageNum++){
+    const suffix=after?'?after='+encodeURIComponent(after):''
+    const page=await jsonApi<AssignmentParticipantsPage>(
+      '/assignments/v1/'+encodeURIComponent(assignmentId)+'/participants'+suffix)
+    assertSame(s)
+    await verifyAssignmentParticipantRoster(page,assignmentId,s.accountId,s.pkg.accountSpki)
+    assertSame(s)
+    if(after&&page.items.length&&page.items[0]!.inviteId<=after)
+      throw Error('assignment.roster_invalid_cursor')
+    items.push(...page.items)
+    if(!page.nextCursor)return items
+    after=page.nextCursor
+  }
+  throw Error('assignment.roster_pagination_limit')
+}
+
 type CachedInvite=ReceivedAssignmentInvite & { cachedForAccountId:string }
 type CachedCapturePolicy={
   key:string;accountId:string;listing:AssignmentListing;verifiedAt:number
