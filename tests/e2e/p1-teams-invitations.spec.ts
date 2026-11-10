@@ -221,6 +221,20 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
       .toContainText('TEAM SECRET PROOF',{timeout:30000})
     await expect(survivor.getByTestId('team-key-epoch')).toHaveCount(0)
 
+    // Recreate the web app before the malicious replay: a high-water mark
+    // stored only in volatile JavaScript state is insufficient.
+    await C.reload()
+    await C.waitForFunction(async()=>{
+      const session=await import('/src/features/identity/application/session.ts')
+      return session.activeSession.value?.online===true
+    },null,{timeout:30000})
+    const verifiedBeforeReplay=await C.evaluate(async()=>{
+      const m=await import('/src/features/people/application/team-invitations.ts')
+      return m.listCachedJoinedTeams()
+    })
+    expect(verifiedBeforeReplay.find(x=>x.teamId===teamId)?.name)
+      .toBe('TEAM SECRET PROOF')
+
     // T29B-02: replay two authentic old responses after C has verified
     // epoch 2. AEAD high-water mark MUST deny the v1 downgrade despite
     // valid original signatures; never overwrite the joined profile.
@@ -244,8 +258,14 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     expect(replay).toBe('teams.verified_epoch_rollback')
     await C.unroute(epochMemberRoute)
     await C.unroute(oldMemberRoute)
-    await expect(survivor.getByTestId('team-joined-list'))
-      .toContainText('TEAM SECRET PROOF')
+    const verifiedAfterReplay=await C.evaluate(async()=>{
+      const m=await import('/src/features/people/application/team-invitations.ts')
+      return m.listCachedJoinedTeams()
+    })
+    expect(verifiedAfterReplay.find(x=>x.teamId===teamId)?.name)
+      .toBe('TEAM SECRET PROOF')
+    expect(verifiedAfterReplay.find(x=>x.teamId===teamId)?.verifiedOnline)
+      .toBe(false)
 
     // T29B-01 regression: after pending D's signed automatic retirement
     // owner can still remove surviving C and complete another rotation.
