@@ -1,6 +1,8 @@
 # P1-29C — независимый security/integration аудит, задание 08
 
-> **Integration archive:** exact QA report originally authored in PR #61; the separate audit tooling remains in QA-only PR. This archival copy does not claim a new audit of the integration commit.\n\nДата: 2026-11-10. Исходный продукт: [#59](https://github.com/1troitsky/photobunker-v3/pull/59)
+> **Архив интеграции:** копия независимого отчёта из [QA PR #61](https://github.com/1troitsky/photobunker-v3/pull/61). Исходные evidence сохранены; ссылки на QA harness нормализованы. Это не новый аудит интеграционного коммита.
+
+Дата: 2026-11-10. Исходный продукт: [#59](https://github.com/1troitsky/photobunker-v3/pull/59)
 **`ff9c7bab2485c7d2cfd094e67fdb505a1221ee00`**, база #57 `65f0c1a`.
 Отдельное исправление: [Draft #60](https://github.com/1troitsky/photobunker-v3/pull/60)
 **`54f984162451e44e49d374ba5c08cb3a2b7a0536`**.
