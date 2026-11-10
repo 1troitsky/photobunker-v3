@@ -3,7 +3,7 @@ import Dexie from 'dexie'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {activeSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
-import {b64,freshPackage,random} from '../../identity/infrastructure/crypto'
+import {b64,createPB2,freshPackage,openRecovery,random,sealRecovery} from '../../identity/infrastructure/crypto'
 import {jsonApi} from '../../identity/infrastructure/api'
 import {getBoundMatrixCredentials} from './matrix-binding'
 import {
@@ -87,7 +87,15 @@ describe('P2-02D1: PB3 Recovery Key sealed Matrix SSSS escrow',()=>{
     expect(JSON.stringify(server)).not.toContain('accessToken')
     expect(JSON.stringify(server)).not.toContain(session.pkg.akek)
     expect(await matrixRecoveryPending()).toBe(false)
-    const restored={...session,deviceId:crypto.randomUUID()}
+    // Exercise actual PB3 Recovery Key crypto, not just reusing a Session
+    // reference. The new PB3 device receives only the recovered package.
+    const kit=await createPB2()
+    const recoveryEnvelope=await sealRecovery(session.pkg,kit)
+    const recoveredPackage=await openRecovery(
+      recoveryEnvelope,kit,session.accountId)
+    expect(recoveredPackage.akek).toBe(session.pkg.akek)
+    expect(recoveredPackage.accountSpki).toBe(session.pkg.accountSpki)
+    const restored={...session,pkg:recoveredPackage,deviceId:crypto.randomUUID()}
     activeSession.value=restored
     const recovered=await recoverMatrixSecretStorageKey()
     expect(Array.from(recovered??[])).toEqual(Array.from(key))
