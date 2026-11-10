@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Assignments\AssignmentGrantScope as AScope;
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
 use App\Storage\StorageManager;
@@ -25,13 +26,16 @@ final class PhotoGrantController extends Controller
         abort_unless(strlen($text)>=150&&strlen($text)<=30000,422);
         try{$c=json_decode($text,true,32,JSON_THROW_ON_ERROR);}catch(\Throwable){abort(422);}
         abort_unless(is_array($c)&&!array_is_list($c),422);
+        $v2=($c['version']??null)===2;
         P::exact($c,['version','grantId','photoId','ownerAccountId','recipientAccountId',
+            ...($v2?['assignmentId']:[]),
             'recipientKeyDigest','scope','expiresAt','assets']);
-        abort_unless($c['version']===1 && $c['scope']==='read'
+        abort_unless(in_array($c['version'],[1,2],true) && $c['scope']==='read'
             && is_int($c['expiresAt']) && $c['expiresAt']>PhotoSync::nowMs()
             && is_string($c['recipientKeyDigest'])
             && preg_match('/^[a-f0-9]{64}$/D',$c['recipientKeyDigest']),422);
-        foreach(['grantId','photoId','ownerAccountId','recipientAccountId'] as $field){
+        foreach(['grantId','photoId','ownerAccountId','recipientAccountId',
+            ...($v2?['assignmentId']:[])] as $field){
             abort_unless(is_string($c[$field]),422);
             P::uuid($c[$field]);
         }
@@ -61,8 +65,10 @@ final class PhotoGrantController extends Controller
         abort_unless(is_string($body['contract'])&&is_string($body['signature']),422);
         $grant=$this->contract($body['contract']);
         abort_unless($grant['ownerAccountId']===$owner->id,403);
+        $domain=$grant['version']===2
+            ?"pb3.photo-grant.v2\n":"pb3.photo-grant.v1\n";
         abort_unless(P::verify($owner->account_spki,
-            "pb3.photo-grant.v1\n".$body['contract'],$body['signature']),401);
+            $domain.$body['contract'],$body['signature']),401);
         $hash=hash('sha256',$body['contract']);
         return DB::transaction(function()use($grant,$hash,$owner,$body){
             // Lock owner and photo. Grants cannot be created during TTL deletion.
@@ -94,9 +100,14 @@ final class PhotoGrantController extends Controller
                 abort_if($previous->state!=='active'||$previous->expires_at<=PhotoSync::nowMs(),410);
                 return $this->sync->json(['grantId'=>$previous->id,'state'=>'active','unchanged'=>true]);
             }
+            if($grant['version']===2){
+                AScope::creation($grant['assignmentId'],$owner->id,
+                    $recipient->id,$grant['expiresAt']);
+            }
             DB::table('photo_access_grants')->insert([
                 'id'=>$grant['grantId'],'photo_id'=>$photo->id,'owner_account_id'=>$owner->id,
                 'recipient_account_id'=>$recipient->id,'recipient_key_digest'=>$directory->descriptor_hash,
+                'assignment_id'=>$grant['version']===2?$grant['assignmentId']:null,
                 'expires_at'=>$grant['expiresAt'],'state'=>'active','contract_hash'=>$hash,
                 'contract_json'=>$body['contract'],'account_signature'=>$body['signature'],
                 'created_at'=>now(),'updated_at'=>now(),
@@ -118,6 +129,7 @@ final class PhotoGrantController extends Controller
         abort_unless($g,404);
         abort_if($g->state!=='active' || $g->expires_at<=PhotoSync::nowMs()
             || $g->photo_state!=='active'||$g->photo_expires<=PhotoSync::nowMs(),410);
+        AScope::requireReadable($g->assignment_id);
         return $g;
     }
 
@@ -129,7 +141,22 @@ final class PhotoGrantController extends Controller
           ->join('photo_records as p','p.id','=','g.photo_id')
           ->where('g.recipient_account_id',$account->id)
           ->where('g.state','active')->where('g.expires_at','>',PhotoSync::nowMs())
-          ->where('p.state','active')->where('p.expires_at','>',PhotoSync::nowMs());
+          ->where('p.state','active')->where('p.expires_at','>',PhotoSync::nowMs())
+          ->leftJoin('assignment_records_v1 as a','a.id','=','g.assignment_id')
+          ->where(function($q){
+              $q->whereNull('g.assignment_id')
+                ->orWhere(function($scoped){
+                    $now=PhotoSync::nowMs();
+                    $scoped->whereNotNull('a.id')
+                        ->where(function($cutoff)use($now){
+                        $cutoff->whereNull('a.files_access_until')
+                            ->orWhere('a.files_access_until','>',$now);
+                    })->where(function($cutoff)use($now){
+                        $cutoff->whereNull('a.assignment_access_until')
+                            ->orWhere('a.assignment_access_until','>',$now);
+                    });
+                });
+          });
         if($after!==null)$q->where('g.id','>',$after);
         $rows=$q->orderBy('g.id')->limit(51)
           ->get(['g.id','g.photo_id','g.owner_account_id','g.expires_at']);

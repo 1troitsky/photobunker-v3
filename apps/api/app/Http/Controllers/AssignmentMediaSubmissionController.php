@@ -140,6 +140,8 @@ final class AssignmentMediaSubmissionController extends Controller
                 ->where('recipient_account_id',$a->owner_account_id)
                 ->where('state','active')->first();
             abort_unless($grant&&$grant->expires_at>$now
+                &&($grant->assignment_id===null
+                    ||$grant->assignment_id===$assignmentId)
                 &&$grant->expires_at<=$media->expires_at
                 &&hash_equals($grant->media_contract_hash,
                     $media->contract_hash),403);

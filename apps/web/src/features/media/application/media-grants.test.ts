@@ -25,7 +25,25 @@ describe('P1-11 immutable owner-signed media recipient scope',()=>{
         ...fixture(),scope,
       })).toThrow('media_grant.invalid_scope')
     }
+    // Old independent v1 shares cannot quietly acquire an assignment scope.
     expect(()=>parseMediaGrantContract({...fixture(),version:2})).toThrow()
+    expect(()=>parseMediaGrantContract({...fixture(),
+      assignmentId:uuid(5),
+    })).toThrow()
+    // New v2 ECDH grant explicitly names exactly one Fieldwork assignment.
+    const scoped:MediaGrantContract={
+      ...fixture(),version:2,assignmentId:uuid(5),
+    }
+    expect(parseMediaGrantContract(scoped).assignmentId).toBe(uuid(5))
+    expect(()=>parseMediaGrantContract({
+      ...scoped,assignmentId:null,
+    })).toThrow()
+    expect(()=>parseMediaGrantContract({
+      ...scoped,assignmentId:'not-a-uuid',
+    })).toThrow()
+    expect(()=>parseMediaGrantContract({
+      ...scoped,recipientAccountId:uuid(99),rogueDEK:'plaintext',
+    })).toThrow()
     expect(()=>parseMediaGrantContract({...fixture(),
       recipientKeyDigest:'ff',
     })).toThrow()

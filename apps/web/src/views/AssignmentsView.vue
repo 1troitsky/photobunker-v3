@@ -574,7 +574,8 @@ async function submit(photo:StoredPhoto):Promise<void>{
     if(checked.personalPhoto&&!window.confirm(
       'Это личное фото, снятое вне задания. Дать владельцу задания доступ к фото и его приватным метаданным (включая описание и GPS, если они есть)?'
     ))return
-    const grantId=await queueRecipientGrant(photo.photoId,target.ownerAccountId)
+    const grantId=await queueRecipientGrant(photo.photoId,target.ownerAccountId,
+      target.id,checked.grantExpiresAtCap)
     await queueAssignmentSubmission(target.id,photo.photoId,grantId,
       checked.policyRevision)
     await flushRecipientGrants()
@@ -595,7 +596,7 @@ async function submitMedia(media:StoredMedia):Promise<void>{
     // Verify the freshly signed owner policy, local AEAD-decrypted
     // category/description/GPS, and exact recording binding before creating
     // ANY recipient key envelope; offline captures remain Local-First.
-    await preflightAssignmentMediaGrant(
+    const checked=await preflightAssignmentMediaGrant(
       target.id,media.mediaId,target.ownerAccountId)
     if(!window.confirm(
       (media.capture?'Эта запись была создана для задания. ':'Это личный файл вне задания. ')
@@ -603,7 +604,8 @@ async function submitMedia(media:StoredMedia):Promise<void>{
       +(media.mediaType==='video'?'видео':'аудио')
       +', включая исходное имя и приватные метаданные? Отзыв не удалит уже скачанные копии.'
     ))return
-    const grantId=await queueMediaRecipientGrant(media.mediaId,target.ownerAccountId)
+    const grantId=await queueMediaRecipientGrant(media.mediaId,target.ownerAccountId,
+      target.id,checked.grantExpiresAtCap)
     await queueAssignmentMediaSubmission(target.id,media.mediaId,grantId)
     await flushMediaGrants()
     await flushAssignmentOutbox()

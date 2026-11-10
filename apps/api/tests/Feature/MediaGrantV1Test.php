@@ -189,6 +189,109 @@ final class MediaGrantV1Test extends TestCase
         ];
     }
 
+    /** The recipient owns Fieldwork, but the contributor retains S3 ownership. */
+    private function acceptedAssignment():string
+    {
+        $id=(string)Str::uuid();
+        $fieldworkOwner=$this->people['recipient']['id'];
+        $contributor=$this->people['owner']['id'];
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$id,'owner_account_id'=>$fieldworkOwner,
+            'operation_id'=>(string)Str::uuid(),
+            'contract_hash'=>str_repeat('f',64),'contract_json'=>'{}',
+            'owner_signature'=>'fixture','private_envelope_json'=>'{}',
+            'state'=>'active','starts_at'=>now()->subHour()->getTimestampMs(),
+            'ends_at'=>null,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('assignment_invites_v1')->insert([
+            'id'=>(string)Str::uuid(),'assignment_id'=>$id,
+            'owner_account_id'=>$fieldworkOwner,
+            'recipient_account_id'=>$contributor,'role'=>'contributor',
+            'state'=>'accepted','recipient_key_digest'=>str_repeat('b',64),
+            'contract_hash'=>str_repeat('c',64),'contract_json'=>'{}',
+            'owner_signature'=>'fixture',
+            'expires_at'=>now()->addDay()->getTimestampMs(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        return $id;
+    }
+
+    private function scopedMediaGrant(array $old,string $assignmentId):array
+    {
+        $old=json_decode($old['contract'],true,32,JSON_THROW_ON_ERROR);
+        $parts=[];
+        foreach($old as $k=>$v){
+            $parts[$k]=$k==='version'?2:$v;
+            if($k==='recipientAccountId')$parts['assignmentId']=$assignmentId;
+        }
+        $json=json_encode($parts,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return [
+            'contract'=>$json,
+            'signature'=>$this->signature('owner',
+                "pb3.media-grant.v2\n".$json),
+        ];
+    }
+
+    public function test_p1_22_media_scope_expires_without_deleting_contributor_media_or_personal_grant():void
+    {
+        $digest=$this->publishRecipientKey();
+        $assignmentId=$this->acceptedAssignment();
+        $this->asRole('owner');
+        $scoped=$this->scopedMediaGrant($this->grantInput($digest),$assignmentId);
+        $id=json_decode($scoped['contract'],true,32,JSON_THROW_ON_ERROR)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$scoped)->assertCreated();
+        $this->postJson('/media-shares/v1/grants',$scoped)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $personal=$this->grantInput($digest);
+        $personalId=json_decode($personal['contract'],true,32,JSON_THROW_ON_ERROR)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$personal)->assertCreated();
+        $this->assertDatabaseHas('media_recipient_grants_v1',[
+            'id'=>$id,'assignment_id'=>$assignmentId,
+        ]);
+        $this->asRole('recipient');
+        $this->getJson('/media-shares/v1/grants/'.$id)->assertOk();
+        $chunkId=array_key_first($this->chunks);
+        $this->get('/media-shares/v1/grants/'.$id.'/chunks/'.$chunkId)->assertOk();
+        DB::table('assignment_records_v1')->where('id',$assignmentId)
+            ->update(['files_access_until'=>now()->subMinute()->getTimestampMs()]);
+        $this->getJson('/media-shares/v1/grants/'.$id)->assertGone();
+        $this->get('/media-shares/v1/grants/'.$id.'/chunks/'.$chunkId)->assertGone();
+        $items=$this->getJson('/media-shares/v1/received')->assertOk()->json('items');
+        $this->assertNotContains($id,array_column($items,'grantId'));
+        $this->assertContains($personalId,array_column($items,'grantId'));
+        $this->getJson('/media-shares/v1/grants/'.$personalId)->assertOk();
+        $this->get('/media-shares/v1/grants/'.$personalId.'/chunks/'.$chunkId)->assertOk();
+        $this->assertDatabaseHas('media_files_v1',['id'=>$this->mediaId,'state'=>'active']);
+        $this->assertDatabaseCount('media_chunks_v1',2);
+    }
+
+    public function test_p1_22_media_scope_requires_accepted_contributor_and_valid_deadline():void
+    {
+        $digest=$this->publishRecipientKey();
+        $assignmentId=$this->acceptedAssignment();
+        $this->asRole('owner');
+        $scoped=$this->scopedMediaGrant($this->grantInput($digest),$assignmentId);
+        DB::table('assignment_invites_v1')->where('assignment_id',$assignmentId)
+            ->update(['state'=>'pending']);
+        $this->postJson('/media-shares/v1/grants',$scoped)->assertForbidden();
+        DB::table('assignment_invites_v1')->where('assignment_id',$assignmentId)
+            ->update(['state'=>'accepted']);
+        $forged=$scoped;
+        $forged['signature']=$this->signature('owner',
+            "pb3.media-grant.v1\n".$scoped['contract']);
+        $this->postJson('/media-shares/v1/grants',$forged)->assertUnauthorized();
+        DB::table('assignment_records_v1')->where('id',$assignmentId)->update([
+            'files_access_until'=>now()->addMinutes(5)->getTimestampMs(),
+        ]);
+        $this->postJson('/media-shares/v1/grants',$scoped)->assertUnprocessable();
+        DB::table('assignment_records_v1')->where('id',$assignmentId)->update([
+            'files_access_until'=>null,
+            'owner_account_id'=>$this->people['unrelated']['id'],
+        ]);
+        $this->postJson('/media-shares/v1/grants',$scoped)->assertForbidden();
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
     public function test_recipient_only_gets_signed_media_and_authenticated_chunks():void
     {
         $digest=$this->publishRecipientKey();
