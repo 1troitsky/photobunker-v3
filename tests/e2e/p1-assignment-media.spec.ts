@@ -96,7 +96,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await A.getByRole('tab',{name:'Правила'}).click()
     await expect(A.locator('#editor-photo-categories')).toHaveValue('Report')
     await expect(A.locator('#editor-photo-tags')).toHaveValue('photo-evidence')
-    const submitEditor=A.getByRole('button',{name:'Подписать и сохранить правила'})
+    const submitEditor=A.getByRole('button',{name:'Подписать и сохранить'})
     await expect(submitEditor).toBeDisabled() // no implicit autosave
     await A.locator('#editor-photo-description-min').fill('0')
     await A.getByRole('tab',{name:'Файлы'}).click()
