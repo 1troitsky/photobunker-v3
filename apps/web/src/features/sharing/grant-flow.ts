@@ -66,6 +66,7 @@ function wrapInfo(context:{
 
 export async function queueRecipientGrant(
   photoId:string,recipientAccountId:string,assignmentId?:string,
+  maxExpiresAt?:number|null,
 ):Promise<string> {
   const s=requireSession()
   if(s.accountId===recipientAccountId)throw new Error('share.cannot_share_self')
