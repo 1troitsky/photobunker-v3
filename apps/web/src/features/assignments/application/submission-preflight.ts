@@ -227,17 +227,17 @@ export async function preflightAssignmentPhotoGrant(
     ||revision>latest.policyRevision)
     throw Error('assignment.capture_scope_mismatch')
   let effective:HistoricalEffectivePolicy
-  if(revision===latest.policyRevision){
-    const contract=latest.policyAmendmentContract
-    if(!contract)throw Error('assignment.policy_not_authenticated')
+  if(latest.policyRevision===1){
     effective={
-      revision,policyHash:await hash(contract),
+      revision:1,policyHash:await hash(latest.policyContract),
       requirements:signedPolicyRequirements(latest),
       validFrom:latest.startsAt,validUntil:Number.POSITIVE_INFINITY,
     }
   }else{
-    // Includes revision 1: an original signed photo captured AFTER an
-    // amendment must not receive a recipient DEK grant under stale rules.
+    // Every amendment needs an authenticated effective-time boundary,
+    // including the latest revision. Otherwise client-declared capture
+    // timestamps could predate policy approval yet reveal a recipient DEK.
+    // Revision 1 also needs the upper boundary of its successor.
     // Historical revisions are never guessed. An already verified chain
     // is readable offline; on first access use a fresh accepted-member API.
     // Every read re-verifies every owner signature against the local pin.
