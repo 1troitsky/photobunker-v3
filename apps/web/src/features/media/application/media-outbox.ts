@@ -7,7 +7,7 @@ import {
   encryptMediaFile,decryptMediaChunks,validateMediaContract,
 } from '../domain/media-crypto'
 import type {
-  MediaContract,MediaMetadata,StoredMediaChunk,MediaType,
+  MediaContract,MediaMetadata,StoredMediaChunk,MediaType,MediaPrivateFields,
 } from '../domain/media-crypto'
 
 export type MediaCaptureIntent={
@@ -75,13 +75,14 @@ export async function verifyReceipt(contract:MediaContract,receipt:MediaReceipt)
  * an optional network flush; an unapproved quota cannot erase the local row.
  */
 export async function enqueueEncryptedMedia(
-  file:File,capture?:MediaCaptureIntent,
+  file:File,capture?:MediaCaptureIntent,privateFields:MediaPrivateFields={},
 ):Promise<string>{
   const session=requireSession()
   const createdAt=Date.now()
   const expiresAt=createdAt+13*86400000
   const {contract,chunks}=await encryptMediaFile(
-    file,session.pkg,expiresAt,()=>same(session))
+    file,session.pkg,expiresAt,()=>same(session),
+    privateFields,capture?.startedAt??createdAt)
   same(session)
   const signed=JSON.stringify(contract)
   const signature=await sign(session.device.deviceKey,'pb3.media.v1\n'+signed)

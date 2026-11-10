@@ -106,7 +106,7 @@ final class AssignmentV1Controller extends Controller
         $raw=$r->json('contract');
         $shape=is_string($raw)?json_decode($raw,true,32):null;
         $policyVersion=is_array($shape)?($shape['version']??null):null;
-        $withRequirements=in_array($policyVersion,[2,3,4],true);
+        $withRequirements=in_array($policyVersion,[2,3,4,5],true);
         $keys=[
             'version','operationId','assignmentId','ownerAccountId',
             'rootPolicyHash','previousPolicyHash',
@@ -115,8 +115,10 @@ final class AssignmentV1Controller extends Controller
         if($withRequirements)$keys=array_merge($keys,[
             'requiredCategory','descriptionMinLength','requiredGps',
         ]);
-        if($policyVersion===4)$keys=array_merge($keys,['videoGoal','audioGoal']);
+        if(in_array($policyVersion,[4,5],true))$keys=array_merge($keys,['videoGoal','audioGoal']);
+        if($policyVersion===5)$keys=array_merge($keys,['videoRequirements','audioRequirements']);
         $domain=match($policyVersion){
+            5=>'pb3.assignment-policy.v5',
             4=>'pb3.assignment-policy.v4',
             3=>'pb3.assignment-policy.v3',
             2=>'pb3.assignment-policy.v2',
@@ -166,10 +168,14 @@ final class AssignmentV1Controller extends Controller
             $differentMedia=$c['allowedMedia']!==$currentMedia;
             $currentVideoGoal=$oldVersion>=4?$previousValues['videoGoal']:null;
             $currentAudioGoal=$oldVersion>=4?$previousValues['audioGoal']:null;
-            $differentGoals=$c['version']===4
+            $differentGoals=$c['version']>=4
                 &&($c['videoGoal']!==$currentVideoGoal
                     ||$c['audioGoal']!==$currentAudioGoal);
-            abort_unless($differentRules||$differentMedia||$differentGoals
+            $defaults=['requiredCategory'=>false,'descriptionMinLength'=>0,'requiredGps'=>false];
+            $differentMediaRules=$c['version']===5
+                &&($c['videoRequirements']!==($oldVersion>=5?$previousValues['videoRequirements']:$defaults)
+                    ||$c['audioRequirements']!==($oldVersion>=5?$previousValues['audioRequirements']:$defaults));
+            abort_unless($differentRules||$differentMedia||$differentGoals||$differentMediaRules
                 ||($a->photo_goal===null?null:(int)$a->photo_goal)!==$c['photoGoal'],409);
             $previous=hash('sha256',$a->latest_policy_contract??$a->contract_json);
             abort_unless(hash_equals($previous,$c['previousPolicyHash']),409);
@@ -340,12 +346,12 @@ final class AssignmentV1Controller extends Controller
             'videoGoal'=>(static function()use($x){
                 $policy=$x->latest_policy_contract
                     ?json_decode($x->latest_policy_contract,true,32,JSON_THROW_ON_ERROR):null;
-                return ($policy['version']??0)===4?$policy['videoGoal']:null;
+                return ($policy['version']??0)>=4?$policy['videoGoal']:null;
             })(),
             'audioGoal'=>(static function()use($x){
                 $policy=$x->latest_policy_contract
                     ?json_decode($x->latest_policy_contract,true,32,JSON_THROW_ON_ERROR):null;
-                return ($policy['version']??0)===4?$policy['audioGoal']:null;
+                return ($policy['version']??0)>=4?$policy['audioGoal']:null;
             })(),
             'confirmedPhotoCount'=>(int)$x->confirmed_photo_count,
             'confirmedVideoCount'=>(int)$x->confirmed_video_count,

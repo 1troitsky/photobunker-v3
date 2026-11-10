@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest'
 import {
-  validAllowedMedia,signedAllowedAssignmentMedia,signedPolicyRequirements,signedPolicyGoals,
+  validAllowedMedia,signedAllowedAssignmentMedia,signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,
 } from './assignment-outbox'
 import type {AssignmentListing} from './assignment-outbox'
 
@@ -99,5 +99,49 @@ describe('P1-15 independently signed multimedia target counts',()=>{
     }),videoGoal:1})).toThrow('assignment.invalid_signed_goal')
     expect(signedPolicyGoals({...base,videoGoal:2}))
       .toEqual({photoGoal:30,videoGoal:2,audioGoal:null})
+  })
+})
+
+describe('P1-16 owner-signed per-kind media requirements',()=>{
+  const empty={requiredCategory:false,descriptionMinLength:0,requiredGps:false}
+  const mandatory={requiredCategory:true,descriptionMinLength:12,requiredGps:true}
+  it('never invents video/audio restrictions under older photo-only/v3/v4 policies',()=>{
+    expect(signedMediaRequirements(policy(1),'video')).toEqual(empty)
+    expect(signedMediaRequirements(policy(2,{version:3,
+      allowedMedia:['photo','video'],
+    }),'video')).toEqual(empty)
+    expect(signedMediaRequirements(policy(2,{version:4,
+      videoGoal:2,audioGoal:1,allowedMedia:['photo','video','audio'],
+    }),'audio')).toEqual(empty)
+  })
+  it('recognizes independent mandatory audio rules with optional video metadata',()=>{
+    const p=policy(2,{
+      version:5,photoGoal:30,videoGoal:2,audioGoal:1,
+      allowedMedia:['photo','video','audio'],
+      videoRequirements:empty,audioRequirements:mandatory,
+      requiredCategory:false,descriptionMinLength:0,requiredGps:false,
+    })
+    expect(signedPolicyGoals({...p,videoGoal:2,audioGoal:1}))
+      .toEqual({photoGoal:30,videoGoal:2,audioGoal:1})
+    expect(signedAllowedAssignmentMedia(p)).toEqual(['photo','video','audio'])
+    expect(signedMediaRequirements(p,'video')).toEqual(empty)
+    expect(signedMediaRequirements(p,'audio')).toEqual(mandatory)
+  })
+  it('rejects malformed or enabled restrictions for a disabled type',()=>{
+    const p=policy(2,{version:5,allowedMedia:['photo','audio'],
+      videoRequirements:empty,audioRequirements:mandatory,
+    })
+    for(const invalid of [
+      {...mandatory,requiredGps:'yes'}, {...mandatory,descriptionMinLength:4001},
+      {...mandatory,extra:true},{...mandatory,descriptionMinLength:1.5},
+    ])expect(()=>signedMediaRequirements(policy(2,{
+      version:5,allowedMedia:['photo','audio'],
+      videoRequirements:empty,audioRequirements:invalid,
+    }),'audio')).toThrow('assignment.invalid_media_requirements')
+    expect(()=>signedMediaRequirements(policy(2,{
+      version:5,allowedMedia:['photo','audio'],
+      videoRequirements:mandatory,audioRequirements:mandatory,
+    }),'video')).toThrow('assignment.invalid_media_requirements')
+    expect(signedMediaRequirements(p,'audio')).toEqual(mandatory)
   })
 })

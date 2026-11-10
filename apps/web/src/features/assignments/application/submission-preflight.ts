@@ -134,7 +134,7 @@ export async function verifySignedPolicyHistory(
     let contract:Record<string,unknown>
     try{contract=JSON.parse(event.contract) as Record<string,unknown>}
     catch{throw Error('assignment.policy_history_invalid')}
-    if(![1,2,3,4].includes(contract.version as number)
+    if(![1,2,3,4,5].includes(contract.version as number)
       ||typeof contract.version!=='number'
       ||contract.version<previousVersion
       ||contract.assignmentId!==latest.assignmentId
@@ -152,8 +152,8 @@ export async function verifySignedPolicyHistory(
       photoGoal:contract.photoGoal as number|null,
       // Each historical policy has its OWN signed goal projection;
       // the current server projection must never be used for an old revision.
-      videoGoal:contract.version===4?contract.videoGoal as number|null:null,
-      audioGoal:contract.version===4?contract.audioGoal as number|null:null,
+      videoGoal:(contract.version as number)>=4?contract.videoGoal as number|null:null,
+      audioGoal:(contract.version as number)>=4?contract.audioGoal as number|null:null,
       policyAmendmentContract:event.contract,
       policyAmendmentSignature:event.signature,
     }

@@ -76,12 +76,13 @@ final class AssignmentContract
     /**
      * Amendments retain the immutable root. v1 is photo-goal only;
      * v2 adds photo capture requirements; v3 explicitly opts into video
-     * and/or audio; v4 adds independent, optional video/audio progress goals.
+     * and/or audio; v4 adds independent, optional video/audio progress goals; v5 adds
+     * per-kind public requirement flags (never actual private fields).
      * Never broaden older photo-only signed policy implicitly.
      */
     public static function policyAmendment(array $d,string $owner,string $assignment):void
     {
-        abort_unless(in_array($d['version'],[1,2,3,4],true)
+        abort_unless(in_array($d['version'],[1,2,3,4,5],true)
             &&$d['assignmentId']===$assignment
             &&$d['ownerAccountId']===$owner
             &&is_int($d['fromPolicyRevision'])
@@ -106,7 +107,7 @@ final class AssignmentContract
                 &&$d['descriptionMinLength']>=0
                 &&$d['descriptionMinLength']<=4000,422);
         }
-        if($d['version']===4){
+        if($d['version']>=4){
             // Target counts are progress indicators, never upload ceilings.
             // Earlier signed policy versions intentionally have no goals
             // for video/audio and must not acquire them implicitly.
@@ -115,6 +116,25 @@ final class AssignmentContract
                 abort_unless($goal===null ||
                     (in_array($kind,$d['allowedMedia'],true)
                         &&is_int($goal)&&$goal>=1&&$goal<=999),422);
+            }
+        }
+        if($d['version']===5){
+            foreach(['video'=>'videoRequirements','audio'=>'audioRequirements'] as $kind=>$field){
+                $rules=$d[$field]??null;
+                abort_unless(is_array($rules)
+                    &&array_keys($rules)===['requiredCategory','descriptionMinLength','requiredGps']
+                    &&is_bool($rules['requiredCategory'])
+                    &&is_int($rules['descriptionMinLength'])
+                    &&$rules['descriptionMinLength']>=0
+                    &&$rules['descriptionMinLength']<=4000
+                    &&is_bool($rules['requiredGps']),422);
+                // Disabled kinds cannot retain misleading "mandatory" flags.
+                if(!in_array($kind,$d['allowedMedia'],true)){
+                    abort_unless($rules===[
+                        'requiredCategory'=>false,'descriptionMinLength'=>0,
+                        'requiredGps'=>false,
+                    ],422);
+                }
             }
         }
     }

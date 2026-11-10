@@ -10,9 +10,9 @@ import {
   queueAssignmentInvitation, queueAssignmentAcceptance,
   queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
   queueAssignmentMediaSubmission, listAssignmentMediaSubmissions,
-  signedAllowedAssignmentMedia,verifySignedAssignmentPolicy,
+  signedAllowedAssignmentMedia,
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
-  signedPolicyRequirements,signedPolicyGoals,verifyAssignmentInvite,
+  signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
@@ -20,6 +20,7 @@ import type {
   AssignmentMediaSubmission,
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
+import { preflightAssignmentMediaGrant } from '../features/assignments/application/media-submission-preflight'
 import {
   openOwnerAssignment, openRecipientAssignment,
 } from '../features/assignments/infrastructure/assignment-crypto'
@@ -38,6 +39,7 @@ type VisibleAssignment={
   id:string;ownerAccountId:string;data:PrivateAssignment|null
   state:string;revision:number;policyRevision:number
   requirements:CaptureRequirements;allowedMedia:AllowedAssignmentMedia
+  videoRequirements:CaptureRequirements;audioRequirements:CaptureRequirements
   localState?:string;goal:number|null;videoGoal:number|null;audioGoal:number|null
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
   confirmedVideos:number|null;confirmedAudio:number|null
@@ -66,6 +68,12 @@ const editedDescriptionMin=ref<string|number>(0)
 const editedRequiredGps=ref(false)
 const editedAllowVideo=ref(false)
 const editedAllowAudio=ref(false)
+const editedVideoReqCategory=ref(false)
+const editedVideoReqDescription=ref<string|number>(0)
+const editedVideoReqGps=ref(false)
+const editedAudioReqCategory=ref(false)
+const editedAudioReqDescription=ref<string|number>(0)
+const editedAudioReqGps=ref(false)
 const recipientId=ref('')
 const ownerCheck=ref<SafetyCheck|null>(null)
 const contributorCheck=ref<SafetyCheck|null>(null)
@@ -178,6 +186,8 @@ async function hydrate():Promise<void>{
       id:item.id,ownerAccountId:item.ownerAccountId,data,
       state:'active',revision:1,policyRevision:1,
       requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
+      videoRequirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
+      audioRequirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       allowedMedia:['photo'],
       localState:item.state,goal:item.photoGoal,videoGoal:null,audioGoal:null,
       confirmedPhotos:null,confirmedVideos:null,confirmedAudio:null,
@@ -264,7 +274,10 @@ async function hydrate():Promise<void>{
     const row:VisibleAssignment={
       id:item.assignmentId,ownerAccountId:item.ownerAccountId,data,
       state:item.state,revision:item.revision,policyRevision:item.policyRevision,
-      requirements:signedPolicyRequirements(item),localState:previous?.localState,
+      requirements:signedPolicyRequirements(item),
+      videoRequirements:signedMediaRequirements(item,'video'),
+      audioRequirements:signedMediaRequirements(item,'audio'),
+      localState:previous?.localState,
       goal:item.photoGoal,videoGoal:signedPolicyGoals(item).videoGoal,
       audioGoal:signedPolicyGoals(item).audioGoal,
       confirmedPhotos:offline?null:item.confirmedPhotoCount,
@@ -337,6 +350,12 @@ function choose(assignmentId:string):void{
   editedRequiredGps.value=chosen?.requirements.requiredGps??false
   editedAllowVideo.value=chosen?.allowedMedia.includes('video')??false
   editedAllowAudio.value=chosen?.allowedMedia.includes('audio')??false
+  editedVideoReqCategory.value=chosen?.videoRequirements.requiredCategory??false
+  editedVideoReqDescription.value=chosen?.videoRequirements.descriptionMinLength??0
+  editedVideoReqGps.value=chosen?.videoRequirements.requiredGps??false
+  editedAudioReqCategory.value=chosen?.audioRequirements.requiredCategory??false
+  editedAudioReqDescription.value=chosen?.audioRequirements.descriptionMinLength??0
+  editedAudioReqGps.value=chosen?.audioRequirements.requiredGps??false
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
   submissions.value=[];mediaSubmissions.value=[];cleanPreview()
@@ -382,6 +401,16 @@ async function changeGoal():Promise<void>{
       photoGoal:value,
       videoGoal:editedAllowVideo.value&&videoInput!==''?Number(videoInput):null,
       audioGoal:editedAllowAudio.value&&audioInput!==''?Number(audioInput):null,
+      videoRequirements:{
+        requiredCategory:editedAllowVideo.value&&editedVideoReqCategory.value,
+        descriptionMinLength:editedAllowVideo.value?Number(editedVideoReqDescription.value):0,
+        requiredGps:editedAllowVideo.value&&editedVideoReqGps.value,
+      },
+      audioRequirements:{
+        requiredCategory:editedAllowAudio.value&&editedAudioReqCategory.value,
+        descriptionMinLength:editedAllowAudio.value?Number(editedAudioReqDescription.value):0,
+        requiredGps:editedAllowAudio.value&&editedAudioReqGps.value,
+      },
       requiredCategory:editedRequiredCategory.value,
       descriptionMinLength:Number(editedDescriptionMin.value),
       requiredGps:editedRequiredGps.value,
@@ -488,21 +517,11 @@ async function submitMedia(media:StoredMedia):Promise<void>{
     if(contributorCheck.value?.accountId!==target.ownerAccountId
       ||!contributorCheck.value.confirmed)
       throw Error('Подтвердите отпечаток владельца задания')
-    // Fresh signed owner permission must be checked BEFORE any recipient
-    // envelope is created. Offline queueing may use only signed cached
-    // policy; server always enforces its CURRENT revision on admission.
-    const online=!!activeSession.value?.online&&navigator.onLine
-    const snapshots=online
-      ?(await listServerAssignments()).items
-      :await listCachedAssignmentSnapshots()
-    const policy=snapshots.find(x=>x.assignmentId===target.id)
-    if(!policy)throw Error('assignment.policy_not_available')
-    await verifySignedAssignmentPolicy(policy,!online)
-    if(policy.state!=='active'
-      ||!signedAllowedAssignmentMedia(policy).includes(media.mediaType)
-      ||policy.startsAt>Date.now()
-      ||(policy.endsAt!==null&&policy.endsAt<=Date.now()))
-      throw Error('assignment.media_not_allowed')
+    // Verify the freshly signed owner policy, local AEAD-decrypted
+    // category/description/GPS, and exact recording binding before creating
+    // ANY recipient key envelope; offline captures remain Local-First.
+    await preflightAssignmentMediaGrant(
+      target.id,media.mediaId,target.ownerAccountId)
     if(!window.confirm(
       (media.capture?'Эта запись была создана для задания. ':'Это личный файл вне задания. ')
       +'Передать владельцу задания E2EE-ключ всего '
@@ -674,6 +693,16 @@ onUnmounted(cleanPreview)
           описание минимум {{ selected.requirements.descriptionMinLength }} символов;
           GPS {{ selected.requirements.requiredGps?'обязателен':'необязателен' }}.
         </p>
+        <p v-if="selected.allowedMedia.includes('video')" class="muted" data-testid="assignment-video-requirements">
+          Видео: категория {{ selected.videoRequirements.requiredCategory?'обязательна':'необязательна' }},
+          описание минимум {{ selected.videoRequirements.descriptionMinLength }} символов,
+          GPS {{ selected.videoRequirements.requiredGps?'обязателен':'необязателен' }}.
+        </p>
+        <p v-if="selected.allowedMedia.includes('audio')" class="muted" data-testid="assignment-audio-requirements">
+          Аудио: категория {{ selected.audioRequirements.requiredCategory?'обязательна':'необязательна' }},
+          описание минимум {{ selected.audioRequirements.descriptionMinLength }} символов,
+          GPS {{ selected.audioRequirements.requiredGps?'обязателен':'необязателен' }}.
+        </p>
         <p v-if="selected.confirmedPhotos!==null" class="muted">
           Подтверждено сервером: Фото {{ selected.confirmedPhotos }}
           <template v-if="selected.goal!==null"> / {{ selected.goal }}</template>
@@ -732,7 +761,27 @@ onUnmounted(cleanPreview)
             <label v-if="editedAllowAudio" for="assignment-audio-goal">Цель по аудио (1–999, пусто — без цели)</label>
             <input v-if="editedAllowAudio" id="assignment-audio-goal" v-model="editedAudioGoal"
               type="number" min="1" max="999" step="1" placeholder="Без цели">
-            <p class="muted">Цели — только для подсчёта подтверждённого прогресса. При отключении типа его цель сбрасывается в следующей подписанной версии.</p>
+            <div v-if="editedAllowVideo" class="foundation-card">
+              <h4>Обязательные приватные поля видео</h4>
+              <label class="checkline"><input id="assignment-video-required-category"
+                v-model="editedVideoReqCategory" type="checkbox">Категория обязательна</label>
+              <label for="assignment-video-description-min">Описание: минимум символов (0 — необязательно)</label>
+              <input id="assignment-video-description-min" v-model="editedVideoReqDescription"
+                type="number" min="0" max="4000" step="1">
+              <label class="checkline"><input id="assignment-video-required-gps"
+                v-model="editedVideoReqGps" type="checkbox">GPS обязателен</label>
+            </div>
+            <div v-if="editedAllowAudio" class="foundation-card">
+              <h4>Обязательные приватные поля аудио</h4>
+              <label class="checkline"><input id="assignment-audio-required-category"
+                v-model="editedAudioReqCategory" type="checkbox">Категория обязательна</label>
+              <label for="assignment-audio-description-min">Описание: минимум символов (0 — необязательно)</label>
+              <input id="assignment-audio-description-min" v-model="editedAudioReqDescription"
+                type="number" min="0" max="4000" step="1">
+              <label class="checkline"><input id="assignment-audio-required-gps"
+                v-model="editedAudioReqGps" type="checkbox">GPS обязателен</label>
+            </div>
+            <p class="muted">Цели — только для подсчёта подтверждённого прогресса. При отключении типа его цель и требования сбрасываются в следующей подписанной версии.</p>
             <button type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeGoal">Подписать новые правила</button>
