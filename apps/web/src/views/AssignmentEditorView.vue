@@ -6,34 +6,15 @@ import {
   flushAssignmentOutbox, listAssignmentOperations,
   listCachedAssignmentSnapshots, listServerAssignments,
   queueAssignmentInvitation, queueAssignmentPolicyChange,
-  signedAllowedAssignmentMedia, signedAdvancedRequirements,
-  signedMediaRequirements, signedPolicyGoals, signedPolicyRequirements,
   verifySignedAssignmentPolicy,
 } from '../features/assignments/application/assignment-outbox'
-import type { AssignmentListing, AllowedAssignmentMedia } from '../features/assignments/application/assignment-outbox'
+import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
+import { blankEditorDraft,buildEditorPolicy,editorDraftFromListing } from '../features/assignments/application/assignment-editor-model'
+import type { EditorDraft } from '../features/assignments/application/assignment-editor-model'
 import { openOwnerAssignment } from '../features/assignments/infrastructure/assignment-crypto'
-import { parseRulesCsv } from '../features/assignments/domain/advanced-rules'
 import { confirmPeer, inspectPeer } from '../features/sharing/key-directory'
 
 type Tab='main'|'files'|'people'|'rules'
-type Draft={
-  photoGoal:string;videoGoal:string;audioGoal:string
-  video:boolean;audio:boolean
-  photoRequiredCategory:boolean;photoDescriptionMin:number;photoGps:boolean
-  videoRequiredCategory:boolean;videoDescriptionMin:number;videoGps:boolean
-  audioRequiredCategory:boolean;audioDescriptionMin:number;audioGps:boolean
-  photoCategories:string;photoTags:string
-  videoCategories:string;videoTags:string
-  audioCategories:string;audioTags:string
-}
-const blank=():Draft=>({
-  photoGoal:'',videoGoal:'',audioGoal:'',video:false,audio:false,
-  photoRequiredCategory:false,photoDescriptionMin:0,photoGps:false,
-  videoRequiredCategory:false,videoDescriptionMin:0,videoGps:false,
-  audioRequiredCategory:false,audioDescriptionMin:0,audioGps:false,
-  photoCategories:'',photoTags:'',videoCategories:'',videoTags:'',
-  audioCategories:'',audioTags:'',
-})
 const tabs:ReadonlyArray<{id:Tab;label:string}>=[
   {id:'main',label:'Основное'},
   {id:'files',label:'Файлы'},
@@ -43,7 +24,7 @@ const tabs:ReadonlyArray<{id:Tab;label:string}>=[
 const route=useRoute()
 const assignmentId=computed(()=>String(route.params.assignmentId??''))
 const activeTab=ref<Tab>('main')
-const draft=reactive<Draft>(blank())
+const draft=reactive<EditorDraft>(blankEditorDraft())
 const listing=ref<AssignmentListing|null>(null)
 const title=ref('')
 const instructions=ref('')
@@ -68,33 +49,8 @@ function sameIdentity(a:typeof activeSession.value,b:typeof activeSession.value)
     &&a.pkg.accountSpki===b.pkg.accountSpki&&a.pkg.revision===b.pkg.revision
 }
 function fail(e:unknown):string{return e instanceof Error?e.message:'assignment.editor_error'}
-function fieldsFrom(row:AssignmentListing):Draft{
-  const kinds=signedAllowedAssignmentMedia(row)
-  const goals=signedPolicyGoals(row)
-  const photo=signedPolicyRequirements(row)
-  const video=signedMediaRequirements(row,'video')
-  const audio=signedMediaRequirements(row,'audio')
-  const pa=signedAdvancedRequirements(row,'photo')
-  const va=signedAdvancedRequirements(row,'video')
-  const aa=signedAdvancedRequirements(row,'audio')
-  return {
-    photoGoal:goals.photoGoal===null?'':String(goals.photoGoal),
-    videoGoal:goals.videoGoal===null?'':String(goals.videoGoal),
-    audioGoal:goals.audioGoal===null?'':String(goals.audioGoal),
-    video:kinds.includes('video'),audio:kinds.includes('audio'),
-    photoRequiredCategory:photo.requiredCategory,
-    photoDescriptionMin:photo.descriptionMinLength,photoGps:photo.requiredGps,
-    videoRequiredCategory:video.requiredCategory,
-    videoDescriptionMin:video.descriptionMinLength,videoGps:video.requiredGps,
-    audioRequiredCategory:audio.requiredCategory,
-    audioDescriptionMin:audio.descriptionMinLength,audioGps:audio.requiredGps,
-    photoCategories:pa.allowedCategories.join(', '),photoTags:pa.requiredTags.join(', '),
-    videoCategories:va.allowedCategories.join(', '),videoTags:va.requiredTags.join(', '),
-    audioCategories:aa.allowedCategories.join(', '),audioTags:aa.requiredTags.join(', '),
-  }
-}
 function apply(row:AssignmentListing):void{
-  const values=fieldsFrom(row)
+  const values=editorDraftFromListing(row)
   Object.assign(draft,values)
   baseline.value=JSON.stringify(values)
   baselineRevision.value=row.policyRevision
@@ -161,55 +117,6 @@ function undo():void{
   apply(listing.value)
   error.value='';notice.value=''
 }
-function positiveGoal(value:string,max:number):number|null{
-  if(value.trim()==='')return null
-  const n=Number(value)
-  if(!Number.isInteger(n)||n<1||n>max)throw Error('assignment.invalid_goal')
-  return n
-}
-function minLength(value:number):number{
-  const n=Number(value)
-  if(!Number.isInteger(n)||n<0||n>4000)
-    throw Error('assignment.invalid_capture_requirements')
-  return n
-}
-function advanced(categories:string,tags:string):{
-  allowedCategories:string[];requiredTags:string[]
-}{
-  return {
-    allowedCategories:parseRulesCsv(categories,16,64),
-    requiredTags:parseRulesCsv(tags,12,48),
-  }
-}
-function buildPolicy():Parameters<typeof queueAssignmentPolicyChange>[1]{
-  const allowedMedia:AllowedAssignmentMedia=['photo']
-  if(draft.video)allowedMedia.push('video')
-  if(draft.audio)allowedMedia.push('audio')
-  return {
-    photoGoal:positiveGoal(draft.photoGoal,9999),
-    videoGoal:draft.video?positiveGoal(draft.videoGoal,999):null,
-    audioGoal:draft.audio?positiveGoal(draft.audioGoal,999):null,
-    allowedMedia,
-    requiredCategory:draft.photoRequiredCategory,
-    descriptionMinLength:minLength(draft.photoDescriptionMin),
-    requiredGps:draft.photoGps,
-    videoRequirements:{
-      requiredCategory:draft.video&&draft.videoRequiredCategory,
-      descriptionMinLength:draft.video?minLength(draft.videoDescriptionMin):0,
-      requiredGps:draft.video&&draft.videoGps,
-    },
-    audioRequirements:{
-      requiredCategory:draft.audio&&draft.audioRequiredCategory,
-      descriptionMinLength:draft.audio?minLength(draft.audioDescriptionMin):0,
-      requiredGps:draft.audio&&draft.audioGps,
-    },
-    photoAdvanced:advanced(draft.photoCategories,draft.photoTags),
-    videoAdvanced:draft.video?advanced(draft.videoCategories,draft.videoTags)
-      :{allowedCategories:[],requiredTags:[]},
-    audioAdvanced:draft.audio?advanced(draft.audioCategories,draft.audioTags)
-      :{allowedCategories:[],requiredTags:[]},
-  }
-}
 async function save():Promise<void>{
   if(!editable.value||!dirty.value||!listing.value)return
   const session=activeSession.value
@@ -231,7 +138,7 @@ async function save():Promise<void>{
     }else if(listing.value.policyRevision!==baselineRevision.value)
       throw Error('assignment.editor_revision_changed')
     if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
-    const policy=buildPolicy()
+    const policy=buildEditorPolicy(draft)
     const operationId=await queueAssignmentPolicyChange(assignmentId.value,policy)
     pending.value=true
     notice.value='Подписанное изменение сохранено локально в зашифрованной очереди.'
@@ -306,7 +213,7 @@ watch(activeSession,(next,previous)=>{
     ++run
     listing.value=null;title.value='';instructions.value=''
     baseline.value='';baselineRevision.value=null
-    Object.assign(draft,blank());peerReset()
+    Object.assign(draft,blankEditorDraft());peerReset()
     loadState.value='loading'
     void refresh()
   }
@@ -314,7 +221,7 @@ watch(activeSession,(next,previous)=>{
 watch(assignmentId,()=>{
   title.value='';instructions.value='';listing.value=null
   baseline.value='';baselineRevision.value=null
-  Object.assign(draft,blank());peerReset()
+  Object.assign(draft,blankEditorDraft());peerReset()
   activeTab.value='main';loadState.value='loading'
   void refresh()
 })
