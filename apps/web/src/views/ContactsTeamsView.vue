@@ -8,6 +8,7 @@ import {
 import type { ConfirmedContact } from '../features/people/application/contact-book'
 import { listLocalTeams, queueTeam, refreshTeams } from '../features/people/application/team-book'
 import type { TeamView } from '../features/people/application/team-book'
+import TeamMembershipPanel from './TeamMembershipPanel.vue'
 
 const activeTab=ref<'contacts'|'teams'>('contacts')
 const contacts=ref<ConfirmedContact[]>([])
@@ -259,6 +260,8 @@ onUnmounted(()=>{
         </div>
         <p class="muted">Владелец команды подтверждён сервером после синхронизации. Приглашения и изменение ролей появятся с отдельной подписанной моделью полномочий.</p>
       </div>
+      <TeamMembershipPanel :owned-teams="teams" :contacts="contacts"
+        @refresh="reloadTeams" />
       <p v-if="teamLoading" role="status">Синхронизация команд…</p>
       <p v-if="teamNotice" role="status" class="status-text">{{ teamNotice }}</p>
       <p v-if="teamError" role="alert" class="error-text">{{ teamError }}</p>
