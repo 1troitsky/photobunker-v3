@@ -132,7 +132,7 @@ async function rotateTeam():Promise<void>{
     if(identity()!==scope)return
     await reloadRoster()
     if(identity()===scope){
-      notice.value='Новая эпоха ключа подтверждена сервером. Старый ключ больше не выдаётся.'
+      notice.value='Новая эпоха подтверждена сервером. Текущий профиль защищён новым ключом.'
       emit('refresh')
     }
   }catch(e){
