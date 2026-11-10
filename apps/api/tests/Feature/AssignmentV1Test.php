@@ -849,6 +849,70 @@ final class AssignmentV1Test extends TestCase
         ]);
     }
 
+    private function signedMediaRequirementsV5(array $allowed,array $videoRules,
+        array $audioRules,int $from=1):array
+    {
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $root=$a->contract_json;
+        $previous=$a->latest_policy_contract??$root;
+        return $this->signed('owner','pb3.assignment-policy.v5',[
+            'version'=>5,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'rootPolicyHash'=>hash('sha256',$root),
+            'previousPolicyHash'=>hash('sha256',$previous),
+            'fromPolicyRevision'=>$from,'toPolicyRevision'=>$from+1,
+            'photoGoal'=>30,'allowedMedia'=>$allowed,
+            'requiredCategory'=>false,'descriptionMinLength'=>0,
+            'requiredGps'=>false,
+            'videoGoal'=>in_array('video',$allowed,true)?2:null,
+            'audioGoal'=>in_array('audio',$allowed,true)?1:null,
+            'videoRequirements'=>$videoRules,'audioRequirements'=>$audioRules,
+        ]);
+    }
+
+    public function test_v5_per_kind_requirements_are_owner_signed_exact_and_not_plaintext():void
+    {
+        $this->createAssignment();
+        $this->as('owner');
+        $url='/assignments/v1/'.$this->assignmentId.'/policy';
+        $disabled=['requiredCategory'=>false,'descriptionMinLength'=>0,'requiredGps'=>false];
+        $strict=['requiredCategory'=>true,'descriptionMinLength'=>12,'requiredGps'=>true];
+        $invalid=$this->signedMediaRequirementsV5(['photo','audio'],$strict,$strict);
+        $this->postJson($url,$invalid)->assertUnprocessable(); // video disabled
+        $invalidMin=$this->signedMediaRequirementsV5(['photo','audio'],$disabled,
+            ['requiredCategory'=>true,'descriptionMinLength'=>4001,'requiredGps'=>false]);
+        $this->postJson($url,$invalidMin)->assertUnprocessable();
+        $wrongOrder=$this->signedMediaRequirementsV5(['photo','audio'],$disabled,[
+            'requiredGps'=>true,'descriptionMinLength'=>12,'requiredCategory'=>true,
+        ]);
+        $this->postJson($url,$wrongOrder)->assertUnprocessable();
+        $valid=$this->signedMediaRequirementsV5(
+            ['photo','video','audio'],$disabled,$strict);
+        $this->postJson($url,$valid)->assertOk()
+            ->assertJsonPath('policyRevision',2);
+        $this->postJson($url,$valid)->assertOk()
+            ->assertJsonPath('unchanged',true); // lost ACK
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.policyAmendmentContract',$valid['contract'])
+            ->assertJsonPath('items.0.policyAmendmentSignature',$valid['signature'])
+            ->assertJsonPath('items.0.videoGoal',2)
+            ->assertJsonPath('items.0.audioGoal',1);
+        $this->assertStringNotContainsString('latitude',$valid['contract']);
+        $this->assertStringNotContainsString('private-description',$valid['contract']);
+        $old=$this->signedPerKindPolicyV4(['photo','video','audio'],2,1,2);
+        $this->postJson($url,$old)->assertConflict(); // cannot downgrade to v4
+        $unchanged=$this->signedMediaRequirementsV5(
+            ['photo','video','audio'],$disabled,$strict,2);
+        $this->postJson($url,$unchanged)->assertConflict();
+        $changed=$this->signedMediaRequirementsV5(
+            ['photo','video','audio'],$strict,$strict,2);
+        $this->postJson($url,$changed)->assertOk()
+            ->assertJsonPath('policyRevision',3);
+        $this->assertDatabaseCount('assignment_policy_events_v1',2);
+    }
+
     public function test_v4_media_goals_are_signed_optional_and_never_upload_ceilings():void
     {
         $this->createAssignment();
