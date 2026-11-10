@@ -6,6 +6,7 @@ import { validateAdvancedFields } from '../domain/advanced-rules'
 import {
   listServerAssignments,signedAllowedAssignmentMedia,
   signedMediaRequirements,signedAdvancedRequirements,verifySignedAssignmentPolicy,
+  schedulePermitsAt,
 } from './assignment-outbox'
 import type { AssignmentListing } from './assignment-outbox'
 
@@ -33,8 +34,7 @@ export async function preflightAssignmentMediaGrant(
   if(!policy||policy.ownerAccountId!==expectedOwnerAccountId
     ||policy.ownerAccountId===session.accountId
     ||policy.state!=='active'
-    ||policy.startsAt>Date.now()
-    ||(policy.endsAt!==null&&policy.endsAt<=Date.now()))
+    ||!schedulePermitsAt(policy,Date.now()))
     throw Error('assignment.policy_not_authenticated')
   await verifySignedAssignmentPolicy(policy,true)
   const media=(await listLocalMedia()).find(x=>x.mediaId===mediaId)

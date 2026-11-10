@@ -10,7 +10,7 @@ import type { StoredPhoto } from '../../photo-sync/application/p1-photo'
 import {
   listCachedAssignmentSnapshots, listServerAssignments,
   signedPolicyRequirements, signedAdvancedRequirements,
-  verifySignedAssignmentPolicy, validAllowedMedia,
+  verifySignedAssignmentPolicy, validAllowedMedia, schedulePermitsAt,
 } from './assignment-outbox'
 import type {
   AssignmentListing, CaptureRequirements, SignedCaptureBinding,
@@ -241,8 +241,7 @@ export async function preflightAssignmentPhotoGrant(
   if(activeSession.value!==session)throw Error('identity.changed')
   if(!latest||latest.ownerAccountId!==expectedOwner
     ||latest.state!=='active'
-    ||latest.startsAt>Date.now()
-    ||(latest.endsAt!==null&&latest.endsAt<=Date.now()))
+    ||!schedulePermitsAt(latest,Date.now()))
     throw Error('assignment.policy_not_authenticated')
   const photos=await listLocalPhotos()
   const photo=photos.find(p=>p.photoId===photoId)

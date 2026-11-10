@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Assignments\AssignmentContract as C;
+use App\Assignments\AssignmentSchedule as S;
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
 use Illuminate\Http\Request;
@@ -67,8 +68,7 @@ final class AssignmentMediaSubmissionController extends Controller
             }
             $now=PhotoSync::nowMs();
             abort_unless($a->state==='active'
-                &&$a->starts_at<=$now
-                &&($a->ends_at===null||$a->ends_at>$now)
+                &&S::permits($a,$now)
                 &&(int)$a->policy_revision===$d['policyRevision'],409);
             // Photo-only signed assignment roots cannot implicitly receive
             // video/audio, even if an E2EE grant already exists.
@@ -116,9 +116,8 @@ final class AssignmentMediaSubmissionController extends Controller
                     &&hash_equals($capture['policyHash'],$d['policyHash'])
                     &&hash_equals($capture['mediaContractHash'],
                         $media->contract_hash)
-                    &&$capture['startedAt']>=$a->starts_at
-                    &&($a->ends_at===null
-                        ||$capture['finishedAt']<=$a->ends_at),409);
+                    &&S::permits($a,$capture['startedAt'])
+                    &&S::permits($a,$capture['finishedAt']),409);
                 // Server acceptance of the signed policy predates capture.
                 // Allow only bounded client clock skew. Neither this check
                 // nor the account signature attests real-world recording time.

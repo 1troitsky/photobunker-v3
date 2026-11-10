@@ -565,6 +565,105 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       instructions:'SECOND CONFIDENTIAL INSTRUCTIONS 2',
     })
     await B.context().setOffline(false)
+    // Offline transitions intentionally mark the in-memory identity as
+    // offline; restoring network connectivity does NOT silently certify the
+    // session. Reauthenticate before making the next verified server read.
+    await B.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+    })
+
+    // P1-20: edit a REAL owner-signed schedule with an accepted contributor
+    // still using the original ECDH invitation and the original root policy.
+    await A.goto('/assignments/'+assignmentId+'/edit')
+    // Route renders an authenticated *local* snapshot immediately. Wait for
+    // the network session proof before demanding fresh server authority.
+    await A.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+    })
+    await expect(A.locator('#editor-schedule-start'))
+      .toBeVisible({timeout:20000})
+    await expect(A.locator('#editor-schedule-start')).not.toHaveValue('')
+    const future=await A.evaluate(()=>{
+      const d=new Date(Date.now()+2*86400000)
+      d.setSeconds(0,0)
+      const pad=(n:number)=>String(n).padStart(2,'0')
+      return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())
+        +'T'+pad(d.getHours())+':'+pad(d.getMinutes())
+    })
+    const originalRoot=await A.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const item=(await a.listServerAssignments()).items.find(x=>x.assignmentId===id)!
+      return {startsAt:item.startsAt,endsAt:item.endsAt,
+        policyContract:item.policyContract,policyRevision:item.policyRevision,
+        privateRevision:item.privateRevision}
+    },assignmentId)
+    await A.locator('#editor-schedule-start').fill(future)
+    await expect(A.locator('#editor-block-before')).toBeChecked()
+    await A.getByRole('button',{name:'Подписать и сохранить'}).click()
+    await expect(A.getByText('Изменение подписано и принято сервером.'))
+      .toBeVisible({timeout:20000})
+    const blocked=await B.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const row=(await a.listServerAssignments()).items.find(x=>x.assignmentId===id)!
+      const e=a.signedAssignmentSchedule(row)
+      return {revision:row.scheduleRevision,rawStart:row.startsAt,
+        rawEnd:row.endsAt,policyContract:row.policyContract,
+        policyRevision:row.policyRevision,privateRevision:row.privateRevision,
+        effectiveStartsAt:e.startsAt,blockBeforeStart:e.blockBeforeStart,
+        allowedNow:a.schedulePermitsAt(row,Date.now())}
+    },assignmentId)
+    expect(blocked.revision).toBe(2)
+    expect(blocked.rawStart).toBe(originalRoot.startsAt)
+    expect(blocked.rawEnd).toBe(originalRoot.endsAt)
+    expect(blocked.policyContract).toBe(originalRoot.policyContract)
+    expect(blocked.policyRevision).toBe(originalRoot.policyRevision)
+    expect(blocked.privateRevision).toBe(originalRoot.privateRevision)
+    expect(blocked.effectiveStartsAt).toBeGreaterThan(Date.now())
+    expect(blocked.blockBeforeStart).toBe(true)
+    expect(blocked.allowedNow).toBe(false)
+
+    // Independently turn OFF only the before-start restriction and enable
+    // a future after-end cutoff. Neither action deletes any media ciphertext.
+    await A.locator('#editor-block-before').uncheck()
+    const finish=await A.evaluate(()=>{
+      const d=new Date(Date.now()+4*86400000)
+      d.setSeconds(0,0)
+      const pad=(n:number)=>String(n).padStart(2,'0')
+      return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())
+        +'T'+pad(d.getHours())+':'+pad(d.getMinutes())
+    })
+    await A.locator('#editor-schedule-end').fill(finish)
+    await A.locator('#editor-block-after').check()
+    await A.getByRole('button',{name:'Подписать и сохранить'}).click()
+    await expect(A.getByText('Изменение подписано и принято сервером.'))
+      .toBeVisible({timeout:20000})
+    const schedule=await B.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const row=(await a.listServerAssignments()).items.find(x=>x.assignmentId===id)!
+      const policy=a.signedAssignmentSchedule(row)
+      const history=await fetch('/assignments/v1/'+id+'/schedule-history')
+      const signed=await history.json()
+      return {revision:row.scheduleRevision,
+        rootPolicyUnchanged:row.policyContract,
+        allowedNow:a.schedulePermitsAt(row,Date.now()),
+        allowedAfterEnd:a.schedulePermitsAt(row,policy.endsAt!+1000),
+        blockBeforeStart:policy.blockBeforeStart,
+        blockAfterEnd:policy.blockAfterEnd,
+        historyStatus:history.status,historyCount:signed.events?.length}
+    },assignmentId)
+    expect(schedule.revision).toBe(3)
+    expect(schedule.rootPolicyUnchanged).toBe(originalRoot.policyContract)
+    expect(schedule.allowedNow).toBe(true)
+    expect(schedule.allowedAfterEnd).toBe(false)
+    expect(schedule.blockBeforeStart).toBe(false)
+    expect(schedule.blockAfterEnd).toBe(true)
+    expect(schedule.historyStatus).toBe(200)
+    expect(schedule.historyCount).toBe(2)
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(B.locator('.assignment-card-name'))
+      .toContainText('PRIVATE UPDATED TITLE 2',{timeout:20000})
 
     expect(ownerId).not.toBe(contributorId)
   }finally{

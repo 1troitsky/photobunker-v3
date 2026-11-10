@@ -9,6 +9,7 @@ import {
   cachePrivateAssignment, readCachedPrivateAssignment,
   effectiveAssignmentEnvelope,assignmentPrivateCacheScope,
   queueAssignmentPrivateTextChange,
+  queueAssignmentScheduleChange,signedAssignmentSchedule,schedulePermitsAt,
   signedCaptureBinding,signedPolicyRequirements,queueAssignmentGoalChange,
 } from './assignment-outbox'
 
@@ -22,6 +23,95 @@ async function account(id:string):Promise<void>{
   } as unknown as Session
 }
 
+
+describe('P1-20 signed time windows and durable operation isolation',()=>{
+  it('rejects tampered schedules, preserves immutable root and refuses revisions rollback',async()=>{
+    const owner=crypto.randomUUID()
+    await account(owner)
+    const session=activeSession.value!
+    const id=await queueAssignmentCreation({
+      title:'PRIVATE FIELDWORK NAME',
+      instructions:'SECRET SCHEDULE DETAILS',
+      photoGoal:5,
+    })
+    const create=(await listAssignmentOperations()).find(op=>op.kind==='create'
+      &&(JSON.parse(op.contract) as {assignmentId?:string}).assignmentId===id)!
+    const root=JSON.parse(create.contract) as {
+      startsAt:number;endsAt:null
+      privateEnvelope:{version:1;iv:string;ciphertext:string
+        wrappedKey:{iv:string;ciphertext:string}}
+    }
+    const item={
+      assignmentId:id,ownerAccountId:owner,ownerAccountSpki:session.pkg.accountSpki,
+      state:'active',revision:1,photoGoal:5,confirmedPhotoCount:0,
+      policyRevision:1,privateRevision:1,scheduleRevision:1,
+      startsAt:root.startsAt,endsAt:null,
+      privateEnvelope:root.privateEnvelope,
+      policyContract:create.contract,policySignature:create.signature,
+      policyAmendmentContract:null,policyAmendmentSignature:null,
+      privateAmendmentContract:null,privateAmendmentSignature:null,
+      scheduleAmendmentContract:null,scheduleAmendmentSignature:null,
+      stateContract:null,stateSignature:null,
+    }
+    await expect(verifySignedAssignmentPolicy(item)).resolves.toBeUndefined()
+    const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+      const request=indexedDB.open('pb3-assignment-operation-outbox-v1')
+      request.onsuccess=()=>resolve(request.result)
+      request.onerror=()=>reject(request.error)
+    })
+    await new Promise<void>((resolve,reject)=>{
+      const tx=db.transaction('capturePolicies','readwrite')
+      tx.objectStore('capturePolicies').put({
+        key:owner+'/'+id,accountId:owner,listing:item,verifiedAt:Date.now(),
+      })
+      tx.oncomplete=()=>resolve()
+      tx.onerror=()=>reject(tx.error)
+    })
+    db.close()
+    const future=Date.now()+86400000
+    const next={
+      startsAt:future,endsAt:future+86400000,
+      blockBeforeStart:true,blockAfterEnd:true,
+    }
+    const id1=await queueAssignmentScheduleChange(id,next)
+    const op=(await listAssignmentOperations()).find(x=>x.id===id1)!
+    const contract=JSON.parse(op.contract)
+    expect(op.kind).toBe('schedule')
+    expect(op.state).toBe('queued')
+    expect(contract.rootPolicyHash)
+      .toBe(hex(await digest(new TextEncoder().encode(create.contract))))
+    expect(contract.fromScheduleRevision).toBe(1)
+    expect(contract.toScheduleRevision).toBe(2)
+    expect(contract.startsAt).toBe(future)
+    expect(op.contract).not.toContain('PRIVATE FIELDWORK NAME')
+    expect(op.contract).not.toContain('SECRET SCHEDULE DETAILS')
+    const current={...item,scheduleRevision:2,
+      scheduleAmendmentContract:op.contract,
+      scheduleAmendmentSignature:op.signature}
+    await expect(verifySignedAssignmentPolicy(current)).resolves.toBeUndefined()
+    expect(signedAssignmentSchedule(current)).toEqual(next)
+    expect(schedulePermitsAt(current,Date.now())).toBe(false)
+    expect(schedulePermitsAt(current,future+1000)).toBe(true)
+    expect(schedulePermitsAt(current,future+86400000)).toBe(false)
+    expect(()=>assertSignedPolicyProgress(item,current)).not.toThrow()
+    expect(()=>assertSignedPolicyProgress(current,item))
+      .toThrow('assignment.schedule_rollback')
+    expect(()=>assertSignedPolicyProgress(current,{
+      ...current,scheduleAmendmentContract:'another signed value',
+    })).toThrow('assignment.schedule_equivocation')
+    await expect(verifySignedAssignmentPolicy({...current,
+      scheduleAmendmentSignature:create.signature,
+    })).rejects.toThrow('assignment.schedule_not_authenticated')
+    await expect(verifySignedAssignmentPolicy({...current,
+      scheduleRevision:3,
+    })).rejects.toThrow('assignment.schedule_not_authenticated')
+    await expect(queueAssignmentScheduleChange(id,next))
+      .rejects.toThrow('assignment.schedule_edit_pending')
+    await expect(queueAssignmentScheduleChange(id,{
+      ...next,endsAt:null,blockAfterEnd:true,
+    })).rejects.toThrow('assignment.invalid_schedule')
+  })
+})
 
 describe('P1-19 signed AEAD private text snapshot and historical cache safety',()=>{
   it('binds encrypted text to the owner root hash, rejects signature and revision rollback',async()=>{
