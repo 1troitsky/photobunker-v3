@@ -208,7 +208,19 @@ async function save():Promise<void>{
       await flushAssignmentOutbox()
       if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
       const ops=await listAssignmentOperations()
-      if(ids.every(id=>ops.find(x=>x.id===id)?.state==='sent')){
+      const results=ids.map(id=>ops.find(x=>x.id===id))
+      const rejected=results.filter(op=>op?.state==='conflict')
+      if(rejected.length){
+        // A terminal 403/409/410/422 is NOT an upload in progress. Keep
+        // local user edits for explicit reconciliation; never fake success.
+        pending.value=false
+        error.value='Сервер отклонил подписанное изменение: '
+          +rejected.map(op=>op?.lastError??'assignment.conflict').join(', ')
+          +'. Обновите подписанную версию и проверьте изменения.'
+        notice.value=results.some(op=>op?.state==='sent')
+          ?'Часть независимых изменений принята, остальные требуют сверки.'
+          :'Ни одно отклонённое изменение не принято сервером.'
+      }else if(results.every(op=>op?.state==='sent')){
         notice.value='Изменение подписано и принято сервером.'
         pending.value=false
         baseline.value='';baselineText.value='';baselineSchedule.value=''
