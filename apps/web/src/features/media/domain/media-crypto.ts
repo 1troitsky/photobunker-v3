@@ -139,7 +139,7 @@ export function validateMediaContract(c:MediaContract,expected?:{
       &&chunk.index===index
       &&chunk.kind===(metadata?'metadata':'data')
       &&Number.isSafeInteger(chunk.plainBytes)
-      &&(metadata?(chunk.plainBytes>=2&&chunk.plainBytes<=8192)
+      &&(metadata?(chunk.plainBytes>=2&&chunk.plainBytes<=24576)
         :chunk.plainBytes===expectedPlain)
       &&chunk.bytes===chunk.plainBytes+16
       &&typeof chunk.sha256==='string'&&digest.test(chunk.sha256)
@@ -219,7 +219,7 @@ export async function encryptMediaFile(
       ?new Blob([encoder.encode(JSON.stringify(meta))],{type:'application/json'})
       :file.slice(i*MEDIA_CHUNK,(i+1)*MEDIA_CHUNK)
     const clear=new Uint8Array(await source.arrayBuffer())
-    validate(kind!=='metadata'||clear.length<=8192,'media.metadata_too_large')
+    validate(kind!=='metadata'||clear.length<=24576,'media.metadata_too_large')
     const iv=crypto.getRandomValues(new Uint8Array(12))
     const aad=encoder.encode(JSON.stringify({
       v:1,alg:'AES-256-GCM',accountId:contract.accountId,
