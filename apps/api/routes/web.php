@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\MatrixBindingController;
+use App\Http\Controllers\MatrixRecoveryEscrowController;
 use App\Http\Controllers\PhotoSyncController;
 use App\Http\Controllers\MediaV1Controller;
 use App\Http\Controllers\MediaGrantController;
@@ -193,4 +194,8 @@ Route::prefix('teams/v2')->middleware('throttle:pb3-assignments')->group(functio
 Route::prefix('matrix/v1')->middleware('throttle:40,1')->group(function(){
     Route::get('/me',[MatrixBindingController::class,'mine']);
     Route::post('/bindings',[MatrixBindingController::class,'bind']);
+    // Only the authenticated PB3 owner may read/store a signed opaque
+    // Matrix 4S key envelope. Never a public recipient/room-key endpoint.
+    Route::get('/recovery/ssss',[MatrixRecoveryEscrowController::class,'mine']);
+    Route::post('/recovery/ssss',[MatrixRecoveryEscrowController::class,'store']);
 });
