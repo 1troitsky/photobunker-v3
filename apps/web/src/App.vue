@@ -21,6 +21,10 @@ const dock = [
         <strong>{{ brand.name }}</strong>
         <small><span class="status-dot" aria-hidden="true"></span>Подготовка</small>
       </div>
+      <div class="shell-header-actions" v-if="route.path==='/contacts'">
+        <button type="button" disabled aria-label="Blacklist — пока недоступен"
+          title="Требует настоящего серверного отзыва полномочий">Blacklist</button>
+      </div>
     </header>
 
     <main class="shell-main" id="main">
