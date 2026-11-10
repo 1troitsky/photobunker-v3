@@ -181,7 +181,7 @@ function newConversation():void{
     void nextTick(()=>pickerRef.value?.focus())
   }
 }
-watch(activeSession,(current,old)=>{
+watch(activeSession,(_current,old)=>{
   const prev=old?[
     old.accountId,old.deviceId,old.pkg.akek,old.pkg.accountSpki,old.pkg.revision,
   ].join('|'):''
