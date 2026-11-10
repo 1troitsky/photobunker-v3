@@ -634,14 +634,20 @@ onUnmounted(cleanPreview)
             <div class="assignment-card-progress">
               <span v-if="assignment.confirmedPhotos!==null">
                 Фото: {{ assignment.confirmedPhotos }}{{ assignment.goal===null?'':' / '+assignment.goal }}
-                <template v-if="progressPercentage(assignment)!==null">
-                  · {{ progressPercentage(assignment) }}%
-                </template>
               </span>
               <span v-else class="muted">Фото: цель {{ assignment.goal??'не задана' }} · ожидает подтверждения</span>
-              <progress v-if="assignment.goal!==null&&assignment.confirmedPhotos!==null"
-                :max="assignment.goal" :value="Math.min(assignment.confirmedPhotos,assignment.goal)"
-                :aria-label="'Подтверждённый прогресс по фото '+assignment.id"/>
+              <span v-if="assignment.allowedMedia.includes('video')&&assignment.confirmedVideos!==null">
+                · Видео: {{ assignment.confirmedVideos }}{{ assignment.videoGoal===null?'':' / '+assignment.videoGoal }}
+              </span>
+              <span v-if="assignment.allowedMedia.includes('audio')&&assignment.confirmedAudio!==null">
+                · Аудио: {{ assignment.confirmedAudio }}{{ assignment.audioGoal===null?'':' / '+assignment.audioGoal }}
+              </span>
+              <span v-if="progressPercentage(assignment)!==null">
+                · Всего {{ progressPercentage(assignment) }}%
+              </span>
+              <progress v-if="progressPercentage(assignment)!==null"
+                :max="100" :value="progressPercentage(assignment)??0"
+                :aria-label="'Подтверждённый прогресс задания '+assignment.id"/>
               <small v-if="pendingReceiptCount(assignment.id)>0" class="muted">
                 Локально ожидают отправки: {{ pendingReceiptCount(assignment.id) }}
               </small>
@@ -662,18 +668,22 @@ onUnmounted(cleanPreview)
         <p v-if="selected.data" class="muted">{{ selected.data.instructions }}</p>
         <p><code>{{ selected.id }}</code></p>
         <p class="muted">Разрешённые типы: {{ selected.allowedMedia.join(', ') }} · {{ selected.goal===null?'Без цели по фото':'Фото: цель '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
+        <p class="muted">Цели для прогресса: Видео — {{ selected.videoGoal??'не задана' }}, Аудио — {{ selected.audioGoal??'не задана' }}. Цели не ограничивают отправку файлов.</p>
         <p class="muted">
           Подписанные требования: категория {{ selected.requirements.requiredCategory?'обязательна':'необязательна' }};
           описание минимум {{ selected.requirements.descriptionMinLength }} символов;
           GPS {{ selected.requirements.requiredGps?'обязателен':'необязателен' }}.
         </p>
         <p v-if="selected.confirmedPhotos!==null" class="muted">
-          Подтверждено сервером: {{ selected.confirmedPhotos }}
-          <template v-if="selected.goal!==null"> / {{ selected.goal }} · {{ progressPercentage(selected) }}%</template>
+          Подтверждено сервером: Фото {{ selected.confirmedPhotos }}
+          <template v-if="selected.goal!==null"> / {{ selected.goal }}</template>
+          <template v-if="progressPercentage(selected)!==null">
+            · Общий прогресс {{ progressPercentage(selected) }}%
+          </template>
         </p>
         <p v-if="selected.confirmedVideos!==null&&selected.confirmedAudio!==null"
           class="muted" data-testid="assignment-media-counts">
-          Видео: {{ selected.confirmedVideos }} · Аудио: {{ selected.confirmedAudio }}
+          Видео: {{ selected.confirmedVideos }}{{ selected.videoGoal===null?'':' / '+selected.videoGoal }} · Аудио: {{ selected.confirmedAudio }}{{ selected.audioGoal===null?'':' / '+selected.audioGoal }}
           (только при действующих E2EE-разрешениях)
         </p>
         <p v-if="pendingReceiptCount(selected.id)>0" class="muted">
@@ -716,6 +726,13 @@ onUnmounted(cleanPreview)
               <input id="assignment-allow-audio" v-model="editedAllowAudio" type="checkbox">
               Разрешить аудио (E2EE)
             </label>
+            <label v-if="editedAllowVideo" for="assignment-video-goal">Цель по видео (1–999, пусто — без цели)</label>
+            <input v-if="editedAllowVideo" id="assignment-video-goal" v-model="editedVideoGoal"
+              type="number" min="1" max="999" step="1" placeholder="Без цели">
+            <label v-if="editedAllowAudio" for="assignment-audio-goal">Цель по аудио (1–999, пусто — без цели)</label>
+            <input v-if="editedAllowAudio" id="assignment-audio-goal" v-model="editedAudioGoal"
+              type="number" min="1" max="999" step="1" placeholder="Без цели">
+            <p class="muted">Цели — только для подсчёта подтверждённого прогресса. При отключении типа его цель сбрасывается в следующей подписанной версии.</p>
             <button type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeGoal">Подписать новые правила</button>
