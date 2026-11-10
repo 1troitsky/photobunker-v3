@@ -9,7 +9,7 @@ import {
 import {pinnedPeer,ensureOwnExchangeKey} from '../../sharing/key-directory'
 import {listConfirmedContacts} from './contact-book'
 import {
-  withCurrentOwnerTeamDEK,verifyEpochHistory,profileAad,
+  withCurrentOwnerTeamDEK,verifyEpochHistory,profileAad,ownerEpochStatus,
   openVerifiedCurrentEpochMember,
 } from './team-epochs'
 import {cacheVerifiedJoinedTeam,verifiedTeamMembershipHistory} from './team-invitations'
@@ -285,7 +285,7 @@ export async function queueEpochInvitation(
   teamId:string,recipientAccountId:string,role:TeamRole,
 ):Promise<string>{
   const s=requireSession()
-  if(!s.online||(typeof navigator!=='undefined'||!navigator.onLine))
+  if(!s.online||(typeof navigator!=='undefined'&&!navigator.onLine))
     throw Error('teams.epoch_invite_requires_online')
   if(!uuidRe.test(teamId)||!uuidRe.test(recipientAccountId)
     ||!['curator','contributor','viewer'].includes(role))
@@ -366,4 +366,328 @@ export async function queueEpochAcceptance(item:EpochTeamInvite):Promise<string>
     teamId:c.teamId,inviteId:c.inviteId,operationId,
     ...command,state:'queued',createdAt:Date.now()})
   return operationId
+}
+
+/** Exact signed operation is immutable; after Lost ACK the same payload is
+ * replayed, never signed again. A 409 stays an explicit conflict.
+ */
+export async function syncEpochInvitationOperations():Promise<void>{
+  const s=requireSession()
+  if(!s.online||(typeof navigator!=='undefined'&&!navigator.onLine))return
+  const ops=await operations(s)
+  for(const op of ops.filter(x=>x.state==='queued')
+    .sort((a,b)=>a.createdAt-b.createdAt)){
+    same(s)
+    let url:string
+    if(op.kind==='invite'){
+      const c=inviteShape(op.contract)
+      if(c.ownerAccountId!==s.accountId
+        ||c.operationId!==op.operationId||c.inviteId!==op.inviteId
+        ||!await verify(await importSpki(s.pkg.accountSpki),
+          inviteDomain+op.contract,op.signature))
+        throw Error('teams.untrusted_epoch_outbox')
+      url='/teams/v2/'+encodeURIComponent(op.teamId)+'/invites'
+    }else if(op.kind==='accept'){
+      const c=acceptShape(op.contract)
+      if(c.recipientAccountId!==s.accountId
+        ||c.operationId!==op.operationId||c.inviteId!==op.inviteId
+        ||!await verify(await importSpki(s.pkg.accountSpki),
+          acceptDomain+op.contract,op.signature))
+        throw Error('teams.untrusted_epoch_outbox')
+      url='/teams/v2/'+encodeURIComponent(op.teamId)
+        +'/invites/'+encodeURIComponent(op.inviteId)+'/accept'
+    }else{
+      let c:MembershipChange
+      try{c=JSON.parse(op.contract) as MembershipChange}
+      catch{throw Error('teams.untrusted_epoch_outbox')}
+      if(c.version!==1||c.ownerAccountId!==s.accountId
+        ||c.operationId!==op.operationId||c.inviteId!==op.inviteId
+        ||c.teamId!==op.teamId
+        ||!await verify(await importSpki(s.pkg.accountSpki),
+          mutationDomain+op.contract,op.signature))
+        throw Error('teams.untrusted_epoch_outbox')
+      url='/teams/v1/'+encodeURIComponent(op.teamId)+'/membership'
+    }
+    try{
+      const ack:{
+        inviteId?:string;state?:string;keyEpoch?:number;unchanged:boolean
+        operationId?:string;membershipRevision?:number;rotationRequired?:boolean
+      }=await jsonApi(url,'POST',{
+        contract:op.contract,signature:op.signature,
+      })
+      same(s)
+      if(typeof ack.unchanged!=='boolean')throw Error('teams.epoch_ack_invalid')
+      if(op.kind==='membership'){
+        const c=JSON.parse(op.contract) as MembershipChange
+        if(ack.operationId!==op.operationId
+          ||!Number.isInteger(ack.membershipRevision)
+          ||(ack.membershipRevision??0)<c.toRevision
+          ||typeof ack.rotationRequired!=='boolean')
+          throw Error('teams.epoch_membership_ack_invalid')
+      }else{
+        const c=op.kind==='invite'
+          ?inviteShape(op.contract):acceptShape(op.contract)
+        if(ack.inviteId!==op.inviteId
+          ||ack.state!==(op.kind==='invite'?'pending':'accepted')
+          ||ack.keyEpoch!==c.keyEpoch)
+          throw Error('teams.epoch_invitation_ack_invalid')
+      }
+      await store(s,{...op,state:'sent'})
+    }catch(e){
+      same(s)
+      if(e instanceof Error&&e.message==='api.http_409')
+        await store(s,{...op,state:'conflict'})
+      else throw e
+    }
+  }
+}
+
+/** Owner-only signed v2 roster. A revoked historical invite remains a
+ * signed record; only the current accepted member carries live ACL.
+ */
+export async function listOwnerEpochRoster(teamId:string):Promise<EpochRosterMember[]>{
+  const s=requireSession()
+  if(!s.online)throw Error('teams.epoch_roster_requires_online')
+  const [history,status]=await Promise.all([
+    verifiedTeamMembershipHistory(teamId),ownerEpochStatus(teamId),
+  ])
+  if(status.membershipRevision!==history.revision
+    ||status.rotationRequired!==history.rotationRequired)
+    throw Error('teams.epoch_roster_revision_changed')
+  const signer=await importSpki(s.pkg.accountSpki)
+  let after:string|null=null
+  const roster:EpochRosterMember[]=[]
+  for(let n=0;n<100;n++){
+    const path='/teams/v2/'+encodeURIComponent(teamId)+'/participants'
+      +(after?'?after='+encodeURIComponent(after):'')
+    const page:{items:Array<{
+      inviteId:string;recipientAccountId:string;recipientAccountSpki:string
+      role:TeamRole;effectiveRole:TeamRole;state:'pending'|'accepted'|'revoked'
+      keyEpoch:number;membershipRevision:number;expiresAt:number
+      contract:string;signature:string
+      acceptedContract:string|null;acceptedSignature:string|null
+    }>;nextCursor:string|null}=await jsonApi(path)
+    same(s)
+    if(!Array.isArray(page.items)||page.items.length>50
+      ||page.nextCursor!==null
+        &&(typeof page.nextCursor!=='string'||!uuidRe.test(page.nextCursor)))
+      throw Error('teams.invalid_epoch_roster')
+    for(const item of page.items){
+      const c=inviteShape(item.contract)
+      if(c.teamId!==teamId||c.ownerAccountId!==s.accountId
+        ||c.inviteId!==item.inviteId
+        ||c.recipientAccountId!==item.recipientAccountId
+        ||c.role!==item.role||c.keyEpoch!==item.keyEpoch
+        ||c.membershipRevision!==item.membershipRevision
+        ||c.expiresAt!==item.expiresAt
+        ||c.keyEpoch>status.keyEpoch
+        ||!['pending','accepted','revoked'].includes(item.state)
+        ||!await verify(signer,inviteDomain+item.contract,item.signature))
+        throw Error('teams.untrusted_epoch_roster')
+      if(item.acceptedContract!==null||item.acceptedSignature!==null){
+        if(!item.acceptedContract||!item.acceptedSignature)
+          throw Error('teams.epoch_roster_missing_consent')
+        const receipt=acceptShape(item.acceptedContract)
+        if(receipt.inviteId!==c.inviteId||receipt.teamId!==teamId
+          ||receipt.recipientAccountId!==c.recipientAccountId
+          ||receipt.inviteHash!==await hash(item.contract)
+          ||receipt.keyEpoch!==c.keyEpoch
+          ||receipt.keyEpochHash!==c.keyEpochHash
+          ||!await verify(await importSpki(item.recipientAccountSpki),
+            acceptDomain+item.acceptedContract,item.acceptedSignature))
+          throw Error('teams.epoch_roster_untrusted_consent')
+      }else if(item.state==='accepted')
+        throw Error('teams.epoch_roster_missing_consent')
+      let derivedRole:TeamRole=c.role
+      let signedRevoked=false
+      for(const e of history.events.filter(x=>x.inviteId===c.inviteId)){
+        if(e.targetAccountId!==c.recipientAccountId
+          ||e.previousRole!==derivedRole||signedRevoked)
+          throw Error('teams.invalid_epoch_membership_chain')
+        if(e.action==='remove')signedRevoked=true
+        else derivedRole=e.nextRole as TeamRole
+      }
+      // A pending invite may also be invalidated by a newer key epoch,
+      // without any signed explicit member-removal event.
+      const autoExpired=c.keyEpoch<status.keyEpoch
+        &&item.acceptedContract===null
+      if(item.effectiveRole!==derivedRole
+        ||(item.state==='revoked'&&!signedRevoked&&!autoExpired)
+        ||(signedRevoked&&item.state!=='revoked'))
+        throw Error('teams.epoch_roster_acl_mismatch')
+      roster.push({
+        inviteId:c.inviteId,recipientAccountId:c.recipientAccountId,
+        role:derivedRole,state:item.state,expiresAt:c.expiresAt,
+        protocolVersion:2,keyEpoch:c.keyEpoch,
+      })
+    }
+    if(page.nextCursor===null)return roster
+    if(page.items.length!==50
+      ||page.items[49]!.inviteId!==page.nextCursor
+      ||after!==null&&page.nextCursor<=after)
+      throw Error('teams.invalid_epoch_roster')
+    after=page.nextCursor
+  }
+  throw Error('teams.epoch_roster_limit')
+}
+
+export async function queueEpochMembershipChange(
+  teamId:string,member:EpochRosterMember,
+  action:'change_role'|'remove',nextRole:TeamRole|null,
+):Promise<string>{
+  const s=requireSession()
+  const [roster,history]=await Promise.all([
+    listOwnerEpochRoster(teamId),verifiedTeamMembershipHistory(teamId),
+  ])
+  const existing=roster.find(x=>x.inviteId===member.inviteId
+    &&x.recipientAccountId===member.recipientAccountId)
+  if(!existing||existing.role!==member.role
+    ||existing.state!==member.state||existing.state==='revoked'
+    ||history.rotationRequired
+    ||action==='change_role'&&(existing.state!=='accepted'
+      ||nextRole===existing.role
+      ||!['curator','contributor','viewer'].includes(nextRole as string))
+    ||action==='remove'&&nextRole!==null)
+    throw Error('teams.invalid_epoch_membership_change')
+  const operationId=uuid()
+  const payload:MembershipChange={
+    version:1,operationId,teamId,ownerAccountId:s.accountId,
+    inviteId:existing.inviteId,targetAccountId:existing.recipientAccountId,
+    action,previousRole:existing.role,nextRole,
+    fromRevision:history.revision,toRevision:history.revision+1,
+  }
+  const command=await signed(s,mutationDomain,payload)
+  await store(s,{version:1,kind:'membership',
+    teamId,inviteId:existing.inviteId,operationId,
+    ...command,state:'queued',createdAt:Date.now()})
+  return operationId
+}
+
+/** The joined member verifies owner root + all signed epoch links *after*
+ * server consent has established access to the authenticated history.
+ */
+export async function openJoinedEpochInvite(item:EpochTeamInvite):Promise<JoinedTeam>{
+  const s=requireSession()
+  if(!s.online||item.state!=='accepted')throw Error('teams.epoch_member_requires_online')
+  const checked=await verifiedInvite(item)
+  if(!checked.trustedOwner)throw Error('teams.untrusted_epoch_owner')
+  const owner=await pinnedPeer(checked.ownerAccountId)
+  if(owner.accountSpki!==checked.ownerAccountSpki)
+    throw Error('teams.epoch_owner_key_changed')
+  const invitation=inviteShape(checked.contract)
+  let response:{
+    teamId:string;ownerAccountId:string;ownerAccountSpki:string
+    membershipRevision:number;keyEpoch:number;keyEpochHash:string
+    effectiveRole:TeamRole
+    invite:{
+      contract:string;signature:string;contractHash:string
+      acceptedContract:string;acceptedSignature:string
+    }
+    epoch:{contract:string;signature:string;contractHash:string}
+    latestRoleEvent:{contract:string;signature:string}|null
+  }
+  try{
+    response=await jsonApi('/teams/v2/'+encodeURIComponent(item.teamId)+'/member')
+  }catch(e){
+    if(e instanceof Error&&e.message==='api.http_404'){
+      // Member can survive another rotation; in that case the direct
+      // current-epoch grant replaces the historical signed v2 envelope.
+      return openVerifiedCurrentEpochMember(
+        item.teamId,item.ownerAccountId,invitation.rootContractHash)
+    }
+    throw e
+  }
+  same(s)
+  if(response.teamId!==invitation.teamId
+    ||response.ownerAccountId!==invitation.ownerAccountId
+    ||response.ownerAccountSpki!==owner.accountSpki
+    ||response.keyEpoch!==invitation.keyEpoch
+    ||response.keyEpochHash!==invitation.keyEpochHash
+    ||response.invite.contract!==checked.contract
+    ||response.invite.signature!==checked.signature
+    ||response.invite.contractHash!==checked.contractHash)
+    throw Error('teams.untrusted_epoch_member')
+  const receipt=acceptShape(response.invite.acceptedContract)
+  if(receipt.teamId!==invitation.teamId
+    ||receipt.inviteId!==invitation.inviteId
+    ||receipt.recipientAccountId!==s.accountId
+    ||receipt.keyEpoch!==invitation.keyEpoch
+    ||receipt.keyEpochHash!==invitation.keyEpochHash
+    ||receipt.inviteHash!==checked.contractHash
+    ||!await verify(await importSpki(s.pkg.accountSpki),
+      acceptDomain+response.invite.acceptedContract,
+      response.invite.acceptedSignature))
+    throw Error('teams.untrusted_epoch_consent')
+  const chain=await verifyEpochHistory(invitation.teamId,
+    invitation.ownerAccountId,owner.accountSpki,invitation.rootContractHash)
+  const epoch=chain.latest
+  if(!epoch||chain.epoch!==invitation.keyEpoch
+    ||chain.contractHash!==invitation.keyEpochHash
+    ||chain.rotationRequired
+    ||chain.membershipRevision!==response.membershipRevision
+    ||response.epoch.contractHash!==chain.contractHash
+    ||response.epoch.contract!==JSON.stringify(epoch)
+    ||!await verify(await importSpki(owner.accountSpki),
+      'pb3.team-key-epoch.v1\n'+response.epoch.contract,
+      response.epoch.signature))
+    throw Error('teams.untrusted_epoch_chain')
+  const own=await ensureOwnExchangeKey()
+  if(own.directory.descriptorHash!==invitation.recipientKeyDigest)
+    throw Error('teams.epoch_key_changed')
+  const context=info(invitation)
+  const wrapping=await exchangeKey(own.privateKey,
+    invitation.envelope.ephemeralSpki,
+    context,unb64(invitation.envelope.salt,16))
+  const raw=new Uint8Array(await crypto.subtle.decrypt({
+    name:'AES-GCM',iv:unb64(invitation.envelope.iv,12),
+    additionalData:enc.encode(context),tagLength:128,
+  },wrapping,unb64(invitation.envelope.ciphertext,48)))
+  let plaintext:ArrayBuffer
+  try{
+    if(raw.length!==32)throw Error('teams.invalid_epoch_join_key')
+    const key=await crypto.subtle.importKey('raw',raw,
+      {name:'AES-GCM'},false,['decrypt'])
+    plaintext=await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(epoch.privateEnvelope.iv,12),
+      additionalData:profileAad(epoch),tagLength:128,
+    },key,unb64(epoch.privateEnvelope.ciphertext))
+  }finally{raw.fill(0)}
+  let profile:{name:string;description:string}
+  try{profile=JSON.parse(dec.decode(plaintext)) as typeof profile}
+  catch{throw Error('teams.epoch_join_profile_invalid')}
+  if(!profile||typeof profile.name!=='string'
+    ||!profile.name||profile.name.trim()!==profile.name
+    ||profile.name.length>64||typeof profile.description!=='string'
+    ||profile.description.trim()!==profile.description
+    ||profile.description.length>1024
+    ||Object.keys(profile).sort().join('|')!=='description|name')
+    throw Error('teams.epoch_join_profile_invalid')
+  let role:TeamRole=invitation.role
+  if(response.latestRoleEvent){
+    let event:MembershipChange
+    try{event=JSON.parse(response.latestRoleEvent.contract) as MembershipChange}
+    catch{throw Error('teams.untrusted_epoch_join_role')}
+    if(event.action!=='change_role'
+      ||event.ownerAccountId!==invitation.ownerAccountId
+      ||event.teamId!==invitation.teamId
+      ||event.inviteId!==invitation.inviteId
+      ||event.targetAccountId!==s.accountId
+      ||event.toRevision<=invitation.membershipRevision
+      ||event.toRevision>response.membershipRevision
+      ||!['curator','contributor','viewer'].includes(event.nextRole as string)
+      ||!await verify(await importSpki(owner.accountSpki),
+        mutationDomain+response.latestRoleEvent.contract,
+        response.latestRoleEvent.signature))
+      throw Error('teams.untrusted_epoch_join_role')
+    role=event.nextRole as TeamRole
+  }
+  if(role!==response.effectiveRole)
+    throw Error('teams.epoch_join_role_mismatch')
+  same(s)
+  const joined:JoinedTeam={
+    teamId:invitation.teamId,ownerAccountId:invitation.ownerAccountId,
+    name:profile.name,description:profile.description,role,verifiedOnline:true,
+  }
+  await cacheVerifiedJoinedTeam(joined,s.accountId)
+  return joined
 }
