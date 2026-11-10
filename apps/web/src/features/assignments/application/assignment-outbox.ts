@@ -616,8 +616,8 @@ export function assertSignedPolicyProgress(
   if((next.privateRevision??1)<(previous.privateRevision??1))
     throw Error('assignment.private_rollback')
   if((next.privateRevision??1)===(previous.privateRevision??1)
-    &&(next.privateAmendmentContract!==previous.privateAmendmentContract
-      ||next.privateAmendmentSignature!==previous.privateAmendmentSignature))
+    &&((next.privateAmendmentContract??null)!==(previous.privateAmendmentContract??null)
+      ||(next.privateAmendmentSignature??null)!==(previous.privateAmendmentSignature??null)))
     throw Error('assignment.private_equivocation')
   if(next.policyRevision<previous.policyRevision)
     throw new Error('assignment.policy_rollback')
