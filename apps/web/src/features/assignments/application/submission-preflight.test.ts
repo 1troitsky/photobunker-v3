@@ -162,7 +162,7 @@ describe('P1-08 signed historical policy and E2EE grant preflight',()=>{
     }
     const contract3=JSON.stringify(v3),hash3=await hash(contract3)
     const signature3=await sign(await importSigner(session.pkg.accountPkcs8),
-      'pb3.assignment-policy.v3\\n'+contract3)
+      'pb3.assignment-policy.v3\n'+contract3)
     const v4={
       ...v3,version:4,operationId:crypto.randomUUID(),
       previousPolicyHash:hash3,fromPolicyRevision:4,toPolicyRevision:5,
@@ -170,7 +170,7 @@ describe('P1-08 signed historical policy and E2EE grant preflight',()=>{
     }
     const contract4=JSON.stringify(v4),hash4=await hash(contract4)
     const signature4=await sign(await importSigner(session.pkg.accountPkcs8),
-      'pb3.assignment-policy.v4\\n'+contract4)
+      'pb3.assignment-policy.v4\n'+contract4)
     const history:SignedPolicyHistory={
       ...f.history,policyRevision:5,events:[
         ...f.history.events,
