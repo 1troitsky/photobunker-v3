@@ -100,6 +100,51 @@ final class TeamKeyEpochController extends Controller
         ]);
     }
 
+
+    /** Bounded chain needed by returning members to verify successive epoch
+     * rotations back to the immutable original owner-signed team root.
+     */
+    public function history(Request $r,string $teamId)
+    {
+        [$actor]=$this->sync->actor($r);
+        P::uuid($teamId);
+        $team=DB::table('team_records_v1')->where('id',$teamId)
+            ->where('state','active')->first();
+        abort_unless($team,404);
+        $isOwner=$team->owner_account_id===$actor->id;
+        if(!$isOwner){
+            abort_unless(DB::table('team_members_v1')
+                ->where('team_id',$teamId)->where('account_id',$actor->id)
+                ->where('state','active')->exists(),404);
+            abort_unless(!$team->rotation_required,409);
+        }
+        $after=$r->query('after');
+        abort_unless($after===null
+            ||(is_string($after)&&ctype_digit($after)),422);
+        $cursor=$after===null?1:(int)$after;
+        abort_unless($cursor>=1&&$cursor<=1000000,422);
+        $rows=DB::table('team_key_epochs_v1')
+            ->where('team_id',$teamId)->where('epoch','>',$cursor)
+            ->orderBy('epoch')->limit(51)->get();
+        $items=$rows->take(50)->map(static fn($e)=>[
+            'keyEpoch'=>(int)$e->epoch,'contract'=>$e->contract_json,
+            'signature'=>$e->owner_signature,'contractHash'=>$e->contract_hash,
+        ])->values()->all();
+        return $this->sync->json([
+            'teamId'=>$teamId,'ownerAccountId'=>$team->owner_account_id,
+            'membershipRevision'=>(int)$team->membership_revision,
+            'keyEpoch'=>(int)$team->key_epoch,
+            'rotationRequired'=>(bool)$team->rotation_required,
+            'root'=>[
+                'contract'=>$team->contract_json,
+                'signature'=>$team->owner_signature,
+                'contractHash'=>$team->contract_hash,
+            ],
+            'items'=>$items,
+            'nextCursor'=>$rows->count()>50?$items[49]['keyEpoch']:null,
+        ]);
+    }
+
     public function rotate(Request $r,string $teamId)
     {
         $this->sync->origin($r);

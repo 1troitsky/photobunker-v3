@@ -166,6 +166,8 @@ Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(functio
         ->whereUuid('teamId');
     Route::get('/{teamId}/epoch/member',[TeamKeyEpochController::class,'recipient'])
         ->whereUuid('teamId');
+    Route::get('/{teamId}/epoch/history',[TeamKeyEpochController::class,'history'])
+        ->whereUuid('teamId');
     Route::post('/{teamId}/epoch',[TeamKeyEpochController::class,'rotate'])
         ->whereUuid('teamId');
 });
