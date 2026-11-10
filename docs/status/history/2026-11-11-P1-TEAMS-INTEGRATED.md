@@ -11,7 +11,7 @@ P1-27 Owner Team; P1-28 recipient-signed consent and ECDH invitations; P1-29A re
 
 ## Доказательства
 
-- Независимый аудит: [QA #61](https://github.com/1troitsky/photobunker-v3/pull/61), [P1-29C report](../audits/P1-29C-INDEPENDENT-INTEGRATION-AUDIT.md), **74/74 PASS**. Предыдущие отрицательные аудиты #55/#58 не удалены.
+- Независимый аудит: [QA #61](https://github.com/1troitsky/photobunker-v3/pull/61), [P1-29C report](../../audits/P1-29C-INDEPENDENT-INTEGRATION-AUDIT.md), **74/74 PASS**. Предыдущие отрицательные аудиты #55/#58 не удалены.
 - Exact-main [foundation](https://github.com/1troitsky/photobunker-v3/actions/runs/42898003940): PHP8.4/8.5 109 tests / 1807 assertions, Vitest151, TS/build PASS.
 - Exact-main [PG/Garage/Chromium](https://github.com/1troitsky/photobunker-v3/actions/runs/42898003754): 19/19 PASS.
 - Exact-main [security](https://github.com/1troitsky/photobunker-v3/actions/runs/42898003566): PASS.
