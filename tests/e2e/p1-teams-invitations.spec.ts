@@ -45,7 +45,7 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     await A.getByTestId('team-name').fill('TEAM SECRET PROOF')
     await A.getByLabel('Описание').first().fill('E2EE profile visible only to accepted users')
     await A.getByTestId('team-create-submit').click()
-    await expect(A.getByText('TEAM SECRET PROOF')).toBeVisible()
+    await expect(A.getByTestId(/^team-row-/).getByText('TEAM SECRET PROOF')).toBeVisible()
     await expect(A.getByText('В облаке',{exact:false}))
       .toBeVisible({timeout:30000})
     const panel=A.getByTestId('team-membership-panel')
