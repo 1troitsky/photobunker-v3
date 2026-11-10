@@ -102,3 +102,59 @@ describe('P1-19 unchanged DEK preserves accepted E2EE recipients across private 
     await expect(openOwnerAssignment(owner,inviteId,original,revised)).rejects.toThrow()
   })
 })
+
+describe('P1-22 versioned E2EE per-kind instructions',()=>{
+  it('keeps legacy v1 readable and sends new v2 fields only inside fresh ciphertext',async()=>{
+    const owner=(await freshPackage(ownerId)).pkg
+    const root=await sealAssignment(owner,assignmentId,{
+      version:1,title:'Legacy',instructions:'General',
+    })
+    const recipient=await crypto.subtle.generateKey(
+      {name:'ECDH',namedCurve:'P-256'},false,['deriveBits'])
+    const ctx={
+      assignmentId,inviteId,ownerAccountId:ownerId,recipientAccountId:recipientId,
+      role:'contributor' as const,expiresAt:Date.now()+86400000,
+    }
+    const invite=await wrapAssignmentForRecipient(owner,assignmentId,root,{
+      inviteId,recipientAccountId:recipientId,expiresAt:ctx.expiresAt,
+      role:'contributor',
+    },await exportECDHPublic(recipient.publicKey))
+    const extra={
+      version:2 as const,title:'Legacy',instructions:'General',
+      photoInstructions:'SECRET PHOTO angles',
+      videoInstructions:'SECRET VIDEO sequence',
+      audioInstructions:'SECRET AUDIO script',
+    }
+    const changed=await resealOwnerAssignment(owner,assignmentId,root,extra)
+    expect(changed.wrappedKey).toEqual(root.wrappedKey)
+    expect(changed.iv).not.toEqual(root.iv)
+    for(const value of Object.values(extra).filter(v=>typeof v==='string'))
+      expect(JSON.stringify(changed)).not.toContain(value)
+    expect(await openOwnerAssignment(owner,assignmentId,root,changed)).toEqual(extra)
+    expect(await openRecipientAssignment(recipient.privateKey,ctx,invite,changed))
+      .toEqual(extra)
+    expect(await openRecipientAssignment(recipient.privateKey,ctx,invite,root))
+      .toEqual({version:1,title:'Legacy',instructions:'General'})
+    await expect(openRecipientAssignment(recipient.privateKey,
+      {...ctx,recipientAccountId:ownerId},invite,changed)).rejects.toThrow()
+  })
+  it('fails closed on incomplete, oversized and unknown v2 private fields',async()=>{
+    const owner=(await freshPackage(ownerId)).pkg
+    const root=await sealAssignment(owner,assignmentId,{
+      version:1,title:'Legacy',instructions:'',
+    })
+    const valid={
+      version:2 as const,title:'Title',instructions:'',
+      photoInstructions:'',videoInstructions:'',audioInstructions:'',
+    }
+    await expect(resealOwnerAssignment(owner,assignmentId,root,{
+      ...valid,photoInstructions:'x'.repeat(2001),
+    })).rejects.toThrow('assignment.invalid_media_instructions')
+    await expect(resealOwnerAssignment(owner,assignmentId,root,{
+      ...valid,audioInstructions:undefined,
+    } as unknown as typeof valid)).rejects.toThrow('assignment.invalid_media_instructions')
+    await expect(resealOwnerAssignment(owner,assignmentId,root,{
+      ...valid,secretUnexpected:'plaintext',
+    } as typeof valid)).rejects.toThrow('assignment.invalid_media_instructions')
+  })
+})
