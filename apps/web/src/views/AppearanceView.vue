@@ -8,6 +8,7 @@ import {
 import type {DockId} from '../features/appearance/application/dock-preferences'
 
 const draft=ref<DockId[]>([...appliedDock.value])
+const touched=ref(false)
 const busy=ref(false)
 const error=ref('')
 const status=ref('')
@@ -18,10 +19,13 @@ const availableRows=computed(()=>DOCK_CATALOG.filter(x=>!draft.value.includes(x.
 
 watch(appliedDock,items=>{
   // Do not overwrite a user's unsaved order with an asynchronous read.
-  if(!dirty.value)draft.value=[...items]
+  if(!touched.value)draft.value=[...items]
 })
 watch(draft,items=>{previewDock.value=[...items]}, {deep:true,immediate:true})
-watch(activeSession,()=>{
+watch(()=>{const s=activeSession.value
+  return s?[s.accountId,s.deviceId,s.pkg.revision,s.pkg.akek].join('|'):''
+},()=>{
+  touched.value=false
   draft.value=[...DEFAULT_DOCK]
   previewDock.value=null
   error.value='';status.value=''
@@ -31,6 +35,7 @@ onUnmounted(()=>{previewDock.value=null})
 function change(items:DockId[]):void{
   error.value='';status.value=''
   draft.value=validateDock(items)
+  touched.value=true
 }
 function add(id:DockId):void{
   if(draft.value.includes(id)||draft.value.length>=6)return
@@ -59,6 +64,7 @@ function drop(index:number):void{
   change(updated)
 }
 function cancel():void{
+  touched.value=false
   draft.value=[...appliedDock.value]
   previewDock.value=null
   error.value=''
@@ -72,6 +78,7 @@ async function save():Promise<void>{
   busy.value=true;error.value='';status.value=''
   try{
     await saveDock(draft.value)
+    touched.value=false
     previewDock.value=null
     status.value='Настройки Dock зашифрованы и сохранены на этом устройстве'
   }catch(e){
