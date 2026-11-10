@@ -220,7 +220,7 @@ export function validatePhotoForGrant(
  */
 export async function preflightAssignmentPhotoGrant(
   assignmentId:string,photoId:string,expectedOwner:string,
-):Promise<{policyRevision:number;personalPhoto:boolean}>{
+):Promise<{policyRevision:number;personalPhoto:boolean;grantExpiresAtCap:number|null}>{
   const session=requireSession()
   // A local signed snapshot is suitable for OFFLINE capture, not
   // automatically current owner authorization at an ONLINE E2EE grant.
