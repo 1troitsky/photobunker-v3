@@ -8,6 +8,7 @@ use App\Http\Controllers\MediaGrantController;
 use App\Http\Controllers\MediaRevisionController;
 use App\Http\Controllers\RecipientKeyController;
 use App\Http\Controllers\TeamV1Controller;
+use App\Http\Controllers\TeamInvitationController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
 use App\Http\Controllers\AssignmentMediaSubmissionController;
@@ -133,4 +134,19 @@ Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(functio
     Route::get('/',[TeamV1Controller::class,'index']);
     Route::post('/',[TeamV1Controller::class,'create']);
     Route::get('/{teamId}',[TeamV1Controller::class,'show'])->whereUuid('teamId');
+});
+
+// P1-28: team DEK invitation and independent recipient-signed consent.
+// New members have zero implied assignment/file rights.
+Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/invites/received',[TeamInvitationController::class,'inbox']);
+    Route::post('/{teamId}/invites',[TeamInvitationController::class,'invite'])
+        ->whereUuid('teamId');
+    Route::get('/{teamId}/participants',[TeamInvitationController::class,'participants'])
+        ->whereUuid('teamId');
+    Route::post('/{teamId}/invites/{inviteId}/accept',
+        [TeamInvitationController::class,'accept'])
+        ->whereUuid('teamId')->whereUuid('inviteId');
+    Route::get('/{teamId}/member',[TeamInvitationController::class,'memberTeam'])
+        ->whereUuid('teamId');
 });

@@ -179,6 +179,37 @@ export async function listLocalTeams():Promise<TeamView[]>{
   same(s)
   return result.sort((a,b)=>a.name.localeCompare(b.name))
 }
+/**
+ * Never expose a persisted plaintext Team DEK. Only the owner can unwrap
+ * the signed root envelope, and raw key bytes live until the callback returns.
+ * Callers must separately verify each ECDH recipient + signed invite scope.
+ */
+export async function withOwnerTeamDEK<T>(
+  teamId:string,
+  action:(raw:Uint8Array<ArrayBuffer>,root:{contract:string;signature:string})=>Promise<T>,
+):Promise<T>{
+  const s=requireSession()
+  const entries=await localEntries(s)
+  const entry=entries.find(x=>x.teamId===teamId)
+  if(!entry||entry.ownerAccountId!==s.accountId||entry.delivery!=='synced')
+    throw Error('teams.synced_owner_team_required')
+  await verified(s,entry)
+  const c=parse(entry.contract)
+  let raw:Uint8Array<ArrayBuffer>
+  try{
+    raw=new Uint8Array(await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(c.privateEnvelope.wrappedKey.iv,12),
+      additionalData:enc.encode(ownerKeyAAD+s.accountId+'\n'+teamId),
+      tagLength:128,
+    },await key(s),unb64(c.privateEnvelope.wrappedKey.ciphertext,48)))
+  }catch{throw Error('teams.invalid_owner_dek')}
+  try{
+    if(raw.length!==32)throw Error('teams.invalid_owner_dek')
+    same(s)
+    return await action(raw,{contract:entry.contract,signature:entry.signature})
+  }finally{raw.fill(0)}
+}
+
 /** Durably persist encrypted signed operation before any HTTP request. */
 export async function queueTeam(name:string,description:string):Promise<TeamView>{
   const s=requireSession(),cleanName=name.trim(),cleanDescription=description.trim()
