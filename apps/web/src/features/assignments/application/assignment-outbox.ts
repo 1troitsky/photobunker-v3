@@ -7,7 +7,7 @@ import { listOutgoingGrants } from '../../sharing/grant-flow'
 import { listOutgoingMediaGrants } from '../../media/application/media-grants'
 import { listLocalMedia } from '../../media/application/media-outbox'
 import type { MediaCaptureIntent } from '../../media/application/media-outbox'
-import { sealAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
+import { sealAssignment, resealOwnerAssignment, openOwnerAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
 import type { AssignmentEnvelope, AssignmentInviteEnvelope, PrivateAssignment } from '../infrastructure/assignment-crypto'
 import { preparePhotoMetadata } from '../../photo-sync/domain/capture-metadata'
 import type { CaptureMetadataInput } from '../../photo-sync/domain/capture-metadata'
@@ -16,7 +16,7 @@ import type { MediaPrivateFields } from '../../media/domain/media-crypto'
 import { EMPTY_ADVANCED_RULES, normalizeAdvancedRules, validateAdvancedFields } from '../domain/advanced-rules'
 import type { AdvancedRules } from '../domain/advanced-rules'
 
-export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'
+export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'|'private'
 export type AssignmentOperationState='queued'|'retry'|'sent'|'conflict'
 
 export interface AssignmentOperation {
@@ -58,6 +58,9 @@ export type AssignmentListing={
   policySignature:string
   policyAmendmentContract?:string|null
   policyAmendmentSignature?:string|null
+  privateRevision?:number
+  privateAmendmentContract?:string|null
+  privateAmendmentSignature?:string|null
   stateContract:string|null
   stateSignature:string|null
   privateEnvelope:AssignmentEnvelope
@@ -260,6 +263,7 @@ function domain(kind:AssignmentOperationKind):string{
     'media-submit':'pb3.assignment-media-submit.v1\n',
     state:'pb3.assignment-state.v1\n',
     policy:'pb3.assignment-policy.v1\n',
+    private:'pb3.assignment-private.v2\n',
   }
   return signedDomains[kind]
 }
