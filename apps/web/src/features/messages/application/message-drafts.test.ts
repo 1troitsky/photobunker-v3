@@ -3,7 +3,7 @@ import Dexie from 'dexie'
 import {beforeEach,afterEach,describe,it,expect,vi} from 'vitest'
 import {activeSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
-import {freshPackage} from '../../identity/infrastructure/crypto'
+import {freshPackage,digest,hex} from '../../identity/infrastructure/crypto'
 import {
   getMessageDraft,listMessageDrafts,saveMessageDraft,
   MAX_MESSAGE_DRAFT_LENGTH,
@@ -25,7 +25,12 @@ let session:Session
 async function openDB(){
   const local=new Dexie('pb3-encrypted-messages-drafts-v1')
   local.version(1).stores({drafts:'&key,ownerScope'})
-  const rows=await local.table('drafts').toArray()
+  const accountId=activeSession.value?.accountId
+  if(!accountId)throw Error('no test session')
+  const ownerScope=hex(await digest(new TextEncoder().encode(
+    'pb3.message-draft-scope.v1\n'+accountId)))
+  const rows=await local.table('drafts').where('ownerScope')
+    .equals(ownerScope).toArray()
   local.close()
   return rows as Array<Record<string,unknown>>
 }
@@ -119,8 +124,9 @@ describe('P2-01 account-encrypted messages drafts without Matrix impersonation',
     activeSession.value={accountId:other,deviceId:crypto.randomUUID(),
       pkg,online:false} as Session
     expect(await getMessageDraft(contact)).toBe('')
-    expect((await openDB()).length).toBeGreaterThan(0)
+    expect(await openDB()).toHaveLength(0)
     activeSession.value=session
     expect(await getMessageDraft(contact)).toBe('first account only')
+    expect(await openDB()).toHaveLength(1)
   })
 })
