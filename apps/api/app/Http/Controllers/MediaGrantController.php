@@ -176,7 +176,8 @@ final class MediaGrantController extends Controller
                 $q->whereNull('g.assignment_id')
                     ->orWhere(function($scoped){
                         $now=PhotoSync::nowMs();
-                        $scoped->where(function($cutoff)use($now){
+                        $scoped->whereNotNull('a.id')
+                            ->where(function($cutoff)use($now){
                             $cutoff->whereNull('a.files_access_until')
                                 ->orWhere('a.files_access_until','>',$now);
                         })->where(function($cutoff)use($now){
