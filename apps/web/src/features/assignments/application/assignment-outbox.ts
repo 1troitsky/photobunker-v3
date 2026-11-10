@@ -826,6 +826,37 @@ export async function verifySignedAssignmentPolicy(
       item.scheduleAmendmentSignature,trustedSpki,item,
       scheduleRevision-1,prevHash)
   }
+  const retentionRevision=item.retentionRevision??1
+  if(!Number.isInteger(retentionRevision)||retentionRevision<1
+    ||retentionRevision>1001)
+    throw Error('assignment.invalid_retention_revision')
+  if(retentionRevision===1){
+    if(item.retentionAmendmentContract!=null
+      ||item.retentionAmendmentSignature!=null
+      ||(item.filesAccessUntil??null)!==null
+      ||(item.assignmentAccessUntil??null)!==null)
+      throw Error('assignment.retention_not_authenticated')
+  }else{
+    if(typeof item.retentionAmendmentContract!=='string'
+      ||typeof item.retentionAmendmentSignature!=='string')
+      throw Error('assignment.retention_not_authenticated')
+    const edit=parseRetentionEvent(item.retentionAmendmentContract)
+    const rootHash=hex(await digest(new TextEncoder().encode(item.policyContract)))
+    const prevHash=retentionRevision===2?rootHash:edit.previousRetentionHash
+    if(typeof prevHash!=='string'||!/^[a-f0-9]{64}$/.test(prevHash))
+      throw Error('assignment.retention_not_authenticated')
+    await verifyRetentionEvent(item.retentionAmendmentContract,
+      item.retentionAmendmentSignature,trustedSpki,item,
+      retentionRevision-1,prevHash)
+    const effective=signedAssignmentRetention(item)
+    if(effective.filesAccessUntil!==(item.filesAccessUntil??null)
+      ||effective.assignmentAccessUntil!==(item.assignmentAccessUntil??null))
+      throw Error('assignment.retention_projection_mismatch')
+    if(effective.filesAccessUntil!==null
+      &&effective.assignmentAccessUntil!==null
+      &&effective.assignmentAccessUntil<effective.filesAccessUntil)
+      throw Error('assignment.invalid_signed_retention')
+  }
   if(item.revision===1){
     if(item.state!=='active'||item.stateContract!==null
       ||item.stateSignature!==null)throw new Error('assignment.state_not_authenticated')
@@ -870,6 +901,14 @@ export function assertSignedPolicyProgress(
     throw new Error('assignment.original_policy_changed')
   if(next.revision<previous.revision)
     throw new Error('assignment.state_rollback')
+  if((next.retentionRevision??1)<(previous.retentionRevision??1))
+    throw Error('assignment.retention_rollback')
+  if((next.retentionRevision??1)===(previous.retentionRevision??1)
+    &&((next.retentionAmendmentContract??null)!==(previous.retentionAmendmentContract??null)
+      ||(next.retentionAmendmentSignature??null)!==(previous.retentionAmendmentSignature??null)
+      ||(next.filesAccessUntil??null)!==(previous.filesAccessUntil??null)
+      ||(next.assignmentAccessUntil??null)!==(previous.assignmentAccessUntil??null)))
+    throw Error('assignment.retention_equivocation')
   if((next.scheduleRevision??1)<(previous.scheduleRevision??1))
     throw Error('assignment.schedule_rollback')
   if((next.scheduleRevision??1)===(previous.scheduleRevision??1)
@@ -949,6 +988,11 @@ export async function listServerAssignments(after?:string):Promise<{
         ?s.pkg.accountSpki:(await pinnedPeer(item.ownerAccountId)).accountSpki
       await verifyScheduleHistory(item,trustedSpki)
     }
+    if((item.retentionRevision??1)>1){
+      const trustedSpki=item.ownerAccountId===s.accountId
+        ?s.pkg.accountSpki:(await pinnedPeer(item.ownerAccountId)).accountSpki
+      await verifyRetentionHistory(item,trustedSpki)
+    }
   }
   assertSame(s)
   // Cache only signed, independently authenticated policy snapshots.
@@ -980,7 +1024,8 @@ export async function listCachedAssignmentSnapshots():Promise<AssignmentListing[
     assertSame(s)
     try{
       await verifySignedAssignmentPolicy(row.listing,true)
-      verified.push(row.listing)
+      if(assignmentOpenAt(row.listing,Date.now()))
+        verified.push(row.listing)
     }catch{/* A stale/corrupt/unpinned server snapshot grants no authority. */}
   }
   assertSame(s)
@@ -991,6 +1036,7 @@ export async function listCachedAssignmentSnapshots():Promise<AssignmentListing[
 export async function listVerifiedCapturePolicies():Promise<AssignmentListing[]>{
   const rows=await listCachedAssignmentSnapshots()
   return rows.filter(item=>item.state==='active'
+    &&assignmentFilesOpenAt(item,Date.now())
     &&schedulePermitsAt(item,Date.now()))
 }
 
@@ -1007,6 +1053,8 @@ export async function signedCaptureBinding(
   // request that can fail during an API outage.
   await verifySignedAssignmentPolicy(policy,true)
   if(policy.state!=='active'
+    ||!assignmentFilesOpenAt(policy,Date.now())
+    ||!assignmentFilesOpenAt(policy,capturedAt)
     ||!schedulePermitsAt(policy,capturedAt)) {
     throw new Error('assignment.capture_not_permitted')
   }
@@ -1165,6 +1213,8 @@ export async function queueAssignmentPolicyChange(
     &&previousRules.requiredGps===requiredGps))
     throw Error('assignment.invalid_policy_change')
   const schedule=signedAssignmentSchedule(a)
+  if(!assignmentFilesOpenAt(a,Date.now()))
+    throw Error('assignment.retention_access_expired')
   if(a.policyRevision>=1001||(schedule.blockAfterEnd
     &&schedule.endsAt!==null&&schedule.endsAt<=Date.now()))
     throw Error('assignment.policy_edit_limit')
@@ -1209,6 +1259,8 @@ export async function queueAssignmentPrivateTextChange(
   await verifySignedAssignmentPolicy(listing,true)
   assertSame(session)
   const schedule=signedAssignmentSchedule(listing)
+  if(!assignmentOpenAt(listing,Date.now()))
+    throw Error('assignment.retention_access_expired')
   if(listing.state!=='active'
     ||(schedule.blockAfterEnd&&schedule.endsAt!==null
       &&schedule.endsAt<=Date.now())
@@ -1284,7 +1336,8 @@ export async function queueAssignmentScheduleChange(
   const item=cache.listing
   await verifySignedAssignmentPolicy(item,true)
   assertSame(session)
-  if(item.state!=='active'||(item.scheduleRevision??1)>=1001)
+  if(item.state!=='active'||!assignmentFilesOpenAt(item,Date.now())
+    ||(item.scheduleRevision??1)>=1001)
     throw Error('assignment.schedule_edit_not_allowed')
   const old=signedAssignmentSchedule(item)
   if(JSON.stringify(old)===JSON.stringify(next))
@@ -1316,6 +1369,60 @@ export async function queueAssignmentScheduleChange(
   return op.id
 }
 
+/**
+ * Durable owner-signed logical retention. This operation NEVER delegates
+ * physical deletion of contributor originals or expands their independent
+ * file TTL. Existing accepted assignment policy remains immutable.
+ */
+export async function queueAssignmentRetentionChange(
+  assignmentId:string,next:AssignmentRetention,
+):Promise<string>{
+  const session=requireSession()
+  if(!validAssignmentRetention(next))throw Error('assignment.invalid_retention')
+  const cache=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  if(!cache||cache.listing.ownerAccountId!==session.accountId)
+    throw Error('assignment.retention_not_owned')
+  const item=cache.listing
+  await verifySignedAssignmentPolicy(item,true)
+  assertSame(session)
+  if(item.state!=='active'||!assignmentFilesOpenAt(item,Date.now())
+    ||(item.retentionRevision??1)>=1001)
+    throw Error('assignment.retention_edit_not_allowed')
+  const old=signedAssignmentRetention(item)
+  if(JSON.stringify(old)===JSON.stringify(next))
+    throw Error('assignment.retention_unchanged')
+  const end=signedAssignmentSchedule(item).endsAt
+  for(const date of [next.filesAccessUntil,next.assignmentAccessUntil]){
+    if(date!==null&&(date<=Date.now()||(end!==null&&date<end)))
+      throw Error('assignment.retention_deadline_not_allowed')
+  }
+  const ops=await listAssignmentOperations()
+  if(ops.some(op=>op.kind==='retention'
+    &&['queued','retry'].includes(op.state)
+    &&(JSON.parse(op.contract) as {assignmentId:string}).assignmentId===assignmentId))
+    throw Error('assignment.retention_edit_pending')
+  const enc=new TextEncoder()
+  const previous=(item.retentionRevision??1)>1
+    ?item.retentionAmendmentContract:item.policyContract
+  if(!previous)throw Error('assignment.retention_not_authenticated')
+  const payload={
+    version:1,operationId:crypto.randomUUID(),assignmentId,
+    ownerAccountId:session.accountId,
+    rootPolicyHash:hex(await digest(enc.encode(item.policyContract))),
+    previousRetentionHash:hex(await digest(enc.encode(previous))),
+    fromRetentionRevision:item.retentionRevision??1,
+    toRetentionRevision:(item.retentionRevision??1)+1,
+    filesAccessUntil:next.filesAccessUntil,
+    assignmentAccessUntil:next.assignmentAccessUntil,
+    deleteOriginals:false,
+  }
+  const op=await signedOperation('retention',
+    '/assignments/v1/'+encodeURIComponent(assignmentId)+'/retention',payload)
+  assertSame(session)
+  await persist(op)
+  return op.id
+}
+
 /** Signed owner lifecycle commands are durable and do not delete media. */
 export async function queueAssignmentStateTransition(
   assignmentId:string,action:'finish'|'resume',
@@ -1326,7 +1433,8 @@ export async function queueAssignmentStateTransition(
     throw new Error('assignment.state_policy_not_cached')
   await verifySignedAssignmentPolicy(row.listing)
   const a=row.listing
-  if(!((action==='finish'&&a.state==='active')
+  if(!assignmentOpenAt(a,Date.now())
+    ||!((action==='finish'&&a.state==='active')
     ||(action==='resume'&&a.state==='finished')))
     throw new Error('assignment.invalid_state_transition')
   const schedule=signedAssignmentSchedule(a)
@@ -1374,6 +1482,9 @@ export async function queueAssignmentInvitation(
   }
   if(!listing||listing.ownerAccountId!==s.accountId)
     throw new Error('assignment.not_owned')
+  if('policyContract' in listing
+    &&!assignmentFilesOpenAt(listing,Date.now()))
+    throw Error('assignment.retention_access_expired')
   const inviteId=crypto.randomUUID(),expiresAt=Date.now()+6*86400000
   const envelope:AssignmentInviteEnvelope=await wrapAssignmentForRecipient(
     s.pkg,assignmentId,listing.privateEnvelope,
@@ -1508,6 +1619,7 @@ export async function signedMediaCaptureIntent(
   const policy=row.listing
   const allowed=signedAllowedAssignmentMedia(policy)
   if(policy.ownerAccountId===session.accountId
+    ||!assignmentFilesOpenAt(policy,Date.now())
     ||policy.state!=='active'
     ||!allowed.includes(mediaType)
     ||policy.policyRevision<2
@@ -1541,6 +1653,7 @@ export async function queueAssignmentMediaSubmission(
   await verifySignedAssignmentPolicy(listing,true)
   assertSame(session)
   if(listing.ownerAccountId===session.accountId
+    ||!assignmentFilesOpenAt(listing,Date.now())
     ||listing.state!=='active'
     ||!schedulePermitsAt(listing,Date.now()))
     throw Error('assignment.not_accepting_submissions')
