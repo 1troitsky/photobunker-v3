@@ -143,3 +143,34 @@ describe('P1-16 encrypted private video/audio metadata',()=>{
       .toThrow('media.invalid_description')
   })
 })
+
+describe('P1-17 encrypted media v3 tags',()=>{
+  it('hides actual category and tags in public transport and decrypts them only with DEK',async()=>{
+    const {pkg}=await freshPackage(crypto.randomUUID())
+    const bytes=new Uint8Array(1024).fill(41)
+    const file=new File([bytes],'PRIVATE-TAGS.webm',{type:'video/webm'})
+    const fields={category:'Report',description:'private',
+      tags:[' evidence ','field']}
+    const encrypted=await encryptMediaFile(file,pkg,Date.now()+86400000,
+      check,fields)
+    expect(encrypted.contract.version).toBe(1)
+    const serialized=JSON.stringify(encrypted.contract)
+    for(const secret of ['PRIVATE-TAGS','Report','evidence','field','private'])
+      expect(serialized).not.toContain(secret)
+    const decrypted=await decryptMediaChunks(pkg,encrypted.contract,
+      encrypted.chunks.map(c=>c.blob),check)
+    expect(decrypted.metadata).toMatchObject({
+      version:3,category:'Report',description:'private',
+      tags:['evidence','field'],
+    })
+    expect(new Uint8Array(await decrypted.blob.arrayBuffer())).toEqual(bytes)
+    for(const chunk of encrypted.chunks){
+      const raw=new TextDecoder().decode(await chunk.blob.arrayBuffer())
+      expect(raw).not.toContain('evidence')
+      expect(raw).not.toContain('Report')
+    }
+    await expect(encryptMediaFile(file,pkg,Date.now()+86400000,
+      check,{tags:['evidence','evidence']}))
+      .rejects.toThrow('assignment.duplicate_rule_label')
+  })
+})
