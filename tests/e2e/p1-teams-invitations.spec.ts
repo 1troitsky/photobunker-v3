@@ -1,10 +1,11 @@
 import { test, expect } from '@playwright/test'
 
 test('P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read',async({browser})=>{
-  test.setTimeout(260000)
+  test.setTimeout(330000)
   const ctxA=await browser.newContext(),ctxB=await browser.newContext()
-  const ctxC=await browser.newContext()
-  const A=await ctxA.newPage(),B=await ctxB.newPage(),C=await ctxC.newPage()
+  const ctxC=await browser.newContext(),ctxD=await browser.newContext()
+  const A=await ctxA.newPage(),B=await ctxB.newPage()
+  const C=await ctxC.newPage(),D=await ctxD.newPage()
   async function enroll(page:typeof A):Promise<string>{
     await page.goto('/settings')
     await page.getByRole('button',{name:'Создать ключ'}).click()
@@ -38,11 +39,14 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     const accountA=await enroll(A)
     const accountB=await enroll(B)
     const accountC=await enroll(C)
+    const accountD=await enroll(D)
     await prepareDirectory(A)
     await prepareDirectory(B)
     await prepareDirectory(C)
+    await prepareDirectory(D)
     await confirmContact(A,accountB,'Peer B')
     await confirmContact(A,accountC,'Peer C')
+    await confirmContact(A,accountD,'Peer D')
     await confirmContact(B,accountA,'Peer A')
     await confirmContact(C,accountA,'Peer A')
     await A.getByRole('button',{name:/^Команды \(/}).click()
@@ -91,6 +95,29 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     await survivor.getByRole('button',{name:'Принять'}).click()
     await expect(survivor.getByTestId('team-joined-list'))
       .toContainText('TEAM SECRET PROOF',{timeout:30000})
+    // Preserve only in this test's memory: a GENUINE historical v1
+    // invitation and signed member payload for hostile-origin rollback test.
+    const originalC=await C.evaluate(async()=>{
+      const m=await import('/src/features/people/application/team-invitations.ts')
+      const received=await m.listIncomingTeamInvites()
+      const invite=received.invites.find(x=>x.state==='accepted')
+      if(!invite)throw Error('missing accepted historical invite')
+      const res=await fetch('/teams/v1/'+invite.teamId+'/member',{
+        credentials:'include',headers:{Accept:'application/json'},
+      })
+      if(!res.ok)throw Error('missing historical member response')
+      return {invite,oldMember:await res.json() as unknown}
+    })
+    const teamId=originalC.invite.teamId
+
+    // D must remain pending at the moment of rotation, to exercise the
+    // independently signed exact-invite retirement proof T29B-01.
+    await panel.getByRole('button',{name:'Добавить участника'}).click()
+    await panel.getByTestId('team-invite-contact').selectOption(accountD)
+    await panel.getByTestId('team-invite-role').selectOption('viewer')
+    await panel.getByTestId('team-invite-submit').click()
+    await expect(panel.getByTestId('team-member-'+accountD))
+      .toContainText('Ожидает согласия',{timeout:30000})
     // Durable local member state is encrypted: neither team name nor
     // owner identity, plaintext consent, or Team DEK is indexed on disk.
     const encrypted=await B.evaluate(async()=>{
@@ -162,6 +189,11 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
       timeout:30000,
     })
     await expect(panel.getByTestId('team-rotation-required')).toHaveCount(0)
+    // A live signed epoch must prove the automatic retirement of D.
+    await expect(panel.getByTestId('team-member-'+accountD))
+      .toContainText('Исключён',{timeout:30000})
+    await expect(panel.getByTestId('team-member-'+accountC))
+      .toContainText('Принято',{timeout:30000})
 
     // Owner outbox persists ONLY locally sealed ciphertext, no new DEK,
     // profile data, owner ID or recipient identities in browser storage.
@@ -189,6 +221,46 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
       .toContainText('TEAM SECRET PROOF',{timeout:30000})
     await expect(survivor.getByTestId('team-key-epoch')).toHaveCount(0)
 
+    // T29B-02: replay two authentic old responses after C has verified
+    // epoch 2. AEAD high-water mark MUST deny the v1 downgrade despite
+    // valid original signatures; never overwrite the joined profile.
+    const epochMemberRoute='**/teams/v1/'+teamId+'/epoch/member'
+    const oldMemberRoute='**/teams/v1/'+teamId+'/member'
+    await C.route(epochMemberRoute,route=>route.fulfill({
+      status:200,contentType:'application/json',
+      body:JSON.stringify({teamId,keyEpoch:1}),
+    }))
+    await C.route(oldMemberRoute,route=>route.fulfill({
+      status:200,contentType:'application/json',
+      body:JSON.stringify(originalC.oldMember),
+    }))
+    const replay=await C.evaluate(async oldInvite=>{
+      const m=await import('/src/features/people/application/team-epochs.ts')
+      try{
+        await m.openAnyJoinedTeam(oldInvite)
+        return 'accepted-old-epoch'
+      }catch(e){return e instanceof Error?e.message:String(e)}
+    },originalC.invite)
+    expect(replay).toBe('teams.verified_epoch_rollback')
+    await C.unroute(epochMemberRoute)
+    await C.unroute(oldMemberRoute)
+    await expect(survivor.getByTestId('team-joined-list'))
+      .toContainText('TEAM SECRET PROOF')
+
+    // T29B-01 regression: after pending D's signed automatic retirement
+    // owner can still remove surviving C and complete another rotation.
+    const memberC=panel.getByTestId('team-member-'+accountC)
+    A.once('dialog',dialog=>{void dialog.accept()})
+    await memberC.getByRole('button',{name:'Исключить'}).click()
+    await expect(panel.getByTestId('team-rotation-required'))
+      .toBeVisible({timeout:30000})
+    A.once('dialog',dialog=>{void dialog.accept()})
+    await panel.getByTestId('team-rotate-key').click()
+    await expect(panel.getByTestId('team-key-epoch')).toContainText('эпоха 3',{
+      timeout:30000,
+    })
+    await expect(panel.getByTestId('team-rotation-required')).toHaveCount(0)
+
     // Explicit server authorization of a removed recipient fails even
     // after key rotation has re-enabled access to remaining members.
     const removedStatus=await B.evaluate(async(teamId)=>{
@@ -202,6 +274,7 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     }))
     expect(removedStatus).toBe(404)
   }finally{
-    await ctxA.close();await ctxB.close();await ctxC.close()
+    await ctxA.close();await ctxB.close()
+    await ctxC.close();await ctxD.close()
   }
 })
