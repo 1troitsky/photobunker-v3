@@ -82,6 +82,53 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(policy).toEqual({http:200,version:6,
       allowed:['photo','video','audio'],videoGoal:2,audioGoal:1})
 
+    // P1-18: the real four-tab editor is a separate route, not a static
+    // prototype. It decrypts the private owner envelope and publishes a new
+    // owner-account-signed v6 policy after explicit confirmation.
+    await A.getByTestId('open-fieldwork-editor').click()
+    await expect(A.getByTestId('fieldwork-assignment-editor')).toBeVisible()
+    await expect(A.getByTestId('editor-private-title'))
+      .toHaveText('Media v3 opt-in assignment')
+    await expect(A.getByRole('tab')).toHaveCount(4)
+    await A.getByRole('tab',{name:'Файлы'}).click()
+    await expect(A.locator('#editor-video-goal')).toHaveValue('2')
+    await expect(A.locator('#editor-audio-goal')).toHaveValue('1')
+    await A.getByRole('tab',{name:'Правила'}).click()
+    await expect(A.locator('#editor-photo-categories')).toHaveValue('Report')
+    await expect(A.locator('#editor-photo-tags')).toHaveValue('photo-evidence')
+    const submitEditor=A.getByRole('button',{name:'Подписать и сохранить правила'})
+    await expect(submitEditor).toBeDisabled() // no implicit autosave
+    await A.locator('#editor-photo-description-min').fill('0')
+    await A.getByRole('tab',{name:'Файлы'}).click()
+    await A.getByRole('tab',{name:'Правила'}).click()
+    await expect(submitEditor).toBeDisabled() // no semantic change
+    await A.getByRole('tab',{name:'Файлы'}).click()
+    await A.getByRole('tab',{name:'Участники'}).click()
+    await expect(A.getByLabel('ID аккаунта исполнителя')).toBeVisible()
+    await A.getByRole('tab',{name:'Правила'}).click()
+    await A.locator('#editor-photo-description-min').fill('1')
+    await expect(submitEditor).toBeEnabled()
+    await submitEditor.click()
+    await expect(A.getByText('Изменение подписано и принято сервером.'))
+      .toBeVisible({timeout:25000})
+    await expect(submitEditor).toBeDisabled()
+    const signedEditor=await A.evaluate(async id=>{
+      const res=await fetch('/assignments/v1/'+id+'/policy-history',{
+        credentials:'same-origin',
+      })
+      const json=await res.json()
+      const latest=JSON.parse(json.events.at(-1).contract)
+      return {status:res.status,revision:json.policyRevision,version:latest.version,
+        descriptionMinLength:latest.descriptionMinLength,
+        advanced:latest.photoAdvanced}
+    },assignmentId)
+    expect(signedEditor).toEqual({
+      status:200,revision:3,version:6,descriptionMinLength:1,
+      advanced:{allowedCategories:['Report'],requiredTags:['photo-evidence']},
+    })
+    await A.getByRole('link',{name:'Назад к заданиям'}).click()
+    await A.getByRole('button',{name:'Открыть',exact:true}).first().click()
+
     await A.locator('#assignment-recipient-id').fill(contributorId)
     await A.getByRole('button',{name:'Проверить ключ исполнителя'}).click()
     await A.getByLabel('Я сверил отпечаток исполнителя').check()
@@ -233,7 +280,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await A.locator('#assignment-audio-allowed').fill('Report')
     await A.locator('#assignment-audio-required-tags').fill('evidence')
     await A.getByRole('button',{name:'Подписать новые правила'}).click()
-    await expect(A.getByText('Версия правил: 3')).toBeVisible({timeout:20000})
+    await expect(A.getByText('Версия правил: 4')).toBeVisible({timeout:20000})
     await expect(A.getByTestId('assignment-audio-requirements'))
       .toContainText('описание минимум 12 символов')
     // An already-imported personal audio has NO authenticated private fields:
@@ -304,7 +351,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       }
     })
     expect(recorded).toMatchObject({
-      type:'audio',capturePolicy:3,captureMediaId:recorded.id,
+      type:'audio',capturePolicy:4,captureMediaId:recorded.id,
       captureAssignment:assignmentId,captureKind:'audio',
       hasPrivateFilename:false,leakedActualTags:false,signed:true,ciphertextOnly:true,
     })
