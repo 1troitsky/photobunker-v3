@@ -224,10 +224,12 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     // Recreate the web app before the malicious replay: a high-water mark
     // stored only in volatile JavaScript state is insufficient.
     await C.reload()
-    await C.waitForFunction(async()=>{
+    // Session bootstrap is intentionally local-first (initially offline).
+    // Explicitly finish the supported real server proof before probing ACL.
+    await C.evaluate(async()=>{
       const session=await import('/src/features/identity/application/session.ts')
-      return session.activeSession.value?.online===true
-    },null,{timeout:30000})
+      await session.reauthenticate()
+    })
     const verifiedBeforeReplay=await C.evaluate(async()=>{
       const m=await import('/src/features/people/application/team-invitations.ts')
       return m.listCachedJoinedTeams()
@@ -249,6 +251,8 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
       body:JSON.stringify(originalC.oldMember),
     }))
     const replay=await C.evaluate(async oldInvite=>{
+      const auth=await import('/src/features/identity/application/session.ts')
+      await auth.reauthenticate()
       const m=await import('/src/features/people/application/team-epochs.ts')
       try{
         await m.openAnyJoinedTeam(oldInvite)
