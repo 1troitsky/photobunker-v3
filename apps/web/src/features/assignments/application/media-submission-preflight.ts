@@ -19,7 +19,7 @@ const enc=new TextEncoder()
  */
 export async function preflightAssignmentMediaGrant(
   assignmentId:string,mediaId:string,expectedOwnerAccountId:string,
-):Promise<{mediaType:'video'|'audio';personalMedia:boolean}>{
+):Promise<{mediaType:'video'|'audio';personalMedia:boolean;grantExpiresAtCap:number|null}>{
   const session=requireSession()
   if(!session.online||!navigator.onLine)
     throw Error('assignment.media_grant_requires_connection')
