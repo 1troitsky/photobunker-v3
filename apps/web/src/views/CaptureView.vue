@@ -42,6 +42,10 @@ const requiredFields=computed(()=>{
     ?signedPolicyRequirements(policy)
     :signedMediaRequirements(policy,captureMode.value)):null
 })
+const requiredAdvanced=computed(()=>{
+  const policy=policies.value.find(p=>p.assignmentId===selectedAssignment.value)
+  return policy?signedAdvancedRequirements(policy,captureMode.value):null
+})
 // Volatile capture form. These values never enter IndexedDB in plaintext.
 const category=ref('')
 const description=ref('')
@@ -470,9 +474,9 @@ onUnmounted(()=>{disposed=true;closeCamera()})
           описание минимум {{ requiredFields.descriptionMinLength }} символов,
           GPS {{ requiredFields.requiredGps?'обязателен':'необязателен' }}.
         </p>
-        <p v-if="selectedAssignment" class="muted" data-testid="camera-advanced-rules">
-          Категории (публичный список правил): {{ signedAdvancedRequirements(policies.find(p=>p.assignmentId===selectedAssignment)!,captureMode).allowedCategories.join(', ')||'любые' }};
-          обязательные теги: {{ signedAdvancedRequirements(policies.find(p=>p.assignmentId===selectedAssignment)!,captureMode).requiredTags.join(', ')||'нет' }}.
+        <p v-if="requiredAdvanced" class="muted" data-testid="camera-advanced-rules">
+          Категории (публичный список правил): {{ requiredAdvanced.allowedCategories.join(', ')||'любые' }};
+          обязательные теги: {{ requiredAdvanced.requiredTags.join(', ')||'нет' }}.
         </p>
       </div>
       <div class="foundation-card">
