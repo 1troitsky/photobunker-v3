@@ -31,7 +31,9 @@ import type { PrivateAssignment } from '../features/assignments/infrastructure/a
 import {
   ensureOwnExchangeKey, inspectPeer, confirmPeer,
 } from '../features/sharing/key-directory'
-import { queueRecipientGrant, flushRecipientGrants, readReceivedPhoto } from '../features/sharing/grant-flow'
+import { queueRecipientGrant, flushRecipientGrants, readReceivedPhoto,
+  readReceivedPhotoMetadata } from '../features/sharing/grant-flow'
+import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import { listLocalPhotos, flushOutbox } from '../features/photo-sync/application/p1-photo'
 import type { StoredPhoto } from '../features/photo-sync/application/p1-photo'
 import {listLocalMedia} from '../features/media/application/media-outbox'
@@ -98,6 +100,7 @@ const search=ref('')
 const showCreate=ref(false)
 const previewUrl=ref('')
 const previewMime=ref('image/jpeg')
+const previewPrivate=ref<{category?:string;description?:string;tags?:string[];gps?:GPSFix}|null>(null)
 const filters=ref<'all'|'active'>('active')
 
 const selected=computed(()=>assignments.value.find(a=>a.id===selectedId.value)??null)
@@ -161,6 +164,7 @@ function pendingReceiptCount(assignmentId:string):number{
 
 function cleanPreview():void{
   if(previewUrl.value){URL.revokeObjectURL(previewUrl.value);previewUrl.value=''}
+  previewPrivate.value=null
 }
 function resetSensitive():void {
   assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
@@ -576,15 +580,19 @@ async function openMediaSubmission(grantId:string):Promise<void>{
     cleanPreview()
     previewUrl.value=URL.createObjectURL(result.blob)
     previewMime.value=result.metadata.mime
+    previewPrivate.value=result.metadata
     notice.value='Видео/аудио и приватные метаданные расшифрованы на устройстве'
   })
 }
 async function openSubmission(grantId:string):Promise<void>{
   await operate(async()=>{
-    const blob=await readReceivedPhoto(grantId) // verifies pinned owner + DEK and server ACL
+    const [blob,metadata]=await Promise.all([
+      readReceivedPhoto(grantId),readReceivedPhotoMetadata(grantId),
+    ]) // both assets independently verify pinned owner + DEK + active ACL
     cleanPreview()
     previewUrl.value=URL.createObjectURL(blob)
     previewMime.value='image/jpeg'
+    previewPrivate.value=metadata
     notice.value='Фотография расшифрована только на этом устройстве'
   })
 }
@@ -892,7 +900,7 @@ onUnmounted(cleanPreview)
           <p v-if="!eligiblePhotos.length" class="muted">Для этого задания нет подходящих синхронизированных фотографий.</p>
           <template v-if="selected.allowedMedia.some(kind=>kind==='video'||kind==='audio')">
             <h3>Видео и аудио · из Browser</h3>
-            <p class="muted">Понадобятся заранее загруженный зашифрованный файл, подписанное разрешение типа в задании и отдельное подтверждение передачи приватных метаданных. Для видео/аудио требования GPS, категории и описания, предназначенные для камеры фото, пока не заявляются как выполненные.</p>
+            <p class="muted">Понадобится зашифрованный файл разрешённого типа. До E2EE-передачи проверяются подписанные требования задания к категории, описанию, GPS и тегам; фактические приватные значения серверу недоступны.</p>
             <div v-for="file in eligibleMedia" :key="file.key" class="photo-row">
               <div><strong>{{ file.mediaType==='video'?'Видео':'Аудио' }} · {{ file.mediaId.slice(0,8) }}</strong>
                 <small>{{ file.capture?'Снято по заданию · подписано':'Личный медиафайл · требуется согласие' }}</small>
@@ -943,6 +951,13 @@ onUnmounted(cleanPreview)
         <img v-if="previewMime.startsWith('image/')" :src="previewUrl" class="decrypted-preview" alt="Полученная зашифрованная фотография">
         <video v-else-if="previewMime.startsWith('video/')" :src="previewUrl" class="decrypted-preview" controls playsinline preload="metadata"/>
         <audio v-else-if="previewMime.startsWith('audio/')" :src="previewUrl" controls preload="metadata"/>
+        <div v-if="previewPrivate" class="muted" data-testid="assignment-decrypted-private-metadata">
+          <p v-if="previewPrivate.category">Категория: {{ previewPrivate.category }}</p>
+          <p v-if="previewPrivate.description">Описание: {{ previewPrivate.description }}</p>
+          <p v-if="previewPrivate.tags?.length">Теги: {{ previewPrivate.tags.join(', ') }}</p>
+          <p v-if="previewPrivate.gps">GPS: {{ previewPrivate.gps.latitude }}, {{ previewPrivate.gps.longitude }} (±{{ Math.round(previewPrivate.gps.accuracyMeters) }} м)</p>
+          <small>Приватные поля расшифрованы на устройстве по отдельному E2EE-разрешению.</small>
+        </div>
         <button type="button" @click="cleanPreview">Закрыть</button>
       </div>
 
