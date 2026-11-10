@@ -136,7 +136,37 @@ try{
       &&event.getSender()===alice.userId;
   },90);
 
-  console.log("P2-02C PASS: two Matrix accounts, real RustCrypto Megolm, homeserver ciphertext, recipient decrypt");
+  // Lost-ACK replay of the EXACT SAME ciphertext bytes + txnId as
+  // the original SDK-authenticated send. A second event ID would mean
+  // the server failed the required idempotent transaction contract.
+  const replayPath=`/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.encrypted/${encodeURIComponent(txnId)}`;
+  const replay=await fetch(baseUrl+replayPath,{
+    method:"PUT",
+    headers:{
+      Authorization:`Bearer ${alice.token}`,
+      Accept:"application/json",
+      "Content-Type":"application/json",
+    },
+    body:JSON.stringify(raw.content),
+    signal:AbortSignal.timeout(7000),
+  });
+  assert.equal(replay.status,200,"Encrypted Matrix txn replay rejected");
+  const same=await replay.json();
+  assert.equal(same.event_id,sent.event_id,
+    "Lost ACK duplicate yielded a DIFFERENT remote event");
+
+  const matches=cb.getRoom(roomId)?.getLiveTimeline().getEvents()
+    .filter(e=>e.getId()===sent.event_id) ?? [];
+  assert.equal(matches.length,1,"Duplicate ciphertext reached recipient timeline");
+
+  // A bearer token is mandatory; ciphertext rooms are not public media URLs.
+  const anonymous=await fetch(baseUrl+
+    `/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/event/${encodeURIComponent(sent.event_id)}`,{
+    signal:AbortSignal.timeout(5000),
+  });
+  assert.equal(anonymous.status,401,
+    "An unauthenticated user unexpectedly read a private room event");
+  console.log("P2-02C PASS: two Matrix accounts, RustCrypto Megolm ciphertext/decrypt, exact-txn Lost ACK replay, anonymous event rejected");
 }finally{
   for(const client of clients){
     try{client.stopClient()}catch{ /* disposable process exit */ }
