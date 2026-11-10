@@ -7,6 +7,7 @@ import {
   listOwnerTeamRoster, listIncomingTeamInvites, listCachedJoinedTeams,
   queueTeamInvitation, queueTeamAcceptance, syncTeamMemberOperations,
   openJoinedTeam, queueTeamMembershipChange, verifiedTeamMembershipHistory,
+  dropRevokedJoinedTeam,
 } from '../features/people/application/team-invitations'
 import type {
   TeamRole, TeamInvitation, TeamRosterMember, JoinedTeam,
@@ -61,6 +62,9 @@ async function reload():Promise<void>{
     const results=await listIncomingTeamInvites()
     if(!current(scope,token))return
     incoming.value=results
+    const revokedTeams=results.filter(x=>x.state==='revoked')
+    for(const item of revokedTeams)await dropRevokedJoinedTeam(item.teamId)
+    if(!current(scope,token))return
     const verified=await Promise.all(results.filter(x=>
       x.state==='accepted'&&x.trustedOwner).map(async x=>{
         try{return await openJoinedTeam(x)}catch{return null}

@@ -53,7 +53,6 @@ type MembershipEvent={
   previousRole:TeamRole;nextRole:TeamRole|null
   fromRevision:number;toRevision:number
 }
-type SignedMembershipEvent=MembershipEvent & {contract:string;signature:string}
 export type TeamMembershipState={
   membershipRevision:number;keyEpoch:number;rotationRequired:boolean
 }
@@ -663,6 +662,16 @@ export async function openJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
     name:data.name,description:data.description,role:effectiveRole,verifiedOnline:true}
   await sealRow(s,'joined',c.teamId,joined)
   return joined
+}
+/** Best-effort local cleanup after a CURRENT online ACL revocation.
+ * Previously exported plaintext and offline devices cannot be retracted. */
+export async function dropRevokedJoinedTeam(teamId:string):Promise<void>{
+  const s=requireSession()
+  if(!uuidPattern.test(teamId))throw Error('teams.invalid_team_id')
+  const {key:rowKey}=await rowId(s,'joined',teamId)
+  same(s)
+  await db.joined.delete(rowKey)
+  same(s)
 }
 export async function listCachedJoinedTeams():Promise<JoinedTeam[]>{
   const s=requireSession()
