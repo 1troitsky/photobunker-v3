@@ -192,7 +192,8 @@ async function verifyReceived(input:Omit<TeamInvitation,'trustedOwner'>):Promise
     ||c.ownerAccountId!==input.ownerAccountId
     ||c.role!==input.role||c.expiresAt!==input.expiresAt
     ||(input.state!=='pending'&&input.state!=='accepted')
-    ||input.expired!==(input.state==='pending'&&c.expiresAt<=Date.now()+30000)
+    ||typeof input.expired!=='boolean'
+    ||(input.state==='accepted'&&input.expired)
     ||await hash(input.contract)!==input.contractHash
     ||!await verify(await importSpki(input.ownerAccountSpki),
       inviteDomain+input.contract,input.signature))
@@ -203,7 +204,7 @@ async function verifyReceived(input:Omit<TeamInvitation,'trustedOwner'>):Promise
     trusted=pin.accountSpki===input.ownerAccountSpki
   }catch{ /* Unpinned sender: display only, never accept/decrypt. */ }
   same(s)
-  return {...input,trustedOwner:trusted}
+  return {...input,expired:input.state==='pending'&&c.expiresAt<=Date.now(),trustedOwner:trusted}
 }
 export async function listIncomingTeamInvites():Promise<TeamInvitation[]>{
   const s=requireSession()
