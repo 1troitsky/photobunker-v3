@@ -28,7 +28,7 @@ let instructionGeneration=0
 const captureMode=ref<'photo'|'video'|'audio'>('photo')
 const currentMediaInstruction=computed(()=>{
   const value=assignmentPrivate.value
-  if(value?.version!==2)return ''
+  if(!canCaptureType.value||value?.version!==2)return ''
   return captureMode.value==='photo'?value.photoInstructions
     :captureMode.value==='video'?value.videoInstructions:value.audioInstructions
 })
