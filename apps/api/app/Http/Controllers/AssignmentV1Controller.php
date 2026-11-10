@@ -853,6 +853,51 @@ final class AssignmentV1Controller extends Controller
         },3);
     }
 
+    /**
+     * Owner-only authoritative invitation roster. This is a READ endpoint,
+     * never a role grant or evidence that an existing media DEK is revoked.
+     * Return the original owner-signed invite for independent client checks;
+     * server-derived consent status is explicitly not owner-signed.
+     */
+    public function participants(Request $r,string $assignmentId)
+    {
+        [$actor]=$this->sync->actor($r);
+        P::uuid($assignmentId);
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$assignmentId)
+            ->where('owner_account_id',$actor->id)->first();
+        abort_unless($a,404); // never disclose other accounts' recipient graph
+        R::requireAvailable($a);
+        $after=$r->query('after');
+        if($after!==null){
+            abort_unless(is_string($after),422);
+            P::uuid($after);
+        }
+        $now=PhotoSync::nowMs();
+        $q=DB::table('assignment_invites_v1')
+            ->where('assignment_id',$a->id);
+        if($after!==null)$q->where('id','>',$after);
+        $rows=$q->orderBy('id')->limit(51)->get([
+            'id','recipient_account_id','role','state','expires_at',
+            'contract_json','owner_signature',
+        ]);
+        $more=$rows->count()>50;
+        $page=$rows->take(50);
+        return $this->sync->json([
+            'items'=>$page->map(static fn($x)=>[
+                'inviteId'=>$x->id,
+                'recipientAccountId'=>$x->recipient_account_id,
+                'role'=>$x->role,'state'=>$x->state,
+                'expiresAt'=>(int)$x->expires_at,
+                'expired'=>$x->state==='pending'&&(int)$x->expires_at<=$now,
+                'contract'=>$x->contract_json,
+                'signature'=>$x->owner_signature,
+            ])->all(),
+            'nextCursor'=>$more?$page->last()->id:null,
+            'serverNowMs'=>$now,
+        ]);
+    }
+
     public function inbox(Request $r)
     {
         [$actor]=$this->sync->actor($r);
