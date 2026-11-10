@@ -24,7 +24,7 @@ async function account(id:string):Promise<void>{
 
 
 describe('P1-19 signed AEAD private text snapshot and historical cache safety',()=>{
-  it('binds encrypted text to owner's root hash, rejects signature and revision rollback',async()=>{
+  it('binds encrypted text to the owner root hash, rejects signature and revision rollback',async()=>{
     const owner='99999999-9999-4999-8999-999999999999'
     await account(owner)
     const session=activeSession.value!
