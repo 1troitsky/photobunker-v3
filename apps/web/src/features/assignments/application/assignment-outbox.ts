@@ -11,6 +11,8 @@ import { sealAssignment, wrapAssignmentForRecipient } from '../infrastructure/as
 import type { AssignmentEnvelope, AssignmentInviteEnvelope, PrivateAssignment } from '../infrastructure/assignment-crypto'
 import { preparePhotoMetadata } from '../../photo-sync/domain/capture-metadata'
 import type { CaptureMetadataInput } from '../../photo-sync/domain/capture-metadata'
+import { prepareMediaPrivateFields, validateMediaPrivateRequirements } from '../../media/domain/media-crypto'
+import type { MediaPrivateFields } from '../../media/domain/media-crypto'
 
 export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'
 export type AssignmentOperationState='queued'|'retry'|'sent'|'conflict'
@@ -98,7 +100,7 @@ export function signedPolicyRequirements(item:AssignmentListing):CaptureRequirem
   if(!item.policyAmendmentContract)throw Error('assignment.policy_revision_not_authenticated')
   const amend=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>
   if(amend.version===1)return {...NO_CAPTURE_REQUIREMENTS}
-  if(![2,3,4].includes(amend.version as number)||typeof amend.requiredCategory!=='boolean'
+  if(![2,3,4,5].includes(amend.version as number)||typeof amend.requiredCategory!=='boolean'
     ||typeof amend.requiredGps!=='boolean'
     ||!Number.isInteger(amend.descriptionMinLength)
     ||(amend.descriptionMinLength as number)<0
@@ -123,7 +125,7 @@ export function signedAllowedAssignmentMedia(item:AssignmentListing):AllowedAssi
   if(!item.policyAmendmentContract)
     throw Error('assignment.policy_revision_not_authenticated')
   const edit=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>
-  if(edit.version===3||edit.version===4){
+  if(edit.version===3||edit.version===4||edit.version===5){
     if(!validAllowedMedia(edit.allowedMedia))throw Error('assignment.invalid_allowed_media')
     return edit.allowedMedia
   }
@@ -131,6 +133,31 @@ export function signedAllowedAssignmentMedia(item:AssignmentListing):AllowedAssi
   throw Error('assignment.invalid_policy_revision')
 }
 
+/** Owner-signed public requirement flags, not plaintext captured metadata. */
+export function signedMediaRequirements(
+  item:AssignmentListing,kind:'video'|'audio',
+):CaptureRequirements{
+  if(item.policyRevision===1)return {...NO_CAPTURE_REQUIREMENTS}
+  if(!item.policyAmendmentContract)throw Error('assignment.policy_revision_not_authenticated')
+  const edit=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>
+  if(edit.version!==5)return {...NO_CAPTURE_REQUIREMENTS}
+  const rules=edit[kind==='video'?'videoRequirements':'audioRequirements']
+  if(!validCaptureRequirements(rules))throw Error('assignment.invalid_media_requirements')
+  if(!signedAllowedAssignmentMedia(item).includes(kind)
+    &&JSON.stringify(rules)!==JSON.stringify(NO_CAPTURE_REQUIREMENTS))
+    throw Error('assignment.invalid_media_requirements')
+  return rules as CaptureRequirements
+}
+function validCaptureRequirements(value:unknown):value is CaptureRequirements{
+  if(!value||typeof value!=='object'||Array.isArray(value))return false
+  const r=value as Record<string,unknown>
+  return Object.keys(r).join('|')==='requiredCategory|descriptionMinLength|requiredGps'
+    &&typeof r.requiredCategory==='boolean'
+    &&typeof r.requiredGps==='boolean'
+    &&Number.isInteger(r.descriptionMinLength)
+    &&(r.descriptionMinLength as number)>=0
+    &&(r.descriptionMinLength as number)<=4000
+}
 export type AssignmentProgressGoals={
   photoGoal:number|null;videoGoal:number|null;audioGoal:number|null
 }
@@ -153,7 +180,7 @@ export function signedPolicyGoals(item:AssignmentListing):AssignmentProgressGoal
   }
   if(!item.policyAmendmentContract)throw Error('assignment.policy_revision_not_authenticated')
   const amendment=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>
-  if(amendment.version!==4){
+  if(amendment.version!==4&&amendment.version!==5){
     if((item.videoGoal??null)!==null||(item.audioGoal??null)!==null)
       throw Error('assignment.unsigned_media_goal')
     return result
@@ -228,7 +255,9 @@ async function signedOperation(
   const contract=JSON.stringify(payload)
   const signingDomain=kind==='media-submit'&&payload.version===2
     ?'pb3.assignment-media-submit.v2\n'
-    :kind==='policy'&&payload.version===4
+    :kind==='policy'&&payload.version===5
+      ?'pb3.assignment-policy.v5\n'
+      :kind==='policy'&&payload.version===4
       ?'pb3.assignment-policy.v4\n'
       :kind==='policy'&&payload.version===3
       ?'pb3.assignment-policy.v3\n'
@@ -337,17 +366,19 @@ export async function verifySignedAssignmentPolicy(
     try{edit=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>}
     catch{throw new Error('assignment.invalid_policy_revision')}
     const type=edit.version
-    if(type!==1&&type!==2&&type!==3&&type!==4)throw Error('assignment.invalid_policy_revision')
+    if(type!==1&&type!==2&&type!==3&&type!==4&&type!==5)throw Error('assignment.invalid_policy_revision')
     const expected=[
       'version','operationId','assignmentId','ownerAccountId',
       'rootPolicyHash','previousPolicyHash','fromPolicyRevision',
       'toPolicyRevision','photoGoal','allowedMedia',
       ...(type>=2?['requiredCategory','descriptionMinLength','requiredGps']:[]),
-      ...(type===4?['videoGoal','audioGoal']:[]),
+      ...(type>=4?['videoGoal','audioGoal']:[]),
+      ...(type===5?['videoRequirements','audioRequirements']:[]),
     ]
     if(Object.keys(edit).sort().join('|')!==expected.sort().join('|')
       ||!await verify(await importSpki(trustedSpki),
-        (type===4?'pb3.assignment-policy.v4\n'
+        (type===5?'pb3.assignment-policy.v5\n'
+          :type===4?'pb3.assignment-policy.v4\n'
           :type===3?'pb3.assignment-policy.v3\n'
           :type===2?'pb3.assignment-policy.v2\n':domain('policy'))
           +item.policyAmendmentContract,
@@ -367,6 +398,8 @@ export async function verifySignedAssignmentPolicy(
     signedPolicyRequirements(item) // hard-fail invalid signed v2-v4 flags
     signedAllowedAssignmentMedia(item)
     signedPolicyGoals(item) // reject spoofed per-kind server columns
+    signedMediaRequirements(item,'video')
+    signedMediaRequirements(item,'audio')
   }
   if(item.revision===1){
     if(item.state!=='active'||item.stateContract!==null
