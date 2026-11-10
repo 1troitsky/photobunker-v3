@@ -6,12 +6,16 @@ import type { TeamView } from '../features/people/application/team-book'
 import {
   listOwnerTeamRoster, listIncomingTeamInvites, listCachedJoinedTeams,
   queueTeamInvitation, queueTeamAcceptance, syncTeamMemberOperations,
-  openJoinedTeam, queueTeamMembershipChange, verifiedTeamMembershipHistory,
+  queueTeamMembershipChange, verifiedTeamMembershipHistory,
   dropRevokedJoinedTeam,
 } from '../features/people/application/team-invitations'
 import type {
   TeamRole, TeamInvitation, TeamRosterMember, JoinedTeam,
 } from '../features/people/application/team-invitations'
+import {
+  openAnyJoinedTeam, ownerEpochStatus, queueTeamKeyRotation,
+  syncTeamKeyRotations,
+} from '../features/people/application/team-epochs'
 
 defineProps<{ ownedTeams:TeamView[]; contacts:ConfirmedContact[] }>()
 const emit=defineEmits<{ refresh:[] }>()
@@ -22,8 +26,10 @@ const roster=ref<TeamRosterMember[]>([])
 const incoming=ref<TeamInvitation[]>([])
 const joined=ref<JoinedTeam[]>([])
 const revokedTeamIds=ref<string[]>([])
+const suspendedTeamIds=ref<string[]>([])
 const showInvite=ref(false)
 const rotationRequired=ref(false)
+const keyEpoch=ref(1)
 const roleEditId=ref<string|null>(null)
 const roleDraft=ref<TeamRole>('viewer')
 const busy=ref(false)
@@ -47,7 +53,8 @@ function hasNetwork():boolean{
 }
 async function reload():Promise<void>{
   const scope=identity(),token=++generation
-  incoming.value=[];joined.value=[];revokedTeamIds.value=[];error.value=''
+  incoming.value=[];joined.value=[];revokedTeamIds.value=[]
+  suspendedTeamIds.value=[];error.value=''
   if(!scope)return
   try{
     const cached=await listCachedJoinedTeams()
@@ -65,11 +72,12 @@ async function reload():Promise<void>{
     const results=response.invites
     incoming.value=results
     revokedTeamIds.value=response.revokedTeamIds
+    suspendedTeamIds.value=response.suspendedTeamIds
     for(const id of response.revokedTeamIds)await dropRevokedJoinedTeam(id)
     if(!current(scope,token))return
     const verified=await Promise.all(results.filter(x=>
       x.state==='accepted'&&x.trustedOwner).map(async x=>{
-        try{return await openJoinedTeam(x)}catch{return null}
+        try{return await openAnyJoinedTeam(x)}catch{return null}
       }))
     if(current(scope,token)){
       const known=verified.filter((x):x is JoinedTeam=>x!==null)
@@ -84,21 +92,53 @@ async function reload():Promise<void>{
 }
 async function reloadRoster():Promise<void>{
   const scope=identity(),id=selectedTeam.value
-  roster.value=[];rotationRequired.value=false;roleEditId.value=null;error.value=''
+  roster.value=[];rotationRequired.value=false;keyEpoch.value=1
+  roleEditId.value=null;error.value=''
   if(!id)return
   if(!hasNetwork()){error.value='teams.roster_requires_online';return}
   try{
-    const [members,history]=await Promise.all([
+    await syncTeamKeyRotations()
+    const [members,history,epoch]=await Promise.all([
       listOwnerTeamRoster(id),verifiedTeamMembershipHistory(id),
+      ownerEpochStatus(id),
     ])
+    if(epoch.membershipRevision!==history.revision
+      ||epoch.rotationRequired!==history.rotationRequired)
+      throw Error('teams.membership_epoch_mismatch')
     if(identity()===scope&&selectedTeam.value===id){
       roster.value=members
       rotationRequired.value=history.rotationRequired
+      keyEpoch.value=epoch.keyEpoch
     }
   }catch(e){
     if(identity()===scope&&selectedTeam.value===id)
       error.value=e instanceof Error?e.message:'teams.roster_error'
   }
+}
+async function rotateTeam():Promise<void>{
+  if(busy.value||!selectedTeam.value||!rotationRequired.value)return
+  const scope=identity(),teamId=selectedTeam.value
+  if(!window.confirm(
+    'Выпустить новый ключ команды и заново зашифровать её профиль? '+
+    'Новый ключ получат только оставшиеся действующие участники. '+
+    'Уже сохранённые бывшими участниками данные невозможно отозвать.',
+  ))return
+  busy.value=true;error.value='';notice.value=''
+  try{
+    await queueTeamKeyRotation(teamId)
+    if(identity()!==scope)return
+    notice.value='Новый ключ подписан и сохранён в зашифрованной очереди.'
+    await syncTeamKeyRotations()
+    if(identity()!==scope)return
+    await reloadRoster()
+    if(identity()===scope){
+      notice.value='Новая эпоха подтверждена сервером. Текущий профиль защищён новым ключом.'
+      emit('refresh')
+    }
+  }catch(e){
+    if(identity()===scope)
+      error.value=e instanceof Error?e.message:'teams.epoch_rotation_failed'
+  }finally{busy.value=false}
 }
 async function memberAction(
   person:TeamRosterMember,action:'change_role'|'remove',nextRole:TeamRole|null,
@@ -214,8 +254,16 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
         </div>
         <p v-if="rotationRequired" role="alert" class="error-text"
           data-testid="team-rotation-required">
-          После исключения участника выдача старого Team DEK заблокирована.
-          До публикации нового ключевого эпоха приглашения и изменение ролей недоступны.
+          Выдача старого Team DEK заблокирована после исключения участника.
+          Нужно выпустить новый ключ для оставшихся участников.
+        </p>
+        <button v-if="rotationRequired" type="button" class="contacts-full-button"
+          :disabled="busy||!hasNetwork()" data-testid="team-rotate-key"
+          @click="rotateTeam">Обновить ключ команды</button>
+        <p v-if="keyEpoch>1&&!rotationRequired" class="muted"
+          data-testid="team-key-epoch">
+          Ключ команды обновлён (эпоха {{ keyEpoch }}).
+          Новые приглашения пока требуют обновлённого протокола приглашений.
         </p>
         <div v-for="person in roster" :key="person.inviteId"
           class="contacts-list-row"
@@ -244,7 +292,7 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
           </div>
         </div>
         <button type="button" class="contacts-full-button"
-          :disabled="!hasNetwork()||rotationRequired" @click="showInvite=!showInvite">
+          :disabled="!hasNetwork()||rotationRequired||keyEpoch>1" @click="showInvite=!showInvite">
           Добавить участника
         </button>
         <form v-if="showInvite" data-testid="team-invite-form"
@@ -271,6 +319,11 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
         </form>
       </template>
     </template>
+    <p v-if="suspendedTeamIds.length" role="status"
+      data-testid="team-suspended-notice">
+      Команда ожидает ротацию ключа после изменения состава.
+      Старые ключевые конверты временно не выдаются.
+    </p>
     <p v-if="revokedTeamIds.length" role="status"
       data-testid="team-revoked-notice">
       Доступ к команде отозван. Зашифрованный локальный снимок удалён.

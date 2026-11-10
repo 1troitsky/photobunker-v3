@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test'
 
 test('P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read',async({browser})=>{
-  test.setTimeout(210000)
+  test.setTimeout(260000)
   const ctxA=await browser.newContext(),ctxB=await browser.newContext()
-  const A=await ctxA.newPage(),B=await ctxB.newPage()
+  const ctxC=await browser.newContext()
+  const A=await ctxA.newPage(),B=await ctxB.newPage(),C=await ctxC.newPage()
   async function enroll(page:typeof A):Promise<string>{
     await page.goto('/settings')
     await page.getByRole('button',{name:'Создать ключ'}).click()
@@ -36,10 +37,14 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
   try{
     const accountA=await enroll(A)
     const accountB=await enroll(B)
+    const accountC=await enroll(C)
     await prepareDirectory(A)
     await prepareDirectory(B)
+    await prepareDirectory(C)
     await confirmContact(A,accountB,'Peer B')
+    await confirmContact(A,accountC,'Peer C')
     await confirmContact(B,accountA,'Peer A')
+    await confirmContact(C,accountA,'Peer A')
     await A.getByRole('button',{name:/^Команды \(/}).click()
     await A.getByRole('button',{name:'Создать команду'}).click()
     await A.getByTestId('team-name').fill('TEAM SECRET PROOF')
@@ -70,6 +75,22 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     await expect(inbox.getByText('TEAM SECRET PROOF')).toBeVisible()
     await expect(inbox.getByText('E2EE profile visible only to accepted users'))
       .toBeVisible()
+
+    // Add a second verified recipient before excluding B. C must survive
+    // rotation with a fresh independent DEK; B must not receive its envelope.
+    await panel.getByRole('button',{name:'Добавить участника'}).click()
+    await panel.getByTestId('team-invite-contact').selectOption(accountC)
+    await panel.getByTestId('team-invite-role').selectOption('viewer')
+    await panel.getByTestId('team-invite-submit').click()
+    await expect(panel.getByTestId('team-member-'+accountC))
+      .toContainText('Ожидает согласия',{timeout:30000})
+    await C.getByRole('button',{name:/^Команды \(/}).click()
+    const survivor=C.getByTestId('team-membership-panel')
+    await expect(survivor.getByTestId('team-incoming-invites'))
+      .toBeVisible({timeout:30000})
+    await survivor.getByRole('button',{name:'Принять'}).click()
+    await expect(survivor.getByTestId('team-joined-list'))
+      .toContainText('TEAM SECRET PROOF',{timeout:30000})
     // Durable local member state is encrypted: neither team name nor
     // owner identity, plaintext consent, or Team DEK is indexed on disk.
     const encrypted=await B.evaluate(async()=>{
@@ -129,7 +150,58 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     await expect(inbox.getByTestId('team-revoked-notice'))
       .toBeVisible({timeout:30000})
     await expect(inbox.getByTestId('team-joined-list')).toHaveCount(0)
+
+    // While the Team is quarantined, C receives a key-free suspension notice,
+    // never an old signed ECDH envelope.
+    await survivor.getByRole('button',{name:'Обновить'}).click()
+    await expect(survivor.getByTestId('team-suspended-notice'))
+      .toBeVisible({timeout:30000})
+    A.once('dialog',dialog=>{void dialog.accept()})
+    await panel.getByTestId('team-rotate-key').click()
+    await expect(panel.getByTestId('team-key-epoch')).toContainText('эпоха 2',{
+      timeout:30000,
+    })
+    await expect(panel.getByTestId('team-rotation-required')).toHaveCount(0)
+
+    // Owner outbox persists ONLY locally sealed ciphertext, no new DEK,
+    // profile data, owner ID or recipient identities in browser storage.
+    const encryptedEpoch=await A.evaluate(async()=>{
+      return new Promise<string>((resolve,reject)=>{
+        const req=indexedDB.open('pb3-encrypted-team-epochs-v1')
+        req.onerror=()=>reject(req.error)
+        req.onsuccess=()=>{
+          const db=req.result,tx=db.transaction('operations','readonly')
+          const op=tx.objectStore('operations').getAll()
+          op.onerror=()=>reject(op.error)
+          tx.oncomplete=()=>{
+            resolve(JSON.stringify(op.result));db.close()
+          }
+        }
+      })
+    })
+    for(const forbidden of [
+      'TEAM SECRET PROOF','E2EE profile visible only to accepted users',
+      accountA,accountB,accountC,'recipientAccountId','privateEnvelope',
+    ])expect(encryptedEpoch).not.toContain(forbidden)
+
+    await survivor.getByRole('button',{name:'Обновить'}).click()
+    await expect(survivor.getByTestId('team-joined-list'))
+      .toContainText('TEAM SECRET PROOF',{timeout:30000})
+    await expect(survivor.getByTestId('team-key-epoch')).toHaveCount(0)
+
+    // Explicit server authorization of a removed recipient fails even
+    // after key rotation has re-enabled access to remaining members.
+    const removedStatus=await B.evaluate(async(teamId)=>{
+      const response=await fetch('/teams/v1/'+teamId+'/epoch/member',{
+        credentials:'include',
+      })
+      return response.status
+    },await A.evaluate(async()=>{
+      const m=await import('/src/features/people/application/team-book.ts')
+      return (await m.listLocalTeams()).find(x=>x.name==='TEAM SECRET PROOF')!.teamId
+    }))
+    expect(removedStatus).toBe(404)
   }finally{
-    await ctxA.close();await ctxB.close()
+    await ctxA.close();await ctxB.close();await ctxC.close()
   }
 })

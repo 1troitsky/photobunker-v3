@@ -1,45 +1,48 @@
-# PB3 — текущая карта прогресса
+# PB3 — актуальная карта прогресса
 
-**Обновлено:** 2026-11-10 · **этап:** P1-26 — подтверждённый контакт в подписанном приглашении задания.
-**Состояние:** [Draft PR #44 / P1-26](https://github.com/1troitsky/photobunker-v3/pull/44) поверх [#43 / P1-25](https://github.com/1troitsky/photobunker-v3/pull/43) → [#42 / P1-24](https://github.com/1troitsky/photobunker-v3/pull/42). **В `main` ничего не слито; production не развёрнут.** Проверенная кодовая SHA P1-26: `454618dc3b5d53604a17f7fbabf688d2ae931a3a`. Финальную SHA после документационных коммитов сверять с CI.
+**Обновлено:** 2026-11-10 · **актуальный блок:** P1-29B — ротация E2EE-ключей Teams после исключения участника.
 
-> Эта страница — краткая **карта**, а не источник технической истины. Истина: `AGENTS.md`, `ts.md`, реальные ветки/PR/commits, CI и код. Обновлять **после крупных блоков**, не после каждого Issue/commit. Для подробностей — `docs/planning/`; для QA — `docs/audits/`. Не вычислять % по количеству PR или файлов.
+> Source of truth: `AGENTS.md`, `ts.md`, текущий GitHub `main`/PR/CI. Прошлую карту P1-26 сохранили в [архиве](history/2026-11-10-P1-26-pre-merge-snapshot.md), чтобы её устаревшие формулировки не считались текущим статусом.
 
-## Краткая сводка
+## Интегрированная база
 
-- **Проверенная база:** P1-20 Draft PR #38 на `bb04b62e14ea611ce2dc8cd85dc99fc8df228282`, CI **3/3 PASS**, PHP 8.4/8.5 **73/1201**, Vitest **97/97**, Chromium **15/15**.
-- **Завершённый крупный блок на Draft:** P1-21 PR #39 — независимо подписанные `filesAccessUntil` / `assignmentAccessUntil` (OFF по умолчанию), запреты на сервере независимо от scheduler, Local-First, неизменяемая история, идемпотентный ledger логических tombstones. **Владельцы заданий не могут удалять оригиналы исполнителей**. [Спецификация P1-21](../planning/P1-21-SIGNED-ASSIGNMENT-RETENTION.md) и [архивный отчёт](history/2026-11-10-P1-21-summary.md).
-- **Проверено на кодовой SHA `7d9debec`:** [Security/config — PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42773206531); [PHP8.4/8.5 + frontend — PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42773206290) (на каждой PHP-версии **75 tests / 1287 assertions**, Vitest **101/101** в 20 файлах, TS/build PASS); [реальный PostgreSQL18/Garage2.5 + Chromium — PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42773206329) (**15/15**, включая новый двухаккаунтный подписанный retention сценарий).
-- **P1-22 / Draft PR #40 — проверено:** отдельные приватные инструкции для фото, видео, аудио в E2EE-конверте v2, обратное чтение старого v1, неизменный root DEK, подписанная зашифрованная очередь, расшифровка у принятого исполнителя и в зашифрованном offline-cache. [Контракт и ограничения](../planning/P1-22-E2EE-MEDIA-INSTRUCTIONS.md). Код `95ec6a61`: [security PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42778972735), [PHP 75/1287 ×2 + Vitest 103/103 + build PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42778972880), [PG18/Garage2.5 + Chromium 15/15 PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42778972855).
-- **P1-23 / Draft PR #41 — проверено:** owner-only серверный список приглашений, подписанная подлинность адресата/роли и live-статусы pending/accepted, 404 посторонним и исполнителю; восстановление списка после перехода offline → online. [Контракт и ограничения](../planning/P1-23-OWNER-PARTICIPANT-ROSTER.md). Код `8d55cfe1`: [security PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42780964041), [PHP 76/1322 ×2 + Vitest 106/106 + build PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42780964119), [PG18/Garage2.5 + Chromium 15/15 PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42780963882).
-- **P1-24 / Draft PR #42 — проверено:** камера отображает общие и отдельные E2EE-инструкции только из подписанно-версионированного, account-scoped AES-GCM-кэша текущего задания. Переключение фото/видео/аудио и смена задания не сохраняют чужой текст; нет права съёмки — нет отдельной инструкции, нет доверенного кэша — явный fallback. [Контракт и ограничения](../planning/P1-24-CAMERA-E2EE-INSTRUCTIONS.md), [архивный отчёт](history/2026-11-10-P1-24-summary.md). Код `04579c37`: [security PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42783968544), [PHP 76/1322 ×2 + Vitest 106/106 + TS/build PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42783968869), [PG18/Garage2.5 + Chromium 15/15 PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42783968879).
-- **P1-25 / Draft PR #43 — проверено:** единый экран «Контакты и Команды», точный UUID-lookup с независимым fingerprint-confirmation, локальная книга контактов с AES-GCM AKEK и hashed account/peer indexes; офлайн-перечень, изменение имени, удаление; никакого автоматического media-grant. Teams/Blacklist честно **не реализованы**, поиск `@username/#UserID` — **OPEN**. [Спецификация](../planning/P1-25-ENCRYPTED-CONFIRMED-CONTACTS.md), [архивный отчёт](history/2026-11-10-P1-25-summary.md). Код `bb1a21ab`: [security PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42788066667), [PHP 76/1322 ×2 + Vitest 110/110 + TS/build PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42788067059), [PG18/Garage2.5 + Chromium 16/16 PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42788067023).
-- **P1-26 / Draft PR #44 — проверено:** Fieldwork «Участники» выбирает уже независимо подтверждённый контакт из зашифрованной локальной книги; выбор только подставляет UUID и заново проверяет подписанную директорию. **До явной отправки приглашения roster пуст и новые grants не появляются.** [Спецификация](../planning/P1-26-CONTACT-ASSIGNMENT-PICKER.md), [архивный отчёт](history/2026-11-10-P1-25-P1-26-summary.md). Код `454618dc`: [security PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42789432948), [PHP 76/1322 ×2 + Vitest 110/110 + TS/build PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42789433482), [PG18/Garage2.5 + Chromium 17/17 PASS](https://github.com/1troitsky/photobunker-v3/actions/runs/42789433018).
-- **Интеграционный кандидат P1-26 + assignment-scoped E2EE grants:** отдельная ветка поверх PR #44 переносит защищённые гранты PR #45, не перезаписывая P1-22–P1-26. **Это ещё не совместно проверенная реализация**: CI и независимая локальная проверка должны пройти на точном интеграционном SHA. Исходные Draft PR #44/#45 неизменны; `main` не затронут. [План интеграционной проверки](../audits/P1-26-P1-22-INTEGRATION-20261110.md).
-- **Интеграция:** все P0/P1 модули остаются в последовательности незавершённых Draft PR. CI PASS не означает приёмку владельцем, физические устройства, независимый аудит, merge или deploy.
-- **Следующее:** server-authoritative Teams/ACL/Blacklist и privacy-aware профили; модель отзыва ключей и contributor-owned физическое удаление остаются **OPEN**, никаких фиктивных полномочий.
+- `main @ ee0cbe6836b5359e971319dfc8ae91ef695c7d42` — после независимого аудита и объединения ранее проверенного P1 до интеграции Teams.
+- В рамках текущего блока `main` не менялся. **Merge и deploy не выполнялись.** Компоненты Teams пока доступны в **stacked Draft PRs**, а не в `main`.
 
-## Постоянная карта модулей
+## Текущая цепочка Teams
 
-| № | Модуль | Фактическое состояние | Готовность | Проверено | Интеграция | Приоритет |
-|---|---|---|---|---|---|---|
-| 1 | Ядро: Identity / E2EE / Local-First / Recovery | Базовые криптографические сценарии и очереди реализованы в staged P0/P1 | Не оценено | CI/E2E в частях P1; mobile не проверено | Draft PR chain | Высокий |
-| 2 | Shell / Dock / Навигация / Адаптивность | Vue-shell и маршруты есть; полную UI-паритетность не оценивали | Не оценено | Частично, Chromium | Draft PR chain | Средний |
-| 3 | Камера: фото / видео / аудио / GPS | Реальный browser capture/signed intents; P1-24 — E2EE-инструкции текущего задания по выбранному типу из проверенного зашифрованного кэша | Не оценено | P1-24 Chromium E2E 15/15, но не native Safari/iOS/Android | Draft PR #42 | Высокий |
-| 4 | Browser / Каталог / Импорт / Синхронизация / Обмен | Есть E2EE импорт/обмен и синхронизация; полный Browser UX и каталожные операции не подтверждены | Не оценено | Частично, Chromium | Draft PR chain | Высокий |
-| 5 | Просмотр / Редактирование / Версии файлов | Подписанные версии медиа есть; принятый полный редактор 3.2 не подтверждён | Не оценено | Частично, Chromium | Draft PR chain | Средний |
-| 6 | Задания / Fieldwork / Участники задания | P1-19–P1-24 — E2EE-текст, расписание, retention, roster, инструкции в камере; P1-26 — подтверждённый контакт выбирается в подписанное приглашение, но не даёт медиаправ. Нет DEK-revoke/чужого GC | Не оценено | P1-26 PHP 76/1322, Vitest 110/110, двухаккаунтный Chromium 17/17; не устройства | Draft PR #37–#44 | **Высокий** |
-| 7 | Контакты / Команды / Роли | P1-25 — подтверждённая зашифрованная книга и офлайн CRUD; P1-26 — выбор контакта в Fieldwork приглашении с повторной проверкой ключа. Серверные Teams/ACL/Blacklist и @username/#UserID **не реализованы** | Не оценено | PHP 76/1322, Vitest 110/110, двухаккаунтный Chromium 17/17; не устройства | Draft PR #43–#44 | **Высокий** |
-| 8 | Messenger / Matrix | Запланировано; утверждённый UI не равен интеграции Matrix | Не оценено | Нет подтверждённого production E2E | План | Позже |
-| 9 | PIN / Emergency / Dead Man's Switch / Безопасность | Целевые требования определены; полнота реализации не подтверждена | Не оценено | Не оценено | План/отдельные заготовки | Высокий |
-| 10 | Профиль / Настройки / Уведомления | Есть базовые настройки Identity; полная принятая структура не подтверждена | Не оценено | Частично | Draft/план | Средний |
-| 11 | Storage Manager / S3 / Репликация / Backup | E2EE sync/Garage есть; P1-21 фиксирует только логические tombstones, не физический GC чужих медиа; BYO/репликация/backup не подтверждены | Не оценено | Изолированный Garage CI, no-delete PHP | Частично Draft/план | Высокий |
-| 12 | Тарифы / Квоты / Оплата | Реальная серверная Free-квота созданий заданий; полное биллинг-ядро не подтверждено | Не оценено | PHP tests | Частично Draft/план | Средний |
-| 13 | Administration / Analytics | Запланированный отдельный модуль | Не оценено | Нет | План | Позже |
-| 14 | PWA / Кроссбраузерность / Производительность / Релиз | Chromium двух аккаунтов проверяет P1-26 Contacts→signed assignment invitation и прежние offline/E2EE сценарии; физические iOS/Android/Safari и cold offline trust не проверялись | Не оценено | P1-26 CI 3/3, Chromium 17/17; устройства не проверены | Draft/план | Высокий |
+| Этап | PR / HEAD | Подтверждённое состояние |
+|---|---|---|
+| P1-27 — Teams owner, подписанный Team DEK и Local-First | [#50](https://github.com/1troitsky/photobunker-v3/pull/50) · `157909c9` | CI 3/3 PASS, Chromium 18/18 |
+| P1-28 — подтверждённые приглашения, согласие, recipient ECDH | [#51](https://github.com/1troitsky/photobunker-v3/pull/51) · `b45028d` | CI 3/3 PASS, Chromium 19/19 |
+| P1-29A — подписанные роли, исключение, запрет выдачи старого DEK | [#52](https://github.com/1troitsky/photobunker-v3/pull/52) · `70d6a1e` | CI 3/3 PASS после повторного Chromium 19/19; первоначальный сбой старого media E2E сохранён |
+| P1-29B — новый Team DEK и подписанные ключевые эпохи | [#53](https://github.com/1troitsky/photobunker-v3/pull/53) | Код / тесты в Draft. Точный финальный HEAD CI и независимый QA ещё требуют подтверждения |
 
-**Почему нет процентов:** нет проверенного перечня критериев приёмки для всех 14 модулей. Процент без такой базы вводил бы в заблуждение. После инвентаризации можно добавить оценку по реальным критериям сценариев/QA/интеграции.
+### Реализовано в P1-29B
 
-## Правило изменения карты
+Новый случайный Team DEK, новая AEAD-шифротекстовая версия профиля, отдельный ECDH-envelope каждому **активному** участнику, проверка текущей подписанной ревизии/ключа/списка участников, атомарный PostgreSQL commit, подписанная цепочка эпох, encrypted outbox и Lost ACK replay. На стороне UI — подтверждение ротации, quarantine warning и чтение новой версии оставшимся участником. Полные инварианты: [P1-29B](../planning/P1-29B-TEAM-DEK-EPOCH-ROTATION.md).
 
-Прежде чем править эту таблицу, сверить текущее состояние веток (включая stacked Draft), CI на конкретной SHA, известные блокировки и `ts.md`. Для крупных этапов создавать **один** архивный отчёт в `docs/status/history/YYYY-MM-DD-<этап>-summary.md`, не дублируя здесь подробную историю. `main` не менять без разрешения владельца.
+### Не готово / ограничения
+
+- P1-29B **не готов к merge**, пока точный HEAD CI, настоящий трёхаккаунтный Chromium и независимый локальный QA не пройдут.
+- **P1-29C:** подписанные invitations v2 для новой эпохи после ротации; текущие v1-инвайты запрещены после epoch 1, чтобы не выдавать старый ключ.
+- Командное членство не предоставляет автоматически права на чужие задания, медиа, сообщения.
+- Уже расшифрованное исключённым участником содержимое нельзя криптографически «забрать назад».
+- Native iPhone/Safari/Android — NOT TESTED. Production миграции/locks — NOT TESTED. Trusted cold offline — BLOCKED BY DESIGN.
+
+## Продуктовые модули — без искусственных процентов
+
+| Модуль | Фактический статус |
+|---|---|
+| Identity / Recovery / E2EE / Local-First | Основные P0/P1 сценарии в `main`; дальнейший аудит и устройства нужны |
+| Фото / видео / аудио, камера / GPS | Production-style browser/E2E контракты реализованы; physical/native не проверены |
+| Задания / E2EE grants / retention | Базовые подписанные сценарии интегрированы, остаются расширения |
+| Контакты / Teams | Контакты в `main`; Teams owner/invites/roles/rekey в #50–#53 Draft |
+| Browser / File viewer / редактор | Полный approved UX и производственный редактор не подтверждены |
+| Matrix Messenger | Отдельный обязательный последующий блок |
+| Security & Privacy / backups / Emergency | Целевая спецификация, полный безопасный runtime pipeline не подтверждён |
+| Storage Manager / BYO S3 / backup replica | Garage E2EE-путь есть; BYO/replica/backup ещё впереди |
+| Billing / Plans / Analytics / Administration | Дальнейшие обязательные фазы, не объявлять готовыми |
+| Native PWA, deployment | Проверка физических устройств и release security gates впереди |
+
+**Следующее:** закрыть QA P1-29B, затем P1-29C (epoch-scoped invites), независимый аудит всей цепочки Teams и безопасная интеграция локальным агентом по согласованному процессу.

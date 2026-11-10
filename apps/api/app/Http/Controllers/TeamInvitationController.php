@@ -78,6 +78,7 @@ final class TeamInvitationController extends Controller
                 ]);
             }
             abort_unless($team->state==='active'&&!$team->rotation_required
+                &&(int)$team->key_epoch===1
                 &&hash_equals($team->contract_hash,$c['teamContractHash']),409);
             abort_if(DB::table('team_invites_v1')
                 ->where('operation_id',$c['operationId'])->exists(),409);
@@ -117,9 +118,11 @@ final class TeamInvitationController extends Controller
         if($after!==null)P::uuid($after);
         $q=DB::table('team_invites_v1 as i')
             ->join('identity_accounts as a','a.id','=','i.owner_account_id')
+            ->join('team_records_v1 as t','t.id','=','i.team_id')
             ->where('i.recipient_account_id',$actor->id);
         if($after!==null)$q->where('i.id','>',$after);
-        $rows=$q->select(['i.*','a.account_spki'])->orderBy('i.id')
+        $rows=$q->select(['i.*','a.account_spki','t.rotation_required'])
+            ->orderBy('i.id')
             ->limit(51)->get();
         $items=$rows->take(50)->map(function($i){
             if($i->state==='revoked'){
@@ -129,6 +132,15 @@ final class TeamInvitationController extends Controller
                 return [
                     'inviteId'=>$i->id,'teamId'=>$i->team_id,
                     'state'=>'revoked',
+                ];
+            }
+            if($i->rotation_required){
+                // All historical ECDH envelopes are suspended while an
+                // exclusion awaits cryptographic re-key. Keep survivor cache
+                // but mark its live ACL unavailable until the new epoch.
+                return [
+                    'inviteId'=>$i->id,'teamId'=>$i->team_id,
+                    'state'=>'suspended',
                 ];
             }
             return [
@@ -231,6 +243,7 @@ final class TeamInvitationController extends Controller
                 ]);
             }
             abort_unless($team->state==='active'&&!$team->rotation_required
+                &&(int)$team->key_epoch===1
                 &&$invite->state==='pending'
                 &&(int)$invite->expires_at>PhotoSync::nowMs(),409);
             $directory=DB::table('account_exchange_keys')
@@ -280,7 +293,8 @@ final class TeamInvitationController extends Controller
         abort_unless($team,404);
         // Never serve the old Team DEK once any member is excluded.
         // The surviving member gets 409 until a new key epoch is committed.
-        abort_unless(!$team->rotation_required,409);
+        abort_unless(!$team->rotation_required
+            &&(int)$team->key_epoch===1,409);
         // Member's own accepted invite is required to unwrap the team DEK.
         $invite=DB::table('team_invites_v1')
             ->where('team_id',$teamId)

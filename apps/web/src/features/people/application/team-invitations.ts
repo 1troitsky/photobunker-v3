@@ -217,9 +217,11 @@ async function verifyReceived(input:Omit<TeamInvitation,'trustedOwner'>):Promise
   same(s)
   return {...input,expired:input.state==='pending'&&c.expiresAt<=Date.now(),trustedOwner:trusted}
 }
-type RevokedTeamInvite={inviteId:string;teamId:string;state:'revoked'}
+type MinimalTeamInvite={
+  inviteId:string;teamId:string;state:'revoked'|'suspended'
+}
 export async function listIncomingTeamInvites():Promise<{
-  invites:TeamInvitation[];revokedTeamIds:string[]
+  invites:TeamInvitation[];revokedTeamIds:string[];suspendedTeamIds:string[]
 }>{
   const s=requireSession()
   if(!s.online||(typeof navigator!=='undefined'&&!navigator.onLine))
@@ -227,11 +229,12 @@ export async function listIncomingTeamInvites():Promise<{
   let after:string|null=null
   const invites:TeamInvitation[]=[]
   const revokedTeamIds:string[]=[]
+  const suspendedTeamIds:string[]=[]
   for(let n=0;n<100;n++){
     const path:string='/teams/v1/invites/received'
       +(after?'?after='+encodeURIComponent(after):'')
     const page: {
-      items:Array<Omit<TeamInvitation,'trustedOwner'>|RevokedTeamInvite>
+      items:Array<Omit<TeamInvitation,'trustedOwner'>|MinimalTeamInvite>
       nextCursor:string|null
     }=
       await jsonApi(path)
@@ -240,17 +243,21 @@ export async function listIncomingTeamInvites():Promise<{
       ||page.nextCursor!==null&&typeof page.nextCursor!=='string')
       throw Error('teams.bad_inbox')
     for(const item of page.items){
-      if(item.state==='revoked'){
+      if(item.state==='revoked'||item.state==='suspended'){
         if(Object.keys(item).sort().join('|')!=='inviteId|state|teamId'
           ||!uuidPattern.test(item.teamId)||!uuidPattern.test(item.inviteId))
-          throw Error('teams.bad_revoked_notice')
-        revokedTeamIds.push(item.teamId)
+          throw Error('teams.bad_membership_notice')
+        if(item.state==='revoked')revokedTeamIds.push(item.teamId)
+        else suspendedTeamIds.push(item.teamId)
       }else{
-        const checked=await verifyReceived(item)
+        // The minimal revoked/suspended variants were already handled above.
+        const checked=await verifyReceived(
+          item as Omit<TeamInvitation,'trustedOwner'>,
+        )
         invites.push(checked)
       }
     }
-    if(page.nextCursor===null)return {invites,revokedTeamIds}
+    if(page.nextCursor===null)return {invites,revokedTeamIds,suspendedTeamIds}
     if(page.items.length!==50||page.items[49]!.inviteId!==page.nextCursor
       ||after!==null&&page.nextCursor<=after)throw Error('teams.bad_inbox')
     after=page.nextCursor
@@ -328,9 +335,10 @@ export async function verifiedTeamMembershipHistory(teamId:string):Promise<{
       cursor=c.toRevision
     }
     if(page.nextCursor===null){
-      if(cursor!==expectedRev
-        ||(events.length>0&&events[events.length-1]!.action==='remove'
-          &&quarantined!==true))
+      // After an independently signed key epoch rotation the last
+      // membership event may still be "remove" while quarantine is false.
+      // Server checks authoritative membership+epoch CAS on every write.
+      if(cursor!==expectedRev)
         throw Error('teams.incomplete_membership_history')
       return {events,revision:expectedRev,rotationRequired:quarantined}
     }
@@ -680,6 +688,20 @@ export async function openJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
 }
 /** Best-effort local cleanup after a CURRENT online ACL revocation.
  * Previously exported plaintext and offline devices cannot be retracted. */
+/** Only invoke after independently signed current server epoch, member ACL,
+ * decrypted ciphertext and role binding have all been checked. */
+export async function cacheVerifiedJoinedTeam(
+  team:JoinedTeam,expectedRecipientAccountId:string,
+):Promise<void>{
+  const s=requireSession()
+  if(s.accountId!==expectedRecipientAccountId)
+    throw Error('identity.changed')
+  if(!uuidPattern.test(team.teamId)||!uuidPattern.test(team.ownerAccountId)
+    ||!['curator','contributor','viewer'].includes(team.role)
+    ||!team.verifiedOnline)
+    throw Error('teams.invalid_verified_member_cache')
+  await sealRow(s,'joined',team.teamId,team)
+}
 export async function dropRevokedJoinedTeam(teamId:string):Promise<void>{
   const s=requireSession()
   if(!uuidPattern.test(teamId))throw Error('teams.invalid_team_id')
