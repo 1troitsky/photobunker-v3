@@ -110,6 +110,9 @@ Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(f
     Route::get('/{assignmentId}/policy-history',[AssignmentV1Controller::class,'policyHistory'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/schedule',[AssignmentV1Controller::class,'changeSchedule'])->whereUuid('assignmentId');
     Route::get('/{assignmentId}/schedule-history',[AssignmentV1Controller::class,'scheduleHistory'])->whereUuid('assignmentId');
+    Route::post('/{assignmentId}/retention',[AssignmentV1Controller::class,'changeRetention'])->whereUuid('assignmentId');
+    Route::get('/{assignmentId}/retention-history',[AssignmentV1Controller::class,'retentionHistory'])->whereUuid('assignmentId');
+    Route::get('/{assignmentId}/retention-status',[AssignmentV1Controller::class,'retentionStatus'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/private',[AssignmentV1Controller::class,'changePrivateText'])->whereUuid('assignmentId');
     Route::get('/{assignmentId}/private-history',[AssignmentV1Controller::class,'privateTextHistory'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/invites',[AssignmentV1Controller::class,'invite'])->whereUuid('assignmentId');
