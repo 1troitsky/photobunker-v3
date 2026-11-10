@@ -574,7 +574,7 @@ async function submit(photo:StoredPhoto):Promise<void>{
     if(checked.personalPhoto&&!window.confirm(
       'Это личное фото, снятое вне задания. Дать владельцу задания доступ к фото и его приватным метаданным (включая описание и GPS, если они есть)?'
     ))return
-    const grantId=await queueRecipientGrant(photo.photoId,target.ownerAccountId)
+    const grantId=await queueRecipientGrant(photo.photoId,target.ownerAccountId,target.id)
     await queueAssignmentSubmission(target.id,photo.photoId,grantId,
       checked.policyRevision)
     await flushRecipientGrants()
@@ -603,7 +603,7 @@ async function submitMedia(media:StoredMedia):Promise<void>{
       +(media.mediaType==='video'?'видео':'аудио')
       +', включая исходное имя и приватные метаданные? Отзыв не удалит уже скачанные копии.'
     ))return
-    const grantId=await queueMediaRecipientGrant(media.mediaId,target.ownerAccountId)
+    const grantId=await queueMediaRecipientGrant(media.mediaId,target.ownerAccountId,target.id)
     await queueAssignmentMediaSubmission(target.id,media.mediaId,grantId)
     await flushMediaGrants()
     await flushAssignmentOutbox()
