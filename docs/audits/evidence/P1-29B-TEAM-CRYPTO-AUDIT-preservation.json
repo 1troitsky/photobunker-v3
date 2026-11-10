@@ -1,0 +1,48 @@
+{
+  "remoteRefs": [
+    {
+      "ref": "main",
+      "sha": "ee0cbe6836b5359e971319dfc8ae91ef695c7d42"
+    },
+    {
+      "ref": "53",
+      "sha": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+      "base": "p1/29a-teams-signed-membership-acl-quarantine",
+      "merged": false
+    },
+    {
+      "ref": "50",
+      "sha": "157909c9b414f7d4ea8591b683b69913946a42c3",
+      "base": "main",
+      "merged": false
+    },
+    {
+      "ref": "51",
+      "sha": "b45028d46b56c37173cafdc7bcd311b65c042e15",
+      "base": "p1/27-teams-owner-create-local-first",
+      "merged": false
+    },
+    {
+      "ref": "52",
+      "sha": "70d6a1e55b7fee8b56cece70f483fba5589346ef",
+      "base": "p1/28-teams-signed-invitations-consent",
+      "merged": false
+    }
+  ],
+  "productTrackedDiffExitCode": 0,
+  "originalUserFileSha256Check": {
+    "count": 38,
+    "exitCode": 0,
+    "unchanged": true
+  },
+  "pythonSyntax": {
+    "method": "in-memory compile",
+    "exitCode": 0
+  },
+  "environmentDiagnostic": {
+    "command": "python3 -m py_compile scripts/team-crypto-audit/run.py scripts/team-crypto-audit/analyze.py scripts/team-crypto-audit/export.py",
+    "status": "FAIL_ENVIRONMENT",
+    "error": "PermissionError: system Python cache outside writable roots",
+    "resolution": "In-memory compile succeeded without external writes"
+  }
+}

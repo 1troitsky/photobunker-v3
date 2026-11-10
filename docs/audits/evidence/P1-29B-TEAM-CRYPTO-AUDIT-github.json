@@ -1,0 +1,73 @@
+{
+  "prs": [
+    {
+      "number": 50,
+      "url": "https://github.com/1troitsky/photobunker-v3/pull/50",
+      "base": "main",
+      "baseSha": "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+      "head": "p1/27-teams-owner-create-local-first",
+      "headSha": "157909c9b414f7d4ea8591b683b69913946a42c3",
+      "draft": true,
+      "merged": false
+    },
+    {
+      "number": 51,
+      "url": "https://github.com/1troitsky/photobunker-v3/pull/51",
+      "base": "p1/27-teams-owner-create-local-first",
+      "baseSha": "157909c9b414f7d4ea8591b683b69913946a42c3",
+      "head": "p1/28-teams-signed-invitations-consent",
+      "headSha": "b45028d46b56c37173cafdc7bcd311b65c042e15",
+      "draft": true,
+      "merged": false
+    },
+    {
+      "number": 52,
+      "url": "https://github.com/1troitsky/photobunker-v3/pull/52",
+      "base": "p1/28-teams-signed-invitations-consent",
+      "baseSha": "b45028d46b56c37173cafdc7bcd311b65c042e15",
+      "head": "p1/29a-teams-signed-membership-acl-quarantine",
+      "headSha": "70d6a1e55b7fee8b56cece70f483fba5589346ef",
+      "draft": true,
+      "merged": false
+    },
+    {
+      "number": 53,
+      "url": "https://github.com/1troitsky/photobunker-v3/pull/53",
+      "base": "p1/29a-teams-signed-membership-acl-quarantine",
+      "baseSha": "70d6a1e55b7fee8b56cece70f483fba5589346ef",
+      "head": "p1/29b-team-dek-epoch-rotation",
+      "headSha": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+      "draft": true,
+      "merged": false
+    }
+  ],
+  "ci": [
+    {
+      "id": 42826191583,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42826191583",
+      "sha": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+      "conclusion": "success",
+      "status": "completed",
+      "attempt": 1,
+      "updatedAt": "2026-11-10T13:38:00Z"
+    },
+    {
+      "id": 42826192284,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42826192284",
+      "sha": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+      "conclusion": "success",
+      "status": "completed",
+      "attempt": 1,
+      "updatedAt": "2026-11-10T13:37:30Z"
+    },
+    {
+      "id": 42826191884,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42826191884",
+      "sha": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+      "conclusion": "success",
+      "status": "completed",
+      "attempt": 1,
+      "updatedAt": "2026-11-10T13:40:19Z"
+    }
+  ]
+}

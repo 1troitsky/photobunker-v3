@@ -1,0 +1,2942 @@
+{
+  "productSha": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+  "reproductionSourceSha": "c379898799f4119a6d12d4d73075ba0cb4047a7a",
+  "sourceNote": "QA evolved between the preserved runs. This SHA/manifest identifies the delivered reproduction harness, not an invented per-run source snapshot.",
+  "qaSourceSha256": {
+    "scripts/local-acceptance/Dockerfile": "8fdaf79fe8a89b796f495518996852079efe7d530a58fd1640e0f56593528f68",
+    "scripts/local-acceptance/compose.yml": "6ebadaf207f4dd5822d4ca4c714948ff3a3b14ba77ff16f68d6b6e23c06a74cd",
+    "scripts/local-acceptance/run.py": "05232ed5a7e1b6d5476228577e77523801835770bdc5741a8b09326f14b94aa8",
+    "scripts/team-crypto-audit/README.md": "3b5d2be93ece5f84739a928f1d3612c619909ee1aec453cda24c7368286582fc",
+    "scripts/team-crypto-audit/analyze.py": "be9928e5dd8d49c6c2ab4dd77e9f4516fd46bb211dbb22b3c412647917559b14",
+    "scripts/team-crypto-audit/export.py": "7a6f2e0ed35721e5744b857ac8b02317f3536c143e70e6e6a7e1a897881f569c",
+    "scripts/team-crypto-audit/run.py": "1dfb3e54089462ce88f85ac53f5e12efe3641b243d78e27ce3afeee956546ebf",
+    "tests/local-acceptance/test_isolation.py": "d17d7a0012b66fbadce45b4bee83dfaea0e0881c2e9662cefeaa4470463c08c8",
+    "tests/team-crypto-audit/instrumented.ts": "9369384d93a93c432589dd15210f82ffe7e8195ce3c5a9c04caf7f5bb1e9c231",
+    "tests/team-crypto-audit/media.config.ts": "272c2c15e228881b250a8b6aa10d1da3c43b7744517da00f0208916c562f09a5",
+    "tests/team-crypto-audit/playwright.config.ts": "c54218789a910124290951adf532a0c76e4f188ca0b1ac665c8620ab39dfa20e",
+    "tests/team-crypto-audit/teams.spec.ts": "3478f488975b8bf8b0492fa1efbc7786b6cdc52bd34d4037dcd05c024a84bebf"
+  },
+  "chain": {
+    "status": "PASS",
+    "base": "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+    "target": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+    "stages": [
+      {
+        "pr": 50,
+        "base": "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+        "head": "157909c9b414f7d4ea8591b683b69913946a42c3",
+        "ancestryExitCode": 0,
+        "commits": 9,
+        "changedFiles": [
+          "apps/api/app/Http/Controllers/TeamV1Controller.php",
+          "apps/api/database/migrations/2026_11_10_000007_create_team_records_v1.php",
+          "apps/api/routes/web.php",
+          "apps/api/tests/Feature/TeamV1Test.php",
+          "apps/web/src/features/people/application/team-book.test.ts",
+          "apps/web/src/features/people/application/team-book.ts",
+          "apps/web/src/views/ContactsTeamsView.vue",
+          "apps/web/vite.config.ts",
+          "docs/planning/P1-27-SIGNED-ENCRYPTED-TEAMS-OWNER.md",
+          "tests/e2e/p1-encrypted-contacts.spec.ts",
+          "tests/e2e/p1-teams-owner.spec.ts"
+        ]
+      },
+      {
+        "pr": 51,
+        "base": "157909c9b414f7d4ea8591b683b69913946a42c3",
+        "head": "b45028d46b56c37173cafdc7bcd311b65c042e15",
+        "ancestryExitCode": 0,
+        "commits": 15,
+        "changedFiles": [
+          "apps/api/app/Http/Controllers/TeamInvitationController.php",
+          "apps/api/database/migrations/2026_11_10_000008_create_team_invites_v1.php",
+          "apps/api/routes/web.php",
+          "apps/api/tests/Feature/TeamInvitationTest.php",
+          "apps/web/src/features/people/application/team-book.ts",
+          "apps/web/src/features/people/application/team-invitations.test.ts",
+          "apps/web/src/features/people/application/team-invitations.ts",
+          "apps/web/src/views/ContactsTeamsView.vue",
+          "apps/web/src/views/TeamMembershipPanel.vue",
+          "docs/planning/P1-28-TEAMS-INVITES-CONSENT-DEK.md",
+          "tests/e2e/p1-teams-invitations.spec.ts",
+          "tests/e2e/p1-teams-owner.spec.ts"
+        ]
+      },
+      {
+        "pr": 52,
+        "base": "b45028d46b56c37173cafdc7bcd311b65c042e15",
+        "head": "70d6a1e55b7fee8b56cece70f483fba5589346ef",
+        "ancestryExitCode": 0,
+        "commits": 14,
+        "changedFiles": [
+          "apps/api/app/Http/Controllers/TeamInvitationController.php",
+          "apps/api/app/Http/Controllers/TeamMembershipController.php",
+          "apps/api/app/Http/Controllers/TeamV1Controller.php",
+          "apps/api/database/migrations/2026_11_10_000009_team_membership_revision_v1.php",
+          "apps/api/routes/web.php",
+          "apps/api/tests/Feature/TeamInvitationTest.php",
+          "apps/web/src/features/people/application/team-invitations.ts",
+          "apps/web/src/features/people/application/team-membership-history.test.ts",
+          "apps/web/src/views/TeamMembershipPanel.vue",
+          "docs/planning/P1-29A-TEAM-ACL-QUARANTINE.md",
+          "tests/e2e/p1-teams-invitations.spec.ts"
+        ]
+      },
+      {
+        "pr": 53,
+        "base": "70d6a1e55b7fee8b56cece70f483fba5589346ef",
+        "head": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+        "ancestryExitCode": 0,
+        "commits": 17,
+        "changedFiles": [
+          "apps/api/app/Http/Controllers/TeamInvitationController.php",
+          "apps/api/app/Http/Controllers/TeamKeyEpochController.php",
+          "apps/api/database/migrations/2026_11_10_000010_team_key_epochs_v1.php",
+          "apps/api/routes/web.php",
+          "apps/api/tests/Feature/TeamKeyEpochTest.php",
+          "apps/web/src/features/people/application/team-epochs.test.ts",
+          "apps/web/src/features/people/application/team-epochs.ts",
+          "apps/web/src/features/people/application/team-invitations.ts",
+          "apps/web/src/views/TeamMembershipPanel.vue",
+          "docs/planning/P1-29B-TEAM-DEK-EPOCH-ROTATION.md",
+          "docs/status/CURRENT.md",
+          "docs/status/history/2026-11-10-P1-26-pre-merge-snapshot.md",
+          "tests/e2e/p1-teams-invitations.spec.ts"
+        ]
+      }
+    ],
+    "duplicateStablePatches": {},
+    "conflictMarkers": [],
+    "sourceSha256": {
+      "apps/api/app/Http/Controllers/TeamInvitationController.php": "d5f6f077677bbc72496a6e6114e8a8bf9ca4b1082620babf312c27d95dcb8114",
+      "apps/api/app/Http/Controllers/TeamKeyEpochController.php": "923214fa45a0ee1bb833afdacd9c9478f0fee4a46c2d68291718505efcb56311",
+      "apps/api/app/Http/Controllers/TeamMembershipController.php": "29805cf786686a7283fcd84e02b4b040249602645e95e12ef0ab41c2b68c55a6",
+      "apps/api/app/Http/Controllers/TeamV1Controller.php": "253ae90ecde05903240342d17b5647dd17d5d8558b55a32320e1625aa2782de7",
+      "apps/api/database/migrations/2026_11_10_000007_create_team_records_v1.php": "8b92a69a747aae0e954bc008ffe4a661a18c54957a15a1bcd04c65a4007e7891",
+      "apps/api/database/migrations/2026_11_10_000008_create_team_invites_v1.php": "47aeee60c4b953f8554638750ce13e9671558bc8298d58ef354c7f6f7f028961",
+      "apps/api/database/migrations/2026_11_10_000009_team_membership_revision_v1.php": "e420a68cb40ada9d34ce2ac22ab344709eb1c8f876c068fdaa8ac97d82ac4ce1",
+      "apps/api/database/migrations/2026_11_10_000010_team_key_epochs_v1.php": "1d24853c08ff40d96231665ac50e1cc8f824268c803f812df98341b83fa7bd1d",
+      "apps/api/routes/web.php": "e3df76fb1ad12eeffe50f02999a3eef089727934670d8498221654ec52c2653f",
+      "apps/api/tests/Feature/TeamInvitationTest.php": "131ac0fa2b9c7b40b28e69ba9518609d4651344acb2b4ad4d3d5c48ccd440ea9",
+      "apps/api/tests/Feature/TeamKeyEpochTest.php": "4eff12c203fbef864e7dda2f01f2a9f1359b00e2b47bbde49e9ecf2e5e3a2f53",
+      "apps/api/tests/Feature/TeamV1Test.php": "d15c5fe5242789bd8d8c184bde474334e94afac97521012f53ac42327ba910f8",
+      "apps/web/src/features/people/application/team-book.test.ts": "1b0e0ec7ca3df85ede2edbf5b7229e0d8ef56d4599434cbee78b961bd75eb80f",
+      "apps/web/src/features/people/application/team-book.ts": "7a9ed2dce52f17212b26f95463dacf5097729069011c87a9faa2ebfa0de73b78",
+      "apps/web/src/features/people/application/team-epochs.test.ts": "55cf5456f81dbb7376d3be8d19567fbaf633f8bd43c70b6f540f52ca77033386",
+      "apps/web/src/features/people/application/team-epochs.ts": "b3879335b888cf25415318bd696f29c63fed3503e635b15fdea6f84dd35e22a0",
+      "apps/web/src/features/people/application/team-invitations.test.ts": "06028a3cb4483b962e522847b97d2322a8576619f3a08afa129ea9641e242dd4",
+      "apps/web/src/features/people/application/team-invitations.ts": "0285887579e22c049b2a2090cd20520bc2553776aa7f17744fdcd55e945ced15",
+      "apps/web/src/features/people/application/team-membership-history.test.ts": "4036166eaa8d5d62645f1395c1ee2c8886a76655ac07585d126230bd31c8a52b",
+      "apps/web/src/views/ContactsTeamsView.vue": "f1021be07b4de8c4f5489c047ed9368aca7a0cc7fdfd3e506931b073f90dcd57",
+      "apps/web/src/views/TeamMembershipPanel.vue": "b66471c0689fd8b2538e75c3b77a5c3e75af1c441cf56d37a2acfb54c1e84bbe",
+      "apps/web/vite.config.ts": "19d3f1da9884b54276dc14a763a271028411d9ffbe2ff810ae37a5b025ad8031",
+      "docs/planning/P1-27-SIGNED-ENCRYPTED-TEAMS-OWNER.md": "828cb7e4b743f2253db62f1b67f8e3cb25c2cdf6a00a100757ebd7c2df2ffa6b",
+      "docs/planning/P1-28-TEAMS-INVITES-CONSENT-DEK.md": "826f2ad8ab68ce1f9aec8422d711979507f9921050c52c0411f93f90ff6491e2",
+      "docs/planning/P1-29A-TEAM-ACL-QUARANTINE.md": "5e307982aa1f9412cc535dcc444ceb25d976c3e426d5705428e565bf7bc84ef5",
+      "docs/planning/P1-29B-TEAM-DEK-EPOCH-ROTATION.md": "c948866db0be622e564b1bfa162d48426de8145a04d0441c0f4b5d35c741eb01",
+      "docs/status/CURRENT.md": "3bbd3cebb56f9f1535efcd34969599721f38249bbc6d6926250a730b89b42637",
+      "docs/status/history/2026-11-10-P1-26-pre-merge-snapshot.md": "5e83f5c0f1f18f48d7a2ab1aeb20791e9adf6b3e8bc1349f21eb21e0a5a7fea4",
+      "tests/e2e/p1-encrypted-contacts.spec.ts": "823c6ea87fcbf7dab2b5aa93937d9bf55f5ab41e5b750cd7e945c1f3f3cac08c",
+      "tests/e2e/p1-teams-invitations.spec.ts": "17a9762e8eb917c5a7069ad638329c80f495e80498700f703dce12b730e3a44d",
+      "tests/e2e/p1-teams-owner.spec.ts": "e7ea9c20c0b646deaba276747e622964f4fd8cf63b65cd15eccf5ea3f207760e"
+    },
+    "limits": "Ancestry and patch checks prove code inclusion; semantic contracts are covered separately by review and runtime tests."
+  },
+  "runs": [
+    {
+      "id": "pb3-acceptance-qh4b93oa",
+      "checks": [
+        {
+          "name": "git-head",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "log",
+            "-1",
+            "--format=%H %s"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/git-head.log",
+          "seconds": 0.01
+        },
+        {
+          "name": "source-boundaries",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "diff",
+            "--exit-code",
+            "03bcc0880521ebcc9145f134233d39be6a339c2c",
+            "--",
+            "apps/api",
+            "apps/web",
+            "tests/e2e",
+            "tests/playwright.config.ts",
+            "package.json",
+            "pnpm-lock.yaml",
+            "compose.p0.yml"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/source-boundaries.log",
+          "seconds": 0.036
+        },
+        {
+          "name": "node-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "node",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/node-version.log",
+          "seconds": 0.065
+        },
+        {
+          "name": "pnpm-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/pnpm-version.log",
+          "seconds": 0.308
+        },
+        {
+          "name": "pnpm-install",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "install",
+            "--frozen-lockfile"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/pnpm-install.log",
+          "seconds": 1.855
+        },
+        {
+          "name": "typecheck",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "typecheck"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/typecheck.log",
+          "seconds": 3.991
+        },
+        {
+          "name": "vitest",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "test:web"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/vitest.log",
+          "seconds": 5.19
+        },
+        {
+          "name": "production-build",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "build"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/production-build.log",
+          "seconds": 5.645
+        },
+        {
+          "name": "docker-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/docker-version.log",
+          "seconds": 0.24
+        },
+        {
+          "name": "isolation-contract",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "python3",
+            "-B",
+            "tests/local-acceptance/test_isolation.py"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/isolation-contract.log",
+          "seconds": 0.213
+        },
+        {
+          "name": "compose-build",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "build",
+            "api"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/compose-build.log",
+          "seconds": 1.483
+        },
+        {
+          "name": "php-security-floor",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            "$PRODUCT:/source:ro",
+            "pb3-local-acceptance-php:8.4.27",
+            "php",
+            "/source/scripts/check-runtime.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/php-security-floor.log",
+          "seconds": 0.504
+        },
+        {
+          "name": "storage-up",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "up",
+            "-d",
+            "--wait",
+            "postgres",
+            "garage"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/storage-up.log",
+          "seconds": 3.522
+        },
+        {
+          "name": "postgres-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "postgres",
+            "postgres",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/postgres-version.log",
+          "seconds": 0.155
+        },
+        {
+          "name": "garage-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-version.log",
+          "seconds": 0.09
+        },
+        {
+          "name": "garage-assign",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "layout",
+            "assign",
+            "-z",
+            "ci-zone",
+            "-c",
+            "1G",
+            "504f70dfee3363387d822777e02ab52110e01398c718ce7b3c420a66f02e344e"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-assign.log",
+          "seconds": 0.149
+        },
+        {
+          "name": "garage-layout",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "layout",
+            "apply",
+            "--version",
+            "1"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-layout.log",
+          "seconds": 0.236
+        },
+        {
+          "name": "garage-bucket",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "bucket",
+            "create",
+            "pb3-ci-p0"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-bucket.log",
+          "seconds": 0.147
+        },
+        {
+          "name": "garage-key",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "key",
+            "create",
+            "pb3-ci-key"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-key.log",
+          "seconds": 0.146
+        },
+        {
+          "name": "garage-allow",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "bucket",
+            "allow",
+            "--read",
+            "--write",
+            "--owner",
+            "pb3-ci-p0",
+            "--key",
+            "[redacted-disposable-key-id]"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-allow.log",
+          "seconds": 0.179
+        },
+        {
+          "name": "image-digests",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "image",
+            "inspect",
+            "php:8.4.27-cli-bookworm",
+            "postgres:18-alpine",
+            "dxflrs/garage:v2.5.0",
+            "--format",
+            "{{json .RepoTags}} {{json .RepoDigests}}"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/image-digests.log",
+          "seconds": 0.086
+        },
+        {
+          "name": "composer-install",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "install",
+            "--no-interaction",
+            "--no-progress",
+            "--prefer-dist"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-install.log",
+          "seconds": 9.564
+        },
+        {
+          "name": "composer-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-version.log",
+          "seconds": 0.472
+        },
+        {
+          "name": "composer-validate",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "validate",
+            "--strict",
+            "--no-check-publish"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-validate.log",
+          "seconds": 0.486
+        },
+        {
+          "name": "plan-registry",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "/source/scripts/verify-plan-config.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/plan-registry.log",
+          "seconds": 0.375
+        },
+        {
+          "name": "php-lint",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "sh",
+            "-c",
+            "find app bootstrap config routes database tests /source/scripts -name '*.php' -type f -print0 | xargs -0 -n1 php -l"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/php-lint.log",
+          "seconds": 1.101
+        },
+        {
+          "name": "routes",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "artisan",
+            "route:list"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/routes.log",
+          "seconds": 0.47
+        },
+        {
+          "name": "phpunit",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            "$RUN/api:/app",
+            "pb3-local-acceptance-php:8.4.27",
+            "php",
+            "vendor/bin/phpunit",
+            "--log-junit",
+            "/app/phpunit-junit.xml"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/phpunit.log",
+          "seconds": 2.708
+        },
+        {
+          "name": "migrate",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "artisan",
+            "migrate",
+            "--force"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/migrate.log",
+          "seconds": 0.627
+        },
+        {
+          "name": "garage-postgres-smoke",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "tests/integration/garage-postgres-smoke.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-postgres-smoke.log",
+          "seconds": 0.648
+        },
+        {
+          "name": "lifecycle-garage-smoke",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "tests/integration/lifecycle-garage-smoke.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/lifecycle-garage-smoke.log",
+          "seconds": 0.529
+        },
+        {
+          "name": "api-up",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "up",
+            "-d",
+            "api"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/api-up.log",
+          "seconds": 0.852
+        },
+        {
+          "name": "healthz",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/healthz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/healthz.log",
+          "seconds": 1.292
+        },
+        {
+          "name": "readyz",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/readyz.log",
+          "seconds": 0.098
+        },
+        {
+          "name": "os-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "sw_vers"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/os-version.log",
+          "seconds": 0.014
+        },
+        {
+          "name": "playwright-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/playwright-version.log",
+          "seconds": 1.565
+        },
+        {
+          "name": "chromium-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "node",
+            "--input-type=module",
+            "-e",
+            "import {chromium} from \"@playwright/test\"; const b=await chromium.launch(); console.log(b.version()); await b.close()"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/chromium-version.log",
+          "seconds": 0.807
+        },
+        {
+          "name": "vite-ready",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:5173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/vite-ready.log",
+          "seconds": 1.11
+        },
+        {
+          "name": "product-e2e",
+          "status": "FAIL",
+          "exit_code": 1,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/playwright.config.ts",
+            "--output",
+            "$RUN/product-e2e",
+            "--reporter=line,json"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/product-e2e.log",
+          "seconds": 58.609
+        },
+        {
+          "name": "independent-team-audit",
+          "status": "FAIL",
+          "exit_code": 1,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/team-crypto-audit/playwright.config.ts",
+            "--output",
+            "$RUN/independent-team-audit",
+            "--reporter=line,json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/independent-team-audit.log",
+          "seconds": 0.833
+        },
+        {
+          "name": "privacy-canaries",
+          "status": "NOT TESTED",
+          "reason": "Independent journey did not produce canaries",
+          "command": null,
+          "exit_code": null
+        },
+        {
+          "name": "product-source-after",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "diff",
+            "--exit-code",
+            "03bcc0880521ebcc9145f134233d39be6a339c2c"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/product-source-after.log",
+          "seconds": 0.059
+        },
+        {
+          "name": "container-logs",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "logs",
+            "--no-color"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/container-logs.log",
+          "seconds": 0.241
+        },
+        {
+          "name": "isolated-cleanup",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-18e1101c5f",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "down",
+            "--remove-orphans"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/isolated-cleanup.log",
+          "seconds": 10.508
+        }
+      ],
+      "versions": {
+        "php": "8.4.27",
+        "postgres": "18.6",
+        "garage": "2.5.0",
+        "node": "v22.23.3",
+        "pnpm": "10.20.0",
+        "composer": "2.10.3",
+        "chromium": "141.0.7390.37",
+        "playwright": "1.56.1",
+        "macOS": "26.6.2"
+      },
+      "browsers": {
+        "product-e2e": {
+          "stats": {
+            "startTime": "2026-11-10T16:11:09.660Z",
+            "duration": 57728.072,
+            "expected": 17,
+            "skipped": 0,
+            "unexpected": 2,
+            "flaky": 0
+          },
+          "tests": [
+            {
+              "file": "p1-assignment-media.spec.ts",
+              "title": "P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts",
+              "status": "unexpected",
+              "executions": [
+                {
+                  "status": "failed",
+                  "durationMs": 4773,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "late permission survives real online hydration with one live stream",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 701,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "equivalent Session replacement keeps the existing stream",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 662,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "real account switch during permission stops the stale result before opening another",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 766,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "leaving before permission resolves releases every late track without reopening",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 869,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "denied permission is recoverable by a single explicit retry",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 975,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "hydrated camera captures offline against an already verified signed assignment policy",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 1754,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-contact-assignment-picker.spec.ts",
+              "title": "P1-26: confirmed contact → explicit owner-signed assignment invitation, no implicit access",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3318,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-encrypted-contacts.spec.ts",
+              "title": "P1-25: verified peer → encrypted Contacts & Teams → offline persistence → local removal",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 2211,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-09: Free monthly quota accepts three signed creates, rejects fourth without deleting local ciphertext",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 881,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "two browser identities: key-only account, encrypted camera photo, Garage recovery",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3494,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 4652,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-04: A creates encrypted assignment, B accepts and submits a photo grant, A decrypts",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3452,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 8759,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media-revisions.spec.ts",
+              "title": "P1-12: immutable owner-signed media versions survive Garage+Recovery Key without modifying original or inheriting grants",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 2579,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → independent recovered owner decrypt",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3422,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-11: two independently verified accounts exchange 1-key E2EE audio grant, recipient decrypts and owner revokes without deleting original",
+              "status": "unexpected",
+              "executions": [
+                {
+                  "status": "failed",
+                  "durationMs": 2045,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-teams-invitations.spec.ts",
+              "title": "P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 8113,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-teams-owner.spec.ts",
+              "title": "P1-27: owner-signed encrypted Team → durable local queue → server ACL → offline local read",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 1474,
+                  "proofs": []
+                }
+              ]
+            }
+          ]
+        },
+        "independent-team-audit": {
+          "stats": {
+            "startTime": "2026-11-10T16:12:08.241Z",
+            "duration": 4.097999999999956,
+            "expected": 0,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "tests": []
+        }
+      },
+      "exitCode": 1
+    },
+    {
+      "id": "pb3-acceptance-_aejwgoz",
+      "checks": [
+        {
+          "name": "source-boundaries",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "diff",
+            "--exit-code",
+            "03bcc0880521ebcc9145f134233d39be6a339c2c"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/source-boundaries.log",
+          "seconds": 0.05
+        },
+        {
+          "name": "isolation-contract",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "python3",
+            "-B",
+            "tests/local-acceptance/test_isolation.py"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/isolation-contract.log",
+          "seconds": 0.432
+        },
+        {
+          "name": "compose-build",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "build",
+            "api"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/compose-build.log",
+          "seconds": 1.093
+        },
+        {
+          "name": "php-security-floor",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            "$PRODUCT:/source:ro",
+            "pb3-local-acceptance-php:8.4.27",
+            "php",
+            "/source/scripts/check-runtime.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/php-security-floor.log",
+          "seconds": 0.464
+        },
+        {
+          "name": "storage-up",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "up",
+            "-d",
+            "--wait",
+            "postgres",
+            "garage"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/storage-up.log",
+          "seconds": 3.558
+        },
+        {
+          "name": "postgres-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "postgres",
+            "postgres",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/postgres-version.log",
+          "seconds": 0.164
+        },
+        {
+          "name": "garage-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-version.log",
+          "seconds": 0.094
+        },
+        {
+          "name": "garage-assign",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "layout",
+            "assign",
+            "-z",
+            "ci-zone",
+            "-c",
+            "1G",
+            "9674a804cf52bba9c32c559dd1031e507cc32d5f2a1b7f57dc7480d2a213a24b"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-assign.log",
+          "seconds": 0.169
+        },
+        {
+          "name": "garage-layout",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "layout",
+            "apply",
+            "--version",
+            "1"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-layout.log",
+          "seconds": 0.237
+        },
+        {
+          "name": "garage-bucket",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "bucket",
+            "create",
+            "pb3-ci-p0"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-bucket.log",
+          "seconds": 0.138
+        },
+        {
+          "name": "garage-key",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "key",
+            "create",
+            "pb3-ci-key"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-key.log",
+          "seconds": 0.147
+        },
+        {
+          "name": "garage-allow",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "bucket",
+            "allow",
+            "--read",
+            "--write",
+            "--owner",
+            "pb3-ci-p0",
+            "--key",
+            "[redacted-disposable-key-id]"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-allow.log",
+          "seconds": 0.166
+        },
+        {
+          "name": "composer-install",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "install",
+            "--no-interaction",
+            "--no-progress",
+            "--prefer-dist"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-install.log",
+          "seconds": 9.733
+        },
+        {
+          "name": "migrate",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "artisan",
+            "migrate",
+            "--force"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/migrate.log",
+          "seconds": 0.582
+        },
+        {
+          "name": "api-up",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "up",
+            "-d",
+            "api"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/api-up.log",
+          "seconds": 0.844
+        },
+        {
+          "name": "readyz",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/readyz.log",
+          "seconds": 0.255
+        },
+        {
+          "name": "os-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "sw_vers"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/os-version.log",
+          "seconds": 0.012
+        },
+        {
+          "name": "playwright-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/playwright-version.log",
+          "seconds": 0.668
+        },
+        {
+          "name": "chromium-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "node",
+            "--input-type=module",
+            "-e",
+            "import {chromium} from \"@playwright/test\"; const b=await chromium.launch(); console.log(b.version()); await b.close()"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/chromium-version.log",
+          "seconds": 0.513
+        },
+        {
+          "name": "vite-ready",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:5173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/vite-ready.log",
+          "seconds": 1.112
+        },
+        {
+          "name": "independent-team-audit",
+          "status": "FAIL",
+          "exit_code": 1,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/team-crypto-audit/playwright.config.ts",
+            "--output",
+            "$RUN/independent-team-audit",
+            "--reporter=line,json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/independent-team-audit.log",
+          "seconds": 5.995
+        },
+        {
+          "name": "private-database-scan",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "postgres",
+            "pg_dump",
+            "-U",
+            "pb3_ci",
+            "--data-only",
+            "pb3_ci_p0"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/private-database-scan.log",
+          "seconds": 0.178
+        },
+        {
+          "name": "privacy-canary-check",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "python3",
+            "-c",
+            "import json,sys;x=json.load(open(sys.argv[1]));print(json.dumps(x));assert x[\"databaseScanned\"] and x[\"databaseCanariesAbsent\"] and x[\"logCanariesAbsent\"] and x[\"containerLogExit\"]==0",
+            "$RUN/privacy-scan.json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/privacy-canary-check.log",
+          "seconds": 0.031
+        },
+        {
+          "name": "product-source-after",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "diff",
+            "--exit-code",
+            "03bcc0880521ebcc9145f134233d39be6a339c2c"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/product-source-after.log",
+          "seconds": 0.051
+        },
+        {
+          "name": "container-logs",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "logs",
+            "--no-color"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/container-logs.log",
+          "seconds": 0.094
+        },
+        {
+          "name": "isolated-cleanup",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-696b0372d0",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "down",
+            "--remove-orphans"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/isolated-cleanup.log",
+          "seconds": 10.5
+        }
+      ],
+      "versions": {
+        "php": "8.4.27",
+        "postgres": "18.6",
+        "garage": "2.5.0",
+        "chromium": "141.0.7390.37",
+        "playwright": "1.56.1",
+        "macOS": "26.6.2"
+      },
+      "browsers": {
+        "independent-team-audit": {
+          "stats": {
+            "startTime": "2026-11-10T16:14:48.571Z",
+            "duration": 5269.093,
+            "expected": 0,
+            "skipped": 0,
+            "unexpected": 1,
+            "flaky": 0
+          },
+          "tests": [
+            {
+              "file": "teams.spec.ts",
+              "title": "independent real A→B→C: epoch integrity, failure recovery and rollback boundaries",
+              "status": "unexpected",
+              "executions": [
+                {
+                  "status": "failed",
+                  "durationMs": 4605,
+                  "proofs": [
+                    {
+                      "id": "consented-C-decrypts-v1",
+                      "status": "PASS",
+                      "actual": {
+                        "role": "viewer"
+                      }
+                    },
+                    {
+                      "id": "signed-role-change",
+                      "status": "PASS",
+                      "actual": {
+                        "role": "contributor"
+                      }
+                    },
+                    {
+                      "id": "revision-race-serialized",
+                      "status": "PASS",
+                      "actual": {
+                        "statuses": [
+                          201,
+                          409
+                        ]
+                      }
+                    },
+                    {
+                      "id": "quarantine-no-old-key",
+                      "status": "PASS",
+                      "actual": {
+                        "C": 409,
+                        "B": 404,
+                        "pendingNoticeKeys": [
+                          "inviteId",
+                          "state",
+                          "teamId"
+                        ]
+                      }
+                    },
+                    {
+                      "id": "encrypted-outbox-no-plaintext",
+                      "status": "PASS",
+                      "actual": {
+                        "sha256": "d7d3f3dd409c2790edf15f29853674369d3a2501c594cf3b6d8a9d6a98ea526c"
+                      }
+                    },
+                    {
+                      "id": "outage-keeps-exact-ciphertext",
+                      "status": "PASS",
+                      "actual": {
+                        "outage": "network_error"
+                      }
+                    },
+                    {
+                      "id": "forged-signature",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 401,
+                        "expected": 401
+                      }
+                    },
+                    {
+                      "id": "wrong-domain",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 401,
+                        "expected": 401
+                      }
+                    },
+                    {
+                      "id": "omitted-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-role",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "changed-directory",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-revision",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-previous-hash",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "duplicate-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 422,
+                        "expected": 422
+                      }
+                    },
+                    {
+                      "id": "removed-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "negative-writes-atomic",
+                      "status": "PASS",
+                      "actual": {
+                        "keyEpoch": 1
+                      }
+                    },
+                    {
+                      "id": "reload-retains-unacked-ciphertext",
+                      "status": "PASS",
+                      "actual": {
+                        "sha256": "d7d3f3dd409c2790edf15f29853674369d3a2501c594cf3b6d8a9d6a98ea526c",
+                        "serverCommitStatus": 201
+                      }
+                    },
+                    {
+                      "id": "lost-ack-exact-idempotent-replay",
+                      "status": "PASS",
+                      "actual": {
+                        "commit": 201,
+                        "replay": 200,
+                        "unchanged": true,
+                        "identicalBytes": true
+                      }
+                    },
+                    {
+                      "id": "C-decrypts-new-epoch-B-denied",
+                      "status": "PASS",
+                      "actual": {
+                        "B": 404,
+                        "Crole": "viewer"
+                      }
+                    },
+                    {
+                      "id": "fresh-independent-DEK-and-AEAD-binding",
+                      "status": "PASS",
+                      "actual": {
+                        "fresh": true,
+                        "oldKeyRejected": true,
+                        "badAadRejected": true,
+                        "ownerDecrypts": true
+                      }
+                    },
+                    {
+                      "id": "owner-roster-after-pending-invite-sweep",
+                      "status": "FAIL",
+                      "actual": {
+                        "ok": false,
+                        "count": null,
+                        "error": "teams.roster_acl_mismatch"
+                      }
+                    },
+                    {
+                      "id": "pending-old-invite-cannot-join-new-epoch",
+                      "status": "PASS",
+                      "actual": {
+                        "memberStatus": 404,
+                        "acceptAfter": "queued-or-conflict"
+                      }
+                    },
+                    {
+                      "id": "tampered-epoch-response-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "teams.untrusted_member_epoch"
+                      }
+                    },
+                    {
+                      "id": "known-epoch-rollback-rejected",
+                      "status": "FAIL",
+                      "actual": {
+                        "result": "accepted-old-epoch",
+                        "previouslyVerifiedEpoch": 2,
+                        "replayedEpoch": 1
+                      }
+                    },
+                    {
+                      "id": "account-switch-midflight-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "identity.changed"
+                      }
+                    },
+                    {
+                      "id": "verified-cache-preserved-through-errors",
+                      "status": "PASS",
+                      "actual": {
+                        "count": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "exitCode": 1,
+      "privacy": {
+        "databaseScanned": true,
+        "containerLogExit": 0,
+        "databaseCanariesAbsent": true,
+        "logCanariesAbsent": true
+      }
+    },
+    {
+      "id": "pb3-acceptance-93o6w9y4",
+      "checks": [
+        {
+          "name": "source-boundaries",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "diff",
+            "--exit-code",
+            "03bcc0880521ebcc9145f134233d39be6a339c2c"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/source-boundaries.log",
+          "seconds": 0.052
+        },
+        {
+          "name": "isolation-contract",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "python3",
+            "-B",
+            "tests/local-acceptance/test_isolation.py"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/isolation-contract.log",
+          "seconds": 0.393
+        },
+        {
+          "name": "compose-build",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "build",
+            "api"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/compose-build.log",
+          "seconds": 1.091
+        },
+        {
+          "name": "php-security-floor",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            "$PRODUCT:/source:ro",
+            "pb3-local-acceptance-php:8.4.27",
+            "php",
+            "/source/scripts/check-runtime.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/php-security-floor.log",
+          "seconds": 0.479
+        },
+        {
+          "name": "storage-up",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "up",
+            "-d",
+            "--wait",
+            "postgres",
+            "garage"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/storage-up.log",
+          "seconds": 3.532
+        },
+        {
+          "name": "postgres-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "postgres",
+            "postgres",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/postgres-version.log",
+          "seconds": 0.14
+        },
+        {
+          "name": "garage-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-version.log",
+          "seconds": 0.123
+        },
+        {
+          "name": "garage-assign",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "layout",
+            "assign",
+            "-z",
+            "ci-zone",
+            "-c",
+            "1G",
+            "afdf05f9045274804d1179b4088eda67768770a5e4bd3fbeadf6042c91e3cc0d"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-assign.log",
+          "seconds": 0.157
+        },
+        {
+          "name": "garage-layout",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "layout",
+            "apply",
+            "--version",
+            "1"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-layout.log",
+          "seconds": 0.234
+        },
+        {
+          "name": "garage-bucket",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "bucket",
+            "create",
+            "pb3-ci-p0"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-bucket.log",
+          "seconds": 0.146
+        },
+        {
+          "name": "garage-key",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "key",
+            "create",
+            "pb3-ci-key"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-key.log",
+          "seconds": 0.138
+        },
+        {
+          "name": "garage-allow",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "bucket",
+            "allow",
+            "--read",
+            "--write",
+            "--owner",
+            "pb3-ci-p0",
+            "--key",
+            "[redacted-disposable-key-id]"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-allow.log",
+          "seconds": 0.152
+        },
+        {
+          "name": "composer-install",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "install",
+            "--no-interaction",
+            "--no-progress",
+            "--prefer-dist"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-install.log",
+          "seconds": 9.47
+        },
+        {
+          "name": "migrate",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "artisan",
+            "migrate",
+            "--force"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/migrate.log",
+          "seconds": 0.599
+        },
+        {
+          "name": "api-up",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "up",
+            "-d",
+            "api"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/api-up.log",
+          "seconds": 0.843
+        },
+        {
+          "name": "readyz",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/readyz.log",
+          "seconds": 1.296
+        },
+        {
+          "name": "os-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "sw_vers"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/os-version.log",
+          "seconds": 0.011
+        },
+        {
+          "name": "playwright-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/playwright-version.log",
+          "seconds": 0.69
+        },
+        {
+          "name": "chromium-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "node",
+            "--input-type=module",
+            "-e",
+            "import {chromium} from \"@playwright/test\"; const b=await chromium.launch(); console.log(b.version()); await b.close()"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/chromium-version.log",
+          "seconds": 0.596
+        },
+        {
+          "name": "vite-ready",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:5173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/vite-ready.log",
+          "seconds": 1.112
+        },
+        {
+          "name": "media-diagnostic",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/team-crypto-audit/media.config.ts",
+            "--output",
+            "$RUN/media-diagnostic",
+            "--reporter=line,json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/media-diagnostic.log",
+          "seconds": 29.29
+        },
+        {
+          "name": "independent-team-audit",
+          "status": "FAIL",
+          "exit_code": 1,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/team-crypto-audit/playwright.config.ts",
+            "--output",
+            "$RUN/independent-team-audit",
+            "--reporter=line,json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/independent-team-audit.log",
+          "seconds": 5.839
+        },
+        {
+          "name": "private-database-scan",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "postgres",
+            "pg_dump",
+            "-U",
+            "pb3_ci",
+            "--data-only",
+            "pb3_ci_p0"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/private-database-scan.log",
+          "seconds": 0.35
+        },
+        {
+          "name": "privacy-canary-check",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "python3",
+            "-c",
+            "import json,sys;x=json.load(open(sys.argv[1]));print(json.dumps(x));assert x[\"databaseScanned\"] and x[\"databaseCanariesAbsent\"] and x[\"logCanariesAbsent\"] and x[\"containerLogExit\"]==0",
+            "$RUN/privacy-scan.json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/privacy-canary-check.log",
+          "seconds": 0.038
+        },
+        {
+          "name": "product-source-after",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "diff",
+            "--exit-code",
+            "03bcc0880521ebcc9145f134233d39be6a339c2c"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/product-source-after.log",
+          "seconds": 0.052
+        },
+        {
+          "name": "container-logs",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "logs",
+            "--no-color"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/container-logs.log",
+          "seconds": 0.1
+        },
+        {
+          "name": "isolated-cleanup",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-40a214f200",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "down",
+            "--remove-orphans"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/isolated-cleanup.log",
+          "seconds": 10.493
+        }
+      ],
+      "versions": {
+        "php": "8.4.27",
+        "postgres": "18.6",
+        "garage": "2.5.0",
+        "chromium": "141.0.7390.37",
+        "playwright": "1.56.1",
+        "macOS": "26.6.2"
+      },
+      "browsers": {
+        "media-diagnostic": {
+          "stats": {
+            "startTime": "2026-11-10T16:17:50.659Z",
+            "duration": 28445.88,
+            "expected": 3,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "tests": [
+            {
+              "file": "p1-assignment-media.spec.ts",
+              "title": "P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 19300,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → independent recovered owner decrypt",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 4588,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-11: two independently verified accounts exchange 1-key E2EE audio grant, recipient decrypts and owner revokes without deleting original",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3812,
+                  "proofs": []
+                }
+              ]
+            }
+          ]
+        },
+        "independent-team-audit": {
+          "stats": {
+            "startTime": "2026-11-10T16:18:19.918Z",
+            "duration": 5037.884,
+            "expected": 0,
+            "skipped": 0,
+            "unexpected": 1,
+            "flaky": 0
+          },
+          "tests": [
+            {
+              "file": "teams.spec.ts",
+              "title": "independent real A→B→C: epoch integrity, failure recovery and rollback boundaries",
+              "status": "unexpected",
+              "executions": [
+                {
+                  "status": "failed",
+                  "durationMs": 4321,
+                  "proofs": [
+                    {
+                      "id": "consented-C-decrypts-v1",
+                      "status": "PASS",
+                      "actual": {
+                        "role": "viewer"
+                      }
+                    },
+                    {
+                      "id": "signed-role-change",
+                      "status": "PASS",
+                      "actual": {
+                        "role": "contributor"
+                      }
+                    },
+                    {
+                      "id": "revision-race-serialized",
+                      "status": "PASS",
+                      "actual": {
+                        "statuses": [
+                          201,
+                          409
+                        ]
+                      }
+                    },
+                    {
+                      "id": "quarantine-no-old-key",
+                      "status": "PASS",
+                      "actual": {
+                        "C": 409,
+                        "B": 404,
+                        "pendingNoticeKeys": [
+                          "inviteId",
+                          "state",
+                          "teamId"
+                        ]
+                      }
+                    },
+                    {
+                      "id": "encrypted-outbox-no-plaintext",
+                      "status": "PASS",
+                      "actual": {
+                        "sha256": "c7a4105bb18a2d60924fa675cdf308df5c684016fa6ef812e5077c04ed61379c"
+                      }
+                    },
+                    {
+                      "id": "outage-keeps-exact-ciphertext",
+                      "status": "PASS",
+                      "actual": {
+                        "outage": "network_error"
+                      }
+                    },
+                    {
+                      "id": "forged-signature",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 401,
+                        "expected": 401
+                      }
+                    },
+                    {
+                      "id": "wrong-domain",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 401,
+                        "expected": 401
+                      }
+                    },
+                    {
+                      "id": "omitted-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-role",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "changed-directory",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-revision",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-previous-hash",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "duplicate-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 422,
+                        "expected": 422
+                      }
+                    },
+                    {
+                      "id": "removed-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "negative-writes-atomic",
+                      "status": "PASS",
+                      "actual": {
+                        "keyEpoch": 1
+                      }
+                    },
+                    {
+                      "id": "reload-retains-unacked-ciphertext",
+                      "status": "PASS",
+                      "actual": {
+                        "sha256": "c7a4105bb18a2d60924fa675cdf308df5c684016fa6ef812e5077c04ed61379c",
+                        "serverCommitStatus": 201
+                      }
+                    },
+                    {
+                      "id": "lost-ack-exact-idempotent-replay",
+                      "status": "PASS",
+                      "actual": {
+                        "commit": 201,
+                        "replay": 200,
+                        "unchanged": true,
+                        "identicalBytes": true
+                      }
+                    },
+                    {
+                      "id": "C-decrypts-new-epoch-B-denied",
+                      "status": "PASS",
+                      "actual": {
+                        "B": 404,
+                        "Crole": "viewer"
+                      }
+                    },
+                    {
+                      "id": "fresh-independent-DEK-and-AEAD-binding",
+                      "status": "PASS",
+                      "actual": {
+                        "fresh": true,
+                        "oldKeyRejected": true,
+                        "badAadRejected": true,
+                        "ownerDecrypts": true
+                      }
+                    },
+                    {
+                      "id": "owner-roster-after-pending-invite-sweep",
+                      "status": "FAIL",
+                      "actual": {
+                        "ok": false,
+                        "count": null,
+                        "error": "teams.roster_acl_mismatch"
+                      }
+                    },
+                    {
+                      "id": "next-membership-action-remains-available",
+                      "status": "FAIL",
+                      "actual": {
+                        "error": "teams.roster_acl_mismatch"
+                      }
+                    },
+                    {
+                      "id": "pending-old-invite-cannot-join-new-epoch",
+                      "status": "PASS",
+                      "actual": {
+                        "memberStatus": 404,
+                        "acceptAfter": "queued-or-conflict"
+                      }
+                    },
+                    {
+                      "id": "tampered-epoch-response-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "teams.untrusted_member_epoch"
+                      }
+                    },
+                    {
+                      "id": "changed-owner-directory-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "share.unsigned_directory"
+                      }
+                    },
+                    {
+                      "id": "known-epoch-rollback-rejected",
+                      "status": "FAIL",
+                      "actual": {
+                        "result": "accepted-old-epoch",
+                        "previouslyVerifiedEpoch": 2,
+                        "replayedEpoch": 1
+                      }
+                    },
+                    {
+                      "id": "account-switch-midflight-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "identity.changed"
+                      }
+                    },
+                    {
+                      "id": "verified-cache-preserved-through-errors",
+                      "status": "PASS",
+                      "actual": {
+                        "count": 1
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "exitCode": 1,
+      "privacy": {
+        "databaseScanned": true,
+        "containerLogExit": 0,
+        "databaseCanariesAbsent": true,
+        "logCanariesAbsent": true
+      }
+    }
+  ],
+  "originalFailures": [
+    {
+      "run": "pb3-acceptance-qh4b93oa",
+      "check": "independent-team-audit",
+      "classification": "QA_HARNESS",
+      "error": "No tests found; test source was not yet created"
+    },
+    {
+      "run": "pb3-acceptance-qh4b93oa",
+      "check": "product-e2e",
+      "file": "p1-assignment-media.spec.ts:174",
+      "classification": "INTEGRATION_UNSTABLE",
+      "error": "401 text/html; JSON parse failed; GET started before login proof completed",
+      "loginProofStartedUtc": "2026-11-10T16:11:15.005Z",
+      "loginProofDurationMs": 55.567,
+      "getStartedUtc": "2026-11-10T16:11:15.013Z",
+      "getDurationMs": 56.534
+    },
+    {
+      "run": "pb3-acceptance-qh4b93oa",
+      "check": "product-e2e",
+      "file": "p1-media.spec.ts:220",
+      "classification": "UNRESOLVED",
+      "error": "POST /media-shares/v1/grants returned 422; grant.not_confirmed; exact cause unproven"
+    }
+  ],
+  "unexecuted": [
+    "native Safari",
+    "physical iPhone",
+    "physical Android",
+    "production migration load/locks",
+    "PHP 8.5 locally",
+    "true overlapping PostgreSQL transactions (HTTP fixture uses one PHP server worker)",
+    "freshness against total device/cache rollback",
+    "external specialist cryptographic audit"
+  ],
+  "privacyPolicy": "Only command metadata, statuses, counts, public hashes and allowlisted boolean proofs. Raw errors, traces, keys, identities, canaries, media, cookies and credentials remain private."
+}
