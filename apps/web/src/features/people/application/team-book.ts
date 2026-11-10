@@ -210,8 +210,8 @@ export async function refreshTeams():Promise<TeamView[]>{
   await syncQueuedTeams()
   let after:string|null=null
   for(let i=0;i<100;i++){
-    const path='/teams/v1'+(after?'?after='+encodeURIComponent(after):'')
-    const page=await jsonApi<ServerPage>(path)
+    const path:string='/teams/v1'+(after?'?after='+encodeURIComponent(after):'')
+    const page:ServerPage=await jsonApi<ServerPage>(path)
     same(s)
     if(!page||!Array.isArray(page.items)||page.items.length>50
       ||page.nextCursor!==null

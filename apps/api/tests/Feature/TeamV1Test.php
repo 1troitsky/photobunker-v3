@@ -5,6 +5,7 @@ namespace Tests\Feature;
 
 use App\Identity\Protocol as P;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -127,6 +128,8 @@ final class TeamV1Test extends TestCase
 
     public function test_privacy_shape_and_bounded_owner_pagination():void
     {
+        // Isolate pagination from the separately enforced production rate limit.
+        $this->withoutMiddleware(ThrottleRequests::class);
         $this->as('owner');
         for($i=0;$i<51;$i++){
             $this->postJson('/teams/v1',$this->signed('owner',

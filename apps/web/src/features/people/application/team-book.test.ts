@@ -84,7 +84,7 @@ describe('P1-27 signed E2EE Teams owner outbox',()=>{
     const offline=await account(ownerId)
     const team=await queueTeam('Valid Team','')
     activeSession.value={...offline,online:true}
-    api.mockImplementation(async (path,method)=>{
+    api.mockImplementation(async (_path,method)=>{
       if(method==='POST')return {teamId:team.teamId,state:'active',unchanged:false} as never
       return {items:[{teamId:team.teamId,ownerAccountId:ownerId,
         contract:'{}',signature:'invalid',state:'active',memberCount:1}],
