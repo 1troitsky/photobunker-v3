@@ -1,0 +1,97 @@
+name: P2-02C disposable Synapse real RustCrypto E2EE
+on:
+  pull_request:
+    paths:
+      - 'apps/web/tests/integration/matrix-real-e2ee.mjs'
+      - 'apps/web/package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/p2-matrix-real-e2ee.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  two-user-matrix:
+    name: Real Matrix homeserver + RustCrypto two-account gate
+    if: github.repository == '1troitsky/photobunker-v3'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install frozen SDK and test dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate ONLY disposable loopback Synapse
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0777 "$RUNNER_TEMP/pb3-matrix-synapse"
+          image='matrixdotorg/synapse:v1.161.0'
+          docker run --rm -v "$RUNNER_TEMP/pb3-matrix-synapse:/data" \
+            -e SYNAPSE_SERVER_NAME=localhost \
+            -e SYNAPSE_REPORT_STATS=no \
+            "$image" generate
+          config="$RUNNER_TEMP/pb3-matrix-synapse/homeserver.yaml"
+          test -s "$config"
+          # Registration secret is a disposable CI-only provisioning interface.
+          # It must never be committed or exposed to any publicly bound port.
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$secret"
+          if grep -q '^registration_shared_secret:' "$config"; then
+            sudo sed -i "/^registration_shared_secret:/d" "$config"
+          fi
+          printf '\nregistration_shared_secret: "%s"\n' "$secret" | sudo tee -a "$config" >/dev/null
+          unset secret
+          docker run -d --name pb3-ci-synapse \
+            -p 127.0.0.1:18008:8008 \
+            -v "$RUNNER_TEMP/pb3-matrix-synapse:/data" \
+            -e SYNAPSE_LOG_LEVEL=WARNING \
+            "$image" >/dev/null
+          for attempt in $(seq 1 90); do
+            if curl -fsS --max-time 3 http://127.0.0.1:18008/_matrix/client/versions >/dev/null; then
+              break
+            fi
+            if ! docker ps --format '{{.Names}}' | grep -qx pb3-ci-synapse; then
+              echo 'Disposable Synapse stopped before healthy'; exit 1
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:18008/_matrix/client/versions >/dev/null
+      - name: Provision two completely isolated test accounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          alice="$(openssl rand -hex 24)"
+          bob="$(openssl rand -hex 24)"
+          echo "::add-mask::$alice"
+          echo "::add-mask::$bob"
+          docker exec pb3-ci-synapse register_new_matrix_user \
+            -c /data/homeserver.yaml -u pb3_ci_alice -p "$alice" \
+            --no-admin http://localhost:8008 >/dev/null
+          docker exec pb3-ci-synapse register_new_matrix_user \
+            -c /data/homeserver.yaml -u pb3_ci_bob -p "$bob" \
+            --no-admin http://localhost:8008 >/dev/null
+          {
+            echo "MATRIX_CI_BASE_URL=http://127.0.0.1:18008"
+            echo "MATRIX_CI_DISPOSABLE=1"
+            echo "MATRIX_CI_SERVER_NAME=localhost"
+            echo "MATRIX_CI_ALICE=pb3_ci_alice"
+            echo "MATRIX_CI_BOB=pb3_ci_bob"
+            echo "MATRIX_CI_ALICE_PASSWORD=$alice"
+            echo "MATRIX_CI_BOB_PASSWORD=$bob"
+          } >> "$GITHUB_ENV"
+      - name: Real two-user encrypted room and recipient ciphertext decryption
+        timeout-minutes: 9
+        run: pnpm --filter @pb3/web exec node tests/integration/matrix-real-e2ee.mjs
+      - name: Stop and erase disposable Matrix server
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f pb3-ci-synapse >/dev/null 2>&1 || true
+          sudo rm -rf "$RUNNER_TEMP/pb3-matrix-synapse"
