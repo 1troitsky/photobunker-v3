@@ -40,7 +40,8 @@ export async function captureSet(page:Page,assignmentId?:string,record=false){
     const stream=await navigator.mediaDevices.getUserMedia({video:kind==='video',audio:true}),parts:Blob[]=[]
     try{const recorder=new MediaRecorder(stream,{mimeType:kind==='video'?'video/webm':'audio/webm'});recorder.ondataavailable=e=>{if(e.data.size)parts.push(e.data)}
      const done=new Promise<void>((resolve,reject)=>{recorder.onstop=()=>resolve();recorder.onerror=reject});recorder.start();await new Promise(r=>setTimeout(r,220));recorder.stop();await done
-     blob=new Blob(parts,{type:recorder.mimeType})
+     // Match CaptureView: persist the chosen canonical MIME, not the codec-qualified recorder report.
+     blob=new Blob(parts,{type:kind==='video'?'video/webm':'audio/webm'})
     }finally{stream.getTracks().forEach(t=>t.stop())}
    }else{blob=new Blob([crypto.getRandomValues(new Uint8Array(4096))],{type:kind==='video'?'video/webm':'audio/webm'})}
    if(blob.size===0)throw Error('qa.empty_recording')

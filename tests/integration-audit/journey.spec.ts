@@ -25,6 +25,7 @@ test('independent Contacts/instructions/offline capture -> scoped grants -> A de
    return {photo:await hash(data.photoInstructions),video:await hash(data.videoInstructions),audio:await hash(data.audioInstructions)}
   },{paths,id})
   const privateA=await A.evaluate(()=>(window as any).__auditPrivateCanaries)
+  savePrivate('private-canaries.json',[alias,...privateA])
   await A.goto('/assignments/'+id+'/edit');await A.getByRole('tab',{name:'Участники'}).click()
   const selected=A.getByTestId('editor-confirmed-contact-'+bId)
   await selected.getByRole('button',{name:'Выбрать'}).click()
