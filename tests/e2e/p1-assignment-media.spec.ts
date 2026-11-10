@@ -171,8 +171,16 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(rosterRecipientStatus).toBe(404)
     await A.goto('/assignments/'+assignmentId+'/edit')
     await A.getByRole('tab',{name:'Участники'}).click()
+    // Navigation renders from local state before the network login proof.
+    // The direct server probe requires the newly confirmed session cookie.
+    await expect.poll(()=>A.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      return identity.requireSession().online
+    })).toBe(true)
     const rosterServer=await A.evaluate(async id=>{
-      const res=await fetch('/assignments/v1/'+id+'/participants')
+      const res=await fetch('/assignments/v1/'+id+'/participants',{
+        headers:{Accept:'application/json'},cache:'no-store',
+      })
       const body=await res.json()
       return {status:res.status,
         recipients:body.items?.map((x:{recipientAccountId:string;state:string})=>

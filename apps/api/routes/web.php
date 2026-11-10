@@ -7,6 +7,11 @@ use App\Http\Controllers\MediaV1Controller;
 use App\Http\Controllers\MediaGrantController;
 use App\Http\Controllers\MediaRevisionController;
 use App\Http\Controllers\RecipientKeyController;
+use App\Http\Controllers\TeamV1Controller;
+use App\Http\Controllers\TeamInvitationController;
+use App\Http\Controllers\TeamMembershipController;
+use App\Http\Controllers\TeamKeyEpochController;
+use App\Http\Controllers\TeamEpochInvitationController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
 use App\Http\Controllers\AssignmentMediaSubmissionController;
@@ -125,4 +130,59 @@ Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(f
         [AssignmentMediaSubmissionController::class,'create'])->whereUuid('assignmentId');
     Route::get('/{assignmentId}/media-submissions',
         [AssignmentMediaSubmissionController::class,'index'])->whereUuid('assignmentId');
+});
+
+// P1-27: account-signed, encrypted team create/owner list. No implicit DEK grants.
+Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/',[TeamV1Controller::class,'index']);
+    Route::post('/',[TeamV1Controller::class,'create']);
+    Route::get('/{teamId}',[TeamV1Controller::class,'show'])->whereUuid('teamId');
+});
+
+// P1-28: team DEK invitation and independent recipient-signed consent.
+// New members have zero implied assignment/file rights.
+Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/invites/received',[TeamInvitationController::class,'inbox']);
+    Route::post('/{teamId}/invites',[TeamInvitationController::class,'invite'])
+        ->whereUuid('teamId');
+    Route::get('/{teamId}/participants',[TeamInvitationController::class,'participants'])
+        ->whereUuid('teamId');
+    Route::post('/{teamId}/invites/{inviteId}/accept',
+        [TeamInvitationController::class,'accept'])
+        ->whereUuid('teamId')->whereUuid('inviteId');
+    Route::get('/{teamId}/member',[TeamInvitationController::class,'memberTeam'])
+        ->whereUuid('teamId');
+});
+
+// P1-29A: serialized signed membership changes and fail-closed key-epoch quarantine.
+Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/{teamId}/membership-status',[TeamMembershipController::class,'status'])->whereUuid('teamId');
+    Route::get('/{teamId}/membership-history',[TeamMembershipController::class,'history'])->whereUuid('teamId');
+    Route::post('/{teamId}/membership',[TeamMembershipController::class,'mutate'])->whereUuid('teamId');
+});
+
+// P1-29B: owner-authenticated, signed and atomically roster-bound Team key epochs.
+Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/{teamId}/epoch/owner',[TeamKeyEpochController::class,'owner'])
+        ->whereUuid('teamId');
+    Route::get('/{teamId}/epoch/member',[TeamKeyEpochController::class,'recipient'])
+        ->whereUuid('teamId');
+    Route::get('/{teamId}/epoch/history',[TeamKeyEpochController::class,'history'])
+        ->whereUuid('teamId');
+    Route::post('/{teamId}/epoch',[TeamKeyEpochController::class,'rotate'])
+        ->whereUuid('teamId');
+});
+
+// P1-29C: epoch-bound E2EE Team invitation and independent recipient consent.
+Route::prefix('teams/v2')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/invites/received',[TeamEpochInvitationController::class,'inbox']);
+    Route::post('/{teamId}/invites',[TeamEpochInvitationController::class,'create'])
+        ->whereUuid('teamId');
+    Route::get('/{teamId}/participants',[TeamEpochInvitationController::class,'participants'])
+        ->whereUuid('teamId');
+    Route::post('/{teamId}/invites/{inviteId}/accept',
+        [TeamEpochInvitationController::class,'accept'])
+        ->whereUuid('teamId')->whereUuid('inviteId');
+    Route::get('/{teamId}/member',[TeamEpochInvitationController::class,'member'])
+        ->whereUuid('teamId');
 });
