@@ -288,6 +288,9 @@ final class TeamKeyEpochController extends Controller
             DB::table('team_invites_v1')->where('team_id',$teamId)
                 ->where('state','pending')
                 ->update(['state'=>'revoked','updated_at'=>now()]);
+            DB::table('team_invites_v2')->where('team_id',$teamId)
+                ->where('state','pending')
+                ->update(['state'=>'revoked','updated_at'=>now()]);
             DB::table('team_records_v1')->where('id',$teamId)->update([
                 'key_epoch'=>$c['toEpoch'],'rotation_required'=>false,
                 'updated_at'=>now(),

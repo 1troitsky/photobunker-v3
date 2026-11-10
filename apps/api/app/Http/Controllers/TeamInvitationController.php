@@ -185,6 +185,8 @@ final class TeamInvitationController extends Controller
             ->selectSub(DB::table('team_members_v1 as m')
                 ->select('m.role')->whereColumn('m.team_id','i.team_id')
                 ->whereColumn('m.account_id','i.recipient_account_id')
+                ->where('i.state','accepted')
+                ->where('m.state','active')
                 ->limit(1),'effective_role')
             ->orderBy('i.id')->limit(51)->get();
         $items=$rows->take(50)->map(static fn($i)=>[

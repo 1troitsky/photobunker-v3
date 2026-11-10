@@ -279,6 +279,8 @@ final class TeamEpochInvitationController extends Controller
             ->selectSub(DB::table('team_members_v1 as m')
                 ->select('m.role')->whereColumn('m.team_id','i.team_id')
                 ->whereColumn('m.account_id','i.recipient_account_id')
+                ->where('i.state','accepted')
+                ->where('m.state','active')
                 ->limit(1),'effective_role')
             ->orderBy('i.id')->limit(51)->get();
         $items=$rows->take(50)->map(static fn($i)=>[
@@ -328,7 +330,9 @@ final class TeamEpochInvitationController extends Controller
         $signedEvent=DB::table('team_membership_events_v1')
             ->where('team_id',$teamId)
             ->where('target_account_id',$actor->id)
-            ->where('action','change_role')->orderByDesc('to_revision')->first();
+            ->where('action','change_role')
+            ->where('created_at','>=',$invite->accepted_at)
+            ->orderByDesc('to_revision')->first();
         return $this->sync->json([
             'teamId'=>$teamId,'ownerAccountId'=>$team->owner_account_id,
             'ownerAccountSpki'=>$team->account_spki,
