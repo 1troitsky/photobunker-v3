@@ -681,6 +681,7 @@ export async function queueAssignmentPolicyChange(
   next:{photoGoal:number|null;videoGoal?:number|null;audioGoal?:number|null;
     allowedMedia?:AllowedAssignmentMedia
     videoRequirements?:CaptureRequirements;audioRequirements?:CaptureRequirements
+    photoAdvanced?:AdvancedRules;videoAdvanced?:AdvancedRules;audioAdvanced?:AdvancedRules
   }&CaptureRequirements,
 ):Promise<string>{
   const s=requireSession()
@@ -703,6 +704,9 @@ export async function queueAssignmentPolicyChange(
   const previousGoals=signedPolicyGoals(a)
   const previousVideoRules=signedMediaRequirements(a,'video')
   const previousAudioRules=signedMediaRequirements(a,'audio')
+  const previousPhotoAdvanced=signedAdvancedRequirements(a,'photo')
+  const previousVideoAdvanced=signedAdvancedRequirements(a,'video')
+  const previousAudioAdvanced=signedAdvancedRequirements(a,'audio')
   const allowedMedia=next.allowedMedia??previousMedia
   if(!validAllowedMedia(allowedMedia))throw Error('assignment.invalid_allowed_media')
   const videoGoal=next.videoGoal===undefined?previousGoals.videoGoal:next.videoGoal
@@ -717,12 +721,20 @@ export async function queueAssignmentPolicyChange(
   if(!validCaptureRequirements(videoRequirements)
     ||!validCaptureRequirements(audioRequirements))
     throw Error('assignment.invalid_media_requirements')
+  const photoAdvanced=normalizeAdvancedRules(next.photoAdvanced??previousPhotoAdvanced)
+  const videoAdvanced=normalizeAdvancedRules(allowedMedia.includes('video')
+    ?next.videoAdvanced??previousVideoAdvanced:{allowedCategories:[],requiredTags:[]})
+  const audioAdvanced=normalizeAdvancedRules(allowedMedia.includes('audio')
+    ?next.audioAdvanced??previousAudioAdvanced:{allowedCategories:[],requiredTags:[]})
   const mediaChanged=JSON.stringify(allowedMedia)!==JSON.stringify(previousMedia)
   if(a.state!=='active'||(a.photoGoal===photoGoal&&!mediaChanged
     &&videoGoal===previousGoals.videoGoal
     &&audioGoal===previousGoals.audioGoal
     &&JSON.stringify(videoRequirements)===JSON.stringify(previousVideoRules)
     &&JSON.stringify(audioRequirements)===JSON.stringify(previousAudioRules)
+    &&JSON.stringify(photoAdvanced)===JSON.stringify(previousPhotoAdvanced)
+    &&JSON.stringify(videoAdvanced)===JSON.stringify(previousVideoAdvanced)
+    &&JSON.stringify(audioAdvanced)===JSON.stringify(previousAudioAdvanced)
     &&previousRules.requiredCategory===requiredCategory
     &&previousRules.descriptionMinLength===descriptionMinLength
     &&previousRules.requiredGps===requiredGps))
@@ -739,14 +751,15 @@ export async function queueAssignmentPolicyChange(
   const previousContract=a.policyRevision===1?a.policyContract:a.policyAmendmentContract
   if(!previousContract)throw Error('assignment.policy_revision_not_authenticated')
   const previousPolicyHash=hex(await digest(enc.encode(previousContract)))
-  // New edits use v5; historical v1-v4 signatures are immutable.
+  // New edits use v6; historical v1-v5 signatures are immutable.
   const payload={
-    version:5,operationId:crypto.randomUUID(),assignmentId,
+    version:6,operationId:crypto.randomUUID(),assignmentId,
     ownerAccountId:s.accountId,rootPolicyHash,previousPolicyHash,
     fromPolicyRevision:a.policyRevision,toPolicyRevision:a.policyRevision+1,
     photoGoal,allowedMedia,
     requiredCategory,descriptionMinLength,requiredGps,
     videoGoal,audioGoal,videoRequirements,audioRequirements,
+    photoAdvanced,videoAdvanced,audioAdvanced,
   }
   const op=await signedOperation('policy',
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/policy',payload)
@@ -766,6 +779,9 @@ export async function queueAssignmentGoalChange(
     photoGoal,videoGoal:targets.videoGoal,audioGoal:targets.audioGoal,...rules,
     videoRequirements:signedMediaRequirements(row.listing,'video'),
     audioRequirements:signedMediaRequirements(row.listing,'audio'),
+    photoAdvanced:signedAdvancedRequirements(row.listing,'photo'),
+    videoAdvanced:signedAdvancedRequirements(row.listing,'video'),
+    audioAdvanced:signedAdvancedRequirements(row.listing,'audio'),
   })
 }
 
