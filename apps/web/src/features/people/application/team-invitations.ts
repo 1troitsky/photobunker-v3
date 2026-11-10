@@ -220,8 +220,13 @@ async function verifyReceived(input:Omit<TeamInvitation,'trustedOwner'>):Promise
 type MinimalTeamInvite={
   inviteId:string;teamId:string;state:'revoked'|'suspended'
 }
+export type SupersededTeamInvite={
+  inviteId:string;teamId:string;ownerAccountId:string
+  ownerAccountSpki:string;state:'superseded'
+}
 export async function listIncomingTeamInvites():Promise<{
   invites:TeamInvitation[];revokedTeamIds:string[];suspendedTeamIds:string[]
+  superseded:SupersededTeamInvite[]
 }>{
   const s=requireSession()
   if(!s.online||(typeof navigator!=='undefined'&&!navigator.onLine))
@@ -230,11 +235,13 @@ export async function listIncomingTeamInvites():Promise<{
   const invites:TeamInvitation[]=[]
   const revokedTeamIds:string[]=[]
   const suspendedTeamIds:string[]=[]
+  const superseded:SupersededTeamInvite[]=[]
   for(let n=0;n<100;n++){
     const path:string='/teams/v1/invites/received'
       +(after?'?after='+encodeURIComponent(after):'')
     const page: {
-      items:Array<Omit<TeamInvitation,'trustedOwner'>|MinimalTeamInvite>
+      items:Array<Omit<TeamInvitation,'trustedOwner'>|MinimalTeamInvite
+        |SupersededTeamInvite>
       nextCursor:string|null
     }=
       await jsonApi(path)
@@ -249,15 +256,24 @@ export async function listIncomingTeamInvites():Promise<{
           throw Error('teams.bad_membership_notice')
         if(item.state==='revoked')revokedTeamIds.push(item.teamId)
         else suspendedTeamIds.push(item.teamId)
+      }else if(item.state==='superseded'){
+        if(Object.keys(item).sort().join('|')
+          !=='inviteId|ownerAccountId|ownerAccountSpki|state|teamId'
+          ||!uuidPattern.test(item.inviteId)||!uuidPattern.test(item.teamId)
+          ||!uuidPattern.test(item.ownerAccountId))
+          throw Error('teams.bad_epoch_superseded_notice')
+        superseded.push(item)
       }else{
-        // The minimal revoked/suspended variants were already handled above.
+        // Minimal notices never carry a DEK envelope.
         const checked=await verifyReceived(
           item as Omit<TeamInvitation,'trustedOwner'>,
         )
         invites.push(checked)
       }
     }
-    if(page.nextCursor===null)return {invites,revokedTeamIds,suspendedTeamIds}
+    if(page.nextCursor===null)return {
+      invites,revokedTeamIds,suspendedTeamIds,superseded,
+    }
     if(page.items.length!==50||page.items[49]!.inviteId!==page.nextCursor
       ||after!==null&&page.nextCursor<=after)throw Error('teams.bad_inbox')
     after=page.nextCursor
