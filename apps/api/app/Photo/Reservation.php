@@ -130,7 +130,7 @@ final class Reservation
                 &&hash_equals(hash('sha256',$event->contract_json),
                     $event->contract_hash),409);
             $change=json_decode($event->contract_json,true,32,JSON_THROW_ON_ERROR);
-            abort_unless(in_array($change['version'],[1,2,3,4,5],true)
+            abort_unless(in_array($change['version'],[1,2,3,4,5,6],true)
                 &&$change['assignmentId']===$a->id
                 &&$change['ownerAccountId']===$a->owner_account_id
                 &&$change['rootPolicyHash']===$rootHash
