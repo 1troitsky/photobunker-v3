@@ -642,7 +642,7 @@ function checkedFloor(
   same(s)
   return {version:1,teamId,ownerAccountId,...stamp}
 }
-function checkMonotonic(prior:TeamEpochFloor,next:TeamEpochFloor):void{
+function checkMonotonic(prior:TeamEpochFloor,next:TeamEpochFloor,checkRevision=true):void{
   if(prior.version!==1||prior.teamId!==next.teamId
     ||prior.ownerAccountId!==next.ownerAccountId)
     throw Error('teams.verified_epoch_owner_changed')
@@ -651,7 +651,7 @@ function checkMonotonic(prior:TeamEpochFloor,next:TeamEpochFloor):void{
   if(prior.keyEpoch===next.keyEpoch
     &&prior.contractHash!==next.contractHash)
     throw Error('teams.verified_epoch_fork')
-  if(prior.membershipRevision>next.membershipRevision)
+  if(checkRevision&&prior.membershipRevision>next.membershipRevision)
     throw Error('teams.verified_revision_rollback')
 }
 async function sealVerifiedRecord(
@@ -697,13 +697,21 @@ async function openFloor(
  * epoch. Definitive read/compare/write happens atomically with joined cache.
  */
 export async function assertVerifiedTeamEpochNotOlder(
-  teamId:string,ownerAccountId:string,stamp:TeamVerifiedEpoch,
+  teamId:string,ownerAccountId:string,
+  stamp:Pick<TeamVerifiedEpoch,'keyEpoch'|'contractHash'>
+    &Partial<Pick<TeamVerifiedEpoch,'membershipRevision'>>,
 ):Promise<void>{
   const s=requireSession()
-  const next=checkedFloor(s,teamId,ownerAccountId,stamp)
+  // Before the signed membership receipt is checked, only epoch/hash are
+  // known. Do not invent revision 1 or trust the server's unsigned counter.
+  // commitVerifiedTeamView always compares the fully verified revision.
+  const next=checkedFloor(s,teamId,ownerAccountId,{
+    ...stamp,membershipRevision:stamp.membershipRevision??1,
+  })
   const {key:rowKey}=await rowId(s,'freshness',teamId)
   const row=await db.freshness.get(rowKey)
-  if(row)checkMonotonic(await openFloor(s,row,next),next)
+  if(row)checkMonotonic(await openFloor(s,row,next),next,
+    stamp.membershipRevision!==undefined)
   same(s)
 }
 async function commitVerifiedTeamView(

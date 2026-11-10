@@ -215,6 +215,8 @@ async function verifyEpochHistory(
     }
     if(page.nextCursor===null){
       if(after!==epoch||!root)throw Error('teams.incomplete_epoch_chain')
+      if(latest&&revision<latest.membershipRevision)
+        throw Error('teams.invalid_epoch_history')
       return {epoch,contractHash:currentHash,latest,root,
         membershipRevision:revision,rotationRequired:required,
         retiredPendingInviteIds}
@@ -458,7 +460,6 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
     await assertVerifiedTeamEpochNotOlder(
       invite.teamId,invite.ownerAccountId,{
         keyEpoch:1,contractHash:original.teamContractHash,
-        membershipRevision:1,
       })
     same(s)
     return openJoinedTeam(invite)
@@ -500,7 +501,6 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
   await assertVerifiedTeamEpochNotOlder(
     invite.teamId,invite.ownerAccountId,{
       keyEpoch:chain.epoch,contractHash:chain.contractHash,
-      membershipRevision:chain.membershipRevision,
     })
   same(s)
   const r=c.recipients.find(x=>x.accountId===s.accountId)
@@ -537,6 +537,9 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
     ||profile.description.length>1024)
     throw Error('teams.member_epoch_profile_invalid')
   let role:TeamRole=r.role
+  // The live HTTP revision is useful for response consistency, but only
+  // owner-signed epoch/role evidence may advance a durable replay floor.
+  let verifiedRevision=c.membershipRevision
   if(response.latestRoleEvent){
     let event:{
       action:string;teamId:string;targetAccountId:string
@@ -558,6 +561,7 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
         response.latestRoleEvent.signature))
       throw Error('teams.untrusted_member_role_epoch')
     role=event.nextRole
+    verifiedRevision=Math.max(verifiedRevision,event.toRevision)
   }
   if(response.effectiveRole!==role)
     throw Error('teams.untrusted_member_effective_role')
@@ -569,7 +573,7 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
   }
   await cacheVerifiedJoinedTeam(joined,s.accountId,{
     keyEpoch:chain.epoch,contractHash:chain.contractHash,
-    membershipRevision:chain.membershipRevision,
+    membershipRevision:verifiedRevision,
   })
   return joined
 }
