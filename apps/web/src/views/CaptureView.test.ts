@@ -7,6 +7,8 @@ import CaptureView from './CaptureView.vue'
 const mocks = vi.hoisted(() => ({
   capture: vi.fn(), policies: vi.fn(), server: vi.fn(), binding: vi.fn(),
   mediaEnqueue: vi.fn(),
+  privateCache: vi.fn(), verifyPolicy: vi.fn(), privateScope: vi.fn(),
+  allowedMedia: ['photo'] as string[],
   route: {query: {} as Record<string, string>},
 }))
 vi.mock('vue-router', () => ({
@@ -19,10 +21,16 @@ vi.mock('../features/assignments/application/assignment-outbox', () => ({
   listServerAssignments: mocks.server,
   listVerifiedCapturePolicies: mocks.policies,
   signedCaptureBinding: mocks.binding,
-  signedAllowedAssignmentMedia: () => ['photo'],
+  signedAllowedAssignmentMedia: () => mocks.allowedMedia,
+  readCachedPrivateAssignment: mocks.privateCache,
+  verifySignedAssignmentPolicy: mocks.verifyPolicy,
+  assignmentPrivateCacheScope: mocks.privateScope,
   signedMediaCaptureIntent: vi.fn(),
   signedAdvancedRequirements: () => ({allowedCategories:[],requiredTags:[]}),
   signedPolicyRequirements: () => ({
+    requiredCategory:false,descriptionMinLength:0,requiredGps:false,
+  }),
+  signedMediaRequirements: () => ({
     requiredCategory:false,descriptionMinLength:0,requiredGps:false,
   }),
 }))
@@ -80,6 +88,10 @@ beforeEach(() => {
   mocks.server.mockResolvedValue({items: []})
   mocks.binding.mockResolvedValue({assignmentId: 'assignment-a', policyRevision: 1})
   mocks.capture.mockResolvedValue({photoId: 'photo-fixture'})
+  mocks.allowedMedia = ['photo']
+  mocks.privateCache.mockResolvedValue(null)
+  mocks.verifyPolicy.mockResolvedValue(undefined)
+  mocks.privateScope.mockImplementation((row: {privateRevision?: number}) => 'scope-' + (row.privateRevision ?? 1))
 })
 afterEach(async () => {
   app?.unmount(); app = undefined
@@ -88,6 +100,52 @@ afterEach(async () => {
   host?.remove(); activeSession.value = null
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+describe('private instructions and hardware lifecycle',()=>{
+  const policy={assignmentId:'assignment-a',ownerAccountId:'owner-a',policyRevision:1,privateRevision:2}
+  const privateText={version:2,title:'Private title',instructions:'Common instructions',
+    photoInstructions:'Photo framing',videoInstructions:'Video motion',audioInstructions:'Audio notes'}
+  function prepare(){
+    mocks.allowedMedia=['photo','video','audio']
+    mocks.route.query={assignmentId:policy.assignmentId}
+    mocks.policies.mockResolvedValue([policy])
+  }
+  it.each(['video','audio','stop'] as const)
+  ('finishes an in-flight verified private decrypt after %s changes camera tracks',async action=>{
+    prepare()
+    const cached=deferred<typeof privateText>()
+    mocks.privateCache.mockReturnValue(cached.promise)
+    await mount()
+    expect(mocks.verifyPolicy).toHaveBeenCalledWith(policy,true)
+    expect(mocks.privateCache).toHaveBeenCalled()
+    if(action==='stop')button('Отключить').click()
+    else{
+      const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
+      mode.value=action;mode.dispatchEvent(new Event('change',{bubbles:true}))
+    }
+    await settle()
+    cached.resolve(privateText);await settle()
+    expect(host.querySelector('[data-testid="camera-media-instruction"]')?.textContent)
+      .toContain(action==='video'?'Video motion':action==='audio'?'Audio notes':'Photo framing')
+  })
+  it.each(['account','device','key'] as const)
+  ('rejects a previous identity private decrypt after a real %s change',async field=>{
+    prepare()
+    const cached=deferred<typeof privateText>()
+    const original=identity()
+    mocks.privateCache.mockImplementation(()=>activeSession.value===original?cached.promise:Promise.resolve(null))
+    await mount(original)
+    expect(mocks.privateCache).toHaveBeenCalled()
+    const changed={...original,device:{...original.device},pkg:{...original.pkg}}
+    if(field==='account')changed.accountId=changed.pkg.accountId='account-b'
+    else if(field==='device')changed.deviceId=changed.device.deviceId='device-b'
+    else changed.device.encryptionKey={} as CryptoKey
+    activeSession.value=changed
+    await settle();cached.resolve(privateText);await settle()
+    expect(host.querySelector('[data-testid="camera-media-instruction"]')).toBeNull()
+    expect(host.textContent).not.toContain('Photo framing')
+  })
 })
 
 describe('P1-14 MediaRecorder cancellation and plaintext safety',()=>{

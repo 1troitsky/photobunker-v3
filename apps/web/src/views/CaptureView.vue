@@ -52,23 +52,27 @@ async function loadPrivateInstructions():Promise<void>{
   const id=selectedAssignment.value
   const row=policies.value.find(p=>p.assignmentId===id)
   if(!id||!row){privateInstructionState.value='none';return}
-  const identity=cameraIdentity(activeSession.value),generation=cameraGeneration
+  const identity=cameraIdentity(activeSession.value)
+  // Private instructions belong to the identity/assignment/revision, not
+  // the camera track generation. Mode changes and Stop release hardware
+  // without invalidating an otherwise current in-flight cache decrypt.
+  const current=()=>!disposed
+    &&sameIdentity(identity,cameraIdentity(activeSession.value))
+    &&version===instructionGeneration&&selectedAssignment.value===id
   privateInstructionState.value='loading'
   try{
     // The cached summary is AEAD-only, account-scoped and bound to the
     // CURRENT independently verified private revision (never older plaintext).
     await verifySignedAssignmentPolicy(row,true)
     const data=await readCachedPrivateAssignment(id,assignmentPrivateCacheScope(row))
-    if(!ownsCamera(identity,generation)||version!==instructionGeneration
-      ||selectedAssignment.value!==id)return
+    if(!current())return
     assignmentPrivate.value=data
     assignmentPrivateScope.value=data
       ?activeSession.value!.accountId+'|'+id+'|'+assignmentPrivateCacheScope(row)
       :''
     privateInstructionState.value=data?'ready':'unavailable'
   }catch{
-    if(ownsCamera(identity,generation)&&version===instructionGeneration
-      &&selectedAssignment.value===id){
+    if(current()){
       assignmentPrivate.value=null
       assignmentPrivateScope.value=''
       privateInstructionState.value='unavailable'
