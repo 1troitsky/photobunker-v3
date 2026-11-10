@@ -7,6 +7,7 @@ use App\Http\Controllers\MediaV1Controller;
 use App\Http\Controllers\MediaGrantController;
 use App\Http\Controllers\MediaRevisionController;
 use App\Http\Controllers\RecipientKeyController;
+use App\Http\Controllers\TeamV1Controller;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
 use App\Http\Controllers\AssignmentMediaSubmissionController;
@@ -125,4 +126,11 @@ Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(f
         [AssignmentMediaSubmissionController::class,'create'])->whereUuid('assignmentId');
     Route::get('/{assignmentId}/media-submissions',
         [AssignmentMediaSubmissionController::class,'index'])->whereUuid('assignmentId');
+});
+
+// P1-27: account-signed, encrypted team create/owner list. No implicit DEK grants.
+Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/',[TeamV1Controller::class,'index']);
+    Route::post('/',[TeamV1Controller::class,'create']);
+    Route::get('/{teamId}',[TeamV1Controller::class,'show'])->whereUuid('teamId');
 });
