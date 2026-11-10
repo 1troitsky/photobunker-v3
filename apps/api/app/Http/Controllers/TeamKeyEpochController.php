@@ -77,7 +77,14 @@ final class TeamKeyEpochController extends Controller
             ->where('team_id',$teamId)
             ->where('epoch',$root['keyEpoch'])
             ->where('recipient_account_id',$actor->id)->first();
-        abort_unless($grant&&$grant->role===$member->role,409);
+        abort_unless($grant,409);
+        // A later signed membership role change does not change the epoch's
+        // historical ECDH AAD. Current role is returned separately.
+        $latestRole=DB::table('team_membership_events_v1')
+            ->where('team_id',$teamId)
+            ->where('target_account_id',$actor->id)
+            ->where('action','change_role')
+            ->orderByDesc('to_revision')->first();
         // A recipient who rotated their ECDH directory since the epoch
         // must reconfirm/rekey, not receive stale-key ciphertext as current.
         $directory=DB::table('account_exchange_keys')
@@ -90,6 +97,10 @@ final class TeamKeyEpochController extends Controller
             'ownerAccountId'=>$team->owner_account_id,
             'membershipRevision'=>(int)$team->membership_revision,
             'effectiveRole'=>$member->role,
+            'latestRoleEvent'=>$latestRole?[
+                'contract'=>$latestRole->contract_json,
+                'signature'=>$latestRole->owner_signature,
+            ]:null,
             ...$root,
             'recipient'=>[
                 'accountId'=>$actor->id,
