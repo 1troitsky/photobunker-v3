@@ -126,7 +126,8 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
       .toBeVisible({timeout:30000})
     await expect(member).toContainText('Исключён')
     await inbox.getByRole('button',{name:'Обновить'}).click()
-    await expect(inbox.getByText('Отозвано')).toBeVisible({timeout:30000})
+    await expect(inbox.getByTestId('team-revoked-notice'))
+      .toBeVisible({timeout:30000})
     await expect(inbox.getByTestId('team-joined-list')).toHaveCount(0)
   }finally{
     await ctxA.close();await ctxB.close()

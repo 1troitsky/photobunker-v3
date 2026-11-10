@@ -217,26 +217,40 @@ async function verifyReceived(input:Omit<TeamInvitation,'trustedOwner'>):Promise
   same(s)
   return {...input,expired:input.state==='pending'&&c.expiresAt<=Date.now(),trustedOwner:trusted}
 }
-export async function listIncomingTeamInvites():Promise<TeamInvitation[]>{
+type RevokedTeamInvite={inviteId:string;teamId:string;state:'revoked'}
+export async function listIncomingTeamInvites():Promise<{
+  invites:TeamInvitation[];revokedTeamIds:string[]
+}>{
   const s=requireSession()
   if(!s.online||(typeof navigator!=='undefined'&&!navigator.onLine))
     throw Error('teams.invite_inbox_requires_online')
   let after:string|null=null
   const invites:TeamInvitation[]=[]
+  const revokedTeamIds:string[]=[]
   for(let n=0;n<100;n++){
     const path:string='/teams/v1/invites/received'
       +(after?'?after='+encodeURIComponent(after):'')
-    const page: {items:Omit<TeamInvitation,'trustedOwner'>[];nextCursor:string|null}=
+    const page: {
+      items:Array<Omit<TeamInvitation,'trustedOwner'>|RevokedTeamInvite>
+      nextCursor:string|null
+    }=
       await jsonApi(path)
     same(s)
     if(!Array.isArray(page.items)||page.items.length>50
       ||page.nextCursor!==null&&typeof page.nextCursor!=='string')
       throw Error('teams.bad_inbox')
     for(const item of page.items){
-      const checked=await verifyReceived(item)
-      invites.push(checked)
+      if(item.state==='revoked'){
+        if(Object.keys(item).sort().join('|')!=='inviteId|state|teamId'
+          ||!uuidPattern.test(item.teamId)||!uuidPattern.test(item.inviteId))
+          throw Error('teams.bad_revoked_notice')
+        revokedTeamIds.push(item.teamId)
+      }else{
+        const checked=await verifyReceived(item)
+        invites.push(checked)
+      }
     }
-    if(page.nextCursor===null)return invites
+    if(page.nextCursor===null)return {invites,revokedTeamIds}
     if(page.items.length!==50||page.items[49]!.inviteId!==page.nextCursor
       ||after!==null&&page.nextCursor<=after)throw Error('teams.bad_inbox')
     after=page.nextCursor

@@ -122,6 +122,15 @@ final class TeamInvitationController extends Controller
         $rows=$q->select(['i.*','a.account_spki'])->orderBy('i.id')
             ->limit(51)->get();
         $items=$rows->take(50)->map(function($i){
+            if($i->state==='revoked'){
+                // Never re-distribute old signed ECDH key envelopes to a
+                // removed recipient. A minimal tombstone only signals local
+                // UI/cache invalidation; all signed evidence stays owner-only.
+                return [
+                    'inviteId'=>$i->id,'teamId'=>$i->team_id,
+                    'state'=>'revoked',
+                ];
+            }
             return [
                 'inviteId'=>$i->id,'teamId'=>$i->team_id,
                 'ownerAccountId'=>$i->owner_account_id,

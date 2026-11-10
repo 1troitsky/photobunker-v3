@@ -21,6 +21,7 @@ const selectedRole=ref<TeamRole>('contributor')
 const roster=ref<TeamRosterMember[]>([])
 const incoming=ref<TeamInvitation[]>([])
 const joined=ref<JoinedTeam[]>([])
+const revokedTeamIds=ref<string[]>([])
 const showInvite=ref(false)
 const rotationRequired=ref(false)
 const roleEditId=ref<string|null>(null)
@@ -46,7 +47,7 @@ function hasNetwork():boolean{
 }
 async function reload():Promise<void>{
   const scope=identity(),token=++generation
-  incoming.value=[];joined.value=[];error.value=''
+  incoming.value=[];joined.value=[];revokedTeamIds.value=[];error.value=''
   if(!scope)return
   try{
     const cached=await listCachedJoinedTeams()
@@ -59,11 +60,12 @@ async function reload():Promise<void>{
   loading.value=true
   try{
     await syncTeamMemberOperations()
-    const results=await listIncomingTeamInvites()
+    const response=await listIncomingTeamInvites()
     if(!current(scope,token))return
+    const results=response.invites
     incoming.value=results
-    const revokedTeams=results.filter(x=>x.state==='revoked')
-    for(const item of revokedTeams)await dropRevokedJoinedTeam(item.teamId)
+    revokedTeamIds.value=response.revokedTeamIds
+    for(const id of response.revokedTeamIds)await dropRevokedJoinedTeam(id)
     if(!current(scope,token))return
     const verified=await Promise.all(results.filter(x=>
       x.state==='accepted'&&x.trustedOwner).map(async x=>{
@@ -71,7 +73,7 @@ async function reload():Promise<void>{
       }))
     if(current(scope,token)){
       const known=verified.filter((x):x is JoinedTeam=>x!==null)
-      const revoked=new Set(results.filter(x=>x.state==='revoked').map(x=>x.teamId))
+      const revoked=new Set(response.revokedTeamIds)
       joined.value=[...known,...joined.value.filter(x=>
         !known.some(y=>y.teamId===x.teamId)&&!revoked.has(x.teamId))]
     }
@@ -269,6 +271,10 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
         </form>
       </template>
     </template>
+    <p v-if="revokedTeamIds.length" role="status"
+      data-testid="team-revoked-notice">
+      Доступ к команде отозван. Зашифрованный локальный снимок удалён.
+    </p>
     <div v-if="incoming.length" data-testid="team-incoming-invites">
       <h3>Полученные приглашения</h3>
       <div v-for="item in incoming" :key="item.inviteId"

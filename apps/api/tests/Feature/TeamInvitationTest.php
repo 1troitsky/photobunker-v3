@@ -386,7 +386,10 @@ final class TeamInvitationTest extends TestCase
         $this->as('recipient');
         $this->getJson('/teams/v1/'.$this->teamId.'/member')->assertNotFound();
         $this->getJson('/teams/v1/invites/received')->assertOk()
-            ->assertJsonPath('items.0.state','revoked');
+            ->assertJsonPath('items.0.state','revoked')
+            ->assertJsonMissingPath('items.0.contract')
+            ->assertJsonMissingPath('items.0.signature')
+            ->assertJsonMissingPath('items.0.ownerAccountSpki');
         $this->assertDatabaseCount('team_membership_events_v1',1);
         $this->assertDatabaseCount('photo_access_grants',0);
     }
