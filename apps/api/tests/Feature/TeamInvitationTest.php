@@ -274,6 +274,216 @@ final class TeamInvitationTest extends TestCase
         $this->assertDatabaseCount('team_members_v1',1);
     }
 
+
+    private function acceptedRecipient():array
+    {
+        $signed=$this->invite();
+        $invite=json_decode($signed['contract'],true,32,JSON_THROW_ON_ERROR);
+        $accept=$this->sign('recipient','pb3.team-accept.v1',$this->accept(
+            $invite['inviteId'],hash('sha256',$signed['contract'])));
+        $this->as('recipient');
+        $this->postJson('/teams/v1/'.$this->teamId
+            .'/invites/'.$invite['inviteId'].'/accept',$accept)->assertCreated();
+        return $invite;
+    }
+
+    private function membershipEvent(string $action,array $invite,
+        string $currentRole='contributor',?string $nextRole=null,
+        int $fromRevision=1):array
+    {
+        return [
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'teamId'=>$this->teamId,
+            'ownerAccountId'=>$this->accounts['owner']['id'],
+            'inviteId'=>$invite['inviteId'],
+            'targetAccountId'=>$this->accounts['recipient']['id'],
+            'action'=>$action,'previousRole'=>$currentRole,
+            'nextRole'=>$nextRole,'fromRevision'=>$fromRevision,
+            'toRevision'=>$fromRevision+1,
+        ];
+    }
+
+    private function changeMember(array $contract):array
+    {
+        $this->as('owner');
+        $signed=$this->sign('owner','pb3.team-membership.v1',$contract);
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',$signed)
+            ->assertCreated()
+            ->assertJsonPath('membershipRevision',$contract['toRevision']);
+        return $signed;
+    }
+
+    public function test_signed_role_change_uses_revision_and_does_not_grant_files():void
+    {
+        $invite=$this->acceptedRecipient();
+        $this->as('owner');
+        $payload=$this->membershipEvent('change_role',$invite,'contributor','viewer');
+        $signed=$this->changeMember($payload);
+        $this->assertDatabaseHas('team_members_v1',[
+            'team_id'=>$this->teamId,
+            'account_id'=>$this->accounts['recipient']['id'],
+            'state'=>'active','role'=>'viewer',
+        ]);
+        $this->getJson('/teams/v1/'.$this->teamId.'/participants')
+            ->assertOk()->assertJsonPath('items.0.role','contributor')
+            ->assertJsonPath('items.0.effectiveRole','viewer');
+        $this->getJson('/teams/v1/'.$this->teamId.'/membership-status')
+            ->assertOk()->assertJsonPath('membershipRevision',2)
+            ->assertJsonPath('rotationRequired',false);
+        $this->getJson('/teams/v1/'.$this->teamId.'/membership-history')
+            ->assertOk()->assertJsonPath('items.0.contract',$signed['contract'])
+            ->assertJsonPath('items.0.signature',$signed['signature']);
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',$signed)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $altered=$payload;$altered['nextRole']='curator';
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',
+            $this->sign('owner','pb3.team-membership.v1',$altered))
+            ->assertConflict();
+        $stale=$this->membershipEvent('change_role',$invite,'viewer','curator');
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',
+            $this->sign('owner','pb3.team-membership.v1',$stale))
+            ->assertConflict();
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',
+            $this->sign('owner','pb3.assignment-state.v1',$payload))
+            ->assertUnauthorized();
+        $this->assertDatabaseCount('photo_access_grants',0);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        $this->assertDatabaseCount('assignment_invites_v1',0);
+        $this->as('recipient');
+        $this->getJson('/teams/v1/'.$this->teamId.'/member')->assertOk();
+        $this->getJson('/teams/v1/'.$this->teamId.'/membership-history')->assertNotFound();
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',$signed)->assertUnauthorized();
+    }
+
+    public function test_member_removal_immediately_revokes_acl_and_quarantines_old_dek():void
+    {
+        $invite=$this->acceptedRecipient();
+        $change=$this->membershipEvent('remove',$invite);
+        $signed=$this->changeMember($change);
+        $this->assertDatabaseHas('team_members_v1',[
+            'team_id'=>$this->teamId,
+            'account_id'=>$this->accounts['recipient']['id'],
+            'role'=>'contributor','state'=>'revoked',
+        ]);
+        $this->assertDatabaseHas('team_invites_v1',[
+            'id'=>$invite['inviteId'],'state'=>'revoked',
+        ]);
+        $this->getJson('/teams/v1/'.$this->teamId.'/membership-status')
+            ->assertOk()->assertJsonPath('rotationRequired',true);
+        $this->getJson('/teams/v1/'.$this->teamId)->assertOk()
+            ->assertJsonPath('memberCount',1)
+            ->assertJsonPath('rotationRequired',true);
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',$signed)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $another=$this->membershipEvent('change_role',$invite,'contributor','viewer',2);
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',
+            $this->sign('owner','pb3.team-membership.v1',$another))
+            ->assertConflict();
+        $next=$this->invitation('viewer');
+        $this->postJson('/teams/v1/'.$this->teamId.'/invites',
+            $this->sign('owner','pb3.team-invite.v1',$next))
+            ->assertConflict();
+        $this->as('recipient');
+        $this->getJson('/teams/v1/'.$this->teamId.'/member')->assertNotFound();
+        $this->getJson('/teams/v1/invites/received')->assertOk()
+            ->assertJsonPath('items.0.state','revoked')
+            ->assertJsonMissingPath('items.0.contract')
+            ->assertJsonMissingPath('items.0.signature')
+            ->assertJsonMissingPath('items.0.ownerAccountSpki');
+        $this->assertDatabaseCount('team_membership_events_v1',1);
+        $this->assertDatabaseCount('photo_access_grants',0);
+    }
+
+    public function test_surviving_member_is_denied_old_team_dek_until_new_epoch():void
+    {
+        $first=$this->acceptedRecipient();
+        $this->publishKey('outsider',str_repeat('c',64));
+        $other=$this->invitation('viewer');
+        $other['recipientAccountId']=$this->accounts['outsider']['id'];
+        $other['recipientKeyDigest']=str_repeat('c',64);
+        $signed=$this->invite($other);
+        $this->as('outsider');
+        $accept=[
+            'version'=>1,'action'=>'accept','inviteId'=>$other['inviteId'],
+            'teamId'=>$this->teamId,
+            'recipientAccountId'=>$this->accounts['outsider']['id'],
+            'operationId'=>(string)Str::uuid(),
+            'inviteHash'=>hash('sha256',$signed['contract']),
+        ];
+        $this->postJson('/teams/v1/'.$this->teamId.'/invites/'
+            .$other['inviteId'].'/accept',
+            $this->sign('outsider','pb3.team-accept.v1',$accept))->assertCreated();
+        $this->getJson('/teams/v1/'.$this->teamId.'/member')->assertOk();
+        $this->changeMember($this->membershipEvent('remove',$first));
+        $this->as('outsider');
+        // An accepted, still active survivor must not receive the known old
+        // DEK; explicit new epoch publication is needed for EVERY survivor.
+        $this->assertDatabaseHas('team_members_v1',[
+            'team_id'=>$this->teamId,
+            'account_id'=>$this->accounts['outsider']['id'],
+            'state'=>'active','role'=>'viewer',
+        ]);
+        $this->getJson('/teams/v1/'.$this->teamId.'/member')->assertConflict();
+        $this->assertDatabaseCount('photo_access_grants',0);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
+    public function test_pending_invite_can_be_revoked_before_any_consent():void
+    {
+        $signed=$this->invite();
+        $invite=json_decode($signed['contract'],true,32,JSON_THROW_ON_ERROR);
+        $this->changeMember($this->membershipEvent('remove',$invite));
+        $this->assertDatabaseCount('team_members_v1',1);
+        $this->as('recipient');
+        $accept=$this->sign('recipient','pb3.team-accept.v1',
+            $this->accept($invite['inviteId'],hash('sha256',$signed['contract'])));
+        $this->postJson('/teams/v1/'.$this->teamId
+            .'/invites/'.$invite['inviteId'].'/accept',$accept)->assertConflict();
+        $this->getJson('/teams/v1/'.$this->teamId.'/member')->assertNotFound();
+        $this->assertDatabaseCount('team_membership_events_v1',1);
+    }
+
+    public function test_owner_identity_and_transition_invariants_cannot_be_forged():void
+    {
+        $invite=$this->acceptedRecipient();
+        $this->as('owner');
+        $payload=$this->membershipEvent('change_role',$invite,'contributor','viewer');
+        $bad=$payload;$bad['targetAccountId']=$this->accounts['owner']['id'];
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',
+            $this->sign('owner','pb3.team-membership.v1',$bad))
+            ->assertUnprocessable();
+        $bad=$payload;$bad['toRole']='owner';
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',
+            $this->sign('owner','pb3.team-membership.v1',$bad))
+            ->assertUnprocessable();
+        $bad=$payload;$bad['fromRevision']=0;$bad['toRevision']=1;
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',
+            $this->sign('owner','pb3.team-membership.v1',$bad))
+            ->assertUnprocessable();
+        $bad=$payload;$bad['previousRole']='curator';
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',
+            $this->sign('owner','pb3.team-membership.v1',$bad))
+            ->assertConflict();
+        $this->assertDatabaseCount('team_membership_events_v1',0);
+    }
+
+    public function test_signed_member_history_blocks_destructive_downgrade():void
+    {
+        $invite=$this->acceptedRecipient();
+        $this->changeMember($this->membershipEvent('remove',$invite));
+        $migration=require database_path(
+            'migrations/2026_11_10_000009_team_membership_revision_v1.php');
+        try{
+            $migration->down();
+            $this->fail('Membership history downgrade must be refused.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.team_membership.rollback_forbidden',$e->getMessage());
+        }
+        $this->assertTrue(Schema::hasColumn('team_records_v1','rotation_required'));
+        $this->assertTrue(Schema::hasTable('team_membership_events_v1'));
+        $this->assertDatabaseCount('team_membership_events_v1',1);
+    }
+
     public function test_nonempty_signed_invite_history_blocks_downgrade():void
     {
         $this->invite();

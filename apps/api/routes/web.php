@@ -9,6 +9,7 @@ use App\Http\Controllers\MediaRevisionController;
 use App\Http\Controllers\RecipientKeyController;
 use App\Http\Controllers\TeamV1Controller;
 use App\Http\Controllers\TeamInvitationController;
+use App\Http\Controllers\TeamMembershipController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
 use App\Http\Controllers\AssignmentMediaSubmissionController;
@@ -149,4 +150,11 @@ Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(functio
         ->whereUuid('teamId')->whereUuid('inviteId');
     Route::get('/{teamId}/member',[TeamInvitationController::class,'memberTeam'])
         ->whereUuid('teamId');
+});
+
+// P1-29A: serialized signed membership changes and fail-closed key-epoch quarantine.
+Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/{teamId}/membership-status',[TeamMembershipController::class,'status'])->whereUuid('teamId');
+    Route::get('/{teamId}/membership-history',[TeamMembershipController::class,'history'])->whereUuid('teamId');
+    Route::post('/{teamId}/membership',[TeamMembershipController::class,'mutate'])->whereUuid('teamId');
 });

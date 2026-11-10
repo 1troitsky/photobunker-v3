@@ -103,6 +103,32 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     await inbox.getByRole('button',{name:'Обновить'}).click()
     await expect(inbox.getByText('TEAM SECRET PROOF')).toBeVisible()
     await expect(inbox.getByText('Локальная копия',{exact:false})).toBeVisible()
+    await ctxB.setOffline(false)
+    const member=panel.getByTestId('team-member-'+accountB)
+    await member.getByRole('button',{name:'Роль'}).click()
+    await member.getByRole('combobox',{name:'Роль '+accountB})
+      .selectOption('contributor')
+    A.once('dialog',dialog=>{void dialog.accept()})
+    await member.getByRole('button',{name:'Применить'}).click()
+    await expect(member).toContainText('Исполнитель',{timeout:30000})
+    await expect(panel.getByText('Роль изменена и подтверждена сервером.'))
+      .toBeVisible()
+    await inbox.getByRole('button',{name:'Обновить'}).click()
+    await expect(inbox.getByTestId('team-joined-list'))
+      .toContainText('Исполнитель',{timeout:30000})
+
+    // Revoking A->B must immediately stop new server-issued team DEK reads,
+    // quarantine the old DEK for *every* remaining member and invalidate
+    // B's online cache while preserving the signed audit evidence.
+    A.once('dialog',dialog=>{void dialog.accept()})
+    await member.getByRole('button',{name:'Исключить'}).click()
+    await expect(panel.getByTestId('team-rotation-required'))
+      .toBeVisible({timeout:30000})
+    await expect(member).toContainText('Исключён')
+    await inbox.getByRole('button',{name:'Обновить'}).click()
+    await expect(inbox.getByTestId('team-revoked-notice'))
+      .toBeVisible({timeout:30000})
+    await expect(inbox.getByTestId('team-joined-list')).toHaveCount(0)
   }finally{
     await ctxA.close();await ctxB.close()
   }

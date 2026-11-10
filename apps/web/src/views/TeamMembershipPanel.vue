@@ -6,7 +6,8 @@ import type { TeamView } from '../features/people/application/team-book'
 import {
   listOwnerTeamRoster, listIncomingTeamInvites, listCachedJoinedTeams,
   queueTeamInvitation, queueTeamAcceptance, syncTeamMemberOperations,
-  openJoinedTeam,
+  openJoinedTeam, queueTeamMembershipChange, verifiedTeamMembershipHistory,
+  dropRevokedJoinedTeam,
 } from '../features/people/application/team-invitations'
 import type {
   TeamRole, TeamInvitation, TeamRosterMember, JoinedTeam,
@@ -20,7 +21,11 @@ const selectedRole=ref<TeamRole>('contributor')
 const roster=ref<TeamRosterMember[]>([])
 const incoming=ref<TeamInvitation[]>([])
 const joined=ref<JoinedTeam[]>([])
+const revokedTeamIds=ref<string[]>([])
 const showInvite=ref(false)
+const rotationRequired=ref(false)
+const roleEditId=ref<string|null>(null)
+const roleDraft=ref<TeamRole>('viewer')
 const busy=ref(false)
 const loading=ref(false)
 const error=ref('')
@@ -42,7 +47,7 @@ function hasNetwork():boolean{
 }
 async function reload():Promise<void>{
   const scope=identity(),token=++generation
-  incoming.value=[];joined.value=[];error.value=''
+  incoming.value=[];joined.value=[];revokedTeamIds.value=[];error.value=''
   if(!scope)return
   try{
     const cached=await listCachedJoinedTeams()
@@ -55,17 +60,22 @@ async function reload():Promise<void>{
   loading.value=true
   try{
     await syncTeamMemberOperations()
-    const results=await listIncomingTeamInvites()
+    const response=await listIncomingTeamInvites()
     if(!current(scope,token))return
+    const results=response.invites
     incoming.value=results
+    revokedTeamIds.value=response.revokedTeamIds
+    for(const id of response.revokedTeamIds)await dropRevokedJoinedTeam(id)
+    if(!current(scope,token))return
     const verified=await Promise.all(results.filter(x=>
       x.state==='accepted'&&x.trustedOwner).map(async x=>{
         try{return await openJoinedTeam(x)}catch{return null}
       }))
     if(current(scope,token)){
       const known=verified.filter((x):x is JoinedTeam=>x!==null)
+      const revoked=new Set(response.revokedTeamIds)
       joined.value=[...known,...joined.value.filter(x=>
-        !known.some(y=>y.teamId===x.teamId))]
+        !known.some(y=>y.teamId===x.teamId)&&!revoked.has(x.teamId))]
     }
   }catch(e){
     if(current(scope,token))
@@ -74,19 +84,60 @@ async function reload():Promise<void>{
 }
 async function reloadRoster():Promise<void>{
   const scope=identity(),id=selectedTeam.value
-  roster.value=[];error.value=''
+  roster.value=[];rotationRequired.value=false;roleEditId.value=null;error.value=''
   if(!id)return
   if(!hasNetwork()){error.value='teams.roster_requires_online';return}
   try{
-    const members=await listOwnerTeamRoster(id)
-    if(identity()===scope&&selectedTeam.value===id)roster.value=members
+    const [members,history]=await Promise.all([
+      listOwnerTeamRoster(id),verifiedTeamMembershipHistory(id),
+    ])
+    if(identity()===scope&&selectedTeam.value===id){
+      roster.value=members
+      rotationRequired.value=history.rotationRequired
+    }
   }catch(e){
     if(identity()===scope&&selectedTeam.value===id)
       error.value=e instanceof Error?e.message:'teams.roster_error'
   }
 }
+async function memberAction(
+  person:TeamRosterMember,action:'change_role'|'remove',nextRole:TeamRole|null,
+):Promise<void>{
+  if(busy.value||rotationRequired.value||person.state==='revoked'
+    ||action==='change_role'&&(
+      person.state!=='accepted'||nextRole===person.role))return
+  const label=action==='remove'
+    ?'Исключить участника? Его серверный доступ будет отозван. Команда заблокирует выдачу старого ключа до ротации Team DEK.'
+    :'Изменить роль участника? Это не выдаёт прав на файлы или задания.'
+  if(!window.confirm(label))return
+  busy.value=true;error.value='';notice.value=''
+  const scope=identity()
+  try{
+    const id=selectedTeam.value
+    await queueTeamMembershipChange(id,person,action,nextRole)
+    if(identity()!==scope)return
+    notice.value='Изменение подписано и сохранено в очереди.'
+    roleEditId.value=null
+    try{
+      await syncTeamMemberOperations()
+      if(identity()!==scope)return
+      await reloadRoster()
+      notice.value=action==='remove'
+        ?'Участник исключён сервером. Выдача старого Team DEK заблокирована до ротации.'
+        :'Роль изменена и подтверждена сервером.'
+      emit('refresh')
+    }catch(e){
+      if(identity()===scope)
+        error.value=e instanceof Error?e.message:'teams.membership_retry_required'
+    }
+  }catch(e){
+    if(identity()===scope)
+      error.value=e instanceof Error?e.message:'teams.membership_change_failed'
+  }finally{busy.value=false}
+}
 async function sendInvite():Promise<void>{
-  if(busy.value||!selectedTeam.value||!selectedContact.value)return
+  if(busy.value||rotationRequired.value
+    ||!selectedTeam.value||!selectedContact.value)return
   busy.value=true;notice.value='';error.value=''
   const scope=identity()
   try{
@@ -161,16 +212,39 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
             <strong>Владелец</strong><code>{{ activeSession?.accountId }}</code>
           </div>
         </div>
+        <p v-if="rotationRequired" role="alert" class="error-text"
+          data-testid="team-rotation-required">
+          После исключения участника выдача старого Team DEK заблокирована.
+          До публикации нового ключевого эпоха приглашения и изменение ролей недоступны.
+        </p>
         <div v-for="person in roster" :key="person.inviteId"
           class="contacts-list-row"
           :data-testid="'team-member-'+person.recipientAccountId">
           <div class="contacts-row-label">
             <code>{{ person.recipientAccountId }}</code>
-            <small>{{ roleText(person.role) }} · {{ person.state==='accepted'?'Принято':'Ожидает согласия' }}</small>
+            <small>{{ roleText(person.role) }} · {{ person.state==='accepted'?'Принято':person.state==='revoked'?'Исключён':'Ожидает согласия' }}</small>
+            <div v-if="roleEditId===person.inviteId" class="action-row">
+              <select v-model="roleDraft" :aria-label="'Роль '+person.recipientAccountId">
+                <option value="curator">Куратор</option>
+                <option value="contributor">Исполнитель</option>
+                <option value="viewer">Наблюдатель</option>
+              </select>
+              <button type="button" :disabled="busy||roleDraft===person.role"
+                @click="memberAction(person,'change_role',roleDraft)">Применить</button>
+              <button type="button" @click="roleEditId=null">Отмена</button>
+            </div>
+          </div>
+          <div v-if="!rotationRequired&&person.state!=='revoked'" class="action-row">
+            <button v-if="person.state==='accepted'" type="button"
+              :disabled="busy" @click="roleEditId=person.inviteId;roleDraft=person.role">
+              Роль
+            </button>
+            <button type="button" :disabled="busy"
+              @click="memberAction(person,'remove',null)">Исключить</button>
           </div>
         </div>
         <button type="button" class="contacts-full-button"
-          :disabled="!hasNetwork()" @click="showInvite=!showInvite">
+          :disabled="!hasNetwork()||rotationRequired" @click="showInvite=!showInvite">
           Добавить участника
         </button>
         <form v-if="showInvite" data-testid="team-invite-form"
@@ -197,6 +271,10 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
         </form>
       </template>
     </template>
+    <p v-if="revokedTeamIds.length" role="status"
+      data-testid="team-revoked-notice">
+      Доступ к команде отозван. Зашифрованный локальный снимок удалён.
+    </p>
     <div v-if="incoming.length" data-testid="team-incoming-invites">
       <h3>Полученные приглашения</h3>
       <div v-for="item in incoming" :key="item.inviteId"
@@ -204,7 +282,7 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
         <div class="contacts-row-label">
           <strong>{{ roleText(item.role) }}</strong>
           <code>От {{ item.ownerAccountId }}</code>
-          <small>{{ item.state==='accepted'?'Принято':item.expired?'Истекло':'Ожидает ответа' }}</small>
+          <small>{{ item.state==='revoked'?'Отозвано':item.state==='accepted'?'Принято':item.expired?'Истекло':'Ожидает ответа' }}</small>
           <small v-if="!item.trustedOwner">
             Не подтверждён ключ владельца — проверьте его отпечаток в Контактах.
           </small>
