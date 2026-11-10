@@ -43,9 +43,11 @@ final class TeamV1Controller extends Controller
         foreach(['teamId','operationId','ownerAccountId'] as $field)C::uuid($c,$field);
         $envelope=$c['privateEnvelope'];
         abort_unless(is_array($envelope)&&!array_is_list($envelope),422);
-        P::exact($envelope,['iv','ciphertext']);
-        abort_unless(is_string($envelope['iv'])&&is_string($envelope['ciphertext']),422);
-        P::b64($envelope['iv'],12);
+        // Profile uses a team-specific DEK; AKEK only wraps the owner key.
+        // Future invitations wrap this immutable DEK to independently
+        // trusted members without re-encrypting the team profile.
+        C::envelope($envelope);
+        P::b64($envelope['wrappedKey']['ciphertext'],48);
         $bytes=P::b64($envelope['ciphertext']);
         abort_unless(strlen($bytes)>=32&&strlen($bytes)<=4096,422);
         $hash=hash('sha256',$input['contract']);

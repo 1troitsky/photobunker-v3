@@ -10,13 +10,15 @@ const enc=new TextEncoder()
 const dec=new TextDecoder('utf-8',{fatal:true})
 const uuidPattern=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
 const profileAAD='pb3.team-profile.v1\n'
+const ownerKeyAAD='pb3.team-owner-key.v1\n'
 const localAAD='pb3.team-local.v1\n'
 const domain='pb3.team-create.v1\n'
 type Delivery='queued'|'synced'|'conflict'
 type Cipher={iv:string;ciphertext:string}
+type TeamEnvelope=Cipher & {version:1;wrappedKey:Cipher}
 type TeamContract={
   version:1;teamId:string;operationId:string;ownerAccountId:string
-  privateEnvelope:Cipher
+  privateEnvelope:TeamEnvelope
 }
 type CachedTeam={
   version:1;teamId:string;ownerAccountId:string
@@ -72,13 +74,22 @@ function parse(raw:string):TeamContract{
     ||typeof value.operationId!=='string'||!uuidPattern.test(value.operationId)
     ||typeof value.ownerAccountId!=='string'||!uuidPattern.test(value.ownerAccountId)
     ||!value.privateEnvelope
-    ||Object.keys(value.privateEnvelope).sort().join('|')!=='ciphertext|iv'
+    ||Object.keys(value.privateEnvelope).sort().join('|')
+      !=='ciphertext|iv|version|wrappedKey'
+    ||value.privateEnvelope.version!==1
     ||typeof value.privateEnvelope.iv!=='string'
     ||typeof value.privateEnvelope.ciphertext!=='string'
+    ||!value.privateEnvelope.wrappedKey
+    ||Object.keys(value.privateEnvelope.wrappedKey).sort().join('|')
+      !=='ciphertext|iv'
+    ||typeof value.privateEnvelope.wrappedKey.iv!=='string'
+    ||typeof value.privateEnvelope.wrappedKey.ciphertext!=='string'
     ||JSON.stringify(value)!==raw)throw Error('teams.invalid_contract')
   unb64(value.privateEnvelope.iv,12)
-  if(unb64(value.privateEnvelope.ciphertext).length>4096)
-    throw Error('teams.invalid_contract')
+  unb64(value.privateEnvelope.wrappedKey.iv,12)
+  unb64(value.privateEnvelope.wrappedKey.ciphertext,48)
+  const bytes=unb64(value.privateEnvelope.ciphertext)
+  if(bytes.length<32||bytes.length>4096)throw Error('teams.invalid_contract')
   return value
 }
 async function verified(s:Session,entry:CachedTeam):Promise<TeamView>{
@@ -94,12 +105,23 @@ async function verified(s:Session,entry:CachedTeam):Promise<TeamView>{
       domain+entry.contract,entry.signature))
     throw Error('teams.untrusted_contract')
   let plain:ArrayBuffer
-  try{plain=await crypto.subtle.decrypt({
-    name:'AES-GCM',iv:unb64(c.privateEnvelope.iv,12),
-    additionalData:enc.encode(profileAAD+s.accountId+'\n'+entry.teamId),
-    tagLength:128,
-  },await key(s),unb64(c.privateEnvelope.ciphertext))}
-  catch{throw Error('teams.encrypted_profile_unreadable')}
+  try{
+    const dekBytes=new Uint8Array(await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(c.privateEnvelope.wrappedKey.iv,12),
+      additionalData:enc.encode(ownerKeyAAD+s.accountId+'\n'+entry.teamId),
+      tagLength:128,
+    },await key(s),unb64(c.privateEnvelope.wrappedKey.ciphertext,48)))
+    try{
+      if(dekBytes.length!==32)throw Error('teams.invalid_team_key')
+      const dek=await crypto.subtle.importKey('raw',dekBytes,
+        {name:'AES-GCM'},false,['decrypt'])
+      plain=await crypto.subtle.decrypt({
+        name:'AES-GCM',iv:unb64(c.privateEnvelope.iv,12),
+        additionalData:enc.encode(profileAAD+s.accountId+'\n'+entry.teamId),
+        tagLength:128,
+      },dek,unb64(c.privateEnvelope.ciphertext))
+    }finally{dekBytes.fill(0)}
+  }catch{throw Error('teams.encrypted_profile_unreadable')}
   let data:{name:string;description:string}
   try{data=JSON.parse(dec.decode(plain)) as {name:string;description:string}}
   catch{throw Error('teams.invalid_profile')}
@@ -164,14 +186,29 @@ export async function queueTeam(name:string,description:string):Promise<TeamView
     ||/\p{Cc}/u.test(cleanName+cleanDescription))
     throw Error('teams.invalid_name')
   const teamId=uuid(),operationId=uuid()
-  const iv=random(12)
-  const ciphertext=await crypto.subtle.encrypt({
-    name:'AES-GCM',iv,additionalData:enc.encode(profileAAD+s.accountId+'\n'+teamId),
-    tagLength:128,
-  },await key(s),enc.encode(JSON.stringify({name:cleanName,description:cleanDescription})))
+  const iv=random(12),wrapIv=random(12),rawTeamKey=random(32)
+  let envelope:TeamEnvelope
+  try{
+    const dek=await crypto.subtle.importKey('raw',rawTeamKey,
+      {name:'AES-GCM'},false,['encrypt'])
+    const [ciphertext,wrapped]=await Promise.all([
+      crypto.subtle.encrypt({
+        name:'AES-GCM',iv,
+        additionalData:enc.encode(profileAAD+s.accountId+'\n'+teamId),
+        tagLength:128,
+      },dek,enc.encode(JSON.stringify({name:cleanName,description:cleanDescription}))),
+      crypto.subtle.encrypt({
+        name:'AES-GCM',iv:wrapIv,
+        additionalData:enc.encode(ownerKeyAAD+s.accountId+'\n'+teamId),
+        tagLength:128,
+      },await key(s),rawTeamKey),
+    ])
+    envelope={version:1,iv:b64(iv),ciphertext:b64(ciphertext),
+      wrappedKey:{iv:b64(wrapIv),ciphertext:b64(wrapped)}}
+  }finally{rawTeamKey.fill(0)}
   const contract:TeamContract={
     version:1,teamId,operationId,ownerAccountId:s.accountId,
-    privateEnvelope:{iv:b64(iv),ciphertext:b64(ciphertext)},
+    privateEnvelope:envelope,
   }
   const raw=JSON.stringify(contract)
   const signature=await sign(await importSigner(s.pkg.accountPkcs8),domain+raw)

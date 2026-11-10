@@ -71,8 +71,13 @@ final class TeamV1Test extends TestCase
             'operationId'=>(string)Str::uuid(),
             'ownerAccountId'=>$this->accounts[$role]['id'],
             'privateEnvelope'=>[
+                'version'=>1,
                 'iv'=>P::encode(random_bytes(12)),
                 'ciphertext'=>P::encode(random_bytes(100)),
+                'wrappedKey'=>[
+                    'iv'=>P::encode(random_bytes(12)),
+                    'ciphertext'=>P::encode(random_bytes(48)),
+                ],
             ],
         ];
     }
