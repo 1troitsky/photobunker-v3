@@ -6,6 +6,7 @@ import CaptureView from './views/CaptureView.vue'
 import PhotoBrowserView from './views/PhotoBrowserView.vue'
 import ContactsTeamsView from './views/ContactsTeamsView.vue'
 import MessagesView from './views/MessagesView.vue'
+import AppearanceView from './views/AppearanceView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -19,6 +20,8 @@ export const router = createRouter({
     { path: '/contacts', component: ContactsTeamsView, meta: { title: 'Контакты и Команды' } },
     { path: '/messages', component: MessagesView, meta: { title: 'Сообщения' } },
     { path: '/settings', component: AccountView, meta: { title: 'Настройки' } },
+    { path: '/settings/appearance', component: AppearanceView,
+      meta: { title: 'Оформление' } },
     { path: '/:pathMatch(.*)*', redirect: '/assignments' },
   ],
 })
