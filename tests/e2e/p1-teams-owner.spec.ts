@@ -54,7 +54,7 @@ test('P1-27: owner-signed encrypted Team → durable local queue → server ACL 
     await expect(B.getByText('Команд пока нет.')).toBeVisible()
 
     await ctxA.setOffline(true)
-    await A.getByRole('button',{name:'Обновить',exact:true}).click()
+    await A.getByRole('button',{name:'Обновить',exact:true}).first().click()
     await expect(A.getByTestId(/^team-row-/).getByText('ENCRYPTED TEAM NAME')).toBeVisible()
     await expect(A.getByText('В облаке',{exact:false})).toBeVisible()
   }finally{
