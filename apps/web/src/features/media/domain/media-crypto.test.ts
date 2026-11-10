@@ -137,7 +137,7 @@ describe('P1-16 encrypted private video/audio metadata',()=>{
     }},now)).toThrow('capture.invalid_or_stale_gps')
     expect(()=>prepareMediaPrivateFields({description:'\u0001 control'}))
       .toThrow('media.invalid_description')
-    expect(()=>prepareMediaPrivateFields({category:' '.repeat(80)}))
+    expect(prepareMediaPrivateFields({category:' '.repeat(80)}))
       .toEqual({})
     expect(()=>prepareMediaPrivateFields({description:'x'.repeat(4001)}))
       .toThrow('media.invalid_description')
