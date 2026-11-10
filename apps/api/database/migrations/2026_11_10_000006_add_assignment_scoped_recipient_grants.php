@@ -4,6 +4,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 /**
  * An independent owner-signed recipient grant is NOT revoked by a Fieldwork
@@ -29,6 +30,15 @@ return new class extends Migration {
 
     public function down():void
     {
+        // A rollback that drops assignment_id would erase the security
+        // boundary on already-issued v2 E2EE recipient grants. Check BOTH
+        // tables before changing either schema. A live rollback still
+        // requires stopping writers: this query is not a concurrency lock.
+        if(DB::table('photo_access_grants')->whereNotNull('assignment_id')->exists()
+            ||DB::table('media_recipient_grants_v1')->whereNotNull('assignment_id')->exists()){
+            throw new \RuntimeException('pb3.scoped_grants.rollback_forbidden');
+        }
+
         Schema::table('photo_access_grants',static function(Blueprint $t):void{
             $t->dropIndex('photo_grants_assignment_scope');
             $t->dropConstrainedForeignId('assignment_id');
