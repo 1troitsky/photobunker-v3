@@ -6,7 +6,7 @@ import { validateAdvancedFields } from '../domain/advanced-rules'
 import {
   listServerAssignments,signedAllowedAssignmentMedia,
   signedMediaRequirements,signedAdvancedRequirements,verifySignedAssignmentPolicy,
-  schedulePermitsAt,assignmentFilesOpenAt,
+  schedulePermitsAt,assignmentFilesOpenAt,assignmentGrantExpiryCap,
 } from './assignment-outbox'
 import type { AssignmentListing } from './assignment-outbox'
 
