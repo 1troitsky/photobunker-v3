@@ -353,9 +353,42 @@ final class TeamEpochInvitationTest extends TestCase
             'retiredPendingInviteIds'=>[$pending['inviteId']],
         ];
         $this->login('owner');
+        // The same signed array MUST cover pending v2 invitations, not
+        // merely old v1 IDs. Reject all incomplete or forged sweeps before
+        // any epoch grant or recipient revocation can be committed.
+        $missing=$epoch3;$missing['retiredPendingInviteIds']=[];
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
+            $this->signed('owner','pb3.team-key-epoch.v1',$missing))
+            ->assertConflict();
+        $different=$epoch3;
+        $different['retiredPendingInviteIds']=[(string)Str::uuid()];
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
+            $this->signed('owner','pb3.team-key-epoch.v1',$different))
+            ->assertConflict();
+        $duplicated=$epoch3;
+        $duplicated['retiredPendingInviteIds']=[
+            $pending['inviteId'],$pending['inviteId'],
+        ];
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
+            $this->signed('owner','pb3.team-key-epoch.v1',$duplicated))
+            ->assertUnprocessable();
+        $extra=$epoch3;
+        $extra['retiredPendingInviteIds']=[
+            $pending['inviteId'],(string)Str::uuid(),
+        ];
+        sort($extra['retiredPendingInviteIds'],SORT_STRING);
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
+            $this->signed('owner','pb3.team-key-epoch.v1',$extra))
+            ->assertConflict();
+        $this->assertDatabaseHas('team_invites_v2',[
+            'id'=>$pending['inviteId'],'state'=>'pending',
+        ]);
+        $this->assertDatabaseCount('team_key_epochs_v1',1);
         $signed=$this->signed('owner','pb3.team-key-epoch.v1',$epoch3);
         $this->postJson('/teams/v1/'.$this->teamId.'/epoch',$signed)
             ->assertCreated()->assertJsonPath('keyEpoch',3);
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',$signed)
+            ->assertOk()->assertJsonPath('unchanged',true);
         $this->assertDatabaseHas('team_invites_v2',[
             'id'=>$pending['inviteId'],'state'=>'revoked',
         ]);
