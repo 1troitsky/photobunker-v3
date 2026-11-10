@@ -923,6 +923,61 @@ export async function queueAssignmentPolicyChange(
   await persist(op)
   return op.id
 }
+/**
+ * Owner edits encrypted assignment text without rotating the immutable
+ * root DEK. Existing accepted invitations retain access to new revisions.
+ * No plaintext title/instructions are ever persisted in the outbox or API.
+ */
+export async function queueAssignmentPrivateTextChange(
+  assignmentId:string,next:PrivateAssignment,
+):Promise<string>{
+  const session=requireSession()
+  const cache=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  if(!cache||cache.listing.ownerAccountId!==session.accountId)
+    throw Error('assignment.private_not_owned')
+  const listing=cache.listing
+  await verifySignedAssignmentPolicy(listing,true)
+  assertSame(session)
+  if(listing.state!=='active'
+    ||(listing.endsAt!==null&&listing.endsAt<=Date.now())
+    ||(listing.privateRevision??1)>=1001)
+    throw Error('assignment.private_edit_not_allowed')
+  const operations=await listAssignmentOperations()
+  if(operations.some(op=>op.kind==='private'
+    &&['queued','retry'].includes(op.state)
+    &&(JSON.parse(op.contract) as {assignmentId:string}).assignmentId===assignmentId))
+    throw Error('assignment.private_edit_pending')
+  const old=await openOwnerAssignment(session.pkg,assignmentId,
+    listing.privateEnvelope,effectiveAssignmentEnvelope(listing))
+  const validated:PrivateAssignment={
+    version:1,title:next.title.trim(),instructions:next.instructions,
+  }
+  if(old.title===validated.title&&old.instructions===validated.instructions)
+    throw Error('assignment.private_text_unchanged')
+  const newEnvelope=await resealOwnerAssignment(session.pkg,assignmentId,
+    listing.privateEnvelope,validated)
+  assertSame(session)
+  const enc=new TextEncoder()
+  const root=JSON.stringify(listing.privateEnvelope)
+  const previous=(listing.privateRevision??1)>1
+    ?listing.privateAmendmentContract:root
+  if(!previous)throw Error('assignment.private_revision_not_authenticated')
+  const payload={
+    version:2,operationId:crypto.randomUUID(),assignmentId,
+    ownerAccountId:session.accountId,
+    rootPrivateHash:hex(await digest(enc.encode(root))),
+    previousPrivateHash:hex(await digest(enc.encode(previous))),
+    fromPrivateRevision:listing.privateRevision??1,
+    toPrivateRevision:(listing.privateRevision??1)+1,
+    privateEnvelope:newEnvelope,
+  }
+  const op=await signedOperation('private',
+    '/assignments/v1/'+encodeURIComponent(assignmentId)+'/private',payload)
+  assertSame(session)
+  await persist(op)
+  return op.id
+}
+
 export async function queueAssignmentGoalChange(
   assignmentId:string,photoGoal:number|null,
 ):Promise<string>{
