@@ -92,11 +92,39 @@ export async function sealAssignment(
   }finally{raw.fill(0);akek.fill(0)}
 }
 
+/**
+ * The signed creation envelope is the immutable DEK trust anchor.
+ * A later owner-signed private amendment changes ONLY the ciphertext and IV.
+ * This keeps every existing invitation's ECDH-wrapped DEK usable.
+ */
 export async function openOwnerAssignment(
   owner:PackageV2,assignmentId:string,envelope:AssignmentEnvelope,
+  effective:AssignmentEnvelope=envelope,
 ):Promise<PrivateAssignment>{
+  if(JSON.stringify(effective.wrappedKey)!==JSON.stringify(envelope.wrappedKey))
+    throw Error('assignment.private_key_rotation_forbidden')
   return unwrapOwnerKey(owner,assignmentId,envelope,
-    raw=>openContent(raw,owner.accountId,assignmentId,envelope))
+    raw=>openContent(raw,owner.accountId,assignmentId,effective))
+}
+export async function resealOwnerAssignment(
+  owner:PackageV2,assignmentId:string,root:AssignmentEnvelope,
+  values:PrivateAssignment,
+):Promise<AssignmentEnvelope>{
+  validateText(values)
+  return unwrapOwnerKey(owner,assignmentId,root,async raw=>{
+    const key=await crypto.subtle.importKey('raw',raw,
+      {name:'AES-GCM'},false,['encrypt'])
+    const iv=random(12)
+    const encrypted=await crypto.subtle.encrypt({
+      name:'AES-GCM',iv,
+      additionalData:contentScope(owner.accountId,assignmentId),
+      tagLength:128,
+    },key,encoder.encode(JSON.stringify(values)))
+    return {
+      version:1 as const,iv:b64(iv),ciphertext:b64(encrypted),
+      wrappedKey:{...root.wrappedKey},
+    }
+  })
 }
 
 export async function wrapAssignmentForRecipient(
