@@ -1,0 +1,1247 @@
+{
+  "productSha": "2c1406586dd819357bd3fcc933985f616ce72d39",
+  "baselineSha": "f13ad76929916ecfbb2ef0d5fd7a5a284f680e02",
+  "securitySourceSha": "3a5f5cf1d5f96c5e903e0099261081919b3236e1",
+  "qaSourceSha": "f32864208bbe8b4fb60b581ab60a57c152f80bf9",
+  "qaFilesSha256": {
+    "scripts/integration-audit/analyze.py": "7fa80c43baed9ed9a5be9f1d012a2a17b7b7e15e1e1f7da4c9d583ba003fbfda",
+    "scripts/integration-audit/fixture-snapshot.php": "f2ae213578a95aa1162d5f17d61eb52e80c216be1ceea076b87500803c67fb1c",
+    "scripts/integration-audit/run.py": "982fbd248124126ee5a5931a15529405b2de6068b41b2ec7743c320978296957",
+    "scripts/local-acceptance/Dockerfile": "8fdaf79fe8a89b796f495518996852079efe7d530a58fd1640e0f56593528f68",
+    "scripts/local-acceptance/compose.yml": "6ebadaf207f4dd5822d4ca4c714948ff3a3b14ba77ff16f68d6b6e23c06a74cd",
+    "scripts/local-acceptance/run.py": "05232ed5a7e1b6d5476228577e77523801835770bdc5741a8b09326f14b94aa8",
+    "tests/integration-audit/adversarial.spec.ts": "1245f70254a4c965cb733be7f6a39afa03988ba7b10842e62ab6886b5b41ab87",
+    "tests/integration-audit/expiry.spec.ts": "8bfbfe6fd8b94a3582c6c3cec6b77d0f8d77d8fb0f666a17f58926f0921430f9",
+    "tests/integration-audit/helpers.ts": "cd7ddeab9fa9bebaa218bf1428bfff9df6220ab3c4ec544e32389de8a3219a8c",
+    "tests/integration-audit/journey.spec.ts": "8a219c7eb60fe6f2a33f3508eee70b72aedd0cc0ce8fdc9aa693d588f842aac2",
+    "tests/integration-audit/migration-seed.spec.ts": "910e489c6fb11d324245168d680a47d2b35b4d11c151c0d82b45d7e3cdc3b44a",
+    "tests/integration-audit/migration-upgrade.spec.ts": "36efe7c899a657f1ecb6a3473951b2057c5c25b62211154d5272edce4a3e841b",
+    "tests/integration-audit/playwright.config.ts": "3cc6727930e8638facdcbd44ef2a031560ba9533fc0fa172fc82e014af94d54a",
+    "tests/local-acceptance/test_isolation.py": "d17d7a0012b66fbadce45b4bee83dfaea0e0881c2e9662cefeaa4470463c08c8"
+  },
+  "privateRunId": "pb3-acceptance-pc47_cos",
+  "startedUtcEpoch": 1794306903.418553,
+  "versions": {
+    "node": "v22.23.3",
+    "pnpm": "10.20.0",
+    "php": "8.4.27",
+    "postgres": "18.6",
+    "garage": "2.5.0",
+    "composer": "2.10.3",
+    "chromium": "141.0.7390.37",
+    "playwright": "1.56.1",
+    "macOS": "26.6.2"
+  },
+  "checks": [
+    {
+      "name": "product-head",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "log",
+        "-1",
+        "--format=%H %s"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/product-head.log",
+      "seconds": 0.013
+    },
+    {
+      "name": "product-source-clean",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "diff",
+        "--exit-code",
+        "2c1406586dd819357bd3fcc933985f616ce72d39"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/product-source-clean.log",
+      "seconds": 0.047
+    },
+    {
+      "name": "baseline-head",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "log",
+        "-1",
+        "--format=%H %s"
+      ],
+      "cwd": "$BASE44",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/baseline-head.log",
+      "seconds": 0.008
+    },
+    {
+      "name": "baseline-source-clean",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "diff",
+        "--exit-code",
+        "f13ad76929916ecfbb2ef0d5fd7a5a284f680e02"
+      ],
+      "cwd": "$BASE44",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/baseline-source-clean.log",
+      "seconds": 0.047
+    },
+    {
+      "name": "dependency-and-patch-audit",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "-B",
+        "scripts/integration-audit/analyze.py"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/dependency-and-patch-audit.log",
+      "seconds": 1.63
+    },
+    {
+      "name": "node-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "node",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/node-version.log",
+      "seconds": 0.027
+    },
+    {
+      "name": "pnpm-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/pnpm-version.log",
+      "seconds": 0.265
+    },
+    {
+      "name": "os-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "sw_vers"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/os-version.log",
+      "seconds": 0.013
+    },
+    {
+      "name": "docker-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/docker-version.log",
+      "seconds": 0.247
+    },
+    {
+      "name": "isolation-contract",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "-B",
+        "tests/local-acceptance/test_isolation.py"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/isolation-contract.log",
+      "seconds": 0.19
+    },
+    {
+      "name": "compose-build",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "build",
+        "api"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose-build.log",
+      "seconds": 1.104
+    },
+    {
+      "name": "php-security-floor",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "-v",
+        "$BASE44:/source:ro",
+        "pb3-local-acceptance-php:8.4.27",
+        "php",
+        "/source/scripts/check-runtime.php"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/php-security-floor.log",
+      "seconds": 0.552
+    },
+    {
+      "name": "storage-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "--wait",
+        "postgres",
+        "garage"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/storage-up.log",
+      "seconds": 3.549
+    },
+    {
+      "name": "postgres-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "postgres",
+        "postgres",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/postgres-version.log",
+      "seconds": 0.161
+    },
+    {
+      "name": "garage-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/garage-version.log",
+      "seconds": 0.097
+    },
+    {
+      "name": "garage-assign",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "layout",
+        "assign",
+        "-z",
+        "ci-zone",
+        "-c",
+        "1G",
+        "5d685fe6255b185bc9a1c74c90ed2d1df84a2d3b26b722c154febd7d134fd2d7"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/garage-assign.log",
+      "seconds": 0.165
+    },
+    {
+      "name": "garage-layout",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "layout",
+        "apply",
+        "--version",
+        "1"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/garage-layout.log",
+      "seconds": 0.233
+    },
+    {
+      "name": "garage-bucket",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "bucket",
+        "create",
+        "pb3-ci-p0"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/garage-bucket.log",
+      "seconds": 0.144
+    },
+    {
+      "name": "garage-key",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "key",
+        "create",
+        "pb3-ci-key"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/garage-key.log",
+      "seconds": 0.14
+    },
+    {
+      "name": "garage-allow",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "bucket",
+        "allow",
+        "--read",
+        "--write",
+        "--owner",
+        "pb3-ci-p0",
+        "--key",
+        "pb3-ci-key"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/garage-allow.log",
+      "seconds": 0.158
+    },
+    {
+      "name": "composer-install",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "install",
+        "--no-interaction",
+        "--no-progress",
+        "--prefer-dist"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/composer-install.log",
+      "seconds": 11.815
+    },
+    {
+      "name": "composer-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/composer-version.log",
+      "seconds": 0.461
+    },
+    {
+      "name": "php-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "-v"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/php-version.log",
+      "seconds": 0.305
+    },
+    {
+      "name": "baseline-migrate",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "artisan",
+        "migrate",
+        "--force"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/baseline-migrate.log",
+      "seconds": 0.535
+    },
+    {
+      "name": "api-baseline-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "api"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/api-baseline-up.log",
+      "seconds": 0.871
+    },
+    {
+      "name": "api-baseline-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/api-baseline-ready.log",
+      "seconds": 0.279
+    },
+    {
+      "name": "vite-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:5173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/vite-ready.log",
+      "seconds": 3.142
+    },
+    {
+      "name": "playwright-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/playwright-version.log",
+      "seconds": 0.654
+    },
+    {
+      "name": "chromium-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "node",
+        "--input-type=module",
+        "-e",
+        "import {chromium} from \"@playwright/test\";const b=await chromium.launch();console.log(b.version());await b.close()"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/chromium-version.log",
+      "seconds": 1.048
+    },
+    {
+      "name": "migration-seed",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "tests/integration-audit/playwright.config.ts",
+        "migration-seed.spec.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/migration-seed",
+        "--reporter=line,json"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/migration-seed.log",
+      "seconds": 4.657
+    },
+    {
+      "name": "before-upgrade",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "api",
+        "php",
+        "audit-fixture-snapshot.php"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/before-upgrade.log",
+      "seconds": 0.46
+    },
+    {
+      "name": "api-upgrade-stop",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "stop",
+        "api"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/api-upgrade-stop.log",
+      "seconds": 10.239
+    },
+    {
+      "name": "integration-migrate",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "artisan",
+        "migrate",
+        "--force"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/integration-migrate.log",
+      "seconds": 0.69
+    },
+    {
+      "name": "migration-status",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "artisan",
+        "migrate:status"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/migration-status.log",
+      "seconds": 0.417
+    },
+    {
+      "name": "api-integration-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "--force-recreate",
+        "api"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/api-integration-up.log",
+      "seconds": 0.867
+    },
+    {
+      "name": "api-integration-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/api-integration-ready.log",
+      "seconds": 1.306
+    },
+    {
+      "name": "after-upgrade",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "api",
+        "php",
+        "audit-fixture-snapshot.php"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/after-upgrade.log",
+      "seconds": 0.207
+    },
+    {
+      "name": "migration-preservation-check",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "-c",
+        "import json,sys;x=json.load(open(sys.argv[1]));print(json.dumps(x));assert x[\"unchanged\"] and x[\"v1NullScopes\"]",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/migration-comparison.json"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/migration-preservation-check.log",
+      "seconds": 0.036
+    },
+    {
+      "name": "migration-upgrade",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "tests/integration-audit/playwright.config.ts",
+        "migration-upgrade.spec.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/migration-upgrade",
+        "--reporter=line,json"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/migration-upgrade.log",
+      "seconds": 3.061
+    },
+    {
+      "name": "integrated-journey",
+      "status": "FAIL",
+      "exit_code": 1,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "tests/integration-audit/playwright.config.ts",
+        "journey.spec.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/integrated-journey",
+        "--reporter=line,json"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/integrated-journey.log",
+      "seconds": 4.256
+    },
+    {
+      "name": "adversarial",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "tests/integration-audit/playwright.config.ts",
+        "adversarial.spec.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/adversarial",
+        "--reporter=line,json"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/adversarial.log",
+      "seconds": 6.519
+    },
+    {
+      "name": "expiry",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "tests/integration-audit/playwright.config.ts",
+        "expiry.spec.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/expiry",
+        "--reporter=line,json"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/expiry.log",
+      "seconds": 14.33
+    },
+    {
+      "name": "product-source-after",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "diff",
+        "--exit-code",
+        "2c1406586dd819357bd3fcc933985f616ce72d39"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/product-source-after.log",
+      "seconds": 0.052
+    },
+    {
+      "name": "container-logs",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "logs",
+        "--no-color"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/container-logs.log",
+      "seconds": 0.266
+    },
+    {
+      "name": "isolated-cleanup",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-3d4b98a9a7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "down",
+        "--remove-orphans"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-pc47_cos/isolated-cleanup.log",
+      "seconds": 10.502
+    }
+  ],
+  "browsers": {
+    "adversarial": {
+      "stats": {
+        "startTime": "2026-11-10T10:35:58.381Z",
+        "duration": 5836.614,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "independent same-owner sibling/pending participant/fingerprint/signature/AAD/account-switch attacks fail closed",
+          "file": "adversarial.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 5259,
+              "proofs": [
+                {
+                  "scenario": "adversarial",
+                  "assignmentId": "e1314626-8819-42d8-9dac-cb3e453b31e2",
+                  "sameOwnerSibling": "60852b66-d926-42bd-bed3-8d6d05a6141f",
+                  "pendingAssignment": "93ba8af0-c03c-4f52-8199-959e88b5ca7b",
+                  "http": [
+                    {
+                      "kind": "photo",
+                      "pendingStatus": 403,
+                      "wrongOwner": 403,
+                      "wrongDomain": 401,
+                      "crossAssignment": 403
+                    },
+                    {
+                      "kind": "video",
+                      "pendingStatus": 403,
+                      "wrongOwner": 403,
+                      "wrongDomain": 401,
+                      "crossAssignment": 403
+                    },
+                    {
+                      "kind": "audio",
+                      "pendingStatus": 403,
+                      "wrongOwner": 403,
+                      "wrongDomain": 401,
+                      "crossAssignment": 403
+                    }
+                  ],
+                  "localPendingPreflightRejected": true,
+                  "noPendingPregrant": true,
+                  "fingerprintMismatchRejected": true,
+                  "forgedDirectoryRejected": true,
+                  "cryptographic": [
+                    {
+                      "kind": "photo",
+                      "forgedSignatureRejected": true,
+                      "validSignatureWrongAadRejected": true
+                    },
+                    {
+                      "kind": "video",
+                      "forgedSignatureRejected": true,
+                      "validSignatureWrongAadRejected": true
+                    },
+                    {
+                      "kind": "audio",
+                      "forgedSignatureRejected": true,
+                      "validSignatureWrongAadRejected": true
+                    }
+                  ],
+                  "accountSwitchApiHttp": 404,
+                  "accountScopedLocalReadDenied": true,
+                  "recoveryOriginalHashesMatch": true,
+                  "localCiphertextIdentifiersPreserved": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "expiry": {
+      "stats": {
+        "startTime": "2026-11-10T10:36:04.919Z",
+        "duration": 13636.438,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "independent real-clock grant/schedule/retention expiry preserves v1 shares and contributor originals",
+          "file": "expiry.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 12961,
+              "proofs": [
+                {
+                  "scenario": "expiry-and-preservation",
+                  "assignmentId": "ff6f753e-cc8b-4acc-877b-0a02f116d92d",
+                  "grantOwnExpiryStatuses": [
+                    410,
+                    410,
+                    410
+                  ],
+                  "signedScheduleEndsAt": 1794306973197,
+                  "signedFilesAccessUntil": 1794306976397,
+                  "signedAssignmentAccessUntil": 1794306977897,
+                  "grantBeyondSignedCutoff": [
+                    422,
+                    422,
+                    422
+                  ],
+                  "postExpiryReplayUnchanged": [
+                    true,
+                    true,
+                    true
+                  ],
+                  "newGrantAfterScheduleEnd": [
+                    409,
+                    409,
+                    409
+                  ],
+                  "existingReadAfterScheduleEnd": [
+                    200,
+                    200,
+                    200
+                  ],
+                  "scopedAfterFilesDeadline": [
+                    410,
+                    410,
+                    410
+                  ],
+                  "directCiphertextAfterDeadline": [
+                    410,
+                    410,
+                    410
+                  ],
+                  "personalV1AfterDeadline": [
+                    200,
+                    200,
+                    200
+                  ],
+                  "personalV1PlaintextHashesMatch": true,
+                  "scopedListingsFiltered": true,
+                  "assignmentHiddenAfterDeadline": true,
+                  "ownerDeleteOriginalsHttp": 422,
+                  "physicalDeletionConfirmed": false,
+                  "contributorOriginalHashesMatch": true,
+                  "ciphertextIdsUnchanged": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "integrated-journey": {
+      "stats": {
+        "startTime": "2026-11-10T10:35:54.149Z",
+        "duration": 3552.301,
+        "expected": 0,
+        "skipped": 0,
+        "unexpected": 1,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "independent Contacts/instructions/offline capture -> scoped grants -> A decrypt; grant and submission lost ACK",
+          "file": "journey.spec.ts",
+          "status": "unexpected",
+          "results": [
+            {
+              "status": "failed",
+              "durationMs": 2854,
+              "proofs": []
+            }
+          ]
+        }
+      ]
+    },
+    "migration-seed": {
+      "stats": {
+        "startTime": "2026-11-10T10:35:32.155Z",
+        "duration": 3953.0040000000004,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "old PR44 database receives real signed personal v1 photo/video/audio grants",
+          "file": "migration-seed.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 3533,
+              "proofs": [
+                {
+                  "scenario": "baseline-v1-seed",
+                  "kinds": [
+                    "photo",
+                    "video",
+                    "audio"
+                  ],
+                  "allDecrypted": true,
+                  "grantVersions": [
+                    1,
+                    1,
+                    1
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "migration-upgrade": {
+      "stats": {
+        "startTime": "2026-11-10T10:35:51.192Z",
+        "duration": 2255.327,
+        "expected": 1,
+        "skipped": 0,
+        "unexpected": 0,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "PR46 upgrade keeps pre-existing personal v1 contracts, keys and ciphertext readable",
+          "file": "migration-upgrade.spec.ts",
+          "status": "expected",
+          "results": [
+            {
+              "status": "passed",
+              "durationMs": 1847,
+              "proofs": [
+                {
+                  "scenario": "upgraded-v1-read",
+                  "allThreeRecipientDecrypted": true,
+                  "allThreeContributorDecrypted": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "exitCode": 1,
+  "privacy": "Only commands, exit codes, synthetic identifiers/timestamps, ciphertext hashes and boolean proofs; no raw errors, traces, credentials, keys, filenames, images or private instructions.",
+  "unexecuted": [
+    "native Safari",
+    "physical iPhone/Android",
+    "cold offline trusted PWA",
+    "full CI rerun (intentionally not repeated)"
+  ],
+  "migration-comparison": {
+    "before": {
+      "photo_access_grants": {
+        "count": 1,
+        "stableRowsSha256": "70ce2ad27c8cf2df9de6d7f40103290d1ab8477a940e5618067f937d55aeee50",
+        "assignmentColumn": false,
+        "scopeNullCount": null
+      },
+      "media_recipient_grants_v1": {
+        "count": 2,
+        "stableRowsSha256": "d6010582c911a4ad1518d57e58c5911a21477d52efb6a4854c2f6643c1fc9132",
+        "assignmentColumn": false,
+        "scopeNullCount": null
+      },
+      "photo_records": {
+        "count": 1,
+        "stableRowsSha256": "d9c0ec12848e031ea1ee626b20313460233651ab409f32965b7038fafc40fc24"
+      },
+      "photo_objects": {
+        "count": 2,
+        "stableRowsSha256": "c251c0e634ad9b3bd6a09b9167cb2610af75d25ca079bd7cfde6e775776920f1"
+      },
+      "storage_locations": {
+        "count": 2,
+        "stableRowsSha256": "b5ed3735fa05acf319688d87bd9e416a8504224fec88e4e7ec98de6d1d2800f8"
+      },
+      "media_files_v1": {
+        "count": 2,
+        "stableRowsSha256": "bc09d6806c7061d38fe5e343b28b83e765b47d893cf8e986d26efdaae138f835"
+      },
+      "media_chunks_v1": {
+        "count": 4,
+        "stableRowsSha256": "a83f8c7761e702ee5418c3dbcde7debd238b12142303a99981ad0c1a717d26a4"
+      },
+      "media_chunk_locations_v1": {
+        "count": 4,
+        "stableRowsSha256": "78a5a1b30b1e3219977c4b5ae629867f76a27b15fef8df6cb98adfb151460216"
+      }
+    },
+    "after": {
+      "photo_access_grants": {
+        "count": 1,
+        "stableRowsSha256": "70ce2ad27c8cf2df9de6d7f40103290d1ab8477a940e5618067f937d55aeee50",
+        "assignmentColumn": true,
+        "scopeNullCount": 1
+      },
+      "media_recipient_grants_v1": {
+        "count": 2,
+        "stableRowsSha256": "d6010582c911a4ad1518d57e58c5911a21477d52efb6a4854c2f6643c1fc9132",
+        "assignmentColumn": true,
+        "scopeNullCount": 2
+      },
+      "photo_records": {
+        "count": 1,
+        "stableRowsSha256": "d9c0ec12848e031ea1ee626b20313460233651ab409f32965b7038fafc40fc24"
+      },
+      "photo_objects": {
+        "count": 2,
+        "stableRowsSha256": "c251c0e634ad9b3bd6a09b9167cb2610af75d25ca079bd7cfde6e775776920f1"
+      },
+      "storage_locations": {
+        "count": 2,
+        "stableRowsSha256": "b5ed3735fa05acf319688d87bd9e416a8504224fec88e4e7ec98de6d1d2800f8"
+      },
+      "media_files_v1": {
+        "count": 2,
+        "stableRowsSha256": "bc09d6806c7061d38fe5e343b28b83e765b47d893cf8e986d26efdaae138f835"
+      },
+      "media_chunks_v1": {
+        "count": 4,
+        "stableRowsSha256": "a83f8c7761e702ee5418c3dbcde7debd238b12142303a99981ad0c1a717d26a4"
+      },
+      "media_chunk_locations_v1": {
+        "count": 4,
+        "stableRowsSha256": "78a5a1b30b1e3219977c4b5ae629867f76a27b15fef8df6cb98adfb151460216"
+      }
+    },
+    "unchanged": true,
+    "v1NullScopes": true
+  }
+}

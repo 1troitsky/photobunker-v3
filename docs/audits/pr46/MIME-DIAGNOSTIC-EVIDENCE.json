@@ -1,0 +1,536 @@
+{
+  "productSha": "2c1406586dd819357bd3fcc933985f616ce72d39",
+  "baselineSha": "f13ad76929916ecfbb2ef0d5fd7a5a284f680e02",
+  "securitySourceSha": "3a5f5cf1d5f96c5e903e0099261081919b3236e1",
+  "qaSourceSha": "c91c2a64583400dcbdbc62a321e95f60d342d435",
+  "qaFilesSha256": {
+    "scripts/integration-audit/analyze.py": "7fa80c43baed9ed9a5be9f1d012a2a17b7b7e15e1e1f7da4c9d583ba003fbfda",
+    "scripts/integration-audit/fixture-snapshot.php": "f2ae213578a95aa1162d5f17d61eb52e80c216be1ceea076b87500803c67fb1c",
+    "scripts/integration-audit/run.py": "7d22f96ad1803b9b63ed0bbab96e6016bb75ab3fb1169af655d0e936bd32c701",
+    "scripts/local-acceptance/Dockerfile": "8fdaf79fe8a89b796f495518996852079efe7d530a58fd1640e0f56593528f68",
+    "scripts/local-acceptance/compose.yml": "6ebadaf207f4dd5822d4ca4c714948ff3a3b14ba77ff16f68d6b6e23c06a74cd",
+    "scripts/local-acceptance/run.py": "05232ed5a7e1b6d5476228577e77523801835770bdc5741a8b09326f14b94aa8",
+    "tests/integration-audit/adversarial.spec.ts": "1245f70254a4c965cb733be7f6a39afa03988ba7b10842e62ab6886b5b41ab87",
+    "tests/integration-audit/expiry.spec.ts": "8bfbfe6fd8b94a3582c6c3cec6b77d0f8d77d8fb0f666a17f58926f0921430f9",
+    "tests/integration-audit/helpers.ts": "cd7ddeab9fa9bebaa218bf1428bfff9df6220ab3c4ec544e32389de8a3219a8c",
+    "tests/integration-audit/journey.spec.ts": "049987cabe82996e571e938f6ce30e5ffa3786df5c5a1e113cf4e4c4cc4dc317",
+    "tests/integration-audit/migration-seed.spec.ts": "910e489c6fb11d324245168d680a47d2b35b4d11c151c0d82b45d7e3cdc3b44a",
+    "tests/integration-audit/migration-upgrade.spec.ts": "36efe7c899a657f1ecb6a3473951b2057c5c25b62211154d5272edce4a3e841b",
+    "tests/integration-audit/playwright.config.ts": "3cc6727930e8638facdcbd44ef2a031560ba9533fc0fa172fc82e014af94d54a",
+    "tests/local-acceptance/test_isolation.py": "d17d7a0012b66fbadce45b4bee83dfaea0e0881c2e9662cefeaa4470463c08c8"
+  },
+  "privateRunId": "pb3-acceptance-v9y53pt_",
+  "startedUtcEpoch": 1794307203.679529,
+  "versions": {
+    "node": "NOT VERIFIED IN THIS TARGETED RUN",
+    "pnpm": "NOT VERIFIED IN THIS TARGETED RUN",
+    "php": "8.4.27",
+    "postgres": "18.6",
+    "garage": "2.5.0",
+    "composer": "NOT VERIFIED IN THIS TARGETED RUN",
+    "chromium": "NOT VERIFIED IN THIS TARGETED RUN",
+    "playwright": "NOT VERIFIED IN THIS TARGETED RUN",
+    "macOS": "NOT VERIFIED IN THIS TARGETED RUN"
+  },
+  "checks": [
+    {
+      "name": "product-head",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "log",
+        "-1",
+        "--format=%H %s"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/product-head.log",
+      "seconds": 0.007
+    },
+    {
+      "name": "product-source-clean",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "diff",
+        "--exit-code",
+        "2c1406586dd819357bd3fcc933985f616ce72d39"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/product-source-clean.log",
+      "seconds": 0.044
+    },
+    {
+      "name": "isolation-contract",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "python3",
+        "-B",
+        "tests/local-acceptance/test_isolation.py"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/isolation-contract.log",
+      "seconds": 0.39
+    },
+    {
+      "name": "compose-build",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "build",
+        "api"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose-build.log",
+      "seconds": 1.175
+    },
+    {
+      "name": "php-security-floor",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "-v",
+        "$PRODUCT:/source:ro",
+        "pb3-local-acceptance-php:8.4.27",
+        "php",
+        "/source/scripts/check-runtime.php"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/php-security-floor.log",
+      "seconds": 0.47
+    },
+    {
+      "name": "storage-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "--wait",
+        "postgres",
+        "garage"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/storage-up.log",
+      "seconds": 3.584
+    },
+    {
+      "name": "postgres-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "postgres",
+        "postgres",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/postgres-version.log",
+      "seconds": 0.182
+    },
+    {
+      "name": "garage-version",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "--version"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/garage-version.log",
+      "seconds": 0.104
+    },
+    {
+      "name": "garage-assign",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "layout",
+        "assign",
+        "-z",
+        "ci-zone",
+        "-c",
+        "1G",
+        "b124e65b012bc1d870d5acbc87a9cdbf5831b48929bdcaff6956c8e48512f974"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/garage-assign.log",
+      "seconds": 0.154
+    },
+    {
+      "name": "garage-layout",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "layout",
+        "apply",
+        "--version",
+        "1"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/garage-layout.log",
+      "seconds": 0.226
+    },
+    {
+      "name": "garage-bucket",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "bucket",
+        "create",
+        "pb3-ci-p0"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/garage-bucket.log",
+      "seconds": 0.144
+    },
+    {
+      "name": "garage-key",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "key",
+        "create",
+        "pb3-ci-key"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/garage-key.log",
+      "seconds": 0.138
+    },
+    {
+      "name": "garage-allow",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "exec",
+        "-T",
+        "garage",
+        "/garage",
+        "bucket",
+        "allow",
+        "--read",
+        "--write",
+        "--owner",
+        "pb3-ci-p0",
+        "--key",
+        "pb3-ci-key"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/garage-allow.log",
+      "seconds": 0.14
+    },
+    {
+      "name": "composer-install",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "composer",
+        "install",
+        "--no-interaction",
+        "--no-progress",
+        "--prefer-dist"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/composer-install.log",
+      "seconds": 13.24
+    },
+    {
+      "name": "integration-migrate",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "run",
+        "--rm",
+        "--no-deps",
+        "api",
+        "php",
+        "artisan",
+        "migrate",
+        "--force"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/integration-migrate.log",
+      "seconds": 0.624
+    },
+    {
+      "name": "api-integration-up",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "up",
+        "-d",
+        "api"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/api-integration-up.log",
+      "seconds": 0.84
+    },
+    {
+      "name": "api-integration-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/api-integration-ready.log",
+      "seconds": 1.287
+    },
+    {
+      "name": "vite-ready",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "/usr/bin/python3",
+        "-c",
+        "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:5173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/vite-ready.log",
+      "seconds": 1.122
+    },
+    {
+      "name": "journey-focused",
+      "status": "FAIL",
+      "exit_code": 1,
+      "command": [
+        "pnpm",
+        "exec",
+        "playwright",
+        "test",
+        "--config",
+        "tests/integration-audit/playwright.config.ts",
+        "journey.spec.ts",
+        "--output",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/journey-focused",
+        "--reporter=line,json"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/journey-focused.log",
+      "seconds": 6.241
+    },
+    {
+      "name": "product-source-after",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "git",
+        "diff",
+        "--exit-code",
+        "2c1406586dd819357bd3fcc933985f616ce72d39"
+      ],
+      "cwd": "$PRODUCT",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/product-source-after.log",
+      "seconds": 0.051
+    },
+    {
+      "name": "container-logs",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "logs",
+        "--no-color"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/container-logs.log",
+      "seconds": 0.14
+    },
+    {
+      "name": "isolated-cleanup",
+      "status": "PASS",
+      "exit_code": 0,
+      "command": [
+        "docker",
+        "compose",
+        "--project-name",
+        "pb3-accept-db4e4dcbb7",
+        "--env-file",
+        "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/compose.env",
+        "-f",
+        "$QA/scripts/local-acceptance/compose.yml",
+        "down",
+        "--remove-orphans"
+      ],
+      "cwd": "$QA",
+      "log": "/var/folders/m2/060rt_hx6751l0z6dz1wxczm0000gn/T/pb3-acceptance-v9y53pt_/isolated-cleanup.log",
+      "seconds": 10.619
+    }
+  ],
+  "browsers": {
+    "journey-focused": {
+      "stats": {
+        "startTime": "2026-11-10T10:40:28.484Z",
+        "duration": 5431.46,
+        "expected": 0,
+        "skipped": 0,
+        "unexpected": 1,
+        "flaky": 0
+      },
+      "tests": [
+        {
+          "title": "independent Contacts/instructions/offline capture -> scoped grants -> A decrypt; grant and submission lost ACK",
+          "file": "journey.spec.ts",
+          "status": "unexpected",
+          "results": [
+            {
+              "status": "failed",
+              "durationMs": 4554,
+              "proofs": [
+                {
+                  "scenario": "private-cache-online-precondition",
+                  "verifiedPrivateVersion": 2,
+                  "onlineProofCompleted": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "exitCode": 1,
+  "privacy": "Only commands, exit codes, synthetic identifiers/timestamps, ciphertext hashes and boolean proofs; no raw errors, traces, credentials, keys, filenames, images or private instructions.",
+  "unexecuted": [
+    "native Safari",
+    "physical iPhone/Android",
+    "cold offline trusted PWA",
+    "full CI rerun (intentionally not repeated)"
+  ]
+}
