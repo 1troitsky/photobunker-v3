@@ -176,6 +176,23 @@ final class MatrixBindingV1Test extends TestCase
         $this->assertDatabaseCount('matrix_device_bindings_v1',1);
     }
 
+    public function test_device_revoked_during_whoami_cannot_commit_stale_binding():void {
+        $this->as('alice');
+        $device=$this->users['alice']['did'];
+        Http::fake(function()use($device){
+            DB::table('identity_devices')->where('id',$device)
+                ->update(['revoked_at'=>now()]);
+            return Http::response([
+                'user_id'=>'@alice:matrix.example.test',
+                'device_id'=>'MATRIX_DEVICE_A','is_guest'=>false,
+            ],200);
+        });
+        $this->postJson('/matrix/v1/bindings',$this->request('alice'))
+            ->assertUnauthorized();
+        $this->assertDatabaseCount('matrix_account_bindings_v1',0);
+        $this->assertDatabaseCount('matrix_device_bindings_v1',0);
+    }
+
     public function test_signed_matrix_binding_migration_will_not_drop_live_records():void {
         $this->as('alice');$this->remote();
         $this->postJson('/matrix/v1/bindings',$this->request('alice'))->assertCreated();
