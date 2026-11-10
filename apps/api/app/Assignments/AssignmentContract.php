@@ -151,7 +151,7 @@ final class AssignmentContract
                         &&count($items)<=$limit,422);
                     $seen=[];
                     foreach($items as $label){
-                        $max=$name==='allowedCategories'?96:48;
+                        $max=$name==='allowedCategories'?64:48;
                         abort_unless(is_string($label)&&strlen($label)>0
                             &&strlen($label)<=$max
                             &&trim($label)===$label
