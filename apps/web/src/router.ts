@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import FoundationScreen from './views/FoundationScreen.vue'
 import AssignmentsView from './views/AssignmentsView.vue'
 import AssignmentEditorView from './views/AssignmentEditorView.vue'
 import AccountView from './views/AccountView.vue'
