@@ -1623,6 +1623,7 @@ export async function signedMediaCaptureIntent(
     ||policy.state!=='active'
     ||!allowed.includes(mediaType)
     ||policy.policyRevision<2
+    ||!assignmentFilesOpenAt(policy,Date.now())
     ||!schedulePermitsAt(policy,startedAt))
     throw Error('assignment.media_recording_not_permitted')
   const latest=policy.policyAmendmentContract
@@ -1655,6 +1656,7 @@ export async function queueAssignmentMediaSubmission(
   if(listing.ownerAccountId===session.accountId
     ||!assignmentFilesOpenAt(listing,Date.now())
     ||listing.state!=='active'
+    ||!assignmentFilesOpenAt(listing,Date.now())
     ||!schedulePermitsAt(listing,Date.now()))
     throw Error('assignment.not_accepting_submissions')
   const media=(await listLocalMedia()).find(x=>x.mediaId===mediaId)
