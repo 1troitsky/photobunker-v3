@@ -10,9 +10,12 @@ import {pinnedPeer,ensureOwnExchangeKey} from '../../sharing/key-directory'
 import {listConfirmedContacts} from './contact-book'
 import {
   withCurrentOwnerTeamDEK,verifyEpochHistory,profileAad,ownerEpochStatus,
-  openVerifiedCurrentEpochMember,
+  openVerifiedCurrentEpochMember,verifiedRetiredPendingTeamInvites,
 } from './team-epochs'
-import {cacheVerifiedJoinedTeam,verifiedTeamMembershipHistory} from './team-invitations'
+import {
+  cacheVerifiedJoinedTeam,verifiedTeamMembershipHistory,
+  assertVerifiedTeamEpochNotOlder,
+} from './team-invitations'
 import type {TeamRole,TeamInvitation,TeamRosterMember,JoinedTeam} from './team-invitations'
 
 const enc=new TextEncoder()
@@ -457,6 +460,9 @@ export async function listOwnerEpochRoster(teamId:string):Promise<EpochRosterMem
   const signer=await importSpki(s.pkg.accountSpki)
   let after:string|null=null
   const roster:EpochRosterMember[]=[]
+  // Only the complete owner-verified signature chain is authoritative for
+  // automatic expiry/revocation of v2 invitations at rekey.
+  let signedRetirements:Set<string>|null=null
   for(let n=0;n<100;n++){
     const path='/teams/v2/'+encodeURIComponent(teamId)+'/participants'
       +(after?'?after='+encodeURIComponent(after):'')
@@ -507,13 +513,25 @@ export async function listOwnerEpochRoster(teamId:string):Promise<EpochRosterMem
         if(e.action==='remove')signedRevoked=true
         else derivedRole=e.nextRole as TeamRole
       }
-      // A pending invite may also be invalidated by a newer key epoch,
-      // without any signed explicit member-removal event.
-      const autoExpired=c.keyEpoch<status.keyEpoch
-        &&item.acceptedContract===null
+      // Never infer auto-revocation solely from a server-supplied state
+      // and an older epoch number. The exact UUID MUST appear in an owner-
+      // signed key-epoch contract, validated against the whole hash chain.
+      const pendingUnconsented=item.acceptedContract===null
+        &&item.acceptedSignature===null
+      let signedAutoRetirement=false
+      if(!signedRevoked&&(item.state==='revoked'
+        ||c.keyEpoch<status.keyEpoch&&pendingUnconsented)){
+        if(signedRetirements===null){
+          signedRetirements=await verifiedRetiredPendingTeamInvites(teamId)
+          same(s)
+        }
+        signedAutoRetirement=pendingUnconsented
+          &&signedRetirements.has(c.inviteId)
+      }
       if(item.effectiveRole!==derivedRole
-        ||(item.state==='revoked'&&!signedRevoked&&!autoExpired)
-        ||(signedRevoked&&item.state!=='revoked'))
+        ||(item.state==='revoked')!==(signedRevoked||signedAutoRetirement)
+        ||c.keyEpoch<status.keyEpoch&&pendingUnconsented
+          &&!signedAutoRetirement)
         throw Error('teams.epoch_roster_acl_mismatch')
       roster.push({
         inviteId:c.inviteId,recipientAccountId:c.recipientAccountId,
@@ -631,6 +649,11 @@ export async function openJoinedEpochInvite(item:EpochTeamInvite):Promise<Joined
       'pb3.team-key-epoch.v1\n'+response.epoch.contract,
       response.epoch.signature))
     throw Error('teams.untrusted_epoch_chain')
+  await assertVerifiedTeamEpochNotOlder(
+    invitation.teamId,invitation.ownerAccountId,{
+      keyEpoch:chain.epoch,contractHash:chain.contractHash,
+    })
+  same(s)
   const own=await ensureOwnExchangeKey()
   if(own.directory.descriptorHash!==invitation.recipientKeyDigest)
     throw Error('teams.epoch_key_changed')
@@ -663,6 +686,8 @@ export async function openJoinedEpochInvite(item:EpochTeamInvite):Promise<Joined
     ||Object.keys(profile).sort().join('|')!=='description|name')
     throw Error('teams.epoch_join_profile_invalid')
   let role:TeamRole=invitation.role
+  // Only owner-signed epoch/role evidence may raise the durable floor.
+  let verifiedRevision=epoch.membershipRevision
   if(response.latestRoleEvent){
     let event:MembershipChange
     try{event=JSON.parse(response.latestRoleEvent.contract) as MembershipChange}
@@ -680,6 +705,7 @@ export async function openJoinedEpochInvite(item:EpochTeamInvite):Promise<Joined
         response.latestRoleEvent.signature))
       throw Error('teams.untrusted_epoch_join_role')
     role=event.nextRole as TeamRole
+    verifiedRevision=Math.max(verifiedRevision,event.toRevision)
   }
   if(role!==response.effectiveRole)
     throw Error('teams.epoch_join_role_mismatch')
@@ -688,6 +714,9 @@ export async function openJoinedEpochInvite(item:EpochTeamInvite):Promise<Joined
     teamId:invitation.teamId,ownerAccountId:invitation.ownerAccountId,
     name:profile.name,description:profile.description,role,verifiedOnline:true,
   }
-  await cacheVerifiedJoinedTeam(joined,s.accountId)
+  await cacheVerifiedJoinedTeam(joined,s.accountId,{
+    keyEpoch:chain.epoch,contractHash:chain.contractHash,
+    membershipRevision:verifiedRevision,
+  })
   return joined
 }
