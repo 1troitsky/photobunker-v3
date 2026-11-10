@@ -65,7 +65,7 @@ describe('P1-25 encrypted fingerprint-confirmed contact book',()=>{
     expect(await listConfirmedContacts()).toEqual([])
     restore(alice)
     expect((await listConfirmedContacts())[0]?.alias).toBe('Source 1')
-    const wrongKey=await account(ownerId)
+    await account(ownerId)
     await expect(listConfirmedContacts())
       .rejects.toThrow('contacts.encrypted_record_unreadable')
     restore(alice)
