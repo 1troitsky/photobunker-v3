@@ -221,6 +221,33 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
       .toContainText('TEAM SECRET PROOF',{timeout:30000})
     await expect(survivor.getByTestId('team-key-epoch')).toHaveCount(0)
 
+    // A cached title is NOT proof of an online-verified current epoch.
+    // Force actual signed-chain validation and ECDH/AES-GCM decryption
+    // before simulating malicious historical transport responses.
+    const verifiedEpochTwo=await C.evaluate(async acceptedInvite=>{
+      const auth=await import('/src/features/identity/application/session.ts')
+      await auth.reauthenticate()
+      const api=await import('/src/features/people/application/team-epochs.ts')
+      return api.openAnyJoinedTeam(acceptedInvite)
+    },originalC.invite)
+    expect(verifiedEpochTwo.name).toBe('TEAM SECRET PROOF')
+    expect(verifiedEpochTwo.verifiedOnline).toBe(true)
+    const storedWatermarkCount=await C.evaluate(async()=>{
+      return new Promise<number>((resolve,reject)=>{
+        const open=indexedDB.open('pb3-encrypted-team-members-v1')
+        open.onerror=()=>reject(open.error)
+        open.onsuccess=()=>{
+          const db=open.result,tx=db.transaction('freshness','readonly')
+          const request=tx.objectStore('freshness').count()
+          request.onerror=()=>reject(request.error)
+          tx.oncomplete=()=>{
+            resolve(request.result);db.close()
+          }
+        }
+      })
+    })
+    expect(storedWatermarkCount).toBeGreaterThan(0)
+
     // Recreate the web app before the malicious replay: a high-water mark
     // stored only in volatile JavaScript state is insufficient.
     await C.reload()
@@ -236,6 +263,19 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     })
     expect(verifiedBeforeReplay.find(x=>x.teamId===teamId)?.name)
       .toBe('TEAM SECRET PROOF')
+    const watermarkAfterReload=await C.evaluate(async()=>{
+      return new Promise<number>((resolve,reject)=>{
+        const open=indexedDB.open('pb3-encrypted-team-members-v1')
+        open.onerror=()=>reject(open.error)
+        open.onsuccess=()=>{
+          const db=open.result,tx=db.transaction('freshness','readonly')
+          const request=tx.objectStore('freshness').count()
+          request.onerror=()=>reject(request.error)
+          tx.oncomplete=()=>{resolve(request.result);db.close()}
+        }
+      })
+    })
+    expect(watermarkAfterReload).toBe(storedWatermarkCount)
 
     // T29B-02: replay two authentic old responses after C has verified
     // epoch 2. AEAD high-water mark MUST deny the v1 downgrade despite
