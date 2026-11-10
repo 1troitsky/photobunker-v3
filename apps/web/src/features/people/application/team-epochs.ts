@@ -82,7 +82,7 @@ async function hash(raw:string):Promise<string>{
 function ownerAad(owner:string,team:string,epoch:number,revision:number):Uint8Array<ArrayBuffer>{
   return enc.encode(ownerAadPrefix+owner+'\n'+team+'\n'+epoch+'\n'+revision)
 }
-function profileAad(c:Pick<EpochContract,'ownerAccountId'|'teamId'|'toEpoch'|'membershipRevision'|'previousEpochHash'>):Uint8Array<ArrayBuffer>{
+export function profileAad(c:Pick<EpochContract,'ownerAccountId'|'teamId'|'toEpoch'|'membershipRevision'|'previousEpochHash'>):Uint8Array<ArrayBuffer>{
   return enc.encode(profileAadPrefix+c.ownerAccountId+'\n'+c.teamId+'\n'
     +c.toEpoch+'\n'+c.membershipRevision+'\n'+c.previousEpochHash)
 }
