@@ -303,6 +303,80 @@ final class TeamEpochInvitationTest extends TestCase
         $this->assertDatabaseCount('team_members_v1',1);
     }
 
+    public function test_previously_excluded_member_requires_fresh_epoch_consent_to_rejoin():void
+    {
+        DB::table('team_members_v1')->insert([
+            'team_id'=>$this->teamId,
+            'account_id'=>$this->users['guest']['id'],
+            'role'=>'contributor','state'=>'revoked',
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $invite=$this->invite(['role'=>'viewer']);
+        $command=$this->postInvite($invite);
+        $this->assertDatabaseHas('team_members_v1',[
+            'team_id'=>$this->teamId,
+            'account_id'=>$this->users['guest']['id'],
+            'role'=>'contributor','state'=>'revoked',
+        ]);
+        $this->login('guest');
+        $this->getJson('/teams/v2/'.$this->teamId.'/member')->assertNotFound();
+        $this->postJson('/teams/v2/'.$this->teamId.'/invites/'
+            .$invite['inviteId'].'/accept',$this->signed('guest',
+                'pb3.team-accept.v2',$this->consent($invite,
+                    hash('sha256',$command['contract']))))
+            ->assertCreated();
+        $this->assertDatabaseCount('team_members_v1',2);
+        $this->assertDatabaseHas('team_members_v1',[
+            'team_id'=>$this->teamId,
+            'account_id'=>$this->users['guest']['id'],
+            'role'=>'viewer','state'=>'active',
+        ]);
+        $this->getJson('/teams/v2/'.$this->teamId.'/member')
+            ->assertOk()->assertJsonPath('effectiveRole','viewer');
+        $this->assertDatabaseCount('photo_access_grants',0);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
+    public function test_new_epoch_revokes_older_pending_v2_invitation_without_key_redistribution():void
+    {
+        $pending=$this->invite();
+        $this->postInvite($pending);
+        DB::table('team_records_v1')->where('id',$this->teamId)
+            ->update(['rotation_required'=>true,'membership_revision'=>3]);
+        $epoch3=[
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'teamId'=>$this->teamId,'ownerAccountId'=>$this->users['owner']['id'],
+            'fromEpoch'=>2,'toEpoch'=>3,'membershipRevision'=>3,
+            'previousEpochHash'=>$this->epochHash,
+            'privateEnvelope'=>self::profile(),'recipients'=>[],
+        ];
+        $this->login('owner');
+        $signed=$this->signed('owner','pb3.team-key-epoch.v1',$epoch3);
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',$signed)
+            ->assertCreated()->assertJsonPath('keyEpoch',3);
+        $this->assertDatabaseHas('team_invites_v2',[
+            'id'=>$pending['inviteId'],'state'=>'revoked',
+        ]);
+        $this->login('guest');
+        $this->getJson('/teams/v2/invites/received')
+            ->assertOk()->assertJsonPath('items.0.state','revoked')
+            ->assertJsonMissingPath('items.0.envelope')
+            ->assertJsonMissingPath('items.0.contract');
+        $this->getJson('/teams/v2/'.$this->teamId.'/member')->assertNotFound();
+        $this->login('owner');
+        $next=$this->invite([
+            'keyEpoch'=>3,
+            'keyEpochHash'=>hash('sha256',$signed['contract']),
+            'membershipRevision'=>3,
+        ]);
+        $this->postJson('/teams/v2/'.$this->teamId.'/invites',
+            $this->signed('owner','pb3.team-invite.v2',$next))
+            ->assertCreated()->assertJsonPath('keyEpoch',3);
+        $this->assertDatabaseCount('team_invites_v2',2);
+        $this->getJson('/teams/v2/'.$this->teamId.'/participants')
+            ->assertOk()->assertJsonCount(2,'items');
+    }
+
     public function test_signed_invitation_history_cannot_be_dropped():void
     {
         $this->postInvite($this->invite());
