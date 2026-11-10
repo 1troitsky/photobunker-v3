@@ -86,6 +86,10 @@ const editedVideoAllowed=ref('')
 const editedVideoTags=ref('')
 const editedAudioAllowed=ref('')
 const editedAudioTags=ref('')
+// Legacy owner form: rebase only untouched fields when the authenticated
+// server policy arrives after a fast click on a cached/offline card.
+const ownerFormPolicyRevision=ref<number|null>(null)
+const ownerFormTouched=ref(false)
 const recipientId=ref('')
 const ownerCheck=ref<SafetyCheck|null>(null)
 const contributorCheck=ref<SafetyCheck|null>(null)
@@ -358,9 +362,7 @@ async function create():Promise<void>{
     notice.value='Задание зашифровано и принято локально. Синхронизация — в очереди.'
   })
 }
-function choose(assignmentId:string):void{
-  selectedId.value=assignmentId
-  const chosen=assignments.value.find(a=>a.id===assignmentId)
+function populateOwnerPolicyForm(chosen:VisibleAssignment|undefined):void{
   editedGoal.value=chosen?.goal??''
   editedVideoGoal.value=chosen?.videoGoal??''
   editedAudioGoal.value=chosen?.audioGoal??''
@@ -381,6 +383,13 @@ function choose(assignmentId:string):void{
   editedVideoTags.value=chosen?.videoAdvanced.requiredTags.join(', ')??''
   editedAudioAllowed.value=chosen?.audioAdvanced.allowedCategories.join(', ')??''
   editedAudioTags.value=chosen?.audioAdvanced.requiredTags.join(', ')??''
+  ownerFormPolicyRevision.value=chosen?.policyRevision??null
+  ownerFormTouched.value=false
+}
+function choose(assignmentId:string):void{
+  selectedId.value=assignmentId
+  const chosen=assignments.value.find(a=>a.id===assignmentId)
+  populateOwnerPolicyForm(chosen)
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
   submissions.value=[];mediaSubmissions.value=[];cleanPreview()
@@ -418,6 +427,8 @@ async function changeGoal():Promise<void>{
     const a=selected.value
     if(!a?.isOwner||a.localState==='queued')
       throw new Error('assignment.owner_required')
+    if(ownerFormPolicyRevision.value!==a.policyRevision)
+      throw Error('assignment.editor_revision_changed')
     const input=String(editedGoal.value).trim()
     const value=input===''?null:Number(input)
     const videoInput=String(editedVideoGoal.value).trim()
@@ -456,6 +467,7 @@ async function changeGoal():Promise<void>{
         ...(editedAllowAudio.value?['audio']:[]),
       ] as AllowedAssignmentMedia,
     })
+    ownerFormTouched.value=false
     if(activeSession.value?.online&&navigator.onLine)await flushAssignmentOutbox()
     await refresh()
     notice.value='Новые правила подписаны и сохранены. До подтверждения сервером действует прежняя версия.'
@@ -596,6 +608,13 @@ async function openSubmission(grantId:string):Promise<void>{
     notice.value='Фотография расшифрована только на этом устройстве'
   })
 }
+watch(()=>selected.value?.policyRevision,(version)=>{
+  const chosen=selected.value
+  if(!chosen?.isOwner||version===undefined
+    ||version===ownerFormPolicyRevision.value)return
+  if(!ownerFormTouched.value)populateOwnerPolicyForm(chosen)
+  else error.value='Новые подписанные правила получены. Сохраните свои заметки отдельно, закройте задание и откройте заново — устаревшие правки не будут подписаны.'
+})
 watch(activeSession,(next,previous)=>{
   // Online reauthentication refreshes Session by replacing the object, even
   // when account/device keys are unchanged. Only an identity boundary may
@@ -770,6 +789,8 @@ onUnmounted(cleanPreview)
 
         <template v-if="selected.isOwner">
           <div class="assignment-toolbar">
+            <RouterLink :to="'/assignments/'+encodeURIComponent(selected.id)+'/edit'"
+              class="fieldwork-editor-link" data-testid="open-fieldwork-editor">Редактор · 4 вкладки</RouterLink>
             <span class="muted">Версия состояния: {{ selected.revision }}</span>
             <span class="muted">Версия правил: {{ selected.policyRevision }}</span>
             <button v-if="selected.state==='active'" type="button"
@@ -780,7 +801,8 @@ onUnmounted(cleanPreview)
               @click="changeState('resume')">Возобновить задание</button>
           </div>
           <p v-if="pendingStateChange" class="muted" role="status">Подписанное изменение состояния или правил ожидает подтверждения сервера.</p>
-          <div v-if="selected.state==='active'" class="foundation-card">
+          <div v-if="selected.state==='active'" class="foundation-card"
+            @input="ownerFormTouched=true" @change="ownerFormTouched=true">
             <h3>Подписанные правила съёмки</h3>
             <label for="assignment-edited-goal">Цель по фото (пусто — без цели)</label>
             <input id="assignment-edited-goal" v-model="editedGoal" type="number" min="1" max="9999" placeholder="Без цели">
