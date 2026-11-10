@@ -115,6 +115,7 @@ Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(f
     Route::get('/{assignmentId}/retention-status',[AssignmentV1Controller::class,'retentionStatus'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/private',[AssignmentV1Controller::class,'changePrivateText'])->whereUuid('assignmentId');
     Route::get('/{assignmentId}/private-history',[AssignmentV1Controller::class,'privateTextHistory'])->whereUuid('assignmentId');
+    Route::get('/{assignmentId}/participants',[AssignmentV1Controller::class,'participants'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/invites',[AssignmentV1Controller::class,'invite'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/invites/{inviteId}/accept',
         [AssignmentV1Controller::class,'accept'])->whereUuid('assignmentId')->whereUuid('inviteId');
