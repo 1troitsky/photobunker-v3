@@ -6,6 +6,7 @@ namespace Tests\Feature;
 use App\Identity\Protocol as P;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -230,6 +231,30 @@ final class MediaGrantV1Test extends TestCase
             'signature'=>$this->signature('owner',
                 "pb3.media-grant.v2\n".$json),
         ];
+    }
+
+    public function test_scoped_media_grant_blocks_migration_rollback_before_either_column_drops():void
+    {
+        $digest=$this->publishRecipientKey();
+        $assignmentId=$this->acceptedAssignment();
+        $this->asRole('owner');
+        $scoped=$this->scopedMediaGrant($this->grantInput($digest),$assignmentId);
+        $id=json_decode($scoped['contract'],true,32,JSON_THROW_ON_ERROR)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$scoped)->assertCreated();
+        $migration=require database_path(
+            'migrations/2026_11_10_000006_add_assignment_scoped_recipient_grants.php'
+        );
+        try{
+            $migration->down();
+            $this->fail('Rollback must reject an existing scoped media grant.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.scoped_grants.rollback_forbidden',$e->getMessage());
+        }
+        $this->assertTrue(Schema::hasColumn('photo_access_grants','assignment_id'));
+        $this->assertTrue(Schema::hasColumn('media_recipient_grants_v1','assignment_id'));
+        $this->assertDatabaseHas('media_recipient_grants_v1',[
+            'id'=>$id,'assignment_id'=>$assignmentId,'state'=>'active',
+        ]);
     }
 
     public function test_p1_22_media_scope_expires_without_deleting_contributor_media_or_personal_grant():void
