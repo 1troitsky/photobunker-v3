@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Assignments\AssignmentContract as C;
 use App\Assignments\AssignmentSchedule as S;
+use App\Assignments\AssignmentRetention as R;
 use App\Assignments\MonthlyCreationQuota;
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
@@ -35,6 +36,7 @@ final class AssignmentV1Controller extends Controller
         P::uuid($id);
         $a=DB::table('assignment_records_v1')->where('id',$id)->first();
         abort_unless($a,404);
+        R::requireAvailable($a);
         return $a;
     }
 
@@ -149,6 +151,7 @@ final class AssignmentV1Controller extends Controller
                 ]);
             }
             abort_unless($a->state==='active'
+                &&R::filesOpen($a)
                 &&(!S::current($a)['blockAfterEnd']
                     ||S::current($a)['endsAt']>PhotoSync::nowMs())
                 &&(int)$a->policy_revision===$c['fromPolicyRevision']
@@ -248,6 +251,7 @@ final class AssignmentV1Controller extends Controller
                 ]);
             }
             abort_unless($a->state==='active'
+                &&R::assignmentOpen($a)
                 &&(!S::current($a)['blockAfterEnd']
                     ||S::current($a)['endsAt']>PhotoSync::nowMs())
                 &&(int)$a->private_revision===$c['fromPrivateRevision'],409);
@@ -322,6 +326,146 @@ final class AssignmentV1Controller extends Controller
     }
 
     /**
+     * P1-21 owner-signed association/assignment access deadlines.
+     * This is NOT physical deletion of contributor-owned media: the uploader
+     * retains ownership and independent TTL, other grants and S3 locations.
+     */
+    public function changeRetention(Request $r,string $assignmentId)
+    {
+        $this->sync->origin($r);
+        [$actor]=$this->sync->actor($r);
+        $c=$this->signed($r,$actor,'pb3.assignment-retention.v1',[
+            'version','operationId','assignmentId','ownerAccountId',
+            'rootPolicyHash','previousRetentionHash',
+            'fromRetentionRevision','toRetentionRevision',
+            'filesAccessUntil','assignmentAccessUntil','deleteOriginals',
+        ]);
+        R::validate($c,$actor->id,$assignmentId);
+        $hash=hash('sha256',$r->json('contract'));
+        return DB::transaction(function()use($r,$actor,$c,$assignmentId,$hash){
+            $a=DB::table('assignment_records_v1')
+                ->where('id',$assignmentId)->lockForUpdate()->first();
+            abort_unless($a&&$a->owner_account_id===$actor->id,404);
+            abort_unless(hash_equals(hash('sha256',$a->contract_json),
+                $c['rootPolicyHash']),409);
+            $previousEvent=DB::table('assignment_retention_events_v1')
+                ->where('operation_id',$c['operationId'])->first();
+            if($previousEvent){
+                abort_unless($previousEvent->assignment_id===$a->id
+                    &&hash_equals($previousEvent->contract_hash,$hash),409);
+                return $this->sync->json([
+                    'assignmentId'=>$a->id,
+                    'retentionRevision'=>(int)$a->retention_revision,
+                    'unchanged'=>true,
+                ]);
+            }
+            // Deadlines are immutable once reached: never resurrect an
+            // assignment association or expose previously hidden receipts.
+            abort_unless($a->state==='active'
+                &&R::mayRevise($a)
+                &&(int)$a->retention_revision===$c['fromRetentionRevision'],409);
+            $previous=$a->latest_retention_contract??$a->contract_json;
+            abort_unless(hash_equals(hash('sha256',$previous),
+                $c['previousRetentionHash']),409);
+            $old=R::current($a);
+            $next=[
+                'filesAccessUntil'=>$c['filesAccessUntil'],
+                'assignmentAccessUntil'=>$c['assignmentAccessUntil'],
+                'deleteOriginals'=>false,
+            ];
+            abort_unless($old!==$next,409);
+            R::validateDeadlinesAgainstSchedule($next,S::current($a));
+            $at=PhotoSync::nowMs();
+            foreach(['filesAccessUntil','assignmentAccessUntil'] as $key){
+                abort_unless($next[$key]===null||$next[$key]>$at,409);
+            }
+            DB::table('assignment_retention_events_v1')->insert([
+                'operation_id'=>$c['operationId'],
+                'assignment_id'=>$a->id,
+                'from_revision'=>$c['fromRetentionRevision'],
+                'to_revision'=>$c['toRetentionRevision'],
+                'contract_hash'=>$hash,
+                'contract_json'=>$r->json('contract'),
+                'owner_signature'=>$r->json('signature'),
+                'occurred_at_ms'=>$at,
+                'created_at'=>\Carbon\CarbonImmutable::createFromTimestampMs($at,'UTC'),
+            ]);
+            DB::table('assignment_records_v1')->where('id',$a->id)->update([
+                'retention_revision'=>$c['toRetentionRevision'],
+                'files_access_until'=>$c['filesAccessUntil'],
+                'assignment_access_until'=>$c['assignmentAccessUntil'],
+                'latest_retention_contract'=>$r->json('contract'),
+                'latest_retention_signature'=>$r->json('signature'),
+                'updated_at'=>now(),
+            ]);
+            return $this->sync->json([
+                'assignmentId'=>$a->id,
+                'retentionRevision'=>$c['toRetentionRevision'],
+                'unchanged'=>false,
+            ]);
+        },3);
+    }
+
+    /** Public deadlines and signatures only: no file IDs, private text or DEKs. */
+    public function retentionHistory(Request $r,string $assignmentId)
+    {
+        [$actor]=$this->sync->actor($r);
+        P::uuid($assignmentId);
+        $a=DB::table('assignment_records_v1')->where('id',$assignmentId)->first();
+        abort_unless($a,404);
+        if($a->owner_account_id!==$actor->id){
+            R::requireAvailable($a);
+            abort_unless(DB::table('assignment_invites_v1')
+                ->where('assignment_id',$assignmentId)
+                ->where('recipient_account_id',$actor->id)
+                ->where('state','accepted')->exists(),404);
+        }
+        $events=DB::table('assignment_retention_events_v1')
+            ->where('assignment_id',$assignmentId)->orderBy('to_revision')
+            ->limit(1001)->get(['from_revision','to_revision','contract_hash',
+                'contract_json','owner_signature','occurred_at_ms']);
+        abort_unless($events->count()===(int)$a->retention_revision-1,409);
+        return $this->sync->json([
+            'assignmentId'=>$assignmentId,
+            'retentionRevision'=>(int)$a->retention_revision,
+            'rootPolicyHash'=>hash('sha256',$a->contract_json),
+            'events'=>$events->map(fn($e)=>[
+                'fromRetentionRevision'=>(int)$e->from_revision,
+                'toRetentionRevision'=>(int)$e->to_revision,
+                'contractHash'=>$e->contract_hash,
+                'contract'=>$e->contract_json,
+                'signature'=>$e->owner_signature,
+                'occurredAtMs'=>(int)$e->occurred_at_ms,
+            ])->values()->all(),
+        ]);
+    }
+
+    /**
+     * Read-only owner maintenance receipt. A tombstone means DB cutoff was
+     * recorded, NEVER that S3 ciphertext was physically removed.
+     */
+    public function retentionStatus(Request $r,string $assignmentId)
+    {
+        [$actor]=$this->sync->actor($r);
+        P::uuid($assignmentId);
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$assignmentId)
+            ->where('owner_account_id',$actor->id)->first();
+        abort_unless($a,404);
+        $t=DB::table('assignment_retention_tombstones_v1')
+            ->where('assignment_id',$assignmentId)->first();
+        return $this->sync->json([
+            'assignmentId'=>$assignmentId,
+            'filesAccessExpired'=>!R::filesOpen($a),
+            'assignmentAccessExpired'=>!R::assignmentOpen($a),
+            'filesCutoffRecorded'=>$t!==null&&$t->files_marked_at!==null,
+            'assignmentCutoffRecorded'=>$t!==null&&$t->assignment_marked_at!==null,
+            'physicalDeletionConfirmed'=>false,
+            'physicalStatus'=>'not_authorized',
+        ]);
+    }
+
+    /**
      * Owner-signed, independently versioned schedule changes. Root creation
      * timestamps are immutable and always remain verifiable by recipients.
      * A schedule edit never expires or deletes stored media.
@@ -358,11 +502,15 @@ final class AssignmentV1Controller extends Controller
                 ]);
             }
             abort_unless($a->state==='active'
+                &&R::mayRevise($a)
                 &&(int)$a->schedule_revision===$c['fromScheduleRevision'],409);
             $previous=$a->latest_schedule_contract??$a->contract_json;
             abort_unless(hash_equals(hash('sha256',$previous),
                 $c['previousScheduleHash']),409);
             $old=S::current($a);
+            R::validateDeadlinesAgainstSchedule(R::current($a),[
+                'endsAt'=>$c['endsAt'],
+            ]);
             abort_unless($old!==[
                 'startsAt'=>$c['startsAt'],'endsAt'=>$c['endsAt'],
                 'blockBeforeStart'=>$c['blockBeforeStart'],
@@ -457,7 +605,8 @@ final class AssignmentV1Controller extends Controller
                     'revision'=>(int)$a->revision,'unchanged'=>true,
                 ]);
             }
-            abort_unless((int)$a->revision===$c['fromRevision']
+            abort_unless(R::assignmentOpen($a)
+                &&(int)$a->revision===$c['fromRevision']
                 &&$c['toRevision']===(int)$a->revision+1
                 &&$c['policyRevision']===1,409);
             $expected=$c['action']==='finish'?'active':'finished';
@@ -502,8 +651,13 @@ final class AssignmentV1Controller extends Controller
         [$actor]=$this->sync->actor($r);
         $after=$r->query('after');
         if($after!==null){abort_unless(is_string($after),422);P::uuid($after);}
+        $now=PhotoSync::nowMs();
         $q=DB::table('assignment_records_v1 as a')
           ->join('identity_accounts as owner','owner.id','=','a.owner_account_id')
+          ->where(function($q)use($now){
+              $q->whereNull('a.assignment_access_until')
+                ->orWhere('a.assignment_access_until','>',$now);
+          })
           ->where(function($query)use($actor){
               $query->where('a.owner_account_id',$actor->id)
                 ->orWhereExists(function($sub)use($actor){
@@ -522,6 +676,8 @@ final class AssignmentV1Controller extends Controller
             'a.latest_policy_contract','a.latest_policy_signature',
             'a.private_revision','a.latest_private_contract','a.latest_private_signature',
             'a.schedule_revision','a.latest_schedule_contract','a.latest_schedule_signature',
+            'a.retention_revision','a.latest_retention_contract','a.latest_retention_signature',
+            'a.files_access_until','a.assignment_access_until',
             'owner.account_spki as owner_account_spki',
         ];
         $now=PhotoSync::nowMs();
@@ -578,9 +734,15 @@ final class AssignmentV1Controller extends Controller
                     ?json_decode($x->latest_policy_contract,true,32,JSON_THROW_ON_ERROR):null;
                 return ($policy['version']??0)>=4?$policy['audioGoal']:null;
             })(),
-            'confirmedPhotoCount'=>(int)$x->confirmed_photo_count,
-            'confirmedVideoCount'=>(int)$x->confirmed_video_count,
-            'confirmedAudioCount'=>(int)$x->confirmed_audio_count,
+            'confirmedPhotoCount'=>$x->files_access_until!==null
+                &&(int)$x->files_access_until<=PhotoSync::nowMs()
+                ?0:(int)$x->confirmed_photo_count,
+            'confirmedVideoCount'=>$x->files_access_until!==null
+                &&(int)$x->files_access_until<=PhotoSync::nowMs()
+                ?0:(int)$x->confirmed_video_count,
+            'confirmedAudioCount'=>$x->files_access_until!==null
+                &&(int)$x->files_access_until<=PhotoSync::nowMs()
+                ?0:(int)$x->confirmed_audio_count,
             'startsAt'=>(int)$x->starts_at,
             'endsAt'=>$x->ends_at===null?null:(int)$x->ends_at,
             'privateEnvelope'=>json_decode($x->private_envelope_json,true,16,JSON_THROW_ON_ERROR),
@@ -590,6 +752,11 @@ final class AssignmentV1Controller extends Controller
             'scheduleRevision'=>(int)$x->schedule_revision,
             'scheduleAmendmentContract'=>$x->latest_schedule_contract,
             'scheduleAmendmentSignature'=>$x->latest_schedule_signature,
+            'retentionRevision'=>(int)$x->retention_revision,
+            'retentionAmendmentContract'=>$x->latest_retention_contract,
+            'retentionAmendmentSignature'=>$x->latest_retention_signature,
+            'filesAccessUntil'=>$x->files_access_until===null?null:(int)$x->files_access_until,
+            'assignmentAccessUntil'=>$x->assignment_access_until===null?null:(int)$x->assignment_access_until,
             // A client must verify this owner's original signed policy before
             // trusting capture constraints. Server metadata alone is not a signature.
             'policyContract'=>$x->contract_json,
@@ -665,7 +832,7 @@ final class AssignmentV1Controller extends Controller
                 return $this->sync->json(['inviteId'=>$other->id,
                   'state'=>$other->state,'unchanged'=>true]);
             }
-            abort_unless($a->state==='active',409);
+            abort_unless($a->state==='active'&&R::filesOpen($a),409);
             $recipient=DB::table('identity_accounts')
               ->where('id',$c['recipientAccountId'])->where('status','ready')->first();
             abort_unless($recipient,404);
@@ -694,10 +861,18 @@ final class AssignmentV1Controller extends Controller
             ->join('identity_accounts as o','o.id','=','i.owner_account_id')
             ->where('i.recipient_account_id',$actor->id)
             ->where(function($q):void {
+                $q->whereNull('a.assignment_access_until')
+                  ->orWhere('a.assignment_access_until','>',PhotoSync::nowMs());
+            })
+            ->where(function($q):void {
                 $q->where('i.state','accepted')->orWhere(function($pending):void {
                     $pending->where('i.state','pending')
                         ->where('i.expires_at','>',PhotoSync::nowMs())
-                        ->where('a.state','active');
+                        ->where('a.state','active')
+                        ->where(function($w):void{
+                            $w->whereNull('a.files_access_until')
+                              ->orWhere('a.files_access_until','>',PhotoSync::nowMs());
+                        });
                 });
             })
             ->orderBy('i.id')->limit(50)
@@ -739,7 +914,7 @@ final class AssignmentV1Controller extends Controller
                 return $this->sync->json(['inviteId'=>$inviteId,
                   'state'=>'accepted','unchanged'=>true]);
             }
-            abort_unless($a->state==='active',409);
+            abort_unless($a->state==='active'&&R::filesOpen($a),409);
             abort_if($invite->expires_at<=PhotoSync::nowMs(),410);
             abort_unless($invite->state==='pending',409);
             DB::table('assignment_invites_v1')->where('id',$inviteId)->update([
@@ -780,6 +955,7 @@ final class AssignmentV1Controller extends Controller
                 return $this->sync->json(['submissionId'=>$existing->id,'unchanged'=>true]);
             }
             abort_unless($a->state==='active'
+                &&R::filesOpen($a)
                 &&$c['policyRevision']<=(int)$a->policy_revision
                 &&S::permitsNow($a),409);
             $joined=DB::table('assignment_invites_v1')->where('assignment_id',$a->id)
@@ -835,6 +1011,7 @@ final class AssignmentV1Controller extends Controller
         [$actor]=$this->sync->actor($r);
         $assignment=$this->assignment($assignmentId);
         abort_unless($assignment->owner_account_id===$actor->id,404);
+        abort_unless(R::filesOpen($assignment),404);
         $rows=DB::table('assignment_submissions_v1 as s')
             ->join('photo_records as p','p.id','=','s.photo_id')
             ->join('photo_access_grants as g','g.id','=','s.photo_grant_id')

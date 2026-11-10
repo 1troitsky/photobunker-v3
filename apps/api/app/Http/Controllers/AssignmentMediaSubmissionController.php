@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Assignments\AssignmentContract as C;
 use App\Assignments\AssignmentSchedule as S;
+use App\Assignments\AssignmentRetention as R;
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
 use Illuminate\Http\Request;
@@ -68,6 +69,7 @@ final class AssignmentMediaSubmissionController extends Controller
             }
             $now=PhotoSync::nowMs();
             abort_unless($a->state==='active'
+                &&R::filesOpen($a,$now)
                 &&S::permits($a,$now)
                 &&(int)$a->policy_revision===$d['policyRevision'],409);
             // Photo-only signed assignment roots cannot implicitly receive
@@ -171,6 +173,7 @@ final class AssignmentMediaSubmissionController extends Controller
         [$actor]=$this->sync->actor($r);
         $a=$this->assignment($assignmentId);
         abort_unless($a->owner_account_id===$actor->id,404);
+        abort_unless(R::filesOpen($a),404);
         $now=PhotoSync::nowMs();
         $after=$r->query('after');
         if($after!==null){

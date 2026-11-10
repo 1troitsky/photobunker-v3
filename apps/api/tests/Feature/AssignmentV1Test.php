@@ -185,6 +185,161 @@ final class AssignmentV1Test extends TestCase
         ]);
     }
 
+
+    private function signedRetention(
+        int $from,?int $files,?int $assignment,
+        bool $deleteOriginals=false,?string $operationId=null
+    ):array
+    {
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        return $this->signed('owner','pb3.assignment-retention.v1',[
+            'version'=>1,'operationId'=>$operationId??(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'rootPolicyHash'=>hash('sha256',$a->contract_json),
+            'previousRetentionHash'=>hash('sha256',
+                $a->latest_retention_contract??$a->contract_json),
+            'fromRetentionRevision'=>$from,
+            'toRetentionRevision'=>$from+1,
+            'filesAccessUntil'=>$files,
+            'assignmentAccessUntil'=>$assignment,
+            'deleteOriginals'=>$deleteOriginals,
+        ]);
+    }
+
+    public function test_p1_21_retention_is_signed_and_replay_safe():void
+    {
+        $this->createAssignment();
+        $base='/assignments/v1/'.$this->assignmentId;
+        $url=$base.'/retention';
+        $now=\App\Photo\PhotoSync::nowMs();
+        $files=$now+3*86400000;
+        $assignment=$now+5*86400000;
+
+        $this->as('outsider');
+        $this->getJson($base.'/retention-history')->assertNotFound();
+        $this->getJson($base.'/retention-status')->assertNotFound();
+        $this->as('recipient');
+        $this->getJson($base.'/retention-history')->assertNotFound();
+
+        $this->as('owner');
+        $first=$this->signedRetention(1,$files,$assignment);
+        $this->postJson($url,[
+            'contract'=>$first['contract'],
+            'signature'=>P::encode(random_bytes(64)),
+        ])->assertUnauthorized();
+        $this->postJson($url,$this->signedRetention(1,$files,$assignment,true))
+            ->assertUnprocessable();
+        $this->postJson($url,$this->signedRetention(1,$assignment,$files))
+            ->assertUnprocessable();
+        $this->postJson($url,$first)->assertOk()
+            ->assertJsonPath('retentionRevision',2)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$first)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->getJson('/assignments/v1')->assertOk()
+            ->assertJsonPath('items.0.retentionRevision',2)
+            ->assertJsonPath('items.0.filesAccessUntil',$files)
+            ->assertJsonPath('items.0.assignmentAccessUntil',$assignment);
+        $this->getJson($base.'/retention-history')->assertOk()
+            ->assertJsonPath('retentionRevision',2)
+            ->assertJsonCount(1,'events');
+
+        $this->postJson($url,$this->signedRetention(1,$files+60000,$assignment))
+            ->assertConflict();
+        $second=$this->signedRetention(2,$files+60000,$assignment);
+        $this->postJson($url,$second)->assertOk()
+            ->assertJsonPath('retentionRevision',3);
+        $this->postJson($url,$second)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->postJson($url,$first)->assertOk()
+            ->assertJsonPath('retentionRevision',3)
+            ->assertJsonPath('unchanged',true);
+        $this->postJson($url,$this->signedRetention(3,$files+60000,$assignment))
+            ->assertConflict(); // no-op
+        $this->assertDatabaseCount('assignment_retention_events_v1',2);
+        $this->assertDatabaseHas('assignment_records_v1',[
+            'id'=>$this->assignmentId,'retention_revision'=>3,
+        ]);
+
+        $invite=$this->invite();
+        $this->as('recipient');
+        $this->getJson($base.'/retention-history')->assertNotFound();
+        $this->accept($invite);
+        $this->getJson($base.'/retention-history')->assertOk()
+            ->assertJsonPath('retentionRevision',3)
+            ->assertJsonCount(2,'events');
+        $this->as('outsider');
+        $this->getJson($base.'/retention-history')->assertNotFound();
+    }
+
+    public function test_p1_21_cutoffs_are_immediate_and_tombstones_never_delete_originals():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $photo=(string)Str::uuid();
+        DB::table('photo_records')->insert([
+            'id'=>$photo,
+            'account_id'=>$this->people['recipient']['account'],
+            'device_id'=>$this->people['recipient']['device'],
+            'operation_id'=>(string)Str::uuid(),
+            'state'=>'active',
+            'expires_at'=>now()->addDays(30)->getTimestampMs(),
+            'contract_hash'=>str_repeat('b',64),
+            'contract_json'=>'{}','signature'=>'fixture',
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $base='/assignments/v1/'.$this->assignmentId;
+        $this->as('owner');
+        $now=\App\Photo\PhotoSync::nowMs();
+        $files=$now+3600000;
+        $assignment=$now+7200000;
+        $signed=$this->signedRetention(1,$files,$assignment);
+        $this->postJson($base.'/retention',$signed)->assertOk();
+
+        config()->set('assignment_retention.enabled',false);
+        $this->artisan('pb3:assignment-retain')->assertExitCode(1);
+        $this->assertDatabaseCount('assignment_retention_tombstones_v1',0);
+        $this->travelTo(now()->addHours(1)->addSeconds(1));
+        $this->as('owner');
+        $this->getJson('/assignments/v1')->assertOk()->assertJsonCount(1,'items');
+        $this->getJson($base.'/retention-status')->assertOk()
+            ->assertJsonPath('filesAccessExpired',true)
+            ->assertJsonPath('assignmentAccessExpired',false)
+            ->assertJsonPath('physicalDeletionConfirmed',false);
+        $this->postJson($base.'/retention',
+            $this->signedRetention(2,$files+86400000,$assignment+86400000))
+            ->assertConflict(); // expired association cannot resurrect
+        $lifecycle=new \App\Assignments\AssignmentRetentionLifecycle();
+        $this->assertContains($this->assignmentId,$lifecycle->dueIds(20));
+        $first=$lifecycle->mark($this->assignmentId);
+        $this->assertSame(['files'=>true,'assignment'=>false],$first);
+        $this->assertNotContains($this->assignmentId,$lifecycle->dueIds(20));
+        $this->assertDatabaseHas('assignment_retention_tombstones_v1',[
+            'assignment_id'=>$this->assignmentId,
+            'physical_status'=>'not_authorized',
+        ]);
+        $this->assertDatabaseHas('photo_records',[
+            'id'=>$photo,'state'=>'active',
+            'account_id'=>$this->people['recipient']['account'],
+        ]);
+
+        $this->travelTo(now()->addHours(1)->addSeconds(1));
+        $this->getJson('/assignments/v1')->assertOk()->assertJsonCount(0,'items');
+        $this->getJson($base.'/retention-status')->assertOk()
+            ->assertJsonPath('assignmentAccessExpired',true)
+            ->assertJsonPath('physicalDeletionConfirmed',false);
+        $this->assertContains($this->assignmentId,$lifecycle->dueIds(20));
+        $this->assertSame(['files'=>true,'assignment'=>true],
+            $lifecycle->mark($this->assignmentId));
+        $this->assertNotContains($this->assignmentId,$lifecycle->dueIds(20));
+        $this->assertDatabaseCount('assignment_retention_tombstones_v1',1);
+        $this->assertDatabaseHas('photo_records',['id'=>$photo,'state'=>'active']);
+        $this->as('recipient');
+        $this->getJson($base.'/retention-history')->assertNotFound();
+    }
+
     public function test_p1_20_schedule_has_independent_owner_signed_revisions_and_admission():void
     {
         $this->createAssignment();

@@ -8,11 +8,14 @@ import {
   queueAssignmentInvitation, queueAssignmentPolicyChange,
   queueAssignmentPrivateTextChange,effectiveAssignmentEnvelope,
   queueAssignmentScheduleChange,signedAssignmentSchedule,
+  queueAssignmentRetentionChange,signedAssignmentRetention,
   verifySignedAssignmentPolicy,
 } from '../features/assignments/application/assignment-outbox'
 import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
 import { scheduleDraftFromListing,buildEditorSchedule } from '../features/assignments/application/schedule-editor'
 import type { ScheduleEditorDraft } from '../features/assignments/application/schedule-editor'
+import {retentionDraftFromListing,buildEditorRetention} from '../features/assignments/application/retention-editor'
+import type {RetentionDraft} from '../features/assignments/application/retention-editor'
 import { blankEditorDraft,buildEditorPolicy,editorDraftFromListing } from '../features/assignments/application/assignment-editor-model'
 import type { EditorDraft } from '../features/assignments/application/assignment-editor-model'
 import { openOwnerAssignment } from '../features/assignments/infrastructure/assignment-crypto'
@@ -32,6 +35,9 @@ const draft=reactive<EditorDraft>(blankEditorDraft())
 const scheduleDraft=reactive<ScheduleEditorDraft>({
   startsAt:'',endsAt:'',blockBeforeStart:true,blockAfterEnd:false,
 })
+const retentionDraft=reactive<RetentionDraft>({
+  filesEnabled:false,filesDate:'',assignmentEnabled:false,assignmentDate:'',
+})
 const listing=ref<AssignmentListing|null>(null)
 const title=ref('')
 const instructions=ref('')
@@ -46,6 +52,8 @@ const baselinePrivateRevision=ref<number|null>(null)
 const baselineText=ref('')
 const baselineSchedule=ref('')
 const baselineScheduleRevision=ref<number|null>(null)
+const baselineRetention=ref('')
+const baselineRetentionRevision=ref<number|null>(null)
 const peerId=ref('')
 const peerFingerprint=ref('')
 const peerConfirmed=ref(false)
@@ -55,7 +63,10 @@ const dirtyPolicy=computed(()=>!!baseline.value&&JSON.stringify(draft)!==baselin
 const dirtyText=computed(()=>!!baselineText.value&&JSON.stringify({title:title.value,instructions:instructions.value})!==baselineText.value)
 const dirtySchedule=computed(()=>!!baselineSchedule.value
   &&JSON.stringify(scheduleDraft)!==baselineSchedule.value)
-const dirty=computed(()=>dirtyPolicy.value||dirtyText.value||dirtySchedule.value)
+const dirtyRetention=computed(()=>!!baselineRetention.value
+  &&JSON.stringify(retentionDraft)!==baselineRetention.value)
+const dirty=computed(()=>dirtyPolicy.value||dirtyText.value
+  ||dirtySchedule.value||dirtyRetention.value)
 const owner=computed(()=>!!activeSession.value&&listing.value?.ownerAccountId===activeSession.value.accountId)
 const editable=computed(()=>owner.value&&listing.value?.state==='active'
   &&!pending.value&&!busy.value)
@@ -77,6 +88,12 @@ function applySchedule(row:AssignmentListing):void{
   baselineSchedule.value=JSON.stringify(form)
   baselineScheduleRevision.value=row.scheduleRevision??1
 }
+function applyRetention(row:AssignmentListing):void{
+  const values=retentionDraftFromListing(row)
+  Object.assign(retentionDraft,values)
+  baselineRetention.value=JSON.stringify(values)
+  baselineRetentionRevision.value=row.retentionRevision??1
+}
 async function fromRow(row:AssignmentListing,session:NonNullable<typeof activeSession.value>,
   generation:number):Promise<void>{
   await verifySignedAssignmentPolicy(row,loadState.value==='offline')
@@ -87,12 +104,14 @@ async function fromRow(row:AssignmentListing,session:NonNullable<typeof activeSe
   if(!sameIdentity(activeSession.value,session)||run!==generation)return
   if(dirty.value&&(baselineRevision.value!==row.policyRevision
     ||baselinePrivateRevision.value!==(row.privateRevision??1)
-    ||baselineScheduleRevision.value!==(row.scheduleRevision??1))){
+    ||baselineScheduleRevision.value!==(row.scheduleRevision??1)
+    ||baselineRetentionRevision.value!==(row.retentionRevision??1))){
     notice.value='Подписанная версия изменилась. Отмените локальные правки и обновите перед сохранением.'
     return
   }
   if(!dirtyPolicy.value)apply(row)
   if(!dirtySchedule.value)applySchedule(row)
+  if(!dirtyRetention.value)applyRetention(row)
   if(!dirtyText.value){
     title.value=decrypted.title
     instructions.value=decrypted.instructions
@@ -100,7 +119,7 @@ async function fromRow(row:AssignmentListing,session:NonNullable<typeof activeSe
     baselinePrivateRevision.value=row.privateRevision??1
   }
   pending.value=(await listAssignmentOperations()).some(op=>{
-    if(!['policy','private','schedule'].includes(op.kind)
+    if(!['policy','private','schedule','retention'].includes(op.kind)
       ||!['queued','retry'].includes(op.state))return false
     try{return (JSON.parse(op.contract) as {assignmentId?:string}).assignmentId===row.assignmentId}
     catch{return false}
@@ -151,6 +170,7 @@ async function undo():Promise<void>{
     if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
     apply(row)
     applySchedule(row)
+    applyRetention(row)
     title.value=data.title;instructions.value=data.instructions
     baselineText.value=JSON.stringify({title:data.title,instructions:data.instructions})
     baselinePrivateRevision.value=row.privateRevision??1
@@ -175,11 +195,13 @@ async function save():Promise<void>{
       }while(!fresh&&cursor)
       if(!fresh||fresh.policyRevision!==baselineRevision.value
         ||(fresh.privateRevision??1)!==baselinePrivateRevision.value
-        ||(fresh.scheduleRevision??1)!==baselineScheduleRevision.value)
+        ||(fresh.scheduleRevision??1)!==baselineScheduleRevision.value
+        ||(fresh.retentionRevision??1)!==baselineRetentionRevision.value)
         throw Error('assignment.editor_revision_changed')
     }else if(listing.value.policyRevision!==baselineRevision.value
       ||(listing.value.privateRevision??1)!==baselinePrivateRevision.value
-      ||(listing.value.scheduleRevision??1)!==baselineScheduleRevision.value)
+      ||(listing.value.scheduleRevision??1)!==baselineScheduleRevision.value
+      ||(listing.value.retentionRevision??1)!==baselineRetentionRevision.value)
       throw Error('assignment.editor_revision_changed')
     if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
     const policy=dirtyPolicy.value?buildEditorPolicy(draft):null
@@ -187,16 +209,43 @@ async function save():Promise<void>{
       version:1 as const,title:title.value.trim(),instructions:instructions.value,
     }:null
     // Validate all changed representations before persisting signed operations.
+    const previousSchedule=signedAssignmentSchedule(listing.value)
     const schedule=dirtySchedule.value
-      ?buildEditorSchedule(scheduleDraft,signedAssignmentSchedule(listing.value))
+      ?buildEditorSchedule(scheduleDraft,previousSchedule)
       :null
+    const previousRetention=signedAssignmentRetention(listing.value)
+    const retention=dirtyRetention.value
+      ?buildEditorRetention(retentionDraft,previousRetention,
+        (schedule??previousSchedule).endsAt)
+      :null
+    const effectiveRetention=retention??previousRetention
+    const desiredEnd=(schedule??previousSchedule).endsAt
+    if(desiredEnd!==null
+      &&[effectiveRetention.filesAccessUntil,
+        effectiveRetention.assignmentAccessUntil].some(d=>d!==null&&d<desiredEnd))
+      throw Error('assignment.retention_before_schedule_end')
+    // The two independent contracts are not atomic. Select the only safe
+    // order if an old deadline would invalidate the new schedule. If the
+    // combined change requires an unavailable atomic swap, fail closed.
+    const retentionFirst=!!schedule&&!!retention
+      &&[previousRetention.filesAccessUntil,
+        previousRetention.assignmentAccessUntil].some(d=>
+          d!==null&&schedule.endsAt!==null&&d<schedule.endsAt)
+    if(retentionFirst&&previousSchedule.endsAt!==null
+      &&[retention!.filesAccessUntil,retention!.assignmentAccessUntil]
+        .some(d=>d!==null&&d<previousSchedule.endsAt!))
+      throw Error('assignment.schedule_retention_change_needs_two_steps')
     if(text&&(!text.title||text.title.length>120||text.instructions.length>4000))
       throw Error('assignment.invalid_text')
     const ids:string[]=[]
     try{
       if(policy)ids.push(await queueAssignmentPolicyChange(assignmentId.value,policy))
       if(text)ids.push(await queueAssignmentPrivateTextChange(assignmentId.value,text))
+      if(retentionFirst&&retention)
+        ids.push(await queueAssignmentRetentionChange(assignmentId.value,retention))
       if(schedule)ids.push(await queueAssignmentScheduleChange(assignmentId.value,schedule))
+      if(!retentionFirst&&retention)
+        ids.push(await queueAssignmentRetentionChange(assignmentId.value,retention))
     }catch(e){
       // Partial dual-event signing never becomes an invisible failure.
       if(ids.length)pending.value=true
@@ -224,6 +273,7 @@ async function save():Promise<void>{
         notice.value='Изменение подписано и принято сервером.'
         pending.value=false
         baseline.value='';baselineText.value='';baselineSchedule.value=''
+        baselineRetention.value=''
         await refresh()
       }else{
         notice.value='Подписанное изменение ожидает подтверждения сервера.'
@@ -289,9 +339,13 @@ watch(activeSession,(next,previous)=>{
     baseline.value='';baselineRevision.value=null
     baselineText.value='';baselinePrivateRevision.value=null
   baselineSchedule.value='';baselineScheduleRevision.value=null
+  baselineRetention.value='';baselineRetentionRevision.value=null
     Object.assign(draft,blankEditorDraft())
     Object.assign(scheduleDraft,{
       startsAt:'',endsAt:'',blockBeforeStart:true,blockAfterEnd:false,
+    })
+    Object.assign(retentionDraft,{
+      filesEnabled:false,filesDate:'',assignmentEnabled:false,assignmentDate:'',
     })
     peerReset()
     loadState.value='loading'
@@ -303,9 +357,13 @@ watch(assignmentId,()=>{
   baseline.value='';baselineRevision.value=null
   baselineText.value='';baselinePrivateRevision.value=null
   baselineSchedule.value='';baselineScheduleRevision.value=null
+  baselineRetention.value='';baselineRetentionRevision.value=null
   Object.assign(draft,blankEditorDraft())
   Object.assign(scheduleDraft,{
     startsAt:'',endsAt:'',blockBeforeStart:true,blockAfterEnd:false,
+  })
+  Object.assign(retentionDraft,{
+    filesEnabled:false,filesDate:'',assignmentEnabled:false,assignmentDate:'',
   })
   peerReset()
   activeTab.value='main';loadState.value='loading'
@@ -315,7 +373,7 @@ onMounted(()=>{void refresh()})
 watch(()=>scheduleDraft.endsAt,(value)=>{
   if(!value)scheduleDraft.blockAfterEnd=false
 })
-onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';baselineText.value='';baselineSchedule.value=''})
+onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';baselineText.value='';baselineSchedule.value='';baselineRetention.value=''})
 </script>
 
 <template>
@@ -389,7 +447,30 @@ onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';ba
             <strong>Правила {{ listing?.policyRevision }} · Время {{ listing?.scheduleRevision??1 }}</strong>
           </div>
         </div>
-        <p class="muted">Время и запреты подписываются владельцем и проверяются сервером. У исторических заданий первоначальные ограничения сохранены до явного изменения расписания. Автоматическое удаление файлов и задания пока не подключено: изменение времени их не удаляет.</p>
+        <p class="muted">Время и запреты подписываются владельцем и проверяются сервером. У исторических заданий первоначальные ограничения сохраняются до явного изменения расписания.</p>
+        <h3>Сроки хранения и доступ</h3>
+        <p class="muted">Эти даты отдельно подписываются владельцем. Когда срок наступит, сервер прекращает выдавать материалы через задание или скрывает само задание. Это не меняет исходный TTL и не удаляет личные файлы исполнителей из S3.</p>
+        <label class="checkline">
+          <input id="editor-retention-files-enabled" type="checkbox"
+            v-model="retentionDraft.filesEnabled" :disabled="!editable">
+          Прекратить доступ к материалам задания по дате
+        </label>
+        <label v-if="retentionDraft.filesEnabled" for="editor-retention-files-date">Дата прекращения доступа к материалам</label>
+        <input v-if="retentionDraft.filesEnabled" id="editor-retention-files-date"
+          type="datetime-local" v-model="retentionDraft.filesDate" :disabled="!editable" required>
+        <label class="checkline">
+          <input id="editor-retention-assignment-enabled" type="checkbox"
+            v-model="retentionDraft.assignmentEnabled" :disabled="!editable">
+          Автоматически скрыть задание по дате
+        </label>
+        <label v-if="retentionDraft.assignmentEnabled" for="editor-retention-assignment-date">Дата скрытия задания</label>
+        <input v-if="retentionDraft.assignmentEnabled" id="editor-retention-assignment-date"
+          type="datetime-local" v-model="retentionDraft.assignmentDate" :disabled="!editable" required>
+        <label class="checkline">
+          <input type="checkbox" disabled aria-describedby="editor-delete-originals-explanation">
+          Удалить также исходные файлы исполнителей
+        </label>
+        <p id="editor-delete-originals-explanation" class="muted">Недоступно до отдельного подписанного согласия владельцев файлов и безопасного GC всех S3-локаций. Скрытие задания не подтверждает физическое удаление.</p>
       </div>
 
       <div v-if="activeTab==='files'" id="editor-panel-files"
@@ -486,7 +567,7 @@ onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';ba
         <p class="muted">Public Card, редактирование оригинала и права на передачу пока не имеют подтверждённой модели E2EE scopes. Их здесь нельзя включить простым UI-переключателем.</p>
       </div>
 
-      <p v-if="pending" role="status" class="muted">Подписанное изменение правил, расписания или приватного текста ожидает серверного подтверждения. Следующее изменение пока заблокировано.</p>
+      <p v-if="pending" role="status" class="muted">Подписанное изменение правил, расписания, хранения или приватного текста ожидает подтверждения сервера. Следующее изменение пока заблокировано.</p>
       <p v-if="notice" role="status" class="status-text">{{ notice }}</p>
       <p v-if="error" role="alert" class="error-text">{{ error }}</p>
       <div class="fieldwork-editor-actions">

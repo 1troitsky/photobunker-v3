@@ -665,6 +665,67 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await expect(B.locator('.assignment-card-name'))
       .toContainText('PRIVATE UPDATED TITLE 2',{timeout:20000})
 
+
+    // P1-21: retain real contributor originals while adding independent,
+    // owner-account-signed future access cutoffs to the same assignment.
+    const deadline=(days:number)=>A.evaluate(offset=>{
+      const d=new Date(Date.now()+offset*86400000)
+      d.setSeconds(0,0)
+      const pad=(n:number)=>String(n).padStart(2,'0')
+      return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())
+        +'T'+pad(d.getHours())+':'+pad(d.getMinutes())
+    },days)
+    const filesDeadline=await deadline(6)
+    const assignmentDeadline=await deadline(8)
+    await expect(A.locator('#editor-retention-files-enabled'))
+      .toBeEnabled({timeout:20000})
+    await A.locator('#editor-retention-files-enabled').check()
+    await A.locator('#editor-retention-files-date').fill(filesDeadline)
+    await A.locator('#editor-retention-assignment-enabled').check()
+    await A.locator('#editor-retention-assignment-date').fill(assignmentDeadline)
+    await expect(A.getByRole('checkbox',{
+      name:'Удалить также исходные файлы исполнителей',
+    })).toBeDisabled()
+    await A.getByRole('button',{name:'Подписать и сохранить'}).click()
+    await expect(A.getByText('Изменение подписано и принято сервером.'))
+      .toBeVisible({timeout:20000})
+    const signedRetention=await B.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const row=(await a.listServerAssignments()).items.find(x=>x.assignmentId===id)!
+      const retention=a.signedAssignmentRetention(row)
+      const res=await fetch('/assignments/v1/'+id+'/retention-history')
+      const history=await res.json()
+      return {
+        revision:row.retentionRevision,
+        policyContract:row.policyContract,
+        privateRevision:row.privateRevision,
+        fileAccessBefore:a.assignmentFilesOpenAt(
+          row,retention.filesAccessUntil!-1),
+        fileAccessAt:a.assignmentFilesOpenAt(
+          row,retention.filesAccessUntil!),
+        assignmentAccessAt:a.assignmentOpenAt(
+          row,retention.assignmentAccessUntil!),
+        removeOriginals:retention.deleteOriginals,
+        historyStatus:res.status,historyCount:history.events?.length,
+      }
+    },assignmentId)
+    expect(signedRetention).toEqual({
+      revision:2,policyContract:originalRoot.policyContract,
+      privateRevision:originalRoot.privateRevision,
+      fileAccessBefore:true,fileAccessAt:false,
+      assignmentAccessAt:false,removeOriginals:false,
+      historyStatus:200,historyCount:1,
+    })
+    const retentionStatus=await A.evaluate(async id=>{
+      const r=await fetch('/assignments/v1/'+id+'/retention-status')
+      const status=await r.json()
+      return {http:r.status,physicalDeleted:status.physicalDeletionConfirmed,
+        physicalStatus:status.physicalStatus}
+    },assignmentId)
+    expect(retentionStatus).toEqual({
+      http:200,physicalDeleted:false,physicalStatus:'not_authorized',
+    })
+
     expect(ownerId).not.toBe(contributorId)
   }finally{
     await ownerCtx.close();await contributorCtx.close()

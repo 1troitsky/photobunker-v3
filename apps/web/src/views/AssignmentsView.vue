@@ -15,6 +15,7 @@ import {
   signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,
   signedAdvancedRequirements,verifyAssignmentInvite,
   effectiveAssignmentEnvelope,assignmentPrivateCacheScope,
+  assignmentOpenAt,assignmentFilesOpenAt,
   signedAssignmentSchedule,
 } from '../features/assignments/application/assignment-outbox'
 import type {
@@ -52,6 +53,7 @@ type VisibleAssignment={
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
   confirmedVideos:number|null;confirmedAudio:number|null
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
+  filesAccessUntil?:number|null;assignmentAccessUntil?:number|null
   blockBeforeStart:boolean;blockAfterEnd:boolean
 }
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
@@ -199,7 +201,10 @@ async function hydrate():Promise<void>{
   ])
   if(activeSession.value!==identity)return
   operations.value=ops;photos.value=localPhotos;mediaFiles.value=localMedia
-  const localRows:VisibleAssignment[]=await Promise.all(local.map(async item=>{
+  // Once a create is ACKed, its signed, independently verified snapshot
+  // (not a stale local plaintext summary) is the ONLY render authority.
+  const localRows:VisibleAssignment[]=await Promise.all(
+    local.filter(item=>item.state!=='sent').map(async item=>{
     let data:PrivateAssignment|null=null
     try{data=await openOwnerAssignment(identity.pkg,item.id,item.privateEnvelope)}
     catch { /* a corrupted local envelope must never reveal plaintext */ }
@@ -215,6 +220,7 @@ async function hydrate():Promise<void>{
       localState:item.state,goal:item.photoGoal,videoGoal:null,audioGoal:null,
       confirmedPhotos:null,confirmedVideos:null,confirmedAudio:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
+      filesAccessUntil:null,assignmentAccessUntil:null,
       blockBeforeStart:true,blockAfterEnd:item.endsAt!==null,
     }
   }))
@@ -266,6 +272,7 @@ async function hydrate():Promise<void>{
   invites.value=received
   const rows=[...localRows]
   for(const item of snapshots){
+    if(!assignmentOpenAt(item,Date.now()))continue
     const previous=rows.find(a=>a.id===item.assignmentId)
     // A fresh signed private revision must invalidate prior root/plaintext
     // previews. Never show an outdated title from a locally queued draft.
@@ -315,11 +322,16 @@ async function hydrate():Promise<void>{
       localState:previous?.localState,
       goal:item.photoGoal,videoGoal:signedPolicyGoals(item).videoGoal,
       audioGoal:signedPolicyGoals(item).audioGoal,
-      confirmedPhotos:offline?null:item.confirmedPhotoCount,
-      confirmedVideos:offline?null:(item.confirmedVideoCount??null),
-      confirmedAudio:offline?null:(item.confirmedAudioCount??null),
+      confirmedPhotos:offline?null:assignmentFilesOpenAt(item,Date.now())
+        ?item.confirmedPhotoCount:0,
+      confirmedVideos:offline?null:assignmentFilesOpenAt(item,Date.now())
+        ?(item.confirmedVideoCount??null):0,
+      confirmedAudio:offline?null:assignmentFilesOpenAt(item,Date.now())
+        ?(item.confirmedAudioCount??null):0,
       allowedMedia:signedAllowedAssignmentMedia(item),
       createdAt:previous?.createdAt??item.startsAt,
+      filesAccessUntil:item.filesAccessUntil??null,
+      assignmentAccessUntil:item.assignmentAccessUntil??null,
       isOwner:item.ownerAccountId===identity.accountId,
       startsAt:effectiveTime.startsAt,endsAt:effectiveTime.endsAt,
       blockBeforeStart:effectiveTime.blockBeforeStart,
