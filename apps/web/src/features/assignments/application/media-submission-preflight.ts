@@ -73,5 +73,6 @@ export async function preflightAssignmentMediaGrant(
       throw Error('assignment.recording_bound_to_different_policy')
   }
   if(activeSession.value!==session)throw Error('identity.changed')
-  return {mediaType:media.mediaType,personalMedia:!media.capture}
+  return {mediaType:media.mediaType,personalMedia:!media.capture,
+    grantExpiresAtCap:assignmentGrantExpiryCap(policy)}
 }
