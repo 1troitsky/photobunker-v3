@@ -369,7 +369,10 @@ async function selectConfirmedContact(id:string):Promise<void>{
   // re-run the signed-directory/pin check in the existing invitation flow.
   peerId.value=id
   peerReset()
+  const session=activeSession.value,generation=run
   await peerInspect()
+  if(!sameIdentity(session,activeSession.value)||generation!==run
+    ||peerId.value!==id)return
   if(peerFingerprint.value&&peerFingerprint.value!==contact.safetyFingerprint){
     peerReset()
     error.value='contacts.trusted_key_changed'
@@ -381,10 +384,13 @@ async function selectConfirmedContact(id:string):Promise<void>{
 async function peerInspect():Promise<void>{
   if(!owner.value)return
   busy.value=true;error.value='';notice.value=''
+  const session=activeSession.value,generation=run
   try{
     const id=peerId.value.trim().toLowerCase()
-    if(id===activeSession.value?.accountId)throw Error('assignment.cannot_invite_self')
+    if(id===session?.accountId)throw Error('assignment.cannot_invite_self')
     const {directory,confirmed}=await inspectPeer(id)
+    if(!sameIdentity(session,activeSession.value)||generation!==run
+      ||peerId.value.trim().toLowerCase()!==id)return
     peerId.value=id
     peerFingerprint.value=directory.safetyFingerprint
     peerConfirmed.value=confirmed
