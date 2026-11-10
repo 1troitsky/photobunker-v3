@@ -77,7 +77,7 @@ final class TeamInvitationController extends Controller
                     'unchanged'=>true,
                 ]);
             }
-            abort_unless($team->state==='active'
+            abort_unless($team->state==='active'&&!$team->rotation_required
                 &&hash_equals($team->contract_hash,$c['teamContractHash']),409);
             abort_if(DB::table('team_invites_v1')
                 ->where('operation_id',$c['operationId'])->exists(),409);
@@ -161,12 +161,17 @@ final class TeamInvitationController extends Controller
             ->where('i.team_id',$teamId);
         if($after!==null)$q->where('i.id','>',$after);
         $rows=$q->select(['i.*','recipient.account_spki as recipient_account_spki'])
+            ->selectSub(DB::table('team_members_v1 as m')
+                ->select('m.role')->whereColumn('m.team_id','i.team_id')
+                ->whereColumn('m.account_id','i.recipient_account_id')
+                ->where('m.state','active')->limit(1),'effective_role')
             ->orderBy('i.id')->limit(51)->get();
         $items=$rows->take(50)->map(static fn($i)=>[
             'inviteId'=>$i->id,
             'recipientAccountId'=>$i->recipient_account_id,
             'recipientAccountSpki'=>$i->recipient_account_spki,
-            'role'=>$i->role,'state'=>$i->state,
+            'role'=>$i->role,'effectiveRole'=>$i->effective_role??$i->role,
+            'state'=>$i->state,
             'expiresAt'=>(int)$i->expires_at,
             'contract'=>$i->contract_json,
             'signature'=>$i->owner_signature,
@@ -216,7 +221,7 @@ final class TeamInvitationController extends Controller
                     'unchanged'=>true,
                 ]);
             }
-            abort_unless($team->state==='active'
+            abort_unless($team->state==='active'&&!$team->rotation_required
                 &&$invite->state==='pending'
                 &&(int)$invite->expires_at>PhotoSync::nowMs(),409);
             $directory=DB::table('account_exchange_keys')
@@ -264,6 +269,9 @@ final class TeamInvitationController extends Controller
             })
             ->select(['t.*','a.account_spki'])->first();
         abort_unless($team,404);
+        // Never serve the old Team DEK once any member is excluded.
+        // The surviving member gets 409 until a new key epoch is committed.
+        abort_unless(!$team->rotation_required,409);
         // Member's own accepted invite is required to unwrap the team DEK.
         $invite=DB::table('team_invites_v1')
             ->where('team_id',$teamId)

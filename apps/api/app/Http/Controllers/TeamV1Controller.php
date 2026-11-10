@@ -26,6 +26,9 @@ final class TeamV1Controller extends Controller
             'contract'=>$row->contract_json,
             'signature'=>$row->owner_signature,
             'memberCount'=>(int)$row->member_count,
+            'membershipRevision'=>(int)$row->membership_revision,
+            'keyEpoch'=>(int)$row->key_epoch,
+            'rotationRequired'=>(bool)$row->rotation_required,
         ];
     }
 
