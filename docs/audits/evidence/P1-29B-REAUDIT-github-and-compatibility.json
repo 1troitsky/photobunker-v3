@@ -1,0 +1,105 @@
+{
+  "audited": {
+    "pr": 56,
+    "head": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+    "branch": "p1/29b-audit-remediation-pending-proof-epoch-freshness",
+    "base": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+    "ci": [
+      {
+        "id": 42859562949,
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42859562949",
+        "sha": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+        "conclusion": "success",
+        "status": "completed",
+        "attempt": 1
+      },
+      {
+        "id": 42859563141,
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42859563141",
+        "sha": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+        "conclusion": "success",
+        "status": "completed",
+        "attempt": 1
+      },
+      {
+        "id": 42859563053,
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42859563053",
+        "sha": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+        "conclusion": "success",
+        "status": "completed",
+        "attempt": 1
+      }
+    ]
+  },
+  "fix": {
+    "pr": 57,
+    "head": "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+    "base": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+    "ci": [
+      {
+        "id": 42875110951,
+        "name": "P0 security floor and contract checks",
+        "sha": "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42875110951",
+        "attempt": 1
+      },
+      {
+        "id": 42875110675,
+        "name": "P0-02 isolated PostgreSQL 18 and Garage 2.5",
+        "sha": "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42875110675",
+        "attempt": 1
+      },
+      {
+        "id": 42875110690,
+        "name": "P0-02 real Laravel + Vue foundation",
+        "sha": "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42875110690",
+        "attempt": 1
+      }
+    ]
+  },
+  "preservedQa55": {
+    "head": "7f653a590ab4a0b44a1e576ee4e5ea9ad07183bc",
+    "unchanged": true
+  },
+  "compatibility54": {
+    "head": "4a4340871ffff2aa553e630373383484fcf401ab",
+    "base": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+    "status": "BLOCKED",
+    "command": [
+      "git",
+      "merge-tree",
+      "--write-tree",
+      "--messages",
+      "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+      "4a4340871ffff2aa553e630373383484fcf401ab"
+    ],
+    "exitCode": 1,
+    "temporaryTree": "32d162ce7ed61ff0a4f9b60914b21f6dbdfe9dd8",
+    "conflicts": [
+      "apps/api/app/Http/Controllers/TeamKeyEpochController.php",
+      "apps/web/src/features/people/application/team-epochs.ts"
+    ],
+    "findings": [
+      "pending v2 sweep is unsigned and absent from retiredPendingInviteIds exact set",
+      "v2/current-member cache calls use the old two-argument API and do not carry verified freshness stamps",
+      "rotation/invitation fixtures use the old signed epoch shape without required retirements"
+    ],
+    "limits": "Read-only/static compatibility assessment, no branch merge, conflict resolution or integrated runtime PASS claimed."
+  },
+  "preservation": {
+    "main": "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+    "qa55": "7f653a590ab4a0b44a1e576ee4e5ea9ad07183bc",
+    "pr56": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+    "originalUserFiles": 38,
+    "sha256Unchanged": true,
+    "checksExitCode": 0
+  }
+}

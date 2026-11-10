@@ -1,0 +1,5624 @@
+{
+  "auditedProductSha": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+  "reproductionSourceSha": "469763fe967f72c41382aa6da0e76fed5c6723ea",
+  "sourceNote": "QA evolved between the preserved runs. This SHA/manifest identifies the delivered reproduction harness, not an invented per-run source snapshot.",
+  "qaSourceSha256": {
+    "scripts/local-acceptance/Dockerfile": "8fdaf79fe8a89b796f495518996852079efe7d530a58fd1640e0f56593528f68",
+    "scripts/local-acceptance/compose.yml": "6ebadaf207f4dd5822d4ca4c714948ff3a3b14ba77ff16f68d6b6e23c06a74cd",
+    "scripts/local-acceptance/run.py": "05232ed5a7e1b6d5476228577e77523801835770bdc5741a8b09326f14b94aa8",
+    "scripts/team-crypto-audit/README.md": "85289a7b86374a476a40ad8306c7318158e537cde0fd92f29aaac35830372a05",
+    "scripts/team-crypto-audit/analyze.py": "6c144c0a9e9472430107b3a5f3cb2f8840424e294507eb37e4c6c0a1be1a5d41",
+    "scripts/team-crypto-audit/export.py": "346d5f6a97b0d594e9c8637a4cbecc6b708c41cf4e51c49e21c6da5f1cd66489",
+    "scripts/team-crypto-audit/run.py": "c4712c364d510f8199430c38c753017dc8cc75542ffa69d2c9b15d8b3083916d",
+    "tests/local-acceptance/test_isolation.py": "d17d7a0012b66fbadce45b4bee83dfaea0e0881c2e9662cefeaa4470463c08c8",
+    "tests/team-crypto-audit/instrumented.ts": "9369384d93a93c432589dd15210f82ffe7e8195ce3c5a9c04caf7f5bb1e9c231",
+    "tests/team-crypto-audit/media.config.ts": "272c2c15e228881b250a8b6aa10d1da3c43b7744517da00f0208916c562f09a5",
+    "tests/team-crypto-audit/playwright.config.ts": "c54218789a910124290951adf532a0c76e4f188ca0b1ac665c8620ab39dfa20e",
+    "tests/team-crypto-audit/teams.spec.ts": "d0337a3ca81a91ad4edb9a57726f5a8cc96ac5e11f8fa22c00b2f96801fd036c"
+  },
+  "chain": {
+    "status": "PASS",
+    "base": "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+    "target": "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+    "stages": [
+      {
+        "pr": 50,
+        "base": "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+        "head": "157909c9b414f7d4ea8591b683b69913946a42c3",
+        "ancestryExitCode": 0,
+        "commits": 9,
+        "changedFiles": [
+          "apps/api/app/Http/Controllers/TeamV1Controller.php",
+          "apps/api/database/migrations/2026_11_10_000007_create_team_records_v1.php",
+          "apps/api/routes/web.php",
+          "apps/api/tests/Feature/TeamV1Test.php",
+          "apps/web/src/features/people/application/team-book.test.ts",
+          "apps/web/src/features/people/application/team-book.ts",
+          "apps/web/src/views/ContactsTeamsView.vue",
+          "apps/web/vite.config.ts",
+          "docs/planning/P1-27-SIGNED-ENCRYPTED-TEAMS-OWNER.md",
+          "tests/e2e/p1-encrypted-contacts.spec.ts",
+          "tests/e2e/p1-teams-owner.spec.ts"
+        ]
+      },
+      {
+        "pr": 51,
+        "base": "157909c9b414f7d4ea8591b683b69913946a42c3",
+        "head": "b45028d46b56c37173cafdc7bcd311b65c042e15",
+        "ancestryExitCode": 0,
+        "commits": 15,
+        "changedFiles": [
+          "apps/api/app/Http/Controllers/TeamInvitationController.php",
+          "apps/api/database/migrations/2026_11_10_000008_create_team_invites_v1.php",
+          "apps/api/routes/web.php",
+          "apps/api/tests/Feature/TeamInvitationTest.php",
+          "apps/web/src/features/people/application/team-book.ts",
+          "apps/web/src/features/people/application/team-invitations.test.ts",
+          "apps/web/src/features/people/application/team-invitations.ts",
+          "apps/web/src/views/ContactsTeamsView.vue",
+          "apps/web/src/views/TeamMembershipPanel.vue",
+          "docs/planning/P1-28-TEAMS-INVITES-CONSENT-DEK.md",
+          "tests/e2e/p1-teams-invitations.spec.ts",
+          "tests/e2e/p1-teams-owner.spec.ts"
+        ]
+      },
+      {
+        "pr": 52,
+        "base": "b45028d46b56c37173cafdc7bcd311b65c042e15",
+        "head": "70d6a1e55b7fee8b56cece70f483fba5589346ef",
+        "ancestryExitCode": 0,
+        "commits": 14,
+        "changedFiles": [
+          "apps/api/app/Http/Controllers/TeamInvitationController.php",
+          "apps/api/app/Http/Controllers/TeamMembershipController.php",
+          "apps/api/app/Http/Controllers/TeamV1Controller.php",
+          "apps/api/database/migrations/2026_11_10_000009_team_membership_revision_v1.php",
+          "apps/api/routes/web.php",
+          "apps/api/tests/Feature/TeamInvitationTest.php",
+          "apps/web/src/features/people/application/team-invitations.ts",
+          "apps/web/src/features/people/application/team-membership-history.test.ts",
+          "apps/web/src/views/TeamMembershipPanel.vue",
+          "docs/planning/P1-29A-TEAM-ACL-QUARANTINE.md",
+          "tests/e2e/p1-teams-invitations.spec.ts"
+        ]
+      },
+      {
+        "pr": 53,
+        "base": "70d6a1e55b7fee8b56cece70f483fba5589346ef",
+        "head": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+        "ancestryExitCode": 0,
+        "commits": 17,
+        "changedFiles": [
+          "apps/api/app/Http/Controllers/TeamInvitationController.php",
+          "apps/api/app/Http/Controllers/TeamKeyEpochController.php",
+          "apps/api/database/migrations/2026_11_10_000010_team_key_epochs_v1.php",
+          "apps/api/routes/web.php",
+          "apps/api/tests/Feature/TeamKeyEpochTest.php",
+          "apps/web/src/features/people/application/team-epochs.test.ts",
+          "apps/web/src/features/people/application/team-epochs.ts",
+          "apps/web/src/features/people/application/team-invitations.ts",
+          "apps/web/src/views/TeamMembershipPanel.vue",
+          "docs/planning/P1-29B-TEAM-DEK-EPOCH-ROTATION.md",
+          "docs/status/CURRENT.md",
+          "docs/status/history/2026-11-10-P1-26-pre-merge-snapshot.md",
+          "tests/e2e/p1-teams-invitations.spec.ts"
+        ]
+      },
+      {
+        "pr": 56,
+        "base": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+        "head": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+        "ancestryExitCode": 0,
+        "commits": 12,
+        "changedFiles": [
+          "apps/api/app/Http/Controllers/TeamKeyEpochController.php",
+          "apps/api/tests/Feature/TeamKeyEpochTest.php",
+          "apps/web/src/features/people/application/team-epoch-freshness.test.ts",
+          "apps/web/src/features/people/application/team-epochs.test.ts",
+          "apps/web/src/features/people/application/team-epochs.ts",
+          "apps/web/src/features/people/application/team-invitations.ts",
+          "docs/audits/P1-29B-AUDIT-REMEDIATION-PLAN.md",
+          "docs/status/CURRENT.md",
+          "tests/e2e/p1-teams-invitations.spec.ts"
+        ]
+      },
+      {
+        "pr": "separate-fix",
+        "base": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+        "head": "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+        "ancestryExitCode": 0,
+        "commits": 1,
+        "changedFiles": [
+          "apps/web/src/features/people/application/team-epochs.ts",
+          "apps/web/src/features/people/application/team-invitations.ts",
+          "apps/web/src/features/people/application/team-member-revision.test.ts",
+          "tests/e2e/p1-assignment-media.spec.ts"
+        ]
+      }
+    ],
+    "duplicateStablePatches": {},
+    "conflictMarkers": [],
+    "sourceSha256": {
+      "apps/api/app/Http/Controllers/TeamInvitationController.php": "d5f6f077677bbc72496a6e6114e8a8bf9ca4b1082620babf312c27d95dcb8114",
+      "apps/api/app/Http/Controllers/TeamKeyEpochController.php": "87f2517140c687cd1ba0d64f4cfd003221eb2a35b868bb8b451c3655ae8505f8",
+      "apps/api/app/Http/Controllers/TeamMembershipController.php": "29805cf786686a7283fcd84e02b4b040249602645e95e12ef0ab41c2b68c55a6",
+      "apps/api/app/Http/Controllers/TeamV1Controller.php": "253ae90ecde05903240342d17b5647dd17d5d8558b55a32320e1625aa2782de7",
+      "apps/api/database/migrations/2026_11_10_000007_create_team_records_v1.php": "8b92a69a747aae0e954bc008ffe4a661a18c54957a15a1bcd04c65a4007e7891",
+      "apps/api/database/migrations/2026_11_10_000008_create_team_invites_v1.php": "47aeee60c4b953f8554638750ce13e9671558bc8298d58ef354c7f6f7f028961",
+      "apps/api/database/migrations/2026_11_10_000009_team_membership_revision_v1.php": "e420a68cb40ada9d34ce2ac22ab344709eb1c8f876c068fdaa8ac97d82ac4ce1",
+      "apps/api/database/migrations/2026_11_10_000010_team_key_epochs_v1.php": "1d24853c08ff40d96231665ac50e1cc8f824268c803f812df98341b83fa7bd1d",
+      "apps/api/routes/web.php": "e3df76fb1ad12eeffe50f02999a3eef089727934670d8498221654ec52c2653f",
+      "apps/api/tests/Feature/TeamInvitationTest.php": "131ac0fa2b9c7b40b28e69ba9518609d4651344acb2b4ad4d3d5c48ccd440ea9",
+      "apps/api/tests/Feature/TeamKeyEpochTest.php": "8de3714a851d1f703be7cda209ef680e239791f9a1f21ff41f3dc90a76bb8d3b",
+      "apps/api/tests/Feature/TeamV1Test.php": "d15c5fe5242789bd8d8c184bde474334e94afac97521012f53ac42327ba910f8",
+      "apps/web/src/features/people/application/team-book.test.ts": "1b0e0ec7ca3df85ede2edbf5b7229e0d8ef56d4599434cbee78b961bd75eb80f",
+      "apps/web/src/features/people/application/team-book.ts": "7a9ed2dce52f17212b26f95463dacf5097729069011c87a9faa2ebfa0de73b78",
+      "apps/web/src/features/people/application/team-epoch-freshness.test.ts": "d0d8945453b06f195a0b231428cf9698bfca847284482f16a00745fe0d453bc4",
+      "apps/web/src/features/people/application/team-epochs.test.ts": "6a258c6a8bbba818728b58cf90c8920ff80056536f1a9cfb15761334434c4549",
+      "apps/web/src/features/people/application/team-epochs.ts": "8a642160854c2269118ed7300d7c56d0f1b9bf99077db06c70fecb4022cae7cf",
+      "apps/web/src/features/people/application/team-invitations.test.ts": "06028a3cb4483b962e522847b97d2322a8576619f3a08afa129ea9641e242dd4",
+      "apps/web/src/features/people/application/team-invitations.ts": "d160b01130a7f6a625c22e8a1b4d68549f408f5a4e1c7dfc763cf3a49b57414e",
+      "apps/web/src/features/people/application/team-member-revision.test.ts": "6efca6ae2f5482405bc13d309fc2d79024e8b1aa197ee6823037a507c7a16707",
+      "apps/web/src/features/people/application/team-membership-history.test.ts": "4036166eaa8d5d62645f1395c1ee2c8886a76655ac07585d126230bd31c8a52b",
+      "apps/web/src/views/ContactsTeamsView.vue": "f1021be07b4de8c4f5489c047ed9368aca7a0cc7fdfd3e506931b073f90dcd57",
+      "apps/web/src/views/TeamMembershipPanel.vue": "b66471c0689fd8b2538e75c3b77a5c3e75af1c441cf56d37a2acfb54c1e84bbe",
+      "apps/web/vite.config.ts": "19d3f1da9884b54276dc14a763a271028411d9ffbe2ff810ae37a5b025ad8031",
+      "docs/audits/P1-29B-AUDIT-REMEDIATION-PLAN.md": "6288d6fcff86bd121b7fc1f7eedbe8f898a53d723c51a42544973eeebebcce0e",
+      "docs/planning/P1-27-SIGNED-ENCRYPTED-TEAMS-OWNER.md": "828cb7e4b743f2253db62f1b67f8e3cb25c2cdf6a00a100757ebd7c2df2ffa6b",
+      "docs/planning/P1-28-TEAMS-INVITES-CONSENT-DEK.md": "826f2ad8ab68ce1f9aec8422d711979507f9921050c52c0411f93f90ff6491e2",
+      "docs/planning/P1-29A-TEAM-ACL-QUARANTINE.md": "5e307982aa1f9412cc535dcc444ceb25d976c3e426d5705428e565bf7bc84ef5",
+      "docs/planning/P1-29B-TEAM-DEK-EPOCH-ROTATION.md": "c948866db0be622e564b1bfa162d48426de8145a04d0441c0f4b5d35c741eb01",
+      "docs/status/CURRENT.md": "fe310cf4fba931d4d6a32072812b1e58f2deee867f320872286743124f309d33",
+      "docs/status/history/2026-11-10-P1-26-pre-merge-snapshot.md": "5e83f5c0f1f18f48d7a2ab1aeb20791e9adf6b3e8bc1349f21eb21e0a5a7fea4",
+      "tests/e2e/p1-assignment-media.spec.ts": "633321cf458092ec04133e515b18ed41671bcf2ed9743d568a3f1070d21c2351",
+      "tests/e2e/p1-encrypted-contacts.spec.ts": "823c6ea87fcbf7dab2b5aa93937d9bf55f5ab41e5b750cd7e945c1f3f3cac08c",
+      "tests/e2e/p1-teams-invitations.spec.ts": "3c8e999c1e9d80dde6b56807ddd9580e6dc30101afccf9c23c304cc856a1ef95",
+      "tests/e2e/p1-teams-owner.spec.ts": "e7ea9c20c0b646deaba276747e622964f4fd8cf63b65cd15eccf5ea3f207760e"
+    },
+    "limits": "Ancestry and patch checks prove code inclusion; semantic contracts are covered separately by review and runtime tests."
+  },
+  "runs": [
+    {
+      "id": "pb3-acceptance-hvoodmzb",
+      "productSha": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+      "checks": [
+        {
+          "name": "git-head",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "log",
+            "-1",
+            "--format=%H %s"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/git-head.log",
+          "seconds": 0.01
+        },
+        {
+          "name": "source-boundaries",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "diff",
+            "--exit-code",
+            "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+            "--",
+            "apps/api",
+            "apps/web",
+            "tests/e2e",
+            "tests/playwright.config.ts",
+            "package.json",
+            "pnpm-lock.yaml",
+            "compose.p0.yml"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/source-boundaries.log",
+          "seconds": 0.039
+        },
+        {
+          "name": "node-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "node",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/node-version.log",
+          "seconds": 0.062
+        },
+        {
+          "name": "pnpm-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/pnpm-version.log",
+          "seconds": 0.309
+        },
+        {
+          "name": "pnpm-install",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "install",
+            "--frozen-lockfile"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/pnpm-install.log",
+          "seconds": 1.984
+        },
+        {
+          "name": "typecheck",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "typecheck"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/typecheck.log",
+          "seconds": 6.386
+        },
+        {
+          "name": "vitest",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "test:web"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/vitest.log",
+          "seconds": 4.158
+        },
+        {
+          "name": "production-build",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "build"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/production-build.log",
+          "seconds": 5.674
+        },
+        {
+          "name": "docker-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/docker-version.log",
+          "seconds": 0.274
+        },
+        {
+          "name": "isolation-contract",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "python3",
+            "-B",
+            "tests/local-acceptance/test_isolation.py"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/isolation-contract.log",
+          "seconds": 0.2
+        },
+        {
+          "name": "compose-build",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "build",
+            "api"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/compose-build.log",
+          "seconds": 1.381
+        },
+        {
+          "name": "php-security-floor",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            "$PRODUCT:/source:ro",
+            "pb3-local-acceptance-php:8.4.27",
+            "php",
+            "/source/scripts/check-runtime.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/php-security-floor.log",
+          "seconds": 0.483
+        },
+        {
+          "name": "storage-up",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "up",
+            "-d",
+            "--wait",
+            "postgres",
+            "garage"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/storage-up.log",
+          "seconds": 3.574
+        },
+        {
+          "name": "postgres-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "postgres",
+            "postgres",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/postgres-version.log",
+          "seconds": 0.167
+        },
+        {
+          "name": "garage-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-version.log",
+          "seconds": 0.1
+        },
+        {
+          "name": "garage-assign",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "layout",
+            "assign",
+            "-z",
+            "ci-zone",
+            "-c",
+            "1G",
+            "3abbe816681936bbb0cc267a53dfc7f958d89f9551488ebb4b0ad743c5753246"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-assign.log",
+          "seconds": 0.172
+        },
+        {
+          "name": "garage-layout",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "layout",
+            "apply",
+            "--version",
+            "1"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-layout.log",
+          "seconds": 0.229
+        },
+        {
+          "name": "garage-bucket",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "bucket",
+            "create",
+            "pb3-ci-p0"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-bucket.log",
+          "seconds": 0.14
+        },
+        {
+          "name": "garage-key",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "key",
+            "create",
+            "pb3-ci-key"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-key.log",
+          "seconds": 0.143
+        },
+        {
+          "name": "garage-allow",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "bucket",
+            "allow",
+            "--read",
+            "--write",
+            "--owner",
+            "pb3-ci-p0",
+            "--key",
+            "[redacted-disposable-key-id]"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-allow.log",
+          "seconds": 0.157
+        },
+        {
+          "name": "image-digests",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "image",
+            "inspect",
+            "php:8.4.27-cli-bookworm",
+            "postgres:18-alpine",
+            "dxflrs/garage:v2.5.0",
+            "--format",
+            "{{json .RepoTags}} {{json .RepoDigests}}"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/image-digests.log",
+          "seconds": 0.085
+        },
+        {
+          "name": "composer-install",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "install",
+            "--no-interaction",
+            "--no-progress",
+            "--prefer-dist"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-install.log",
+          "seconds": 23.195
+        },
+        {
+          "name": "composer-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-version.log",
+          "seconds": 0.467
+        },
+        {
+          "name": "composer-validate",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "validate",
+            "--strict",
+            "--no-check-publish"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-validate.log",
+          "seconds": 0.446
+        },
+        {
+          "name": "plan-registry",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "/source/scripts/verify-plan-config.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/plan-registry.log",
+          "seconds": 0.329
+        },
+        {
+          "name": "php-lint",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "sh",
+            "-c",
+            "find app bootstrap config routes database tests /source/scripts -name '*.php' -type f -print0 | xargs -0 -n1 php -l"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/php-lint.log",
+          "seconds": 1.073
+        },
+        {
+          "name": "routes",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "artisan",
+            "route:list"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/routes.log",
+          "seconds": 0.471
+        },
+        {
+          "name": "phpunit",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            "$RUN/api:/app",
+            "pb3-local-acceptance-php:8.4.27",
+            "php",
+            "vendor/bin/phpunit",
+            "--log-junit",
+            "/app/phpunit-junit.xml"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/phpunit.log",
+          "seconds": 2.698
+        },
+        {
+          "name": "migrate",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "artisan",
+            "migrate",
+            "--force"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/migrate.log",
+          "seconds": 0.836
+        },
+        {
+          "name": "garage-postgres-smoke",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "tests/integration/garage-postgres-smoke.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-postgres-smoke.log",
+          "seconds": 0.617
+        },
+        {
+          "name": "lifecycle-garage-smoke",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "tests/integration/lifecycle-garage-smoke.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/lifecycle-garage-smoke.log",
+          "seconds": 0.801
+        },
+        {
+          "name": "api-up",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "up",
+            "-d",
+            "api"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/api-up.log",
+          "seconds": 0.856
+        },
+        {
+          "name": "healthz",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/healthz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/healthz.log",
+          "seconds": 1.283
+        },
+        {
+          "name": "readyz",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/readyz.log",
+          "seconds": 0.105
+        },
+        {
+          "name": "os-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "sw_vers"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/os-version.log",
+          "seconds": 0.013
+        },
+        {
+          "name": "playwright-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/playwright-version.log",
+          "seconds": 1.621
+        },
+        {
+          "name": "chromium-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "node",
+            "--input-type=module",
+            "-e",
+            "import {chromium} from \"@playwright/test\"; const b=await chromium.launch(); console.log(b.version()); await b.close()"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/chromium-version.log",
+          "seconds": 0.944
+        },
+        {
+          "name": "vite-ready",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:5173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/vite-ready.log",
+          "seconds": 1.113
+        },
+        {
+          "name": "media-diagnostic",
+          "status": "FAIL",
+          "exit_code": 1,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/team-crypto-audit/media.config.ts",
+            "--output",
+            "$RUN/media-diagnostic",
+            "--reporter=line,json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/media-diagnostic.log",
+          "seconds": 14.375
+        },
+        {
+          "name": "product-e2e",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/playwright.config.ts",
+            "--output",
+            "$RUN/product-e2e",
+            "--reporter=line,json"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/product-e2e.log",
+          "seconds": 75.893
+        },
+        {
+          "name": "independent-team-audit",
+          "status": "FAIL",
+          "exit_code": 1,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/team-crypto-audit/playwright.config.ts",
+            "--output",
+            "$RUN/independent-team-audit",
+            "--reporter=line,json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/independent-team-audit.log",
+          "seconds": 6.582
+        },
+        {
+          "name": "private-database-scan",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "postgres",
+            "pg_dump",
+            "-U",
+            "pb3_ci",
+            "--data-only",
+            "pb3_ci_p0"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/private-database-scan.log",
+          "seconds": 0.354
+        },
+        {
+          "name": "privacy-canary-check",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "python3",
+            "-c",
+            "import json,sys;x=json.load(open(sys.argv[1]));print(json.dumps(x));assert x[\"databaseScanned\"] and x[\"databaseCanariesAbsent\"] and x[\"logCanariesAbsent\"] and x[\"containerLogExit\"]==0",
+            "$RUN/privacy-scan.json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/privacy-canary-check.log",
+          "seconds": 0.091
+        },
+        {
+          "name": "product-source-after",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "diff",
+            "--exit-code",
+            "41fa666b3cc54d351ce0d916fecf6e44973c97a5"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/product-source-after.log",
+          "seconds": 0.06
+        },
+        {
+          "name": "container-logs",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "logs",
+            "--no-color"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/container-logs.log",
+          "seconds": 0.105
+        },
+        {
+          "name": "isolated-cleanup",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-b22dddc861",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "down",
+            "--remove-orphans"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/isolated-cleanup.log",
+          "seconds": 10.522
+        }
+      ],
+      "versions": {
+        "php": "8.4.27",
+        "postgres": "18.6",
+        "garage": "2.5.0",
+        "node": "v22.23.3",
+        "pnpm": "10.20.0",
+        "composer": "2.10.3",
+        "chromium": "141.0.7390.37",
+        "playwright": "1.56.1",
+        "macOS": "26.6.2"
+      },
+      "browsers": {
+        "product-e2e": {
+          "stats": {
+            "startTime": "2026-11-10T17:39:54.106Z",
+            "duration": 75098.51199999999,
+            "expected": 19,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "tests": [
+            {
+              "file": "p1-assignment-media.spec.ts",
+              "title": "P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 18780,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "late permission survives real online hydration with one live stream",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 1062,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "equivalent Session replacement keeps the existing stream",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 650,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "real account switch during permission stops the stale result before opening another",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 1064,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "leaving before permission resolves releases every late track without reopening",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 868,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "denied permission is recoverable by a single explicit retry",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 960,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "hydrated camera captures offline against an already verified signed assignment policy",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 1306,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-contact-assignment-picker.spec.ts",
+              "title": "P1-26: confirmed contact → explicit owner-signed assignment invitation, no implicit access",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3221,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-encrypted-contacts.spec.ts",
+              "title": "P1-25: verified peer → encrypted Contacts & Teams → offline persistence → local removal",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 2185,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-09: Free monthly quota accepts three signed creates, rejects fourth without deleting local ciphertext",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 854,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "two browser identities: key-only account, encrypted camera photo, Garage recovery",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 2822,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 4268,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-04: A creates encrypted assignment, B accepts and submits a photo grant, A decrypts",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3088,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 9909,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media-revisions.spec.ts",
+              "title": "P1-12: immutable owner-signed media versions survive Garage+Recovery Key without modifying original or inheriting grants",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 2858,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → independent recovered owner decrypt",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3389,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-11: two independently verified accounts exchange 1-key E2EE audio grant, recipient decrypts and owner revokes without deleting original",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3543,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-teams-invitations.spec.ts",
+              "title": "P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 10950,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-teams-owner.spec.ts",
+              "title": "P1-27: owner-signed encrypted Team → durable local queue → server ACL → offline local read",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 1701,
+                  "proofs": []
+                }
+              ]
+            }
+          ]
+        },
+        "media-diagnostic": {
+          "stats": {
+            "startTime": "2026-11-10T17:39:39.764Z",
+            "duration": 13550.869,
+            "expected": 2,
+            "skipped": 0,
+            "unexpected": 1,
+            "flaky": 0
+          },
+          "tests": [
+            {
+              "file": "p1-assignment-media.spec.ts",
+              "title": "P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts",
+              "status": "unexpected",
+              "executions": [
+                {
+                  "status": "failed",
+                  "durationMs": 5004,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → independent recovered owner decrypt",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3623,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-11: two independently verified accounts exchange 1-key E2EE audio grant, recipient decrypts and owner revokes without deleting original",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3736,
+                  "proofs": []
+                }
+              ]
+            }
+          ]
+        },
+        "independent-team-audit": {
+          "stats": {
+            "startTime": "2026-11-10T17:41:10.039Z",
+            "duration": 5754.351000000001,
+            "expected": 0,
+            "skipped": 0,
+            "unexpected": 1,
+            "flaky": 0
+          },
+          "tests": [
+            {
+              "file": "teams.spec.ts",
+              "title": "independent real A→B→C: epoch integrity, failure recovery and rollback boundaries",
+              "status": "unexpected",
+              "executions": [
+                {
+                  "status": "failed",
+                  "durationMs": 5133,
+                  "proofs": [
+                    {
+                      "id": "consented-C-decrypts-v1",
+                      "status": "PASS",
+                      "actual": {
+                        "role": "viewer"
+                      }
+                    },
+                    {
+                      "id": "signed-role-change",
+                      "status": "PASS",
+                      "actual": {
+                        "role": "contributor"
+                      }
+                    },
+                    {
+                      "id": "v1-role-change-repeated-live-read",
+                      "status": "FAIL",
+                      "actual": {
+                        "ok": false,
+                        "role": null,
+                        "error": "teams.verified_revision_rollback"
+                      }
+                    },
+                    {
+                      "id": "revision-race-serialized",
+                      "status": "PASS",
+                      "actual": {
+                        "statuses": [
+                          201,
+                          409
+                        ]
+                      }
+                    },
+                    {
+                      "id": "quarantine-no-old-key",
+                      "status": "PASS",
+                      "actual": {
+                        "C": 409,
+                        "B": 404,
+                        "pendingNoticeKeys": [
+                          "inviteId",
+                          "state",
+                          "teamId"
+                        ]
+                      }
+                    },
+                    {
+                      "id": "encrypted-outbox-no-plaintext",
+                      "status": "PASS",
+                      "actual": {
+                        "sha256": "8e4d650d400844f5051129faa1bff9991985b0fa4e6b0e4c8c6d83086cacc938"
+                      }
+                    },
+                    {
+                      "id": "outage-keeps-exact-ciphertext",
+                      "status": "PASS",
+                      "actual": {
+                        "outage": "network_error"
+                      }
+                    },
+                    {
+                      "id": "exact-signed-pending-retirement",
+                      "status": "PASS",
+                      "actual": {
+                        "count": 1,
+                        "exact": true
+                      }
+                    },
+                    {
+                      "id": "forged-signature",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 401,
+                        "expected": 401
+                      }
+                    },
+                    {
+                      "id": "wrong-domain",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 401,
+                        "expected": 401
+                      }
+                    },
+                    {
+                      "id": "omitted-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-role",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "changed-directory",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-revision",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-previous-hash",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "duplicate-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 422,
+                        "expected": 422
+                      }
+                    },
+                    {
+                      "id": "removed-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "missing-retirements",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 422,
+                        "expected": 422
+                      }
+                    },
+                    {
+                      "id": "omitted-retirement",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "duplicate-retirement",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 422,
+                        "expected": 422
+                      }
+                    },
+                    {
+                      "id": "changed-retirement",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "surplus-retirement",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "unsigned-retirement-change",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 401,
+                        "expected": 401
+                      }
+                    },
+                    {
+                      "id": "negative-writes-atomic",
+                      "status": "PASS",
+                      "actual": {
+                        "keyEpoch": 1
+                      }
+                    },
+                    {
+                      "id": "reload-retains-unacked-ciphertext",
+                      "status": "PASS",
+                      "actual": {
+                        "sha256": "8e4d650d400844f5051129faa1bff9991985b0fa4e6b0e4c8c6d83086cacc938",
+                        "serverCommitStatus": 201
+                      }
+                    },
+                    {
+                      "id": "lost-ack-exact-idempotent-replay",
+                      "status": "PASS",
+                      "actual": {
+                        "commit": 201,
+                        "replay": 200,
+                        "unchanged": true,
+                        "identicalBytes": true
+                      }
+                    },
+                    {
+                      "id": "C-decrypts-new-epoch-B-denied",
+                      "status": "PASS",
+                      "actual": {
+                        "B": 404,
+                        "Crole": "viewer"
+                      }
+                    },
+                    {
+                      "id": "freshness-encrypted-at-rest",
+                      "status": "PASS",
+                      "actual": {
+                        "freshnessRows": 1,
+                        "sha256": "6b94adbae4970caeb32de58ac2b752bc3bba9e2f1264bb73b76e4b27021f4a47"
+                      }
+                    },
+                    {
+                      "id": "freshness-persists-full-reload",
+                      "status": "PASS",
+                      "actual": {
+                        "sha256": "6b94adbae4970caeb32de58ac2b752bc3bba9e2f1264bb73b76e4b27021f4a47"
+                      }
+                    },
+                    {
+                      "id": "fresh-independent-DEK-and-AEAD-binding",
+                      "status": "PASS",
+                      "actual": {
+                        "fresh": true,
+                        "oldKeyRejected": true,
+                        "badAadRejected": true,
+                        "ownerDecrypts": true
+                      }
+                    },
+                    {
+                      "id": "owner-roster-after-pending-invite-sweep",
+                      "status": "PASS",
+                      "actual": {
+                        "ok": true,
+                        "count": 3,
+                        "error": null
+                      }
+                    },
+                    {
+                      "id": "next-membership-action-remains-available",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "queued"
+                      }
+                    },
+                    {
+                      "id": "pending-old-invite-cannot-join-new-epoch",
+                      "status": "PASS",
+                      "actual": {
+                        "memberStatus": 404,
+                        "acceptAfter": "queued-or-conflict"
+                      }
+                    },
+                    {
+                      "id": "tampered-epoch-response-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "teams.untrusted_member_epoch"
+                      }
+                    },
+                    {
+                      "id": "changed-owner-directory-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "share.unsigned_directory"
+                      }
+                    },
+                    {
+                      "id": "known-epoch-rollback-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "result": "teams.verified_epoch_rollback",
+                        "previouslyVerifiedEpoch": 2,
+                        "replayedEpoch": 1
+                      }
+                    },
+                    {
+                      "id": "rollback-keeps-encrypted-offline-snapshot",
+                      "status": "PASS",
+                      "actual": {
+                        "unchanged": true
+                      }
+                    },
+                    {
+                      "id": "account-switch-midflight-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "identity.changed"
+                      }
+                    },
+                    {
+                      "id": "verified-cache-preserved-through-errors",
+                      "status": "PASS",
+                      "actual": {
+                        "count": 1
+                      }
+                    },
+                    {
+                      "id": "genuine-signed-same-epoch-fork-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "teams.verified_epoch_fork"
+                      }
+                    },
+                    {
+                      "id": "membership-revision-rollback-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "teams.verified_revision_rollback"
+                      }
+                    },
+                    {
+                      "id": "unsigned-revision-cannot-poison-freshness",
+                      "status": "FAIL",
+                      "actual": {
+                        "inflatedRead": "accepted",
+                        "legitimateRead": "teams.verified_revision_rollback"
+                      }
+                    },
+                    {
+                      "id": "offline-cache-survives-hostile-responses",
+                      "status": "PASS",
+                      "actual": {
+                        "count": 1,
+                        "local": true
+                      }
+                    },
+                    {
+                      "id": "real-tabs-serialize-freshness",
+                      "status": "PASS",
+                      "actual": {
+                        "writes": [
+                          "stored",
+                          "teams.verified_epoch_rollback"
+                        ],
+                        "olderRead": "teams.verified_epoch_rollback"
+                      }
+                    },
+                    {
+                      "id": "remove-C-and-complete-epoch-three",
+                      "status": "PASS",
+                      "actual": {
+                        "epoch": 3,
+                        "quarantine": false,
+                        "recipients": 0,
+                        "retirements": 0,
+                        "Cstatus": 404
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "exitCode": 1,
+      "testCounts": {
+        "vitestPassed": [
+          137
+        ],
+        "phpunit": [
+          101,
+          1696
+        ]
+      },
+      "privacy": {
+        "databaseScanned": true,
+        "containerLogExit": 0,
+        "databaseCanariesAbsent": true,
+        "logCanariesAbsent": true
+      }
+    },
+    {
+      "id": "pb3-acceptance-1t2uqh68",
+      "productSha": "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+      "checks": [
+        {
+          "name": "git-head",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "log",
+            "-1",
+            "--format=%H %s"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/git-head.log",
+          "seconds": 0.012
+        },
+        {
+          "name": "source-boundaries",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "diff",
+            "--exit-code",
+            "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+            "--",
+            "apps/api",
+            "apps/web",
+            "tests/e2e",
+            "tests/playwright.config.ts",
+            "package.json",
+            "pnpm-lock.yaml",
+            "compose.p0.yml"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/source-boundaries.log",
+          "seconds": 0.011
+        },
+        {
+          "name": "node-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "node",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/node-version.log",
+          "seconds": 0.076
+        },
+        {
+          "name": "pnpm-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/pnpm-version.log",
+          "seconds": 0.338
+        },
+        {
+          "name": "pnpm-install",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "install",
+            "--frozen-lockfile"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/pnpm-install.log",
+          "seconds": 0.767
+        },
+        {
+          "name": "typecheck",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "typecheck"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/typecheck.log",
+          "seconds": 5.144
+        },
+        {
+          "name": "vitest",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "test:web"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/vitest.log",
+          "seconds": 3.937
+        },
+        {
+          "name": "production-build",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "build"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/production-build.log",
+          "seconds": 5.872
+        },
+        {
+          "name": "docker-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/docker-version.log",
+          "seconds": 0.346
+        },
+        {
+          "name": "isolation-contract",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "python3",
+            "-B",
+            "tests/local-acceptance/test_isolation.py"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/isolation-contract.log",
+          "seconds": 0.206
+        },
+        {
+          "name": "compose-build",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "build",
+            "api"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/compose-build.log",
+          "seconds": 1.165
+        },
+        {
+          "name": "php-security-floor",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            "$PRODUCT:/source:ro",
+            "pb3-local-acceptance-php:8.4.27",
+            "php",
+            "/source/scripts/check-runtime.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/php-security-floor.log",
+          "seconds": 0.489
+        },
+        {
+          "name": "storage-up",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "up",
+            "-d",
+            "--wait",
+            "postgres",
+            "garage"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/storage-up.log",
+          "seconds": 3.55
+        },
+        {
+          "name": "postgres-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "postgres",
+            "postgres",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/postgres-version.log",
+          "seconds": 0.159
+        },
+        {
+          "name": "garage-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-version.log",
+          "seconds": 0.11
+        },
+        {
+          "name": "garage-assign",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "layout",
+            "assign",
+            "-z",
+            "ci-zone",
+            "-c",
+            "1G",
+            "988281c534024fabfc0e08476dd49d93bed4f8629693057920028d0fefbdc497"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-assign.log",
+          "seconds": 0.159
+        },
+        {
+          "name": "garage-layout",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "layout",
+            "apply",
+            "--version",
+            "1"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-layout.log",
+          "seconds": 0.23
+        },
+        {
+          "name": "garage-bucket",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "bucket",
+            "create",
+            "pb3-ci-p0"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-bucket.log",
+          "seconds": 0.135
+        },
+        {
+          "name": "garage-key",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "key",
+            "create",
+            "pb3-ci-key"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-key.log",
+          "seconds": 0.132
+        },
+        {
+          "name": "garage-allow",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "garage",
+            "/garage",
+            "bucket",
+            "allow",
+            "--read",
+            "--write",
+            "--owner",
+            "pb3-ci-p0",
+            "--key",
+            "[redacted-disposable-key-id]"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-allow.log",
+          "seconds": 0.138
+        },
+        {
+          "name": "image-digests",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "image",
+            "inspect",
+            "php:8.4.27-cli-bookworm",
+            "postgres:18-alpine",
+            "dxflrs/garage:v2.5.0",
+            "--format",
+            "{{json .RepoTags}} {{json .RepoDigests}}"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/image-digests.log",
+          "seconds": 0.084
+        },
+        {
+          "name": "composer-install",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "install",
+            "--no-interaction",
+            "--no-progress",
+            "--prefer-dist"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-install.log",
+          "seconds": 98.853
+        },
+        {
+          "name": "composer-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-version.log",
+          "seconds": 0.731
+        },
+        {
+          "name": "composer-validate",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "composer",
+            "validate",
+            "--strict",
+            "--no-check-publish"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/composer-validate.log",
+          "seconds": 0.506
+        },
+        {
+          "name": "plan-registry",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "/source/scripts/verify-plan-config.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/plan-registry.log",
+          "seconds": 0.392
+        },
+        {
+          "name": "php-lint",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "sh",
+            "-c",
+            "find app bootstrap config routes database tests /source/scripts -name '*.php' -type f -print0 | xargs -0 -n1 php -l"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/php-lint.log",
+          "seconds": 1.15
+        },
+        {
+          "name": "routes",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "artisan",
+            "route:list"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/routes.log",
+          "seconds": 0.511
+        },
+        {
+          "name": "phpunit",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            "$RUN/api:/app",
+            "pb3-local-acceptance-php:8.4.27",
+            "php",
+            "vendor/bin/phpunit",
+            "--log-junit",
+            "/app/phpunit-junit.xml"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/phpunit.log",
+          "seconds": 2.724
+        },
+        {
+          "name": "migrate",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "artisan",
+            "migrate",
+            "--force"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/migrate.log",
+          "seconds": 0.881
+        },
+        {
+          "name": "garage-postgres-smoke",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "tests/integration/garage-postgres-smoke.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/garage-postgres-smoke.log",
+          "seconds": 0.746
+        },
+        {
+          "name": "lifecycle-garage-smoke",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "run",
+            "--rm",
+            "--no-deps",
+            "api",
+            "php",
+            "tests/integration/lifecycle-garage-smoke.php"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/lifecycle-garage-smoke.log",
+          "seconds": 0.602
+        },
+        {
+          "name": "api-up",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "up",
+            "-d",
+            "api"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/api-up.log",
+          "seconds": 0.894
+        },
+        {
+          "name": "healthz",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/healthz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/healthz.log",
+          "seconds": 1.322
+        },
+        {
+          "name": "readyz",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:8000/api/readyz',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/readyz.log",
+          "seconds": 0.104
+        },
+        {
+          "name": "os-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "sw_vers"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/os-version.log",
+          "seconds": 0.016
+        },
+        {
+          "name": "playwright-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "--version"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/playwright-version.log",
+          "seconds": 3.063
+        },
+        {
+          "name": "chromium-version",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "node",
+            "--input-type=module",
+            "-e",
+            "import {chromium} from \"@playwright/test\"; const b=await chromium.launch(); console.log(b.version()); await b.close()"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/chromium-version.log",
+          "seconds": 0.676
+        },
+        {
+          "name": "vite-ready",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "/usr/bin/python3",
+            "-c",
+            "import time,urllib.request,sys\ndeadline=time.monotonic()+45\nwhile time.monotonic()<deadline:\n try:\n  response=urllib.request.urlopen('http://127.0.0.1:5173/settings',timeout=2)\n  print(response.status); sys.exit(0)\n except Exception: time.sleep(1)\nsys.exit(1)\n"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/vite-ready.log",
+          "seconds": 1.099
+        },
+        {
+          "name": "media-diagnostic",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/team-crypto-audit/media.config.ts",
+            "--output",
+            "$RUN/media-diagnostic",
+            "--reporter=line,json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/media-diagnostic.log",
+          "seconds": 31.076
+        },
+        {
+          "name": "product-e2e",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/playwright.config.ts",
+            "--output",
+            "$RUN/product-e2e",
+            "--reporter=line,json"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/product-e2e.log",
+          "seconds": 81.143
+        },
+        {
+          "name": "independent-team-audit",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "pnpm",
+            "exec",
+            "playwright",
+            "test",
+            "--config",
+            "tests/team-crypto-audit/playwright.config.ts",
+            "--output",
+            "$RUN/independent-team-audit",
+            "--reporter=line,json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/independent-team-audit.log",
+          "seconds": 7.11
+        },
+        {
+          "name": "private-database-scan",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "exec",
+            "-T",
+            "postgres",
+            "pg_dump",
+            "-U",
+            "pb3_ci",
+            "--data-only",
+            "pb3_ci_p0"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/private-database-scan.log",
+          "seconds": 0.46
+        },
+        {
+          "name": "privacy-canary-check",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "python3",
+            "-c",
+            "import json,sys;x=json.load(open(sys.argv[1]));print(json.dumps(x));assert x[\"databaseScanned\"] and x[\"databaseCanariesAbsent\"] and x[\"logCanariesAbsent\"] and x[\"containerLogExit\"]==0",
+            "$RUN/privacy-scan.json"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/privacy-canary-check.log",
+          "seconds": 0.036
+        },
+        {
+          "name": "product-source-after",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "git",
+            "diff",
+            "--exit-code",
+            "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed"
+          ],
+          "cwd": "$PRODUCT",
+          "log": "$RUN/product-source-after.log",
+          "seconds": 0.022
+        },
+        {
+          "name": "container-logs",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "logs",
+            "--no-color"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/container-logs.log",
+          "seconds": 0.115
+        },
+        {
+          "name": "isolated-cleanup",
+          "status": "PASS",
+          "exit_code": 0,
+          "command": [
+            "docker",
+            "compose",
+            "--project-name",
+            "pb3-accept-dec04e9ea2",
+            "--env-file",
+            "$RUN/compose.env",
+            "-f",
+            "$QA/scripts/local-acceptance/compose.yml",
+            "down",
+            "--remove-orphans"
+          ],
+          "cwd": "$QA",
+          "log": "$RUN/isolated-cleanup.log",
+          "seconds": 10.59
+        }
+      ],
+      "versions": {
+        "php": "8.4.27",
+        "postgres": "18.6",
+        "garage": "2.5.0",
+        "node": "v22.23.3",
+        "pnpm": "10.20.0",
+        "composer": "2.10.3",
+        "chromium": "141.0.7390.37",
+        "playwright": "1.56.1",
+        "macOS": "26.6.2"
+      },
+      "browsers": {
+        "product-e2e": {
+          "stats": {
+            "startTime": "2026-11-10T18:25:19.716Z",
+            "duration": 80190.893,
+            "expected": 19,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "tests": [
+            {
+              "file": "p1-assignment-media.spec.ts",
+              "title": "P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 19382,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "late permission survives real online hydration with one live stream",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 1061,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "equivalent Session replacement keeps the existing stream",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 903,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "real account switch during permission stops the stale result before opening another",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 1064,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "leaving before permission resolves releases every late track without reopening",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 850,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "denied permission is recoverable by a single explicit retry",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 961,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-camera-session.spec.ts",
+              "title": "hydrated camera captures offline against an already verified signed assignment policy",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 1418,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-contact-assignment-picker.spec.ts",
+              "title": "P1-26: confirmed contact → explicit owner-signed assignment invitation, no implicit access",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3563,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-encrypted-contacts.spec.ts",
+              "title": "P1-25: verified peer → encrypted Contacts & Teams → offline persistence → local removal",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 2582,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-09: Free monthly quota accepts three signed creates, rejects fourth without deleting local ciphertext",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 915,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "two browser identities: key-only account, encrypted camera photo, Garage recovery",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3131,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 5924,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-04: A creates encrypted assignment, B accepts and submits a photo grant, A decrypts",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 4015,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-identity-photo.spec.ts",
+              "title": "P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 8729,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media-revisions.spec.ts",
+              "title": "P1-12: immutable owner-signed media versions survive Garage+Recovery Key without modifying original or inheriting grants",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 2951,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → independent recovered owner decrypt",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 4262,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-11: two independently verified accounts exchange 1-key E2EE audio grant, recipient decrypts and owner revokes without deleting original",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3296,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-teams-invitations.spec.ts",
+              "title": "P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 11133,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-teams-owner.spec.ts",
+              "title": "P1-27: owner-signed encrypted Team → durable local queue → server ACL → offline local read",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 1972,
+                  "proofs": []
+                }
+              ]
+            }
+          ]
+        },
+        "media-diagnostic": {
+          "stats": {
+            "startTime": "2026-11-10T18:24:48.444Z",
+            "duration": 30318.273,
+            "expected": 3,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "tests": [
+            {
+              "file": "p1-assignment-media.spec.ts",
+              "title": "P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 21504,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → independent recovered owner decrypt",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 4153,
+                  "proofs": []
+                }
+              ]
+            },
+            {
+              "file": "p1-media.spec.ts",
+              "title": "P1-11: two independently verified accounts exchange 1-key E2EE audio grant, recipient decrypts and owner revokes without deleting original",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 3778,
+                  "proofs": []
+                }
+              ]
+            }
+          ]
+        },
+        "independent-team-audit": {
+          "stats": {
+            "startTime": "2026-11-10T18:26:40.817Z",
+            "duration": 6214.6050000000005,
+            "expected": 1,
+            "skipped": 0,
+            "unexpected": 0,
+            "flaky": 0
+          },
+          "tests": [
+            {
+              "file": "teams.spec.ts",
+              "title": "independent real A→B→C: epoch integrity, failure recovery and rollback boundaries",
+              "status": "expected",
+              "executions": [
+                {
+                  "status": "passed",
+                  "durationMs": 5609,
+                  "proofs": [
+                    {
+                      "id": "consented-C-decrypts-v1",
+                      "status": "PASS",
+                      "actual": {
+                        "role": "viewer"
+                      }
+                    },
+                    {
+                      "id": "signed-role-change",
+                      "status": "PASS",
+                      "actual": {
+                        "role": "contributor"
+                      }
+                    },
+                    {
+                      "id": "v1-role-change-repeated-live-read",
+                      "status": "PASS",
+                      "actual": {
+                        "ok": true,
+                        "role": "contributor",
+                        "error": null
+                      }
+                    },
+                    {
+                      "id": "revision-race-serialized",
+                      "status": "PASS",
+                      "actual": {
+                        "statuses": [
+                          201,
+                          409
+                        ]
+                      }
+                    },
+                    {
+                      "id": "quarantine-no-old-key",
+                      "status": "PASS",
+                      "actual": {
+                        "C": 409,
+                        "B": 404,
+                        "pendingNoticeKeys": [
+                          "inviteId",
+                          "state",
+                          "teamId"
+                        ]
+                      }
+                    },
+                    {
+                      "id": "encrypted-outbox-no-plaintext",
+                      "status": "PASS",
+                      "actual": {
+                        "sha256": "6a11dac83474628501a7d75138ac8a26b01ddb868d2d528ad00b62337ca0b046"
+                      }
+                    },
+                    {
+                      "id": "outage-keeps-exact-ciphertext",
+                      "status": "PASS",
+                      "actual": {
+                        "outage": "network_error"
+                      }
+                    },
+                    {
+                      "id": "exact-signed-pending-retirement",
+                      "status": "PASS",
+                      "actual": {
+                        "count": 1,
+                        "exact": true
+                      }
+                    },
+                    {
+                      "id": "forged-signature",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 401,
+                        "expected": 401
+                      }
+                    },
+                    {
+                      "id": "wrong-domain",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 401,
+                        "expected": 401
+                      }
+                    },
+                    {
+                      "id": "omitted-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-role",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "changed-directory",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-revision",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "wrong-previous-hash",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "duplicate-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 422,
+                        "expected": 422
+                      }
+                    },
+                    {
+                      "id": "removed-recipient",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "missing-retirements",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 422,
+                        "expected": 422
+                      }
+                    },
+                    {
+                      "id": "omitted-retirement",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "duplicate-retirement",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 422,
+                        "expected": 422
+                      }
+                    },
+                    {
+                      "id": "changed-retirement",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "surplus-retirement",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 409,
+                        "expected": 409
+                      }
+                    },
+                    {
+                      "id": "unsigned-retirement-change",
+                      "status": "PASS",
+                      "actual": {
+                        "status": 401,
+                        "expected": 401
+                      }
+                    },
+                    {
+                      "id": "negative-writes-atomic",
+                      "status": "PASS",
+                      "actual": {
+                        "keyEpoch": 1
+                      }
+                    },
+                    {
+                      "id": "reload-retains-unacked-ciphertext",
+                      "status": "PASS",
+                      "actual": {
+                        "sha256": "6a11dac83474628501a7d75138ac8a26b01ddb868d2d528ad00b62337ca0b046",
+                        "serverCommitStatus": 201
+                      }
+                    },
+                    {
+                      "id": "lost-ack-exact-idempotent-replay",
+                      "status": "PASS",
+                      "actual": {
+                        "commit": 201,
+                        "replay": 200,
+                        "unchanged": true,
+                        "identicalBytes": true
+                      }
+                    },
+                    {
+                      "id": "C-decrypts-new-epoch-B-denied",
+                      "status": "PASS",
+                      "actual": {
+                        "B": 404,
+                        "Crole": "viewer"
+                      }
+                    },
+                    {
+                      "id": "freshness-encrypted-at-rest",
+                      "status": "PASS",
+                      "actual": {
+                        "freshnessRows": 1,
+                        "sha256": "07983edfa3e076eb846b58f13c3d5abfd0213643452b15512e1e25d2a1c6f307"
+                      }
+                    },
+                    {
+                      "id": "freshness-persists-full-reload",
+                      "status": "PASS",
+                      "actual": {
+                        "sha256": "07983edfa3e076eb846b58f13c3d5abfd0213643452b15512e1e25d2a1c6f307"
+                      }
+                    },
+                    {
+                      "id": "fresh-independent-DEK-and-AEAD-binding",
+                      "status": "PASS",
+                      "actual": {
+                        "fresh": true,
+                        "oldKeyRejected": true,
+                        "badAadRejected": true,
+                        "ownerDecrypts": true
+                      }
+                    },
+                    {
+                      "id": "owner-roster-after-pending-invite-sweep",
+                      "status": "PASS",
+                      "actual": {
+                        "ok": true,
+                        "count": 3,
+                        "error": null
+                      }
+                    },
+                    {
+                      "id": "next-membership-action-remains-available",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "queued"
+                      }
+                    },
+                    {
+                      "id": "pending-old-invite-cannot-join-new-epoch",
+                      "status": "PASS",
+                      "actual": {
+                        "memberStatus": 404,
+                        "acceptAfter": "queued-or-conflict"
+                      }
+                    },
+                    {
+                      "id": "tampered-epoch-response-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "teams.untrusted_member_epoch"
+                      }
+                    },
+                    {
+                      "id": "changed-owner-directory-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "share.unsigned_directory"
+                      }
+                    },
+                    {
+                      "id": "known-epoch-rollback-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "result": "teams.verified_epoch_rollback",
+                        "previouslyVerifiedEpoch": 2,
+                        "replayedEpoch": 1
+                      }
+                    },
+                    {
+                      "id": "rollback-keeps-encrypted-offline-snapshot",
+                      "status": "PASS",
+                      "actual": {
+                        "unchanged": true
+                      }
+                    },
+                    {
+                      "id": "account-switch-midflight-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "identity.changed"
+                      }
+                    },
+                    {
+                      "id": "verified-cache-preserved-through-errors",
+                      "status": "PASS",
+                      "actual": {
+                        "count": 1
+                      }
+                    },
+                    {
+                      "id": "genuine-signed-same-epoch-fork-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "teams.verified_epoch_fork"
+                      }
+                    },
+                    {
+                      "id": "membership-revision-rollback-rejected",
+                      "status": "PASS",
+                      "actual": {
+                        "error": "teams.invalid_epoch_history"
+                      }
+                    },
+                    {
+                      "id": "unsigned-revision-cannot-poison-freshness",
+                      "status": "PASS",
+                      "actual": {
+                        "inflatedRead": "accepted",
+                        "legitimateRead": "accepted"
+                      }
+                    },
+                    {
+                      "id": "offline-cache-survives-hostile-responses",
+                      "status": "PASS",
+                      "actual": {
+                        "count": 1,
+                        "local": true
+                      }
+                    },
+                    {
+                      "id": "real-tabs-serialize-freshness",
+                      "status": "PASS",
+                      "actual": {
+                        "writes": [
+                          "stored",
+                          "teams.verified_epoch_rollback"
+                        ],
+                        "olderRead": "teams.verified_epoch_rollback"
+                      }
+                    },
+                    {
+                      "id": "remove-C-and-complete-epoch-three",
+                      "status": "PASS",
+                      "actual": {
+                        "epoch": 3,
+                        "quarantine": false,
+                        "recipients": 0,
+                        "retirements": 0,
+                        "Cstatus": 404
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "exitCode": 0,
+      "testCounts": {
+        "vitestPassed": [
+          143
+        ],
+        "phpunit": [
+          101,
+          1696
+        ]
+      },
+      "privacy": {
+        "databaseScanned": true,
+        "containerLogExit": 0,
+        "databaseCanariesAbsent": true,
+        "logCanariesAbsent": true
+      },
+      "mediaTransport": [
+        {
+          "at": 1794335090120,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090177,
+          "path": "/identity/v2/prepare",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090203,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090229,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090259,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090485,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090500,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090516,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090590,
+          "path": "/media-shares/v1/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090905,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090938,
+          "path": "/identity/v2/prepare",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090965,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335090993,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335091023,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335091327,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335091349,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335091369,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335091449,
+          "path": "/media-shares/v1/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335091469,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335091952,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335091965,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335091979,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092014,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092026,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092082,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092082,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092091,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092197,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092224,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092407,
+          "path": "/assignments/v1/:id/policy",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092443,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092455,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092760,
+          "path": "/assignments/v1/:id/policy-history",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335092889,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335093169,
+          "path": "/assignments/v1/:id/policy",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335093218,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335093229,
+          "path": "/assignments/v1/:id/policy-history",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335093719,
+          "path": "/assignments/v1/:id/invites",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335093743,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335093926,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335093953,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094096,
+          "path": "/assignments/v1/:id/media-submissions",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094135,
+          "path": "/assignments/v1/:id/submissions",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094173,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094206,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094216,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094230,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094245,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094270,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094297,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094822,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 404,
+          "accept": null,
+          "mime": "text/html; charset=utf-8"
+        },
+        {
+          "at": 1794335094872,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094886,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094904,
+          "path": "/assignments/v1/:id/invites/:id/accept",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094917,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094929,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094941,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335094970,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335095057,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335095074,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335095485,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335095507,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335095525,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335095563,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335095599,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335095706,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335095726,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335095747,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335096482,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335096788,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335096802,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335096830,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335096875,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335096889,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335097137,
+          "path": "/assignments/v1/:id/policy-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335097163,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335097200,
+          "path": "/assignments/v1/:id/submissions",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335097249,
+          "path": "/assignments/v1/:id/media-submissions",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335097264,
+          "path": "/assignments/v1/:id/submissions",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335097279,
+          "path": "/assignments/v1/:id/submissions",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335097870,
+          "path": "/media-shares/v1/grants",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335098109,
+          "path": "/assignments/v1/:id/media-submissions",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335098664,
+          "path": "/media-shares/v1/grants",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335098685,
+          "path": "/assignments/v1/:id/media-submissions",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099019,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099037,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099122,
+          "path": "/assignments/v1/:id/submissions",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099138,
+          "path": "/assignments/v1/:id/media-submissions",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099229,
+          "path": "/assignments/v1/:id/media-submissions",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099253,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099270,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099287,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099367,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335099416,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335099433,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099478,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335099495,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335099513,
+          "path": "/media-shares/v1/grants/:id/revoke",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099535,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 410,
+          "accept": null,
+          "mime": "text/html; charset=utf-8"
+        },
+        {
+          "at": 1794335099586,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099599,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099803,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099822,
+          "path": "/assignments/v1/:id/policy",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099864,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335099879,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335100254,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335100274,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335100290,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335103210,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335103506,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335103523,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335103547,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335103580,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335103590,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335103880,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335103900,
+          "path": "/media-shares/v1/grants",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335103922,
+          "path": "/assignments/v1/:id/media-submissions",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335104249,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335104264,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335104327,
+          "path": "/assignments/v1/:id/media-submissions",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335104346,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335104436,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335104457,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335104517,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335104531,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335104545,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335106624,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335106832,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335106845,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335106859,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335106887,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335106899,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107219,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107240,
+          "path": "/media-shares/v1/grants",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107260,
+          "path": "/assignments/v1/:id/media-submissions",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107315,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107341,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107405,
+          "path": "/assignments/v1/:id/media-submissions",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107422,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107479,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335107499,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335107554,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107570,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107586,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107646,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107679,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107696,
+          "path": "/assignments/v1/:id/private",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107731,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107749,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107788,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107834,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107848,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107864,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107890,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107929,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335107993,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108380,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108405,
+          "path": "/assignments/v1/:id/private",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108446,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108460,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108483,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108498,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108524,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108569,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108936,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108954,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335108970,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109052,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109166,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109179,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109186,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109211,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109238,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109255,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109323,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109337,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109365,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109412,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109424,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109438,
+          "path": "/assignments/v1/:id/schedule",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109473,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109487,
+          "path": "/assignments/v1/:id/schedule-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109517,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109563,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109589,
+          "path": "/assignments/v1/:id/schedule-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109721,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109738,
+          "path": "/assignments/v1/:id/schedule-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109757,
+          "path": "/assignments/v1/:id/schedule",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109797,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109824,
+          "path": "/assignments/v1/:id/schedule-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109850,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109875,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109903,
+          "path": "/assignments/v1/:id/schedule-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109918,
+          "path": "/assignments/v1/:id/schedule-history",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109964,
+          "path": "/assignments/v1/usage",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335109995,
+          "path": "/assignments/v1/invites/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110051,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110062,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110086,
+          "path": "/assignments/v1/:id/schedule-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110109,
+          "path": "/assignments/v1/:id/schedule-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110123,
+          "path": "/assignments/v1/:id/retention",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110176,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110232,
+          "path": "/assignments/v1/:id/schedule-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110525,
+          "path": "/assignments/v1/:id/retention-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110570,
+          "path": "/assignments/v1/:id/participants",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110640,
+          "path": "/assignments/v1/:id/private-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110673,
+          "path": "/assignments/v1/:id/schedule-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110705,
+          "path": "/assignments/v1/:id/retention-history",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110719,
+          "path": "/assignments/v1/:id/retention-history",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335110734,
+          "path": "/assignments/v1/:id/retention-status",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335111287,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335111312,
+          "path": "/identity/v2/prepare",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335111337,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335111360,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335111389,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335111712,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335111948,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335111965,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335112009,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335112045,
+          "path": "/media-shares/v1/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335112523,
+          "path": "/identity/v2/recovery/eSt7c9D5QWPA9EqmQZEGhg",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335112536,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335112553,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335112573,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335112889,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335112906,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335112928,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335112991,
+          "path": "/media-shares/v1/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335113775,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335113799,
+          "path": "/identity/v2/prepare",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335113823,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335113844,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335113870,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335114223,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335114236,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335114262,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335114299,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335114324,
+          "path": "/media-shares/v1/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335114704,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335114719,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335114736,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335114805,
+          "path": "/media-shares/v1/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335115335,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335115355,
+          "path": "/identity/v2/prepare",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335115383,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335115402,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335115429,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335115753,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335115773,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335115795,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335115847,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335115872,
+          "path": "/media-shares/v1/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335116489,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335116509,
+          "path": "/identity/v2/prepare",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335116535,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335116557,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335116584,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335116902,
+          "path": "/identity/v2/csrf",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335116919,
+          "path": "/identity/v2/challenges",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335116935,
+          "path": "/identity/v2/proof",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335117013,
+          "path": "/media-shares/v1/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335117433,
+          "path": "/media-shares/v1/grants",
+          "method": "POST",
+          "status": 201,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335117482,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 404,
+          "accept": null,
+          "mime": "text/html; charset=utf-8"
+        },
+        {
+          "at": 1794335117533,
+          "path": "/media-shares/v1/received",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335117880,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335117985,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335118008,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335118264,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335118382,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335118404,
+          "path": "/media-shares/v1/grants/:id/chunks/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/octet-stream"
+        },
+        {
+          "at": 1794335118422,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335118464,
+          "path": "/media-shares/v1/grants/:id/revoke",
+          "method": "POST",
+          "status": 200,
+          "accept": "application/json",
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335118558,
+          "path": "/media-shares/v1/received",
+          "method": "GET",
+          "status": 200,
+          "accept": null,
+          "mime": "application/json"
+        },
+        {
+          "at": 1794335118571,
+          "path": "/media-shares/v1/grants/:id",
+          "method": "GET",
+          "status": 410,
+          "accept": null,
+          "mime": "text/html; charset=utf-8"
+        }
+      ]
+    }
+  ],
+  "preservedOriginalAudit": {
+    "pr": 55,
+    "head": "7f653a590ab4a0b44a1e576ee4e5ea9ad07183bc",
+    "evidence": "https://github.com/1troitsky/photobunker-v3/blob/7f653a590ab4a0b44a1e576ee4e5ea9ad07183bc/docs/audits/evidence/P1-29B-TEAM-CRYPTO-AUDIT-local.json"
+  },
+  "diagnostics": [
+    {
+      "run": "pb3-acceptance-hvoodmzb",
+      "check": "media-diagnostic",
+      "classification": "TEST_READINESS",
+      "error": "participants fetch raced online hydration; HTML/JSON parse error retained"
+    },
+    {
+      "classification": "QA_HARNESS",
+      "error": "Old spaced-string import replacement missed compact product imports; passive transport instrumentation was absent. Regex replacement now asserts exactly one match."
+    },
+    {
+      "classification": "ENVIRONMENT",
+      "command": "pnpm install --offline --frozen-lockfile",
+      "exitCode": 1,
+      "error": "ERR_PNPM_NO_OFFLINE_TARBALL; normal frozen install then succeeded"
+    }
+  ],
+  "unexecuted": [
+    "native Safari",
+    "physical iPhone",
+    "physical Android",
+    "production migration load/locks",
+    "PHP 8.5 locally",
+    "true overlapping PostgreSQL transactions (HTTP fixture uses one PHP server worker)",
+    "freshness against total device/cache rollback",
+    "external specialist cryptographic audit"
+  ],
+  "privacyPolicy": "Only command metadata, statuses, counts, public hashes and allowlisted boolean proofs. Raw errors, traces, keys, identities, canaries, media, cookies and credentials remain private."
+}
