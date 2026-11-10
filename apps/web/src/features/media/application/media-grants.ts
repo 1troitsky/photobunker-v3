@@ -129,7 +129,9 @@ export async function queueMediaRecipientGrant(
   })
   const grantId=crypto.randomUUID()
   const mediaContractHash=await sha(enc.encode(JSON.stringify(row.contract)))
-  const expiresAt=Math.min(row.expiresAt,Date.now()+86400000)
+  const expiresAt=Math.min(row.expiresAt,Date.now()+86400000,
+    assignmentId&&maxExpiresAt!=null?maxExpiresAt:Number.POSITIVE_INFINITY)
+  if(expiresAt<=Date.now())throw Error('media_grant.assignment_access_expired')
   const scope={
     ownerAccountId:session.accountId,recipientAccountId,
     mediaId,grantId,expiresAt,mediaContractHash,
