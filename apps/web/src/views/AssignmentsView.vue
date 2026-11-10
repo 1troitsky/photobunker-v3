@@ -15,6 +15,7 @@ import {
   signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,
   signedAdvancedRequirements,verifyAssignmentInvite,
   effectiveAssignmentEnvelope,assignmentPrivateCacheScope,
+  signedAssignmentSchedule,
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
@@ -51,6 +52,7 @@ type VisibleAssignment={
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
   confirmedVideos:number|null;confirmedAudio:number|null
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
+  blockBeforeStart:boolean;blockAfterEnd:boolean
 }
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
 type Submission={submissionId:string;photoId:string;photoGrantId:string;contributorAccountId:string}
@@ -213,6 +215,7 @@ async function hydrate():Promise<void>{
       localState:item.state,goal:item.photoGoal,videoGoal:null,audioGoal:null,
       confirmedPhotos:null,confirmedVideos:null,confirmedAudio:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
+      blockBeforeStart:true,blockAfterEnd:item.endsAt!==null,
     }
   }))
   if(activeSession.value!==identity)return
@@ -298,6 +301,7 @@ async function hydrate():Promise<void>{
         }
       }catch{/* unconfirmed peer or invalid ciphertext remains opaque */}
     }
+    const effectiveTime=signedAssignmentSchedule(item)
     const row:VisibleAssignment={
       id:item.assignmentId,ownerAccountId:item.ownerAccountId,data,
       state:item.state,revision:item.revision,policyRevision:item.policyRevision,
@@ -317,7 +321,9 @@ async function hydrate():Promise<void>{
       allowedMedia:signedAllowedAssignmentMedia(item),
       createdAt:previous?.createdAt??item.startsAt,
       isOwner:item.ownerAccountId===identity.accountId,
-      startsAt:item.startsAt,endsAt:item.endsAt,
+      startsAt:effectiveTime.startsAt,endsAt:effectiveTime.endsAt,
+      blockBeforeStart:effectiveTime.blockBeforeStart,
+      blockAfterEnd:effectiveTime.blockAfterEnd,
     }
     if(previous)rows[rows.indexOf(previous)]=row
     else rows.push(row)
@@ -805,7 +811,7 @@ onUnmounted(cleanPreview)
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeState('finish')">Завершить задание</button>
             <button v-else-if="selected.state==='finished'" type="button"
-              :disabled="busy||pendingStateChange||(selected.endsAt!==null&&selected.endsAt<=Date.now())"
+              :disabled="busy||pendingStateChange||(selected.blockAfterEnd&&selected.endsAt!==null&&selected.endsAt<=Date.now())"
               @click="changeState('resume')">Возобновить задание</button>
           </div>
           <p v-if="pendingStateChange" class="muted" role="status">Подписанное изменение состояния или правил ожидает подтверждения сервера.</p>
