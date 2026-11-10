@@ -55,25 +55,24 @@ test('P2-01: verified contact → real encrypted message draft → fullscreen ov
     const content='PRIVATE_DRAFT_NOT_A_MATRIX_EVENT'
     await A.getByTestId('messages-editor').fill(content)
 
-    // A failed IndexedDB write must never silently dismiss the composer.
-    // Simulate a quota/security failure at the browser storage boundary.
+    // A real encryption failure must not dismiss or wipe the composer.
+    // Unlike native IDBTransaction monkeypatches, rejecting the AEAD write
+    // is deterministic across Dexie's internal transaction implementations.
     await A.evaluate(()=>{
-      const native=IDBDatabase.prototype.transaction
-      const testWindow=window as Window & {restoreDraftStorage?:()=>void}
-      testWindow.restoreDraftStorage=()=>{IDBDatabase.prototype.transaction=native}
-      IDBDatabase.prototype.transaction=function(stores,mode,options){
-        if(mode==='readwrite')
-          throw new DOMException('Test write refused','QuotaExceededError')
-        return native.call(this,stores,mode,options)
+      const native=SubtleCrypto.prototype.encrypt
+      const testWindow=window as Window & {restoreDraftCrypto?:()=>void}
+      testWindow.restoreDraftCrypto=()=>{SubtleCrypto.prototype.encrypt=native}
+      SubtleCrypto.prototype.encrypt=function(){
+        return Promise.reject(new DOMException('Test AEAD refused','OperationError'))
       }
     })
     await A.getByTestId('messages-close').click()
+    await expect(overlay.getByRole('alert')).toBeVisible()
     await expect(overlay).toBeVisible()
     await expect(A.getByTestId('messages-editor')).toHaveValue(content)
-    await expect(overlay.getByRole('alert')).toBeVisible()
     await A.evaluate(()=>{
-      const testWindow=window as Window & {restoreDraftStorage?:()=>void}
-      testWindow.restoreDraftStorage?.()
+      const testWindow=window as Window & {restoreDraftCrypto?:()=>void}
+      testWindow.restoreDraftCrypto?.()
     })
     await A.getByTestId('messages-close').click()
     await expect(overlay).toHaveCount(0)
