@@ -693,6 +693,16 @@ onUnmounted(cleanPreview)
           описание минимум {{ selected.requirements.descriptionMinLength }} символов;
           GPS {{ selected.requirements.requiredGps?'обязателен':'необязателен' }}.
         </p>
+        <p v-if="selected.allowedMedia.includes('video')" class="muted" data-testid="assignment-video-requirements">
+          Видео: категория {{ selected.videoRequirements.requiredCategory?'обязательна':'необязательна' }},
+          описание минимум {{ selected.videoRequirements.descriptionMinLength }} символов,
+          GPS {{ selected.videoRequirements.requiredGps?'обязателен':'необязателен' }}.
+        </p>
+        <p v-if="selected.allowedMedia.includes('audio')" class="muted" data-testid="assignment-audio-requirements">
+          Аудио: категория {{ selected.audioRequirements.requiredCategory?'обязательна':'необязательна' }},
+          описание минимум {{ selected.audioRequirements.descriptionMinLength }} символов,
+          GPS {{ selected.audioRequirements.requiredGps?'обязателен':'необязателен' }}.
+        </p>
         <p v-if="selected.confirmedPhotos!==null" class="muted">
           Подтверждено сервером: Фото {{ selected.confirmedPhotos }}
           <template v-if="selected.goal!==null"> / {{ selected.goal }}</template>
@@ -751,7 +761,27 @@ onUnmounted(cleanPreview)
             <label v-if="editedAllowAudio" for="assignment-audio-goal">Цель по аудио (1–999, пусто — без цели)</label>
             <input v-if="editedAllowAudio" id="assignment-audio-goal" v-model="editedAudioGoal"
               type="number" min="1" max="999" step="1" placeholder="Без цели">
-            <p class="muted">Цели — только для подсчёта подтверждённого прогресса. При отключении типа его цель сбрасывается в следующей подписанной версии.</p>
+            <div v-if="editedAllowVideo" class="foundation-card">
+              <h4>Обязательные приватные поля видео</h4>
+              <label class="checkline"><input id="assignment-video-required-category"
+                v-model="editedVideoReqCategory" type="checkbox">Категория обязательна</label>
+              <label for="assignment-video-description-min">Описание: минимум символов (0 — необязательно)</label>
+              <input id="assignment-video-description-min" v-model="editedVideoReqDescription"
+                type="number" min="0" max="4000" step="1">
+              <label class="checkline"><input id="assignment-video-required-gps"
+                v-model="editedVideoReqGps" type="checkbox">GPS обязателен</label>
+            </div>
+            <div v-if="editedAllowAudio" class="foundation-card">
+              <h4>Обязательные приватные поля аудио</h4>
+              <label class="checkline"><input id="assignment-audio-required-category"
+                v-model="editedAudioReqCategory" type="checkbox">Категория обязательна</label>
+              <label for="assignment-audio-description-min">Описание: минимум символов (0 — необязательно)</label>
+              <input id="assignment-audio-description-min" v-model="editedAudioReqDescription"
+                type="number" min="0" max="4000" step="1">
+              <label class="checkline"><input id="assignment-audio-required-gps"
+                v-model="editedAudioReqGps" type="checkbox">GPS обязателен</label>
+            </div>
+            <p class="muted">Цели — только для подсчёта подтверждённого прогресса. При отключении типа его цель и требования сбрасываются в следующей подписанной версии.</p>
             <button type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeGoal">Подписать новые правила</button>
