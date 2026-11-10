@@ -38,6 +38,10 @@ async function raw(){
 }
 function configure():void{
   api.mockImplementation(async(path,method,data)=>{
+    if(path==='/matrix/v1/me')return {
+      configured:true,bound:false,homeserverUrl:home,matrixUserId:mxid,
+      deviceBinding:null,
+    } as never
     if(path==='/matrix/v1/recovery/ssss'&&method!=='POST'){
       return(server?{present:true,contract:server.contract,
         signature:corruptReceipt?b64(random(64)):server.signature}
@@ -97,6 +101,9 @@ describe('P2-02D1: PB3 Recovery Key sealed Matrix SSSS escrow',()=>{
     expect(recoveredPackage.accountSpki).toBe(session.pkg.accountSpki)
     const restored={...session,pkg:recoveredPackage,deviceId:crypto.randomUUID()}
     activeSession.value=restored
+    // There is no Matrix token or Matrix-device binding on this new PB3
+    // device. Only the previously confirmed PB3 account binding exists.
+    bound.mockResolvedValue(null)
     const recovered=await recoverMatrixSecretStorageKey()
     expect(Array.from(recovered??[])).toEqual(Array.from(key))
     recovered?.fill(0)
