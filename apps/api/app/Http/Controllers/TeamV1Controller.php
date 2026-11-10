@@ -42,7 +42,14 @@ final class TeamV1Controller extends Controller
         abort_unless($c['version']===1&&$c['ownerAccountId']===$actor->id,422);
         foreach(['teamId','operationId','ownerAccountId'] as $field)C::uuid($c,$field);
         $envelope=$c['privateEnvelope'];
-        abort_unless(is_array($envelope)&&!array_is_list($envelope),422);
+        abort_unless(is_array($envelope)&&!array_is_list($envelope)
+            &&($envelope['version']??null)===1
+            &&is_string($envelope['iv']??null)
+            &&is_string($envelope['ciphertext']??null)
+            &&is_array($envelope['wrappedKey']??null)
+            &&!array_is_list($envelope['wrappedKey'])
+            &&is_string($envelope['wrappedKey']['iv']??null)
+            &&is_string($envelope['wrappedKey']['ciphertext']??null),422);
         // Profile uses a team-specific DEK; AKEK only wraps the owner key.
         // Future invitations wrap this immutable DEK to independently
         // trusted members without re-encrypting the team profile.

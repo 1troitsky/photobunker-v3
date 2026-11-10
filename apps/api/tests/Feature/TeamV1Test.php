@@ -129,6 +129,10 @@ final class TeamV1Test extends TestCase
         $this->postJson('/teams/v1',$forged)->assertUnauthorized();
         $wrong=$this->contract('outsider');
         $this->postJson('/teams/v1',$this->signed('owner',$wrong))->assertUnprocessable();
+        $illTyped=$this->contract('owner');
+        $illTyped['privateEnvelope']['wrappedKey']['ciphertext']=42;
+        $this->postJson('/teams/v1',$this->signed('owner',$illTyped))
+            ->assertUnprocessable();
         $this->assertDatabaseCount('team_records_v1',1);
     }
 
