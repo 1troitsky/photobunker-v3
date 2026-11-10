@@ -124,7 +124,7 @@ function matches(person:ConfirmedContact):boolean{
   return !search||person.alias.toLocaleLowerCase().includes(search)
     ||person.peerAccountId.includes(search)
 }
-watch(activeSession,(now,previous)=>{
+watch(activeSession,(_now,previous)=>{
   const prev=previous?[
     previous.accountId,previous.deviceId,previous.pkg.accountSpki,
     previous.pkg.akek,previous.pkg.revision,
