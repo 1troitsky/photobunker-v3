@@ -106,7 +106,7 @@ final class AssignmentV1Controller extends Controller
         $raw=$r->json('contract');
         $shape=is_string($raw)?json_decode($raw,true,32):null;
         $policyVersion=is_array($shape)?($shape['version']??null):null;
-        $withRequirements=in_array($policyVersion,[2,3],true);
+        $withRequirements=in_array($policyVersion,[2,3,4],true);
         $keys=[
             'version','operationId','assignmentId','ownerAccountId',
             'rootPolicyHash','previousPolicyHash',
@@ -115,10 +115,14 @@ final class AssignmentV1Controller extends Controller
         if($withRequirements)$keys=array_merge($keys,[
             'requiredCategory','descriptionMinLength','requiredGps',
         ]);
-        $c=$this->signed($r,$actor,
-            $policyVersion===3?'pb3.assignment-policy.v3'
-                :($policyVersion===2?'pb3.assignment-policy.v2'
-                :'pb3.assignment-policy.v1'),$keys);
+        if($policyVersion===4)$keys=array_merge($keys,['videoGoal','audioGoal']);
+        $domain=match($policyVersion){
+            4=>'pb3.assignment-policy.v4',
+            3=>'pb3.assignment-policy.v3',
+            2=>'pb3.assignment-policy.v2',
+            default=>'pb3.assignment-policy.v1',
+        };
+        $c=$this->signed($r,$actor,$domain,$keys);
         C::policyAmendment($c,$actor->id,$assignmentId);
         $hash=hash('sha256',$r->json('contract'));
         return DB::transaction(function()use($c,$actor,$assignmentId,$r,$hash){
@@ -154,13 +158,18 @@ final class AssignmentV1Controller extends Controller
             $currentCategory=$oldRules?$previousValues['requiredCategory']:false;
             $currentMinLength=$oldRules?$previousValues['descriptionMinLength']:0;
             $currentGps=$oldRules?$previousValues['requiredGps']:false;
-            $currentMedia=$oldVersion===3?$previousValues['allowedMedia']:['photo'];
+            $currentMedia=$oldVersion>=3?$previousValues['allowedMedia']:['photo'];
             $differentRules=$c['version']>=2
                 &&($c['requiredCategory']!==$currentCategory
                     ||$c['descriptionMinLength']!==$currentMinLength
                     ||$c['requiredGps']!==$currentGps);
             $differentMedia=$c['allowedMedia']!==$currentMedia;
-            abort_unless($differentRules||$differentMedia
+            $currentVideoGoal=$oldVersion>=4?$previousValues['videoGoal']:null;
+            $currentAudioGoal=$oldVersion>=4?$previousValues['audioGoal']:null;
+            $differentGoals=$c['version']===4
+                &&($c['videoGoal']!==$currentVideoGoal
+                    ||$c['audioGoal']!==$currentAudioGoal);
+            abort_unless($differentRules||$differentMedia||$differentGoals
                 ||($a->photo_goal===null?null:(int)$a->photo_goal)!==$c['photoGoal'],409);
             $previous=hash('sha256',$a->latest_policy_contract??$a->contract_json);
             abort_unless(hash_equals($previous,$c['previousPolicyHash']),409);
@@ -328,6 +337,16 @@ final class AssignmentV1Controller extends Controller
             'state'=>$x->state,'revision'=>(int)$x->revision,
             'policyRevision'=>(int)$x->policy_revision,
             'photoGoal'=>$x->photo_goal===null?null:(int)$x->photo_goal,
+            'videoGoal'=>(static function()use($x){
+                $policy=$x->latest_policy_contract
+                    ?json_decode($x->latest_policy_contract,true,32,JSON_THROW_ON_ERROR):null;
+                return ($policy['version']??0)===4?$policy['videoGoal']:null;
+            })(),
+            'audioGoal'=>(static function()use($x){
+                $policy=$x->latest_policy_contract
+                    ?json_decode($x->latest_policy_contract,true,32,JSON_THROW_ON_ERROR):null;
+                return ($policy['version']??0)===4?$policy['audioGoal']:null;
+            })(),
             'confirmedPhotoCount'=>(int)$x->confirmed_photo_count,
             'confirmedVideoCount'=>(int)$x->confirmed_video_count,
             'confirmedAudioCount'=>(int)$x->confirmed_audio_count,
