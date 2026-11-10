@@ -8,6 +8,7 @@ import {
 } from '../../identity/infrastructure/crypto'
 import { pinnedPeer, ensureOwnExchangeKey } from '../../sharing/key-directory'
 import { listLocalTeams } from './team-book'
+import { listOwnerEpochRoster } from './team-epoch-invitations'
 import {
   listOwnerTeamRoster, verifiedTeamMembershipHistory, openJoinedTeam,
   cacheVerifiedJoinedTeam,
@@ -302,8 +303,13 @@ export async function queueTeamKeyRotation(teamId:string):Promise<string>{
     ||current.membershipRevision!==history.revision
     ||current.rotationRequired!==true)
     throw Error('teams.stale_epoch_roster')
-  const surviving=members.filter(x=>x.state==='accepted')
+  const epochMembers=status.keyEpoch>=2
+    ?await listOwnerEpochRoster(teamId):[]
+  same(s)
+  const surviving=[...members,...epochMembers].filter(x=>x.state==='accepted')
     .sort((a,b)=>a.recipientAccountId.localeCompare(b.recipientAccountId))
+  if(new Set(surviving.map(x=>x.recipientAccountId)).size!==surviving.length)
+    throw Error('teams.epoch_duplicate_active_member')
   if(surviving.length>100)throw Error('teams.epoch_roster_limit')
   const toEpoch=status.keyEpoch+1
   const operationId=uuid()
