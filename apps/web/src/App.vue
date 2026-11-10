@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
-import { brand } from './config/brand'
-const route = useRoute()
-// Canonical default only. User-editable 3–6 Dock (with mandatory Settings)
-// belongs to accepted App Appearance 1.3 and will be wired in P2.
-const dock = [
-  { to: '/assignments', name: 'Задания', icon: 'tasks' },
-  { to: '/browser', name: 'Browser', icon: 'folder' },
-  { to: '/camera', name: 'Камера', icon: 'camera' },
-  { to: '/contacts', name: 'Контакты', icon: 'users' },
-  { to: '/messages', name: 'Сообщения', icon: 'message' },
-  { to: '/settings', name: 'Настройки', icon: 'settings' },
-] as const
+import {computed,watch} from 'vue'
+import {useRoute} from 'vue-router'
+import {brand} from './config/brand'
+import {activeSession} from './features/identity/application/session'
+import {
+  DOCK_CATALOG,visibleDock,loadDock,
+} from './features/appearance/application/dock-preferences'
+const route=useRoute()
+const dock=computed(()=>visibleDock.value.map(id=>DOCK_CATALOG.find(x=>x.id===id)!))
+// Local-only bootstrap. Neither Fieldwork Shell nor camera waits for network.
+watch(()=>{const s=activeSession.value
+  return s?[s.accountId,s.deviceId,s.pkg.akek,s.pkg.accountSpki,s.pkg.revision].join('|'):''
+},()=>{void loadDock().catch(()=>{/* error exposed in Appearance settings */})},
+{immediate:true})
 </script>
 
 <template>
@@ -32,10 +33,11 @@ const dock = [
       <RouterView />
     </main>
 
-    <nav class="shell-dock" aria-label="Главная навигация">
+    <nav class="shell-dock" aria-label="Главная навигация"
+      :style="{gridTemplateColumns:'repeat('+dock.length+',minmax(0,1fr))'}">
       <RouterLink
         v-for="item in dock" :key="item.to" :to="item.to"
-        :class="{ active: (route.path === item.to || (item.to === '/assignments' && route.path.startsWith('/assignments/'))) }"
+        :class="{ active: (route.path === item.to || (item.to === '/assignments' && route.path.startsWith('/assignments/')) || (item.to === '/settings' && route.path.startsWith('/settings/'))) }"
         :aria-current="(route.path === item.to || (item.to === '/assignments' && route.path.startsWith('/assignments/'))) ? 'page' : undefined"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -47,7 +49,7 @@ const dock = [
           <template v-else-if="item.icon === 'message'"><path d="M4 5h16v12H9l-5 4zM8 10h8M8 13h5"/></template>
           <template v-else><circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></template>
         </svg>
-        <small>{{ item.name }}</small>
+        <small>{{ item.label }}</small>
       </RouterLink>
     </nav>
   </div>
