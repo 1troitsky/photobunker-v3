@@ -117,8 +117,8 @@ describe('P1-25 encrypted fingerprint-confirmed contact book',()=>{
     // first unrelated row returned by IndexedDB.
     const scope=hex(await digest(new TextEncoder().encode(
       'pb3.contact-index.v1\n'+ownerId)))
-    const row=(await raw.table('contacts').where('ownerScope').equals(scope).first())
-      as {key:string;ownerScope:string;iv:string;ciphertext:string}|undefined
+    const row:{key:string;ownerScope:string;iv:string;ciphertext:string}|undefined=
+      await raw.table('contacts').where('ownerScope').equals(scope).first()
     expect(row).toBeDefined()
     if(!row)throw Error('test.missing_contact')
     await raw.table('contacts').put({...row,iv:b64(random(12))})
