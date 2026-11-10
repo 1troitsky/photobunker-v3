@@ -565,6 +565,13 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       instructions:'SECOND CONFIDENTIAL INSTRUCTIONS 2',
     })
     await B.context().setOffline(false)
+    // Offline transitions intentionally mark the in-memory identity as
+    // offline; restoring network connectivity does NOT silently certify the
+    // session. Reauthenticate before making the next verified server read.
+    await B.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+    })
 
     // P1-20: edit a REAL owner-signed schedule with an accepted contributor
     // still using the original ECDH invitation and the original root policy.
