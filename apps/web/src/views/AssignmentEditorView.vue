@@ -21,6 +21,8 @@ import type { EditorDraft } from '../features/assignments/application/assignment
 import { openOwnerAssignment, upgradePrivateAssignment } from '../features/assignments/infrastructure/assignment-crypto'
 import type { PrivateAssignment, PrivateAssignmentV2 } from '../features/assignments/infrastructure/assignment-crypto'
 import { confirmPeer, inspectPeer } from '../features/sharing/key-directory'
+import { listConfirmedContacts } from '../features/people/application/contact-book'
+import type { ConfirmedContact } from '../features/people/application/contact-book'
 
 type Tab='main'|'files'|'people'|'rules'
 const tabs:ReadonlyArray<{id:Tab;label:string}>=[
@@ -61,6 +63,9 @@ const baselineRetentionRevision=ref<number|null>(null)
 const participants=ref<AssignmentParticipant[]>([])
 const rosterStatus=ref<'idle'|'loading'|'ready'|'offline'|'error'>('idle')
 const rosterError=ref('')
+const confirmedContacts=ref<ConfirmedContact[]>([])
+const contactsLoading=ref(false)
+const contactsError=ref('')
 const peerId=ref('')
 const peerFingerprint=ref('')
 const peerConfirmed=ref(false)
@@ -149,6 +154,28 @@ async function fromRow(row:AssignmentListing,session:NonNullable<typeof activeSe
     catch{return false}
   })
 }
+async function refreshConfirmedContacts(
+  id=assignmentId.value,session=activeSession.value,generation=run,
+):Promise<void>{
+  confirmedContacts.value=[]
+  contactsError.value=''
+  if(!session||!owner.value)return
+  contactsLoading.value=true
+  try{
+    // The local list is account-encrypted and every entry is checked against
+    // its independently pinned peer. It is display-only, never an ACL source.
+    const rows=await listConfirmedContacts()
+    if(!sameIdentity(session,activeSession.value)||generation!==run
+      ||assignmentId.value!==id)return
+    confirmedContacts.value=rows
+  }catch(e){
+    if(sameIdentity(session,activeSession.value)&&generation===run)
+      contactsError.value=fail(e)
+  }finally{
+    if(sameIdentity(session,activeSession.value)&&generation===run)
+      contactsLoading.value=false
+  }
+}
 async function refreshRoster(
   id=assignmentId.value,session=activeSession.value,generation=run,
 ):Promise<void>{
@@ -173,6 +200,7 @@ async function refresh():Promise<void>{
   const generation=++run
   const session=activeSession.value
   participants.value=[];rosterStatus.value='idle';rosterError.value=''
+  confirmedContacts.value=[];contactsError.value='';contactsLoading.value=false
   error.value=''
   if(!session){listing.value=null;loadState.value='missing';return}
   const id=assignmentId.value
@@ -203,6 +231,7 @@ async function refresh():Promise<void>{
     if(run===generation){
       loadState.value='fresh'
       void refreshRoster(id,session,generation)
+      void refreshConfirmedContacts(id,session,generation)
     }
   }catch(e){
     if(run===generation){
@@ -332,13 +361,36 @@ async function save():Promise<void>{
   finally{busy.value=false}
 }
 function peerReset():void{peerFingerprint.value='';peerConfirmed.value=false;peerAgreed.value=false}
+async function selectConfirmedContact(id:string):Promise<void>{
+  if(!owner.value||busy.value)return
+  const contact=confirmedContacts.value.find(x=>x.peerAccountId===id)
+  if(!contact)throw Error('contacts.not_found')
+  // Selecting a local address-book row NEVER sends an invitation. Always
+  // re-run the signed-directory/pin check in the existing invitation flow.
+  peerId.value=id
+  peerReset()
+  const session=activeSession.value,generation=run
+  await peerInspect()
+  if(!sameIdentity(session,activeSession.value)||generation!==run
+    ||peerId.value!==id)return
+  if(peerFingerprint.value&&peerFingerprint.value!==contact.safetyFingerprint){
+    peerReset()
+    error.value='contacts.trusted_key_changed'
+    return
+  }
+  if(peerConfirmed.value)
+    notice.value='Контакт выбран, ключ подтверждён. Приглашение ещё не отправлено.'
+}
 async function peerInspect():Promise<void>{
   if(!owner.value)return
   busy.value=true;error.value='';notice.value=''
+  const session=activeSession.value,generation=run
   try{
     const id=peerId.value.trim().toLowerCase()
-    if(id===activeSession.value?.accountId)throw Error('assignment.cannot_invite_self')
+    if(id===session?.accountId)throw Error('assignment.cannot_invite_self')
     const {directory,confirmed}=await inspectPeer(id)
+    if(!sameIdentity(session,activeSession.value)||generation!==run
+      ||peerId.value.trim().toLowerCase()!==id)return
     peerId.value=id
     peerFingerprint.value=directory.safetyFingerprint
     peerConfirmed.value=confirmed
@@ -400,6 +452,7 @@ watch(activeSession,(next,previous)=>{
       filesEnabled:false,filesDate:'',assignmentEnabled:false,assignmentDate:'',
     })
     peerReset()
+    confirmedContacts.value=[];contactsError.value=''
     loadState.value='loading'
     void refresh()
   }else if(next?.online&&!previous?.online){
@@ -423,14 +476,22 @@ watch(assignmentId,()=>{
     filesEnabled:false,filesDate:'',assignmentEnabled:false,assignmentDate:'',
   })
   peerReset()
+  confirmedContacts.value=[];contactsError.value=''
   activeTab.value='main';loadState.value='loading'
   void refresh()
 })
 onMounted(()=>{void refresh()})
+watch(activeTab,(next)=>{
+  if(next==='people'&&owner.value)void refreshConfirmedContacts()
+})
 watch(()=>scheduleDraft.endsAt,(value)=>{
   if(!value)scheduleDraft.blockAfterEnd=false
 })
-onUnmounted(()=>{++run;clearPrivate();baseline.value='';baselineText.value='';baselineSchedule.value='';baselineRetention.value=''})
+onUnmounted(()=>{
+  ++run;clearPrivate();confirmedContacts.value=[]
+  baseline.value='';baselineText.value=''
+  baselineSchedule.value='';baselineRetention.value=''
+})
 </script>
 
 <template>
@@ -599,6 +660,26 @@ onUnmounted(()=>{++run;clearPrivate();baseline.value='';baselineText.value='';ba
             @click="refreshRoster()">Обновить список</button>
         </div>
         <h3>Пригласить исполнителя</h3>
+        <div class="fieldwork-editor-contacts" data-testid="editor-confirmed-contact-picker">
+          <p class="muted">Можно выбрать уже независимо подтверждённый контакт из зашифрованной локальной книги. Это заполнит адресата, но не создаст приглашение и не выдаст доступ к файлам.</p>
+          <button type="button" :disabled="busy||contactsLoading" @click="refreshConfirmedContacts()">
+            {{ contactsLoading?'Проверка контактов…':'Обновить контакты' }}
+          </button>
+          <p v-if="contactsError" role="alert" class="error-text">{{ contactsError }}</p>
+          <p v-else-if="!contactsLoading&&!confirmedContacts.length" class="muted">
+            Подтверждённых контактов пока нет. Их можно добавить в «Контакты и Команды».
+          </p>
+          <div v-for="person in confirmedContacts" :key="person.peerAccountId"
+            class="photo-row" :data-testid="'editor-confirmed-contact-'+person.peerAccountId">
+            <div>
+              <strong>{{ person.alias||'Контакт без имени' }}</strong>
+              <code>{{ person.peerAccountId }}</code>
+            </div>
+            <button type="button" :disabled="busy" @click="selectConfirmedContact(person.peerAccountId)">
+              Выбрать
+            </button>
+          </div>
+        </div>
         <p class="muted">Приглашение подписывается владельцем. Доступ к расшифровке файлов выдаётся отдельно, не самим фактом участия. Сейчас доступна проверенная роль «Исполнитель»; куратор и наблюдатель требуют серверной модели полномочий.</p>
         <label for="editor-recipient-id">ID аккаунта исполнителя</label>
         <input id="editor-recipient-id" v-model="peerId" spellcheck="false" autocomplete="off"
@@ -614,7 +695,7 @@ onUnmounted(()=>{++run;clearPrivate();baseline.value='';baselineText.value='';ba
           <p v-else class="status-text">Ключ подтверждён</p>
           <button v-if="peerConfirmed" type="button" :disabled="busy||listing?.state!=='active'" @click="invite">Отправить подписанное приглашение</button>
         </div>
-        <p class="muted">Контакты, команды, роли и file scopes из принятого Editor 2.2 пока не подменяются демонстрационными участниками.</p>
+        <p class="muted">Контакты используются только как подтверждённая адресная книга. Команды, новые роли и file scopes ещё требуют самостоятельных серверных полномочий.</p>
       </div>
 
       <div v-if="activeTab==='rules'" id="editor-panel-rules"
