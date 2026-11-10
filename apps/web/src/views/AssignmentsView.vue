@@ -15,6 +15,7 @@ import {
   signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,
   signedAdvancedRequirements,verifyAssignmentInvite,
   effectiveAssignmentEnvelope,assignmentPrivateCacheScope,
+  assignmentOpenAt,assignmentFilesOpenAt,
   signedAssignmentSchedule,
 } from '../features/assignments/application/assignment-outbox'
 import type {
@@ -52,6 +53,7 @@ type VisibleAssignment={
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
   confirmedVideos:number|null;confirmedAudio:number|null
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
+  filesAccessUntil?:number|null;assignmentAccessUntil?:number|null
   blockBeforeStart:boolean;blockAfterEnd:boolean
 }
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
@@ -215,6 +217,7 @@ async function hydrate():Promise<void>{
       localState:item.state,goal:item.photoGoal,videoGoal:null,audioGoal:null,
       confirmedPhotos:null,confirmedVideos:null,confirmedAudio:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
+      filesAccessUntil:null,assignmentAccessUntil:null,
       blockBeforeStart:true,blockAfterEnd:item.endsAt!==null,
     }
   }))
@@ -320,6 +323,8 @@ async function hydrate():Promise<void>{
       confirmedAudio:offline?null:(item.confirmedAudioCount??null),
       allowedMedia:signedAllowedAssignmentMedia(item),
       createdAt:previous?.createdAt??item.startsAt,
+      filesAccessUntil:item.filesAccessUntil??null,
+      assignmentAccessUntil:item.assignmentAccessUntil??null,
       isOwner:item.ownerAccountId===identity.accountId,
       startsAt:effectiveTime.startsAt,endsAt:effectiveTime.endsAt,
       blockBeforeStart:effectiveTime.blockBeforeStart,
