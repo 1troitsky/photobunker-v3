@@ -11,7 +11,7 @@ import {
 
 vi.mock('../../sharing/key-directory',()=>({pinnedPeer:vi.fn()}))
 const peerId='22222222-2222-4222-8222-222222222222'
-const ownerId='11111111-1111-4111-8111-111111111111'
+let ownerId='11111111-1111-4111-8111-111111111111'
 const outsiderId='33333333-3333-4333-8333-333333333333'
 const fingerprint='a'.repeat(64)
 const trusted=vi.mocked(pinnedPeer)
@@ -33,6 +33,9 @@ async function rawRows(){
   return rows as Array<{key:string;ownerScope:string;iv:string;ciphertext:string}>
 }
 beforeEach(()=>{
+  // A prior Vitest test must never read the previous test's IndexedDB
+  // ciphertext using a newly generated package for an identical UUID.
+  ownerId=crypto.randomUUID()
   trusted.mockImplementation(async id=>({
     accountId:id,safetyFingerprint:fingerprint,
   } as Awaited<ReturnType<typeof pinnedPeer>>))
