@@ -1,0 +1,79 @@
+{
+  "source": {
+    "pr": 59,
+    "sha": "ff9c7bab2485c7d2cfd094e67fdb505a1221ee00",
+    "base": "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+    "ci": [
+      {
+        "id": 42880171764,
+        "sha": "ff9c7bab2485c7d2cfd094e67fdb505a1221ee00",
+        "status": "completed",
+        "conclusion": "success",
+        "attempt": 1,
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42880171764"
+      },
+      {
+        "id": 42880171740,
+        "sha": "ff9c7bab2485c7d2cfd094e67fdb505a1221ee00",
+        "status": "completed",
+        "conclusion": "success",
+        "attempt": 1,
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42880171740"
+      },
+      {
+        "id": 42880171540,
+        "sha": "ff9c7bab2485c7d2cfd094e67fdb505a1221ee00",
+        "status": "completed",
+        "conclusion": "success",
+        "attempt": 1,
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42880171540"
+      }
+    ]
+  },
+  "fix": {
+    "pr": 60,
+    "sha": "54f984162451e44e49d374ba5c08cb3a2b7a0536",
+    "base": "ff9c7bab2485c7d2cfd094e67fdb505a1221ee00",
+    "ci": [
+      {
+        "id": 42889143053,
+        "sha": "54f984162451e44e49d374ba5c08cb3a2b7a0536",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42889143053",
+        "attempt": 1
+      },
+      {
+        "id": 42889142988,
+        "sha": "54f984162451e44e49d374ba5c08cb3a2b7a0536",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42889142988",
+        "attempt": 1
+      },
+      {
+        "id": 42889142940,
+        "sha": "54f984162451e44e49d374ba5c08cb3a2b7a0536",
+        "status": "completed",
+        "conclusion": "success",
+        "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42889142940",
+        "attempt": 1
+      }
+    ]
+  },
+  "preservation": {
+    "main": "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+    "pr59": "ff9c7bab2485c7d2cfd094e67fdb505a1221ee00",
+    "qa55": "7f653a590ab4a0b44a1e576ee4e5ea9ad07183bc",
+    "qa58": "b95e0b089ad6958747d8c0e055f6b8207e41ee88",
+    "originalUserFiles": 39,
+    "sha256Unchanged": true,
+    "exitCode": 0
+  },
+  "historical54": {
+    "sha": "4a4340871ffff2aa553e630373383484fcf401ab",
+    "independentMergeRequired": false,
+    "ancestorExitCode": 1,
+    "role": "read-only provenance; audited reimplementation already in #59"
+  }
+}

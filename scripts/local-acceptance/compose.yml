@@ -1,0 +1,63 @@
+# All services share a NEW network namespace to reuse the existing CI smoke
+# guards (127.0.0.1:5432/3900). No production endpoints or persistent volumes.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: pb3_ci_p0
+      POSTGRES_USER: pb3_ci
+      POSTGRES_PASSWORD: ${PB3_TEST_PASSWORD:?}
+    ports:
+      - "127.0.0.1:8000:8000"
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U pb3_ci -d pb3_ci_p0"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+  garage:
+    image: dxflrs/garage:v2.5.0
+    network_mode: service:postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${PB3_RUN_DIR:?}/garage.toml:/etc/garage.toml:ro
+    tmpfs:
+      - /var/lib/garage
+  api:
+    image: pb3-local-acceptance-php:8.4.27
+    build:
+      context: .
+    network_mode: service:postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /app
+    volumes:
+      - ${PB3_RUN_DIR:?}/api:/app
+      - ${PB3_REPO_ROOT:?}:/source:ro
+    environment:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: http://127.0.0.1:5173
+      APP_KEY: ${PB3_TEST_APP_KEY:?}
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_ci_p0
+      DB_USERNAME: pb3_ci
+      DB_PASSWORD: ${PB3_TEST_PASSWORD:?}
+      SESSION_DRIVER: file
+      SESSION_SECURE_COOKIE: 'false'
+      CACHE_STORE: array
+      LOG_CHANNEL: stderr
+      S3_ENDPOINT: http://127.0.0.1:3900
+      S3_REGION: garage
+      S3_BUCKET: pb3-ci-p0
+      S3_ACCESS_KEY: ${PB3_TEST_S3_KEY:-not-provisioned}
+      S3_SECRET_KEY: ${PB3_TEST_S3_SECRET:-not-provisioned}
+      PB3_ISOLATED_STORAGE_SMOKE: '1'
+      PB3_ENABLE_PHOTO_CLEANUP: 'false'
+    command: [php, artisan, serve, --host=0.0.0.0, --port=8000, --no-reload]
