@@ -657,6 +657,12 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       const identity=await import('/src/features/identity/application/session.ts')
       await identity.reauthenticate()
     })
+    // The participant is still on Camera after P1-24 display assertions.
+    // Return through SPA navigation before later schedule checks click
+    // the assignment-list "Обновить" action; no cold session bootstrap.
+    await B.getByRole('link',{name:'Задания',exact:true}).click()
+    await expect(B.getByRole('button',{name:'Обновить',exact:true}))
+      .toBeVisible({timeout:20000})
 
     // P1-20: edit a REAL owner-signed schedule with an accepted contributor
     // still using the original ECDH invitation and the original root policy.
