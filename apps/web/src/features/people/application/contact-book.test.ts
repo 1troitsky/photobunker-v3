@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { freshPackage, b64, random } from '../../identity/infrastructure/crypto'
+import { freshPackage, b64, random, digest, hex } from '../../identity/infrastructure/crypto'
 import { activeSession } from '../../identity/application/session'
 import type { Session } from '../../identity/application/session'
 import { pinnedPeer } from '../../sharing/key-directory'
@@ -112,10 +112,15 @@ describe('P1-25 encrypted fingerprint-confirmed contact book',()=>{
     await saveConfirmedContact(peerId,fingerprint,'Sensitive')
     const raw=new Dexie('pb3-encrypted-contacts-v1')
     raw.version(1).stores({contacts:'&key,ownerScope'})
-    const [original]=await raw.table('contacts').toArray() as Array<{
-      key:string;ownerScope:string;iv:string;ciphertext:string
-    }>
-    const row=original!
+    // Several unit tests intentionally keep distinct accounts in the same
+    // IndexedDB. Target only THIS test's account-scoped record, not the
+    // first unrelated row returned by IndexedDB.
+    const scope=hex(await digest(new TextEncoder().encode(
+      'pb3.contact-index.v1\n'+ownerId)))
+    const row=await raw.table('contacts').where('ownerScope').equals(scope).first()
+      as {key:string;ownerScope:string;iv:string;ciphertext:string}|undefined
+    expect(row).toBeDefined()
+    if(!row)throw Error('test.missing_contact')
     await raw.table('contacts').put({...row,iv:b64(random(12))})
     await expect(listConfirmedContacts())
       .rejects.toThrow('contacts.encrypted_record_unreadable')
