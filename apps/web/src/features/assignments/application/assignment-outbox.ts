@@ -547,6 +547,26 @@ export async function verifySignedAssignmentPolicy(
     signedAdvancedRequirements(item,'video')
     signedAdvancedRequirements(item,'audio')
   }
+  const privateRevision=item.privateRevision??1
+  if(!Number.isInteger(privateRevision)||privateRevision<1||privateRevision>1001)
+    throw Error('assignment.invalid_private_revision')
+  if(privateRevision===1){
+    if(item.privateAmendmentContract!=null||item.privateAmendmentSignature!=null)
+      throw Error('assignment.private_revision_not_authenticated')
+  }else{
+    if(typeof item.privateAmendmentContract!=='string'
+      ||typeof item.privateAmendmentSignature!=='string')
+      throw Error('assignment.private_revision_not_authenticated')
+    const amendment=JSON.parse(item.privateAmendmentContract) as Record<string,unknown>
+    const rootHash=hex(await digest(new TextEncoder().encode(
+      JSON.stringify(item.privateEnvelope))))
+    const previousHash=privateRevision===2?rootHash:amendment.previousPrivateHash
+    if(typeof previousHash!=='string'||!/^[a-f0-9]{64}$/.test(previousHash))
+      throw Error('assignment.private_revision_not_authenticated')
+    await verifyPrivateEvent(item.privateAmendmentContract,
+      item.privateAmendmentSignature,trustedSpki,item,
+      privateRevision-1,previousHash)
+  }
   if(item.revision===1){
     if(item.state!=='active'||item.stateContract!==null
       ||item.stateSignature!==null)throw new Error('assignment.state_not_authenticated')
@@ -591,6 +611,14 @@ export function assertSignedPolicyProgress(
     throw new Error('assignment.original_policy_changed')
   if(next.revision<previous.revision)
     throw new Error('assignment.state_rollback')
+  if(JSON.stringify(next.privateEnvelope)!==JSON.stringify(previous.privateEnvelope))
+    throw Error('assignment.original_private_envelope_changed')
+  if((next.privateRevision??1)<(previous.privateRevision??1))
+    throw Error('assignment.private_rollback')
+  if((next.privateRevision??1)===(previous.privateRevision??1)
+    &&(next.privateAmendmentContract!==previous.privateAmendmentContract
+      ||next.privateAmendmentSignature!==previous.privateAmendmentSignature))
+    throw Error('assignment.private_equivocation')
   if(next.policyRevision<previous.policyRevision)
     throw new Error('assignment.policy_rollback')
   if(next.policyRevision===previous.policyRevision
@@ -644,7 +672,14 @@ export async function listServerAssignments(after?:string):Promise<{
   const result=await jsonApi<{items:AssignmentListing[];nextCursor:string|null}>(
     '/assignments/v1'+q)
   assertSame(s)
-  for(const item of result.items)await verifySignedAssignmentPolicy(item)
+  for(const item of result.items){
+    await verifySignedAssignmentPolicy(item)
+    if((item.privateRevision??1)>1){
+      const trustedSpki=item.ownerAccountId===s.accountId
+        ?s.pkg.accountSpki:(await pinnedPeer(item.ownerAccountId)).accountSpki
+      await verifyPrivateHistory(item,trustedSpki)
+    }
+  }
   assertSame(s)
   // Cache only signed, independently authenticated policy snapshots.
   // No plaintext assignment name, DEK or recovery material is persisted.
