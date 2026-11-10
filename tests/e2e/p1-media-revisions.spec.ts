@@ -22,6 +22,11 @@ test('P1-12: immutable owner-signed media versions survive Garage+Recovery Key w
     ]
     const ids:string[]=[]
     for(const file of snapshots){
+      // The real file chooser is disabled during encryption/refresh/sync.
+      // Playwright setInputFiles bypasses disabled input, so wait explicitly
+      // instead of pretending a user could select while the form is busy.
+      await expect(media.getByTestId('media-import-file'))
+        .toBeEnabled({timeout:30000})
       await media.getByTestId('media-import-file').setInputFiles({
         name:file.name,mimeType:'audio/wav',
         buffer:Buffer.alloc(1025,file.byte),
