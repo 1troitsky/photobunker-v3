@@ -222,6 +222,10 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     await expect(inbox.getByTestId('team-joined-list'))
       .toContainText('E2EE profile visible only to accepted users')
     await expect(inbox.getByTestId('team-revoked-notice')).toHaveCount(0)
+    await panel.getByTestId('team-member-selector').selectOption('')
+    await panel.getByTestId('team-member-selector').selectOption({
+      label:'TEAM SECRET PROOF',
+    })
     await expect(panel.getByTestId('team-member-'+accountB))
       .toContainText('Принято',{timeout:30000})
 
