@@ -168,6 +168,128 @@ final class AssignmentV1Test extends TestCase
         return $this->signed($role,'pb3.assignment-state.v1',$payload);
     }
 
+    private function signedSchedule(int $from,int $start,?int $end,
+        bool $before,bool $after,?string $operationId=null):array
+    {
+        $row=DB::table('assignment_records_v1')->where('id',$this->assignmentId)->first();
+        return $this->signed('owner','pb3.assignment-schedule.v1',[
+            'version'=>1,'operationId'=>$operationId??(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'rootPolicyHash'=>hash('sha256',$row->contract_json),
+            'previousScheduleHash'=>hash('sha256',
+                $row->latest_schedule_contract??$row->contract_json),
+            'fromScheduleRevision'=>$from,'toScheduleRevision'=>$from+1,
+            'startsAt'=>$start,'endsAt'=>$end,
+            'blockBeforeStart'=>$before,'blockAfterEnd'=>$after,
+        ]);
+    }
+
+    public function test_p1_20_schedule_has_independent_owner_signed_revisions_and_admission():void
+    {
+        $this->createAssignment();
+        $this->as('owner');
+        $base='/assignments/v1/'.$this->assignmentId;
+        $row=DB::table('assignment_records_v1')->where('id',$this->assignmentId)->first();
+        $root=$row->contract_json;
+        $originalStart=(int)$row->starts_at;
+        $now=\App\Photo\PhotoSync::nowMs();
+        $start=$now+86400000;
+        $end=$start+86400000;
+        $this->getJson('/assignments/v1')->assertOk()
+            ->assertJsonPath('items.0.scheduleRevision',1)
+            ->assertJsonPath('items.0.scheduleAmendmentContract',null);
+        $first=$this->signedSchedule(1,$start,$end,true,true);
+        $this->postJson($base.'/schedule',$first)->assertOk()
+            ->assertJsonPath('scheduleRevision',2)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($base.'/schedule',$first)->assertOk()
+            ->assertJsonPath('scheduleRevision',2)
+            ->assertJsonPath('unchanged',true);
+        $updated=DB::table('assignment_records_v1')->where('id',$this->assignmentId)->first();
+        $this->assertSame($root,$updated->contract_json);
+        $this->assertSame($originalStart,(int)$updated->starts_at);
+        $this->assertSame(2,(int)$updated->schedule_revision);
+        $this->assertFalse(\App\Assignments\AssignmentSchedule::permits($updated,$now));
+        $this->assertTrue(\App\Assignments\AssignmentSchedule::permits($updated,$start));
+        $this->assertFalse(\App\Assignments\AssignmentSchedule::permits($updated,$end));
+        $this->getJson('/assignments/v1')->assertOk()
+            ->assertJsonPath('items.0.startsAt',$originalStart)
+            ->assertJsonPath('items.0.scheduleRevision',2)
+            ->assertJsonPath('items.0.scheduleAmendmentContract',$first['contract']);
+        $second=$this->signedSchedule(2,$start,$end,false,true);
+        $this->postJson($base.'/schedule',$second)->assertOk()
+            ->assertJsonPath('scheduleRevision',3);
+        $updated=DB::table('assignment_records_v1')->where('id',$this->assignmentId)->first();
+        $this->assertTrue(\App\Assignments\AssignmentSchedule::permits($updated,$now));
+        $this->assertFalse(\App\Assignments\AssignmentSchedule::permits($updated,$end));
+        $third=$this->signedSchedule(3,$start,$end,false,false);
+        $this->postJson($base.'/schedule',$third)->assertOk()
+            ->assertJsonPath('scheduleRevision',4);
+        $updated=DB::table('assignment_records_v1')->where('id',$this->assignmentId)->first();
+        $this->assertTrue(\App\Assignments\AssignmentSchedule::permits($updated,$end+3600000));
+        $this->assertSame($root,$updated->contract_json);
+        $this->getJson($base.'/schedule-history')->assertOk()
+            ->assertJsonPath('scheduleRevision',4)
+            ->assertJsonPath('rootPolicyHash',hash('sha256',$root))
+            ->assertJsonCount(3,'events')
+            ->assertJsonPath('events.2.contract',$third['contract'])
+            ->assertJsonPath('events.2.signature',$third['signature']);
+        $this->postJson($base.'/schedule',$first)->assertOk()
+            ->assertJsonPath('unchanged',true)
+            ->assertJsonPath('scheduleRevision',4);
+        $this->assertDatabaseCount('assignment_schedule_events_v1',3);
+        $this->assertDatabaseCount('assignment_records_v1',1);
+        // Signed schedule events do not delete or retire media or the assignment.
+        $this->assertSame('active',$updated->state);
+    }
+
+    public function test_p1_20_schedule_acl_replay_stale_signature_and_invalid_dates():void
+    {
+        $this->createAssignment();
+        $url='/assignments/v1/'.$this->assignmentId.'/schedule';
+        $history=$url.'-history';
+        $now=\App\Photo\PhotoSync::nowMs();
+        $start=$now+86400000;
+        $this->as('outsider');
+        $this->getJson($history)->assertNotFound();
+        $this->as('recipient');
+        $this->getJson($history)->assertNotFound();
+        $this->as('owner');
+        $first=$this->signedSchedule(1,$start,null,true,false);
+        $this->postJson($url,[
+            'contract'=>$first['contract'],'signature'=>\App\Identity\Protocol::encode(random_bytes(64)),
+        ])->assertUnauthorized();
+        $malformed=json_decode($first['contract'],true,32,JSON_THROW_ON_ERROR);
+        $malformed['blockAfterEnd']=true; // illegal without an end date
+        $this->postJson($url,$this->signed('owner','pb3.assignment-schedule.v1',$malformed))
+            ->assertUnprocessable();
+        $malformed['blockAfterEnd']=false;
+        $malformed['endsAt']=$start; // strict end > start
+        $this->postJson($url,$this->signed('owner','pb3.assignment-schedule.v1',$malformed))
+            ->assertUnprocessable();
+        $this->postJson($url,$first)->assertOk();
+        $this->postJson($url,$this->signedSchedule(1,$start+120000,null,true,false))
+            ->assertConflict();
+        $this->as('owner');
+        $next=$this->signedSchedule(2,$start+60000,null,true,false);
+        $this->postJson($url,$next)->assertOk();
+        $this->postJson($url,$first)->assertOk()
+            ->assertJsonPath('scheduleRevision',3)->assertJsonPath('unchanged',true);
+        $this->as('outsider');
+        $this->getJson($history)->assertNotFound();
+        $this->as('owner');
+        $invite=$this->invite();
+        $this->as('recipient');
+        $this->getJson($history)->assertNotFound(); // pending is NOT membership
+        $this->accept($invite);
+        $this->getJson($history)->assertOk()
+            ->assertJsonPath('scheduleRevision',3)
+            ->assertJsonCount(2,'events');
+        $this->getJson('/assignments/v1')->assertOk()
+            ->assertJsonPath('items.0.scheduleRevision',3);
+    }
+
     public function test_r2_01_owner_state_transition_persists_exact_subsecond_receipt():void
     {
         $this->travelTo(now()->startOfSecond()->addMilliseconds(750));
