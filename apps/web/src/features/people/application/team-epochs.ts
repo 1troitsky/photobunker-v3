@@ -10,7 +10,7 @@ import { pinnedPeer, ensureOwnExchangeKey } from '../../sharing/key-directory'
 import { listLocalTeams } from './team-book'
 import {
   listOwnerTeamRoster, verifiedTeamMembershipHistory, openJoinedTeam,
-  cacheVerifiedJoinedTeam,
+  cacheVerifiedJoinedTeam,assertVerifiedTeamEpochNotOlder,
 } from './team-invitations'
 import type { TeamRole, TeamInvitation, JoinedTeam } from './team-invitations'
 
@@ -449,7 +449,20 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
   if(response.teamId!==invite.teamId
     ||!Number.isInteger(response.keyEpoch)||response.keyEpoch<1)
     throw Error('teams.invalid_epoch_member')
-  if(response.keyEpoch===1)return openJoinedTeam(invite)
+  if(response.keyEpoch===1){
+    // Even a genuine historical v1 response must not replace an already
+    // verified newer epoch on this account/device.
+    let original:{teamContractHash:string}
+    try{original=JSON.parse(invite.contract) as typeof original}
+    catch{throw Error('teams.bad_member_invite')}
+    await assertVerifiedTeamEpochNotOlder(
+      invite.teamId,invite.ownerAccountId,{
+        keyEpoch:1,contractHash:original.teamContractHash,
+        membershipRevision:1,
+      })
+    same(s)
+    return openJoinedTeam(invite)
+  }
   if(!invite.trustedOwner||invite.state!=='accepted')
     throw Error('teams.untrusted_member_epoch')
   const peer=await pinnedPeer(invite.ownerAccountId)
@@ -484,6 +497,12 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
     ||response.recipient?.accountId!==s.accountId
     ||!['curator','contributor','viewer'].includes(response.effectiveRole))
     throw Error('teams.untrusted_member_epoch')
+  await assertVerifiedTeamEpochNotOlder(
+    invite.teamId,invite.ownerAccountId,{
+      keyEpoch:chain.epoch,contractHash:chain.contractHash,
+      membershipRevision:chain.membershipRevision,
+    })
+  same(s)
   const r=c.recipients.find(x=>x.accountId===s.accountId)
   if(!r||!response.recipient
     ||JSON.stringify(r)!==JSON.stringify(response.recipient))
@@ -548,6 +567,9 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
     name:profile.name,description:profile.description,
     role,verifiedOnline:true,
   }
-  await cacheVerifiedJoinedTeam(joined,s.accountId)
+  await cacheVerifiedJoinedTeam(joined,s.accountId,{
+    keyEpoch:chain.epoch,contractHash:chain.contractHash,
+    membershipRevision:chain.membershipRevision,
+  })
   return joined
 }
