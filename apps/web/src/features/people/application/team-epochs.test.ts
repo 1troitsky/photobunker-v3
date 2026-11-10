@@ -141,7 +141,7 @@ describe('P1-29B encrypted owner Team key epoch outbox',()=>{
     const command=JSON.parse(sent[0]!) as {contract:string;signature:string}
     const c=JSON.parse(command.contract) as {
       fromEpoch:number;toEpoch:number;membershipRevision:number
-      previousEpochHash:string
+      previousEpochHash:string;retiredPendingInviteIds:string[]
       recipients:Array<{accountId:string;role:string;recipientKeyDigest:string
         envelope:{ephemeralSpki:string;salt:string;iv:string;ciphertext:string}}>
       privateEnvelope:{ciphertext:string}
