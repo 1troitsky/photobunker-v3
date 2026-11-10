@@ -161,7 +161,12 @@ final class TeamInvitationTest extends TestCase
         $this->getJson('/teams/v1/'.$this->teamId)->assertOk()
             ->assertJsonPath('memberCount',1);
 
+        $this->getJson('/teams/v1/'.$this->teamId.'/participants')->assertOk()
+            ->assertJsonPath('items.0.state','pending')
+            ->assertJsonPath('items.0.recipientAccountId',
+                $this->accounts['recipient']['id']);
         $this->as('recipient');
+        $this->getJson('/teams/v1/'.$this->teamId.'/participants')->assertNotFound();
         $this->getJson('/teams/v1/'.$this->teamId.'/member')->assertNotFound();
         $this->getJson('/teams/v1/invites/received')->assertOk()
             ->assertJsonPath('items.0.inviteId',$i['inviteId'])
@@ -187,6 +192,9 @@ final class TeamInvitationTest extends TestCase
         $this->assertDatabaseCount('photo_access_grants',0);
         $this->assertDatabaseCount('media_recipient_grants_v1',0);
         $this->as('owner');
+        $this->getJson('/teams/v1/'.$this->teamId.'/participants')->assertOk()
+            ->assertJsonPath('items.0.state','accepted')
+            ->assertJsonPath('items.0.acceptedContract',$accept['contract']);
         $this->getJson('/teams/v1/'.$this->teamId)->assertOk()
             ->assertJsonPath('memberCount',2);
         $this->as('outsider');

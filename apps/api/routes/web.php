@@ -142,6 +142,8 @@ Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(functio
     Route::get('/invites/received',[TeamInvitationController::class,'inbox']);
     Route::post('/{teamId}/invites',[TeamInvitationController::class,'invite'])
         ->whereUuid('teamId');
+    Route::get('/{teamId}/participants',[TeamInvitationController::class,'participants'])
+        ->whereUuid('teamId');
     Route::post('/{teamId}/invites/{inviteId}/accept',
         [TeamInvitationController::class,'accept'])
         ->whereUuid('teamId')->whereUuid('inviteId');

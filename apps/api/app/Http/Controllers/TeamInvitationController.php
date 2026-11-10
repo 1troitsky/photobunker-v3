@@ -142,6 +142,43 @@ final class TeamInvitationController extends Controller
         ]);
     }
 
+
+    /** Owner-only bounded signed roster; accepted state is server-authenticated
+     * and each recipient consent signature is returned for independent checks.
+     */
+    public function participants(Request $r,string $teamId)
+    {
+        [$actor]=$this->sync->actor($r);
+        P::uuid($teamId);
+        $team=DB::table('team_records_v1')->where('id',$teamId)
+            ->where('owner_account_id',$actor->id)->first();
+        abort_unless($team,404);
+        $after=$r->query('after');
+        abort_unless($after===null||is_string($after),422);
+        if($after!==null)P::uuid($after);
+        $q=DB::table('team_invites_v1 as i')
+            ->join('identity_accounts as recipient','recipient.id','=','i.recipient_account_id')
+            ->where('i.team_id',$teamId);
+        if($after!==null)$q->where('i.id','>',$after);
+        $rows=$q->select(['i.*','recipient.account_spki as recipient_account_spki'])
+            ->orderBy('i.id')->limit(51)->get();
+        $items=$rows->take(50)->map(static fn($i)=>[
+            'inviteId'=>$i->id,
+            'recipientAccountId'=>$i->recipient_account_id,
+            'recipientAccountSpki'=>$i->recipient_account_spki,
+            'role'=>$i->role,'state'=>$i->state,
+            'expiresAt'=>(int)$i->expires_at,
+            'contract'=>$i->contract_json,
+            'signature'=>$i->owner_signature,
+            'acceptedContract'=>$i->accepted_contract,
+            'acceptedSignature'=>$i->accepted_signature,
+        ])->values()->all();
+        return $this->sync->json([
+            'items'=>$items,
+            'nextCursor'=>$rows->count()>50?$items[49]['inviteId']:null,
+        ]);
+    }
+
     public function accept(Request $r,string $teamId,string $inviteId)
     {
         $this->sync->origin($r);
