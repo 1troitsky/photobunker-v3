@@ -221,7 +221,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     // v2, never a general-purpose v1 personal share.
     const photoScope=await A.evaluate(async id=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
-      const submission=(await a.listAssignmentSubmissions(id)).items[0]!
+      const submission=(await a.listAssignmentSubmissions(id))[0]!
       const res=await fetch('/shares/v1/grants/'+submission.photoGrantId)
       const detail=await res.json()
       const grant=JSON.parse(detail.contract)
