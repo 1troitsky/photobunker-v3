@@ -294,11 +294,16 @@ final class TeamEpochInvitationController extends Controller
                 ->where('i.state','accepted')
                 ->where('m.state','active')
                 ->limit(1),'effective_role')
+            ->selectSub(DB::table('team_membership_events_v1 as e')
+                ->select('e.next_role')->whereColumn('e.invite_id','i.id')
+                ->where('e.action','change_role')
+                ->orderByDesc('e.to_revision')->limit(1),'historic_role')
             ->orderBy('i.id')->limit(51)->get();
         $items=$rows->take(50)->map(static fn($i)=>[
             'inviteId'=>$i->id,'recipientAccountId'=>$i->recipient_account_id,
             'recipientAccountSpki'=>$i->recipient_account_spki,
-            'role'=>$i->role,'effectiveRole'=>$i->effective_role??$i->role,
+            'role'=>$i->role,
+            'effectiveRole'=>$i->effective_role??$i->historic_role??$i->role,
             'state'=>$i->state,'keyEpoch'=>(int)$i->key_epoch,
             'membershipRevision'=>(int)$i->membership_revision,
             'expiresAt'=>(int)$i->expires_at,
