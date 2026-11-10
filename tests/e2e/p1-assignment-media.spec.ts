@@ -163,13 +163,15 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       const video=document.querySelector('.video-frame video') as HTMLVideoElement|null
       return video?.videoWidth??0
     }),{timeout:20000}).toBeGreaterThan(0)
+    // The owner's additional signed 1-character description requirement
+    // is checked before the independent signed category allowlist.
+    await B.locator('#camera-description').fill('Verified photo description for signed v6')
     await B.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(B.getByText('assignment.category_not_allowed')).toBeVisible()
     await B.locator('#camera-category').fill('Report')
     await B.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(B.getByText('assignment.required_tags_missing')).toBeVisible()
     await B.locator('#camera-tags').fill('photo-evidence')
-    await B.locator('#camera-description').fill('Verified photo description for signed v6')
     await B.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(B.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
     const photo=await B.evaluate(async()=>{
