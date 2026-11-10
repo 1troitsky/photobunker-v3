@@ -7,9 +7,12 @@ import {
   listCachedAssignmentSnapshots, listServerAssignments,
   queueAssignmentInvitation, queueAssignmentPolicyChange,
   queueAssignmentPrivateTextChange,effectiveAssignmentEnvelope,
+  queueAssignmentScheduleChange,signedAssignmentSchedule,
   verifySignedAssignmentPolicy,
 } from '../features/assignments/application/assignment-outbox'
 import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
+import { scheduleDraftFromListing,buildEditorSchedule } from '../features/assignments/application/schedule-editor'
+import type { ScheduleEditorDraft } from '../features/assignments/application/schedule-editor'
 import { blankEditorDraft,buildEditorPolicy,editorDraftFromListing } from '../features/assignments/application/assignment-editor-model'
 import type { EditorDraft } from '../features/assignments/application/assignment-editor-model'
 import { openOwnerAssignment } from '../features/assignments/infrastructure/assignment-crypto'
@@ -26,6 +29,9 @@ const route=useRoute()
 const assignmentId=computed(()=>String(route.params.assignmentId??''))
 const activeTab=ref<Tab>('main')
 const draft=reactive<EditorDraft>(blankEditorDraft())
+const scheduleDraft=reactive<ScheduleEditorDraft>({
+  startsAt:'',endsAt:'',blockBeforeStart:true,blockAfterEnd:false,
+})
 const listing=ref<AssignmentListing|null>(null)
 const title=ref('')
 const instructions=ref('')
@@ -38,6 +44,8 @@ const baseline=ref('')
 const baselineRevision=ref<number|null>(null)
 const baselinePrivateRevision=ref<number|null>(null)
 const baselineText=ref('')
+const baselineSchedule=ref('')
+const baselineScheduleRevision=ref<number|null>(null)
 const peerId=ref('')
 const peerFingerprint=ref('')
 const peerConfirmed=ref(false)
@@ -45,7 +53,9 @@ const peerAgreed=ref(false)
 let run=0
 const dirtyPolicy=computed(()=>!!baseline.value&&JSON.stringify(draft)!==baseline.value)
 const dirtyText=computed(()=>!!baselineText.value&&JSON.stringify({title:title.value,instructions:instructions.value})!==baselineText.value)
-const dirty=computed(()=>dirtyPolicy.value||dirtyText.value)
+const dirtySchedule=computed(()=>!!baselineSchedule.value
+  &&JSON.stringify(scheduleDraft)!==baselineSchedule.value)
+const dirty=computed(()=>dirtyPolicy.value||dirtyText.value||dirtySchedule.value)
 const owner=computed(()=>!!activeSession.value&&listing.value?.ownerAccountId===activeSession.value.accountId)
 const editable=computed(()=>owner.value&&listing.value?.state==='active'
   &&!pending.value&&!busy.value)
@@ -61,6 +71,12 @@ function apply(row:AssignmentListing):void{
   baselineRevision.value=row.policyRevision
   listing.value=row
 }
+function applySchedule(row:AssignmentListing):void{
+  const form=scheduleDraftFromListing(row)
+  Object.assign(scheduleDraft,form)
+  baselineSchedule.value=JSON.stringify(form)
+  baselineScheduleRevision.value=row.scheduleRevision??1
+}
 async function fromRow(row:AssignmentListing,session:NonNullable<typeof activeSession.value>,
   generation:number):Promise<void>{
   await verifySignedAssignmentPolicy(row,loadState.value==='offline')
@@ -70,11 +86,13 @@ async function fromRow(row:AssignmentListing,session:NonNullable<typeof activeSe
     row.privateEnvelope,effectiveAssignmentEnvelope(row))
   if(!sameIdentity(activeSession.value,session)||run!==generation)return
   if(dirty.value&&(baselineRevision.value!==row.policyRevision
-    ||baselinePrivateRevision.value!==(row.privateRevision??1))){
+    ||baselinePrivateRevision.value!==(row.privateRevision??1)
+    ||baselineScheduleRevision.value!==(row.scheduleRevision??1))){
     notice.value='Подписанная версия изменилась. Отмените локальные правки и обновите перед сохранением.'
     return
   }
   if(!dirtyPolicy.value)apply(row)
+  if(!dirtySchedule.value)applySchedule(row)
   if(!dirtyText.value){
     title.value=decrypted.title
     instructions.value=decrypted.instructions
@@ -82,7 +100,7 @@ async function fromRow(row:AssignmentListing,session:NonNullable<typeof activeSe
     baselinePrivateRevision.value=row.privateRevision??1
   }
   pending.value=(await listAssignmentOperations()).some(op=>{
-    if(!['policy','private'].includes(op.kind)
+    if(!['policy','private','schedule'].includes(op.kind)
       ||!['queued','retry'].includes(op.state))return false
     try{return (JSON.parse(op.contract) as {assignmentId?:string}).assignmentId===row.assignmentId}
     catch{return false}
@@ -132,6 +150,7 @@ async function undo():Promise<void>{
       row.privateEnvelope,effectiveAssignmentEnvelope(row))
     if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
     apply(row)
+    applySchedule(row)
     title.value=data.title;instructions.value=data.instructions
     baselineText.value=JSON.stringify({title:data.title,instructions:data.instructions})
     baselinePrivateRevision.value=row.privateRevision??1
@@ -155,23 +174,29 @@ async function save():Promise<void>{
         cursor=page.nextCursor??undefined
       }while(!fresh&&cursor)
       if(!fresh||fresh.policyRevision!==baselineRevision.value
-        ||(fresh.privateRevision??1)!==baselinePrivateRevision.value)
+        ||(fresh.privateRevision??1)!==baselinePrivateRevision.value
+        ||(fresh.scheduleRevision??1)!==baselineScheduleRevision.value)
         throw Error('assignment.editor_revision_changed')
     }else if(listing.value.policyRevision!==baselineRevision.value
-      ||(listing.value.privateRevision??1)!==baselinePrivateRevision.value)
+      ||(listing.value.privateRevision??1)!==baselinePrivateRevision.value
+      ||(listing.value.scheduleRevision??1)!==baselineScheduleRevision.value)
       throw Error('assignment.editor_revision_changed')
     if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
     const policy=dirtyPolicy.value?buildEditorPolicy(draft):null
     const text=dirtyText.value?{
       version:1 as const,title:title.value.trim(),instructions:instructions.value,
     }:null
-    // Validate BOTH representations before persisting either signed op.
+    // Validate all changed representations before persisting signed operations.
+    const schedule=dirtySchedule.value
+      ?buildEditorSchedule(scheduleDraft,signedAssignmentSchedule(listing.value))
+      :null
     if(text&&(!text.title||text.title.length>120||text.instructions.length>4000))
       throw Error('assignment.invalid_text')
     const ids:string[]=[]
     try{
       if(policy)ids.push(await queueAssignmentPolicyChange(assignmentId.value,policy))
       if(text)ids.push(await queueAssignmentPrivateTextChange(assignmentId.value,text))
+      if(schedule)ids.push(await queueAssignmentScheduleChange(assignmentId.value,schedule))
     }catch(e){
       // Partial dual-event signing never becomes an invisible failure.
       if(ids.length)pending.value=true
@@ -186,7 +211,7 @@ async function save():Promise<void>{
       if(ids.every(id=>ops.find(x=>x.id===id)?.state==='sent')){
         notice.value='Изменение подписано и принято сервером.'
         pending.value=false
-        baseline.value='';baselineText.value=''
+        baseline.value='';baselineText.value='';baselineSchedule.value=''
         await refresh()
       }else{
         notice.value='Подписанное изменение ожидает подтверждения сервера.'
@@ -251,7 +276,12 @@ watch(activeSession,(next,previous)=>{
     listing.value=null;title.value='';instructions.value=''
     baseline.value='';baselineRevision.value=null
     baselineText.value='';baselinePrivateRevision.value=null
-    Object.assign(draft,blankEditorDraft());peerReset()
+  baselineSchedule.value='';baselineScheduleRevision.value=null
+    Object.assign(draft,blankEditorDraft())
+    Object.assign(scheduleDraft,{
+      startsAt:'',endsAt:'',blockBeforeStart:true,blockAfterEnd:false,
+    })
+    peerReset()
     loadState.value='loading'
     void refresh()
   }
@@ -260,12 +290,20 @@ watch(assignmentId,()=>{
   title.value='';instructions.value='';listing.value=null
   baseline.value='';baselineRevision.value=null
   baselineText.value='';baselinePrivateRevision.value=null
-  Object.assign(draft,blankEditorDraft());peerReset()
+  baselineSchedule.value='';baselineScheduleRevision.value=null
+  Object.assign(draft,blankEditorDraft())
+  Object.assign(scheduleDraft,{
+    startsAt:'',endsAt:'',blockBeforeStart:true,blockAfterEnd:false,
+  })
+  peerReset()
   activeTab.value='main';loadState.value='loading'
   void refresh()
 })
 onMounted(()=>{void refresh()})
-onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';baselineText.value=''})
+watch(()=>scheduleDraft.endsAt,(value)=>{
+  if(!value)scheduleDraft.blockAfterEnd=false
+})
+onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';baselineText.value='';baselineSchedule.value=''})
 </script>
 
 <template>
@@ -314,12 +352,32 @@ onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';ba
         <textarea id="editor-private-instructions" v-model="instructions"
           rows="5" maxlength="4000" :disabled="!editable" placeholder="Инструкции для исполнителя"/>
         <div class="fieldwork-editor-grid">
-          <div><span class="muted">Начало</span><strong>{{ listing?new Date(listing.startsAt).toLocaleString('ru-RU'):'' }}</strong></div>
-          <div><span class="muted">Окончание</span><strong>{{ listing?.endsAt?new Date(listing.endsAt).toLocaleString('ru-RU'):'Не задано' }}</strong></div>
+          <div>
+            <label for="editor-schedule-start">Начало задания</label>
+            <input id="editor-schedule-start" type="datetime-local"
+              v-model="scheduleDraft.startsAt" :disabled="!editable" required>
+            <label class="checkline">
+              <input id="editor-block-before" v-model="scheduleDraft.blockBeforeStart"
+                type="checkbox" :disabled="!editable">
+              Запретить добавление до начала
+            </label>
+          </div>
+          <div>
+            <label for="editor-schedule-end">Окончание (необязательно)</label>
+            <input id="editor-schedule-end" type="datetime-local"
+              v-model="scheduleDraft.endsAt" :disabled="!editable">
+            <label class="checkline">
+              <input id="editor-block-after" v-model="scheduleDraft.blockAfterEnd"
+                type="checkbox" :disabled="!editable||!scheduleDraft.endsAt">
+              Запретить добавление после окончания
+            </label>
+          </div>
           <div><span class="muted">Состояние</span><strong>{{ listing?.state==='active'?'Активно':'Завершено' }}</strong></div>
-          <div><span class="muted">Версия правил</span><strong>{{ listing?.policyRevision }}</strong></div>
+          <div><span class="muted">Ревизии</span>
+            <strong>Правила {{ listing?.policyRevision }} · Время {{ listing?.scheduleRevision??1 }}</strong>
+          </div>
         </div>
-        <p class="muted">Изменение расписания и автоматическое удаление пока не подключены к реальному lifecycle — никаких фиктивных переключателей.</p>
+        <p class="muted">Время и запреты подписываются владельцем и проверяются сервером. У исторических заданий первоначальные ограничения сохранены до явного изменения расписания. Автоматическое удаление файлов и задания пока не подключено: изменение времени их не удаляет.</p>
       </div>
 
       <div v-if="activeTab==='files'" id="editor-panel-files"
@@ -416,7 +474,7 @@ onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';ba
         <p class="muted">Public Card, редактирование оригинала и права на передачу пока не имеют подтверждённой модели E2EE scopes. Их здесь нельзя включить простым UI-переключателем.</p>
       </div>
 
-      <p v-if="pending" role="status" class="muted">Подписанная версия правил или приватного текста ожидает серверного подтверждения. Следующее изменение пока заблокировано.</p>
+      <p v-if="pending" role="status" class="muted">Подписанное изменение правил, расписания или приватного текста ожидает серверного подтверждения. Следующее изменение пока заблокировано.</p>
       <p v-if="notice" role="status" class="status-text">{{ notice }}</p>
       <p v-if="error" role="alert" class="error-text">{{ error }}</p>
       <div class="fieldwork-editor-actions">
