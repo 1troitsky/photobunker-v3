@@ -88,7 +88,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await A.getByTestId('open-fieldwork-editor').click()
     await expect(A.getByTestId('fieldwork-assignment-editor')).toBeVisible()
     await expect(A.getByTestId('editor-private-title'))
-      .toHaveText('Media v3 opt-in assignment')
+      .toHaveValue('Media v3 opt-in assignment')
     await expect(A.getByRole('tab')).toHaveCount(4)
     await A.getByRole('tab',{name:'Файлы'}).click()
     await expect(A.locator('#editor-video-goal')).toHaveValue('2')
