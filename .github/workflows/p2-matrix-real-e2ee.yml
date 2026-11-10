@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - 'apps/web/tests/integration/matrix-real-e2ee.mjs'
+      - 'apps/web/src/features/messages/**'
+      - 'apps/api/app/Http/Controllers/Matrix*'
+      - 'apps/api/database/migrations/*matrix*'
+      - 'apps/api/routes/web.php'
       - 'apps/web/package.json'
       - 'pnpm-lock.yaml'
       - '.github/workflows/p2-matrix-real-e2ee.yml'
