@@ -281,8 +281,13 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     })
     expect(intact).toBe(2)
 
-    // P1-17: owner tightens only AUDIO requirements in signed v6,
-    // leaving video permissions, photo requirements, and old receipts intact.
+    // P1-18 regression: after returning from the separate editor, a fast
+    // click on the locally restored card must rebase UNTOUCHED legacy fields
+    // when the owner-signed current server policy arrives asynchronously.
+    await expect(A.locator('#assignment-allow-audio')).toBeChecked({timeout:20000})
+    await expect(A.locator('#assignment-allow-video')).toBeChecked()
+    await expect(A.locator('#assignment-audio-goal')).toHaveValue('1')
+    // Owner now tightens only AUDIO requirements in signed v6.
     await A.locator('#assignment-audio-required-category').check()
     await A.locator('#assignment-audio-description-min').fill('12')
     await A.locator('#assignment-audio-required-gps').check()
