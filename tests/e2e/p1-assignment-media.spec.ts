@@ -3,7 +3,10 @@ import {test,expect} from '@playwright/test'
 test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts',async({browser})=>{
   test.setTimeout(240000)
   const ownerCtx=await browser.newContext()
-  const contributorCtx=await browser.newContext({permissions:['camera','microphone']})
+  const contributorCtx=await browser.newContext({
+    permissions:['camera','microphone','geolocation'],
+    geolocation:{latitude:41.647849,longitude:41.639411,accuracy:6},
+  })
   const A=await ownerCtx.newPage()
   const B=await contributorCtx.newPage()
   async function enroll(page:typeof A):Promise<string>{
@@ -51,7 +54,8 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(assignmentId).toMatch(/^[0-9a-f-]{36}$/)
     await expect(A.locator('.assignment-detail')).toContainText('Разрешённые типы: photo')
 
-    // P1-15: explicit owner-signed v4 targets. Original root stays photo-only.
+    // P1-16: newly edited owner-signed v5 targets and rules.
+    // Original root remains photo-only and older signed versions unchanged.
     await A.locator('#assignment-allow-video').check()
     await A.locator('#assignment-allow-audio').check()
     await A.locator('#assignment-video-goal').fill('2')
@@ -73,7 +77,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
         audioGoal:JSON.parse(body.events[0].contract).audioGoal,
       }
     },assignmentId)
-    expect(policy).toEqual({http:200,version:4,
+    expect(policy).toEqual({http:200,version:5,
       allowed:['photo','video','audio'],videoGoal:2,audioGoal:1})
 
     await A.locator('#assignment-recipient-id').fill(contributorId)
@@ -163,6 +167,33 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     })
     expect(intact).toBe(2)
 
+    // P1-16: owner tightens only AUDIO requirements in signed v5,
+    // leaving video permissions, photo requirements, and old receipts intact.
+    await A.locator('#assignment-audio-required-category').check()
+    await A.locator('#assignment-audio-description-min').fill('12')
+    await A.locator('#assignment-audio-required-gps').check()
+    await A.getByRole('button',{name:'Подписать новые правила'}).click()
+    await expect(A.getByText('Версия правил: 3')).toBeVisible({timeout:20000})
+    await expect(A.getByTestId('assignment-audio-requirements'))
+      .toContainText('описание минимум 12 символов')
+    // An already-imported personal audio has NO authenticated private fields:
+    // it must never gain an E2EE recipient grant under tightened rules.
+    const preflightResult=await B.evaluate(async({assignmentId,ownerId})=>{
+      const m=await import('/src/features/media/application/media-outbox.ts')
+      const p=await import('/src/features/assignments/application/media-submission-preflight.ts')
+      const g=await import('/src/features/media/application/media-grants.ts')
+      const audio=(await m.listLocalMedia()).find(x=>x.mediaType==='audio'&&!x.capture)!
+      const before=(await g.listOutgoingMediaGrants()).length
+      let rejected=''
+      try{await p.preflightAssignmentMediaGrant(assignmentId,audio.mediaId,ownerId)}
+      catch(e){rejected=e instanceof Error?e.message:'unknown'}
+      return {rejected,before,after:(await g.listOutgoingMediaGrants()).length}
+    },{assignmentId,ownerId})
+    expect(preflightResult).toEqual({
+      rejected:'assignment.category_required',
+      before:preflightResult.before,after:preflightResult.before,
+    })
+
     // P1-14: actual Chromium MediaRecorder microphone stream (not a fake
     // uploaded audio file) while the accepted signed policy is cached.
     await B.goto('/camera?assignmentId='+assignmentId)
@@ -171,6 +202,16 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await B.getByTestId('camera-mode').selectOption('audio')
     await expect(B.getByTestId('camera-start-recording'))
       .toBeEnabled({timeout:20000})
+    await B.getByTestId('camera-start-recording').click()
+    await expect(B.getByText('assignment.category_required')).toBeVisible()
+    await B.locator('#camera-category').fill('Report')
+    await B.getByTestId('camera-start-recording').click()
+    await expect(B.getByText('assignment.description_too_short')).toBeVisible()
+    await B.locator('#camera-description').fill('PRIVATE-AUDIO-CAPTURE-METADATA')
+    await B.getByTestId('camera-start-recording').click()
+    await expect(B.getByText('assignment.gps_required')).toBeVisible()
+    await B.getByRole('button',{name:'Получить GPS'}).click()
+    await expect(B.getByText(/GPS получен/)).toBeVisible({timeout:12000})
     await B.getByTestId('camera-start-recording').click()
     await expect(B.getByTestId('camera-recording-status')).toBeVisible()
     await B.waitForTimeout(1600) // actual microphone media data, not debounce
@@ -196,7 +237,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       }
     })
     expect(recorded).toMatchObject({
-      type:'audio',capturePolicy:2,captureMediaId:recorded.id,
+      type:'audio',capturePolicy:3,captureMediaId:recorded.id,
       captureAssignment:assignmentId,captureKind:'audio',
       hasPrivateFilename:false,signed:true,ciphertextOnly:true,
     })
@@ -235,11 +276,20 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       const grant=await import('/src/features/media/application/media-grants.ts')
       const data=await grant.readReceivedMediaGrant(id)
       return {mime:data.blob.type,bytes:data.blob.size,
-        fileName:data.metadata.fileName}
+        fileName:data.metadata.fileName,version:data.metadata.version,
+        category:data.metadata.category,description:data.metadata.description,
+        gps:data.metadata.gps&&{
+          latitude:data.metadata.gps.latitude,
+          longitude:data.metadata.gps.longitude,
+        }}
     },capturedReceipt!.mediaGrantId)
     expect(verified.mime).toMatch(/^audio\//)
     expect(verified.bytes).toBeGreaterThan(128)
     expect(verified.fileName).toMatch(/^recording-/)
+    expect(verified.version).toBe(2)
+    expect(verified.category).toBe('Report')
+    expect(verified.description).toBe('PRIVATE-AUDIO-CAPTURE-METADATA')
+    expect(verified.gps).toEqual({latitude:41.647849,longitude:41.639411})
 
     // Verify the separate camera+microphone MediaRecorder branch as well.
     await B.goto('/camera?assignmentId='+assignmentId)
