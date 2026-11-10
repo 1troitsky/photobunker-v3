@@ -610,6 +610,12 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       .toContainText('PRIVATE PHOTO FRAMING 2',{timeout:20000})
     await expect(B.getByTestId('camera-private-instructions'))
       .not.toContainText('PRIVATE VIDEO MOTION 1')
+    // No stale decrypted text may survive assignment deselection.
+    await B.locator('#camera-assignment').selectOption('')
+    await expect(B.getByTestId('camera-private-instructions')).toHaveCount(0)
+    await B.locator('#camera-assignment').selectOption(assignmentId)
+    await expect(B.getByTestId('camera-media-instruction'))
+      .toContainText('PRIVATE PHOTO FRAMING 2')
     await B.locator('#camera-mode').selectOption('video')
     await expect(B.getByTestId('camera-media-instruction'))
       .toContainText('PRIVATE VIDEO MOTION 1')
