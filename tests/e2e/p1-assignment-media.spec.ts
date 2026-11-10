@@ -33,6 +33,11 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       ['audio','audio/wav','ASSIGNMENT-PRIVATE-AUDIO.wav',0x31],
       ['video','video/webm','ASSIGNMENT-PRIVATE-VIDEO.webm',0x52],
     ] as const){
+      // The real file chooser is disabled during encryption/refresh/sync.
+      // Playwright setInputFiles bypasses disabled input, so wait explicitly
+      // instead of pretending a user could select while the form is busy.
+      await expect(mediaPanel.getByTestId('media-import-file'))
+        .toBeEnabled({timeout:30000})
       await mediaPanel.getByTestId('media-import-file').setInputFiles({
         name,mimeType:mime,buffer:Buffer.alloc(2048,byte),
       })
