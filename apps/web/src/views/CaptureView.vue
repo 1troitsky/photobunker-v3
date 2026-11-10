@@ -23,11 +23,24 @@ const policies=ref<AssignmentListing[]>([])
 const selectedAssignment=ref('')
 // Volatile display only; decrypt from account-scoped, signed-revision-bound AEAD cache.
 const assignmentPrivate=ref<PrivateAssignment|null>(null)
+const assignmentPrivateScope=ref('')
 const privateInstructionState=ref<'none'|'loading'|'ready'|'unavailable'>('none')
+/**
+ * Bind volatile plaintext to the account, selected assignment and EXACT
+ * already verified signed private revision. A Vue selection change must not
+ * show another assignment's text even for one render before its watcher runs.
+ */
+const visiblePrivateInstructions=computed(()=>{
+  const session=activeSession.value
+  const row=policies.value.find(p=>p.assignmentId===selectedAssignment.value)
+  if(!session||!row||!assignmentPrivate.value)return null
+  const expected=session.accountId+'|'+row.assignmentId+'|'+assignmentPrivateCacheScope(row)
+  return assignmentPrivateScope.value===expected?assignmentPrivate.value:null
+})
 let instructionGeneration=0
 const captureMode=ref<'photo'|'video'|'audio'>('photo')
 const currentMediaInstruction=computed(()=>{
-  const value=assignmentPrivate.value
+  const value=visiblePrivateInstructions.value
   if(!canCaptureType.value||value?.version!==2)return ''
   return captureMode.value==='photo'?value.photoInstructions
     :captureMode.value==='video'?value.videoInstructions:value.audioInstructions
@@ -35,6 +48,7 @@ const currentMediaInstruction=computed(()=>{
 async function loadPrivateInstructions():Promise<void>{
   const version=++instructionGeneration
   assignmentPrivate.value=null
+  assignmentPrivateScope.value=''
   const id=selectedAssignment.value
   const row=policies.value.find(p=>p.assignmentId===id)
   if(!id||!row){privateInstructionState.value='none';return}
@@ -48,11 +62,15 @@ async function loadPrivateInstructions():Promise<void>{
     if(!ownsCamera(identity,generation)||version!==instructionGeneration
       ||selectedAssignment.value!==id)return
     assignmentPrivate.value=data
+    assignmentPrivateScope.value=data
+      ?activeSession.value!.accountId+'|'+id+'|'+assignmentPrivateCacheScope(row)
+      :''
     privateInstructionState.value=data?'ready':'unavailable'
   }catch{
     if(ownsCamera(identity,generation)&&version===instructionGeneration
       &&selectedAssignment.value===id){
       assignmentPrivate.value=null
+      assignmentPrivateScope.value=''
       privateInstructionState.value='unavailable'
     }
   }
@@ -448,6 +466,7 @@ watch(activeSession,session=>{
     releaseStream()
     policies.value=[];selectedAssignment.value='';policyNotice.value=''
     ++instructionGeneration;assignmentPrivate.value=null
+    assignmentPrivateScope.value=''
     privateInstructionState.value='none'
     category.value='';description.value='';privateTags.value='';clearGPS()
     message.value='';error.value=''
@@ -473,6 +492,7 @@ watch(captureMode,()=>{
 })
 onUnmounted(()=>{
   disposed=true;++instructionGeneration;assignmentPrivate.value=null
+  assignmentPrivateScope.value=''
   privateInstructionState.value='none';closeCamera()
 })
 </script>
@@ -509,10 +529,10 @@ onUnmounted(()=>{
         <p v-if="policyNotice" class="muted" role="status">{{ policyNotice }}</p>
         <div v-if="selectedAssignment" class="camera-private-instructions"
           data-testid="camera-private-instructions">
-          <template v-if="privateInstructionState==='ready'">
+          <template v-if="privateInstructionState==='ready'&&visiblePrivateInstructions">
             <h3>Зашифрованные инструкции задания</h3>
-            <p v-if="assignmentPrivate?.instructions" class="muted">
-              Общие: {{ assignmentPrivate.instructions }}
+            <p v-if="visiblePrivateInstructions.instructions" class="muted">
+              Общие: {{ visiblePrivateInstructions.instructions }}
             </p>
             <p v-if="currentMediaInstruction" data-testid="camera-media-instruction"
               class="muted">
