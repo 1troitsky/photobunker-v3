@@ -481,3 +481,216 @@ onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value=''})
     </template>
   </section>
 </template>
+
+<style scoped>
+.fieldwork-editor {
+  max-width: 900px;
+  padding: 24px clamp(14px, 3vw, 30px) 22px;
+  color: #f1f1f1;
+}
+.fieldwork-editor-top { margin-bottom: 22px; }
+.fieldwork-editor-back {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  color: #bcbcbc;
+  text-decoration: none;
+  font-size: 12px;
+}
+.fieldwork-editor-back:hover { color: #f4f4f4; }
+.fieldwork-editor-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+}
+.fieldwork-editor-heading h1 { margin: 6px 0; font-size: clamp(23px, 3vw, 28px); }
+.fieldwork-editor-heading p { margin: 0; overflow-wrap: anywhere; }
+.fieldwork-editor-state {
+  display: inline-block;
+  max-width: 200px;
+  flex-shrink: 0;
+  color: #b4b4b4;
+  font-size: 11px;
+  text-align: right;
+}
+.fieldwork-editor-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  border-bottom: 1px solid #383838;
+  background: #161616;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  gap: 3px;
+}
+.fieldwork-editor-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #969696;
+  padding: 15px 4px 13px;
+  min-width: 0;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.fieldwork-editor-tabs button.active {
+  color: #f4f4f4;
+  border-bottom-color: var(--accent, #1ed760);
+}
+.fieldwork-editor-tabs button:focus-visible {
+  outline: 2px solid var(--accent, #1ed760);
+  outline-offset: -2px;
+}
+.fieldwork-editor-panel {
+  background: #1c1c1c;
+  border-radius: 0 0 12px 12px;
+  padding: clamp(16px, 3vw, 25px);
+  min-height: 315px;
+  border: 1px solid #292929;
+  border-top: none;
+}
+.fieldwork-editor-panel h2 {
+  font-size: 17px;
+  margin: 0 0 17px;
+}
+.fieldwork-editor-panel h3 {
+  font-size: 13px;
+  margin: 22px 0 12px;
+}
+.fieldwork-editor-panel p {
+  line-height: 1.5;
+}
+.fieldwork-editor-panel label {
+  display: block;
+  color: #ddd;
+  font-size: 12px;
+  margin: 17px 0 8px;
+}
+.fieldwork-editor-panel input:not([type=checkbox]),
+.fieldwork-editor-panel textarea {
+  display: block;
+  width: 100%;
+  background: #131313;
+  border: 1px solid #444;
+  border-radius: 7px;
+  color: #f1f1f1;
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 13px;
+  margin: 0 0 13px;
+}
+.fieldwork-editor-panel textarea {
+  min-height: 58px;
+  resize: vertical;
+}
+.fieldwork-editor-panel input:focus-visible,
+.fieldwork-editor-panel textarea:focus-visible {
+  outline: 2px solid var(--accent, #1ed760);
+  outline-offset: 1px;
+}
+.fieldwork-editor-panel input:disabled,
+.fieldwork-editor-panel textarea:disabled { opacity: .58; }
+.fieldwork-editor-panel .checkline {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 13px 0;
+}
+.fieldwork-editor-panel input[type=checkbox] {
+  width: 17px; height: 17px;
+  margin: 0;
+  accent-color: var(--accent, #1ed760);
+}
+.fieldwork-editor-readonly {
+  padding: 13px 15px;
+  border: 1px solid #333;
+  border-radius: 7px;
+  background: #171717;
+  overflow-wrap: anywhere;
+}
+.fieldwork-editor-instructions { min-height: 70px; white-space: pre-wrap; }
+.fieldwork-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 22px 0;
+}
+.fieldwork-editor-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #303030;
+  padding: 13px;
+  border-radius: 8px;
+}
+.fieldwork-editor-grid strong { font-size: 12px; overflow-wrap: anywhere; }
+.fieldwork-editor-media { display: grid; gap: 12px; }
+.fieldwork-editor-media > div {
+  border: 1px solid #303030;
+  background: #202020;
+  border-radius: 9px;
+  padding: 10px 15px 14px;
+}
+.fieldwork-editor-media small { font-weight: 400; }
+.fieldwork-editor-media label small { display: block; margin-top: 5px; }
+.fieldwork-editor-rules {
+  border: 1px solid #383838;
+  border-radius: 9px;
+  margin: 18px 0;
+  padding: 12px 16px;
+  min-width: 0;
+}
+.fieldwork-editor-rules:disabled { opacity: .63; }
+.fieldwork-editor-rules legend {
+  padding: 0 8px;
+  color: #f0f0f0;
+  font-weight: 700;
+}
+.fieldwork-editor-fingerprint {
+  background: #141414;
+  padding: 12px 16px;
+  border-radius: 9px;
+  margin: 15px 0;
+  border: 1px solid #3d3d3d;
+}
+.fieldwork-editor-fingerprint code { display: block; overflow-wrap: anywhere; }
+.fieldwork-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  border-top: 1px solid #393939;
+  background: #191919;
+  padding: 14px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  margin-top: 18px;
+  border-radius: 9px;
+}
+.fieldwork-editor-actions .fieldwork-editor-save {
+  background: #216d3d;
+  border-color: #358e52;
+  font-weight: 700;
+}
+.fieldwork-editor-actions .fieldwork-editor-save:not(:disabled):hover {
+  background: #28864a;
+}
+@media (max-width: 500px) {
+  .fieldwork-editor { padding: 12px 10px 16px; }
+  .fieldwork-editor-heading { display: block; }
+  .fieldwork-editor-state { display: block; text-align: left; margin-top: 8px; }
+  .fieldwork-editor-panel { padding: 14px; }
+  .fieldwork-editor-tabs button { font-size: 11px; padding: 14px 1px 12px; }
+  .fieldwork-editor-grid { grid-template-columns: 1fr; gap: 8px; }
+  .fieldwork-editor-actions { justify-content: stretch; }
+  .fieldwork-editor-actions button { flex: 1 1 auto; }
+  .fieldwork-editor-actions .fieldwork-editor-save { flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .fieldwork-editor-tabs button { transition: color .14s ease, border-color .14s ease; }
+}
+</style>
