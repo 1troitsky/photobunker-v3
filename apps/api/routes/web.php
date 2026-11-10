@@ -108,6 +108,8 @@ Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(f
     Route::post('/{assignmentId}/state',[AssignmentV1Controller::class,'changeState'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/policy',[AssignmentV1Controller::class,'changePolicy'])->whereUuid('assignmentId');
     Route::get('/{assignmentId}/policy-history',[AssignmentV1Controller::class,'policyHistory'])->whereUuid('assignmentId');
+    Route::post('/{assignmentId}/private',[AssignmentV1Controller::class,'changePrivateText'])->whereUuid('assignmentId');
+    Route::get('/{assignmentId}/private-history',[AssignmentV1Controller::class,'privateTextHistory'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/invites',[AssignmentV1Controller::class,'invite'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/invites/{inviteId}/accept',
         [AssignmentV1Controller::class,'accept'])->whereUuid('assignmentId')->whereUuid('inviteId');
