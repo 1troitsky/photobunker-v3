@@ -23,7 +23,7 @@ test('P1-27: owner-signed encrypted Team → durable local queue → server ACL 
 
     // A newly queued team must not be reported as remotely persisted
     // before its matching signed server ACK. The final status is authoritative.
-    await expect(A.getByText('ENCRYPTED TEAM NAME'))
+    await expect(A.getByTestId(/^team-row-/).getByText('ENCRYPTED TEAM NAME'))
       .toBeVisible({timeout:20000})
     await expect(A.getByText('В облаке',{exact:false}))
       .toBeVisible({timeout:20000})
@@ -55,7 +55,7 @@ test('P1-27: owner-signed encrypted Team → durable local queue → server ACL 
 
     await ctxA.setOffline(true)
     await A.getByRole('button',{name:'Обновить',exact:true}).click()
-    await expect(A.getByText('ENCRYPTED TEAM NAME')).toBeVisible()
+    await expect(A.getByTestId(/^team-row-/).getByText('ENCRYPTED TEAM NAME')).toBeVisible()
     await expect(A.getByText('В облаке',{exact:false})).toBeVisible()
   }finally{
     await ctxA.close();await ctxB.close()
