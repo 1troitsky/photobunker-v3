@@ -250,7 +250,10 @@ export async function listIncomingTeamInvites():Promise<{
         if(item.state==='revoked')revokedTeamIds.push(item.teamId)
         else suspendedTeamIds.push(item.teamId)
       }else{
-        const checked=await verifyReceived(item)
+        // The minimal revoked/suspended variants were already handled above.
+        const checked=await verifyReceived(
+          item as Omit<TeamInvitation,'trustedOwner'>,
+        )
         invites.push(checked)
       }
     }
