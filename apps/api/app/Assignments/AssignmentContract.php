@@ -77,12 +77,13 @@ final class AssignmentContract
      * Amendments retain the immutable root. v1 is photo-goal only;
      * v2 adds photo capture requirements; v3 explicitly opts into video
      * and/or audio; v4 adds independent, optional video/audio progress goals; v5 adds
-     * per-kind public requirement flags (never actual private fields).
+     * per-kind public requirement flags (never actual private fields);
+     * v6 adds PUBLIC allowed-category vocabulary and required tag vocabulary.
      * Never broaden older photo-only signed policy implicitly.
      */
     public static function policyAmendment(array $d,string $owner,string $assignment):void
     {
-        abort_unless(in_array($d['version'],[1,2,3,4,5],true)
+        abort_unless(in_array($d['version'],[1,2,3,4,5,6],true)
             &&$d['assignmentId']===$assignment
             &&$d['ownerAccountId']===$owner
             &&is_int($d['fromPolicyRevision'])
@@ -118,7 +119,7 @@ final class AssignmentContract
                         &&is_int($goal)&&$goal>=1&&$goal<=999),422);
             }
         }
-        if($d['version']===5){
+        if($d['version']>=5){
             foreach(['video'=>'videoRequirements','audio'=>'audioRequirements'] as $kind=>$field){
                 $rules=$d[$field]??null;
                 abort_unless(is_array($rules)
@@ -134,6 +135,34 @@ final class AssignmentContract
                         'requiredCategory'=>false,'descriptionMinLength'=>0,
                         'requiredGps'=>false,
                     ],422);
+                }
+            }
+        }
+        if($d['version']===6){
+            $empty=['allowedCategories'=>[],'requiredTags'=>[]];
+            foreach(['photo'=>'photoAdvanced','video'=>'videoAdvanced',
+                'audio'=>'audioAdvanced'] as $kind=>$field){
+                $v=$d[$field]??null;
+                abort_unless(is_array($v)&&!array_is_list($v)
+                    &&array_keys($v)===['allowedCategories','requiredTags'],422);
+                foreach(['allowedCategories'=>16,'requiredTags'=>12] as $name=>$limit){
+                    $items=$v[$name];
+                    abort_unless(is_array($items)&&array_is_list($items)
+                        &&count($items)<=$limit,422);
+                    $seen=[];
+                    foreach($items as $label){
+                        $max=$name==='allowedCategories'?64:48;
+                        abort_unless(is_string($label)&&strlen($label)>0
+                            &&strlen($label)<=$max
+                            &&trim($label)===$label
+                            &&preg_match('//u',$label)===1
+                            &&preg_match('/[\\x00-\\x1f\\x7f,]/',$label)===0
+                            &&!isset($seen[$label]),422);
+                        $seen[$label]=true;
+                    }
+                }
+                if(!in_array($kind,$d['allowedMedia'],true)){
+                    abort_unless($v===$empty,422);
                 }
             }
         }

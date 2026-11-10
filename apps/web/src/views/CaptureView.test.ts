@@ -21,6 +21,7 @@ vi.mock('../features/assignments/application/assignment-outbox', () => ({
   signedCaptureBinding: mocks.binding,
   signedAllowedAssignmentMedia: () => ['photo'],
   signedMediaCaptureIntent: vi.fn(),
+  signedAdvancedRequirements: () => ({allowedCategories:[],requiredTags:[]}),
   signedPolicyRequirements: () => ({
     requiredCategory:false,descriptionMinLength:0,requiredGps:false,
   }),
@@ -261,7 +262,7 @@ describe('camera session ownership and async permission lifecycle', () => {
     button('Сделать снимок').click();await settle()
     expect(mocks.capture).toHaveBeenCalledWith(
       expect.any(Blob),undefined,{
-        category:'Репортаж',description:'CONFIDENTIAL-CATEGORY-GPS',
+        category:'Репортаж',description:'CONFIDENTIAL-CATEGORY-GPS',tags:[],
         gps:expect.objectContaining({
           latitude:41.647849,longitude:41.639411,accuracyMeters:6,
         }),
@@ -332,7 +333,7 @@ describe('camera session ownership and async permission lifecycle', () => {
     const opened = media(); requests[0]!.resolve(opened.stream); await settle()
     button('Сделать снимок').click(); await settle()
     expect(mocks.binding).toHaveBeenCalledWith('assignment-a',expect.any(Number),{
-      category:'',description:'',gps:null,
+      category:'',description:'',gps:null,tags:[],
     })
     activeSession.value = {...session, accountId: 'account-b'}
     binding.resolve({assignmentId: 'assignment-a', policyRevision: 1}); await settle()

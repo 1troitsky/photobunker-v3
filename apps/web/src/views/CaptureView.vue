@@ -7,10 +7,11 @@ import { enqueueEncryptedMedia } from '../features/media/application/media-outbo
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
 import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
 import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
+import { parseRulesCsv } from '../features/assignments/domain/advanced-rules'
 import {
   listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
   signedMediaCaptureIntent,signedAllowedAssignmentMedia,
-  signedPolicyRequirements,signedMediaRequirements,
+  signedPolicyRequirements,signedMediaRequirements,signedAdvancedRequirements,
 } from '../features/assignments/application/assignment-outbox'
 import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
 
@@ -41,9 +42,14 @@ const requiredFields=computed(()=>{
     ?signedPolicyRequirements(policy)
     :signedMediaRequirements(policy,captureMode.value)):null
 })
+const requiredAdvanced=computed(()=>{
+  const policy=policies.value.find(p=>p.assignmentId===selectedAssignment.value)
+  return policy?signedAdvancedRequirements(policy,captureMode.value):null
+})
 // Volatile capture form. These values never enter IndexedDB in plaintext.
 const category=ref('')
 const description=ref('')
+const privateTags=ref('')
 const gps=ref<GPSFix|null>(null)
 const gpsLoading=ref(false)
 const gpsError=ref('')
@@ -241,6 +247,7 @@ async function beginRecording():Promise<void>{
     // metadata encryption use these values, never mutable form state.
     const privateFields={
       category:category.value,description:description.value,gps:gps.value,
+      tags:parseRulesCsv(privateTags.value,12,48),
     }
     // Snapshot verified owner policy BEFORE acquiring any recording bytes.
     // MediaFile v1 stays opaque; an independent account-signed capture
@@ -382,6 +389,7 @@ async function capture():Promise<void> {
     // must refer to the same input even if UI changes during async binding.
     const privateFields={
       category:category.value,description:description.value,gps:gps.value,
+      tags:parseRulesCsv(privateTags.value,12,48),
     }
     const binding=selectedAssignment.value
       ?await signedCaptureBinding(selectedAssignment.value,capturedAt,privateFields)
@@ -401,7 +409,7 @@ watch(activeSession,session=>{
     observedIdentity=identity;cameraGeneration++
     releaseStream()
     policies.value=[];selectedAssignment.value='';policyNotice.value=''
-    category.value='';description.value='';clearGPS()
+    category.value='';description.value='';privateTags.value='';clearGPS()
     message.value='';error.value=''
   }
   if(!session)return
@@ -466,6 +474,10 @@ onUnmounted(()=>{disposed=true;closeCamera()})
           описание минимум {{ requiredFields.descriptionMinLength }} символов,
           GPS {{ requiredFields.requiredGps?'обязателен':'необязателен' }}.
         </p>
+        <p v-if="requiredAdvanced" class="muted" data-testid="camera-advanced-rules">
+          Категории (публичный список правил): {{ requiredAdvanced.allowedCategories.join(', ')||'любые' }};
+          обязательные теги: {{ requiredAdvanced.requiredTags.join(', ')||'нет' }}.
+        </p>
       </div>
       <div class="foundation-card">
         <h2>Приватная информация {{ captureMode==='photo'?'снимка':captureMode==='video'?'видео':'аудио' }}</h2>
@@ -475,6 +487,9 @@ onUnmounted(()=>{disposed=true;closeCamera()})
         <label for="camera-description">Описание</label>
         <textarea id="camera-description" v-model="description" maxlength="4000"
           rows="3" placeholder="Приватное описание (необязательно)"/>
+        <label for="camera-tags">Теги (через запятую)</label>
+        <input id="camera-tags" v-model="privateTags" type="text" autocomplete="off"
+          data-testid="camera-tags" placeholder="например, репортаж, событие" maxlength="600">
         <div class="action-row">
           <button type="button" :disabled="gpsLoading||busy" @click="obtainGPS">
             {{ gpsLoading?'Определение GPS…':'Получить GPS' }}

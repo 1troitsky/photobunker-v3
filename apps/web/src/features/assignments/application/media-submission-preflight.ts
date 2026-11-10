@@ -2,9 +2,10 @@ import { activeSession,requireSession } from '../../identity/application/session
 import { digest,hex,importSpki,verify } from '../../identity/infrastructure/crypto'
 import { readLocalMedia,listLocalMedia } from '../../media/application/media-outbox'
 import { prepareMediaPrivateFields,validateMediaPrivateRequirements } from '../../media/domain/media-crypto'
+import { validateAdvancedFields } from '../domain/advanced-rules'
 import {
   listServerAssignments,signedAllowedAssignmentMedia,
-  signedMediaRequirements,verifySignedAssignmentPolicy,
+  signedMediaRequirements,signedAdvancedRequirements,verifySignedAssignmentPolicy,
 } from './assignment-outbox'
 import type { AssignmentListing } from './assignment-outbox'
 
@@ -47,6 +48,7 @@ export async function preflightAssignmentMediaGrant(
   const fields=prepareMediaPrivateFields(metadata,metadata.createdAt)
   validateMediaPrivateRequirements(fields,
     signedMediaRequirements(policy,media.mediaType))
+  validateAdvancedFields(fields,signedAdvancedRequirements(policy,media.mediaType))
   if(media.capture){
     let proof:Record<string,unknown>
     try{proof=JSON.parse(media.capture.contract) as Record<string,unknown>}

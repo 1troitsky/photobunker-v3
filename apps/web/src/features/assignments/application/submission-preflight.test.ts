@@ -214,6 +214,73 @@ describe('P1-08 signed historical policy and E2EE grant preflight',()=>{
       assignmentId,owner,chain[0]!,
     )).toThrow('assignment.capture_policy_not_effective')
   })
+  it('authenticates v6 historical photo allowed categories and required tags before DEK grant',async()=>{
+    const f=await fixture()
+    const session=activeSession.value!
+    const v6={
+      version:6,operationId:crypto.randomUUID(),
+      assignmentId:f.assignmentId,ownerAccountId:f.accountId,
+      rootPolicyHash:await hash(f.listing.policyContract),
+      previousPolicyHash:f.hash2,fromPolicyRevision:3,toPolicyRevision:4,
+      photoGoal:45,allowedMedia:['photo'],
+      requiredCategory:true,descriptionMinLength:12,requiredGps:true,
+      videoGoal:null,audioGoal:null,
+      videoRequirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
+      audioRequirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
+      photoAdvanced:{allowedCategories:['Report'],requiredTags:['evidence']},
+      videoAdvanced:{allowedCategories:[],requiredTags:[]},
+      audioAdvanced:{allowedCategories:[],requiredTags:[]},
+    }
+    const contract=JSON.stringify(v6),digestValue=await hash(contract)
+    const signature=await sign(await importSigner(session.pkg.accountPkcs8),
+      'pb3.assignment-policy.v6\n'+contract)
+    const history:SignedPolicyHistory={
+      ...f.history,policyRevision:4,events:[...f.history.events,{
+        fromPolicyRevision:3,toPolicyRevision:4,
+        contract,signature,contractHash:digestValue,
+        occurredAtMs:f.startsAt+10000,
+      }],
+    }
+    const latest={...f.listing,policyRevision:4,
+      policyAmendmentContract:contract,policyAmendmentSignature:signature}
+    const chain=await verifySignedPolicyHistory(latest,history)
+    expect(chain).toHaveLength(4)
+    expect(chain[2]!.advanced.requiredTags).toEqual([])
+    expect(chain[3]!.advanced).toEqual({
+      allowedCategories:['Report'],requiredTags:['evidence'],
+    })
+    const time=f.startsAt+11000
+    const capture={
+      assignmentId:f.assignmentId,ownerAccountId:f.accountId,
+      policyRevision:4,policyHash:digestValue,capturedAt:time,
+    }
+    const base={
+      description:'Confidential data',
+      gps:{latitude:41.65,longitude:41.64,accuracyMeters:5,recordedAt:time-600},
+    }
+    const photo=localPhoto(capture)
+    expect(()=>validatePhotoForGrant(photo,preparePhotoMetadata(time,capture,{
+      ...base,category:'Interview',tags:['evidence'],
+    }),f.assignmentId,f.accountId,chain[3]!))
+      .toThrow('assignment.category_not_allowed')
+    expect(()=>validatePhotoForGrant(photo,preparePhotoMetadata(time,capture,{
+      ...base,category:'Report',
+    }),f.assignmentId,f.accountId,chain[3]!))
+      .toThrow('assignment.required_tags_missing')
+    expect(()=>validatePhotoForGrant(photo,preparePhotoMetadata(time,capture,{
+      ...base,category:'Report',tags:['evidence'],
+    }),f.assignmentId,f.accountId,chain[3]!))
+      .not.toThrow()
+    // Historical v2 photo does not acquire the new v6 tags retroactively.
+    const oldTime=f.startsAt+8500
+    const oldCapture={...capture,policyRevision:3,policyHash:f.hash2,capturedAt:oldTime}
+    expect(()=>validatePhotoForGrant(localPhoto(oldCapture),
+      preparePhotoMetadata(oldTime,oldCapture,{
+        ...base,gps:{...base.gps,recordedAt:oldTime-300},
+        category:'Interview',
+      }),f.assignmentId,f.accountId,chain[2]!))
+      .not.toThrow()
+  })
   it('fails closed on modified history, missing event, forged signature or changed ancestry',async()=>{
     const f=await fixture()
     await expect(verifySignedPolicyHistory(f.listing,{

@@ -106,7 +106,7 @@ final class AssignmentV1Controller extends Controller
         $raw=$r->json('contract');
         $shape=is_string($raw)?json_decode($raw,true,32):null;
         $policyVersion=is_array($shape)?($shape['version']??null):null;
-        $withRequirements=in_array($policyVersion,[2,3,4,5],true);
+        $withRequirements=in_array($policyVersion,[2,3,4,5,6],true);
         $keys=[
             'version','operationId','assignmentId','ownerAccountId',
             'rootPolicyHash','previousPolicyHash',
@@ -115,9 +115,11 @@ final class AssignmentV1Controller extends Controller
         if($withRequirements)$keys=array_merge($keys,[
             'requiredCategory','descriptionMinLength','requiredGps',
         ]);
-        if(in_array($policyVersion,[4,5],true))$keys=array_merge($keys,['videoGoal','audioGoal']);
-        if($policyVersion===5)$keys=array_merge($keys,['videoRequirements','audioRequirements']);
+        if(in_array($policyVersion,[4,5,6],true))$keys=array_merge($keys,['videoGoal','audioGoal']);
+        if(in_array($policyVersion,[5,6],true))$keys=array_merge($keys,['videoRequirements','audioRequirements']);
+        if($policyVersion===6)$keys=array_merge($keys,['photoAdvanced','videoAdvanced','audioAdvanced']);
         $domain=match($policyVersion){
+            6=>'pb3.assignment-policy.v6',
             5=>'pb3.assignment-policy.v5',
             4=>'pb3.assignment-policy.v4',
             3=>'pb3.assignment-policy.v3',
@@ -172,10 +174,15 @@ final class AssignmentV1Controller extends Controller
                 &&($c['videoGoal']!==$currentVideoGoal
                     ||$c['audioGoal']!==$currentAudioGoal);
             $defaults=['requiredCategory'=>false,'descriptionMinLength'=>0,'requiredGps'=>false];
-            $differentMediaRules=$c['version']===5
+            $differentMediaRules=$c['version']>=5
                 &&($c['videoRequirements']!==($oldVersion>=5?$previousValues['videoRequirements']:$defaults)
                     ||$c['audioRequirements']!==($oldVersion>=5?$previousValues['audioRequirements']:$defaults));
-            abort_unless($differentRules||$differentMedia||$differentGoals||$differentMediaRules
+            $emptyAdvanced=['allowedCategories'=>[],'requiredTags'=>[]];
+            $differentAdvanced=$c['version']===6 && (
+                $c['photoAdvanced']!==($oldVersion>=6?$previousValues['photoAdvanced']:$emptyAdvanced)
+                ||$c['videoAdvanced']!==($oldVersion>=6?$previousValues['videoAdvanced']:$emptyAdvanced)
+                ||$c['audioAdvanced']!==($oldVersion>=6?$previousValues['audioAdvanced']:$emptyAdvanced));
+            abort_unless($differentRules||$differentMedia||$differentGoals||$differentMediaRules||$differentAdvanced
                 ||($a->photo_goal===null?null:(int)$a->photo_goal)!==$c['photoGoal'],409);
             $previous=hash('sha256',$a->latest_policy_contract??$a->contract_json);
             abort_unless(hash_equals($previous,$c['previousPolicyHash']),409);

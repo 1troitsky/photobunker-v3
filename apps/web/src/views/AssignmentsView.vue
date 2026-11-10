@@ -12,7 +12,8 @@ import {
   queueAssignmentMediaSubmission, listAssignmentMediaSubmissions,
   signedAllowedAssignmentMedia,
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
-  signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,verifyAssignmentInvite,
+  signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,
+  signedAdvancedRequirements,verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
@@ -21,6 +22,8 @@ import type {
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import { preflightAssignmentMediaGrant } from '../features/assignments/application/media-submission-preflight'
+import { parseRulesCsv, EMPTY_ADVANCED_RULES } from '../features/assignments/domain/advanced-rules'
+import type { AdvancedRules } from '../features/assignments/domain/advanced-rules'
 import {
   openOwnerAssignment, openRecipientAssignment,
 } from '../features/assignments/infrastructure/assignment-crypto'
@@ -28,7 +31,9 @@ import type { PrivateAssignment } from '../features/assignments/infrastructure/a
 import {
   ensureOwnExchangeKey, inspectPeer, confirmPeer,
 } from '../features/sharing/key-directory'
-import { queueRecipientGrant, flushRecipientGrants, readReceivedPhoto } from '../features/sharing/grant-flow'
+import { queueRecipientGrant, flushRecipientGrants, readReceivedPhoto,
+  readReceivedPhotoMetadata } from '../features/sharing/grant-flow'
+import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import { listLocalPhotos, flushOutbox } from '../features/photo-sync/application/p1-photo'
 import type { StoredPhoto } from '../features/photo-sync/application/p1-photo'
 import {listLocalMedia} from '../features/media/application/media-outbox'
@@ -40,6 +45,7 @@ type VisibleAssignment={
   state:string;revision:number;policyRevision:number
   requirements:CaptureRequirements;allowedMedia:AllowedAssignmentMedia
   videoRequirements:CaptureRequirements;audioRequirements:CaptureRequirements
+  photoAdvanced:AdvancedRules;videoAdvanced:AdvancedRules;audioAdvanced:AdvancedRules
   localState?:string;goal:number|null;videoGoal:number|null;audioGoal:number|null
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
   confirmedVideos:number|null;confirmedAudio:number|null
@@ -74,6 +80,12 @@ const editedVideoReqGps=ref(false)
 const editedAudioReqCategory=ref(false)
 const editedAudioReqDescription=ref<string|number>(0)
 const editedAudioReqGps=ref(false)
+const editedPhotoAllowed=ref('')
+const editedPhotoTags=ref('')
+const editedVideoAllowed=ref('')
+const editedVideoTags=ref('')
+const editedAudioAllowed=ref('')
+const editedAudioTags=ref('')
 const recipientId=ref('')
 const ownerCheck=ref<SafetyCheck|null>(null)
 const contributorCheck=ref<SafetyCheck|null>(null)
@@ -88,6 +100,7 @@ const search=ref('')
 const showCreate=ref(false)
 const previewUrl=ref('')
 const previewMime=ref('image/jpeg')
+const previewPrivate=ref<{category?:string;description?:string;tags?:string[];gps?:GPSFix}|null>(null)
 const filters=ref<'all'|'active'>('active')
 
 const selected=computed(()=>assignments.value.find(a=>a.id===selectedId.value)??null)
@@ -151,6 +164,7 @@ function pendingReceiptCount(assignmentId:string):number{
 
 function cleanPreview():void{
   if(previewUrl.value){URL.revokeObjectURL(previewUrl.value);previewUrl.value=''}
+  previewPrivate.value=null
 }
 function resetSensitive():void {
   assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
@@ -188,6 +202,8 @@ async function hydrate():Promise<void>{
       requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       videoRequirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       audioRequirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
+      photoAdvanced:EMPTY_ADVANCED_RULES,videoAdvanced:EMPTY_ADVANCED_RULES,
+      audioAdvanced:EMPTY_ADVANCED_RULES,
       allowedMedia:['photo'],
       localState:item.state,goal:item.photoGoal,videoGoal:null,audioGoal:null,
       confirmedPhotos:null,confirmedVideos:null,confirmedAudio:null,
@@ -277,6 +293,9 @@ async function hydrate():Promise<void>{
       requirements:signedPolicyRequirements(item),
       videoRequirements:signedMediaRequirements(item,'video'),
       audioRequirements:signedMediaRequirements(item,'audio'),
+      photoAdvanced:signedAdvancedRequirements(item,'photo'),
+      videoAdvanced:signedAdvancedRequirements(item,'video'),
+      audioAdvanced:signedAdvancedRequirements(item,'audio'),
       localState:previous?.localState,
       goal:item.photoGoal,videoGoal:signedPolicyGoals(item).videoGoal,
       audioGoal:signedPolicyGoals(item).audioGoal,
@@ -356,6 +375,12 @@ function choose(assignmentId:string):void{
   editedAudioReqCategory.value=chosen?.audioRequirements.requiredCategory??false
   editedAudioReqDescription.value=chosen?.audioRequirements.descriptionMinLength??0
   editedAudioReqGps.value=chosen?.audioRequirements.requiredGps??false
+  editedPhotoAllowed.value=chosen?.photoAdvanced.allowedCategories.join(', ')??''
+  editedPhotoTags.value=chosen?.photoAdvanced.requiredTags.join(', ')??''
+  editedVideoAllowed.value=chosen?.videoAdvanced.allowedCategories.join(', ')??''
+  editedVideoTags.value=chosen?.videoAdvanced.requiredTags.join(', ')??''
+  editedAudioAllowed.value=chosen?.audioAdvanced.allowedCategories.join(', ')??''
+  editedAudioTags.value=chosen?.audioAdvanced.requiredTags.join(', ')??''
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
   submissions.value=[];mediaSubmissions.value=[];cleanPreview()
@@ -405,6 +430,18 @@ async function changeGoal():Promise<void>{
         requiredCategory:editedAllowVideo.value&&editedVideoReqCategory.value,
         descriptionMinLength:editedAllowVideo.value?Number(editedVideoReqDescription.value):0,
         requiredGps:editedAllowVideo.value&&editedVideoReqGps.value,
+      },
+      photoAdvanced:{
+        allowedCategories:parseRulesCsv(editedPhotoAllowed.value,16,64),
+        requiredTags:parseRulesCsv(editedPhotoTags.value,12,48),
+      },
+      videoAdvanced:{
+        allowedCategories:editedAllowVideo.value?parseRulesCsv(editedVideoAllowed.value,16,64):[],
+        requiredTags:editedAllowVideo.value?parseRulesCsv(editedVideoTags.value,12,48):[],
+      },
+      audioAdvanced:{
+        allowedCategories:editedAllowAudio.value?parseRulesCsv(editedAudioAllowed.value,16,64):[],
+        requiredTags:editedAllowAudio.value?parseRulesCsv(editedAudioTags.value,12,48):[],
       },
       audioRequirements:{
         requiredCategory:editedAllowAudio.value&&editedAudioReqCategory.value,
@@ -543,15 +580,19 @@ async function openMediaSubmission(grantId:string):Promise<void>{
     cleanPreview()
     previewUrl.value=URL.createObjectURL(result.blob)
     previewMime.value=result.metadata.mime
+    previewPrivate.value=result.metadata
     notice.value='Видео/аудио и приватные метаданные расшифрованы на устройстве'
   })
 }
 async function openSubmission(grantId:string):Promise<void>{
   await operate(async()=>{
-    const blob=await readReceivedPhoto(grantId) // verifies pinned owner + DEK and server ACL
+    const [blob,metadata]=await Promise.all([
+      readReceivedPhoto(grantId),readReceivedPhotoMetadata(grantId),
+    ]) // both assets independently verify pinned owner + DEK + active ACL
     cleanPreview()
     previewUrl.value=URL.createObjectURL(blob)
     previewMime.value='image/jpeg'
+    previewPrivate.value=metadata
     notice.value='Фотография расшифрована только на этом устройстве'
   })
 }
@@ -703,6 +744,14 @@ onUnmounted(cleanPreview)
           описание минимум {{ selected.audioRequirements.descriptionMinLength }} символов,
           GPS {{ selected.audioRequirements.requiredGps?'обязателен':'необязателен' }}.
         </p>
+        <p v-for="item in [
+          {name:'Фото',allowed:selected.allowedMedia.includes('photo'),rules:selected.photoAdvanced},
+          {name:'Видео',allowed:selected.allowedMedia.includes('video'),rules:selected.videoAdvanced},
+          {name:'Аудио',allowed:selected.allowedMedia.includes('audio'),rules:selected.audioAdvanced},
+        ]" :key="item.name" v-show="item.allowed" class="muted">
+          {{ item.name }} — допустимые категории: {{ item.rules.allowedCategories.join(', ')||'любые' }};
+          обязательные теги: {{ item.rules.requiredTags.join(', ')||'нет' }}.
+        </p>
         <p v-if="selected.confirmedPhotos!==null" class="muted">
           Подтверждено сервером: Фото {{ selected.confirmedPhotos }}
           <template v-if="selected.goal!==null"> / {{ selected.goal }}</template>
@@ -746,6 +795,10 @@ onUnmounted(cleanPreview)
               <input id="assignment-gps-required" v-model="editedRequiredGps" type="checkbox">
               GPS обязателен
             </label>
+            <label for="assignment-photo-allowed">Фото · допустимые категории (через запятую; пусто — любые)</label>
+            <textarea id="assignment-photo-allowed" v-model="editedPhotoAllowed" rows="2" maxlength="1500"/>
+            <label for="assignment-photo-required-tags">Фото · обязательные теги (через запятую; пусто — нет)</label>
+            <textarea id="assignment-photo-required-tags" v-model="editedPhotoTags" rows="2" maxlength="600"/>
             <p class="muted">Дополнительные типы — отдельное добровольное расширение подписанной политики. Ранее созданные задания разрешают только фото.</p>
             <label class="checkline">
               <input id="assignment-allow-video" v-model="editedAllowVideo" type="checkbox">
@@ -770,6 +823,10 @@ onUnmounted(cleanPreview)
                 type="number" min="0" max="4000" step="1">
               <label class="checkline"><input id="assignment-video-required-gps"
                 v-model="editedVideoReqGps" type="checkbox">GPS обязателен</label>
+              <label for="assignment-video-allowed">Допустимые категории видео (через запятую)</label>
+              <textarea id="assignment-video-allowed" v-model="editedVideoAllowed" rows="2" maxlength="1500"/>
+              <label for="assignment-video-required-tags">Обязательные теги видео (через запятую)</label>
+              <textarea id="assignment-video-required-tags" v-model="editedVideoTags" rows="2" maxlength="600"/>
             </div>
             <div v-if="editedAllowAudio" class="foundation-card">
               <h4>Обязательные приватные поля аудио</h4>
@@ -780,12 +837,16 @@ onUnmounted(cleanPreview)
                 type="number" min="0" max="4000" step="1">
               <label class="checkline"><input id="assignment-audio-required-gps"
                 v-model="editedAudioReqGps" type="checkbox">GPS обязателен</label>
+              <label for="assignment-audio-allowed">Допустимые категории аудио (через запятую)</label>
+              <textarea id="assignment-audio-allowed" v-model="editedAudioAllowed" rows="2" maxlength="1500"/>
+              <label for="assignment-audio-required-tags">Обязательные теги аудио (через запятую)</label>
+              <textarea id="assignment-audio-required-tags" v-model="editedAudioTags" rows="2" maxlength="600"/>
             </div>
             <p class="muted">Цели — только для подсчёта подтверждённого прогресса. При отключении типа его цель и требования сбрасываются в следующей подписанной версии.</p>
             <button type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeGoal">Подписать новые правила</button>
-            <p class="muted">Требования подписываются владельцем. Содержимое категории, описания и точные координаты остаются зашифрованными; сервер не может подтвердить физическое присутствие по GPS.</p>
+            <p class="muted">Допустимые категории и обязательные названия тегов — открытая часть подписанной политики и видны серверу. Фактически выбранная категория, применённые теги, описание и GPS шифруются на устройстве. Это проверка клиента, а не независимое подтверждение происхождения файла или GPS.</p>
           </div>
           <p v-if="pendingPolicyChange" class="muted">Новая версия правил находится в локальной очереди. Старые снимки сохраняют исходную подписанную политику.</p>
           <p class="muted">Завершение прекращает новые отправки в задание и съёмку после закрытия, но не удаляет личные фотографии участников и выданные ранее разрешения.</p>
@@ -839,7 +900,7 @@ onUnmounted(cleanPreview)
           <p v-if="!eligiblePhotos.length" class="muted">Для этого задания нет подходящих синхронизированных фотографий.</p>
           <template v-if="selected.allowedMedia.some(kind=>kind==='video'||kind==='audio')">
             <h3>Видео и аудио · из Browser</h3>
-            <p class="muted">Понадобятся заранее загруженный зашифрованный файл, подписанное разрешение типа в задании и отдельное подтверждение передачи приватных метаданных. Для видео/аудио требования GPS, категории и описания, предназначенные для камеры фото, пока не заявляются как выполненные.</p>
+            <p class="muted">Понадобится зашифрованный файл разрешённого типа. До E2EE-передачи проверяются подписанные требования задания к категории, описанию, GPS и тегам; фактические приватные значения серверу недоступны.</p>
             <div v-for="file in eligibleMedia" :key="file.key" class="photo-row">
               <div><strong>{{ file.mediaType==='video'?'Видео':'Аудио' }} · {{ file.mediaId.slice(0,8) }}</strong>
                 <small>{{ file.capture?'Снято по заданию · подписано':'Личный медиафайл · требуется согласие' }}</small>
@@ -890,6 +951,13 @@ onUnmounted(cleanPreview)
         <img v-if="previewMime.startsWith('image/')" :src="previewUrl" class="decrypted-preview" alt="Полученная зашифрованная фотография">
         <video v-else-if="previewMime.startsWith('video/')" :src="previewUrl" class="decrypted-preview" controls playsinline preload="metadata"/>
         <audio v-else-if="previewMime.startsWith('audio/')" :src="previewUrl" controls preload="metadata"/>
+        <div v-if="previewPrivate" class="muted" data-testid="assignment-decrypted-private-metadata">
+          <p v-if="previewPrivate.category">Категория: {{ previewPrivate.category }}</p>
+          <p v-if="previewPrivate.description">Описание: {{ previewPrivate.description }}</p>
+          <p v-if="previewPrivate.tags?.length">Теги: {{ previewPrivate.tags.join(', ') }}</p>
+          <p v-if="previewPrivate.gps">GPS: {{ previewPrivate.gps.latitude }}, {{ previewPrivate.gps.longitude }} (±{{ Math.round(previewPrivate.gps.accuracyMeters) }} м)</p>
+          <small>Приватные поля расшифрованы на устройстве по отдельному E2EE-разрешению.</small>
+        </div>
         <button type="button" @click="cleanPreview">Закрыть</button>
       </div>
 

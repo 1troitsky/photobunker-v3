@@ -241,7 +241,7 @@ describe('P1-04 assignment Local-First encrypted operation outbox',()=>{
     const pending=(await listAssignmentOperations()).find(op=>op.kind==='policy')!
     const changed=JSON.parse(pending.contract)
     expect(changed).toMatchObject({
-      version:5,photoGoal:45,videoGoal:null,audioGoal:null,requiredCategory:true,
+      version:6,photoGoal:45,videoGoal:null,audioGoal:null,requiredCategory:true,
       descriptionMinLength:12,requiredGps:true,
     })
     expect(pending.contract).not.toContain('Confidential description')

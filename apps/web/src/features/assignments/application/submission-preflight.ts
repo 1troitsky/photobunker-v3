@@ -2,12 +2,15 @@ import Dexie, { type Table } from 'dexie'
 import { requireSession, activeSession } from '../../identity/application/session'
 import { jsonApi } from '../../identity/infrastructure/api'
 import { digest, hex } from '../../identity/infrastructure/crypto'
+import { EMPTY_ADVANCED_RULES, validateAdvancedFields } from '../domain/advanced-rules'
+import type { AdvancedRules } from '../domain/advanced-rules'
 import { listLocalPhotos, readLocalPhotoMetadata } from '../../photo-sync/application/p1-photo'
 import type { PhotoMetadata } from '../../photo-sync/domain/capture-metadata'
 import type { StoredPhoto } from '../../photo-sync/application/p1-photo'
 import {
   listCachedAssignmentSnapshots, listServerAssignments,
-  signedPolicyRequirements, verifySignedAssignmentPolicy, validAllowedMedia,
+  signedPolicyRequirements, signedAdvancedRequirements,
+  verifySignedAssignmentPolicy, validAllowedMedia,
 } from './assignment-outbox'
 import type {
   AssignmentListing, CaptureRequirements, SignedCaptureBinding,
@@ -37,6 +40,7 @@ export type SignedPolicyHistory={
 }
 type HistoricalEffectivePolicy={
   revision:number;policyHash:string;requirements:CaptureRequirements
+  advanced:AdvancedRules
   validFrom:number;validUntil:number
 }
 type CachedHistory={
@@ -113,6 +117,7 @@ export async function verifySignedPolicyHistory(
   const chain:HistoricalEffectivePolicy[]=[{
     revision:1,policyHash:root,
     requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
+    advanced:EMPTY_ADVANCED_RULES,
     validFrom:latest.startsAt,validUntil:Number.POSITIVE_INFINITY,
   }]
   let previousHash=root
@@ -134,7 +139,7 @@ export async function verifySignedPolicyHistory(
     let contract:Record<string,unknown>
     try{contract=JSON.parse(event.contract) as Record<string,unknown>}
     catch{throw Error('assignment.policy_history_invalid')}
-    if(![1,2,3,4,5].includes(contract.version as number)
+    if(![1,2,3,4,5,6].includes(contract.version as number)
       ||typeof contract.version!=='number'
       ||contract.version<previousVersion
       ||contract.assignmentId!==latest.assignmentId
@@ -162,6 +167,7 @@ export async function verifySignedPolicyHistory(
     chain.push({
       revision,policyHash:digestValue,
       requirements:signedPolicyRequirements(snapshot),
+      advanced:signedAdvancedRequirements(snapshot,'photo'),
       validFrom:event.occurredAtMs,validUntil:Number.POSITIVE_INFINITY,
     })
     previousAt=event.occurredAtMs
@@ -202,6 +208,7 @@ export function validatePhotoForGrant(
     throw Error('assignment.capture_scope_mismatch')
   }
   validatePrivateFields(meta,effective.requirements)
+  validateAdvancedFields(meta,effective.advanced)
 }
 
 /**
@@ -251,6 +258,7 @@ export async function preflightAssignmentPhotoGrant(
     effective={
       revision:1,policyHash:await hash(latest.policyContract),
       requirements:signedPolicyRequirements(latest),
+      advanced:signedAdvancedRequirements(latest,'photo'),
       validFrom:latest.startsAt,validUntil:Number.POSITIVE_INFINITY,
     }
   }else{
@@ -278,6 +286,7 @@ export async function preflightAssignmentPhotoGrant(
   // assignment contract. Apply the newest requirement set to it.
   if(!photo.capture){
     effective.requirements=signedPolicyRequirements(latest)
+    effective.advanced=signedAdvancedRequirements(latest,'photo')
   }
   validatePhotoForGrant(photo,metadata,assignmentId,expectedOwner,effective)
   if(activeSession.value!==session)throw Error('identity.changed')

@@ -913,6 +913,79 @@ final class AssignmentV1Test extends TestCase
         $this->assertDatabaseCount('assignment_policy_events_v1',2);
     }
 
+    private function signedAdvancedPolicyV6(array $allowed,array $photoAdvanced,
+        array $videoAdvanced,array $audioAdvanced,int $from=1):array
+    {
+        $row=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $flags=['requiredCategory'=>false,'descriptionMinLength'=>0,'requiredGps'=>false];
+        return $this->signed('owner','pb3.assignment-policy.v6',[
+            'version'=>6,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'rootPolicyHash'=>hash('sha256',$row->contract_json),
+            'previousPolicyHash'=>hash('sha256',$row->latest_policy_contract??$row->contract_json),
+            'fromPolicyRevision'=>$from,'toPolicyRevision'=>$from+1,
+            'photoGoal'=>30,'allowedMedia'=>$allowed,
+            'requiredCategory'=>false,'descriptionMinLength'=>0,
+            'requiredGps'=>false,'videoGoal'=>in_array('video',$allowed,true)?2:null,
+            'audioGoal'=>in_array('audio',$allowed,true)?1:null,
+            'videoRequirements'=>$flags,'audioRequirements'=>$flags,
+            'photoAdvanced'=>$photoAdvanced,'videoAdvanced'=>$videoAdvanced,
+            'audioAdvanced'=>$audioAdvanced,
+        ]);
+    }
+
+    public function test_v6_advanced_category_tags_are_signed_canonical_and_versioned():void
+    {
+        $this->createAssignment();
+        $this->as('owner');
+        $url='/assignments/v1/'.$this->assignmentId.'/policy';
+        $empty=['allowedCategories'=>[],'requiredTags'=>[]];
+        $photo=['allowedCategories'=>['Report','Интервью'],
+            'requiredTags'=>['field','evidence']];
+        $video=['allowedCategories'=>['Report'],'requiredTags'=>['evidence']];
+        $audio=['allowedCategories'=>['Interview'],'requiredTags'=>['recorded']];
+        // Canonical content is PUBLIC vocabulary, not user's chosen values.
+        $invalid=$this->signedAdvancedPolicyV6(['photo','audio'],$empty,$video,$audio);
+        $this->postJson($url,$invalid)->assertUnprocessable();
+        foreach([
+            ['requiredTags'=>[],'allowedCategories'=>['Report']],
+            ['allowedCategories'=>['Report','Report'],'requiredTags'=>[]],
+            ['allowedCategories'=>[' Report'],'requiredTags'=>[]],
+            ['allowedCategories'=>['Report'],'requiredTags'=>['tag,other']],
+            ['allowedCategories'=>[],'requiredTags'=>['secret'.chr(1)]],
+        ] as $invalidRules){
+            $candidate=$this->signedAdvancedPolicyV6(
+                ['photo','video','audio'],$invalidRules,$video,$audio);
+            $this->postJson($url,$candidate)->assertUnprocessable();
+        }
+        $valid=$this->signedAdvancedPolicyV6(
+            ['photo','video','audio'],$photo,$video,$audio);
+        $this->postJson($url,$valid)->assertOk()
+            ->assertJsonPath('policyRevision',2);
+        $this->postJson($url,$valid)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.policyAmendmentContract',$valid['contract'])
+            ->assertJsonPath('items.0.videoGoal',2)
+            ->assertJsonPath('items.0.audioGoal',1);
+        $this->assertStringContainsString('requiredTags',$valid['contract']);
+        $this->assertStringNotContainsString('actual-latitude',$valid['contract']);
+        $old=$this->signedMediaRequirementsV5(['photo','video','audio'],
+            ['requiredCategory'=>false,'descriptionMinLength'=>0,'requiredGps'=>false],
+            ['requiredCategory'=>false,'descriptionMinLength'=>0,'requiredGps'=>false],2);
+        $this->postJson($url,$old)->assertConflict();
+        $unchanged=$this->signedAdvancedPolicyV6(
+            ['photo','video','audio'],$photo,$video,$audio,2);
+        $this->postJson($url,$unchanged)->assertConflict();
+        $changed=$this->signedAdvancedPolicyV6(
+            ['photo','video','audio'],$photo,$empty,$audio,2);
+        $this->postJson($url,$changed)->assertOk()
+            ->assertJsonPath('policyRevision',3);
+        $this->assertDatabaseCount('assignment_policy_events_v1',2);
+    }
+
     public function test_v4_media_goals_are_signed_optional_and_never_upload_ceilings():void
     {
         $this->createAssignment();
