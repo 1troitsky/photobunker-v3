@@ -15,6 +15,7 @@ const dec=new TextDecoder('utf-8',{fatal:true})
 const uuidPattern=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
 const inviteDomain='pb3.team-invite.v1\n'
 const acceptDomain='pb3.team-accept.v1\n'
+const membershipDomain='pb3.team-membership.v1\n'
 const createDomain='pb3.team-create.v1\n'
 const recipientDomain='pb3.team-recipient-dek.v1\n'
 const profileAAD='pb3.team-profile.v1\n'
@@ -33,12 +34,12 @@ type AcceptContract={
 }
 export type TeamInvitation={
   inviteId:string;teamId:string;ownerAccountId:string;ownerAccountSpki:string
-  recipientAccountId:string;role:TeamRole;state:'pending'|'accepted'
+  recipientAccountId:string;role:TeamRole;state:'pending'|'accepted'|'revoked'
   expiresAt:number;expired:boolean;contract:string;signature:string
   contractHash:string;trustedOwner:boolean
 }
 export type TeamRosterMember={
-  inviteId:string;recipientAccountId:string;role:TeamRole;state:'pending'|'accepted'
+  inviteId:string;recipientAccountId:string;role:TeamRole;state:'pending'|'accepted'|'revoked'
   expiresAt:number
 }
 export type JoinedTeam={
@@ -46,7 +47,17 @@ export type JoinedTeam={
   role:TeamRole;verifiedOnline:boolean
 }
 type Receipt={inviteId:string;state:'pending'|'accepted';unchanged:boolean}
-type Op={version:1;kind:'invite'|'accept';operationId:string;teamId:string
+type MembershipEvent={
+  version:1;operationId:string;teamId:string;ownerAccountId:string
+  inviteId:string;targetAccountId:string;action:'change_role'|'remove'
+  previousRole:TeamRole;nextRole:TeamRole|null
+  fromRevision:number;toRevision:number
+}
+type SignedMembershipEvent=MembershipEvent & {contract:string;signature:string}
+export type TeamMembershipState={
+  membershipRevision:number;keyEpoch:number;rotationRequired:boolean
+}
+type Op={version:1;kind:'invite'|'accept'|'membership';operationId:string;teamId:string
   inviteId:string;contract:string;signature:string
   state:'queued'|'sent'|'conflict';createdAt:number}
 type Stored={key:string;ownerScope:string;iv:string;ciphertext:string}
@@ -192,7 +203,7 @@ async function verifyReceived(input:Omit<TeamInvitation,'trustedOwner'>):Promise
     ||c.recipientAccountId!==input.recipientAccountId
     ||c.ownerAccountId!==input.ownerAccountId
     ||c.role!==input.role||c.expiresAt!==input.expiresAt
-    ||(input.state!=='pending'&&input.state!=='accepted')
+    ||!['pending','accepted','revoked'].includes(input.state)
     ||typeof input.expired!=='boolean'
     ||(input.state==='accepted'&&input.expired)
     ||await hash(input.contract)!==input.contractHash
@@ -233,18 +244,134 @@ export async function listIncomingTeamInvites():Promise<TeamInvitation[]>{
   }
   throw Error('teams.inbox_page_limit')
 }
+
+function decodeMembershipContract(raw:string):MembershipEvent{
+  let c:MembershipEvent
+  try{c=JSON.parse(raw) as MembershipEvent}
+  catch{throw Error('teams.bad_membership_contract')}
+  if(!c||typeof c!=='object'||Array.isArray(c)
+    ||Object.keys(c).sort().join('|')!==[
+      'version','operationId','teamId','ownerAccountId','inviteId',
+      'targetAccountId','action','previousRole','nextRole',
+      'fromRevision','toRevision',
+    ].sort().join('|')||c.version!==1
+    ||!['change_role','remove'].includes(c.action)
+    ||![c.operationId,c.teamId,c.ownerAccountId,c.inviteId,c.targetAccountId]
+      .every(x=>typeof x==='string'&&uuidPattern.test(x))
+    ||c.targetAccountId===c.ownerAccountId
+    ||!['curator','contributor','viewer'].includes(c.previousRole)
+    ||!Number.isInteger(c.fromRevision)||c.fromRevision<1||c.fromRevision>999999
+    ||c.toRevision!==c.fromRevision+1
+    ||c.action==='remove'&&c.nextRole!==null
+    ||c.action==='change_role'&&(
+      !['curator','contributor','viewer'].includes(c.nextRole as string)
+      ||c.nextRole===c.previousRole)
+    ||JSON.stringify(c)!==raw)throw Error('teams.bad_membership_contract')
+  return c
+}
+/** The owner checks every signed event, including the full server revision
+ * chain. Missing, reordered or retroactively edited events fail closed. */
+export async function verifiedTeamMembershipHistory(teamId:string):Promise<{
+  events:MembershipEvent[];revision:number;rotationRequired:boolean
+}>{
+  const s=requireSession()
+  if(!s.online)throw Error('teams.membership_history_requires_online')
+  const verifier=await importSpki(s.pkg.accountSpki)
+  let cursor=0,expectedRev:number|null=null,quarantined:boolean|null=null
+  const events:MembershipEvent[]=[]
+  for(let n=0;n<100;n++){
+    const path='/teams/v1/'+encodeURIComponent(teamId)
+      +'/membership-history'+(cursor?'?after='+cursor:'')
+    const page:{
+      items:Array<{
+        operationId:string;teamId:string;targetAccountId:string;inviteId:string
+        action:string;previousRole:string;nextRole:string|null
+        fromRevision:number;toRevision:number;contract:string;signature:string
+      }>
+      membershipRevision:number;rotationRequired:boolean;nextCursor:number|null
+    }=await jsonApi(path)
+    same(s)
+    if(!Array.isArray(page.items)||page.items.length>50
+      ||!Number.isInteger(page.membershipRevision)||page.membershipRevision<1
+      ||typeof page.rotationRequired!=='boolean'
+      ||page.nextCursor!==null&&!Number.isInteger(page.nextCursor)
+      ||expectedRev!==null&&page.membershipRevision!==expectedRev
+      ||quarantined!==null&&page.rotationRequired!==quarantined)
+      throw Error('teams.membership_history_malformed')
+    expectedRev=page.membershipRevision
+    quarantined=page.rotationRequired
+    for(const row of page.items){
+      const c=decodeMembershipContract(row.contract)
+      if(c.teamId!==teamId||c.ownerAccountId!==s.accountId
+        ||c.operationId!==row.operationId||c.inviteId!==row.inviteId
+        ||c.targetAccountId!==row.targetAccountId
+        ||c.action!==row.action||c.previousRole!==row.previousRole
+        ||c.nextRole!==row.nextRole
+        ||c.fromRevision!==cursor+1||c.toRevision!==cursor+2
+        ||!await verify(verifier,membershipDomain+row.contract,row.signature))
+        throw Error('teams.untrusted_membership_history')
+      events.push(c)
+      cursor=c.toRevision
+    }
+    if(page.nextCursor===null){
+      if(cursor+1!==expectedRev
+        ||(events.length>0&&events[events.length-1]!.action==='remove'
+          &&quarantined!==true))
+        throw Error('teams.incomplete_membership_history')
+      return {events,revision:expectedRev,rotationRequired:quarantined}
+    }
+    if(page.items.length!==50||page.nextCursor!==cursor)
+      throw Error('teams.incomplete_membership_history')
+  }
+  throw Error('teams.membership_history_limit')
+}
+/** Verify owner-signed revision and issue immutable signed operation before HTTP. */
+export async function queueTeamMembershipChange(
+  teamId:string,member:TeamRosterMember,
+  action:'change_role'|'remove',nextRole:TeamRole|null,
+):Promise<string>{
+  const s=requireSession()
+  const roster=await listOwnerTeamRoster(teamId)
+  const verified=roster.find(x=>x.inviteId===member.inviteId
+    &&x.recipientAccountId===member.recipientAccountId)
+  if(!verified||verified.role!==member.role||verified.state!==member.state
+    ||verified.state==='revoked'
+    ||action==='change_role'&&(verified.state!=='accepted'
+      ||!['curator','contributor','viewer'].includes(nextRole as string)
+      ||nextRole===verified.role)
+    ||action==='remove'&&nextRole!==null)
+    throw Error('teams.invalid_membership_transition')
+  const history=await verifiedTeamMembershipHistory(teamId)
+  if(history.rotationRequired)throw Error('teams.key_rotation_required')
+  const operationId=uuid()
+  const payload:MembershipEvent={
+    version:1,operationId,teamId,ownerAccountId:s.accountId,
+    inviteId:verified.inviteId,targetAccountId:verified.recipientAccountId,
+    action,previousRole:verified.role,nextRole,
+    fromRevision:history.revision,toRevision:history.revision+1,
+  }
+  const signed=await signOwned(s,membershipDomain,payload)
+  const op:Op={version:1,kind:'membership',operationId,teamId,
+    inviteId:verified.inviteId,contract:signed.contract,signature:signed.signature,
+    state:'queued',createdAt:Date.now()}
+  await sealRow(s,'operations',operationId,op)
+  return operationId
+}
+
 export async function listOwnerTeamRoster(teamId:string):Promise<TeamRosterMember[]>{
   const s=requireSession()
   if(!s.online)throw Error('teams.roster_requires_online')
   let after:string|null=null
   const result:TeamRosterMember[]=[]
   const signer=await importSpki(s.pkg.accountSpki)
+  const audit=await verifiedTeamMembershipHistory(teamId)
   for(let n=0;n<100;n++){
     const path:string='/teams/v1/'+encodeURIComponent(teamId)+'/participants'
       +(after?'?after='+encodeURIComponent(after):'')
     const page:{items:Array<TeamRosterMember & {
       contract:string;signature:string;recipientAccountSpki:string
       acceptedContract:string|null;acceptedSignature:string|null
+      effectiveRole:TeamRole
     }>;nextCursor:string|null}=await jsonApi(path)
     same(s)
     if(!Array.isArray(page.items)||page.items.length>50)
@@ -254,10 +381,10 @@ export async function listOwnerTeamRoster(teamId:string):Promise<TeamRosterMembe
       if(c.inviteId!==item.inviteId||c.teamId!==teamId
         ||c.ownerAccountId!==s.accountId||c.recipientAccountId!==item.recipientAccountId
         ||c.role!==item.role||c.expiresAt!==item.expiresAt
-        ||!['pending','accepted'].includes(item.state)
+        ||!['pending','accepted','revoked'].includes(item.state)
         ||!await verify(signer,inviteDomain+item.contract,item.signature))
         throw Error('teams.untrusted_roster')
-      if(item.state==='accepted'){
+      if(item.acceptedContract!==null||item.acceptedSignature!==null){
         if(!item.acceptedContract||!item.acceptedSignature)
           throw Error('teams.consent_missing')
         const a=acceptShape(item.acceptedContract)
@@ -267,10 +394,21 @@ export async function listOwnerTeamRoster(teamId:string):Promise<TeamRosterMembe
           ||!await verify(await importSpki(item.recipientAccountSpki),
             acceptDomain+item.acceptedContract,item.acceptedSignature))
           throw Error('teams.consent_invalid')
-      }else if(item.acceptedContract!==null||item.acceptedSignature!==null)
-        throw Error('teams.unexpected_consent')
+      }
+      let effectiveRole:TeamRole=c.role
+      let signedRevoked=false
+      for(const e of audit.events.filter(e=>e.inviteId===c.inviteId)){
+        if(e.targetAccountId!==c.recipientAccountId
+          ||e.previousRole!==effectiveRole||signedRevoked)
+          throw Error('teams.invalid_membership_chain')
+        if(e.action==='remove')signedRevoked=true
+        else effectiveRole=e.nextRole as TeamRole
+      }
+      if(item.effectiveRole!==effectiveRole
+        ||(item.state==='revoked')!==signedRevoked)
+        throw Error('teams.roster_acl_mismatch')
       result.push({inviteId:item.inviteId,recipientAccountId:c.recipientAccountId,
-        role:item.role,state:item.state,expiresAt:item.expiresAt})
+        role:effectiveRole,state:item.state,expiresAt:item.expiresAt})
     }
     if(page.nextCursor===null)return result
     if(page.items.length!==50||page.items[49]!.inviteId!==page.nextCursor
@@ -333,7 +471,7 @@ export async function syncTeamMemberOperations():Promise<void>{
   for(const op of ops.filter(x=>x.state==='queued')
     .sort((a,b)=>a.createdAt-b.createdAt)){
     same(s)
-    if(op.version!==1||!['invite','accept'].includes(op.kind)
+    if(op.version!==1||!['invite','accept','membership'].includes(op.kind)
       ||!uuidPattern.test(op.operationId)||!uuidPattern.test(op.teamId)
       ||!uuidPattern.test(op.inviteId))throw Error('teams.outbox_invalid')
     if(op.kind==='invite'){
@@ -343,21 +481,39 @@ export async function syncTeamMemberOperations():Promise<void>{
         ||!await verify(await importSpki(s.pkg.accountSpki),
           inviteDomain+op.contract,op.signature))
         throw Error('teams.outbox_untrusted')
-    }else{
+    }else if(op.kind==='accept'){
       const c=acceptShape(op.contract)
       if(c.recipientAccountId!==s.accountId
         ||c.operationId!==op.operationId||c.inviteId!==op.inviteId
         ||!await verify(await importSpki(s.pkg.accountSpki),
           acceptDomain+op.contract,op.signature))
         throw Error('teams.outbox_untrusted')
+    }else{
+      const c=decodeMembershipContract(op.contract)
+      if(c.ownerAccountId!==s.accountId
+        ||c.operationId!==op.operationId||c.inviteId!==op.inviteId
+        ||!await verify(await importSpki(s.pkg.accountSpki),
+          membershipDomain+op.contract,op.signature))
+        throw Error('teams.outbox_untrusted')
     }
-    const url='/teams/v1/'+encodeURIComponent(op.teamId)+'/invites'
-      +(op.kind==='accept'?'/'+encodeURIComponent(op.inviteId)+'/accept':'')
+    const url=op.kind==='membership'
+      ?'/teams/v1/'+encodeURIComponent(op.teamId)+'/membership'
+      :'/teams/v1/'+encodeURIComponent(op.teamId)+'/invites'
+        +(op.kind==='accept'?'/'+encodeURIComponent(op.inviteId)+'/accept':'')
     try{
-      const ack=await jsonApi<Receipt>(url,'POST',
-        {contract:op.contract,signature:op.signature})
+      const ack=await jsonApi<Receipt & {
+        operationId?:string;membershipRevision?:number;rotationRequired?:boolean
+      }>(url,'POST',{contract:op.contract,signature:op.signature})
       same(s)
-      if(ack.inviteId!==op.inviteId||ack.state!==
+      if(op.kind==='membership'){
+        const c=decodeMembershipContract(op.contract)
+        if(ack.operationId!==op.operationId
+          ||!Number.isInteger(ack.membershipRevision)
+          ||ack.membershipRevision!<c.toRevision
+          ||typeof ack.rotationRequired!=='boolean'
+          ||typeof ack.unchanged!=='boolean')
+          throw Error('teams.invalid_membership_ack')
+      }else if(ack.inviteId!==op.inviteId||ack.state!==
           (op.kind==='invite'?'pending':'accepted')
         ||typeof ack.unchanged!=='boolean')
         throw Error('teams.invalid_operation_ack')
@@ -438,6 +594,8 @@ export async function openJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
   const response:{
     teamId:string;ownerAccountId:string;ownerAccountSpki:string
     contract:string;signature:string
+    effectiveRole:TeamRole
+    latestRoleEvent:{contract:string;signature:string}|null
     invite:{inviteId:string;contract:string;signature:string;contractHash:string;role:string}
   }=await jsonApi('/teams/v1/'+encodeURIComponent(c.teamId)+'/member')
   same(s)
@@ -485,9 +643,24 @@ export async function openJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
     ||data.name.trim()!==data.name||!data.name||data.name.length>64
     ||data.description.trim()!==data.description||data.description.length>1024)
     throw Error('teams.member_profile_invalid')
+  let effectiveRole:TeamRole=c.role
+  if(response.latestRoleEvent!==null){
+    const event=decodeMembershipContract(response.latestRoleEvent.contract)
+    if(event.action!=='change_role'
+      ||event.teamId!==c.teamId||event.inviteId!==c.inviteId
+      ||event.ownerAccountId!==c.ownerAccountId
+      ||event.targetAccountId!==s.accountId
+      ||!await verify(await importSpki(pin.accountSpki),
+        membershipDomain+response.latestRoleEvent.contract,
+        response.latestRoleEvent.signature))
+      throw Error('teams.untrusted_role_change')
+    effectiveRole=event.nextRole as TeamRole
+  }
+  if(response.effectiveRole!==effectiveRole)
+    throw Error('teams.untrusted_effective_role')
   same(s)
   const joined:JoinedTeam={teamId:c.teamId,ownerAccountId:c.ownerAccountId,
-    name:data.name,description:data.description,role:c.role,verifiedOnline:true}
+    name:data.name,description:data.description,role:effectiveRole,verifiedOnline:true}
   await sealRow(s,'joined',c.teamId,joined)
   return joined
 }
