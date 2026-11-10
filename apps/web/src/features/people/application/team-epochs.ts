@@ -38,6 +38,7 @@ type EpochContract={
   fromEpoch:number;toEpoch:number;membershipRevision:number
   previousEpochHash:string;privateEnvelope:PrivateEnvelope
   recipients:EpochRecipient[]
+  retiredPendingInviteIds:string[]
 }
 type Root={contract:string;signature:string;contractHash:string}
 type HistoryPage={
@@ -110,6 +111,7 @@ function parseEpoch(raw:string):EpochContract{
     ||Object.keys(c).sort().join('|')!==[
       'version','operationId','teamId','ownerAccountId','fromEpoch','toEpoch',
       'membershipRevision','previousEpochHash','privateEnvelope','recipients',
+      'retiredPendingInviteIds',
     ].sort().join('|')
     ||c.version!==1||![c.operationId,c.teamId,c.ownerAccountId]
       .every(x=>typeof x==='string'&&uuidPattern.test(x))
@@ -124,6 +126,8 @@ function parseEpoch(raw:string):EpochContract{
     ||!c.privateEnvelope.wrappedKey
     ||Object.keys(c.privateEnvelope.wrappedKey).sort().join('|')!=='ciphertext|iv'
     ||!Array.isArray(c.recipients)||c.recipients.length>100
+    ||!Array.isArray(c.retiredPendingInviteIds)
+    ||c.retiredPendingInviteIds.length>500
     ||JSON.stringify(c)!==raw)
     throw Error('teams.invalid_epoch_contract')
   unb64(c.privateEnvelope.iv,12)
@@ -132,6 +136,12 @@ function parseEpoch(raw:string):EpochContract{
   const ciphertext=unb64(c.privateEnvelope.ciphertext)
   if(ciphertext.length<32||ciphertext.length>4096)
     throw Error('teams.invalid_epoch_contract')
+  let previousInvite=''
+  for(const id of c.retiredPendingInviteIds){
+    if(typeof id!=='string'||!uuidPattern.test(id)||id<=previousInvite)
+      throw Error('teams.invalid_retired_invites')
+    previousInvite=id
+  }
   let previous=''
   for(const r of c.recipients){
     if(!r||typeof r!=='object'||Array.isArray(r)
@@ -151,11 +161,13 @@ function parseEpoch(raw:string):EpochContract{
 async function verifyEpochHistory(
   teamId:string,ownerAccountId:string,ownerAccountSpki:string,originalRootHash:string,
 ):Promise<{epoch:number;contractHash:string;latest:EpochContract|null;root:Root;
-  membershipRevision:number;rotationRequired:boolean}>{
+  membershipRevision:number;rotationRequired:boolean;
+  retiredPendingInviteIds:string[]}>{
   const s=requireSession()
   const signer=await importSpki(ownerAccountSpki)
   let after=1,currentHash='',revision:number|null=null,epoch:number|null=null
   let required:boolean|null=null,root:Root|null=null,latest:EpochContract|null=null
+  const retiredPendingInviteIds:string[]=[]
   for(let i=0;i<100;i++){
     const url='/teams/v1/'+encodeURIComponent(teamId)+'/epoch/history'
       +(after>1?'?after='+after:'')
@@ -199,11 +211,13 @@ async function verifyEpochHistory(
       after=c.toEpoch
       currentHash=item.contractHash
       latest=c
+      retiredPendingInviteIds.push(...c.retiredPendingInviteIds)
     }
     if(page.nextCursor===null){
       if(after!==epoch||!root)throw Error('teams.incomplete_epoch_chain')
       return {epoch,contractHash:currentHash,latest,root,
-        membershipRevision:revision,rotationRequired:required}
+        membershipRevision:revision,rotationRequired:required,
+        retiredPendingInviteIds}
     }
     if(page.items.length!==50||page.nextCursor!==after)
       throw Error('teams.incomplete_epoch_chain')
@@ -304,6 +318,10 @@ export async function queueTeamKeyRotation(teamId:string):Promise<string>{
     throw Error('teams.stale_epoch_roster')
   const surviving=members.filter(x=>x.state==='accepted')
     .sort((a,b)=>a.recipientAccountId.localeCompare(b.recipientAccountId))
+  const retiredPendingInviteIds=members.filter(x=>x.state==='pending')
+    .map(x=>x.inviteId).sort()
+  if(retiredPendingInviteIds.length>500)
+    throw Error('teams.too_many_pending_retirements')
   if(surviving.length>100)throw Error('teams.epoch_roster_limit')
   const toEpoch=status.keyEpoch+1
   const operationId=uuid()
@@ -334,6 +352,7 @@ export async function queueTeamKeyRotation(teamId:string):Promise<string>{
       fromEpoch:status.keyEpoch,toEpoch,
       membershipRevision:history.revision,
       previousEpochHash:current.contractHash,privateEnvelope,recipients:[],
+      retiredPendingInviteIds,
     }
     for(const member of surviving){
       const peer=await pinnedPeer(member.recipientAccountId)
@@ -367,6 +386,16 @@ export async function queueTeamKeyRotation(teamId:string):Promise<string>{
     })
     return operationId
   }finally{keyBytes.fill(0)}
+}
+/** Signed proof of exactly which pending invitation IDs were invalidated
+ * during rekey; never treat an arbitrary server "revoked" flag as proof.
+ */
+export async function verifiedRetiredPendingTeamInvites(teamId:string):Promise<Set<string>>{
+  const s=requireSession()
+  const root=await originalRootHash(teamId)
+  const history=await verifyEpochHistory(teamId,s.accountId,
+    s.pkg.accountSpki,root)
+  return new Set(history.retiredPendingInviteIds)
 }
 async function originalRootHash(teamId:string):Promise<string>{
   // The original Team owner ciphertext is immutable; verify it from the

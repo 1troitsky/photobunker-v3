@@ -150,6 +150,7 @@ describe('P1-29B encrypted owner Team key epoch outbox',()=>{
     expect(c.toEpoch).toBe(2)
     expect(c.membershipRevision).toBe(2)
     expect(c.previousEpochHash).toBe(root.contractHash)
+    expect(c.retiredPendingInviteIds).toEqual([])
     expect(c.recipients).toHaveLength(1)
     expect(c.recipients[0]?.accountId).toBe(recipientId)
     expect(c.recipients[0]?.role).toBe('viewer')

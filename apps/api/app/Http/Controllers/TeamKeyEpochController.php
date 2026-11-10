@@ -169,6 +169,7 @@ final class TeamKeyEpochController extends Controller
                 'version','operationId','teamId','ownerAccountId',
                 'fromEpoch','toEpoch','membershipRevision',
                 'previousEpochHash','privateEnvelope','recipients',
+                'retiredPendingInviteIds',
             ],95000);
         abort_unless(($c['version']??null)===1
             &&$c['teamId']===$teamId
@@ -191,6 +192,16 @@ final class TeamKeyEpochController extends Controller
         abort_unless(strlen($sealed)>=32&&strlen($sealed)<=4096,422);
         abort_unless(is_array($c['recipients'])&&array_is_list($c['recipients'])
             &&count($c['recipients'])<=100,422);
+        abort_unless(is_array($c['retiredPendingInviteIds'])
+            &&array_is_list($c['retiredPendingInviteIds'])
+            &&count($c['retiredPendingInviteIds'])<=500,422);
+        $lastInvite='';
+        foreach($c['retiredPendingInviteIds'] as $inviteId){
+            abort_unless(is_string($inviteId),422);
+            P::uuid($inviteId);
+            abort_unless(strcmp($lastInvite,$inviteId)<0,422);
+            $lastInvite=$inviteId;
+        }
         $last='';
         foreach($c['recipients'] as $item){
             abort_unless(is_array($item)&&!array_is_list($item),422);
@@ -262,6 +273,13 @@ final class TeamKeyEpochController extends Controller
                     &&hash_equals($member->descriptor_hash,
                         $item['recipientKeyDigest']),409);
             }
+            // These EXACT invitation IDs are part of the owner-signed
+            // epoch. The atomic sweep cannot produce unsigned "revoked"
+            // records that the owner client cannot independently explain.
+            $pending=DB::table('team_invites_v1')
+                ->where('team_id',$teamId)->where('state','pending')
+                ->orderBy('id')->pluck('id')->all();
+            abort_unless($pending===$c['retiredPendingInviteIds'],409);
             DB::table('team_key_epochs_v1')->insert([
                 'team_id'=>$teamId,'epoch'=>$c['toEpoch'],
                 'operation_id'=>$c['operationId'],
@@ -285,9 +303,11 @@ final class TeamKeyEpochController extends Controller
             }
             // Outstanding v1 invitations carry the old Team DEK and cannot
             // be accepted once the new epoch has been committed.
-            DB::table('team_invites_v1')->where('team_id',$teamId)
-                ->where('state','pending')
-                ->update(['state'=>'revoked','updated_at'=>now()]);
+            if(count($pending)>0){
+                DB::table('team_invites_v1')->where('team_id',$teamId)
+                    ->whereIn('id',$pending)->where('state','pending')
+                    ->update(['state'=>'revoked','updated_at'=>now()]);
+            }
             DB::table('team_records_v1')->where('id',$teamId)->update([
                 'key_epoch'=>$c['toEpoch'],'rotation_required'=>false,
                 'updated_at'=>now(),

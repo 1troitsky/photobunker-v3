@@ -387,6 +387,7 @@ export async function listOwnerTeamRoster(teamId:string):Promise<TeamRosterMembe
   const result:TeamRosterMember[]=[]
   const signer=await importSpki(s.pkg.accountSpki)
   const audit=await verifiedTeamMembershipHistory(teamId)
+  let independentlySignedRetirements:Set<string>|null=null
   for(let n=0;n<100;n++){
     const path:string='/teams/v1/'+encodeURIComponent(teamId)+'/participants'
       +(after?'?after='+encodeURIComponent(after):'')
@@ -426,8 +427,23 @@ export async function listOwnerTeamRoster(teamId:string):Promise<TeamRosterMembe
         if(e.action==='remove')signedRevoked=true
         else effectiveRole=e.nextRole as TeamRole
       }
+      // Automatic pending retirement is authorized by a *specific* signed
+      // key-epoch record, not an arbitrary server-provided revoked flag.
+      // A consented member may only be removed by a signed membership event.
+      let signedEpochRetirement=false
+      if(item.state==='revoked'&&!signedRevoked
+        &&item.acceptedContract===null&&item.acceptedSignature===null){
+        if(independentlySignedRetirements===null){
+          const {verifiedRetiredPendingTeamInvites}=await import('./team-epochs')
+          independentlySignedRetirements=
+            await verifiedRetiredPendingTeamInvites(teamId)
+          same(s)
+        }
+        signedEpochRetirement=independentlySignedRetirements.has(item.inviteId)
+      }
       if(item.effectiveRole!==effectiveRole
-        ||(item.state==='revoked')!==signedRevoked)
+        ||(item.state==='revoked')!==(signedRevoked||signedEpochRetirement)
+        ||signedEpochRetirement&&item.acceptedContract!==null)
         throw Error('teams.roster_acl_mismatch')
       result.push({inviteId:item.inviteId,recipientAccountId:c.recipientAccountId,
         role:effectiveRole,state:item.state,expiresAt:item.expiresAt})

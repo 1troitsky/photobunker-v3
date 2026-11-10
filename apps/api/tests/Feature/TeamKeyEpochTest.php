@@ -147,6 +147,7 @@ final class TeamKeyEpochTest extends TestCase
             'previousEpochHash'=>$this->rootHash,
             'privateEnvelope'=>self::profile(),
             'recipients'=>$recipients??[$this->recipient('contributor')],
+            'retiredPendingInviteIds'=>[],
         ];
     }
 
