@@ -148,8 +148,8 @@ function parseEpoch(raw:string):EpochContract{
   }
   return c
 }
-async function verifyEpochHistory(
-  teamId:string,ownerAccountId:string,ownerAccountSpki:string,originalRootHash:string,
+export async function verifyEpochHistory(
+  teamId:string,ownerAccountId:string,ownerAccountSpki:string,originalRootHash:string|null,
 ):Promise<{epoch:number;contractHash:string;latest:EpochContract|null;root:Root;
   membershipRevision:number;rotationRequired:boolean}>{
   const s=requireSession()
@@ -175,7 +175,7 @@ async function verifyEpochHistory(
     if(!root){
       root=page.root
       if(!root||typeof root.contract!=='string'
-        ||root.contractHash!==originalRootHash
+        ||(originalRootHash!==null&&root.contractHash!==originalRootHash)
         ||await hash(root.contract)!==root.contractHash
         ||!await verify(signer,createDomain+root.contract,root.signature))
         throw Error('teams.untrusted_epoch_origin')
@@ -412,63 +412,55 @@ export async function syncTeamKeyRotations():Promise<void>{
     }
   }
 }
-export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
+/** A post-rotation member obtains their current DEK only through a LIVE
+ * server ACL and a completely owner-signed, chain-verified epoch. A prior
+ * invitation is an optional additional root pin; it isn't an authorization.
+ */
+export async function openVerifiedCurrentEpochMember(
+  teamId:string,expectedOwnerAccountId?:string,expectedRootHash?:string,
+):Promise<JoinedTeam>{
   const s=requireSession()
-  const path='/teams/v1/'+encodeURIComponent(invite.teamId)+'/epoch/member'
-  const response:RecipientEpoch=await jsonApi(path)
+  if(!s.online)throw Error('teams.member_requires_online')
+  if(!uuidPattern.test(teamId))throw Error('teams.invalid_team_id')
+  const response:RecipientEpoch=await jsonApi(
+    '/teams/v1/'+encodeURIComponent(teamId)+'/epoch/member')
   same(s)
-  if(response.teamId!==invite.teamId
-    ||!Number.isInteger(response.keyEpoch)||response.keyEpoch<1)
-    throw Error('teams.invalid_epoch_member')
-  if(response.keyEpoch===1)return openJoinedTeam(invite)
-  if(!invite.trustedOwner||invite.state!=='accepted')
+  if(response.teamId!==teamId
+    ||!Number.isInteger(response.keyEpoch)||response.keyEpoch<2
+    ||typeof response.ownerAccountId!=='string'
+    ||!uuidPattern.test(response.ownerAccountId)
+    ||expectedOwnerAccountId!==undefined
+      &&response.ownerAccountId!==expectedOwnerAccountId)
     throw Error('teams.untrusted_member_epoch')
-  const peer=await pinnedPeer(invite.ownerAccountId)
-  if(peer.accountSpki!==invite.ownerAccountSpki)
-    throw Error('teams.owner_key_changed')
-  let original:{teamContractHash:string;teamId:string;ownerAccountId:string}
-  try{original=JSON.parse(invite.contract) as typeof original}
-  catch{throw Error('teams.bad_member_invite')}
-  if(original.teamId!==invite.teamId
-    ||original.ownerAccountId!==invite.ownerAccountId
-    ||!hashPattern.test(original.teamContractHash)
-    ||!('recipientAccountId' in original)
-    ||original.recipientAccountId!==s.accountId
-    ||!('inviteId' in original)
-    ||original.inviteId!==invite.inviteId
-    ||await hash(invite.contract)!==invite.contractHash
-    ||!await verify(await importSpki(peer.accountSpki),
-      'pb3.team-invite.v1\n'+invite.contract,invite.signature))
-    throw Error('teams.bad_member_invite')
-  const chain=await verifyEpochHistory(invite.teamId,invite.ownerAccountId,
-    peer.accountSpki,original.teamContractHash)
+  const pin=await pinnedPeer(response.ownerAccountId)
+  const chain=await verifyEpochHistory(
+    teamId,response.ownerAccountId,pin.accountSpki,expectedRootHash??null)
   const c=chain.latest
   if(!c||chain.epoch!==response.keyEpoch
     ||chain.contractHash!==response.contractHash
     ||chain.rotationRequired
     ||chain.membershipRevision!==response.membershipRevision
-    ||response.ownerAccountId!==invite.ownerAccountId
     ||response.contract!==JSON.stringify(c)
-    ||response.signature!==undefined
-      &&!await verify(await importSpki(peer.accountSpki),
-        epochDomain+response.contract,response.signature)
+    ||!await verify(await importSpki(pin.accountSpki),
+      epochDomain+response.contract,response.signature)
+    ||response.ownerAccountId!==c.ownerAccountId
     ||response.recipient?.accountId!==s.accountId
     ||!['curator','contributor','viewer'].includes(response.effectiveRole))
     throw Error('teams.untrusted_member_epoch')
-  const r=c.recipients.find(x=>x.accountId===s.accountId)
-  if(!r||!response.recipient
-    ||JSON.stringify(r)!==JSON.stringify(response.recipient))
+  const grant=c.recipients.find(x=>x.accountId===s.accountId)
+  if(!grant||!response.recipient
+    ||JSON.stringify(grant)!==JSON.stringify(response.recipient))
     throw Error('teams.missing_member_epoch_grant')
   const own=await ensureOwnExchangeKey()
-  if(own.directory.descriptorHash!==r.recipientKeyDigest)
+  if(own.directory.descriptorHash!==grant.recipientKeyDigest)
     throw Error('teams.member_epoch_key_changed')
-  const info=recipientInfo(c,r)
-  const key=await exchangeKey(own.privateKey,r.envelope.ephemeralSpki,
-    info,unb64(r.envelope.salt,16))
+  const info=recipientInfo(c,grant)
+  const wrap=await exchangeKey(own.privateKey,grant.envelope.ephemeralSpki,
+    info,unb64(grant.envelope.salt,16))
   const raw=new Uint8Array(await crypto.subtle.decrypt({
-    name:'AES-GCM',iv:unb64(r.envelope.iv,12),
+    name:'AES-GCM',iv:unb64(grant.envelope.iv,12),
     additionalData:enc.encode(info),tagLength:128,
-  },key,unb64(r.envelope.ciphertext,48)))
+  },wrap,unb64(grant.envelope.ciphertext,48)))
   let plaintext:ArrayBuffer
   try{
     if(raw.length!==32)throw Error('teams.invalid_member_epoch_dek')
@@ -482,43 +474,141 @@ export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTea
   let profile:{name:string;description:string}
   try{profile=JSON.parse(dec.decode(plaintext)) as typeof profile}
   catch{throw Error('teams.member_epoch_profile_invalid')}
-  if(!profile||typeof profile.name!=='string'
-    ||!profile.name||profile.name.trim()!==profile.name||profile.name.length>64
+  if(!profile||typeof profile.name!=='string'||!profile.name
+    ||profile.name.trim()!==profile.name||profile.name.length>64
     ||typeof profile.description!=='string'
     ||profile.description.trim()!==profile.description
-    ||profile.description.length>1024)
+    ||profile.description.length>1024
+    ||Object.keys(profile).sort().join('|')!=='description|name')
     throw Error('teams.member_epoch_profile_invalid')
-  let role:TeamRole=r.role
-  if(response.latestRoleEvent){
+  let role:TeamRole=grant.role
+  if(response.latestRoleEvent!==null){
     let event:{
       action:string;teamId:string;targetAccountId:string
-      ownerAccountId:string;inviteId:string;nextRole:TeamRole
-      toRevision:number
+      ownerAccountId:string;nextRole:TeamRole;toRevision:number
     }
     try{event=JSON.parse(response.latestRoleEvent.contract) as typeof event}
     catch{throw Error('teams.untrusted_member_role_epoch')}
     if(event.action!=='change_role'
-      ||event.teamId!==c.teamId||event.ownerAccountId!==c.ownerAccountId
+      ||event.teamId!==teamId
+      ||event.ownerAccountId!==response.ownerAccountId
       ||event.targetAccountId!==s.accountId
-      ||event.inviteId!==invite.inviteId
       ||!['curator','contributor','viewer'].includes(event.nextRole)
       ||!Number.isInteger(event.toRevision)
       ||event.toRevision>response.membershipRevision
-      ||event.toRevision<=c.membershipRevision&&event.nextRole!==r.role
-      ||!await verify(await importSpki(peer.accountSpki),
+      ||!await verify(await importSpki(pin.accountSpki),
         roleDomain+response.latestRoleEvent.contract,
         response.latestRoleEvent.signature))
       throw Error('teams.untrusted_member_role_epoch')
-    role=event.nextRole
+    // Events already baked into the signed epoch must not override that
+    // epoch's current recipient role (or revive a previous membership).
+    if(event.toRevision>c.membershipRevision)role=event.nextRole
   }
   if(response.effectiveRole!==role)
     throw Error('teams.untrusted_member_effective_role')
   same(s)
   const joined:JoinedTeam={
-    teamId:c.teamId,ownerAccountId:c.ownerAccountId,
+    teamId,ownerAccountId:response.ownerAccountId,
     name:profile.name,description:profile.description,
     role,verifiedOnline:true,
   }
   await cacheVerifiedJoinedTeam(joined,s.accountId)
   return joined
+}
+
+/** Access the CURRENT owner Team DEK from its independently verified signed
+ * epoch. Never reuse v1 root DEK to invite anyone after a rotation.
+ */
+export async function withCurrentOwnerTeamDEK<T>(
+  teamId:string,
+  action:(raw:Uint8Array<ArrayBuffer>,scope:{
+    rootContractHash:string;keyEpoch:number;keyEpochHash:string
+    membershipRevision:number
+  })=>Promise<T>,
+):Promise<T>{
+  const s=requireSession()
+  const [status,local]=await Promise.all([
+    ownerEpochStatus(teamId),listLocalTeams(),
+  ])
+  if(status.rotationRequired||status.keyEpoch<2)
+    throw Error('teams.current_epoch_unavailable')
+  const prior=await originalRootHash(teamId)
+  const chain=await verifyEpochHistory(
+    teamId,s.accountId,s.pkg.accountSpki,prior)
+  const epoch=chain.latest
+  if(!epoch||epoch.toEpoch!==status.keyEpoch
+    ||chain.epoch!==status.keyEpoch
+    ||chain.contractHash!==status.contractHash
+    ||chain.membershipRevision!==status.membershipRevision
+    ||chain.rotationRequired
+    ||!local.some(x=>x.teamId===teamId&&x.delivery==='synced'))
+    throw Error('teams.untrusted_owner_current_epoch')
+  const ownerKey=await localKey(s)
+  let bytes:Uint8Array<ArrayBuffer>
+  try{
+    bytes=new Uint8Array(await crypto.subtle.decrypt({
+      name:'AES-GCM',
+      iv:unb64(epoch.privateEnvelope.wrappedKey.iv,12),
+      additionalData:ownerAad(
+        s.accountId,teamId,epoch.toEpoch,epoch.membershipRevision),
+      tagLength:128,
+    },ownerKey,unb64(epoch.privateEnvelope.wrappedKey.ciphertext,48)))
+  }catch{throw Error('teams.invalid_current_owner_dek')}
+  try{
+    if(bytes.length!==32)throw Error('teams.invalid_current_owner_dek')
+    // Verify the owner really holds the new DEK by decrypting the profile,
+    // and that its independently signed bytes match the local owner view.
+    const key=await crypto.subtle.importKey('raw',bytes,
+      {name:'AES-GCM'},false,['decrypt'])
+    const plaintext=await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(epoch.privateEnvelope.iv,12),
+      additionalData:profileAad(epoch),tagLength:128,
+    },key,unb64(epoch.privateEnvelope.ciphertext))
+    let profile:{name:string;description:string}
+    try{profile=JSON.parse(dec.decode(plaintext)) as typeof profile}
+    catch{throw Error('teams.owner_current_profile_unreadable')}
+    const view=local.find(x=>x.teamId===teamId)
+    if(!view||profile.name!==view.name
+      ||profile.description!==view.description)
+      throw Error('teams.owner_current_profile_mismatch')
+    same(s)
+    return await action(bytes,{
+      rootContractHash:chain.root.contractHash,
+      keyEpoch:status.keyEpoch,keyEpochHash:chain.contractHash,
+      membershipRevision:status.membershipRevision,
+    })
+  }finally{bytes.fill(0)}
+}
+
+/** Version 1 accepts from the immutable root; after the first rotation
+ * they always obtain the CURRENT signed epoch and never re-fetch old DEK.
+ */
+export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
+  const s=requireSession()
+  if(invite.state!=='accepted'||!invite.trustedOwner)
+    throw Error('teams.untrusted_member')
+  const response:{teamId:string;keyEpoch:number}=await jsonApi(
+    '/teams/v1/'+encodeURIComponent(invite.teamId)+'/epoch/member')
+  same(s)
+  if(response.teamId!==invite.teamId
+    ||!Number.isInteger(response.keyEpoch)||response.keyEpoch<1)
+    throw Error('teams.invalid_epoch_member')
+  if(response.keyEpoch===1)return openJoinedTeam(invite)
+  const pin=await pinnedPeer(invite.ownerAccountId)
+  if(pin.accountSpki!==invite.ownerAccountSpki)
+    throw Error('teams.owner_key_changed')
+  let c:{teamId:string;ownerAccountId:string;teamContractHash:string;
+    recipientAccountId:string}
+  try{c=JSON.parse(invite.contract) as typeof c}
+  catch{throw Error('teams.bad_member_invite')}
+  if(c.teamId!==invite.teamId
+    ||c.ownerAccountId!==invite.ownerAccountId
+    ||c.recipientAccountId!==s.accountId
+    ||!hashPattern.test(c.teamContractHash)
+    ||await hash(invite.contract)!==invite.contractHash
+    ||!await verify(await importSpki(pin.accountSpki),
+      'pb3.team-invite.v1\n'+invite.contract,invite.signature))
+    throw Error('teams.bad_member_invite')
+  return openVerifiedCurrentEpochMember(
+    invite.teamId,invite.ownerAccountId,c.teamContractHash)
 }
