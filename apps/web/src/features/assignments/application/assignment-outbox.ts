@@ -825,7 +825,20 @@ export async function queueAssignmentInvitation(
   const s=requireSession()
   const peer=await pinnedPeer(recipientAccountId)
   const local=await db.assignments.get(assignmentId)
-  const listing=local??(await listServerAssignments()).items.find(x=>x.assignmentId===assignmentId)
+  // Editing older assignments after a reload must not depend on their being
+  // in the FIRST 50 results of the paginated server listing. The existing
+  // owner-signed policy snapshot has already been independently authenticated.
+  const cached=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
+  if(cached)await verifySignedAssignmentPolicy(cached.listing,true)
+  let listing:LocalAssignment|AssignmentListing|undefined=local??cached?.listing
+  if(!listing&&s.online&&navigator.onLine){
+    let cursor:string|undefined
+    do{
+      const page=await listServerAssignments(cursor)
+      listing=page.items.find(x=>x.assignmentId===assignmentId)
+      cursor=page.nextCursor??undefined
+    }while(!listing&&cursor)
+  }
   if(!listing||listing.ownerAccountId!==s.accountId)
     throw new Error('assignment.not_owned')
   const inviteId=crypto.randomUUID(),expiresAt=Date.now()+6*86400000
