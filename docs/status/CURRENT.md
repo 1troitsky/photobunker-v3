@@ -1,5 +1,9 @@
 # PB3 — актуальная карта прогресса
 
+> **P1-29B independent security gate (2026-11-10): FAIL on #53 `03bcc088`.** [QA PR #55](https://github.com/1troitsky/photobunker-v3/pull/55) twice confirmed **T29B-01** (unsigned pending invite sweep breaks future ACL) and **T29B-02** (genuine epoch-1 rollback accepted after verified epoch 2). Product fixes are proposed only in [Draft PR #56](https://github.com/1troitsky/photobunker-v3/pull/56), stacked on #53; do **not** merge #50–#54 before the corrected chain is independently re-audited. Full independent Chromium baseline was 17/19; sporadic unrelated old media 401/422 still need investigation. **No changes to main or deploy.**
+
+
+
 **Обновлено:** 2026-11-10 · **актуальный блок:** P1-29B — ротация E2EE-ключей Teams после исключения участника.
 
 > Source of truth: `AGENTS.md`, `ts.md`, текущий GitHub `main`/PR/CI. Прошлую карту P1-26 сохранили в [архиве](history/2026-11-10-P1-26-pre-merge-snapshot.md), чтобы её устаревшие формулировки не считались текущим статусом.
