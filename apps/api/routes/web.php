@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\IdentityController;
+use App\Http\Controllers\MatrixBindingController;
 use App\Http\Controllers\PhotoSyncController;
 use App\Http\Controllers\MediaV1Controller;
 use App\Http\Controllers\MediaGrantController;
@@ -185,4 +186,11 @@ Route::prefix('teams/v2')->middleware('throttle:pb3-assignments')->group(functio
         ->whereUuid('teamId')->whereUuid('inviteId');
     Route::get('/{teamId}/member',[TeamEpochInvitationController::class,'member'])
         ->whereUuid('teamId');
+});
+
+// P2-02A: explicit, signed, device-bound proof against operator-pinned
+// Matrix /whoami. Tokens are never stored server-side. Not a send API.
+Route::prefix('matrix/v1')->middleware('throttle:40,1')->group(function(){
+    Route::get('/me',[MatrixBindingController::class,'mine']);
+    Route::post('/bindings',[MatrixBindingController::class,'bind']);
 });
