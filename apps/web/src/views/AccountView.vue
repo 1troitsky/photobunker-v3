@@ -54,6 +54,13 @@ async function copyKey():Promise<void> {
   <section class="foundation-content">
     <h1>Настройки / Доступ</h1>
     <p class="subtitle">Key-Only Identity · P1</p>
+    <div class="foundation-card">
+      <h2>Оформление</h2>
+      <p class="muted">Настройте состав и порядок Dock. Локальные настройки шифруются ключом аккаунта.</p>
+      <RouterLink to="/settings/appearance" data-testid="appearance-open">
+        Настроить панель навигации
+      </RouterLink>
+    </div>
     <div v-if="activeSession" class="foundation-card">
       <p><strong>Аккаунт:</strong> <code>{{ activeSession.accountId }}</code></p>
       <p><strong>Устройство:</strong> <code>{{ activeSession.deviceId }}</code></p>
