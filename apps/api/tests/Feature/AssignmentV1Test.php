@@ -1263,6 +1263,9 @@ final class AssignmentV1Test extends TestCase
         DB::table('photo_access_grants')->where('id',$grant)->update([
             'assignment_id'=>$this->assignmentId,
         ]);
+        // Remove only the synthetic sibling fixture; indexed assignment
+        // assertions below must still target the original signed assignment.
+        DB::table('assignment_records_v1')->where('id',$other)->delete();
         $this->postJson('/assignments/v1/'.$this->assignmentId.'/submissions',$input)
             ->assertCreated();
         $this->postJson('/assignments/v1/'.$this->assignmentId.'/submissions',$input)
@@ -1614,6 +1617,9 @@ final class AssignmentV1Test extends TestCase
         $this->postJson($url,$valid)->assertForbidden();
         DB::table('media_recipient_grants_v1')->where('id',$video['grantId'])
             ->update(['assignment_id'=>$this->assignmentId]);
+        // Remove only the synthetic sibling fixture; indexed assignment
+        // assertions below must still target the original signed assignment.
+        DB::table('assignment_records_v1')->where('id',$other)->delete();
         $this->postJson($url,$valid)->assertCreated()
             ->assertJsonPath('unchanged',false);
         $this->postJson($url,$valid)->assertOk()
