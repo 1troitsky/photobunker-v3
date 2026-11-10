@@ -85,6 +85,7 @@ export function parseMediaGrantContract(input:unknown):MediaGrantContract{
     ||(c.version!==1&&c.version!==2)||c.scope!=='read'
     ||(c.version===2
       ?typeof c.assignmentId!=='string'
+        ||!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(c.assignmentId)
       :c.assignmentId!==undefined)
     ||!Number.isSafeInteger(c.expiresAt)||c.expiresAt<=0
     ||!/^([0-9a-f]{8}-[0-9a-f-]{27,})$/.test(c.grantId)
