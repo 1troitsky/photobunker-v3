@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Assignments\AssignmentGrantScope as AScope;
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
 use App\Storage\StorageManager;
@@ -30,14 +31,17 @@ final class MediaGrantController extends Controller
         try{$c=json_decode($text,true,32,JSON_THROW_ON_ERROR);}
         catch(\Throwable){abort(422);}
         abort_unless(is_array($c)&&!array_is_list($c),422);
+        $v2=($c['version']??null)===2;
         P::exact($c,['version','grantId','mediaId','ownerAccountId',
-            'recipientAccountId','recipientKeyDigest','mediaContractHash',
+            'recipientAccountId',...($v2?['assignmentId']:[]),
+            'recipientKeyDigest','mediaContractHash',
             'scope','expiresAt','envelope']);
-        abort_unless($c['version']===1&&$c['scope']==='read'
+        abort_unless(in_array($c['version'],[1,2],true)&&$c['scope']==='read'
             &&is_int($c['expiresAt'])
             &&$c['expiresAt']>PhotoSync::nowMs()
             &&$c['expiresAt']<=PhotoSync::nowMs()+86400000,422);
-        foreach(['grantId','mediaId','ownerAccountId','recipientAccountId'] as $field){
+        foreach(['grantId','mediaId','ownerAccountId','recipientAccountId',
+            ...($v2?['assignmentId']:[])] as $field){
             abort_unless(is_string($c[$field]),422);
             P::uuid($c[$field]);
         }
@@ -66,8 +70,10 @@ final class MediaGrantController extends Controller
         abort_unless(is_string($body['contract'])&&is_string($body['signature']),422);
         $grant=$this->contract($body['contract']);
         abort_unless($grant['ownerAccountId']===$owner->id,403);
+        $domain=$grant['version']===2
+            ?"pb3.media-grant.v2\n":"pb3.media-grant.v1\n";
         abort_unless(P::verify($owner->account_spki,
-            "pb3.media-grant.v1\n".$body['contract'],$body['signature']),401);
+            $domain.$body['contract'],$body['signature']),401);
         $hash=hash('sha256',$body['contract']);
         return DB::transaction(function()use($grant,$hash,$owner,$body){
             DB::table('identity_accounts')->where('id',$owner->id)
@@ -104,11 +110,16 @@ final class MediaGrantController extends Controller
                     'grantId'=>$existing->id,'state'=>'active','unchanged'=>true,
                 ]);
             }
+            if($grant['version']===2){
+                AScope::creation($grant['assignmentId'],$owner->id,
+                    $recipient->id,$grant['expiresAt']);
+            }
             DB::table('media_recipient_grants_v1')->insert([
                 'id'=>$grant['grantId'],'media_id'=>$media->id,
                 'owner_account_id'=>$owner->id,
                 'recipient_account_id'=>$recipient->id,
                 'recipient_key_digest'=>$directory->descriptor_hash,
+                'assignment_id'=>$grant['version']===2?$grant['assignmentId']:null,
                 'media_contract_hash'=>$media->contract_hash,
                 'expires_at'=>$grant['expiresAt'],
                 'state'=>'active','contract_hash'=>$hash,
@@ -140,6 +151,7 @@ final class MediaGrantController extends Controller
             ||$grant->media_expires<=PhotoSync::nowMs()
             ||!hash_equals($grant->media_contract_hash,
                 $grant->actual_media_hash),410);
+        AScope::requireReadable($grant->assignment_id);
         return $grant;
     }
 
@@ -158,7 +170,21 @@ final class MediaGrantController extends Controller
             ->where('g.expires_at','>',PhotoSync::nowMs())
             ->where('m.state','active')
             ->where('m.expires_at','>',PhotoSync::nowMs())
-            ->whereColumn('m.contract_hash','g.media_contract_hash');
+            ->whereColumn('m.contract_hash','g.media_contract_hash')
+            ->leftJoin('assignment_records_v1 as a','a.id','=','g.assignment_id')
+            ->where(function($q){
+                $q->whereNull('g.assignment_id')
+                    ->orWhere(function($scoped){
+                        $now=PhotoSync::nowMs();
+                        $scoped->where(function($cutoff)use($now){
+                            $cutoff->whereNull('a.files_access_until')
+                                ->orWhere('a.files_access_until','>',$now);
+                        })->where(function($cutoff)use($now){
+                            $cutoff->whereNull('a.assignment_access_until')
+                                ->orWhere('a.assignment_access_until','>',$now);
+                        });
+                    });
+            });
         if($after!==null)$q->where('g.id','>',$after);
         $rows=$q->orderBy('g.id')->limit(51)
             ->get(['g.id','g.media_id','g.owner_account_id',
