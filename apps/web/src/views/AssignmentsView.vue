@@ -428,15 +428,15 @@ async function changeGoal():Promise<void>{
         requiredGps:editedAllowVideo.value&&editedVideoReqGps.value,
       },
       photoAdvanced:{
-        allowedCategories:parseRulesCsv(editedPhotoAllowed.value,16,96),
+        allowedCategories:parseRulesCsv(editedPhotoAllowed.value,16,64),
         requiredTags:parseRulesCsv(editedPhotoTags.value,12,48),
       },
       videoAdvanced:{
-        allowedCategories:editedAllowVideo.value?parseRulesCsv(editedVideoAllowed.value,16,96):[],
+        allowedCategories:editedAllowVideo.value?parseRulesCsv(editedVideoAllowed.value,16,64):[],
         requiredTags:editedAllowVideo.value?parseRulesCsv(editedVideoTags.value,12,48):[],
       },
       audioAdvanced:{
-        allowedCategories:editedAllowAudio.value?parseRulesCsv(editedAudioAllowed.value,16,96):[],
+        allowedCategories:editedAllowAudio.value?parseRulesCsv(editedAudioAllowed.value,16,64):[],
         requiredTags:editedAllowAudio.value?parseRulesCsv(editedAudioTags.value,12,48):[],
       },
       audioRequirements:{
