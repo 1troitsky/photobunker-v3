@@ -148,6 +148,72 @@ describe('P1-08 signed historical policy and E2EE grant preflight',()=>{
       f.assignmentId,f.accountId,chain[1]!,
     )).toThrow('assignment.capture_policy_not_effective')
   })
+  it('verifies owner-signed historical v1/v2/v3/v4 policy timelines and goals',async()=>{
+    const f=await fixture()
+    const session=activeSession.value!
+    const owner=f.accountId,assignmentId=f.assignmentId
+    const rootHash=await hash(f.listing.policyContract)
+    const v3={
+      version:3,operationId:crypto.randomUUID(),assignmentId,
+      ownerAccountId:owner,rootPolicyHash:rootHash,
+      previousPolicyHash:f.hash2,fromPolicyRevision:3,toPolicyRevision:4,
+      photoGoal:45,allowedMedia:['photo','video'],
+      requiredCategory:true,descriptionMinLength:12,requiredGps:true,
+    }
+    const contract3=JSON.stringify(v3),hash3=await hash(contract3)
+    const signature3=await sign(await importSigner(session.pkg.accountPkcs8),
+      'pb3.assignment-policy.v3\n'+contract3)
+    const v4={
+      ...v3,version:4,operationId:crypto.randomUUID(),
+      previousPolicyHash:hash3,fromPolicyRevision:4,toPolicyRevision:5,
+      allowedMedia:['photo','video','audio'],videoGoal:2,audioGoal:1,
+    }
+    const contract4=JSON.stringify(v4),hash4=await hash(contract4)
+    const signature4=await sign(await importSigner(session.pkg.accountPkcs8),
+      'pb3.assignment-policy.v4\n'+contract4)
+    const history:SignedPolicyHistory={
+      ...f.history,policyRevision:5,events:[
+        ...f.history.events,
+        {fromPolicyRevision:3,toPolicyRevision:4,
+          contract:contract3,signature:signature3,contractHash:hash3,
+          occurredAtMs:f.startsAt+8000},
+        {fromPolicyRevision:4,toPolicyRevision:5,
+          contract:contract4,signature:signature4,contractHash:hash4,
+          occurredAtMs:f.startsAt+10000},
+      ],
+    }
+    const latest:AssignmentListing={
+      ...f.listing,policyRevision:5,
+      policyAmendmentContract:contract4,policyAmendmentSignature:signature4,
+      videoGoal:2,audioGoal:1,
+    }
+    // A past signed history must be refreshed on a newer signed revision,
+    // not treated as forged, and never used to authorize a stale E2EE grant.
+    await rememberSignedPolicyHistory(f.listing,f.history)
+    expect(await readSignedPolicyHistoryCache(latest)).toBeNull()
+    const chain=await rememberSignedPolicyHistory(latest,history)
+    expect(chain.map(x=>x.revision)).toEqual([1,2,3,4,5])
+    expect(chain[0]!.validUntil).toBe(f.startsAt+2000)
+    expect(chain[3]!.validUntil).toBe(f.startsAt+10000)
+    expect(chain[4]!.requirements).toEqual({
+      requiredCategory:true,descriptionMinLength:12,requiredGps:true,
+    })
+    // Wrong server-side per-kind target projection is rejected before caching
+    // or using any older policy timeline.
+    await expect(verifySignedPolicyHistory({...latest,videoGoal:3},history))
+      .rejects.toThrow('assignment.invalid_signed_goal')
+    const old={assignmentId,ownerAccountId:owner,
+      policyRevision:1,policyHash:rootHash,capturedAt:f.startsAt+1000}
+    expect(()=>validatePhotoForGrant(
+      localPhoto(old),preparePhotoMetadata(old.capturedAt,old),
+      assignmentId,owner,chain[0]!,
+    )).not.toThrow()
+    const backdated={...old,capturedAt:f.startsAt+3000}
+    expect(()=>validatePhotoForGrant(
+      localPhoto(backdated),preparePhotoMetadata(backdated.capturedAt,backdated),
+      assignmentId,owner,chain[0]!,
+    )).toThrow('assignment.capture_policy_not_effective')
+  })
   it('fails closed on modified history, missing event, forged signature or changed ancestry',async()=>{
     const f=await fixture()
     await expect(verifySignedPolicyHistory(f.listing,{

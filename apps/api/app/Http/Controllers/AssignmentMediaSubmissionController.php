@@ -75,7 +75,7 @@ final class AssignmentMediaSubmissionController extends Controller
             $policy=$a->latest_policy_contract;
             abort_unless(is_string($policy),409);
             $p=json_decode($policy,true,32,JSON_THROW_ON_ERROR);
-            abort_unless(($p['version']??null)===3
+            abort_unless(in_array(($p['version']??null),[3,4],true)
                 &&is_array($p['allowedMedia']??null)
                 &&C::allowedMedia($p['allowedMedia'],true)
                 &&in_array($d['kind'],$p['allowedMedia'],true)

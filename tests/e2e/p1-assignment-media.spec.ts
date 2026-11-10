@@ -51,9 +51,11 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(assignmentId).toMatch(/^[0-9a-f-]{36}$/)
     await expect(A.locator('.assignment-detail')).toContainText('Разрешённые типы: photo')
 
-    // Explicit signed policy v3; never widen the immutable photo-only root.
+    // P1-15: explicit owner-signed v4 targets. Original root stays photo-only.
     await A.locator('#assignment-allow-video').check()
     await A.locator('#assignment-allow-audio').check()
+    await A.locator('#assignment-video-goal').fill('2')
+    await A.locator('#assignment-audio-goal').fill('1')
     await A.getByRole('button',{name:'Подписать новые правила'}).click()
     await expect(A.getByText('Версия правил: 2')).toBeVisible({timeout:20000})
     await expect(A.locator('.assignment-detail'))
@@ -67,9 +69,12 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
         http:res.status,
         version:JSON.parse(body.events[0].contract).version,
         allowed:JSON.parse(body.events[0].contract).allowedMedia,
+        videoGoal:JSON.parse(body.events[0].contract).videoGoal,
+        audioGoal:JSON.parse(body.events[0].contract).audioGoal,
       }
     },assignmentId)
-    expect(policy).toEqual({http:200,version:3,allowed:['photo','video','audio']})
+    expect(policy).toEqual({http:200,version:4,
+      allowed:['photo','video','audio'],videoGoal:2,audioGoal:1})
 
     await A.locator('#assignment-recipient-id').fill(contributorId)
     await A.getByRole('button',{name:'Проверить ключ исполнителя'}).click()
@@ -103,7 +108,9 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
 
     await A.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(A.getByTestId('assignment-media-counts'))
-      .toContainText('Видео: 1 · Аудио: 1',{timeout:20000})
+      .toContainText('Видео: 1 / 2 · Аудио: 1 / 1',{timeout:20000})
+    await expect(A.locator('.assignment-detail'))
+      .toContainText('Общий прогресс 67%',{timeout:20000})
     await A.getByRole('button',{name:'Обновить материалы'}).click()
     await expect(A.getByTestId('assignment-media-submission')).toHaveCount(2)
     const entries=await A.evaluate(async id=>{
@@ -146,7 +153,9 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(unavailable).toBe(410)
     await A.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(A.getByTestId('assignment-media-counts'))
-      .toContainText('Видео: 0 · Аудио: 1',{timeout:20000})
+      .toContainText('Видео: 0 / 2 · Аудио: 1 / 1',{timeout:20000})
+    await expect(A.locator('.assignment-detail'))
+      .toContainText('Общий прогресс 33%',{timeout:20000})
     const intact=await B.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       return (await m.listLocalMedia())
@@ -215,7 +224,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     }),{timeout:30000}).toBe(3)
     await A.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(A.getByTestId('assignment-media-counts'))
-      .toContainText('Видео: 0 · Аудио: 2',{timeout:20000})
+      .toContainText('Видео: 0 / 2 · Аудио: 2 / 1',{timeout:20000})
     const capturedReceipt=await A.evaluate(async id=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
       const res=await a.listAssignmentMediaSubmissions(id)
@@ -283,7 +292,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     }),{timeout:30000}).toBe(4)
     await A.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(A.getByTestId('assignment-media-counts'))
-      .toContainText('Видео: 1 · Аудио: 2',{timeout:20000})
+      .toContainText('Видео: 1 / 2 · Аудио: 2 / 1',{timeout:20000})
     const videoReceipt=await A.evaluate(async({assignmentId,mediaId})=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
       const res=await a.listAssignmentMediaSubmissions(assignmentId)

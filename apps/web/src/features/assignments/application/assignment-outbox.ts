@@ -44,6 +44,8 @@ export type AssignmentListing={
   state:string
   revision:number
   photoGoal:number|null
+  videoGoal?:number|null
+  audioGoal?:number|null
   confirmedPhotoCount:number // server-derived, never a signed capture-policy field
   confirmedVideoCount?:number
   confirmedAudioCount?:number
@@ -96,7 +98,7 @@ export function signedPolicyRequirements(item:AssignmentListing):CaptureRequirem
   if(!item.policyAmendmentContract)throw Error('assignment.policy_revision_not_authenticated')
   const amend=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>
   if(amend.version===1)return {...NO_CAPTURE_REQUIREMENTS}
-  if(![2,3].includes(amend.version as number)||typeof amend.requiredCategory!=='boolean'
+  if(![2,3,4].includes(amend.version as number)||typeof amend.requiredCategory!=='boolean'
     ||typeof amend.requiredGps!=='boolean'
     ||!Number.isInteger(amend.descriptionMinLength)
     ||(amend.descriptionMinLength as number)<0
@@ -121,12 +123,55 @@ export function signedAllowedAssignmentMedia(item:AssignmentListing):AllowedAssi
   if(!item.policyAmendmentContract)
     throw Error('assignment.policy_revision_not_authenticated')
   const edit=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>
-  if(edit.version===3){
+  if(edit.version===3||edit.version===4){
     if(!validAllowedMedia(edit.allowedMedia))throw Error('assignment.invalid_allowed_media')
     return edit.allowedMedia
   }
   if(edit.version===1||edit.version===2)return ['photo']
   throw Error('assignment.invalid_policy_revision')
+}
+
+export type AssignmentProgressGoals={
+  photoGoal:number|null;videoGoal:number|null;audioGoal:number|null
+}
+function progressGoal(value:unknown,max:number):value is number|null{
+  return value===null||(typeof value==='number'&&Number.isInteger(value)
+    &&value>=1&&value<=max)
+}
+/** Server goal columns are merely a display projection of OWNER signed policy.
+ * Caller must also verify the signature and monotonic policy snapshot.
+ */
+export function signedPolicyGoals(item:AssignmentListing):AssignmentProgressGoals{
+  const result:AssignmentProgressGoals={
+    photoGoal:item.photoGoal,videoGoal:null,audioGoal:null,
+  }
+  if(!progressGoal(item.photoGoal,9999))throw Error('assignment.invalid_signed_goal')
+  if(item.policyRevision===1){
+    if((item.videoGoal??null)!==null||(item.audioGoal??null)!==null)
+      throw Error('assignment.unsigned_media_goal')
+    return result
+  }
+  if(!item.policyAmendmentContract)throw Error('assignment.policy_revision_not_authenticated')
+  const amendment=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>
+  if(amendment.version!==4){
+    if((item.videoGoal??null)!==null||(item.audioGoal??null)!==null)
+      throw Error('assignment.unsigned_media_goal')
+    return result
+  }
+  if(!validAllowedMedia(amendment.allowedMedia)
+    ||!progressGoal(amendment.videoGoal,999)
+    ||!progressGoal(amendment.audioGoal,999)
+    ||(amendment.videoGoal!==null&&!amendment.allowedMedia.includes('video'))
+    ||(amendment.audioGoal!==null&&!amendment.allowedMedia.includes('audio'))
+    ||amendment.photoGoal!==item.photoGoal
+    ||amendment.videoGoal!==(item.videoGoal??null)
+    ||amendment.audioGoal!==(item.audioGoal??null))
+    throw Error('assignment.invalid_signed_goal')
+  return {
+    photoGoal:item.photoGoal,
+    videoGoal:amendment.videoGoal as number|null,
+    audioGoal:amendment.audioGoal as number|null,
+  }
 }
 
 class AssignmentDB extends Dexie {
@@ -183,7 +228,9 @@ async function signedOperation(
   const contract=JSON.stringify(payload)
   const signingDomain=kind==='media-submit'&&payload.version===2
     ?'pb3.assignment-media-submit.v2\n'
-    :kind==='policy'&&payload.version===3
+    :kind==='policy'&&payload.version===4
+      ?'pb3.assignment-policy.v4\n'
+      :kind==='policy'&&payload.version===3
       ?'pb3.assignment-policy.v3\n'
       :kind==='policy'&&payload.version===2
       ?'pb3.assignment-policy.v2\n':domain(kind)
@@ -278,6 +325,7 @@ export async function verifySignedAssignmentPolicy(
   if(!Number.isInteger(item.policyRevision)||item.policyRevision<1
     ||item.policyRevision>1001)throw new Error('assignment.invalid_policy_revision')
   if(item.policyRevision===1){
+    signedPolicyGoals(item)
     if(item.photoGoal!==c.photoGoal||item.policyAmendmentContract!=null
       ||item.policyAmendmentSignature!=null)
       throw new Error('assignment.policy_snapshot_mismatch')
@@ -289,16 +337,18 @@ export async function verifySignedAssignmentPolicy(
     try{edit=JSON.parse(item.policyAmendmentContract) as Record<string,unknown>}
     catch{throw new Error('assignment.invalid_policy_revision')}
     const type=edit.version
-    if(type!==1&&type!==2&&type!==3)throw Error('assignment.invalid_policy_revision')
+    if(type!==1&&type!==2&&type!==3&&type!==4)throw Error('assignment.invalid_policy_revision')
     const expected=[
       'version','operationId','assignmentId','ownerAccountId',
       'rootPolicyHash','previousPolicyHash','fromPolicyRevision',
       'toPolicyRevision','photoGoal','allowedMedia',
-      ...(type===2||type===3?['requiredCategory','descriptionMinLength','requiredGps']:[]),
+      ...(type>=2?['requiredCategory','descriptionMinLength','requiredGps']:[]),
+      ...(type===4?['videoGoal','audioGoal']:[]),
     ]
     if(Object.keys(edit).sort().join('|')!==expected.sort().join('|')
       ||!await verify(await importSpki(trustedSpki),
-        (type===3?'pb3.assignment-policy.v3\n'
+        (type===4?'pb3.assignment-policy.v4\n'
+          :type===3?'pb3.assignment-policy.v3\n'
           :type===2?'pb3.assignment-policy.v2\n':domain('policy'))
           +item.policyAmendmentContract,
         item.policyAmendmentSignature))
@@ -308,14 +358,15 @@ export async function verifySignedAssignmentPolicy(
       ||edit.rootPolicyHash!==originalHash
       ||edit.toPolicyRevision!==item.policyRevision
       ||edit.fromPolicyRevision!==item.policyRevision-1
-      ||(type===3?!validAllowedMedia(edit.allowedMedia)
+      ||(type>=3?!validAllowedMedia(edit.allowedMedia)
         :JSON.stringify(edit.allowedMedia)!==JSON.stringify(['photo']))
       ||edit.photoGoal!==item.photoGoal
       ||typeof edit.previousPolicyHash!=='string'
       ||!/^[a-f0-9]{64}$/.test(edit.previousPolicyHash))
       throw new Error('assignment.policy_revision_mismatch')
-    signedPolicyRequirements(item) // hard-fail invalid signed v2/v3 flags
+    signedPolicyRequirements(item) // hard-fail invalid signed v2-v4 flags
     signedAllowedAssignmentMedia(item)
+    signedPolicyGoals(item) // reject spoofed per-kind server columns
   }
   if(item.revision===1){
     if(item.state!=='active'||item.stateContract!==null
@@ -365,6 +416,8 @@ export function assertSignedPolicyProgress(
     throw new Error('assignment.policy_rollback')
   if(next.policyRevision===previous.policyRevision
     &&(next.photoGoal!==previous.photoGoal
+      ||(next.videoGoal??null)!==(previous.videoGoal??null)
+      ||(next.audioGoal??null)!==(previous.audioGoal??null)
       ||next.policyAmendmentContract!==previous.policyAmendmentContract
       ||next.policyAmendmentSignature!==previous.policyAmendmentSignature))
     throw new Error('assignment.policy_equivocation')
@@ -567,11 +620,14 @@ export async function readCachedPrivateAssignment(
  */
 export async function queueAssignmentPolicyChange(
   assignmentId:string,
-  next:{photoGoal:number|null;allowedMedia?:AllowedAssignmentMedia}&CaptureRequirements,
+  next:{photoGoal:number|null;videoGoal?:number|null;audioGoal?:number|null;
+    allowedMedia?:AllowedAssignmentMedia}&CaptureRequirements,
 ):Promise<string>{
   const s=requireSession()
   const {photoGoal,requiredCategory,descriptionMinLength,requiredGps}=next
-  if(photoGoal!==null&&(!Number.isInteger(photoGoal)||photoGoal<1||photoGoal>9999))
+  if(!progressGoal(photoGoal,9999)
+    ||(next.videoGoal!==undefined&&!progressGoal(next.videoGoal,999))
+    ||(next.audioGoal!==undefined&&!progressGoal(next.audioGoal,999)))
     throw Error('assignment.invalid_goal')
   if(typeof requiredCategory!=='boolean'||typeof requiredGps!=='boolean'
     ||!Number.isInteger(descriptionMinLength)||descriptionMinLength<0
@@ -584,10 +640,18 @@ export async function queueAssignmentPolicyChange(
   const a=row.listing
   const previousRules=signedPolicyRequirements(a)
   const previousMedia=signedAllowedAssignmentMedia(a)
+  const previousGoals=signedPolicyGoals(a)
   const allowedMedia=next.allowedMedia??previousMedia
   if(!validAllowedMedia(allowedMedia))throw Error('assignment.invalid_allowed_media')
+  const videoGoal=next.videoGoal===undefined?previousGoals.videoGoal:next.videoGoal
+  const audioGoal=next.audioGoal===undefined?previousGoals.audioGoal:next.audioGoal
+  if((videoGoal!==null&&!allowedMedia.includes('video'))
+    ||(audioGoal!==null&&!allowedMedia.includes('audio')))
+    throw Error('assignment.goal_for_disabled_type')
   const mediaChanged=JSON.stringify(allowedMedia)!==JSON.stringify(previousMedia)
   if(a.state!=='active'||(a.photoGoal===photoGoal&&!mediaChanged
+    &&videoGoal===previousGoals.videoGoal
+    &&audioGoal===previousGoals.audioGoal
     &&previousRules.requiredCategory===requiredCategory
     &&previousRules.descriptionMinLength===descriptionMinLength
     &&previousRules.requiredGps===requiredGps))
@@ -604,15 +668,15 @@ export async function queueAssignmentPolicyChange(
   const previousContract=a.policyRevision===1?a.policyContract:a.policyAmendmentContract
   if(!previousContract)throw Error('assignment.policy_revision_not_authenticated')
   const previousPolicyHash=hex(await digest(enc.encode(previousContract)))
-  const previousVersion=a.policyAmendmentContract
-    ?(JSON.parse(a.policyAmendmentContract) as {version:number}).version:1
-  const version=allowedMedia.length>1||previousVersion===3?3:2
+  // Always publish new edits as v4. Historical v1-v3 contracts
+  // remain immutable and are still verified at their original revision.
   const payload={
-    version,operationId:crypto.randomUUID(),assignmentId,
+    version:4,operationId:crypto.randomUUID(),assignmentId,
     ownerAccountId:s.accountId,rootPolicyHash,previousPolicyHash,
     fromPolicyRevision:a.policyRevision,toPolicyRevision:a.policyRevision+1,
     photoGoal,allowedMedia,
     requiredCategory,descriptionMinLength,requiredGps,
+    videoGoal,audioGoal,
   }
   const op=await signedOperation('policy',
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/policy',payload)
@@ -627,7 +691,10 @@ export async function queueAssignmentGoalChange(
   if(!row)throw Error('assignment.policy_not_cached')
   await verifySignedAssignmentPolicy(row.listing,true)
   const rules=signedPolicyRequirements(row.listing)
-  return queueAssignmentPolicyChange(assignmentId,{photoGoal,...rules})
+  const targets=signedPolicyGoals(row.listing)
+  return queueAssignmentPolicyChange(assignmentId,{
+    photoGoal,videoGoal:targets.videoGoal,audioGoal:targets.audioGoal,...rules,
+  })
 }
 
 /** Signed owner lifecycle commands are durable and do not delete media. */
@@ -813,7 +880,8 @@ export async function signedMediaCaptureIntent(
     ||(policy.endsAt!==null&&startedAt>=policy.endsAt))
     throw Error('assignment.media_recording_not_permitted')
   const latest=policy.policyAmendmentContract
-  if(!latest||(JSON.parse(latest) as {version?:number}).version!==3)
+  if(!latest||![3,4].includes(
+    (JSON.parse(latest) as {version?:number}).version??0))
     throw Error('assignment.media_policy_v3_required')
   const policyHash=hex(await digest(new TextEncoder().encode(latest)))
   assertSame(session)
@@ -853,7 +921,8 @@ export async function queueAssignmentMediaSubmission(
   const policy=listing.policyAmendmentContract
   if(!policy)throw Error('assignment.media_policy_v3_required')
   const activePolicy=JSON.parse(policy) as {version?:number}
-  if(activePolicy.version!==3)throw Error('assignment.media_policy_v3_required')
+  if(![3,4].includes(activePolicy.version??0))
+    throw Error('assignment.media_policy_v3_required')
   const policyHash=hex(await digest(new TextEncoder().encode(policy)))
   const mediaContractHash=hex(await digest(
     new TextEncoder().encode(JSON.stringify(media.contract))))

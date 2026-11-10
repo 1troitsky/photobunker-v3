@@ -6,8 +6,8 @@ import { listLocalPhotos, readLocalPhotoMetadata } from '../../photo-sync/applic
 import type { PhotoMetadata } from '../../photo-sync/domain/capture-metadata'
 import type { StoredPhoto } from '../../photo-sync/application/p1-photo'
 import {
-  listCachedAssignmentSnapshots, signedPolicyRequirements,
-  verifySignedAssignmentPolicy,
+  listCachedAssignmentSnapshots, listServerAssignments,
+  signedPolicyRequirements, verifySignedAssignmentPolicy, validAllowedMedia,
 } from './assignment-outbox'
 import type {
   AssignmentListing, CaptureRequirements, SignedCaptureBinding,
@@ -84,6 +84,10 @@ export async function readSignedPolicyHistoryCache(
   if(cached.accountId!==session.accountId
     ||cached.assignmentId!==latest.assignmentId)
     throw Error('assignment.policy_history_invalid')
+  // A correctly signed newer policy makes an older cached chain incomplete,
+  // not forged. Refresh it online BEFORE exposing a recipient DEK.
+  // A cached history ahead of the latest verified snapshot is still suspect.
+  if(cached.history.policyRevision<latest.policyRevision)return null
   const chain=await verifySignedPolicyHistory(latest,cached.history)
   if(activeSession.value!==session)throw Error('identity.changed')
   return chain
@@ -130,21 +134,26 @@ export async function verifySignedPolicyHistory(
     let contract:Record<string,unknown>
     try{contract=JSON.parse(event.contract) as Record<string,unknown>}
     catch{throw Error('assignment.policy_history_invalid')}
-    if((contract.version!==1&&contract.version!==2)
-      ||(previousVersion===2&&contract.version!==2)
+    if(![1,2,3,4].includes(contract.version as number)
+      ||typeof contract.version!=='number'
+      ||contract.version<previousVersion
       ||contract.assignmentId!==latest.assignmentId
       ||contract.ownerAccountId!==latest.ownerAccountId
       ||contract.rootPolicyHash!==root
       ||contract.previousPolicyHash!==previousHash
       ||contract.fromPolicyRevision!==revision-1
       ||contract.toPolicyRevision!==revision
-      ||!Array.isArray(contract.allowedMedia)
-      ||contract.allowedMedia.length!==1
-      ||contract.allowedMedia[0]!=='photo')
+      ||!validAllowedMedia(contract.allowedMedia)
+      ||(contract.version<=2
+        &&(contract.allowedMedia.length!==1||contract.allowedMedia[0]!=='photo')))
       throw Error('assignment.policy_history_invalid')
     const snapshot:AssignmentListing={
       ...latest,policyRevision:revision,
       photoGoal:contract.photoGoal as number|null,
+      // Each historical policy has its OWN signed goal projection;
+      // the current server projection must never be used for an old revision.
+      videoGoal:contract.version===4?contract.videoGoal as number|null:null,
+      audioGoal:contract.version===4?contract.audioGoal as number|null:null,
       policyAmendmentContract:event.contract,
       policyAmendmentSignature:event.signature,
     }
@@ -205,8 +214,24 @@ export async function preflightAssignmentPhotoGrant(
   assignmentId:string,photoId:string,expectedOwner:string,
 ):Promise<{policyRevision:number;personalPhoto:boolean}>{
   const session=requireSession()
-  const snapshots=await listCachedAssignmentSnapshots()
-  const latest=snapshots.find(x=>x.assignmentId===assignmentId)
+  // A local signed snapshot is suitable for OFFLINE capture, not
+  // automatically current owner authorization at an ONLINE E2EE grant.
+  // Before releasing a DEK, refresh the server listing and authenticate
+  // every owner-signed result. Missing/unreachable policy fails CLOSED.
+  // Fetch all necessary cursor pages: assignment may be past the first 50.
+  let latest:AssignmentListing|undefined
+  if(session.online&&navigator.onLine){
+    let cursor:string|undefined
+    do{
+      const page=await listServerAssignments(cursor)
+      latest=page.items.find(x=>x.assignmentId===assignmentId)
+      cursor=page.nextCursor??undefined
+    }while(!latest&&cursor)
+  }else{
+    latest=(await listCachedAssignmentSnapshots())
+      .find(x=>x.assignmentId===assignmentId)
+  }
+  if(activeSession.value!==session)throw Error('identity.changed')
   if(!latest||latest.ownerAccountId!==expectedOwner
     ||latest.state!=='active'
     ||latest.startsAt>Date.now()
@@ -222,21 +247,17 @@ export async function preflightAssignmentPhotoGrant(
     ||revision>latest.policyRevision)
     throw Error('assignment.capture_scope_mismatch')
   let effective:HistoricalEffectivePolicy
-  if(revision===1){
+  if(latest.policyRevision===1){
     effective={
       revision:1,policyHash:await hash(latest.policyContract),
-      requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
-      validFrom:latest.startsAt,validUntil:Number.POSITIVE_INFINITY,
-    }
-  }else if(revision===latest.policyRevision){
-    const contract=latest.policyAmendmentContract
-    if(!contract)throw Error('assignment.policy_not_authenticated')
-    effective={
-      revision,policyHash:await hash(contract),
       requirements:signedPolicyRequirements(latest),
       validFrom:latest.startsAt,validUntil:Number.POSITIVE_INFINITY,
     }
   }else{
+    // Every amendment needs an authenticated effective-time boundary,
+    // including the latest revision. Otherwise client-declared capture
+    // timestamps could predate policy approval yet reveal a recipient DEK.
+    // Revision 1 also needs the upper boundary of its successor.
     // Historical revisions are never guessed. An already verified chain
     // is readable offline; on first access use a fresh accepted-member API.
     // Every read re-verifies every owner signature against the local pin.

@@ -154,6 +154,64 @@ final class PhotoSyncV1Test extends TestCase {
         $this->reserve($scoped($capture))->assertConflict();
     }
 
+    public function test_v4_signed_goals_preserve_historical_offline_photo_authority():void {
+        // A future photo-only policy edit must never invalidate earlier
+        // authorized offline ciphertext. The reservation service verifies
+        // the ordered server-held policy hash/revision history.
+        $this->travelTo(now()->startOfSecond()->addMilliseconds(750));
+        $changedAt=now()->getTimestampMs();
+        $assignment=(string)Str::uuid();
+        $original='{"version":1,"allowedMedia":["photo"],"photoGoal":30}';
+        $rootHash=hash('sha256',$original);
+        $revision=json_encode([
+            'version'=>4,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
+            'rootPolicyHash'=>$rootHash,'previousPolicyHash'=>$rootHash,
+            'fromPolicyRevision'=>1,'toPolicyRevision'=>2,
+            'photoGoal'=>45,'allowedMedia'=>['photo','video','audio'],
+            'requiredCategory'=>false,'descriptionMinLength'=>0,
+            'requiredGps'=>false,'videoGoal'=>2,'audioGoal'=>1,
+        ],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $newHash=hash('sha256',$revision);
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$assignment,'owner_account_id'=>$this->account,
+            'operation_id'=>(string)Str::uuid(),
+            'contract_hash'=>$rootHash,'contract_json'=>$original,
+            'owner_signature'=>'fixture','private_envelope_json'=>'{}',
+            'state'=>'active','revision'=>1,'policy_revision'=>2,
+            'photo_goal'=>45,'starts_at'=>$changedAt-3600000,
+            'ends_at'=>null,'latest_policy_contract'=>$revision,
+            'latest_policy_signature'=>'fixture',
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('assignment_policy_events_v1')->insert([
+            'operation_id'=>(string)Str::uuid(),'assignment_id'=>$assignment,
+            'from_revision'=>1,'to_revision'=>2,'contract_hash'=>$newHash,
+            'contract_json'=>$revision,'owner_signature'=>'fixture',
+            'occurred_at_ms'=>$changedAt,'created_at'=>now(),
+        ]);
+        $old=[
+            'assignmentId'=>$assignment,'ownerAccountId'=>$this->account,
+            'policyRevision'=>1,'policyHash'=>$rootHash,
+            'capturedAt'=>$changedAt-250,
+        ];
+        $this->reserve($this->assignmentCaptureFixture($old))
+            ->assertOk()->assertJsonPath('state','pending');
+        $wrong=$old;
+        $wrong['capturedAt']=$changedAt+1;
+        $this->reserve($this->assignmentCaptureFixture($wrong))
+            ->assertConflict();
+        $current=$wrong;
+        $current['policyRevision']=2;
+        $current['policyHash']=$newHash;
+        $this->reserve($this->assignmentCaptureFixture($current))
+            ->assertOk()->assertJsonPath('state','pending');
+        $current['policyHash']=$rootHash;
+        $this->reserve($this->assignmentCaptureFixture($current))
+            ->assertConflict();
+        $this->assertDatabaseCount('photo_records',2);
+    }
+
     public function test_old_offline_capture_can_reserve_after_stricter_signed_requirements():void {
         $this->travelTo(now()->startOfSecond()->addMilliseconds(750));
         $changedAt=now()->getTimestampMs();

@@ -12,7 +12,7 @@ import {
   queueAssignmentMediaSubmission, listAssignmentMediaSubmissions,
   signedAllowedAssignmentMedia,verifySignedAssignmentPolicy,
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
-  signedPolicyRequirements,verifyAssignmentInvite,
+  signedPolicyRequirements,signedPolicyGoals,verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
@@ -38,7 +38,7 @@ type VisibleAssignment={
   id:string;ownerAccountId:string;data:PrivateAssignment|null
   state:string;revision:number;policyRevision:number
   requirements:CaptureRequirements;allowedMedia:AllowedAssignmentMedia
-  localState?:string;goal:number|null
+  localState?:string;goal:number|null;videoGoal:number|null;audioGoal:number|null
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
   confirmedVideos:number|null;confirmedAudio:number|null
   createdAt:number;isOwner:boolean;startsAt:number;endsAt:number|null
@@ -59,6 +59,8 @@ const title=ref('')
 const instructions=ref('')
 const goal=ref<string|number>('')
 const editedGoal=ref<string|number>('')
+const editedVideoGoal=ref<string|number>('')
+const editedAudioGoal=ref<string|number>('')
 const editedRequiredCategory=ref(false)
 const editedDescriptionMin=ref<string|number>(0)
 const editedRequiredGps=ref(false)
@@ -113,8 +115,17 @@ const eligiblePhotos=computed(()=>photos.value
     &&(!p.capture||p.capture.assignmentId===selectedId.value))
   .sort((a,b)=>Number(!!b.capture)-Number(!!a.capture)))
 function progressPercentage(assignment:VisibleAssignment):number|null{
-  if(assignment.goal===null||assignment.confirmedPhotos===null)return null
-  return Math.min(100,Math.round(assignment.confirmedPhotos/assignment.goal*100))
+  const targeted=[
+    {goal:assignment.goal,count:assignment.confirmedPhotos},
+    {goal:assignment.videoGoal,count:assignment.confirmedVideos},
+    {goal:assignment.audioGoal,count:assignment.confirmedAudio},
+  ].filter(x=>x.goal!==null)
+  // Only live, server-confirmed E2EE receipts count. No goals => no percent.
+  // Offline counts are unknown: never invent progress from pending captures.
+  if(!targeted.length||targeted.some(x=>x.count===null))return null
+  const total=targeted.reduce((sum,x)=>sum+x.goal!,0)
+  const done=targeted.reduce((sum,x)=>sum+Math.min(x.goal!,x.count!),0)
+  return Math.min(100,Math.round(100*done/total))
 }
 function pendingReceiptCount(assignmentId:string):number{
   const queuedCaptures=photos.value.filter(p=>p.capture?.assignmentId===assignmentId
@@ -168,7 +179,7 @@ async function hydrate():Promise<void>{
       state:'active',revision:1,policyRevision:1,
       requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       allowedMedia:['photo'],
-      localState:item.state,goal:item.photoGoal,
+      localState:item.state,goal:item.photoGoal,videoGoal:null,audioGoal:null,
       confirmedPhotos:null,confirmedVideos:null,confirmedAudio:null,
       createdAt:item.createdAt,isOwner:true,startsAt:item.startsAt,endsAt:item.endsAt,
     }
@@ -254,7 +265,9 @@ async function hydrate():Promise<void>{
       id:item.assignmentId,ownerAccountId:item.ownerAccountId,data,
       state:item.state,revision:item.revision,policyRevision:item.policyRevision,
       requirements:signedPolicyRequirements(item),localState:previous?.localState,
-      goal:item.photoGoal,confirmedPhotos:offline?null:item.confirmedPhotoCount,
+      goal:item.photoGoal,videoGoal:signedPolicyGoals(item).videoGoal,
+      audioGoal:signedPolicyGoals(item).audioGoal,
+      confirmedPhotos:offline?null:item.confirmedPhotoCount,
       confirmedVideos:offline?null:(item.confirmedVideoCount??null),
       confirmedAudio:offline?null:(item.confirmedAudioCount??null),
       allowedMedia:signedAllowedAssignmentMedia(item),
@@ -317,6 +330,8 @@ function choose(assignmentId:string):void{
   selectedId.value=assignmentId
   const chosen=assignments.value.find(a=>a.id===assignmentId)
   editedGoal.value=chosen?.goal??''
+  editedVideoGoal.value=chosen?.videoGoal??''
+  editedAudioGoal.value=chosen?.audioGoal??''
   editedRequiredCategory.value=chosen?.requirements.requiredCategory??false
   editedDescriptionMin.value=chosen?.requirements.descriptionMinLength??0
   editedRequiredGps.value=chosen?.requirements.requiredGps??false
@@ -361,8 +376,13 @@ async function changeGoal():Promise<void>{
       throw new Error('assignment.owner_required')
     const input=String(editedGoal.value).trim()
     const value=input===''?null:Number(input)
+    const videoInput=String(editedVideoGoal.value).trim()
+    const audioInput=String(editedAudioGoal.value).trim()
     await queueAssignmentPolicyChange(a.id,{
-      photoGoal:value,requiredCategory:editedRequiredCategory.value,
+      photoGoal:value,
+      videoGoal:editedAllowVideo.value&&videoInput!==''?Number(videoInput):null,
+      audioGoal:editedAllowAudio.value&&audioInput!==''?Number(audioInput):null,
+      requiredCategory:editedRequiredCategory.value,
       descriptionMinLength:Number(editedDescriptionMin.value),
       requiredGps:editedRequiredGps.value,
       allowedMedia:[
@@ -614,14 +634,20 @@ onUnmounted(cleanPreview)
             <div class="assignment-card-progress">
               <span v-if="assignment.confirmedPhotos!==null">
                 Фото: {{ assignment.confirmedPhotos }}{{ assignment.goal===null?'':' / '+assignment.goal }}
-                <template v-if="progressPercentage(assignment)!==null">
-                  · {{ progressPercentage(assignment) }}%
-                </template>
               </span>
               <span v-else class="muted">Фото: цель {{ assignment.goal??'не задана' }} · ожидает подтверждения</span>
-              <progress v-if="assignment.goal!==null&&assignment.confirmedPhotos!==null"
-                :max="assignment.goal" :value="Math.min(assignment.confirmedPhotos,assignment.goal)"
-                :aria-label="'Подтверждённый прогресс по фото '+assignment.id"/>
+              <span v-if="assignment.allowedMedia.includes('video')&&assignment.confirmedVideos!==null">
+                · Видео: {{ assignment.confirmedVideos }}{{ assignment.videoGoal===null?'':' / '+assignment.videoGoal }}
+              </span>
+              <span v-if="assignment.allowedMedia.includes('audio')&&assignment.confirmedAudio!==null">
+                · Аудио: {{ assignment.confirmedAudio }}{{ assignment.audioGoal===null?'':' / '+assignment.audioGoal }}
+              </span>
+              <span v-if="progressPercentage(assignment)!==null">
+                · Всего {{ progressPercentage(assignment) }}%
+              </span>
+              <progress v-if="progressPercentage(assignment)!==null"
+                :max="100" :value="progressPercentage(assignment)??0"
+                :aria-label="'Подтверждённый прогресс задания '+assignment.id"/>
               <small v-if="pendingReceiptCount(assignment.id)>0" class="muted">
                 Локально ожидают отправки: {{ pendingReceiptCount(assignment.id) }}
               </small>
@@ -642,18 +668,22 @@ onUnmounted(cleanPreview)
         <p v-if="selected.data" class="muted">{{ selected.data.instructions }}</p>
         <p><code>{{ selected.id }}</code></p>
         <p class="muted">Разрешённые типы: {{ selected.allowedMedia.join(', ') }} · {{ selected.goal===null?'Без цели по фото':'Фото: цель '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
+        <p class="muted">Цели для прогресса: Видео — {{ selected.videoGoal??'не задана' }}, Аудио — {{ selected.audioGoal??'не задана' }}. Цели не ограничивают отправку файлов.</p>
         <p class="muted">
           Подписанные требования: категория {{ selected.requirements.requiredCategory?'обязательна':'необязательна' }};
           описание минимум {{ selected.requirements.descriptionMinLength }} символов;
           GPS {{ selected.requirements.requiredGps?'обязателен':'необязателен' }}.
         </p>
         <p v-if="selected.confirmedPhotos!==null" class="muted">
-          Подтверждено сервером: {{ selected.confirmedPhotos }}
-          <template v-if="selected.goal!==null"> / {{ selected.goal }} · {{ progressPercentage(selected) }}%</template>
+          Подтверждено сервером: Фото {{ selected.confirmedPhotos }}
+          <template v-if="selected.goal!==null"> / {{ selected.goal }}</template>
+          <template v-if="progressPercentage(selected)!==null">
+            · Общий прогресс {{ progressPercentage(selected) }}%
+          </template>
         </p>
         <p v-if="selected.confirmedVideos!==null&&selected.confirmedAudio!==null"
           class="muted" data-testid="assignment-media-counts">
-          Видео: {{ selected.confirmedVideos }} · Аудио: {{ selected.confirmedAudio }}
+          Видео: {{ selected.confirmedVideos }}{{ selected.videoGoal===null?'':' / '+selected.videoGoal }} · Аудио: {{ selected.confirmedAudio }}{{ selected.audioGoal===null?'':' / '+selected.audioGoal }}
           (только при действующих E2EE-разрешениях)
         </p>
         <p v-if="pendingReceiptCount(selected.id)>0" class="muted">
@@ -696,6 +726,13 @@ onUnmounted(cleanPreview)
               <input id="assignment-allow-audio" v-model="editedAllowAudio" type="checkbox">
               Разрешить аудио (E2EE)
             </label>
+            <label v-if="editedAllowVideo" for="assignment-video-goal">Цель по видео (1–999, пусто — без цели)</label>
+            <input v-if="editedAllowVideo" id="assignment-video-goal" v-model="editedVideoGoal"
+              type="number" min="1" max="999" step="1" placeholder="Без цели">
+            <label v-if="editedAllowAudio" for="assignment-audio-goal">Цель по аудио (1–999, пусто — без цели)</label>
+            <input v-if="editedAllowAudio" id="assignment-audio-goal" v-model="editedAudioGoal"
+              type="number" min="1" max="999" step="1" placeholder="Без цели">
+            <p class="muted">Цели — только для подсчёта подтверждённого прогресса. При отключении типа его цель сбрасывается в следующей подписанной версии.</p>
             <button type="button"
               :disabled="busy||selected.localState==='queued'||pendingStateChange"
               @click="changeGoal">Подписать новые правила</button>

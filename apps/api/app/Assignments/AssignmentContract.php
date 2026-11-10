@@ -76,17 +76,18 @@ final class AssignmentContract
     /**
      * Amendments retain the immutable root. v1 is photo-goal only;
      * v2 adds photo capture requirements; v3 explicitly opts into video
-     * and/or audio. Never broaden older photo-only signed policy implicitly.
+     * and/or audio; v4 adds independent, optional video/audio progress goals.
+     * Never broaden older photo-only signed policy implicitly.
      */
     public static function policyAmendment(array $d,string $owner,string $assignment):void
     {
-        abort_unless(in_array($d['version'],[1,2,3],true)
+        abort_unless(in_array($d['version'],[1,2,3,4],true)
             &&$d['assignmentId']===$assignment
             &&$d['ownerAccountId']===$owner
             &&is_int($d['fromPolicyRevision'])
             &&$d['fromPolicyRevision']>=1&&$d['fromPolicyRevision']<1001
             &&$d['toPolicyRevision']===$d['fromPolicyRevision']+1
-            &&self::allowedMedia($d['allowedMedia'],$d['version']===3),422);
+            &&self::allowedMedia($d['allowedMedia'],$d['version']>=3),422);
         foreach(['assignmentId','ownerAccountId','operationId'] as $key)
             self::uuid($d,$key);
         foreach(['rootPolicyHash','previousPolicyHash'] as $key){
@@ -104,6 +105,17 @@ final class AssignmentContract
                 &&is_int($d['descriptionMinLength'])
                 &&$d['descriptionMinLength']>=0
                 &&$d['descriptionMinLength']<=4000,422);
+        }
+        if($d['version']===4){
+            // Target counts are progress indicators, never upload ceilings.
+            // Earlier signed policy versions intentionally have no goals
+            // for video/audio and must not acquire them implicitly.
+            foreach(['video'=>'videoGoal','audio'=>'audioGoal'] as $kind=>$field){
+                $goal=$d[$field];
+                abort_unless($goal===null ||
+                    (in_array($kind,$d['allowedMedia'],true)
+                        &&is_int($goal)&&$goal>=1&&$goal<=999),422);
+            }
         }
     }
 

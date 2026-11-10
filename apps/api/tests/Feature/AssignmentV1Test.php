@@ -827,6 +827,86 @@ final class AssignmentV1Test extends TestCase
             'requiredGps'=>false,
         ]);
     }
+    private function signedPerKindPolicyV4(
+        array $allowed,?int $videoGoal,?int $audioGoal,int $from=1
+    ):array
+    {
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $root=$a->contract_json;
+        $previous=$a->latest_policy_contract??$root;
+        return $this->signed('owner','pb3.assignment-policy.v4',[
+            'version'=>4,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'rootPolicyHash'=>hash('sha256',$root),
+            'previousPolicyHash'=>hash('sha256',$previous),
+            'fromPolicyRevision'=>$from,'toPolicyRevision'=>$from+1,
+            'photoGoal'=>30,'allowedMedia'=>$allowed,
+            'requiredCategory'=>false,'descriptionMinLength'=>0,
+            'requiredGps'=>false,
+            'videoGoal'=>$videoGoal,'audioGoal'=>$audioGoal,
+        ]);
+    }
+
+    public function test_v4_media_goals_are_signed_optional_and_never_upload_ceilings():void
+    {
+        $this->createAssignment();
+        $policyUrl='/assignments/v1/'.$this->assignmentId.'/policy';
+        $this->as('owner');
+        // A goal for a disabled type is invalid, even when correctly signed.
+        $forbidden=$this->signedPerKindPolicyV4(['photo','audio'],1,1);
+        $this->postJson($policyUrl,$forbidden)->assertUnprocessable();
+        $tooLarge=$this->signedPerKindPolicyV4(['photo','video'],1000,null);
+        $this->postJson($policyUrl,$tooLarge)->assertUnprocessable();
+        $negative=$this->signedPerKindPolicyV4(['photo','video'],-1,null);
+        $this->postJson($policyUrl,$negative)->assertUnprocessable();
+        $policy=$this->signedPerKindPolicyV4(['photo','video','audio'],2,1);
+        $this->postJson($policyUrl,$policy)->assertOk()
+            ->assertJsonPath('policyRevision',2);
+        $this->postJson($policyUrl,$policy)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.photoGoal',30)
+            ->assertJsonPath('items.0.videoGoal',2)
+            ->assertJsonPath('items.0.audioGoal',1)
+            ->assertJsonPath('items.0.confirmedVideoCount',0);
+        $this->assertDatabaseCount('assignment_policy_events_v1',1);
+        // An old format cannot silently erase signed video/audio goals.
+        $legacy=$this->signedMediaPolicyV3(['photo','video','audio'],2);
+        $this->postJson($policyUrl,$legacy)->assertConflict();
+        $next=$this->signedPerKindPolicyV4(['photo','video','audio'],3,null,2);
+        $this->postJson($policyUrl,$next)->assertOk()
+            ->assertJsonPath('policyRevision',3);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.videoGoal',3)
+            ->assertJsonPath('items.0.audioGoal',null);
+        $this->assertDatabaseCount('assignment_policy_events_v1',2);
+    }
+
+    public function test_v4_goals_do_not_block_authorized_media_submissions():void
+    {
+        $this->createAssignment();
+        $invite=$this->invite();
+        $this->accept($invite);
+        $this->as('owner');
+        $policy=$this->signedPerKindPolicyV4(['photo','video'],1,null);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/policy',$policy)
+            ->assertOk();
+        $videoA=$this->mediaAndGrant('video');
+        $videoB=$this->mediaAndGrant('video');
+        $this->as('recipient');
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $this->postJson($url,$this->signedMediaSubmit($videoA,'video'))
+            ->assertCreated();
+        $this->postJson($url,$this->signedMediaSubmit($videoB,'video'))
+            ->assertCreated(); // 2 > target 1; target is not a quota.
+        $this->as('owner');
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.videoGoal',1)
+            ->assertJsonPath('items.0.confirmedVideoCount',2);
+    }
+
     private function mediaAndGrant(string $kind):array
     {
         $contributor=$this->people['recipient']['account'];
