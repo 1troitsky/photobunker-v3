@@ -145,10 +145,14 @@ async function reloadRoster():Promise<void>{
   try{
     await syncTeamKeyRotations()
     await syncEpochInvitationOperations()
-    const [oldMembers,epochMembers,history,epoch]=await Promise.all([
-      listOwnerTeamRoster(id),listOwnerEpochRoster(id),
-      verifiedTeamMembershipHistory(id),ownerEpochStatus(id),
+    const epoch=await ownerEpochStatus(id)
+    const [oldMembers,history]=await Promise.all([
+      listOwnerTeamRoster(id),verifiedTeamMembershipHistory(id),
     ])
+    // Do not introduce v2 roster/network dependencies into an unchanged
+    // original-epoch Team (P1-28 remains an independently working flow).
+    const epochMembers=epoch.keyEpoch>=2
+      ?await listOwnerEpochRoster(id):[]
     if(epoch.membershipRevision!==history.revision
       ||epoch.rotationRequired!==history.rotationRequired)
       throw Error('teams.membership_epoch_mismatch')
