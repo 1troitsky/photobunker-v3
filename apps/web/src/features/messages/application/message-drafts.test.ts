@@ -113,13 +113,14 @@ describe('P2-01 account-encrypted messages drafts without Matrix impersonation',
       'messages.draft_decryption_failed')
   })
 
-  it('does not commit the next queued change after a key-only session switch',async()=>{
-    const changed={...contact,alias:'new alias'}
-    await saveMessageDraft(contact,'one')
+  it('rejects cross-account drafts even with the same verified peer ID',async()=>{
+    await saveMessageDraft(contact,'first account only')
     const other=crypto.randomUUID(),{pkg}=await freshPackage(other)
     activeSession.value={accountId:other,deviceId:crypto.randomUUID(),
       pkg,online:false} as Session
-    await expect(saveMessageDraft(changed,'different owner'))
-      .rejects.toThrow('messages.recipient_not_confirmed')
+    expect(await getMessageDraft(contact)).toBe('')
+    expect((await openDB()).length).toBeGreaterThan(0)
+    activeSession.value=session
+    expect(await getMessageDraft(contact)).toBe('first account only')
   })
 })
