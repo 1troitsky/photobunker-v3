@@ -600,7 +600,36 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       .toContainText('PRIVATE VIDEO MOTION 1')
     await expect(B.locator('[data-testid="assignment-private-media-instructions"]'))
       .toContainText('PRIVATE AUDIO NOTES 1')
+    // P1-24: a contributor reopening the camera gets only the exact
+    // CURRENT signed-revision-bound, account-AEAD cached private instructions.
+    // They never become server-visible policy fields or media grants.
+    await B.goto('/camera?assignmentId='+assignmentId)
+    await expect(B.locator('#camera-assignment'))
+      .toHaveValue(assignmentId,{timeout:20000})
+    await expect(B.getByTestId('camera-private-instructions'))
+      .toContainText('PRIVATE PHOTO FRAMING 2',{timeout:20000})
+    await expect(B.getByTestId('camera-private-instructions'))
+      .not.toContainText('PRIVATE VIDEO MOTION 1')
+    // No stale decrypted text may survive assignment deselection.
+    await B.locator('#camera-assignment').selectOption('')
+    await expect(B.getByTestId('camera-private-instructions')).toHaveCount(0)
+    await B.locator('#camera-assignment').selectOption(assignmentId)
+    await expect(B.getByTestId('camera-media-instruction'))
+      .toContainText('PRIVATE PHOTO FRAMING 2')
+    await B.locator('#camera-mode').selectOption('video')
+    await expect(B.getByTestId('camera-media-instruction'))
+      .toContainText('PRIVATE VIDEO MOTION 1')
+    await expect(B.getByTestId('camera-media-instruction'))
+      .not.toContainText('PRIVATE AUDIO NOTES 1')
+    await B.locator('#camera-mode').selectOption('audio')
+    await expect(B.getByTestId('camera-media-instruction'))
+      .toContainText('PRIVATE AUDIO NOTES 1')
+    // Keep the already restored account alive during this warm-offline
+    // assertion. A full page navigation immediately before setOffline()
+    // races the asynchronous key-only session bootstrap.
     await B.context().setOffline(true)
+    await expect(B.getByTestId('camera-media-instruction'))
+      .toContainText('PRIVATE AUDIO NOTES 1')
     const cached=await B.evaluate(async id=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
       const row=(await a.listCachedAssignmentSnapshots())
@@ -628,6 +657,12 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       const identity=await import('/src/features/identity/application/session.ts')
       await identity.reauthenticate()
     })
+    // The participant is still on Camera after P1-24 display assertions.
+    // Return through SPA navigation before later schedule checks click
+    // the assignment-list "Обновить" action; no cold session bootstrap.
+    await B.getByRole('link',{name:'Задания',exact:true}).click()
+    await expect(B.getByRole('button',{name:'Обновить',exact:true}))
+      .toBeVisible({timeout:20000})
 
     // P1-20: edit a REAL owner-signed schedule with an accepted contributor
     // still using the original ECDH invitation and the original root policy.
