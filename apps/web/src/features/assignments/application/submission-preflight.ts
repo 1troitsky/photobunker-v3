@@ -291,5 +291,6 @@ export async function preflightAssignmentPhotoGrant(
   }
   validatePhotoForGrant(photo,metadata,assignmentId,expectedOwner,effective)
   if(activeSession.value!==session)throw Error('identity.changed')
-  return {policyRevision:revision,personalPhoto:!photo.capture}
+  return {policyRevision:revision,personalPhoto:!photo.capture,
+    grantExpiresAtCap:assignmentGrantExpiryCap(latest)}
 }
