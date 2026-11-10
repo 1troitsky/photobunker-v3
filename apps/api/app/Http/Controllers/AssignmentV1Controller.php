@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Assignments\AssignmentContract as C;
 use App\Assignments\AssignmentSchedule as S;
+use App\Assignments\AssignmentRetention as R;
 use App\Assignments\MonthlyCreationQuota;
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
@@ -35,6 +36,7 @@ final class AssignmentV1Controller extends Controller
         P::uuid($id);
         $a=DB::table('assignment_records_v1')->where('id',$id)->first();
         abort_unless($a,404);
+        R::requireAvailable($a);
         return $a;
     }
 
@@ -149,6 +151,7 @@ final class AssignmentV1Controller extends Controller
                 ]);
             }
             abort_unless($a->state==='active'
+                &&R::filesOpen($a)
                 &&(!S::current($a)['blockAfterEnd']
                     ||S::current($a)['endsAt']>PhotoSync::nowMs())
                 &&(int)$a->policy_revision===$c['fromPolicyRevision']
@@ -248,6 +251,7 @@ final class AssignmentV1Controller extends Controller
                 ]);
             }
             abort_unless($a->state==='active'
+                &&R::assignmentOpen($a)
                 &&(!S::current($a)['blockAfterEnd']
                     ||S::current($a)['endsAt']>PhotoSync::nowMs())
                 &&(int)$a->private_revision===$c['fromPrivateRevision'],409);
@@ -358,11 +362,15 @@ final class AssignmentV1Controller extends Controller
                 ]);
             }
             abort_unless($a->state==='active'
+                &&R::mayRevise($a)
                 &&(int)$a->schedule_revision===$c['fromScheduleRevision'],409);
             $previous=$a->latest_schedule_contract??$a->contract_json;
             abort_unless(hash_equals(hash('sha256',$previous),
                 $c['previousScheduleHash']),409);
             $old=S::current($a);
+            R::validateDeadlinesAgainstSchedule(R::current($a),[
+                'endsAt'=>$c['endsAt'],
+            ]);
             abort_unless($old!==[
                 'startsAt'=>$c['startsAt'],'endsAt'=>$c['endsAt'],
                 'blockBeforeStart'=>$c['blockBeforeStart'],
@@ -457,7 +465,8 @@ final class AssignmentV1Controller extends Controller
                     'revision'=>(int)$a->revision,'unchanged'=>true,
                 ]);
             }
-            abort_unless((int)$a->revision===$c['fromRevision']
+            abort_unless(R::assignmentOpen($a)
+                &&(int)$a->revision===$c['fromRevision']
                 &&$c['toRevision']===(int)$a->revision+1
                 &&$c['policyRevision']===1,409);
             $expected=$c['action']==='finish'?'active':'finished';
@@ -502,8 +511,13 @@ final class AssignmentV1Controller extends Controller
         [$actor]=$this->sync->actor($r);
         $after=$r->query('after');
         if($after!==null){abort_unless(is_string($after),422);P::uuid($after);}
+        $now=PhotoSync::nowMs();
         $q=DB::table('assignment_records_v1 as a')
           ->join('identity_accounts as owner','owner.id','=','a.owner_account_id')
+          ->where(function($q)use($now){
+              $q->whereNull('a.assignment_access_until')
+                ->orWhere('a.assignment_access_until','>',$now);
+          })
           ->where(function($query)use($actor){
               $query->where('a.owner_account_id',$actor->id)
                 ->orWhereExists(function($sub)use($actor){
@@ -522,6 +536,8 @@ final class AssignmentV1Controller extends Controller
             'a.latest_policy_contract','a.latest_policy_signature',
             'a.private_revision','a.latest_private_contract','a.latest_private_signature',
             'a.schedule_revision','a.latest_schedule_contract','a.latest_schedule_signature',
+            'a.retention_revision','a.latest_retention_contract','a.latest_retention_signature',
+            'a.files_access_until','a.assignment_access_until',
             'owner.account_spki as owner_account_spki',
         ];
         $now=PhotoSync::nowMs();
@@ -578,9 +594,15 @@ final class AssignmentV1Controller extends Controller
                     ?json_decode($x->latest_policy_contract,true,32,JSON_THROW_ON_ERROR):null;
                 return ($policy['version']??0)>=4?$policy['audioGoal']:null;
             })(),
-            'confirmedPhotoCount'=>(int)$x->confirmed_photo_count,
-            'confirmedVideoCount'=>(int)$x->confirmed_video_count,
-            'confirmedAudioCount'=>(int)$x->confirmed_audio_count,
+            'confirmedPhotoCount'=>$x->files_access_until!==null
+                &&(int)$x->files_access_until<=PhotoSync::nowMs()
+                ?0:(int)$x->confirmed_photo_count,
+            'confirmedVideoCount'=>$x->files_access_until!==null
+                &&(int)$x->files_access_until<=PhotoSync::nowMs()
+                ?0:(int)$x->confirmed_video_count,
+            'confirmedAudioCount'=>$x->files_access_until!==null
+                &&(int)$x->files_access_until<=PhotoSync::nowMs()
+                ?0:(int)$x->confirmed_audio_count,
             'startsAt'=>(int)$x->starts_at,
             'endsAt'=>$x->ends_at===null?null:(int)$x->ends_at,
             'privateEnvelope'=>json_decode($x->private_envelope_json,true,16,JSON_THROW_ON_ERROR),
@@ -590,6 +612,11 @@ final class AssignmentV1Controller extends Controller
             'scheduleRevision'=>(int)$x->schedule_revision,
             'scheduleAmendmentContract'=>$x->latest_schedule_contract,
             'scheduleAmendmentSignature'=>$x->latest_schedule_signature,
+            'retentionRevision'=>(int)$x->retention_revision,
+            'retentionAmendmentContract'=>$x->latest_retention_contract,
+            'retentionAmendmentSignature'=>$x->latest_retention_signature,
+            'filesAccessUntil'=>$x->files_access_until===null?null:(int)$x->files_access_until,
+            'assignmentAccessUntil'=>$x->assignment_access_until===null?null:(int)$x->assignment_access_until,
             // A client must verify this owner's original signed policy before
             // trusting capture constraints. Server metadata alone is not a signature.
             'policyContract'=>$x->contract_json,
@@ -665,7 +692,7 @@ final class AssignmentV1Controller extends Controller
                 return $this->sync->json(['inviteId'=>$other->id,
                   'state'=>$other->state,'unchanged'=>true]);
             }
-            abort_unless($a->state==='active',409);
+            abort_unless($a->state==='active'&&R::filesOpen($a),409);
             $recipient=DB::table('identity_accounts')
               ->where('id',$c['recipientAccountId'])->where('status','ready')->first();
             abort_unless($recipient,404);
@@ -694,10 +721,18 @@ final class AssignmentV1Controller extends Controller
             ->join('identity_accounts as o','o.id','=','i.owner_account_id')
             ->where('i.recipient_account_id',$actor->id)
             ->where(function($q):void {
+                $q->whereNull('a.assignment_access_until')
+                  ->orWhere('a.assignment_access_until','>',PhotoSync::nowMs());
+            })
+            ->where(function($q):void {
                 $q->where('i.state','accepted')->orWhere(function($pending):void {
                     $pending->where('i.state','pending')
                         ->where('i.expires_at','>',PhotoSync::nowMs())
-                        ->where('a.state','active');
+                        ->where('a.state','active')
+                        ->where(function($w):void{
+                            $w->whereNull('a.files_access_until')
+                              ->orWhere('a.files_access_until','>',PhotoSync::nowMs());
+                        });
                 });
             })
             ->orderBy('i.id')->limit(50)
@@ -739,7 +774,7 @@ final class AssignmentV1Controller extends Controller
                 return $this->sync->json(['inviteId'=>$inviteId,
                   'state'=>'accepted','unchanged'=>true]);
             }
-            abort_unless($a->state==='active',409);
+            abort_unless($a->state==='active'&&R::filesOpen($a),409);
             abort_if($invite->expires_at<=PhotoSync::nowMs(),410);
             abort_unless($invite->state==='pending',409);
             DB::table('assignment_invites_v1')->where('id',$inviteId)->update([
@@ -780,6 +815,7 @@ final class AssignmentV1Controller extends Controller
                 return $this->sync->json(['submissionId'=>$existing->id,'unchanged'=>true]);
             }
             abort_unless($a->state==='active'
+                &&R::filesOpen($a)
                 &&$c['policyRevision']<=(int)$a->policy_revision
                 &&S::permitsNow($a),409);
             $joined=DB::table('assignment_invites_v1')->where('assignment_id',$a->id)
@@ -835,6 +871,7 @@ final class AssignmentV1Controller extends Controller
         [$actor]=$this->sync->actor($r);
         $assignment=$this->assignment($assignmentId);
         abort_unless($assignment->owner_account_id===$actor->id,404);
+        abort_unless(R::filesOpen($assignment),404);
         $rows=DB::table('assignment_submissions_v1 as s')
             ->join('photo_records as p','p.id','=','s.photo_id')
             ->join('photo_access_grants as g','g.id','=','s.photo_grant_id')
