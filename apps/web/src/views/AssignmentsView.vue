@@ -771,6 +771,16 @@ onUnmounted(cleanPreview)
           <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Снимать по заданию</RouterLink>
         </p>
         <p v-if="selected.data" class="muted">{{ selected.data.instructions }}</p>
+        <div v-if="selected.data?.version===2" class="assignment-private-media-instructions"
+          data-testid="assignment-private-media-instructions">
+          <p v-if="selected.data.photoInstructions" class="muted">
+            <strong>Инструкции для фото:</strong> {{ selected.data.photoInstructions }}
+          </p>
+          <p v-if="selected.allowedMedia.includes('video')&&selected.data.videoInstructions"
+            class="muted"><strong>Инструкции для видео:</strong> {{ selected.data.videoInstructions }}</p>
+          <p v-if="selected.allowedMedia.includes('audio')&&selected.data.audioInstructions"
+            class="muted"><strong>Инструкции для аудио:</strong> {{ selected.data.audioInstructions }}</p>
+        </div>
         <p><code>{{ selected.id }}</code></p>
         <p class="muted">Разрешённые типы: {{ selected.allowedMedia.join(', ') }} · {{ selected.goal===null?'Без цели по фото':'Фото: цель '+selected.goal }} · {{ selected.isOwner?'Владелец':'Исполнитель' }}</p>
         <p class="muted">Цели для прогресса: Видео — {{ selected.videoGoal??'не задана' }}, Аудио — {{ selected.audioGoal??'не задана' }}. Цели не ограничивают отправку файлов.</p>

@@ -18,7 +18,8 @@ import {retentionDraftFromListing,buildEditorRetention} from '../features/assign
 import type {RetentionDraft} from '../features/assignments/application/retention-editor'
 import { blankEditorDraft,buildEditorPolicy,editorDraftFromListing } from '../features/assignments/application/assignment-editor-model'
 import type { EditorDraft } from '../features/assignments/application/assignment-editor-model'
-import { openOwnerAssignment } from '../features/assignments/infrastructure/assignment-crypto'
+import { openOwnerAssignment, upgradePrivateAssignment } from '../features/assignments/infrastructure/assignment-crypto'
+import type { PrivateAssignment, PrivateAssignmentV2 } from '../features/assignments/infrastructure/assignment-crypto'
 import { confirmPeer, inspectPeer } from '../features/sharing/key-directory'
 
 type Tab='main'|'files'|'people'|'rules'
@@ -41,6 +42,9 @@ const retentionDraft=reactive<RetentionDraft>({
 const listing=ref<AssignmentListing|null>(null)
 const title=ref('')
 const instructions=ref('')
+const photoInstructions=ref('')
+const videoInstructions=ref('')
+const audioInstructions=ref('')
 const loadState=ref<'loading'|'offline'|'fresh'|'missing'>('loading')
 const busy=ref(false)
 const pending=ref(false)
@@ -59,8 +63,27 @@ const peerFingerprint=ref('')
 const peerConfirmed=ref(false)
 const peerAgreed=ref(false)
 let run=0
+function privateForm():PrivateAssignmentV2{
+  return {
+    version:2,title:title.value.trim(),instructions:instructions.value,
+    photoInstructions:photoInstructions.value,videoInstructions:videoInstructions.value,
+    audioInstructions:audioInstructions.value,
+  }
+}
+function applyPrivate(value:PrivateAssignment):void{
+  const next=upgradePrivateAssignment(value)
+  title.value=next.title;instructions.value=next.instructions
+  photoInstructions.value=next.photoInstructions
+  videoInstructions.value=next.videoInstructions
+  audioInstructions.value=next.audioInstructions
+  baselineText.value=JSON.stringify(privateForm())
+}
+function clearPrivate():void{
+  title.value='';instructions.value='';photoInstructions.value=''
+  videoInstructions.value='';audioInstructions.value=''
+}
 const dirtyPolicy=computed(()=>!!baseline.value&&JSON.stringify(draft)!==baseline.value)
-const dirtyText=computed(()=>!!baselineText.value&&JSON.stringify({title:title.value,instructions:instructions.value})!==baselineText.value)
+const dirtyText=computed(()=>!!baselineText.value&&JSON.stringify(privateForm())!==baselineText.value)
 const dirtySchedule=computed(()=>!!baselineSchedule.value
   &&JSON.stringify(scheduleDraft)!==baselineSchedule.value)
 const dirtyRetention=computed(()=>!!baselineRetention.value
@@ -113,9 +136,7 @@ async function fromRow(row:AssignmentListing,session:NonNullable<typeof activeSe
   if(!dirtySchedule.value)applySchedule(row)
   if(!dirtyRetention.value)applyRetention(row)
   if(!dirtyText.value){
-    title.value=decrypted.title
-    instructions.value=decrypted.instructions
-    baselineText.value=JSON.stringify({title:decrypted.title,instructions:decrypted.instructions})
+    applyPrivate(decrypted)
     baselinePrivateRevision.value=row.privateRevision??1
   }
   pending.value=(await listAssignmentOperations()).some(op=>{
@@ -171,8 +192,7 @@ async function undo():Promise<void>{
     apply(row)
     applySchedule(row)
     applyRetention(row)
-    title.value=data.title;instructions.value=data.instructions
-    baselineText.value=JSON.stringify({title:data.title,instructions:data.instructions})
+    applyPrivate(data)
     baselinePrivateRevision.value=row.privateRevision??1
     error.value='';notice.value=''
   }catch(e){error.value=fail(e)}
@@ -205,9 +225,7 @@ async function save():Promise<void>{
       throw Error('assignment.editor_revision_changed')
     if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
     const policy=dirtyPolicy.value?buildEditorPolicy(draft):null
-    const text=dirtyText.value?{
-      version:1 as const,title:title.value.trim(),instructions:instructions.value,
-    }:null
+    const text=dirtyText.value?privateForm():null
     // Validate all changed representations before persisting signed operations.
     const previousSchedule=signedAssignmentSchedule(listing.value)
     const schedule=dirtySchedule.value
@@ -235,7 +253,9 @@ async function save():Promise<void>{
       &&[retention!.filesAccessUntil,retention!.assignmentAccessUntil]
         .some(d=>d!==null&&d<previousSchedule.endsAt!))
       throw Error('assignment.schedule_retention_change_needs_two_steps')
-    if(text&&(!text.title||text.title.length>120||text.instructions.length>4000))
+    if(text&&(!text.title||text.title.length>120||text.instructions.length>4000
+      ||[text.photoInstructions,text.videoInstructions,text.audioInstructions]
+        .some(v=>v.length>2000)))
       throw Error('assignment.invalid_text')
     const ids:string[]=[]
     try{
@@ -335,7 +355,7 @@ onBeforeRouteLeave(()=>{
 watch(activeSession,(next,previous)=>{
   if(!sameIdentity(next,previous)){
     ++run
-    listing.value=null;title.value='';instructions.value=''
+    listing.value=null;clearPrivate()
     baseline.value='';baselineRevision.value=null
     baselineText.value='';baselinePrivateRevision.value=null
   baselineSchedule.value='';baselineScheduleRevision.value=null
@@ -353,7 +373,7 @@ watch(activeSession,(next,previous)=>{
   }
 })
 watch(assignmentId,()=>{
-  title.value='';instructions.value='';listing.value=null
+  clearPrivate();listing.value=null
   baseline.value='';baselineRevision.value=null
   baselineText.value='';baselinePrivateRevision.value=null
   baselineSchedule.value='';baselineScheduleRevision.value=null
@@ -373,7 +393,7 @@ onMounted(()=>{void refresh()})
 watch(()=>scheduleDraft.endsAt,(value)=>{
   if(!value)scheduleDraft.blockAfterEnd=false
 })
-onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';baselineText.value='';baselineSchedule.value='';baselineRetention.value=''})
+onUnmounted(()=>{++run;clearPrivate();baseline.value='';baselineText.value='';baselineSchedule.value='';baselineRetention.value=''})
 </script>
 
 <template>
@@ -487,12 +507,20 @@ onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';ba
             <small class="muted">В текущей подписанной политике фото — обязательный базовый тип.</small>
             <label for="editor-photo-goal">Нужно фотографий <small>Только для прогресса</small></label>
             <input id="editor-photo-goal" v-model="draft.photoGoal" type="number" min="1" max="9999" step="1" placeholder="Без цели" :disabled="!editable">
+            <label for="editor-photo-instructions">Инструкции для фотографий</label>
+            <textarea id="editor-photo-instructions" v-model="photoInstructions"
+              data-testid="editor-photo-instructions" rows="3" maxlength="2000"
+              :disabled="!editable" placeholder="Необязательно"/>
           </div>
           <div>
             <label class="checkline"><input id="editor-allow-video" v-model="draft.video" type="checkbox" :disabled="!editable"> Видео</label>
             <template v-if="draft.video">
               <label for="editor-video-goal">Нужно видео <small>Только для прогресса</small></label>
               <input id="editor-video-goal" v-model="draft.videoGoal" type="number" min="1" max="999" step="1" placeholder="Без цели" :disabled="!editable">
+              <label for="editor-video-instructions">Инструкции для видео</label>
+              <textarea id="editor-video-instructions" v-model="videoInstructions"
+                data-testid="editor-video-instructions" rows="3" maxlength="2000"
+                :disabled="!editable" placeholder="Необязательно"/>
             </template>
           </div>
           <div>
@@ -500,10 +528,14 @@ onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';ba
             <template v-if="draft.audio">
               <label for="editor-audio-goal">Нужно аудио <small>Только для прогресса</small></label>
               <input id="editor-audio-goal" v-model="draft.audioGoal" type="number" min="1" max="999" step="1" placeholder="Без цели" :disabled="!editable">
+              <label for="editor-audio-instructions">Инструкции для аудио</label>
+              <textarea id="editor-audio-instructions" v-model="audioInstructions"
+                data-testid="editor-audio-instructions" rows="3" maxlength="2000"
+                :disabled="!editable" placeholder="Необязательно"/>
             </template>
           </div>
         </div>
-        <p class="muted">Цель не ограничивает количество файлов и учитывает только подтверждённые сервером E2EE-материалы. Индивидуальные инструкции и пресеты появятся после версионирования приватной политики.</p>
+        <p class="muted">Цель не ограничивает отправку файлов и учитывает только подтверждённые сервером E2EE-материалы. Отдельные инструкции для типов файлов шифруются вместе с описанием задания и доступны принятым исполнителям. Пресеты камеры пока не связаны с политикой задания.</p>
       </div>
 
       <div v-if="activeTab==='people'" id="editor-panel-people"

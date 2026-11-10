@@ -6,8 +6,23 @@ import type { PackageV2 } from '../../identity/infrastructure/crypto'
 const encoder=new TextEncoder()
 const decoder=new TextDecoder('utf-8',{fatal:true})
 
-export type PrivateAssignment={
+export type PrivateAssignmentV1={
   version:1;title:string;instructions:string
+}
+/** P1-22: encrypted-only per-media instructions, preserving v1 read compatibility. */
+export type PrivateAssignmentV2={
+  version:2;title:string;instructions:string
+  photoInstructions:string;videoInstructions:string;audioInstructions:string
+}
+export type PrivateAssignment=PrivateAssignmentV1|PrivateAssignmentV2
+
+export function upgradePrivateAssignment(value:PrivateAssignment):PrivateAssignmentV2{
+  return {
+    version:2,title:value.title,instructions:value.instructions,
+    photoInstructions:value.version===2?value.photoInstructions:'',
+    videoInstructions:value.version===2?value.videoInstructions:'',
+    audioInstructions:value.version===2?value.audioInstructions:'',
+  }
 }
 export type AssignmentEnvelope={
   version:1;iv:string;ciphertext:string
@@ -29,11 +44,19 @@ function grantScope(input:{
 }):string{
   return 'pb3.assignment-invite-dek.v1\n'+JSON.stringify({version:1,...input})
 }
-function validateText(value:PrivateAssignment):void {
-  if(value.version!==1||typeof value.title!=='string'
-    ||value.title.trim().length<1||value.title.length>120
-    ||typeof value.instructions!=='string'||value.instructions.length>4000)
-    throw new Error('assignment.invalid_text')
+export function validatePrivateAssignment(value:PrivateAssignment):void {
+  if(!value||![1,2].includes(value.version)
+    ||typeof value.title!=='string'||value.title.trim().length<1
+    ||value.title.length>120||typeof value.instructions!=='string'
+    ||value.instructions.length>4000)
+    throw Error('assignment.invalid_text')
+  if(value.version===2){
+    if(Object.keys(value).join('|')!==
+      'version|title|instructions|photoInstructions|videoInstructions|audioInstructions'
+      ||[value.photoInstructions,value.videoInstructions,value.audioInstructions]
+        .some(v=>typeof v!=='string'||v.length>2000))
+      throw Error('assignment.invalid_media_instructions')
+  }
 }
 
 async function unwrapOwnerKey<T>(
@@ -66,14 +89,14 @@ async function openContent(
     additionalData:contentScope(ownerAccountId,assignmentId),tagLength:128,
   },key,unb64(envelope.ciphertext))
   const parsed=JSON.parse(decoder.decode(plain)) as PrivateAssignment
-  validateText(parsed)
+  validatePrivateAssignment(parsed)
   return parsed
 }
 
 export async function sealAssignment(
   owner:PackageV2,assignmentId:string,values:PrivateAssignment,
 ):Promise<AssignmentEnvelope>{
-  validateText(values)
+  validatePrivateAssignment(values)
   const raw=random(32),akek=unb64(owner.akek,32)
   try{
     const dek=await crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt'])
@@ -110,7 +133,7 @@ export async function resealOwnerAssignment(
   owner:PackageV2,assignmentId:string,root:AssignmentEnvelope,
   values:PrivateAssignment,
 ):Promise<AssignmentEnvelope>{
-  validateText(values)
+  validatePrivateAssignment(values)
   return unwrapOwnerKey(owner,assignmentId,root,async raw=>{
     const key=await crypto.subtle.importKey('raw',raw,
       {name:'AES-GCM'},false,['encrypt'])
