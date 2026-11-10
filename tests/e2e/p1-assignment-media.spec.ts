@@ -163,6 +163,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await B.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(B.getByText('assignment.required_tags_missing')).toBeVisible()
     await B.locator('#camera-tags').fill('photo-evidence')
+    await B.locator('#camera-description').fill('Verified photo description for signed v6')
     await B.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(B.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
     const photo=await B.evaluate(async()=>{
