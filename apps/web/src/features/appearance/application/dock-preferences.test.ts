@@ -18,6 +18,12 @@ async function rows():Promise<Array<Record<string,unknown>>>{
   return result
 }
 beforeEach(async()=>{
+  // Each Vitest case must not mutate a prior case's encrypted owner row.
+  // Without clearing, rows()[0] can belong to a different random account.
+  const isolated=new Dexie('pb3-encrypted-appearance-dock-v1')
+  isolated.version(1).stores({prefs:'&scope'})
+  await isolated.table('prefs').clear()
+  isolated.close()
   const accountId=crypto.randomUUID()
   const {pkg}=await freshPackage(accountId)
   owner={
