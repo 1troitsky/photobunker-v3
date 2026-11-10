@@ -6,8 +6,8 @@ import { listLocalPhotos, readLocalPhotoMetadata } from '../../photo-sync/applic
 import type { PhotoMetadata } from '../../photo-sync/domain/capture-metadata'
 import type { StoredPhoto } from '../../photo-sync/application/p1-photo'
 import {
-  listCachedAssignmentSnapshots, signedPolicyRequirements,
-  verifySignedAssignmentPolicy, validAllowedMedia,
+  listCachedAssignmentSnapshots, listServerAssignments,
+  signedPolicyRequirements, verifySignedAssignmentPolicy, validAllowedMedia,
 } from './assignment-outbox'
 import type {
   AssignmentListing, CaptureRequirements, SignedCaptureBinding,
@@ -210,8 +210,24 @@ export async function preflightAssignmentPhotoGrant(
   assignmentId:string,photoId:string,expectedOwner:string,
 ):Promise<{policyRevision:number;personalPhoto:boolean}>{
   const session=requireSession()
-  const snapshots=await listCachedAssignmentSnapshots()
-  const latest=snapshots.find(x=>x.assignmentId===assignmentId)
+  // A local signed snapshot is suitable for OFFLINE capture, not
+  // automatically current owner authorization at an ONLINE E2EE grant.
+  // Before releasing a DEK, refresh the server listing and authenticate
+  // every owner-signed result. Missing/unreachable policy fails CLOSED.
+  // Fetch all necessary cursor pages: assignment may be past the first 50.
+  let latest:AssignmentListing|undefined
+  if(session.online&&navigator.onLine){
+    let cursor:string|undefined
+    do{
+      const page=await listServerAssignments(cursor)
+      latest=page.items.find(x=>x.assignmentId===assignmentId)
+      cursor=page.nextCursor??undefined
+    }while(!latest&&cursor)
+  }else{
+    latest=(await listCachedAssignmentSnapshots())
+      .find(x=>x.assignmentId===assignmentId)
+  }
+  if(activeSession.value!==session)throw Error('identity.changed')
   if(!latest||latest.ownerAccountId!==expectedOwner
     ||latest.state!=='active'
     ||latest.startsAt>Date.now()
