@@ -59,7 +59,7 @@ describe('P1-19 signed AEAD private text snapshot and historical cache safety',(
       tx.objectStore('capturePolicies').put({
         key:owner+'/'+id,accountId:owner,listing:row,verifiedAt:Date.now(),
       })
-      tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)
+      tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)
     })
     db.close()
     const text={version:1 as const,title:'UPDATED CONFIDENTIAL TITLE',instructions:'Private B'}
