@@ -18,14 +18,16 @@ import type {MediaContract,MediaMetadata,MediaType} from '../domain/media-crypto
 
 const enc=new TextEncoder()
 const GRANT_DOMAIN='pb3.media-grant.v1\n'
+const SCOPED_GRANT_DOMAIN='pb3.media-grant.v2\n'
 const REVOKE_DOMAIN='pb3.media-revoke.v1\n'
 const URI='/media-shares/v1'
 export type MediaEnvelope={
   ephemeralSpki:string;salt:string;iv:string;ciphertext:string
 }
 export type MediaGrantContract={
-  version:1;grantId:string;mediaId:string
+  version:1|2;grantId:string;mediaId:string
   ownerAccountId:string;recipientAccountId:string
+  assignmentId?:string
   recipientKeyDigest:string;mediaContractHash:string
   scope:'read';expiresAt:number;envelope:MediaEnvelope
 }
@@ -60,10 +62,16 @@ function same(session:ReturnType<typeof requireSession>):void{
 function wrappingInfo(scope:{
   ownerAccountId:string;recipientAccountId:string
   mediaId:string;grantId:string;expiresAt:number;mediaContractHash:string
+  assignmentId?:string
 }):string{
-  return 'pb3.media-recipient-dek.v1\n'+JSON.stringify({
-    version:1,scope:'read',...scope,
-  })
+  const {assignmentId,...base}=scope
+  return assignmentId
+    ?'pb3.media-recipient-dek.v2\n'+JSON.stringify({
+      version:2,scope:'read',...base,assignmentId,
+    })
+    :'pb3.media-recipient-dek.v1\n'+JSON.stringify({
+      version:1,scope:'read',...base,
+    })
 }
 export function parseMediaGrantContract(input:unknown):MediaGrantContract{
   if(!input||typeof input!=='object'||Array.isArray(input))
@@ -71,8 +79,13 @@ export function parseMediaGrantContract(input:unknown):MediaGrantContract{
   const c=input as MediaGrantContract
   if(Object.keys(c).sort().join('|')!==[
     'version','grantId','mediaId','ownerAccountId','recipientAccountId',
+    ...(c.version===2?['assignmentId']:[]),
     'recipientKeyDigest','mediaContractHash','scope','expiresAt','envelope',
-  ].sort().join('|')||c.version!==1||c.scope!=='read'
+  ].sort().join('|')
+    ||(c.version!==1&&c.version!==2)||c.scope!=='read'
+    ||(c.version===2
+      ?typeof c.assignmentId!=='string'
+      :c.assignmentId!==undefined)
     ||!Number.isSafeInteger(c.expiresAt)||c.expiresAt<=0
     ||!/^([0-9a-f]{8}-[0-9a-f-]{27,})$/.test(c.grantId)
     ||!/^([0-9a-f]{8}-[0-9a-f-]{27,})$/.test(c.mediaId)
@@ -100,7 +113,7 @@ export function parseMediaGrantContract(input:unknown):MediaGrantContract{
  * has been explicitly selected; no ACL follows from assignment membership.
  */
 export async function queueMediaRecipientGrant(
-  mediaId:string,recipientAccountId:string,
+  mediaId:string,recipientAccountId:string,assignmentId?:string,
 ):Promise<string>{
   const session=requireSession()
   if(session.accountId===recipientAccountId)
@@ -118,6 +131,7 @@ export async function queueMediaRecipientGrant(
   const scope={
     ownerAccountId:session.accountId,recipientAccountId,
     mediaId,grantId,expiresAt,mediaContractHash,
+    ...(assignmentId?{assignmentId}:{}),
   }
   const info=wrappingInfo(scope)
   const pair=await crypto.subtle.generateKey(
@@ -131,15 +145,16 @@ export async function queueMediaRecipientGrant(
       name:'AES-GCM',iv,additionalData:enc.encode(info),tagLength:128,
     },derived,raw)))
   const contract:MediaGrantContract={
-    version:1,grantId,mediaId,
+    version:assignmentId?2:1,grantId,mediaId,
     ownerAccountId:session.accountId,recipientAccountId,
+    ...(assignmentId?{assignmentId}:{}),
     recipientKeyDigest:peer.descriptorHash,mediaContractHash,
     scope:'read',expiresAt,
     envelope:{ephemeralSpki,salt:b64(salt),iv:b64(iv),ciphertext},
   }
   const json=JSON.stringify(contract)
   const signature=await sign(await importSigner(session.pkg.accountPkcs8),
-    GRANT_DOMAIN+json)
+    (assignmentId?SCOPED_GRANT_DOMAIN:GRANT_DOMAIN)+json)
   same(session)
   await db.grants.put({
     id:grantId,ownerAccountId:session.accountId,
@@ -233,7 +248,8 @@ export async function readReceivedMediaGrant(grantId:string):Promise<{
   const peer=await pinnedPeer(contract.ownerAccountId)
   if(peer.accountSpki!==detail.ownerAccountSpki
     ||!await verify(await importSpki(peer.accountSpki),
-      GRANT_DOMAIN+detail.contract,detail.signature))
+      (contract.version===2?SCOPED_GRANT_DOMAIN:GRANT_DOMAIN)
+        +detail.contract,detail.signature))
     throw Error('media_grant.unauthenticated_owner')
   const own=await ensureOwnExchangeKey()
   same(session)
@@ -256,6 +272,7 @@ export async function readReceivedMediaGrant(grantId:string):Promise<{
     mediaId:contract.mediaId,grantId,
     expiresAt:contract.expiresAt,
     mediaContractHash:contract.mediaContractHash,
+    ...(contract.version===2?{assignmentId:contract.assignmentId}:{}),
   })
   const env=contract.envelope
   const derived=await exchangeKey(
