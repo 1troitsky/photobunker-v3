@@ -596,7 +596,7 @@ async function submitMedia(media:StoredMedia):Promise<void>{
     // Verify the freshly signed owner policy, local AEAD-decrypted
     // category/description/GPS, and exact recording binding before creating
     // ANY recipient key envelope; offline captures remain Local-First.
-    await preflightAssignmentMediaGrant(
+    const checked=await preflightAssignmentMediaGrant(
       target.id,media.mediaId,target.ownerAccountId)
     if(!window.confirm(
       (media.capture?'Эта запись была создана для задания. ':'Это личный файл вне задания. ')
