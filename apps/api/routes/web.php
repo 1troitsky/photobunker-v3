@@ -10,6 +10,7 @@ use App\Http\Controllers\RecipientKeyController;
 use App\Http\Controllers\TeamV1Controller;
 use App\Http\Controllers\TeamInvitationController;
 use App\Http\Controllers\TeamMembershipController;
+use App\Http\Controllers\TeamKeyEpochController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
 use App\Http\Controllers\AssignmentMediaSubmissionController;
@@ -157,4 +158,14 @@ Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(functio
     Route::get('/{teamId}/membership-status',[TeamMembershipController::class,'status'])->whereUuid('teamId');
     Route::get('/{teamId}/membership-history',[TeamMembershipController::class,'history'])->whereUuid('teamId');
     Route::post('/{teamId}/membership',[TeamMembershipController::class,'mutate'])->whereUuid('teamId');
+});
+
+// P1-29B: owner-authenticated, signed and atomically roster-bound Team key epochs.
+Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/{teamId}/epoch/owner',[TeamKeyEpochController::class,'owner'])
+        ->whereUuid('teamId');
+    Route::get('/{teamId}/epoch/member',[TeamKeyEpochController::class,'recipient'])
+        ->whereUuid('teamId');
+    Route::post('/{teamId}/epoch',[TeamKeyEpochController::class,'rotate'])
+        ->whereUuid('teamId');
 });
