@@ -278,11 +278,26 @@ final class TeamInvitationController extends Controller
             ->where('recipient_account_id',$actor->id)
             ->where('state','accepted')->first();
         abort_unless($invite,404);
+        $member=DB::table('team_members_v1')
+            ->where('team_id',$teamId)
+            ->where('account_id',$actor->id)
+            ->where('state','active')->first();
+        abort_unless($member,404);
+        $event=DB::table('team_membership_events_v1')
+            ->where('team_id',$teamId)
+            ->where('target_account_id',$actor->id)
+            ->where('action','change_role')
+            ->orderByDesc('to_revision')->first();
         return $this->sync->json([
             'teamId'=>$teamId,'ownerAccountId'=>$team->owner_account_id,
             'ownerAccountSpki'=>$team->account_spki,
             'contract'=>$team->contract_json,'signature'=>$team->owner_signature,
             'invite'=>$this->inviteForMember($invite),
+            'effectiveRole'=>$member->role,
+            'latestRoleEvent'=>$event?[
+                'contract'=>$event->contract_json,
+                'signature'=>$event->owner_signature,
+            ]:null,
         ]);
     }
 
