@@ -134,7 +134,14 @@ async function close():Promise<void>{
   threadOpen.value=false
   selected.value=null;editor.value=''
   await nextTick()
+  // Picker rows leave the tree when a draft is opened. Restore focus to
+  // the original control if it survives, otherwise use the draft row or
+  // New Message action (not the document body or a hidden Dock element).
+  const fallback=document.querySelector<HTMLElement>(
+    '[data-testid="messages-draft-'+peer?.peerAccountId+'"]',
+  )??document.querySelector<HTMLElement>('[data-testid="messages-compose"]')
   if(returnFocus&&document.contains(returnFocus))returnFocus.focus()
+  else fallback?.focus()
   returnFocus=null
 }
 function dismissWithoutSave():void{
@@ -282,7 +289,7 @@ onUnmounted(()=>{
           data-testid="messages-thread">
           <header class="messages-thread-top">
             <button type="button" aria-label="Назад к сообщениям"
-              data-testid="messages-close" @click="void close()">←</button>
+              data-testid="messages-close" @click="close">←</button>
             <div class="messages-thread-identity">
               <strong>{{ selected.alias||selected.peerAccountId }}</strong>
               <small>Матрица шифрования ещё не подключена</small>
