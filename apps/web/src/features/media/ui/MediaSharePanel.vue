@@ -1,0 +1,230 @@
+<script setup lang="ts">
+import {onMounted,onUnmounted,ref,watch} from 'vue'
+import {activeSession,reauthenticate} from '../../identity/application/session'
+import {
+  confirmPeer,ensureOwnExchangeKey,inspectPeer,
+} from '../../sharing/key-directory'
+import {
+  attachMediaGrantLifecycle,flushMediaGrants,
+  listOutgoingMediaGrants,listReceivedMediaGrants,
+  queueMediaRecipientGrant,readReceivedMediaGrant,
+  revokeMediaGrant,
+} from '../application/media-grants'
+import type {
+  ReceivedMediaGrant,OutgoingMediaGrant,
+} from '../application/media-grants'
+import type {StoredMedia} from '../application/media-outbox'
+import type {MediaMetadata} from '../domain/media-crypto'
+
+defineProps<{localMedia:StoredMedia[]}>()
+const emit=defineEmits<{
+  openMedia:[blob:Blob,metadata:MediaMetadata]
+}>()
+const recipientId=ref('')
+const recipientPeer=ref<{
+  id:string;fingerprint:string;confirmed:boolean
+}|null>(null)
+const ownerPeer=ref<{
+  id:string;fingerprint:string;confirmed:boolean
+}|null>(null)
+const acknowledgedRecipient=ref(false)
+const acknowledgedOwner=ref(false)
+const outgoing=ref<OutgoingMediaGrant[]>([])
+const incoming=ref<ReceivedMediaGrant[]>([])
+const busy=ref(false)
+const error=ref('')
+const status=ref('')
+let detach:()=>void=()=>{}
+async function action(callback:()=>Promise<void>):Promise<void>{
+  if(busy.value)return
+  busy.value=true;error.value='';status.value=''
+  try{await callback()}
+  catch(e){error.value=e instanceof Error?e.message:'media_grant.failed'}
+  finally{busy.value=false}
+}
+async function hydrate():Promise<void>{
+  const session=activeSession.value
+  if(!session){outgoing.value=[];incoming.value=[];return}
+  try{
+    if(session.online){
+      await ensureOwnExchangeKey()
+      await flushMediaGrants()
+    }
+    const next=await listOutgoingMediaGrants()
+    if(activeSession.value!==session)return
+    outgoing.value=next
+    if(session.online){
+      const result=await listReceivedMediaGrants()
+      if(activeSession.value===session)incoming.value=result
+    }else incoming.value=[]
+  }catch(e){
+    if(activeSession.value===session)
+      error.value=e instanceof Error?e.message:'media_grant.load_failed'
+  }
+}
+function checkRecipient():void{
+  void action(async()=>{
+    const id=recipientId.value.trim().toLowerCase()
+    if(!/^[0-9a-f-]{36}$/.test(id))
+      throw Error('media_grant.invalid_recipient')
+    if(!activeSession.value?.online)await reauthenticate()
+    const {directory,confirmed}=await inspectPeer(id)
+    recipientPeer.value={
+      id,fingerprint:directory.safetyFingerprint,confirmed,
+    }
+    acknowledgedRecipient.value=false
+  })
+}
+function acceptRecipient():void{
+  void action(async()=>{
+    const candidate=recipientPeer.value
+    if(!candidate||!acknowledgedRecipient.value)
+      throw Error('media_grant.fingerprint_not_confirmed')
+    await confirmPeer(candidate.id,candidate.fingerprint)
+    recipientPeer.value={...candidate,confirmed:true}
+    status.value='Получатель подтверждён по независимому отпечатку'
+  })
+}
+function send(mediaId:string):void{
+  void action(async()=>{
+    const peer=recipientPeer.value
+    if(!peer?.confirmed)throw Error('media_grant.peer_not_confirmed')
+    const grantId=await queueMediaRecipientGrant(mediaId,peer.id)
+    outgoing.value=await listOutgoingMediaGrants()
+    await flushMediaGrants()
+    outgoing.value=await listOutgoingMediaGrants()
+    status.value='Разрешение сохранено: '+grantId.slice(0,8)
+  })
+}
+function checkOwner(id:string):void{
+  void action(async()=>{
+    if(!activeSession.value?.online)await reauthenticate()
+    const {directory,confirmed}=await inspectPeer(id)
+    ownerPeer.value={
+      id,fingerprint:directory.safetyFingerprint,confirmed,
+    }
+    acknowledgedOwner.value=false
+  })
+}
+function acceptOwner():void{
+  void action(async()=>{
+    const candidate=ownerPeer.value
+    if(!candidate||!acknowledgedOwner.value)
+      throw Error('media_grant.fingerprint_not_confirmed')
+    await confirmPeer(candidate.id,candidate.fingerprint)
+    ownerPeer.value={...candidate,confirmed:true}
+    status.value='Подпись отправителя будет проверена перед чтением'
+  })
+}
+function openReceived(grant:ReceivedMediaGrant):void{
+  void action(async()=>{
+    if(ownerPeer.value?.id!==grant.ownerAccountId
+      ||!ownerPeer.value?.confirmed)
+      throw Error('media_grant.verify_owner_first')
+    const result=await readReceivedMediaGrant(grant.grantId)
+    emit('openMedia',result.blob,result.metadata)
+    status.value='Медиа расшифровано на устройстве'
+  })
+}
+function revoke(grantId:string):void{
+  void action(async()=>{
+    await revokeMediaGrant(grantId)
+    outgoing.value=await listOutgoingMediaGrants()
+    status.value='Серверный доступ отозван'
+  })
+}
+function refresh():void{
+  void action(async()=>{
+    if(!activeSession.value?.online)await reauthenticate()
+    await hydrate()
+  })
+}
+watch(activeSession,()=>{
+  recipientPeer.value=null;ownerPeer.value=null
+  outgoing.value=[];incoming.value=[]
+  void hydrate()
+})
+onMounted(()=>{detach=attachMediaGrantLifecycle();void hydrate()})
+onUnmounted(()=>detach())
+</script>
+
+<template>
+  <section class="media-share-panel" data-testid="media-share-panel">
+    <h3>E2EE-передача файлов · P1</h3>
+    <p class="muted">
+      Только подтверждённый получатель. Сверьте отпечаток вне приложения.
+      Разрешение «Чтение» передаёт ключ всего файла и его метаданных;
+      оно не создаёт публичную ссылку, не передаёт доступ к другому аккаунту
+      и не включает автоматический экспорт в галерею.
+    </p>
+    <label for="media-share-peer-id">ID аккаунта получателя</label>
+    <input id="media-share-peer-id" v-model="recipientId" type="text"
+      autocomplete="off" spellcheck="false" placeholder="UUID аккаунта">
+    <button type="button" :disabled="busy||!recipientId"
+      @click="checkRecipient">Проверить получателя медиа</button>
+    <div v-if="recipientPeer" class="fingerprint-panel">
+      <strong>Отпечаток получателя медиа</strong>
+      <code data-testid="media-recipient-fingerprint">{{ recipientPeer.fingerprint }}</code>
+      <template v-if="!recipientPeer.confirmed">
+        <p class="muted">Сверьте с человеком по независимому каналу. Доверие к серверному каталогу недостаточно.</p>
+        <label><input v-model="acknowledgedRecipient" type="checkbox">
+          Я сверил отпечаток получателя медиа</label>
+        <button type="button" :disabled="busy||!acknowledgedRecipient"
+          @click="acceptRecipient">Подтвердить получателя медиа</button>
+      </template>
+      <span v-else class="status-text">Ключ получателя подтверждён</span>
+    </div>
+    <template v-if="recipientPeer?.confirmed">
+      <h4>Локально подтверждённые файлы</h4>
+      <div v-for="media in localMedia.filter(x=>x.state==='synced')"
+        :key="media.key" class="photo-row">
+        <code>{{ media.mediaType }} · {{ media.mediaId.slice(0,8) }}</code>
+        <button type="button" :disabled="busy"
+          @click="send(media.mediaId)">Передать медиа</button>
+      </div>
+    </template>
+    <h4>Исходящие разрешения медиа</h4>
+    <div v-for="grant in outgoing" :key="grant.id" class="photo-row">
+      <div>
+        <code>{{ grant.id.slice(0,8) }} · {{ grant.state }}</code>
+        <small>{{ grant.recipientAccountId.slice(0,8) }}</small>
+      </div>
+      <button v-if="grant.state==='sent'" type="button"
+        :disabled="busy" @click="revoke(grant.id)">Отозвать медиа</button>
+    </div>
+    <h4>Полученные файлы</h4>
+    <button type="button" :disabled="busy"
+      @click="refresh">Обновить медиа-разрешения</button>
+    <p v-if="!incoming.length" class="muted">Нет доступных файлов.</p>
+    <div v-for="grant in incoming" :key="grant.grantId" class="photo-row">
+      <div>
+        <code>{{ grant.mediaType }} · {{ grant.mediaId.slice(0,8) }}</code>
+        <small>От: {{ grant.ownerAccountId.slice(0,8) }} · до
+          {{ new Date(grant.expiresAt).toLocaleString('ru-RU') }}</small>
+      </div>
+      <button type="button" :disabled="busy"
+        @click="checkOwner(grant.ownerAccountId)">Проверить отправителя медиа</button>
+      <button type="button" :disabled="busy||ownerPeer?.id!==grant.ownerAccountId||!ownerPeer.confirmed"
+        @click="openReceived(grant)">Открыть полученное медиа</button>
+    </div>
+    <div v-if="ownerPeer" class="fingerprint-panel">
+      <strong>Отпечаток отправителя медиа</strong>
+      <code data-testid="media-owner-fingerprint">{{ ownerPeer.fingerprint }}</code>
+      <template v-if="!ownerPeer.confirmed">
+        <p class="muted">Сверьте отпечаток отправителя через независимый канал.</p>
+        <label><input v-model="acknowledgedOwner" type="checkbox">
+          Я сверил отпечаток отправителя медиа</label>
+        <button type="button" :disabled="busy||!acknowledgedOwner"
+          @click="acceptOwner">Подтвердить отправителя медиа</button>
+      </template>
+    </div>
+    <p v-if="status" role="status" class="status-text">{{ status }}</p>
+    <p v-if="error" role="alert" class="error-text">{{ error }}</p>
+    <p class="muted">После отзыва сервер блокирует новые выдачи блоков. Уже скачанную получателем копию отозвать невозможно.</p>
+  </section>
+</template>
+
+<style scoped>
+.media-share-panel{margin-top:16px}
+.media-share-panel input[type='text']{display:block;max-width:100%;margin:6px 0}
+</style>
