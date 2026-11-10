@@ -25,7 +25,7 @@ let posts:Receipt[]=[]
 let loseAck=false
 let corruptReceipt=false
 
-async function create(id=crypto.randomUUID()):Promise<Session>{
+async function create(id:string=crypto.randomUUID()):Promise<Session>{
   const {pkg}=await freshPackage(id)
   return {accountId:id,deviceId:crypto.randomUUID(),pkg,online:true} as Session
 }
