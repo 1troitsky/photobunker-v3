@@ -928,7 +928,7 @@ export async function signedMediaCaptureIntent(
     ||(policy.endsAt!==null&&startedAt>=policy.endsAt))
     throw Error('assignment.media_recording_not_permitted')
   const latest=policy.policyAmendmentContract
-  if(!latest||![3,4].includes(
+  if(!latest||![3,4,5].includes(
     (JSON.parse(latest) as {version?:number}).version??0))
     throw Error('assignment.media_policy_v3_required')
   // Validate the exact user-supplied, private E2EE metadata before
@@ -973,7 +973,7 @@ export async function queueAssignmentMediaSubmission(
   const policy=listing.policyAmendmentContract
   if(!policy)throw Error('assignment.media_policy_v3_required')
   const activePolicy=JSON.parse(policy) as {version?:number}
-  if(![3,4].includes(activePolicy.version??0))
+  if(![3,4,5].includes(activePolicy.version??0))
     throw Error('assignment.media_policy_v3_required')
   const policyHash=hex(await digest(new TextEncoder().encode(policy)))
   const mediaContractHash=hex(await digest(
