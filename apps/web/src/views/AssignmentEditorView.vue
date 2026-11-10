@@ -9,9 +9,9 @@ import {
   queueAssignmentPrivateTextChange,effectiveAssignmentEnvelope,
   queueAssignmentScheduleChange,signedAssignmentSchedule,
   queueAssignmentRetentionChange,signedAssignmentRetention,
-  verifySignedAssignmentPolicy,
+  verifySignedAssignmentPolicy,listAssignmentParticipants,
 } from '../features/assignments/application/assignment-outbox'
-import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
+import type { AssignmentListing,AssignmentParticipant } from '../features/assignments/application/assignment-outbox'
 import { scheduleDraftFromListing,buildEditorSchedule } from '../features/assignments/application/schedule-editor'
 import type { ScheduleEditorDraft } from '../features/assignments/application/schedule-editor'
 import {retentionDraftFromListing,buildEditorRetention} from '../features/assignments/application/retention-editor'
@@ -58,6 +58,9 @@ const baselineSchedule=ref('')
 const baselineScheduleRevision=ref<number|null>(null)
 const baselineRetention=ref('')
 const baselineRetentionRevision=ref<number|null>(null)
+const participants=ref<AssignmentParticipant[]>([])
+const rosterStatus=ref<'idle'|'loading'|'ready'|'offline'|'error'>('idle')
+const rosterError=ref('')
 const peerId=ref('')
 const peerFingerprint=ref('')
 const peerConfirmed=ref(false)
@@ -146,9 +149,30 @@ async function fromRow(row:AssignmentListing,session:NonNullable<typeof activeSe
     catch{return false}
   })
 }
+async function refreshRoster(
+  id=assignmentId.value,session=activeSession.value,generation=run,
+):Promise<void>{
+  participants.value=[]
+  rosterError.value=''
+  if(!session||!session.online||!navigator.onLine){
+    rosterStatus.value='offline'
+    return
+  }
+  rosterStatus.value='loading'
+  try{
+    const fresh=await listAssignmentParticipants(id)
+    if(!sameIdentity(session,activeSession.value)||generation!==run
+      ||assignmentId.value!==id)return
+    participants.value=fresh;rosterStatus.value='ready'
+  }catch(e){
+    if(!sameIdentity(session,activeSession.value)||generation!==run)return
+    rosterStatus.value='error';rosterError.value=fail(e)
+  }
+}
 async function refresh():Promise<void>{
   const generation=++run
   const session=activeSession.value
+  participants.value=[];rosterStatus.value='idle';rosterError.value=''
   error.value=''
   if(!session){listing.value=null;loadState.value='missing';return}
   const id=assignmentId.value
@@ -174,7 +198,10 @@ async function refresh():Promise<void>{
     if(!sameIdentity(session,activeSession.value)||run!==generation)return
     if(!latest){if(!cached)loadState.value='missing';return}
     await fromRow(latest,session,generation)
-    if(run===generation)loadState.value='fresh'
+    if(run===generation){
+      loadState.value='fresh'
+      void refreshRoster(id,session,generation)
+    }
   }catch(e){
     if(run===generation){
       if(!cached)loadState.value='missing'
@@ -333,7 +360,10 @@ async function invite():Promise<void>{
   try{
     const id=await queueAssignmentInvitation(assignmentId.value,peerId.value)
     notice.value='Подписанное приглашение в очереди: '+id.slice(0,8)
-    if(activeSession.value?.online&&navigator.onLine)await flushAssignmentOutbox()
+    if(activeSession.value?.online&&navigator.onLine){
+      await flushAssignmentOutbox()
+      void refreshRoster()
+    }
     peerReset()
   }catch(e){error.value=fail(e)}
   finally{busy.value=false}
@@ -541,6 +571,27 @@ onUnmounted(()=>{++run;clearPrivate();baseline.value='';baselineText.value='';ba
       <div v-if="activeTab==='people'" id="editor-panel-people"
         role="tabpanel" aria-labelledby="editor-tab-people" class="fieldwork-editor-panel">
         <h2>Участники</h2>
+        <h3>Участники задания</h3>
+        <p class="muted">Показан только свежий список сервера. Идентичность приглашённого и роль проверены по подписи владельца. Статус принятия подтверждён сервером; это не выдаёт E2EE-доступ к файлам.</p>
+        <div class="fieldwork-editor-roster" data-testid="editor-participant-roster">
+          <p v-if="rosterStatus==='loading'" role="status">Получаем список участников…</p>
+          <p v-else-if="rosterStatus==='offline'" role="status">Список участников недоступен офлайн. Ожидающие приглашения в очереди не считаются принятыми.</p>
+          <p v-else-if="rosterStatus==='error'" role="alert">Не удалось проверить список: {{ rosterError }}</p>
+          <p v-else-if="rosterStatus==='ready'&&!participants.length">Приглашённых участников пока нет.</p>
+          <ul v-if="rosterStatus==='ready'&&participants.length">
+            <li v-for="person in participants" :key="person.inviteId"
+              :data-testid="'editor-participant-'+person.recipientAccountId">
+              <code>{{ person.recipientAccountId }}</code>
+              <span> · Исполнитель · {{
+                person.state==='accepted'?'Принято сервером':
+                person.expired?'Приглашение истекло':'Ожидает принятия'
+              }}</span>
+            </li>
+          </ul>
+          <button type="button" :disabled="busy||rosterStatus==='loading'||!activeSession?.online"
+            @click="refreshRoster()">Обновить список</button>
+        </div>
+        <h3>Пригласить исполнителя</h3>
         <p class="muted">Приглашение подписывается владельцем. Доступ к расшифровке файлов выдаётся отдельно, не самим фактом участия. Сейчас доступна проверенная роль «Исполнитель»; куратор и наблюдатель требуют серверной модели полномочий.</p>
         <label for="editor-recipient-id">ID аккаунта исполнителя</label>
         <input id="editor-recipient-id" v-model="peerId" spellcheck="false" autocomplete="off"
