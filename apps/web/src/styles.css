@@ -257,3 +257,54 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 @media(prefers-reduced-motion:reduce){
   .messages-overlay-enter-active,.messages-overlay-leave-active{transition:none}
 }
+
+
+/* P2 Appearance Dock slice — real account-encrypted preferences, not a
+   mock settings editor. The action bar stays above the single Shell Dock. */
+.appearance-page{min-height:100%;max-width:860px;margin:0 auto;display:flex;
+  flex-direction:column;color:#f1f2f1}
+.appearance-content{flex:1;padding:24px 16px 30px;min-width:0}
+.appearance-heading{margin-bottom:29px}
+.appearance-heading a{display:inline-flex;padding:9px 0;color:#b7c6bb;text-decoration:none;
+  min-height:40px;align-items:center}
+.appearance-heading h1{font-size:27px;letter-spacing:-.035em;margin:12px 0 8px}
+.appearance-heading p,.appearance-secondary{color:#9ca89e;font-size:12px;line-height:1.6}
+.appearance-panel{background:#202320;border:1px solid #343a34;border-radius:11px;
+  padding:17px 16px 19px}
+.appearance-panel h2{font-size:17px;margin:0 0 10px}
+.appearance-panel h3{font-size:13px;margin:24px 0 12px}
+.appearance-selected,.appearance-available{list-style:none;padding:0;margin:0;display:flex;
+  flex-direction:column;gap:7px}
+.appearance-selected li,.appearance-available li{display:flex;align-items:center;gap:9px;
+  min-height:51px;padding:7px 8px;border-radius:8px;background:#2b302b;
+  border:1px solid #444c44;min-width:0}
+.appearance-selected li[draggable=true]{cursor:grab}
+.appearance-selected li:active{cursor:grabbing}
+.appearance-handle{font-size:20px;color:#8c988f;flex-shrink:0}
+.appearance-name{font-weight:600;flex:1;min-width:0;overflow-wrap:anywhere}
+.appearance-mandatory{font-size:10px;color:#9db6a3}
+.appearance-order{display:flex;gap:5px;margin-left:auto;flex-shrink:0}
+.appearance-page button{background:#323932;color:#f2f5f2;border:1px solid #4a564a;
+  border-radius:8px;min-height:39px;padding:8px 11px;font:inherit;cursor:pointer}
+.appearance-page button:disabled{opacity:.43;cursor:not-allowed}
+.appearance-page :is(button,a):focus-visible{outline:2px solid #98d8a9;outline-offset:2px}
+.appearance-order button{min-width:36px;padding:7px 9px;font-size:16px}
+.appearance-available li{justify-content:space-between;background:#242824}
+.appearance-available li span{display:flex;flex-direction:column;gap:5px;min-width:0}
+.appearance-available li small{font-size:10px;color:#a1a9a2}
+.appearance-available li button{min-width:38px;margin-left:auto;flex-shrink:0}
+.appearance-reset{margin-top:22px}
+.appearance-footer{position:sticky;bottom:0;z-index:10;display:flex;align-items:center;
+  justify-content:flex-end;gap:10px;padding:12px 16px;
+  background:#181d18;border-top:1px solid #374137}
+.appearance-footer button{min-width:105px;min-height:44px}
+.appearance-page .appearance-save{background:#315640;color:#eaffee;border-color:#49835d}
+.appearance-error{color:#ffaaa5;overflow-wrap:anywhere}
+.appearance-success{color:#b3ebc3}
+@media(max-width:400px){
+  .appearance-selected li,.appearance-available li{gap:5px;padding:7px 5px}
+  .appearance-order{gap:3px}
+  .appearance-order button{min-width:30px;padding:6px}
+  .appearance-mandatory{font-size:9px}
+  .appearance-footer button{flex:1}
+}
