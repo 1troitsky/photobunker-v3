@@ -60,6 +60,8 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await A.locator('#assignment-allow-audio').check()
     await A.locator('#assignment-video-goal').fill('2')
     await A.locator('#assignment-audio-goal').fill('1')
+    await A.locator('#assignment-photo-allowed').fill('Report')
+    await A.locator('#assignment-photo-required-tags').fill('photo-evidence')
     await A.getByRole('button',{name:'Подписать новые правила'}).click()
     await expect(A.getByText('Версия правил: 2')).toBeVisible({timeout:20000})
     await expect(A.locator('.assignment-detail'))
@@ -99,6 +101,62 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
     await B.getByRole('button',{name:'Проверить ключ владельца'}).click()
     await expect(B.getByText('Владелец подтверждён')).toBeVisible()
+    // P1-17: prove the PHOTO path is just as strict as audio/video:
+    // no ciphertext when a signed category/tag obligation is unmet.
+    await B.goto('/camera?assignmentId='+assignmentId)
+    await expect(B.locator('#camera-assignment'))
+      .toHaveValue(assignmentId,{timeout:20000})
+    await expect.poll(()=>B.evaluate(()=>{
+      const video=document.querySelector('.video-frame video') as HTMLVideoElement|null
+      return video?.videoWidth??0
+    }),{timeout:20000}).toBeGreaterThan(0)
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText('assignment.category_not_allowed')).toBeVisible()
+    await B.locator('#camera-category').fill('Report')
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText('assignment.required_tags_missing')).toBeVisible()
+    await B.locator('#camera-tags').fill('photo-evidence')
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
+    const photo=await B.evaluate(async()=>{
+      const p=await import('/src/features/photo-sync/application/p1-photo.ts')
+      const row=(await p.listLocalPhotos()).find(x=>x.capture)
+      if(!row)throw Error('photo.capture_missing')
+      const meta=await p.readLocalPhotoMetadata(row.photoId)
+      const serialized=JSON.stringify(row)
+      return {id:row.photoId,version:meta.version,tags:meta.tags,
+        category:meta.category,ciphertextOnly:row.assets.every(x=>x.blob.type==='application/octet-stream'),
+        leakedTags:serialized.includes('photo-evidence')}
+    })
+    expect(photo).toMatchObject({
+      version:3,tags:['photo-evidence'],category:'Report',
+      ciphertextOnly:true,leakedTags:false,
+    })
+    await B.evaluate(async()=>{
+      const p=await import('/src/features/photo-sync/application/p1-photo.ts')
+      await p.flushOutbox()
+    })
+    await expect.poll(()=>B.evaluate(async id=>{
+      const p=await import('/src/features/photo-sync/application/p1-photo.ts')
+      return (await p.listLocalPhotos()).find(x=>x.photoId===id)?.state
+    },photo.id),{timeout:30000}).toBe('synced')
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
+    await B.getByRole('button',{name:'Проверить ключ владельца'}).click()
+    await expect(B.getByText('Владелец подтверждён')).toBeVisible()
+    await B.getByRole('button',{name:'Отправить в задание'}).click()
+    await expect.poll(()=>B.evaluate(async()=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      return (await a.listAssignmentOperations()).some(x=>x.kind==='submit'&&x.state==='sent')
+    }),{timeout:30000}).toBe(true)
+    await A.getByRole('button',{name:'Обновить материалы'}).click()
+    await expect(A.getByRole('button',{name:'Просмотр'})).toHaveCount(1)
+    await A.getByRole('button',{name:'Просмотр'}).click()
+    await expect(A.getByTestId('assignment-decrypted-private-metadata'))
+      .toContainText('Теги: photo-evidence',{timeout:20000})
+    await expect(A.getByTestId('assignment-decrypted-private-metadata'))
+      .toContainText('Категория: Report')
+
     const buttons=B.getByRole('button',{name:'Отправить медиа в задание'})
     await expect(buttons).toHaveCount(2)
     B.on('dialog',dialog=>dialog.accept())
