@@ -106,8 +106,19 @@ final class MatrixBindingController extends Controller
 
         try {
             return DB::transaction(function () use ($account,$device,$contract,$input,$homeserver,$digest) {
-                DB::table('identity_accounts')->where('id',$account->id)
+                $freshAccount=DB::table('identity_accounts')->where('id',$account->id)
                     ->lockForUpdate()->first();
+                $freshDevice=DB::table('identity_devices')
+                    ->where('id',$device->id)->where('account_id',$account->id)
+                    ->whereNull('revoked_at')->lockForUpdate()->first();
+                // /whoami is a network boundary: revocation or key rotation
+                // may have happened while the request was in flight.
+                abort_unless($freshAccount && $freshAccount->status==='ready'
+                    &&(int)$freshAccount->revision===(int)$account->revision
+                    &&hash_equals((string)$freshAccount->account_spki,(string)$account->account_spki)
+                    &&$freshDevice
+                    &&hash_equals((string)$freshDevice->signing_spki,
+                        (string)$device->signing_spki),401);
                 $oldAccount=DB::table('matrix_account_bindings_v1')
                     ->where('account_id',$account->id)->first();
                 if ($oldAccount) {
