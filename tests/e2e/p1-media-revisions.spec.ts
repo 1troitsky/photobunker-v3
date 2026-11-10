@@ -22,11 +22,22 @@ test('P1-12: immutable owner-signed media versions survive Garage+Recovery Key w
     ]
     const ids:string[]=[]
     for(const file of snapshots){
+      // The real file chooser is disabled during encryption/refresh/sync.
+      // Playwright setInputFiles bypasses disabled input, so wait explicitly
+      // instead of pretending a user could select while the form is busy.
+      await expect(media.getByTestId('media-import-file'))
+        .toBeEnabled({timeout:30000})
       await media.getByTestId('media-import-file').setInputFiles({
         name:file.name,mimeType:'audio/wav',
         buffer:Buffer.alloc(1025,file.byte),
       })
       await media.getByRole('button',{name:'Отправить медиа'}).click()
+      // Real network flush, not a fixed sleep; preserves durable retry
+      // behavior on slower disposable Garage+Postgres CI runners.
+      await A.evaluate(async()=>{
+        const mod=await import('/src/features/media/application/media-outbox.ts')
+        await mod.synchronizeMedia()
+      })
       await expect.poll(()=>A.evaluate(async()=>{
         const mod=await import('/src/features/media/application/media-outbox.ts')
         return (await mod.listLocalMedia()).filter(x=>x.state==='synced').length

@@ -173,6 +173,30 @@ final class AssignmentContract
      * enable video/audio with a stable canonical order; the platform must
      * not infer permission from an accepted invitation alone.
      */
+    /**
+     * The signed v2 private-content amendment carries ONLY AES-GCM ciphertext.
+     * Retaining the same owner-wrapped DEK is mandatory: existing accepted
+     * invite envelopes still unlock new text revisions. The server cannot
+     * read or assert any plaintext name/instructions.
+     */
+    public static function privateTextAmendment(array $d,string $owner,string $assignment):void
+    {
+        abort_unless(($d['version']??null)===2
+            &&($d['assignmentId']??null)===$assignment
+            &&($d['ownerAccountId']??null)===$owner
+            &&is_int($d['fromPrivateRevision']??null)
+            &&$d['fromPrivateRevision']>=1
+            &&$d['fromPrivateRevision']<=1000
+            &&($d['toPrivateRevision']??null)===$d['fromPrivateRevision']+1,422);
+        foreach(['assignmentId','ownerAccountId','operationId'] as $key)self::uuid($d,$key);
+        foreach(['rootPrivateHash','previousPrivateHash'] as $key){
+            abort_unless(is_string($d[$key]??null)
+                &&preg_match('/^[a-f0-9]{64}$/D',$d[$key])===1,422);
+        }
+        abort_unless(is_array($d['privateEnvelope']??null),422);
+        self::envelope($d['privateEnvelope']);
+    }
+
     public static function allowedMedia(mixed $value,bool $extended):bool
     {
         if(!is_array($value)||!array_is_list($value))return false;

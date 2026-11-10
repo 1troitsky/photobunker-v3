@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { freshPackage, exportECDHPublic } from '../../identity/infrastructure/crypto'
 import {
-  sealAssignment, openOwnerAssignment,
+  sealAssignment, openOwnerAssignment, resealOwnerAssignment,
   wrapAssignmentForRecipient, openRecipientAssignment,
 } from './assignment-crypto'
 
@@ -56,5 +56,49 @@ describe('P1-04 assignment envelope and recipient DEK',()=>{
     await expect(openRecipientAssignment(recipient.privateKey,ctx,{
       ...sealed,iv:sealed.salt,
     },envelope)).rejects.toThrow()
+  })
+})
+
+describe('P1-19 unchanged DEK preserves accepted E2EE recipients across private text revisions',()=>{
+  it('same owner-invite key decrypts a freshly sealed title, never a rotated key',async()=>{
+    const owner=(await freshPackage(ownerId)).pkg
+    const original=await sealAssignment(owner,assignmentId,{
+      version:1,title:'OLD PRIVATE TITLE',instructions:'Original instructions',
+    })
+    const recipient=await crypto.subtle.generateKey(
+      {name:'ECDH',namedCurve:'P-256'},false,['deriveBits'])
+    const ctx={
+      assignmentId,inviteId,ownerAccountId:ownerId,recipientAccountId:recipientId,
+      role:'contributor' as const,expiresAt:Date.now()+86400000,
+    }
+    const invite=await wrapAssignmentForRecipient(owner,assignmentId,original,{
+      inviteId,recipientAccountId:recipientId,expiresAt:ctx.expiresAt,
+      role:'contributor',
+    },await exportECDHPublic(recipient.publicKey))
+    const revised=await resealOwnerAssignment(owner,assignmentId,original,{
+      version:1,title:'UPDATED HIDDEN TITLE',instructions:'Private new instructions',
+    })
+    expect(revised.wrappedKey).toEqual(original.wrappedKey)
+    expect(revised.iv).not.toBe(original.iv)
+    expect(revised.ciphertext).not.toBe(original.ciphertext)
+    for(const secret of ['UPDATED HIDDEN TITLE','Private new instructions']){
+      expect(JSON.stringify(revised)).not.toContain(secret)
+    }
+    expect(await openOwnerAssignment(owner,assignmentId,original,revised))
+      .toEqual({version:1,title:'UPDATED HIDDEN TITLE',
+        instructions:'Private new instructions'})
+    expect(await openRecipientAssignment(recipient.privateKey,ctx,invite,revised))
+      .toEqual({version:1,title:'UPDATED HIDDEN TITLE',
+        instructions:'Private new instructions'})
+    expect(await openRecipientAssignment(recipient.privateKey,ctx,invite,original))
+      .toMatchObject({title:'OLD PRIVATE TITLE'})
+    const rotated=await sealAssignment(owner,assignmentId,{
+      version:1,title:'MUST NOT ROTATE',instructions:'',
+    })
+    await expect(openOwnerAssignment(owner,assignmentId,original,rotated))
+      .rejects.toThrow('assignment.private_key_rotation_forbidden')
+    await expect(openRecipientAssignment(recipient.privateKey,ctx,invite,rotated))
+      .rejects.toThrow()
+    await expect(openOwnerAssignment(owner,inviteId,original,revised)).rejects.toThrow()
   })
 })

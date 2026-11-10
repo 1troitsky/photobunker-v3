@@ -7,7 +7,7 @@ import { listOutgoingGrants } from '../../sharing/grant-flow'
 import { listOutgoingMediaGrants } from '../../media/application/media-grants'
 import { listLocalMedia } from '../../media/application/media-outbox'
 import type { MediaCaptureIntent } from '../../media/application/media-outbox'
-import { sealAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
+import { sealAssignment, resealOwnerAssignment, openOwnerAssignment, wrapAssignmentForRecipient } from '../infrastructure/assignment-crypto'
 import type { AssignmentEnvelope, AssignmentInviteEnvelope, PrivateAssignment } from '../infrastructure/assignment-crypto'
 import { preparePhotoMetadata } from '../../photo-sync/domain/capture-metadata'
 import type { CaptureMetadataInput } from '../../photo-sync/domain/capture-metadata'
@@ -16,7 +16,7 @@ import type { MediaPrivateFields } from '../../media/domain/media-crypto'
 import { EMPTY_ADVANCED_RULES, normalizeAdvancedRules, validateAdvancedFields } from '../domain/advanced-rules'
 import type { AdvancedRules } from '../domain/advanced-rules'
 
-export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'
+export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'|'private'
 export type AssignmentOperationState='queued'|'retry'|'sent'|'conflict'
 
 export interface AssignmentOperation {
@@ -58,6 +58,9 @@ export type AssignmentListing={
   policySignature:string
   policyAmendmentContract?:string|null
   policyAmendmentSignature?:string|null
+  privateRevision?:number
+  privateAmendmentContract?:string|null
+  privateAmendmentSignature?:string|null
   stateContract:string|null
   stateSignature:string|null
   privateEnvelope:AssignmentEnvelope
@@ -218,6 +221,124 @@ export function signedPolicyGoals(item:AssignmentListing):AssignmentProgressGoal
   }
 }
 
+/**
+ * An assignment's IMMUTABLE root envelope stays in the original owner
+ * signature. Signed private amendments refer to a new AES-GCM ciphertext
+ * with the SAME DEK; previously accepted ECDH invitations still work.
+ * Caller must authenticate the owner's signature before reading.
+ */
+export function effectiveAssignmentEnvelope(item:AssignmentListing):AssignmentEnvelope{
+  const revision=item.privateRevision??1
+  if(revision===1)return item.privateEnvelope
+  if(!item.privateAmendmentContract)
+    throw Error('assignment.private_revision_not_authenticated')
+  const p=JSON.parse(item.privateAmendmentContract) as {
+    version:number;privateEnvelope:AssignmentEnvelope
+  }
+  if(p.version!==2||!p.privateEnvelope)
+    throw Error('assignment.invalid_private_revision')
+  return p.privateEnvelope
+}
+export function assignmentPrivateCacheScope(item:AssignmentListing):string{
+  return item.privateRevision&&item.privateRevision>1
+    ?item.privateAmendmentContract??''
+    :item.policyContract
+}
+function privateEventShape(value:unknown):value is Record<string,unknown>{
+  if(!value||typeof value!=='object'||Array.isArray(value))return false
+  const e=value as Record<string,unknown>
+  const keys=[
+    'version','operationId','assignmentId','ownerAccountId',
+    'rootPrivateHash','previousPrivateHash',
+    'fromPrivateRevision','toPrivateRevision','privateEnvelope',
+  ]
+  return Object.keys(e).sort().join('|')===keys.sort().join('|')
+}
+function privateEnvelopeShape(value:unknown,root:AssignmentEnvelope):value is AssignmentEnvelope{
+  if(!value||typeof value!=='object'||Array.isArray(value))return false
+  const e=value as Record<string,unknown>
+  const wrap=e.wrappedKey as Record<string,unknown>|null
+  if(!wrap||typeof wrap!=='object'||Array.isArray(wrap))return false
+  return Object.keys(e).sort().join('|')==='ciphertext|iv|version|wrappedKey'
+    &&e.version===1
+    &&Object.keys(wrap).sort().join('|')==='ciphertext|iv'
+    &&JSON.stringify(wrap)===JSON.stringify(root.wrappedKey)
+    &&typeof e.iv==='string'
+    &&/^[A-Za-z0-9_-]{16}$/.test(e.iv)
+    &&e.iv!==root.iv
+    &&typeof e.ciphertext==='string'
+    &&/^[A-Za-z0-9_-]{22,32768}$/.test(e.ciphertext)
+    &&e.ciphertext.length<=32000
+}
+async function verifyPrivateEvent(
+  raw:string,signature:string,spki:string,item:AssignmentListing,
+  expectedFrom:number,expectedPreviousHash:string,
+):Promise<void>{
+  let e:Record<string,unknown>
+  try{e=JSON.parse(raw) as Record<string,unknown>}
+  catch{throw Error('assignment.private_revision_not_authenticated')}
+  const rootHash=hex(await digest(new TextEncoder().encode(
+    JSON.stringify(item.privateEnvelope))))
+  if(!privateEventShape(e)||e.version!==2
+    ||e.assignmentId!==item.assignmentId
+    ||e.ownerAccountId!==item.ownerAccountId
+    ||e.rootPrivateHash!==rootHash
+    ||e.previousPrivateHash!==expectedPreviousHash
+    ||e.fromPrivateRevision!==expectedFrom
+    ||e.toPrivateRevision!==expectedFrom+1
+    ||typeof e.operationId!=='string'
+    ||!/^[a-f0-9-]{36}$/.test(e.operationId)
+    ||!privateEnvelopeShape(e.privateEnvelope,item.privateEnvelope)
+    ||JSON.stringify(e)!==raw
+    ||!await verify(await importSpki(spki),
+      'pb3.assignment-private.v2\n'+raw,signature))
+    throw Error('assignment.private_revision_not_authenticated')
+}
+/** Validated history for fresh, multi-revision new-device account sessions. */
+async function verifyPrivateHistory(item:AssignmentListing,spki:string):Promise<void>{
+  const rev=item.privateRevision??1
+  if(rev===1)return
+  const session=requireSession()
+  const path='/assignments/v1/'+encodeURIComponent(item.assignmentId)
+    +'/private-history'
+  const history=await jsonApi<{
+    assignmentId:string;privateRevision:number;rootPrivateHash:string
+    events:Array<{fromPrivateRevision:number;toPrivateRevision:number
+      contractHash:string;contract:string;signature:string;occurredAtMs:number}>
+  }>(path)
+  assertSame(session)
+  const enc=new TextEncoder()
+  const rootHash=hex(await digest(enc.encode(JSON.stringify(item.privateEnvelope))))
+  if(history.assignmentId!==item.assignmentId
+    ||history.privateRevision!==rev||history.rootPrivateHash!==rootHash
+    ||!Array.isArray(history.events)||history.events.length!==rev-1)
+    throw Error('assignment.private_history_incomplete')
+  let previousHash=rootHash
+  const nonces=new Set([item.privateEnvelope.iv])
+  for(let i=0;i<history.events.length;i++){
+    const event=history.events[i]!
+    if(event.fromPrivateRevision!==i+1
+      ||event.toPrivateRevision!==i+2
+      ||!Number.isSafeInteger(event.occurredAtMs)
+      ||event.occurredAtMs<1500000000000)
+      throw Error('assignment.private_history_invalid')
+    const hash=hex(await digest(enc.encode(event.contract)))
+    if(event.contractHash!==hash)throw Error('assignment.private_history_invalid')
+    await verifyPrivateEvent(event.contract,event.signature,spki,item,
+      i+1,previousHash)
+    const envelope=(JSON.parse(event.contract) as {
+      privateEnvelope:AssignmentEnvelope
+    }).privateEnvelope
+    if(nonces.has(envelope.iv))throw Error('assignment.private_nonce_reused')
+    nonces.add(envelope.iv)
+    previousHash=hash
+  }
+  const latest=history.events.at(-1)!
+  if(latest.contract!==item.privateAmendmentContract
+    ||latest.signature!==item.privateAmendmentSignature)
+    throw Error('assignment.private_history_mismatch')
+}
+
 class AssignmentDB extends Dexie {
   operations!:Table<AssignmentOperation,string>
   assignments!:Table<LocalAssignment,string>
@@ -260,6 +381,7 @@ function domain(kind:AssignmentOperationKind):string{
     'media-submit':'pb3.assignment-media-submit.v1\n',
     state:'pb3.assignment-state.v1\n',
     policy:'pb3.assignment-policy.v1\n',
+    private:'pb3.assignment-private.v2\n',
   }
   return signedDomains[kind]
 }
@@ -425,6 +547,26 @@ export async function verifySignedAssignmentPolicy(
     signedAdvancedRequirements(item,'video')
     signedAdvancedRequirements(item,'audio')
   }
+  const privateRevision=item.privateRevision??1
+  if(!Number.isInteger(privateRevision)||privateRevision<1||privateRevision>1001)
+    throw Error('assignment.invalid_private_revision')
+  if(privateRevision===1){
+    if(item.privateAmendmentContract!=null||item.privateAmendmentSignature!=null)
+      throw Error('assignment.private_revision_not_authenticated')
+  }else{
+    if(typeof item.privateAmendmentContract!=='string'
+      ||typeof item.privateAmendmentSignature!=='string')
+      throw Error('assignment.private_revision_not_authenticated')
+    const amendment=JSON.parse(item.privateAmendmentContract) as Record<string,unknown>
+    const rootHash=hex(await digest(new TextEncoder().encode(
+      JSON.stringify(item.privateEnvelope))))
+    const previousHash=privateRevision===2?rootHash:amendment.previousPrivateHash
+    if(typeof previousHash!=='string'||!/^[a-f0-9]{64}$/.test(previousHash))
+      throw Error('assignment.private_revision_not_authenticated')
+    await verifyPrivateEvent(item.privateAmendmentContract,
+      item.privateAmendmentSignature,trustedSpki,item,
+      privateRevision-1,previousHash)
+  }
   if(item.revision===1){
     if(item.state!=='active'||item.stateContract!==null
       ||item.stateSignature!==null)throw new Error('assignment.state_not_authenticated')
@@ -469,6 +611,14 @@ export function assertSignedPolicyProgress(
     throw new Error('assignment.original_policy_changed')
   if(next.revision<previous.revision)
     throw new Error('assignment.state_rollback')
+  if(JSON.stringify(next.privateEnvelope)!==JSON.stringify(previous.privateEnvelope))
+    throw Error('assignment.original_private_envelope_changed')
+  if((next.privateRevision??1)<(previous.privateRevision??1))
+    throw Error('assignment.private_rollback')
+  if((next.privateRevision??1)===(previous.privateRevision??1)
+    &&((next.privateAmendmentContract??null)!==(previous.privateAmendmentContract??null)
+      ||(next.privateAmendmentSignature??null)!==(previous.privateAmendmentSignature??null)))
+    throw Error('assignment.private_equivocation')
   if(next.policyRevision<previous.policyRevision)
     throw new Error('assignment.policy_rollback')
   if(next.policyRevision===previous.policyRevision
@@ -522,7 +672,14 @@ export async function listServerAssignments(after?:string):Promise<{
   const result=await jsonApi<{items:AssignmentListing[];nextCursor:string|null}>(
     '/assignments/v1'+q)
   assertSame(s)
-  for(const item of result.items)await verifySignedAssignmentPolicy(item)
+  for(const item of result.items){
+    await verifySignedAssignmentPolicy(item)
+    if((item.privateRevision??1)>1){
+      const trustedSpki=item.ownerAccountId===s.accountId
+        ?s.pkg.accountSpki:(await pinnedPeer(item.ownerAccountId)).accountSpki
+      await verifyPrivateHistory(item,trustedSpki)
+    }
+  }
   assertSame(s)
   // Cache only signed, independently authenticated policy snapshots.
   // No plaintext assignment name, DEK or recovery material is persisted.
@@ -766,6 +923,61 @@ export async function queueAssignmentPolicyChange(
   await persist(op)
   return op.id
 }
+/**
+ * Owner edits encrypted assignment text without rotating the immutable
+ * root DEK. Existing accepted invitations retain access to new revisions.
+ * No plaintext title/instructions are ever persisted in the outbox or API.
+ */
+export async function queueAssignmentPrivateTextChange(
+  assignmentId:string,next:PrivateAssignment,
+):Promise<string>{
+  const session=requireSession()
+  const cache=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  if(!cache||cache.listing.ownerAccountId!==session.accountId)
+    throw Error('assignment.private_not_owned')
+  const listing=cache.listing
+  await verifySignedAssignmentPolicy(listing,true)
+  assertSame(session)
+  if(listing.state!=='active'
+    ||(listing.endsAt!==null&&listing.endsAt<=Date.now())
+    ||(listing.privateRevision??1)>=1001)
+    throw Error('assignment.private_edit_not_allowed')
+  const operations=await listAssignmentOperations()
+  if(operations.some(op=>op.kind==='private'
+    &&['queued','retry'].includes(op.state)
+    &&(JSON.parse(op.contract) as {assignmentId:string}).assignmentId===assignmentId))
+    throw Error('assignment.private_edit_pending')
+  const old=await openOwnerAssignment(session.pkg,assignmentId,
+    listing.privateEnvelope,effectiveAssignmentEnvelope(listing))
+  const validated:PrivateAssignment={
+    version:1,title:next.title.trim(),instructions:next.instructions,
+  }
+  if(old.title===validated.title&&old.instructions===validated.instructions)
+    throw Error('assignment.private_text_unchanged')
+  const newEnvelope=await resealOwnerAssignment(session.pkg,assignmentId,
+    listing.privateEnvelope,validated)
+  assertSame(session)
+  const enc=new TextEncoder()
+  const root=JSON.stringify(listing.privateEnvelope)
+  const previous=(listing.privateRevision??1)>1
+    ?listing.privateAmendmentContract:root
+  if(!previous)throw Error('assignment.private_revision_not_authenticated')
+  const payload={
+    version:2,operationId:crypto.randomUUID(),assignmentId,
+    ownerAccountId:session.accountId,
+    rootPrivateHash:hex(await digest(enc.encode(root))),
+    previousPrivateHash:hex(await digest(enc.encode(previous))),
+    fromPrivateRevision:listing.privateRevision??1,
+    toPrivateRevision:(listing.privateRevision??1)+1,
+    privateEnvelope:newEnvelope,
+  }
+  const op=await signedOperation('private',
+    '/assignments/v1/'+encodeURIComponent(assignmentId)+'/private',payload)
+  assertSame(session)
+  await persist(op)
+  return op.id
+}
+
 export async function queueAssignmentGoalChange(
   assignmentId:string,photoGoal:number|null,
 ):Promise<string>{

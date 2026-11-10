@@ -14,6 +14,7 @@ import {
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
   signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,
   signedAdvancedRequirements,verifyAssignmentInvite,
+  effectiveAssignmentEnvelope,assignmentPrivateCacheScope,
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
@@ -42,7 +43,7 @@ import {queueMediaRecipientGrant,flushMediaGrants,readReceivedMediaGrant} from '
 
 type VisibleAssignment={
   id:string;ownerAccountId:string;data:PrivateAssignment|null
-  state:string;revision:number;policyRevision:number
+  state:string;revision:number;policyRevision:number;privateRevision:number
   requirements:CaptureRequirements;allowedMedia:AllowedAssignmentMedia
   videoRequirements:CaptureRequirements;audioRequirements:CaptureRequirements
   photoAdvanced:AdvancedRules;videoAdvanced:AdvancedRules;audioAdvanced:AdvancedRules
@@ -202,7 +203,7 @@ async function hydrate():Promise<void>{
     catch { /* a corrupted local envelope must never reveal plaintext */ }
     return {
       id:item.id,ownerAccountId:item.ownerAccountId,data,
-      state:'active',revision:1,policyRevision:1,
+      state:'active',revision:1,policyRevision:1,privateRevision:1,
       requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       videoRequirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       audioRequirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
@@ -263,11 +264,15 @@ async function hydrate():Promise<void>{
   const rows=[...localRows]
   for(const item of snapshots){
     const previous=rows.find(a=>a.id===item.assignmentId)
-    let data=previous?.data??null
+    // A fresh signed private revision must invalidate prior root/plaintext
+    // previews. Never show an outdated title from a locally queued draft.
+    let data=(previous?.privateRevision??1)===(item.privateRevision??1)
+      ?previous?.data??null:null
     if(!data){
       try{
         if(item.ownerAccountId===identity.accountId){
-          data=await openOwnerAssignment(identity.pkg,item.assignmentId,item.privateEnvelope)
+          data=await openOwnerAssignment(identity.pkg,item.assignmentId,
+            item.privateEnvelope,effectiveAssignmentEnvelope(item))
         }else{
           const invite=received.find(i=>i.assignmentId===item.assignmentId&&i.state==='accepted')
           if(invite){
@@ -275,7 +280,8 @@ async function hydrate():Promise<void>{
             if(offline){
               // No network key-directory access is attempted offline. Only
               // an existing AEAD-encrypted account-scoped summary is opened.
-              data=await readCachedPrivateAssignment(item.assignmentId,item.policyContract)
+              data=await readCachedPrivateAssignment(item.assignmentId,
+                assignmentPrivateCacheScope(item))
             }else{
               const contract=JSON.parse(invite.contract)
               const own=await ensureOwnExchangeKey()
@@ -284,8 +290,9 @@ async function hydrate():Promise<void>{
                 ownerAccountId:item.ownerAccountId,
                 recipientAccountId:identity.accountId,
                 role:'contributor',expiresAt:invite.expiresAt,
-              },contract.envelope,item.privateEnvelope)
-              await cachePrivateAssignment(item.assignmentId,item.policyContract,data)
+              },contract.envelope,effectiveAssignmentEnvelope(item))
+              await cachePrivateAssignment(item.assignmentId,
+                assignmentPrivateCacheScope(item),data)
             }
           }
         }
@@ -294,6 +301,7 @@ async function hydrate():Promise<void>{
     const row:VisibleAssignment={
       id:item.assignmentId,ownerAccountId:item.ownerAccountId,data,
       state:item.state,revision:item.revision,policyRevision:item.policyRevision,
+      privateRevision:item.privateRevision??1,
       requirements:signedPolicyRequirements(item),
       videoRequirements:signedMediaRequirements(item,'video'),
       audioRequirements:signedMediaRequirements(item,'audio'),

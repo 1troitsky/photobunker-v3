@@ -212,6 +212,113 @@ final class AssignmentV1Controller extends Controller
     }
 
     /**
+     * P1-19: signed append-only AEAD ciphertext. Never rewrite the signed
+     * creation envelope, reuse an AES-GCM nonce, or rotate the shared DEK:
+     * otherwise existing accepted invitees lose access.
+     */
+    public function changePrivateText(Request $r,string $assignmentId)
+    {
+        $this->sync->origin($r);
+        [$actor]=$this->sync->actor($r);
+        $c=$this->signed($r,$actor,'pb3.assignment-private.v2',[
+            'version','operationId','assignmentId','ownerAccountId',
+            'rootPrivateHash','previousPrivateHash',
+            'fromPrivateRevision','toPrivateRevision','privateEnvelope',
+        ]);
+        C::privateTextAmendment($c,$actor->id,$assignmentId);
+        $hash=hash('sha256',$r->json('contract'));
+        return DB::transaction(function()use($c,$actor,$assignmentId,$r,$hash){
+            $a=DB::table('assignment_records_v1')->where('id',$assignmentId)
+                ->lockForUpdate()->first();
+            abort_unless($a&&$a->owner_account_id===$actor->id,404);
+            abort_unless(hash_equals(hash('sha256',$a->private_envelope_json),
+                $c['rootPrivateHash']),409);
+            // Idempotent lost-ACK after a later revision or a finished state.
+            $existing=DB::table('assignment_private_events_v1')
+                ->where('operation_id',$c['operationId'])->first();
+            if($existing){
+                abort_unless($existing->assignment_id===$a->id
+                    &&hash_equals($existing->contract_hash,$hash),409);
+                return $this->sync->json([
+                    'assignmentId'=>$a->id,
+                    'privateRevision'=>(int)$a->private_revision,
+                    'unchanged'=>true,
+                ]);
+            }
+            abort_unless($a->state==='active'
+                &&($a->ends_at===null||(int)$a->ends_at>PhotoSync::nowMs())
+                &&(int)$a->private_revision===$c['fromPrivateRevision'],409);
+            $previous=$a->latest_private_contract??$a->private_envelope_json;
+            abort_unless(hash_equals(hash('sha256',$previous),
+                $c['previousPrivateHash']),409);
+            $root=json_decode($a->private_envelope_json,true,16,JSON_THROW_ON_ERROR);
+            $amendment=$c['privateEnvelope'];
+            abort_unless($amendment['wrappedKey']===$root['wrappedKey'],409);
+            // AES-GCM must never reuse a nonce with this unchanged DEK.
+            abort_unless($amendment['iv']!==$root['iv'],409);
+            abort_unless(!DB::table('assignment_private_events_v1')
+                ->where('assignment_id',$a->id)
+                ->where('cipher_iv',$amendment['iv'])->exists(),409);
+            $when=PhotoSync::nowMs();
+            DB::table('assignment_private_events_v1')->insert([
+                'operation_id'=>$c['operationId'],'assignment_id'=>$a->id,
+                'from_revision'=>$c['fromPrivateRevision'],
+                'to_revision'=>$c['toPrivateRevision'],
+                'contract_hash'=>$hash,'contract_json'=>$r->json('contract'),
+                'owner_signature'=>$r->json('signature'),
+                'cipher_iv'=>$amendment['iv'],'occurred_at_ms'=>$when,
+                'created_at'=>\Carbon\CarbonImmutable::createFromTimestampMs($when,'UTC'),
+            ]);
+            DB::table('assignment_records_v1')->where('id',$a->id)->update([
+                'private_revision'=>$c['toPrivateRevision'],
+                'latest_private_contract'=>$r->json('contract'),
+                'latest_private_signature'=>$r->json('signature'),
+                'updated_at'=>now(),
+            ]);
+            return $this->sync->json([
+                'assignmentId'=>$a->id,
+                'privateRevision'=>$c['toPrivateRevision'],
+                'unchanged'=>false,
+            ]);
+        },3);
+    }
+
+    /**
+     * Owner or accepted member only. Returns signed AEAD event history, never
+     * plaintext, keys, unaccepted invitees, filename, media or location.
+     */
+    public function privateTextHistory(Request $r,string $assignmentId)
+    {
+        [$actor]=$this->sync->actor($r);
+        $a=$this->assignment($assignmentId);
+        if($a->owner_account_id!==$actor->id){
+            abort_unless(DB::table('assignment_invites_v1')
+                ->where('assignment_id',$assignmentId)
+                ->where('recipient_account_id',$actor->id)
+                ->where('state','accepted')->exists(),404);
+        }
+        $events=DB::table('assignment_private_events_v1')
+            ->where('assignment_id',$assignmentId)
+            ->orderBy('to_revision')->limit(1001)
+            ->get(['from_revision','to_revision','contract_hash',
+                'contract_json','owner_signature','occurred_at_ms']);
+        abort_unless($events->count()===(int)$a->private_revision-1,409);
+        return $this->sync->json([
+            'assignmentId'=>$assignmentId,
+            'privateRevision'=>(int)$a->private_revision,
+            'rootPrivateHash'=>hash('sha256',$a->private_envelope_json),
+            'events'=>$events->map(fn($e)=>[
+                'fromPrivateRevision'=>(int)$e->from_revision,
+                'toPrivateRevision'=>(int)$e->to_revision,
+                'contractHash'=>$e->contract_hash,
+                'contract'=>$e->contract_json,
+                'signature'=>$e->owner_signature,
+                'occurredAtMs'=>(int)$e->occurred_at_ms,
+            ])->values()->all(),
+        ]);
+    }
+
+    /**
      * A finish/resume command changes server permissions without changing the
      * immutable owner-signed capture policy or deleting participants' media.
      * Every transition has a signed, revision-locked, append-only operation.
@@ -304,6 +411,7 @@ final class AssignmentV1Controller extends Controller
             'a.private_envelope_json','a.contract_json','a.owner_signature',
             'a.latest_state_contract','a.latest_state_signature',
             'a.latest_policy_contract','a.latest_policy_signature',
+            'a.private_revision','a.latest_private_contract','a.latest_private_signature',
             'owner.account_spki as owner_account_spki',
         ];
         $now=PhotoSync::nowMs();
@@ -366,6 +474,9 @@ final class AssignmentV1Controller extends Controller
             'startsAt'=>(int)$x->starts_at,
             'endsAt'=>$x->ends_at===null?null:(int)$x->ends_at,
             'privateEnvelope'=>json_decode($x->private_envelope_json,true,16,JSON_THROW_ON_ERROR),
+            'privateRevision'=>(int)$x->private_revision,
+            'privateAmendmentContract'=>$x->latest_private_contract,
+            'privateAmendmentSignature'=>$x->latest_private_signature,
             // A client must verify this owner's original signed policy before
             // trusting capture constraints. Server metadata alone is not a signature.
             'policyContract'=>$x->contract_json,
