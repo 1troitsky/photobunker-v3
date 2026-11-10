@@ -391,6 +391,40 @@ final class TeamInvitationTest extends TestCase
         $this->assertDatabaseCount('photo_access_grants',0);
     }
 
+    public function test_surviving_member_is_denied_old_team_dek_until_new_epoch():void
+    {
+        $first=$this->acceptedRecipient();
+        $this->publishKey('outsider',str_repeat('c',64));
+        $other=$this->invitation('viewer');
+        $other['recipientAccountId']=$this->accounts['outsider']['id'];
+        $other['recipientKeyDigest']=str_repeat('c',64);
+        $signed=$this->invite($other);
+        $this->as('outsider');
+        $accept=[
+            'version'=>1,'action'=>'accept','inviteId'=>$other['inviteId'],
+            'teamId'=>$this->teamId,
+            'recipientAccountId'=>$this->accounts['outsider']['id'],
+            'operationId'=>(string)Str::uuid(),
+            'inviteHash'=>hash('sha256',$signed['contract']),
+        ];
+        $this->postJson('/teams/v1/'.$this->teamId.'/invites/'
+            .$other['inviteId'].'/accept',
+            $this->sign('outsider','pb3.team-accept.v1',$accept))->assertCreated();
+        $this->getJson('/teams/v1/'.$this->teamId.'/member')->assertOk();
+        $this->changeMember($this->membershipEvent('remove',$first));
+        $this->as('outsider');
+        // An accepted, still active survivor must not receive the known old
+        // DEK; explicit new epoch publication is needed for EVERY survivor.
+        $this->assertDatabaseHas('team_members_v1',[
+            'team_id'=>$this->teamId,
+            'account_id'=>$this->accounts['outsider']['id'],
+            'state'=>'active','role'=>'viewer',
+        ]);
+        $this->getJson('/teams/v1/'.$this->teamId.'/member')->assertConflict();
+        $this->assertDatabaseCount('photo_access_grants',0);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
     public function test_pending_invite_can_be_revoked_before_any_consent():void
     {
         $signed=$this->invite();
