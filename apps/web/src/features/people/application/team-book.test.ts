@@ -16,7 +16,14 @@ async function account(id:string,online=false):Promise<Session>{
   activeSession.value=s
   return s
 }
-beforeEach(()=>{ownerId=crypto.randomUUID();vi.resetAllMocks()})
+beforeEach(()=>{
+  ownerId=crypto.randomUUID()
+  vi.resetAllMocks()
+  // Vitest runs in a simulated browser whose default navigator.onLine may
+  // be false. The offline test creates a team under s.online=false explicitly.
+  // Sync/replay tests need a separate unambiguous online network precondition.
+  Object.defineProperty(navigator,'onLine',{configurable:true,value:true})
+})
 afterEach(()=>{activeSession.value=null})
 async function rawRows():Promise<unknown[]>{
   const scope=hex(await digest(new TextEncoder().encode('pb3.team-scope.v1\n'+ownerId)))
