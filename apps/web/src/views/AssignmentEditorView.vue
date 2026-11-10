@@ -184,6 +184,8 @@ async function refresh():Promise<void>{
     catch(e){error.value=fail(e)}
   }
   if(!session.online||!navigator.onLine){
+    // Restored warm-offline accounts cannot authenticate live roster states.
+    rosterStatus.value='offline'
     if(!cached)loadState.value='missing'
     return
   }
@@ -399,6 +401,11 @@ watch(activeSession,(next,previous)=>{
     })
     peerReset()
     loadState.value='loading'
+    void refresh()
+  }else if(next?.online&&!previous?.online){
+    // Session proof may complete AFTER editor's first offline render.
+    // A same-identity offline→online transition must refresh live roster.
+    // Never discard local edits merely because network auth recovered.
     void refresh()
   }
 })
