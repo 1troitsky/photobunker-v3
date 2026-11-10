@@ -11,6 +11,8 @@ export const router = createRouter({
   routes: [
     { path: '/', redirect: '/assignments' },
     { path: '/assignments', component: AssignmentsView, meta: { title: 'Задания' } },
+    { path: '/assignments/:assignmentId/edit', component: AssignmentEditorView,
+      meta: { title: 'Редактор задания' } },
     { path: '/browser', component: PhotoBrowserView, meta: { title: 'Browser' } },
     { path: '/camera', component: CaptureView, meta: { title: 'Камера' } },
     { path: '/contacts', component: FoundationScreen, meta: { title: 'Контакты' } },
