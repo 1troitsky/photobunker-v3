@@ -221,6 +221,124 @@ export function signedPolicyGoals(item:AssignmentListing):AssignmentProgressGoal
   }
 }
 
+/**
+ * An assignment's IMMUTABLE root envelope stays in the original owner
+ * signature. Signed private amendments refer to a new AES-GCM ciphertext
+ * with the SAME DEK; previously accepted ECDH invitations still work.
+ * Caller must authenticate the owner's signature before reading.
+ */
+export function effectiveAssignmentEnvelope(item:AssignmentListing):AssignmentEnvelope{
+  const revision=item.privateRevision??1
+  if(revision===1)return item.privateEnvelope
+  if(!item.privateAmendmentContract)
+    throw Error('assignment.private_revision_not_authenticated')
+  const p=JSON.parse(item.privateAmendmentContract) as {
+    version:number;privateEnvelope:AssignmentEnvelope
+  }
+  if(p.version!==2||!p.privateEnvelope)
+    throw Error('assignment.invalid_private_revision')
+  return p.privateEnvelope
+}
+export function assignmentPrivateCacheScope(item:AssignmentListing):string{
+  return item.privateRevision&&item.privateRevision>1
+    ?item.privateAmendmentContract??''
+    :item.policyContract
+}
+function privateEventShape(value:unknown):value is Record<string,unknown>{
+  if(!value||typeof value!=='object'||Array.isArray(value))return false
+  const e=value as Record<string,unknown>
+  const keys=[
+    'version','operationId','assignmentId','ownerAccountId',
+    'rootPrivateHash','previousPrivateHash',
+    'fromPrivateRevision','toPrivateRevision','privateEnvelope',
+  ]
+  return Object.keys(e).sort().join('|')===keys.sort().join('|')
+}
+function privateEnvelopeShape(value:unknown,root:AssignmentEnvelope):value is AssignmentEnvelope{
+  if(!value||typeof value!=='object'||Array.isArray(value))return false
+  const e=value as Record<string,unknown>
+  const wrap=e.wrappedKey as Record<string,unknown>|null
+  if(!wrap||typeof wrap!=='object'||Array.isArray(wrap))return false
+  return Object.keys(e).sort().join('|')==='ciphertext|iv|version|wrappedKey'
+    &&e.version===1
+    &&Object.keys(wrap).sort().join('|')==='ciphertext|iv'
+    &&JSON.stringify(wrap)===JSON.stringify(root.wrappedKey)
+    &&typeof e.iv==='string'
+    &&/^[A-Za-z0-9_-]{16}$/.test(e.iv)
+    &&e.iv!==root.iv
+    &&typeof e.ciphertext==='string'
+    &&/^[A-Za-z0-9_-]{22,32768}$/.test(e.ciphertext)
+    &&e.ciphertext.length<=32000
+}
+async function verifyPrivateEvent(
+  raw:string,signature:string,spki:string,item:AssignmentListing,
+  expectedFrom:number,expectedPreviousHash:string,
+):Promise<void>{
+  let e:Record<string,unknown>
+  try{e=JSON.parse(raw) as Record<string,unknown>}
+  catch{throw Error('assignment.private_revision_not_authenticated')}
+  const rootHash=hex(await digest(new TextEncoder().encode(
+    JSON.stringify(item.privateEnvelope))))
+  if(!privateEventShape(e)||e.version!==2
+    ||e.assignmentId!==item.assignmentId
+    ||e.ownerAccountId!==item.ownerAccountId
+    ||e.rootPrivateHash!==rootHash
+    ||e.previousPrivateHash!==expectedPreviousHash
+    ||e.fromPrivateRevision!==expectedFrom
+    ||e.toPrivateRevision!==expectedFrom+1
+    ||typeof e.operationId!=='string'
+    ||!/^[a-f0-9-]{36}$/.test(e.operationId)
+    ||!privateEnvelopeShape(e.privateEnvelope,item.privateEnvelope)
+    ||JSON.stringify(e)!==raw
+    ||!await verify(await importSpki(spki),
+      'pb3.assignment-private.v2\n'+raw,signature))
+    throw Error('assignment.private_revision_not_authenticated')
+}
+/** Validated history for fresh, multi-revision new-device account sessions. */
+async function verifyPrivateHistory(item:AssignmentListing,spki:string):Promise<void>{
+  const rev=item.privateRevision??1
+  if(rev===1)return
+  const session=requireSession()
+  const path='/assignments/v1/'+encodeURIComponent(item.assignmentId)
+    +'/private-history'
+  const history=await jsonApi<{
+    assignmentId:string;privateRevision:number;rootPrivateHash:string
+    events:Array<{fromPrivateRevision:number;toPrivateRevision:number
+      contractHash:string;contract:string;signature:string;occurredAtMs:number}>
+  }>(path)
+  assertSame(session)
+  const enc=new TextEncoder()
+  const rootHash=hex(await digest(enc.encode(JSON.stringify(item.privateEnvelope))))
+  if(history.assignmentId!==item.assignmentId
+    ||history.privateRevision!==rev||history.rootPrivateHash!==rootHash
+    ||!Array.isArray(history.events)||history.events.length!==rev-1)
+    throw Error('assignment.private_history_incomplete')
+  let previousHash=rootHash
+  const nonces=new Set([item.privateEnvelope.iv])
+  for(let i=0;i<history.events.length;i++){
+    const event=history.events[i]!
+    if(event.fromPrivateRevision!==i+1
+      ||event.toPrivateRevision!==i+2
+      ||!Number.isSafeInteger(event.occurredAtMs)
+      ||event.occurredAtMs<1500000000000)
+      throw Error('assignment.private_history_invalid')
+    const hash=hex(await digest(enc.encode(event.contract)))
+    if(event.contractHash!==hash)throw Error('assignment.private_history_invalid')
+    await verifyPrivateEvent(event.contract,event.signature,spki,item,
+      i+1,previousHash)
+    const envelope=(JSON.parse(event.contract) as {
+      privateEnvelope:AssignmentEnvelope
+    }).privateEnvelope
+    if(nonces.has(envelope.iv))throw Error('assignment.private_nonce_reused')
+    nonces.add(envelope.iv)
+    previousHash=hash
+  }
+  const latest=history.events.at(-1)!
+  if(latest.contract!==item.privateAmendmentContract
+    ||latest.signature!==item.privateAmendmentSignature)
+    throw Error('assignment.private_history_mismatch')
+}
+
 class AssignmentDB extends Dexie {
   operations!:Table<AssignmentOperation,string>
   assignments!:Table<LocalAssignment,string>
