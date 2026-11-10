@@ -56,6 +56,11 @@ final class MatrixRecoveryEscrowController extends Controller
         abort_unless(is_array($c)&&!array_is_list($c),422);
         P::exact($c,['version','operationId','accountId','accountRevision',
             'homeserverUrl','matrixUserId','purpose','keyId','iv','ciphertext']);
+        abort_unless(is_string($c['operationId'])
+            &&is_string($c['accountId'])
+            &&is_string($c['homeserverUrl'])
+            &&is_string($c['matrixUserId'])
+            &&is_string($c['purpose']),422);
         P::uuid($c['operationId']);
         abort_unless($c['version']===1
             &&$c['accountId']===$account->id
