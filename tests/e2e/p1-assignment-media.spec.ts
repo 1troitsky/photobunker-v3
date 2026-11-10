@@ -171,8 +171,22 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(rosterRecipientStatus).toBe(404)
     await A.goto('/assignments/'+assignmentId+'/edit')
     await A.getByRole('tab',{name:'Участники'}).click()
-    await expect(A.getByTestId('editor-participant-'+contributorId))
+    const rosterServer=await A.evaluate(async id=>{
+      const res=await fetch('/assignments/v1/'+id+'/participants')
+      const body=await res.json()
+      return {status:res.status,
+        recipients:body.items?.map((x:{recipientAccountId:string;state:string})=>
+          ({id:x.recipientAccountId,state:x.state}))??[],error:body.error??null}
+    },assignmentId)
+    expect(rosterServer.status).toBe(200)
+    expect(rosterServer.recipients).toContainEqual({
+      id:contributorId,state:'accepted',
+    })
+    // Check the entire panel for a useful diagnostic when the UI is stale.
+    await expect(A.getByTestId('editor-participant-roster'))
       .toContainText('Принято сервером',{timeout:20000})
+    await expect(A.getByTestId('editor-participant-'+contributorId))
+      .toContainText('Принято сервером')
     // Return to the existing owner media-review flow after inspecting roster.
     await A.goto('/assignments')
     await A.getByRole('button',{name:'Открыть',exact:true}).first().click()
