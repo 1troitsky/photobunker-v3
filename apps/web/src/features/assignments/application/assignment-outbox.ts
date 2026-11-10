@@ -16,7 +16,7 @@ import type { MediaPrivateFields } from '../../media/domain/media-crypto'
 import { EMPTY_ADVANCED_RULES, normalizeAdvancedRules, validateAdvancedFields } from '../domain/advanced-rules'
 import type { AdvancedRules } from '../domain/advanced-rules'
 
-export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'|'private'|'schedule'
+export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'|'private'|'schedule'|'retention'
 export type AssignmentOperationState='queued'|'retry'|'sent'|'conflict'
 
 export interface AssignmentOperation {
@@ -64,6 +64,11 @@ export type AssignmentListing={
   scheduleRevision?:number
   scheduleAmendmentContract?:string|null
   scheduleAmendmentSignature?:string|null
+  retentionRevision?:number
+  retentionAmendmentContract?:string|null
+  retentionAmendmentSignature?:string|null
+  filesAccessUntil?:number|null
+  assignmentAccessUntil?:number|null
   stateContract:string|null
   stateSignature:string|null
   privateEnvelope:AssignmentEnvelope
@@ -455,6 +460,121 @@ async function verifyScheduleHistory(item:AssignmentListing,spki:string):Promise
     throw Error('assignment.schedule_history_mismatch')
 }
 
+/**
+ * Assignment-scoped retention is NOT physical file deletion.
+ * Captured objects remain owned by the contributor and retain their
+ * independently signed TTL and recipients. This contract hides only
+ * assignment associations and prevents assignment-specific new grants.
+ */
+export type AssignmentRetention={
+  filesAccessUntil:number|null
+  assignmentAccessUntil:number|null
+  deleteOriginals:false
+}
+export function validAssignmentRetention(value:AssignmentRetention):boolean{
+  return (value.filesAccessUntil===null||validScheduleTime(value.filesAccessUntil))
+    &&(value.assignmentAccessUntil===null||validScheduleTime(value.assignmentAccessUntil))
+    &&value.deleteOriginals===false
+    &&(value.filesAccessUntil===null||value.assignmentAccessUntil===null
+      ||value.assignmentAccessUntil>=value.filesAccessUntil)
+}
+export function signedAssignmentRetention(item:AssignmentListing):AssignmentRetention{
+  if((item.retentionRevision??1)===1)return {
+    filesAccessUntil:null,assignmentAccessUntil:null,deleteOriginals:false,
+  }
+  if(!item.retentionAmendmentContract)
+    throw Error('assignment.retention_not_authenticated')
+  const e=JSON.parse(item.retentionAmendmentContract) as AssignmentRetention
+  const value={
+    filesAccessUntil:e.filesAccessUntil,
+    assignmentAccessUntil:e.assignmentAccessUntil,
+    deleteOriginals:e.deleteOriginals,
+  }
+  if(!validAssignmentRetention(value))
+    throw Error('assignment.invalid_signed_retention')
+  return value
+}
+export function assignmentOpenAt(item:AssignmentListing,at:number):boolean{
+  const r=signedAssignmentRetention(item)
+  return r.assignmentAccessUntil===null||at<r.assignmentAccessUntil
+}
+export function assignmentFilesOpenAt(item:AssignmentListing,at:number):boolean{
+  const r=signedAssignmentRetention(item)
+  return assignmentOpenAt(item,at)
+    &&(r.filesAccessUntil===null||at<r.filesAccessUntil)
+}
+function parseRetentionEvent(raw:string):Record<string,unknown>{
+  let e:Record<string,unknown>
+  try{e=JSON.parse(raw) as Record<string,unknown>}
+  catch{throw Error('assignment.retention_not_authenticated')}
+  if(!e||typeof e!=='object'||Array.isArray(e))
+    throw Error('assignment.retention_not_authenticated')
+  const keys=[
+    'version','operationId','assignmentId','ownerAccountId',
+    'rootPolicyHash','previousRetentionHash',
+    'fromRetentionRevision','toRetentionRevision',
+    'filesAccessUntil','assignmentAccessUntil','deleteOriginals',
+  ]
+  if(Object.keys(e).sort().join('|')!==keys.sort().join('|')
+    ||JSON.stringify(e)!==raw
+    ||typeof e.operationId!=='string'
+    ||!/^[a-f0-9]{8}-[a-f0-9-]{27}$/.test(e.operationId)
+    ||!validAssignmentRetention(e as AssignmentRetention))
+    throw Error('assignment.retention_not_authenticated')
+  return e
+}
+async function verifyRetentionEvent(
+  raw:string,signature:string,spki:string,item:AssignmentListing,
+  from:number,previousHash:string,
+):Promise<void>{
+  const e=parseRetentionEvent(raw)
+  const rootHash=hex(await digest(new TextEncoder().encode(item.policyContract)))
+  if(e.version!==1||e.assignmentId!==item.assignmentId
+    ||e.ownerAccountId!==item.ownerAccountId
+    ||e.rootPolicyHash!==rootHash
+    ||e.previousRetentionHash!==previousHash
+    ||e.fromRetentionRevision!==from
+    ||e.toRetentionRevision!==from+1
+    ||!await verify(await importSpki(spki),
+      'pb3.assignment-retention.v1\n'+raw,signature))
+    throw Error('assignment.retention_not_authenticated')
+}
+async function verifyRetentionHistory(item:AssignmentListing,spki:string):Promise<void>{
+  const rev=item.retentionRevision??1
+  if(rev===1)return
+  const session=requireSession()
+  const history=await jsonApi<{
+    assignmentId:string;retentionRevision:number;rootPolicyHash:string
+    events:Array<{fromRetentionRevision:number;toRetentionRevision:number
+      contractHash:string;contract:string;signature:string;occurredAtMs:number}>
+  }>('/assignments/v1/'+encodeURIComponent(item.assignmentId)+'/retention-history')
+  assertSame(session)
+  const encoder=new TextEncoder()
+  const rootHash=hex(await digest(encoder.encode(item.policyContract)))
+  if(history.assignmentId!==item.assignmentId
+    ||history.retentionRevision!==rev||history.rootPolicyHash!==rootHash
+    ||!Array.isArray(history.events)||history.events.length!==rev-1)
+    throw Error('assignment.retention_history_incomplete')
+  let previousHash=rootHash
+  for(let i=0;i<history.events.length;i++){
+    const event=history.events[i]!
+    if(event.fromRetentionRevision!==i+1
+      ||event.toRetentionRevision!==i+2
+      ||!Number.isSafeInteger(event.occurredAtMs)
+      ||event.occurredAtMs<1577836800000)
+      throw Error('assignment.retention_history_invalid')
+    const hash=hex(await digest(encoder.encode(event.contract)))
+    if(event.contractHash!==hash)throw Error('assignment.retention_history_invalid')
+    await verifyRetentionEvent(event.contract,event.signature,spki,item,
+      i+1,previousHash)
+    previousHash=hash
+  }
+  const latest=history.events.at(-1)!
+  if(latest.contract!==item.retentionAmendmentContract
+    ||latest.signature!==item.retentionAmendmentSignature)
+    throw Error('assignment.retention_history_mismatch')
+}
+
 class AssignmentDB extends Dexie {
   operations!:Table<AssignmentOperation,string>
   assignments!:Table<LocalAssignment,string>
@@ -499,6 +619,7 @@ function domain(kind:AssignmentOperationKind):string{
     policy:'pb3.assignment-policy.v1\n',
     private:'pb3.assignment-private.v2\n',
     schedule:'pb3.assignment-schedule.v1\n',
+    retention:'pb3.assignment-retention.v1\n',
   }
   return signedDomains[kind]
 }
