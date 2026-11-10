@@ -152,7 +152,11 @@ describe('P1-19 signed AEAD private text snapshot and historical cache safety',(
       tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error)
     })
     db.close()
-    const text={version:1 as const,title:'UPDATED CONFIDENTIAL TITLE',instructions:'Private B'}
+    const text={
+      version:2 as const,title:'UPDATED CONFIDENTIAL TITLE',instructions:'Private B',
+      photoInstructions:'PRIVATE PHOTO FRAMING',videoInstructions:'PRIVATE VIDEO MOTION',
+      audioInstructions:'PRIVATE AUDIO NOTES',
+    }
     const opId=await queueAssignmentPrivateTextChange(id,text)
     const operation=(await listAssignmentOperations()).find(x=>x.id===opId)!
     const body=JSON.parse(operation.contract)
@@ -161,6 +165,8 @@ describe('P1-19 signed AEAD private text snapshot and historical cache safety',(
     expect(operation.path).toBe('/assignments/v1/'+id+'/private')
     expect(operation.contract).not.toContain('UPDATED CONFIDENTIAL TITLE')
     expect(operation.contract).not.toContain('Private B')
+    for(const secret of [text.photoInstructions,text.videoInstructions,text.audioInstructions])
+      expect(operation.contract).not.toContain(secret)
     expect(body.fromPrivateRevision).toBe(1)
     expect(body.toPrivateRevision).toBe(2)
     expect(body.privateEnvelope.wrappedKey).toEqual(root.privateEnvelope.wrappedKey)
@@ -171,6 +177,14 @@ describe('P1-19 signed AEAD private text snapshot and historical cache safety',(
     await expect(verifySignedAssignmentPolicy(changed)).resolves.toBeUndefined()
     expect(effectiveAssignmentEnvelope(changed)).toEqual(body.privateEnvelope)
     expect(assignmentPrivateCacheScope(changed)).toBe(operation.contract)
+    const decrypted=await import('../infrastructure/assignment-crypto').then(
+      m=>m.openOwnerAssignment(session.pkg,id,row.privateEnvelope,body.privateEnvelope))
+    expect(decrypted).toEqual(text)
+    await cachePrivateAssignment(id,assignmentPrivateCacheScope(changed),decrypted)
+    expect(await readCachedPrivateAssignment(id,assignmentPrivateCacheScope(changed)))
+      .toEqual(text)
+    expect(await readCachedPrivateAssignment(id,assignmentPrivateCacheScope(row)))
+      .toBeNull()
     expect(()=>assertSignedPolicyProgress(row,changed)).not.toThrow()
     expect(()=>assertSignedPolicyProgress(changed,row))
       .toThrow('assignment.private_rollback')
