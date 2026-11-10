@@ -198,7 +198,9 @@ final class TeamKeyEpochTest extends TestCase
         $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
             $this->signed('owner','pb3.team-key-epoch.v1',$bad))
             ->assertConflict();
-        $bad=$this->epoch([$this->recipient('contributor'),$this->recipient('viewer')]);
+        $unexpected=[$this->recipient('contributor'),$this->recipient('viewer')];
+        usort($unexpected,static fn($a,$b)=>strcmp($a['accountId'],$b['accountId']));
+        $bad=$this->epoch($unexpected);
         $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
             $this->signed('owner','pb3.team-key-epoch.v1',$bad))
             ->assertConflict();
