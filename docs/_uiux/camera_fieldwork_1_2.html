@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#121212"><title>PhotoBunker — Camera · Fieldwork 1.2</title>
+<style>
+:root{color-scheme:dark;--bg:#121212;--head:#181818;--panel:#202020;--control:#303030;--stroke:#363636;--muted:#a5a5a5;--ink:#f4f4f4;--green:#1ed760;--warn:#d8b075;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#121212;color:var(--ink)}body{padding:14px;font-size:13px}button,input,select,textarea{font:inherit}button{cursor:pointer;color:inherit}button:disabled{opacity:.36;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--green);outline-offset:2px}[hidden]{display:none!important}svg.ico{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}button svg{pointer-events:none}
+.preview-bar{max-width:1000px;margin:0 auto 11px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:11px;color:#aaa;font-weight:700;letter-spacing:.045em}.preview-bar strong{display:flex;align-items:center;gap:8px}.preview-bar strong:before{content:"";height:7px;width:7px;border-radius:50%;background:var(--green)}.device-switch{background:#292929;border-radius:7px;padding:3px;display:flex;gap:3px}.device-switch button{border:0;background:transparent;color:#aaa;border-radius:5px;padding:6px 12px;font-size:11px;font-weight:650}.device-switch button.active{background:#555;color:white}
+.device{height:790px;max-width:400px;margin:auto;border:1px solid #424242;background:var(--bg);border-radius:22px;overflow:hidden;transition:max-width .2s,border-radius .2s;position:relative}.device.desktop{max-width:1000px;border-radius:10px}.app{height:100%;display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
+.header{height:64px;flex:0 0 64px;display:flex;align-items:center;gap:9px;background:var(--head);padding:0 10px;border-bottom:1px solid #303030}.mark{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;background:#363636;border-radius:9px;color:#eee;font-size:17px;font-weight:850;letter-spacing:-2px}.brand{background:none;border:0;padding:0;text-align:left;display:grid;gap:4px;min-width:0}.brand strong{font-weight:780;font-size:14px;line-height:1;letter-spacing:-.04em}.brand small{font-size:10px;color:#aaa;display:flex;gap:6px;align-items:center;white-space:nowrap}.led{width:6px;height:6px;flex:none;border-radius:50%;background:var(--green)}.led.bad{background:#e48181}.led.warn{background:var(--warn)}.header-actions{margin-left:auto;display:flex;align-items:center;gap:3px}.icon-btn{height:37px;width:35px;border:0;background:none;border-radius:7px;color:#ccc;display:grid;place-items:center}.icon-btn:hover,.icon-btn.active{color:var(--green);background:#29382f}.icon-btn svg{width:21px;height:21px}
+.mode-tabs{flex:0 0 46px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));background:#151515;border-bottom:1px solid #303030;padding:0 13px}.mode-tabs button{border:0;background:none;color:#9f9f9f;font-size:13px;font-weight:700;border-bottom:2px solid transparent;letter-spacing:.01em}.mode-tabs button.active{color:white;border-bottom-color:var(--green)}
+.camera-main{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}.stage{position:relative;flex:1;min-height:0;display:grid;place-items:center;padding:10px;background:#0a0c0b;overflow:hidden}.finder{position:relative;aspect-ratio:4/3;width:min(100%,580px);max-height:100%;overflow:hidden;background:#172423;isolation:isolate;box-shadow:0 0 0 1px #ffffff12}.finder video,.finder .demo-scene{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;z-index:1}.finder .demo-scene{transform:scale(var(--zoom,1));transform-origin:center;transition:transform .16s}.finder .demo-scene.mirrored{transform:scaleX(-1) scale(var(--zoom,1))}.finder video.mirrored{transform:scaleX(-1)}.grid-overlay{pointer-events:none;position:absolute;inset:0;z-index:4;background-image:linear-gradient(to right,transparent 33.2%,#ffffff6b 33.33%,transparent 33.5%,transparent 66.5%,#ffffff6b 66.67%,transparent 66.8%),linear-gradient(to bottom,transparent 33.2%,#ffffff6b 33.33%,transparent 33.5%,transparent 66.5%,#ffffff6b 66.67%,transparent 66.8%)}.finder-corner{pointer-events:none;position:absolute;width:18px;height:18px;border:solid #ffffff7f;z-index:4}.tl{left:12px;top:12px;border-width:1.5px 0 0 1.5px}.tr{right:12px;top:12px;border-width:1.5px 1.5px 0 0}.bl{left:12px;bottom:12px;border-width:0 0 1.5px 1.5px}.br{right:12px;bottom:12px;border-width:0 1.5px 1.5px 0}.record-badge{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:#131313cc;color:white;z-index:5;border-radius:20px;display:flex;align-items:center;gap:7px;padding:7px 11px;font-variant-numeric:tabular-nums;font-size:12px;font-weight:700}.rec-dot{background:#ef4e57;width:8px;height:8px;border-radius:50%;animation:pulse 1.5s infinite}.zoom-indicator{position:absolute;z-index:5;bottom:9px;left:50%;transform:translateX(-50%);color:#eee;font-size:11px;background:#111b;padding:5px 10px;border-radius:30px}.live-activate{position:absolute;z-index:5;bottom:11px;left:11px;display:grid;place-items:center;width:37px;height:34px;background:#1b2420c9;border:1px solid #ffffff5e;border-radius:6px;color:#fff}.live-activate svg{height:18px;width:18px}.snap-flash{position:absolute;inset:0;z-index:8;background:white;opacity:0;pointer-events:none}.snap-flash.show{animation:flash .25s ease-out}.toast{position:absolute;bottom:19px;z-index:10;left:50%;transform:translateX(-50%);max-width:94%;text-align:center;background:#17211deb;padding:9px 12px;color:#eff9f1;font-size:11px;border-radius:6px;box-shadow:0 2px 12px #0009;pointer-events:none}.toast.error{background:#422b2d;color:#ffd7d7}
+.bottom-controls{background:#171717;border-top:1px solid #2a2a2a;flex:0 0 124px;padding:9px 13px 7px}.gps-line{height:24px;display:flex;justify-content:center;align-items:center}.gps-pill{border:0;background:none;display:flex;gap:6px;align-items:center;color:#a6aaa6;font-size:10px;padding:3px 8px;white-space:nowrap}.gps-pill .gps-dot{height:6px;width:6px;border-radius:50%;background:#b18a57}.gps-pill.ready{color:#c1f6cf}.gps-pill.ready .gps-dot{background:var(--green)}.capture-row{display:grid;grid-template-columns:minmax(0,1fr) 106px minmax(0,1fr);align-items:center;gap:4px;height:84px}.context-action{border:0;background:transparent;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:7px;font-size:11px;color:#ccc;min-width:0;padding:6px 2px}.context-action svg{width:23px;height:23px;color:#aeb1af}.context-action strong{font-weight:650;font-size:11px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%}.context-action:active{color:var(--green)}.shutter-wrap{display:grid;place-items:center}.shutter{height:72px;width:72px;border-radius:50%;border:4px solid white;padding:5px;background:#101010;display:grid;place-items:center;transition:transform .12s}.shutter span{display:block;width:100%;height:100%;border-radius:50%;background:white;transition:all .18s}.shutter.video span{width:53px;height:53px;background:#ee454c;border-radius:50%}.shutter.recording span{width:26px;height:26px;background:#ee454c;border-radius:5px}.shutter:active{transform:scale(.94)}
+.dock{flex:0 0 82px;height:82px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#181818;border-top:1px solid #303030;padding:9px 2px 14px}.dock button{border:0;background:none;color:#999;font-size:10px;min-width:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:7px}.dock button.active{color:var(--green)}.dock svg{width:23px;height:23px}
+.sheet-layer{position:absolute;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center;background:#000b;animation:fadeIn .18s ease}.sheet{width:100%;max-height:87%;padding:10px 16px max(24px,env(safe-area-inset-bottom));overflow:auto;overscroll-behavior:contain;background:#292929;border-radius:14px 14px 0 0;box-shadow:0 -12px 40px #0009;animation:sheetIn .24s cubic-bezier(.2,.75,.2,1)}.device.desktop .sheet{max-width:520px}.sheet-handle{width:36px;height:4px;background:#666;border-radius:5px;margin:0 auto 13px}.sheet-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px}.sheet-heading strong{font-size:16px}.sheet-heading button{border:0;background:none;padding:6px}.sheet-body{display:grid;gap:10px}.sheet-section{display:grid;gap:12px;padding:13px;background:#353535;border-radius:9px}.section-title{font-size:12px;font-weight:780;color:#f4f4f4}.sheet-note{color:#acacac;font-size:11px;line-height:1.5;margin:2px 0}.sheet-field{display:grid;gap:7px;color:#f0f0f0;font-size:12px;font-weight:630;min-width:0}.sheet-field select,.sheet-field input,.sheet-field textarea{width:100%;min-width:0;border:1px solid #555;border-radius:6px;background:#292929;color:#f3f3f3;padding:10px;font-size:13px;font-weight:400}.sheet-field textarea{resize:vertical;min-height:86px;line-height:1.45}.sheet-btn{display:flex;justify-content:center;align-items:center;gap:8px;background:#424242;border:1px solid #555;border-radius:7px;min-height:42px;padding:10px;font-size:12px;font-weight:680}.sheet-btn.primary{background:var(--green);color:#0f2416;border-color:var(--green)}.sheet-btn svg{width:18px;height:18px}.sheet-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.sheet-row{display:flex;justify-content:space-between;align-items:center;gap:10px;text-align:left;min-height:51px;padding:10px;border:1px solid #4a4a4a;border-radius:6px;background:#303030}.sheet-row.selected{border-color:#488b57;background:#2c4933}.sheet-row span:first-child{min-width:0;display:grid;gap:4px}.sheet-row strong{font-weight:650;font-size:12px}.sheet-row small{font-size:10px;color:#aaa}.sheet-row svg{width:17px;height:17px;color:#adf1bf}.setting-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#ececec;font-size:12px}.setting-toggle span{display:grid;gap:4px}.setting-toggle small{color:#aaa;font-size:11px;line-height:1.3}.setting-toggle input{width:18px;height:18px;accent-color:var(--green);flex:0 0 18px}.sheet-slider{display:grid;gap:9px;font-size:12px;color:#eee}.slider-head{display:flex;justify-content:space-between;gap:9px}.sheet-slider input{width:100%;accent-color:var(--green)}.tag{font-size:10px;color:#badbc3;background:#30503a;border-radius:5px;padding:3px 6px}.setting-disabled{opacity:.5}.info-stat{display:flex;justify-content:space-between;gap:10px;font-size:12px}.info-stat span{color:#aaa}.info-stat b{text-align:right;font-weight:650}.instruction{color:#ddd;font-size:12px;line-height:1.5}.select-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.select-grid button{padding:10px 4px;border-radius:6px;background:#303030;border:1px solid #4a4a4a;color:#ccc;font-size:11px}.select-grid button.selected{background:#2a4533;border-color:#4d9260;color:white}.photo-preview-large{width:100%;max-height:38vh;object-fit:contain;background:#111;border-radius:8px}.photo-preview-large video{width:100%;max-height:38vh;display:block}.empty-msg{text-align:center;color:#aaa;padding:12px}.sheet-pill-row{display:flex;gap:6px;flex-wrap:wrap}.preset-pill{border:1px solid #555;background:#383838;padding:8px 10px;border-radius:6px;font-size:11px}.preset-pill.selected{border-color:#57a269;background:#31533a;color:#e3f8e7}
+.privacy-cover{position:absolute;z-index:100;inset:0;background:#090a09;color:#f5f5f5;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:28px;gap:0}.eye-icon{display:grid;place-items:center;width:72px;height:72px;color:#b8b8b8;margin-bottom:20px}.eye-icon svg{width:57px;height:57px;stroke-width:1.15}.privacy-cover h2{font-size:24px;letter-spacing:-.045em;margin:0 0 13px}.privacy-cover p{margin:0;color:#aaa;max-width:310px;font-size:13px;line-height:1.65}.blind-controls{margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:15px}.blind-shutter{width:76px;height:76px;display:grid;place-items:center;border:4px solid #f6f6f6;background:#0e0e0e;border-radius:50%;padding:5px}.blind-shutter span{height:100%;width:100%;background:white;border-radius:50%}.blind-shutter.video span{background:#f34d58}.blind-shutter.recording span{width:28px;height:28px;border-radius:5px;background:#f34d58}.blind-note{color:#a5a5a5!important;font-size:11px!important}.blind-timer{color:#ff7a81;font-weight:700;font-size:13px;margin-top:16px;font-variant-numeric:tabular-nums}.blind-back{margin-top:30px;border:1px solid #595959;background:#272727;border-radius:8px;padding:12px 22px;font-size:12px;min-width:185px}
+@keyframes sheetIn{from{transform:translateY(100%)}to{transform:translateY(0)}}@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes flash{0%{opacity:.7}100%{opacity:0}}@keyframes pulse{50%{opacity:.45}}@media(max-width:440px){body{padding:7px}.device{height:min(790px,88dvh);min-height:595px}.stage{padding:7px}.header{padding-inline:9px}.bottom-controls{flex-basis:120px}.capture-row{height:80px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+/* Audio recorder keeps the camera preview fully inactive. */
+.audio-stage{min-height:100%;width:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;text-align:center;color:#eaeaea}.audio-stage .audio-emblem{width:106px;height:106px;border-radius:50%;border:1px solid #415a49;background:radial-gradient(circle,#22372a,#15201a);display:grid;place-items:center;color:#76e995}.audio-stage .audio-emblem svg{width:43px;height:43px}.audio-stage strong{font-size:19px;letter-spacing:-.02em}.audio-stage small{color:#8f9f96;font-size:12px}.audio-bars{display:flex;gap:5px;align-items:center;height:43px}.audio-bars i{display:block;width:5px;height:var(--h);border-radius:12px;background:#4c9865;opacity:.78;transform-origin:center}.audio-bars i:nth-child(1){--h:12px}.audio-bars i:nth-child(2){--h:27px}.audio-bars i:nth-child(3){--h:17px}.audio-bars i:nth-child(4){--h:39px}.audio-bars i:nth-child(5){--h:26px}.audio-bars i:nth-child(6){--h:36px}.audio-bars i:nth-child(7){--h:20px}.audio-bars i:nth-child(8){--h:30px}.audio-bars i:nth-child(9){--h:12px}.audio-stage.recording .audio-bars i{animation:audioBounce .6s ease-in-out infinite alternate;animation-delay:calc(var(--i,1)*70ms);background:#1ed760}.audio-bars i:nth-child(2n){--i:2}.audio-bars i:nth-child(3n){--i:3}.audio-stage.recording .audio-emblem{box-shadow:0 0 0 8px #1ed76012}.audio-elapsed{font-size:22px;font-weight:750;letter-spacing:.06em;font-variant-numeric:tabular-nums;color:#83ed9a}.audio-playback{min-height:135px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;background:#202a23;border-radius:9px;padding:16px}.audio-playback>svg{width:29px;height:29px;color:#78df91}.audio-playback audio{width:100%;height:43px;max-width:430px}.shutter.audio span{background:#ee454c}.blind-shutter.audio span{background:#ee454c}@keyframes audioBounce{from{transform:scaleY(.5)}to{transform:scaleY(1.2)}}@media(prefers-reduced-motion:reduce){.audio-stage.recording .audio-bars i{animation:none}}
+</style></head>
+<body>
+<svg aria-hidden="true" style="width:0;height:0;position:absolute;overflow:hidden" xmlns="http://www.w3.org/2000/svg">
+<symbol id="i-grid" viewbox="0 0 24 24"><rect height="18" rx="2" width="18" x="3" y="3"></rect><path d="M9 3v18M15 3v18M3 9h18M3 15h18"></path></symbol>
+<symbol id="i-flip" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-1v2a3 3 0 0 1-3 3H3"/></symbol>
+<symbol id="i-settings" viewbox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15.1l1.2 1.4-2.1 2.1-1.5-1a8 8 0 0 1-2 .9l-.4 1.9h-3l-.5-1.9a8 8 0 0 1-2-.9l-1.6 1-2-2 1.1-1.5a8 8 0 0 1-.8-2L4 12.6v-3l1.9-.5a8 8 0 0 1 .8-2L5.6 5.6l2-2 1.6 1.1a8 8 0 0 1 2-.8l.5-1.9h3l.4 1.9a8 8 0 0 1 2 .8l1.5-1.1 2.1 2-1.2 1.5a8 8 0 0 1 .8 2l1.9.5v3l-1.9.5a8 8 0 0 1-.9 2z"></path></symbol>
+<symbol id="i-eye-off" viewbox="0 0 24 24"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7"></path><path d="M7.3 5.4A11.9 11.9 0 0 1 12 4.4c4.5 0 8 3 10 7.6a16.8 16.8 0 0 1-3 4.3M16.5 18a12 12 0 0 1-4.5 1.6C7.5 19.6 4 16.6 2 12a15.9 15.9 0 0 1 3-4.2"></path></symbol>
+<symbol id="i-camera" viewbox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v12H3z"></path><circle cx="12" cy="14" r="4"></circle></symbol>
+<symbol id="i-folder" viewbox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 3h8v13H3z"></path></symbol>
+<symbol id="i-list" viewbox="0 0 24 24"><rect height="18" rx="2" width="16" x="4" y="3"></rect><path d="M8 9h8M8 14h8"></path></symbol>
+<symbol id="i-users" viewbox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3 21v-2a6 6 0 0 1 12 0v2M17 6a3 3 0 0 1 0 6m1 5a5 5 0 0 1 3 4"></path></symbol>
+<symbol id="i-user" viewbox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21v-2a8 8 0 0 1 16 0v2"></path></symbol>
+<symbol id="i-filter" viewbox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"></path></symbol>
+<symbol id="i-map" viewbox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"></path></symbol>
+<symbol id="i-check" viewbox="0 0 24 24"><path d="m4 12 5 5L20 6"></path></symbol>
+<symbol id="i-x" viewbox="0 0 24 24"><path d="M5 5l14 14M19 5 5 19"></path></symbol>
+<symbol id="i-chevron" viewbox="0 0 24 24"><path d="m9 5 7 7-7 7"></path></symbol>
+<symbol id="i-info" viewbox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v6M12 7h.01"></path></symbol>
+<symbol id="i-plus" viewbox="0 0 24 24"><path d="M12 4v16M4 12h16"></path></symbol>
+<symbol id="i-zoom" viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="m15 15 6 6"></path></symbol>
+<symbol id="i-share" viewbox="0 0 24 24"><path d="M12 16V3M7 8l5-5 5 5M4 14v7h16v-7"></path></symbol>
+<symbol id="i-wifi-off" viewbox="0 0 24 24"><path d="M3 3l18 18M2 8a17 17 0 0 1 7-3M14 5a17 17 0 0 1 8 3M5 12a11 11 0 0 1 8-2M17 12a11 11 0 0 1 2 1M8 16a5 5 0 0 1 4-1M12 21h.01"></path></symbol>
+
+<symbol id="i-flash" viewBox="0 0 24 24"><path d="M13 2 4 13h7l-1 9 10-12h-7z"/></symbol>
+<symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-3v10l-4-3"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24"><path d="M4 3h14l3 3v15H3V3zM7 3v7h10V3M7 21v-8h10v8"/></symbol>
+<symbol id="i-volume" viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9zM16 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/></symbol>
+<symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></symbol>
+</svg>
+<div class="preview-bar"><strong>FIELDWORK / CAMERA 1.2</strong><div class="device-switch"><button type="button" data-device="phone" class="active">Телефон</button><button type="button" data-device="desktop">Desktop</button></div></div>
+<div class="device phone" id="device"><div class="app" id="app">
+<header class="header"><span class="mark">pb</span><button type="button" class="brand" data-open="status" aria-label="Системный статус"><strong>PhotoBunker</strong><small><span class="led" id="brand-led"></span><span id="brand-status">В работе</span></small></button>
+<div class="header-actions">
+<button type="button" class="icon-btn" data-action="flip" aria-label="Перевернуть камеру" title="Перевернуть камеру"><svg class="ico"><use href="#i-flip"/></svg></button>
+<button type="button" class="icon-btn" data-action="torch" id="torch-button" aria-label="Фонарик" aria-pressed="false" title="Фонарик"><svg class="ico"><use href="#i-flash"/></svg></button>
+<button type="button" class="icon-btn" data-action="privacy" aria-label="Слепой режим" title="Слепой режим"><svg class="ico"><use href="#i-eye-off"/></svg></button>
+</div></header>
+<nav class="mode-tabs" aria-label="Режим съёмки"><button type="button" class="active" data-media="photo" aria-pressed="true">Фото</button><button type="button" data-media="video" aria-pressed="false">Видео</button><button type="button" data-media="audio" aria-pressed="false">Аудио</button></nav>
+<main class="camera-main">
+<section class="stage" aria-label="Предпросмотр камеры"><div class="finder" id="finder">
+<svg aria-label="Демонстрационное изображение фасада здания" class="demo-scene" id="demo-scene" preserveaspectratio="xMidYMid slice" role="img" viewbox="0 0 900 675" xmlns="http://www.w3.org/2000/svg">
+<defs><lineargradient id="sky" x2="0" y2="1"><stop stop-color="#7b999e"></stop><stop offset="1" stop-color="#b8c4bd"></stop></lineargradient><lineargradient id="wall" x2="1" y2=".2"><stop stop-color="#b5a68d"></stop><stop offset="1" stop-color="#d2c2a8"></stop></lineargradient><lineargradient id="street" x2="0" y2="1"><stop stop-color="#77857d"></stop><stop offset="1" stop-color="#5f716a"></stop></lineargradient></defs>
+<rect fill="url(#sky)" height="675" width="900"></rect><path d="M0 486 900 460V675H0" fill="#8f998e"></path><path d="M76 675V139L718 119v556" fill="url(#wall)"></path>
+<path d="m84 175 630-19" stroke="#e6d5b9" stroke-width="24"></path><path d="m85 318 627-14M85 451l627-14" stroke="#a79982" stroke-width="15"></path>
+<g fill="#405a59"><rect height="109" width="97" x="143" y="198"></rect><rect height="109" width="97" x="292" y="195"></rect><rect height="109" width="97" x="442" y="190"></rect><rect height="109" width="97" x="591" y="187"></rect><rect height="108" width="97" x="143" y="331"></rect><rect height="108" width="97" x="292" y="327"></rect><rect height="108" width="97" x="442" y="324"></rect><rect height="108" width="97" x="591" y="320"></rect></g>
+<g fill="#66736c" opacity=".45"><path d="M143 198h97v9h-97zM292 195h97v9h-97zM442 190h97v9h-97zM591 187h97v9h-97z"></path></g>
+<path d="M294 675V489q0-37 74-37t74 37v186" fill="#50625d"></path><path d="M0 570 900 524v151H0" fill="url(#street)"></path><path d="m0 594 900-45" stroke="#c6c7b3" stroke-width="7"></path><path d="M763 625V349" stroke="#415748" stroke-width="12"></path><circle cx="766" cy="345" fill="#5e7d66" r="84"></circle><circle cx="817" cy="425" fill="#587862" r="75"></circle><circle cx="736" cy="418" fill="#6f8b71" r="54"></circle><path d="M0 631 900 592" stroke="#b7b8a9" stroke-opacity=".38" stroke-width="3"></path>
+</svg>
+<video id="live-video" autoplay muted playsinline hidden aria-label="Живой предпросмотр камеры"></video>
+<div class="grid-overlay" id="grid" hidden aria-hidden="true"></div>
+<i class="finder-corner tl"></i><i class="finder-corner tr"></i><i class="finder-corner bl"></i><i class="finder-corner br"></i>
+<div class="record-badge" id="record-badge" hidden><span class="rec-dot"></span><span id="record-time">00:00</span></div>
+<div class="zoom-indicator" id="zoom-indicator" hidden>1.0×</div>
+
+<div class="snap-flash" id="snap-flash"></div>
+</div>
+<div class="audio-stage" id="audio-stage" hidden aria-label="Диктофон — запись без видео">
+  <span class="audio-emblem"><svg class="ico"><use href="#i-mic"/></svg></span>
+  <div class="audio-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <strong>Диктофон</strong><small>Только аудио, без видеозаписи</small>
+  <span class="audio-elapsed" id="audio-elapsed" hidden>00:00</span>
+</div><p class="toast" role="status" id="capture-feedback" hidden></p></section>
+<section class="bottom-controls" aria-label="Управление съёмкой">
+<div class="gps-line"><button type="button" class="gps-pill" id="gps-status" data-open="location"><span class="gps-dot"></span><span id="gps-text">GPS: ожидание</span></button></div>
+<div class="capture-row">
+<button type="button" class="context-action" data-open="assignment" aria-label="Задание и данные снимка"><svg class="ico"><use href="#i-list"/></svg><strong>Задание</strong></button>
+<div class="shutter-wrap"><button type="button" class="shutter" id="shutter" data-action="capture" aria-label="Снять"><span></span></button></div>
+<button type="button" class="context-action" data-open="settings" aria-label="Настройки камеры и пресеты"><svg class="ico"><use href="#i-settings"/></svg><strong>Настройки</strong></button>
+</div></section>
+</main>
+<nav class="dock" aria-label="Навигация PhotoBunker">
+<button type="button" data-nav="Задания"><svg class="ico"><use href="#i-list"/></svg>Задания</button>
+<button type="button" data-nav="Browser"><svg class="ico"><use href="#i-folder"/></svg>Browser</button>
+<button type="button" class="active" aria-current="page" data-nav="Камера"><svg class="ico"><use href="#i-camera"/></svg>Камера</button>
+<button type="button" data-nav="Контакты"><svg class="ico"><use href="#i-users"/></svg>Контакты</button>
+<button type="button" data-nav="Профиль"><svg class="ico"><use href="#i-user"/></svg>Профиль</button>
+</nav>
+<div class="sheet-layer" id="sheet-layer" hidden><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1"><div class="sheet-handle"></div><div class="sheet-heading"><strong id="sheet-title"></strong><button type="button" data-action="close-sheet" aria-label="Закрыть"><svg class="ico"><use href="#i-x"/></svg></button></div><div class="sheet-body" id="sheet-body"></div></section></div>
+<div class="privacy-cover" id="privacy-cover" hidden role="region" aria-label="Слепой режим"><span class="eye-icon"><svg class="ico"><use href="#i-eye-off"/></svg></span><h2>Слепой режим</h2><p>Что-бы другие не видели, что вы делаете 👻</p>
+<div class="blind-timer" id="blind-timer" hidden><span class="rec-dot" style="display:inline-block;vertical-align:middle;margin-right:8px"></span><span id="blind-record-time">00:00</span></div>
+<div class="blind-controls"><button type="button" class="blind-shutter" id="blind-shutter" data-action="capture" aria-label="Снять в слепом режиме"><span></span></button><p class="blind-note" id="blind-note">Если клавиши громкости недоступны — нажмите кнопку</p></div>
+<button type="button" class="blind-back" data-action="resume">Вернуться назад</button></div>
+</div></div>
+<script>
+(() => {
+  'use strict';
+  const root = document.getElementById('app');
+  if (!root || root.dataset.initialized) return;
+  root.dataset.initialized = '1';
+  const $ = (selector) => root.querySelector(selector);
+  const els = {
+    device: document.getElementById('device'),
+    scene: $('#demo-scene'),
+    video: $('#live-video'),
+    finder: $('#finder'),
+    layer: $('#sheet-layer'),
+    sheet: $('#sheet-body'),
+    cover: $('#privacy-cover')
+  };
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const ico = (name) => `<svg class="ico" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+  const baseSettings = () => ({ratio:'4:3',resolution:'Высокое',videoQuality:'720p',audioQuality:'128 кбит/с',maxVideoSec:60,maxAudioSec:600,grid:false,zoom:1,torch:false,gpsTrack:true,gpsShow:true,mic:false});
+  const presets = [
+    {id:'standard',name:'Стандарт',...baseSettings()},
+    {id:'detail',name:'Детали',...baseSettings(),ratio:'1:1',resolution:'Максимальное',grid:true},
+    {id:'report',name:'Репортаж',...baseSettings(),ratio:'16:9',resolution:'Среднее',gpsShow:false}
+  ];
+  const assignments = [
+    {id:'site',name:'Фасады — Site A',instructions:'Снять фасад здания с разных ракурсов, общий вид и детали входной группы. Координаты обязательны, если устройство может их определить.',categories:['Фасад','Детали','Документация','Другое'],shots:['Общий план','Входная группа','Фасад сбоку'],gpsRequired:true},
+    {id:'interior',name:'Интерьер — зал 02',instructions:'Общий план интерьера, освещение и архитектурные детали. GPS необязателен.',categories:['Интерьер','Детали','Освещение'],shots:['Общий план','Детали'],gpsRequired:false},
+    {id:'none',name:'Без задания (личное фото)',instructions:'Личная съёмка без требований задания.',categories:['Личное','Документация','Другое'],shots:[],gpsRequired:false}
+  ];
+  const state = {
+    media:'photo', mode:'demo', facing:'environment', hidden:false,
+    assignment:'site',category:'Фасад',shot:'',description:'',preset:'standard',settings:baseSettings(),
+    busy:false, recording:false, recordStart:0, micGranted:false, resumeVideoAfterAudio:false, gps:null, gpsStatus:'pending',
+    sheet:'', captures:[], log:[{kind:'info',message:'Демонстрационный интерфейс. Снимки и видео остаются в памяти страницы.'}]
+  };
+  let stream = null, micStream = null, recordStream = null, recorder = null;
+  let recorderTick = null, demoTick = null, geoWatch = null, feedbackTimer = null;
+  let openSheetFocus = null;
+  const assignment = () => assignments.find(a => a.id === state.assignment) || assignments[0];
+  const currentPreset = () => presets.find(p => p.id === state.preset) || presets[0];
+  const canTrack = () => state.settings.gpsTrack || assignment().gpsRequired;
+  const isRecording = () => state.recording;
+
+  function log(message,kind='info') {
+    state.log.unshift({kind,message,time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})});
+    state.log = state.log.slice(0,20);
+    $('#brand-status').textContent = kind === 'error' ? 'Ошибка' : kind === 'warning' ? 'Предупреждение' : 'В работе';
+    $('#brand-led').className = 'led' + (kind === 'error' ? ' bad' : kind === 'warning' ? ' warn' : '');
+  }
+  function notify(message,kind='info') {
+    log(message,kind);
+    const toast = $('#capture-feedback');
+    toast.textContent = message;
+    toast.classList.toggle('error',kind==='error');
+    toast.hidden = state.hidden;
+    clearTimeout(feedbackTimer);
+    feedbackTimer = setTimeout(() => { toast.hidden = true; },3300);
+  }
+  function timeText(ms) {
+    const n = Math.floor(Math.max(0,ms)/1000);
+    return String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
+  }
+  function updateTimer() {
+    const t = timeText(Date.now()-state.recordStart);
+    $('#record-time').textContent = t;
+    $('#blind-record-time').textContent = t;
+    $('#audio-elapsed').textContent = t;
+    if(state.recording && !state.busy && (Date.now()-state.recordStart >= (state.media==='audio'?state.settings.maxAudioSec:state.settings.maxVideoSec)*1000)) {
+      stopRecording();
+      log('Достигнута максимальная длительность; запись остановлена');
+    }
+  }
+  function refresh() {
+    const p = state.settings;
+    [...root.querySelectorAll('[data-media]')].forEach(b => {
+      const active=b.dataset.media===state.media;
+      b.classList.toggle('active',active);
+      b.setAttribute('aria-pressed',String(active));
+      b.disabled = state.recording;
+    });
+    $('#shutter').classList.toggle('video',state.media!=='photo');
+    $('#shutter').classList.toggle('audio',state.media==='audio');
+    $('#shutter').classList.toggle('recording',state.recording);
+    $('#shutter').setAttribute('aria-label',state.media==='photo'?'Снять фото':state.recording?'Остановить запись':state.media==='audio'?'Начать запись аудио':'Начать запись видео');
+    $('#blind-shutter').classList.toggle('video',state.media!=='photo');
+    $('#blind-shutter').classList.toggle('audio',state.media==='audio');
+    $('#blind-shutter').classList.toggle('recording',state.recording);
+    $('#blind-shutter').setAttribute('aria-label',state.media==='photo'?'Снять фото в слепом режиме':state.recording?'Остановить запись':state.media==='audio'?'Начать запись аудио':'Начать запись видео');
+    $('#shutter').disabled=state.busy;
+    $('#blind-shutter').disabled=state.busy;
+    $('#record-badge').hidden=!state.recording || state.media==='audio';
+    $('#audio-stage').hidden=state.media!=='audio';
+    els.finder.hidden=state.media==='audio';
+    $('#audio-elapsed').hidden=!state.recording || state.media!=='audio';
+    $('#audio-stage').classList.toggle('recording',state.recording);
+    $('#blind-timer').hidden=!state.recording;
+    if(state.recording) updateTimer();
+    $('#blind-note').textContent=state.media==='photo'?'Если клавиши громкости недоступны — нажмите кнопку':state.media==='audio'?'Нажмите для начала или завершения аудиозаписи':'Нажмите для начала или завершения видеозаписи';
+    const ratio = p.ratio.split(':').map(Number);
+    els.finder.style.aspectRatio=ratio[0]/ratio[1];
+    els.scene.style.setProperty('--zoom',String(p.zoom));
+    els.scene.classList.toggle('mirrored',state.facing==='user');
+    els.video.classList.toggle('mirrored',state.facing==='user');
+    $('#grid').hidden=!p.grid;
+    $('#zoom-indicator').hidden=p.zoom===1;
+    $('#zoom-indicator').textContent=p.zoom.toFixed(1)+'×';
+    
+    els.video.hidden=state.mode!=='live';
+    els.scene.hidden=state.mode==='live';
+    const torch=$('#torch-button');
+    torch.classList.toggle('active',p.torch);
+    torch.setAttribute('aria-pressed',String(p.torch));
+    torch.disabled=state.recording || state.media==='audio';
+    $('[data-action="flip"]').disabled=state.recording || state.media==='audio';
+    const gps=$('#gps-status');
+    gps.hidden=!p.gpsShow;
+    gps.classList.toggle('ready',state.gpsStatus==='ready'&&!!state.gps);
+    $('#gps-text').textContent=!canTrack()?'GPS выключен':state.gpsStatus==='ready'&&state.gps?'GPS ±'+Math.round(state.gps.accuracy)+' м':state.gpsStatus==='unavailable'?'GPS недоступен':state.gpsStatus==='requesting'?'GPS: поиск…':'GPS: ожидание';
+    els.cover.hidden=!state.hidden;
+  }
+  function row(title,sub,action,selected) {
+    return `<button class="sheet-row${selected?' selected':''}" type="button" data-action="${esc(action)}"><span><strong>${esc(title)}</strong>${sub?`<small>${esc(sub)}</small>`:''}</span>${selected?ico('check'):ico('chevron')}</button>`;
+  }
+  function optionList(values,selected) {
+    return values.map(v=>`<option value="${esc(v)}"${v===selected?' selected':''}>${esc(v)}</option>`).join('');
+  }
+  function durationLabel(seconds) {return seconds < 60 ? seconds+' сек' : seconds%60===0 ? (seconds/60)+' мин' : Math.floor(seconds/60)+' мин '+(seconds%60)+' сек';}
+   function toggle(label,description,id,checked,disabled=false) {
+    return `<label class="setting-toggle${disabled?' setting-disabled':''}"><span><strong>${esc(label)}</strong>${description?`<small>${esc(description)}</small>`:''}</span><input id="${id}" type="checkbox" ${checked?'checked ':''}${disabled?'disabled':''}></label>`;
+  }
+  function field(title,id,body) {return `<label class="sheet-field">${esc(title)}${body}</label>`;}
+  function openSheet(name,focusGps=false) {
+    if(state.hidden)return;
+    if(state.recording && name!=='status') { notify('Остановите запись перед изменением настроек','warning'); return; }
+    state.sheet=name;
+    const headings={assignment:'Задание и данные съёмки',settings:'Настройки камеры',status:'Состояние PhotoBunker',last:'Последняя съёмка'};
+    $('#sheet-title').textContent=headings[name]||'Информация';
+    renderSheet();
+    els.layer.hidden=false;
+    els.layer.querySelector('.sheet').focus();
+    if(focusGps)requestAnimationFrame(()=>$('#gps-settings')?.scrollIntoView({block:'nearest',behavior:'smooth'}));
+  }
+  function closeSheet() {
+    els.layer.hidden=true;
+    state.sheet='';
+  }
+  function renderSheet() {
+    let h='';
+    const a=assignment(),p=state.settings;
+    if(state.sheet==='assignment') {
+      h=`<div class="sheet-section"><span class="section-title">Задание</span>
+      ${field('Выбрать задание','task-select',`<select id="task-select">${assignments.map(x=>`<option value="${x.id}"${x.id===state.assignment?' selected':''}>${esc(x.name)}</option>`).join('')}</select>`)}
+      <div class="instruction" id="task-instructions">${esc(a.instructions)}</div>
+      ${a.gpsRequired?'<span class="tag">GPS обязателен по правилам задания</span>':''}</div>
+      <div class="sheet-section"><span class="section-title">Данные следующих снимков</span>
+      ${field('Категория','category-select',`<select id="category-select"><option value="">Без категории</option>${optionList(a.categories,state.category)}</select>`)}
+      ${a.shots.length?field('Ракурс','shot-select',`<select id="shot-select"><option value="">Свободная съёмка</option>${optionList(a.shots,state.shot)}</select>`):''}
+      ${field('Описание съёмки','description',`<textarea id="description" rows="3" maxlength="2000" placeholder="Информация для будущих кадров">${esc(state.description)}</textarea>`)}
+      <p class="sheet-note">Категория, ракурс и описание применяются к следующим материалам в этой демонстрации.</p></div>
+      <button type="button" class="sheet-btn primary" data-action="save-assignment">Готово</button>`;
+    }
+    if(state.sheet==='settings') {
+      h=`<div class="sheet-section"><span class="section-title">Пресеты камеры</span>
+      <div class="sheet-pill-row">${presets.map(x=>`<button class="preset-pill${state.preset===x.id?' selected':''}" type="button" data-action="preset:${esc(x.id)}">${esc(x.name)}</button>`).join('')}</div>
+      ${field('Название пресета','setting-name',`<input id="setting-name" maxlength="55" value="${esc(currentPreset().name)}" placeholder="Название пресета">`)}
+      <div class="sheet-actions"><button type="button" class="sheet-btn primary" data-action="save-preset">${ico('save')} Сохранить пресет</button><button type="button" class="sheet-btn" data-action="add-preset">${ico('plus')} Добавить пресет</button></div>
+      <p class="sheet-note" id="preset-notice">Параметры ниже можно сохранять в выбранный пресет. В макете они хранятся только до обновления страницы.</p></div>
+      <div class="sheet-section"><span class="section-title">Фото</span>
+      ${field('Пропорции','setting-ratio',`<select id="setting-ratio">${optionList(['1:1','4:3','3:2','16:9'],p.ratio)}</select>`)}
+      ${field('Качество фото','setting-resolution',`<select id="setting-resolution">${optionList(['Максимальное','Высокое','Среднее','Низкое'],p.resolution)}</select>`)}
+      <label class="sheet-slider"><span class="slider-head">Масштаб <strong id="zoom-value">${p.zoom.toFixed(1)}×</strong></span><input type="range" id="setting-zoom" min="1" max="3" step="0.1" value="${p.zoom}"></label>
+      ${toggle('Сетка кадрирования 3х3','Не показывается на готовых кадрах','setting-grid',p.grid)}
+      ${toggle('Фонарик','Если поддерживается устройством','setting-torch',p.torch)}
+      </div>
+      <div class="sheet-section"><span class="section-title">Видео</span>
+      ${field('Качество видео','setting-video-quality',`<select id="setting-video-quality">${optionList(['480p','720p','1080p'],p.videoQuality)}</select>`)}
+      <label class="sheet-slider"><span class="slider-head">Максимальная длительность видео <strong id="video-duration-value">${durationLabel(p.maxVideoSec)}</strong></span><input type="range" id="setting-max-video" min="5" max="300" step="5" value="${p.maxVideoSec}"></label>
+      ${toggle('Записывать звук в видео','Используется разрешённый микрофон','setting-mic',p.mic)}
+      </div>
+      <div class="sheet-section"><span class="section-title">Аудио</span>
+      ${field('Качество аудио','setting-audio-quality',`<select id="setting-audio-quality">${optionList(['64 кбит/с','128 кбит/с','192 кбит/с','256 кбит/с'],p.audioQuality)}</select>`)}
+      <label class="sheet-slider"><span class="slider-head">Максимальная длительность аудио <strong id="audio-duration-value">${durationLabel(p.maxAudioSec)}</strong></span><input type="range" id="setting-max-audio" min="5" max="3000" step="5" value="${p.maxAudioSec}"></label>
+      <p class="sheet-note">Аудио записывается без видеопотока. Фактический битрейт зависит от браузера и кодека.</p></div>
+      <div class="sheet-section" id="gps-settings"><span class="section-title">Геолокация</span>
+      ${toggle('Отслеживать GPS',a.gpsRequired?'Включено обязательно по правилам задания':'Можно выключить для следующей съёмки','setting-gps-track',canTrack(),a.gpsRequired)}
+      ${toggle('Показывать GPS над кнопкой «Снять»','Это не влияет на запись координат','setting-gps-show',p.gpsShow)}
+      <div class="info-stat"><span>Текущий статус</span><b>${state.gpsStatus==='ready'&&state.gps?'±'+Math.round(state.gps.accuracy)+' м':!canTrack()?'Выключен':'Ожидает координаты'}</b></div>
+      <button type="button" class="sheet-btn" data-action="locate" ${!canTrack()?'disabled':''}>${ico('pin')} Определить координаты</button>
+      <p class="sheet-note">Геолокация запрашивается с разрешения устройства. Браузер может приостанавливать GPS при сворачивании приложения.</p></div>
+      <div class="sheet-section"><span class="section-title">Разрешения устройства</span>
+      <div class="sheet-actions"><button type="button" class="sheet-btn" data-action="allow-camera">${ico('camera')} Разрешить камеру</button><button type="button" class="sheet-btn" data-action="allow-mic">${ico('mic')} Разрешить микрофон</button></div>
+      <p class="sheet-note" id="permission-note">Камера нужна для фото и видео; микрофон — для аудио и видео со звуком. Браузер запросит разрешение отдельно. Нужен HTTPS или localhost.</p></div>`;
+    }
+    if(state.sheet==='status') {
+      h=`<p class="sheet-note">Состояние операций. В этом HTML файлы остаются только в памяти браузера.</p>
+      ${state.captures.length?`<button type="button" class="sheet-btn" data-open="last">${ico(state.captures[0].kind==='audio'?'mic':state.captures[0].kind==='video'?'video':'camera')} Последняя съёмка · ${esc(state.captures[0].name)}</button>`:''}
+      ${state.log.map(x=>`<div class="sheet-section"><div class="info-stat"><span>${esc(x.time||'')}</span><b>${x.kind==='error'?'Ошибка':x.kind==='warning'?'Предупреждение':'Событие'}</b></div><span class="sheet-note">${esc(x.message)}</span></div>`).join('')}`;
+    }
+    if(state.sheet==='last') {
+      const item=state.captures[0];
+      h=item?`${item.kind==='photo'?`<img class="photo-preview-large" src="${item.url}" alt="Последний кадр">`:item.kind==='audio'?`<div class="audio-playback">${ico('mic')}<strong>Аудиозапись</strong><audio src="${item.url}" controls preload="metadata"></audio></div>`:`<div class="photo-preview-large"><video src="${item.url}" controls playsinline preload="metadata"></video></div>`}
+      <div class="sheet-section"><div class="info-stat"><span>Файл</span><b>${esc(item.name)}</b></div><div class="info-stat"><span>Задание</span><b>${esc(item.assignment)}</b></div><div class="info-stat"><span>Пресет</span><b>${esc(item.preset)}</b></div><div class="info-stat"><span>Категория</span><b>${esc(item.category||'—')}</b></div><div class="info-stat"><span>Тип</span><b>${item.kind==='photo'?'Фото':item.kind==='audio'?'Аудио':'Видео'}</b></div></div>
+      <button type="button" class="sheet-btn" data-action="delete-last">Убрать из демо</button>`:'<p class="sheet-note">Снимков пока нет.</p>';
+    }
+    els.sheet.innerHTML=h;
+  }
+  function stopGeo() {
+    if(geoWatch!==null && navigator.geolocation)navigator.geolocation.clearWatch(geoWatch);
+    geoWatch=null;state.gps=null;state.gpsStatus='pending';
+    refresh();
+  }
+  function startGeo() {
+    if(!canTrack()) {stopGeo();return;}
+    if(geoWatch!==null)return;
+    if(!navigator.geolocation){state.gpsStatus='unavailable';refresh();return;}
+    state.gpsStatus='requesting';refresh();
+    // One watch only; no background-GPS guarantee in a web app.
+    try {
+      geoWatch=navigator.geolocation.watchPosition(pos=>{
+        if(!canTrack())return;
+        state.gps={lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy};
+        state.gpsStatus='ready';refresh();
+        const gpsText=$('#gps-settings .info-stat b');if(gpsText)gpsText.textContent='±'+Math.round(state.gps.accuracy)+' м';
+      },err=>{
+        state.gpsStatus='unavailable';refresh();
+        if(err?.code===1)log('Браузер запретил доступ к GPS','warning');
+      },{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+    }catch {state.gpsStatus='unavailable';refresh();}
+  }
+  function syncGps() {
+    if(canTrack()) startGeo(); else stopGeo();
+  }
+  function stopStream() {
+    if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+    els.video.srcObject=null;
+  }
+  function stopMic() {
+    if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
+  }
+  function applyHardwareZoom(zoom) {
+    if(state.mode!=='live')return;
+    const track=stream?.getVideoTracks()[0];
+    const supported=track?.getCapabilities?.().zoom;
+    if(supported){const v=Math.max(supported.min,Math.min(supported.max,zoom));track.applyConstraints({advanced:[{zoom:v}]}).catch(()=>notify('Аппаратный масштаб недоступен','warning'));}
+    else if(zoom>1)notify('Устройство не поддерживает аппаратный масштаб','warning');
+  }
+  async function applyHardwareTorch(on) {
+    if(state.mode==='demo') {state.settings.torch=on;refresh();return true;}
+    const track=stream?.getVideoTracks()[0];
+    let capabilities;
+    try{capabilities=track?.getCapabilities?.();}catch{}
+    if(!capabilities?.torch){notify('Фонарик недоступен на этой камере','warning');state.settings.torch=false;refresh();return false;}
+    try {await track.applyConstraints({advanced:[{torch:on}]});state.settings.torch=on;refresh();return true;}
+    catch{notify('Не удалось переключить фонарик','warning');state.settings.torch=false;refresh();return false;}
+  }
+  async function startLive() {
+    if(state.busy || state.recording)return;
+    if(!window.isSecureContext || !navigator.mediaDevices?.getUserMedia){notify('Для камеры устройства нужен HTTPS или localhost','error');return;}
+    state.busy=true;refresh();
+    try {
+      stopStream();
+      const ideal={'480p':{width:854,height:480},'720p':{width:1280,height:720},'1080p':{width:1920,height:1080}}[state.settings.videoQuality];
+       const next=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:state.facing},width:{ideal:ideal.width},height:{ideal:ideal.height}},audio:false});
+      stream=next;
+      els.video.srcObject=next;
+      await els.video.play();
+      state.mode='live';
+      if(state.settings.torch)await applyHardwareTorch(true);
+      if(state.settings.zoom>1)applyHardwareZoom(state.settings.zoom);
+      if(canTrack())startGeo();
+      notify('Камера устройства включена');
+    } catch(err) {
+      stopStream();state.mode='demo';
+      notify(err?.name==='NotAllowedError'?'Нет разрешения на камеру':'Камера недоступна — остаётся демонстрация','error');
+    }finally{state.busy=false;refresh();}
+  }
+  function switchDemo() {
+    if(state.recording)return;
+    stopStream();state.mode='demo';state.settings.torch=false;refresh();
+    notify('Демонстрационный режим');
+  }
+  async function svgImage() {
+    const clone=els.scene.cloneNode(true);
+    clone.removeAttribute('id');clone.removeAttribute('class');clone.setAttribute('xmlns','http://www.w3.org/2000/svg');
+    clone.setAttribute('width','900');clone.setAttribute('height','675');
+    const source=new XMLSerializer().serializeToString(clone);
+    const url=URL.createObjectURL(new Blob([source],{type:'image/svg+xml;charset=utf-8'}));
+    try {const img=new Image();img.src=url;await img.decode();return img;}
+    finally{URL.revokeObjectURL(url);}
+  }
+  function drawImageInto(canvas,img,zoom=1,flip=state.facing==='user') {
+    const ctx=canvas.getContext('2d',{alpha:false});
+    ctx.save();ctx.fillStyle='#15201c';ctx.fillRect(0,0,canvas.width,canvas.height);
+    if(flip){ctx.translate(canvas.width,0);ctx.scale(-1,1);}
+    const w=img.videoWidth||img.width, h=img.videoHeight||img.height;
+    const ratio=canvas.width/canvas.height;
+    let sw=w/zoom,sh=h/zoom;
+    if(sw/sh>ratio)sw=sh*ratio;else sh=sw/ratio;
+    ctx.drawImage(img,(w-sw)/2,(h-sh)/2,sw,sh,0,0,canvas.width,canvas.height);
+    ctx.restore();
+  }
+  function captureSize() {
+    const [x,y]=state.settings.ratio.split(':').map(Number);
+    const base=state.settings.resolution==='Низкое'?640:state.settings.resolution==='Среднее'?960:state.settings.resolution==='Максимальное'?1600:1280;
+    return [base,Math.round(base*y/x)];
+  }
+  function addCapture(item) {
+    state.captures.unshift(item);
+    if(state.captures.length>10){const last=state.captures.pop();URL.revokeObjectURL(last.url);}
+  }
+  async function takePhoto() {
+    if(state.busy || state.recording)return;
+    state.busy=true;refresh();
+    if(!state.hidden) {
+      const flash=$('#snap-flash');flash.classList.remove('show');void flash.offsetWidth;flash.classList.add('show');
+    }
+    try {
+      const [w,h]=captureSize(),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+      if(state.mode==='live') {
+        if(els.video.readyState<2)throw Error('Камера ещё не готова');
+        drawImageInto(canvas,els.video,1);
+      } else drawImageInto(canvas,await svgImage(),state.settings.zoom);
+      const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('Ошибка JPEG')),'image/jpeg',.87));
+      const name='DEMO'+String(state.captures.length+1).padStart(4,'0');
+      addCapture({kind:'photo',name,blob,url:URL.createObjectURL(blob),assignment:assignment().name,preset:currentPreset().name,category:state.category,shot:state.shot,description:state.description,gps:canTrack()&&state.gps?{...state.gps}:null});
+      notify(name+' · снимок сохранён в памяти макета');
+    }catch(err){notify('Не удалось снять фото: '+(err?.message||'ошибка'),'error');}
+    finally{state.busy=false;refresh();}
+  }
+  function videoType() {
+    if(!window.MediaRecorder)return '';
+    return ['video/mp4;codecs=avc1','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4']
+      .find(x=>window.MediaRecorder.isTypeSupported?.(x))||'';
+  }
+  function audioType() {
+    if(!window.MediaRecorder)return '';
+    return ['audio/webm;codecs=opus','audio/mp4','audio/webm','audio/ogg;codecs=opus'].find(x=>window.MediaRecorder.isTypeSupported?.(x))||'';
+  }
+  function audioBitrate() {return parseInt(state.settings.audioQuality,10)*1000;}
+  function videoBitrate() {return {'480p':1200000,'720p':3000000,'1080p':5500000}[state.settings.videoQuality]||3000000;}
+  async function startVideo() {
+    if(state.busy || state.recording)return;
+    if(!window.MediaRecorder){notify('Этот браузер не поддерживает запись видео','error');return;}
+    state.busy=true;refresh();
+    try {
+      let videoTrack;
+      if(state.mode==='live') {
+        videoTrack=stream?.getVideoTracks()[0];
+        if(!videoTrack || videoTrack.readyState!=='live')throw Error('Камера ещё не готова');
+        recordStream=new MediaStream([videoTrack]);
+      } else {
+        const canvas=document.createElement('canvas');
+        const {width:vw,height:vh}={'480p':{width:854,height:480},'720p':{width:1280,height:720},'1080p':{width:1920,height:1080}}[state.settings.videoQuality];
+        canvas.width=vw;canvas.height=vh;
+        const img=await svgImage();
+        const paint=()=>drawImageInto(canvas,img,state.settings.zoom*(1+0.008*Math.sin(Date.now()/700)),state.facing==='user');
+        paint();
+        if(!canvas.captureStream)throw Error('Видео в демо не поддерживается этим браузером');
+        recordStream=canvas.captureStream(20);
+        demoTick=setInterval(paint,50);
+      }
+      if(state.settings.mic){
+        try {
+          micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+          micStream.getAudioTracks().forEach(t=>recordStream.addTrack(t));
+        }catch {log('Микрофон недоступен; видео записывается без звука','warning');}
+      }
+      const type=videoType();
+      const options={...(type?{mimeType:type}:{}),videoBitsPerSecond:videoBitrate(),...(state.settings.mic?{audioBitsPerSecond:audioBitrate()}:{})};
+      const localRecorder=new MediaRecorder(recordStream,options);
+      const chunks=[];
+      const startInfo={kind:'video',name:'VIDEO'+String(state.captures.length+1).padStart(4,'0'),assignment:assignment().name,preset:currentPreset().name,category:state.category,shot:state.shot,description:state.description,gps:canTrack()&&state.gps?{...state.gps}:null};
+      localRecorder.ondataavailable=ev=>{if(ev.data?.size)chunks.push(ev.data);};
+      localRecorder.onerror=()=>notify('Ошибка записи видео','error');
+      localRecorder.onstop=()=>{
+        clearInterval(demoTick);demoTick=null;
+        stopMic();
+        if(recordStream){recordStream.getTracks().filter(t=>t!==stream?.getVideoTracks()[0]).forEach(t=>t.stop());recordStream=null;}
+        const blob=new Blob(chunks,{type:localRecorder.mimeType||type||'video/webm'});
+        if(blob.size>0){addCapture({...startInfo,url:URL.createObjectURL(blob),blob});notify(startInfo.name+' · видео в памяти макета');}
+        else notify('Видео не удалось сформировать','error');
+        state.recording=false;state.busy=false;recorder=null;refresh();
+      };
+      localRecorder.start(250);
+      recorder=localRecorder;
+      state.recording=true;state.recordStart=Date.now();
+      updateTimer();recorderTick=setInterval(updateTimer,250);
+      log('Запись видео началась (максимум '+durationLabel(state.settings.maxVideoSec)+')');
+    } catch(err) {
+      clearInterval(demoTick);demoTick=null;
+      stopMic();
+      if(recordStream){recordStream.getTracks().filter(t=>t!==stream?.getVideoTracks()[0]).forEach(t=>t.stop());recordStream=null;}
+      notify('Запись недоступна: '+(err?.message||'ошибка'),'error');
+    }finally{state.busy=false;refresh();}
+  }
+  async function startAudio() {
+    if(state.busy || state.recording)return;
+    if(!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia || !window.isSecureContext){notify('Для записи аудио нужен совместимый браузер и HTTPS/localhost','error');return;}
+    state.busy=true;refresh();
+    try {
+      // Audio-only mode does not request or keep a camera stream.
+      stopStream();state.mode='demo';
+      micStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+      state.micGranted=true;
+      recordStream=micStream;
+      const type=audioType();
+      const options={...(type?{mimeType:type}:{}),audioBitsPerSecond:audioBitrate()};
+      const localRecorder=new MediaRecorder(recordStream,options),chunks=[];
+      const startInfo={kind:'audio',name:'AUDIO'+String(state.captures.length+1).padStart(4,'0'),assignment:assignment().name,preset:currentPreset().name,category:state.category,shot:state.shot,description:state.description,gps:canTrack()&&state.gps?{...state.gps}:null};
+      localRecorder.ondataavailable=ev=>{if(ev.data?.size)chunks.push(ev.data);};
+      localRecorder.onerror=()=>notify('Ошибка записи аудио','error');
+      localRecorder.onstop=()=>{
+        stopMic();recordStream=null;
+        const blob=new Blob(chunks,{type:localRecorder.mimeType||type||'audio/webm'});
+        if(blob.size){addCapture({...startInfo,blob,url:URL.createObjectURL(blob)});notify(startInfo.name+' · аудио в памяти макета');}
+        else notify('Аудиозапись не сформирована','error');
+        state.recording=false;state.busy=false;recorder=null;refresh();
+      };
+      localRecorder.start(250);
+      recorder=localRecorder;state.recording=true;state.recordStart=Date.now();
+      updateTimer();recorderTick=setInterval(updateTimer,250);
+      log('Запись аудио началась (максимум '+durationLabel(state.settings.maxAudioSec)+')');
+    } catch(err) {
+      stopMic();recordStream=null;
+      notify(err?.name==='NotAllowedError'?'Микрофон не разрешён':'Запись аудио недоступна: '+(err?.message||'ошибка'),'error');
+    } finally {state.busy=false;refresh();}
+  }
+  function stopRecording() {
+    if(!state.recording || !recorder || state.busy)return;
+    clearInterval(recorderTick);recorderTick=null;
+    state.busy=true;refresh();
+    try{ if(recorder.state!=='inactive')recorder.stop(); }
+    catch(err){state.busy=false;state.recording=false;refresh();notify('Не удалось завершить запись','error');}
+  }
+  async function shutter() {if(state.media==='photo'){await takePhoto();return;} if(isRecording()){stopRecording();return;} if(state.media==='audio')await startAudio();else await startVideo();}
+  function setAssignment(id) {
+    const a=assignments.find(x=>x.id===id);
+    if(!a)return;
+    state.assignment=id;
+    state.category=a.categories[0]||'';state.shot='';state.description='';
+    if(a.gpsRequired)state.settings.gpsTrack=true;
+    syncGps();refresh();
+  }
+  function selectPreset(id) {
+    const p=presets.find(x=>x.id===id);
+    if(!p)return;
+    state.preset=id;
+    state.settings={...baseSettings(),...p,gpsTrack:assignment().gpsRequired||p.gpsTrack};
+    if(state.mode==='live'){applyHardwareZoom(state.settings.zoom);void applyHardwareTorch(state.settings.torch);}
+    syncGps();refresh();renderSheet();
+  }
+  function settingsFromControls() {
+    return {...state.settings,ratio:$('#setting-ratio').value,resolution:$('#setting-resolution').value,videoQuality:$('#setting-video-quality').value,audioQuality:$('#setting-audio-quality').value,maxVideoSec:Number($('#setting-max-video').value),maxAudioSec:Number($('#setting-max-audio').value),zoom:Number($('#setting-zoom').value),grid:$('#setting-grid').checked,torch:$('#setting-torch').checked,gpsTrack:assignment().gpsRequired||$('#setting-gps-track').checked,gpsShow:$('#setting-gps-show').checked,mic:$('#setting-mic').checked};
+  }
+  function savePreset() {
+    const value=$('#setting-name')?.value.trim();
+    if(!value){const input=$('#setting-name');input?.focus();notify('Введите название пресета','error');return;}
+    if(presets.some(p=>p.id!==state.preset && p.name.toLowerCase()===value.toLowerCase())){notify('Пресет с таким именем уже существует','warning');return;}
+    state.settings=settingsFromControls();
+    Object.assign(currentPreset(),{name:value,...state.settings});
+    renderSheet();refresh();
+    const note=$('#preset-notice');if(note)note.textContent='Пресет «'+value+'» сохранён в памяти макета.';
+    log('Пресет «'+value+'» сохранён в памяти макета');
+  }
+  function addPreset() {
+    state.settings=settingsFromControls();
+    let n=presets.length+1;
+    while(presets.some(p=>p.name==='Новый пресет '+n))n++;
+    const id='custom-'+Date.now()+'-'+n;
+    presets.push({id,name:'Новый пресет '+n,...state.settings});
+    state.preset=id;
+    renderSheet();refresh();
+    const input=$('#setting-name');input?.focus();input?.select();
+    const note=$('#preset-notice');if(note)note.textContent='Пресет добавлен. Переименуйте и нажмите «Сохранить пресет».';
+    log('Добавлен новый пресет '+n);
+  }
+  async function applySetting(el) {
+    const id=el.id;
+    if(!id.startsWith('setting-')||id==='setting-name')return;
+    if(id==='setting-ratio')state.settings.ratio=el.value;
+    if(id==='setting-resolution')state.settings.resolution=el.value;
+    if(id==='setting-video-quality')state.settings.videoQuality=el.value;
+    if(id==='setting-audio-quality')state.settings.audioQuality=el.value;
+    if(id==='setting-max-video'){state.settings.maxVideoSec=Number(el.value);$('#video-duration-value').textContent=durationLabel(state.settings.maxVideoSec);}
+    if(id==='setting-max-audio'){state.settings.maxAudioSec=Number(el.value);$('#audio-duration-value').textContent=durationLabel(state.settings.maxAudioSec);}
+    if(id==='setting-grid')state.settings.grid=el.checked;
+    if(id==='setting-mic')state.settings.mic=el.checked;
+    if(id==='setting-gps-show')state.settings.gpsShow=el.checked;
+    if(id==='setting-zoom'){state.settings.zoom=Number(el.value);$('#zoom-value').textContent=state.settings.zoom.toFixed(1)+'×';applyHardwareZoom(state.settings.zoom);}
+    if(id==='setting-torch') { await applyHardwareTorch(el.checked);el.checked=state.settings.torch; }
+    if(id==='setting-gps-track'){
+      state.settings.gpsTrack=assignment().gpsRequired||el.checked;
+      syncGps();
+    }
+    refresh();
+  }
+  async function allowMic(){
+    if(!window.isSecureContext || !navigator.mediaDevices?.getUserMedia){notify('Для микрофона нужен HTTPS или localhost','error');return;}
+    try{const probe=await navigator.mediaDevices.getUserMedia({audio:true,video:false});state.micGranted=true;probe.getTracks().forEach(t=>t.stop());
+      const note=$('#permission-note');if(note)note.textContent='Микрофон разрешён. Аудиозапись доступна (при поддержке браузера).';log('Доступ к микрофону разрешён');
+    }catch(e){notify(e?.name==='NotAllowedError'?'Браузер отклонил доступ к микрофону':'Микрофон недоступен','error');}
+  }
+  function startBlind() {
+    closeSheet();state.hidden=true;
+    $('#capture-feedback').hidden=true;
+    refresh();
+    log('Слепой режим: предпросмотр скрыт, поток камеры остаётся активным');
+    // Do not call stopStream(), pause(), or video.pause() here.
+  }
+  function resumeBlind() {state.hidden=false;refresh();}
+  function handleVolume(e) {
+    if(!state.hidden || e.repeat || state.busy)return;
+    const keys=['AudioVolumeUp','AudioVolumeDown','VolumeUp','VolumeDown'];
+    if(keys.includes(e.key) || keys.includes(e.code) || e.key===' ' || e.code==='Space'){
+      e.preventDefault();void shutter();
+    }
+  }
+  root.addEventListener('click',async event=>{
+    const b=event.target.closest('button');if(!b||!root.contains(b))return;
+    if(b.dataset.media){
+      if(state.recording)return;
+      const next=b.dataset.media;
+      if(next==='audio'&&state.media!=='audio'){state.resumeVideoAfterAudio=state.mode==='live';stopStream();state.mode='demo';}
+      else if(state.media==='audio'&&next!=='audio'&&state.resumeVideoAfterAudio){state.resumeVideoAfterAudio=false;state.media=next;refresh();void startLive();return;}
+      state.media=next;refresh();return;
+    }
+    if(b.dataset.open){
+      if(b.dataset.open==='location')openSheet('settings',true);else openSheet(b.dataset.open);
+      return;
+    }
+    if(b.dataset.nav){if(b.dataset.nav!=='Камера')openSheet('status');return;}
+    const a=b.dataset.action||'';
+    if(a.startsWith('preset:')){selectPreset(a.substring(7));return;}
+    if(a==='close-sheet'){closeSheet();return;}
+    if(a==='capture'){await shutter();return;}
+    if(a==='torch'){await applyHardwareTorch(!state.settings.torch);return;}
+    if(a==='flip'){
+      if(state.recording)return;
+      state.facing=state.facing==='environment'?'user':'environment';
+      if(state.mode==='live')await startLive();else refresh();return;
+    }
+    if(a==='privacy'){startBlind();return;}
+    if(a==='resume'){resumeBlind();return;}
+    if(a==='live'||a==='allow-camera'){if(state.media==='audio'){notify('Перейдите в режим Фото или Видео для включения камеры','warning');return;}closeSheet();await startLive();return;}
+    if(a==='allow-mic'){await allowMic();return;}
+    if(a==='demo'){closeSheet();switchDemo();return;}
+    if(a==='save-assignment'){
+      state.description=$('#description').value.trim();
+      state.category=$('#category-select').value;
+      state.shot=$('#shot-select')?.value||'';
+      closeSheet();refresh();notify('Задание и данные съёмки обновлены');return;
+    }
+    if(a==='save-preset'){savePreset();return;}
+    if(a==='add-preset'){addPreset();return;}
+    if(a==='delete-last'){
+      if(state.captures[0])URL.revokeObjectURL(state.captures.shift().url);
+      closeSheet();notify('Последний материал удалён из памяти макета');return;
+    }
+    if(a==='locate'){
+      if(!canTrack()){notify('GPS выключен в настройках','warning');return;}
+      stopGeo();startGeo();
+      notify('Запрос геопозиции отправлен браузеру');
+      return;
+    }
+  });
+  root.addEventListener('input',event=>{const el=event.target;
+    if(el.id==='task-select'){
+      state.description=$('#description')?.value||'';
+      setAssignment(el.value);renderSheet();return;
+    }
+    if(el.id.startsWith('setting-'))void applySetting(el);
+  });
+  els.layer.addEventListener('click',e=>{if(e.target===els.layer)closeSheet();});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){
+      if(state.hidden){resumeBlind();e.preventDefault();return;}
+      if(!els.layer.hidden){closeSheet();e.preventDefault();return;}
+    }
+    handleVolume(e);
+  });
+  document.querySelectorAll('[data-device]').forEach(b=>b.addEventListener('click',()=>{
+    els.device.classList.toggle('desktop',b.dataset.device==='desktop');
+    els.device.classList.toggle('phone',b.dataset.device==='phone');
+    document.querySelectorAll('[data-device]').forEach(x=>x.classList.toggle('active',x===b));
+  }));
+  window.addEventListener('pagehide',()=>{
+    if(recorder?.state==='recording')recorder.stop();
+    clearInterval(recorderTick);clearInterval(demoTick);stopMic();stopStream();stopGeo();
+    state.captures.forEach(c=>URL.revokeObjectURL(c.url));
+  });
+  refresh();
+})();
+</script>
+</body></html>
