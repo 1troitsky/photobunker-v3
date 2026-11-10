@@ -2,6 +2,7 @@ import { wrapAssetDEK, unwrapAssetDEK, b64, unb64 } from '../../identity/infrast
 import type { PackageV2 } from '../../identity/infrastructure/crypto'
 import { normalizeGPS } from '../../photo-sync/domain/capture-metadata'
 import type { GPSFix } from '../../photo-sync/domain/capture-metadata'
+import { normalizePrivateTags } from '../../assignments/domain/advanced-rules'
 import { sha } from '../../local-storage/infrastructure/cipher'
 
 export type MediaType='photo'|'video'|'audio'
@@ -28,13 +29,13 @@ export type MediaContract={
 }
 export type StoredMediaChunk=MediaChunkContract & {blob:Blob}
 export type MediaPrivateFields=Readonly<{
-  category?:string;description?:string;gps?:GPSFix|null
+  category?:string;description?:string;gps?:GPSFix|null;tags?:string[]
 }>
 export type CanonicalMediaPrivateFields=Readonly<{
-  category?:string;description?:string;gps?:GPSFix
+  category?:string;description?:string;gps?:GPSFix;tags?:string[]
 }>
 export type MediaMetadata=({
-  version:1|2;fileName:string;mime:string;plainBytes:number;createdAt:number
+  version:1|2|3;fileName:string;mime:string;plainBytes:number;createdAt:number
 })&CanonicalMediaPrivateFields
 /** Only public owner requirements cross the network; actual values never do. */
 export type MediaRequirements={
@@ -57,10 +58,12 @@ export function prepareMediaPrivateFields(
   const category=privateText(input.category,64,'category')
   const description=privateText(input.description,4000,'description')
   const gps=input.gps?normalizeGPS(input.gps,recordedAt):undefined
+  const tags=normalizePrivateTags(input.tags??[])
   return {
     ...(category?{category}:{}),
     ...(description?{description}:{}),
     ...(gps?{gps}:{}),
+    ...(tags.length?{tags}:{}),
   }
 }
 export function validateMediaPrivateRequirements(
@@ -154,7 +157,7 @@ function metadataFor(file:File,mediaType:MediaType,
     &&!/[\x00-\x1f\x7f]/.test(cleanName),'media.filename_invalid')
   const privateFields=prepareMediaPrivateFields(fields,recordedAt)
   return {
-    version:Object.keys(privateFields).length?2:1,
+    version:privateFields.tags?.length?3:Object.keys(privateFields).length?2:1,
     fileName:cleanName,mime:file.type,
     plainBytes:file.size,createdAt:recordedAt,...privateFields,
   }
@@ -164,9 +167,10 @@ export function parseMediaMetadata(raw:unknown,contract:MediaContract):MediaMeta
     'media.metadata_invalid')
   const m=raw as MediaMetadata
   const keys=['createdAt','fileName','mime','plainBytes','version',
-    ...(m.version===2?['category','description','gps']:[])]
+    ...(m.version>=2?['category','description','gps']:[]),
+    ...(m.version===3?['tags']:[])]
   validate(Object.keys(m).every(k=>keys.includes(k))
-    &&(m.version===1||m.version===2)
+    &&(m.version===1||m.version===2||m.version===3)
     &&typeof m.fileName==='string'
     &&m.fileName.length>=1&&m.fileName.length<=160
     &&!/[\x00-\x1f\x7f]/.test(m.fileName)
@@ -183,8 +187,9 @@ export function parseMediaMetadata(raw:unknown,contract:MediaContract):MediaMeta
   // Exact normalized values prevent malformed/deceptive private evidence
   // from being accepted after AES-GCM decryption.
   validate(JSON.stringify(canonical)===JSON.stringify(m)
-    &&(m.version===2||Object.keys(fields).length===0)
-    &&(m.version===1||Object.keys(fields).length>0),'media.metadata_invalid')
+    &&(m.version!==1||Object.keys(fields).length===0)
+    &&(m.version!==2||Object.keys(fields).length>0&&!fields.tags)
+    &&(m.version!==3||!!fields.tags?.length),'media.metadata_invalid')
   return canonical
 }
 
