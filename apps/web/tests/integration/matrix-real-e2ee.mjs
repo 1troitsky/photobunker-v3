@@ -136,11 +136,6 @@ try{
       &&event.getSender()===alice.userId;
   },90);
 
-  // ACK idempotence: Matrix's transaction ID must not create another event
-  // if the same already-sent ciphertext request is replayed. No new crypto
-  // payload is created by this assertion.
-  const path=`/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/`;
-  assert.ok(path.includes("send"));
   console.log("P2-02C PASS: two Matrix accounts, real RustCrypto Megolm, homeserver ciphertext, recipient decrypt");
 }finally{
   for(const client of clients){
