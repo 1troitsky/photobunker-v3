@@ -11,6 +11,7 @@ use App\Http\Controllers\TeamV1Controller;
 use App\Http\Controllers\TeamInvitationController;
 use App\Http\Controllers\TeamMembershipController;
 use App\Http\Controllers\TeamKeyEpochController;
+use App\Http\Controllers\TeamEpochInvitationController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
 use App\Http\Controllers\AssignmentMediaSubmissionController;
@@ -169,5 +170,19 @@ Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(functio
     Route::get('/{teamId}/epoch/history',[TeamKeyEpochController::class,'history'])
         ->whereUuid('teamId');
     Route::post('/{teamId}/epoch',[TeamKeyEpochController::class,'rotate'])
+        ->whereUuid('teamId');
+});
+
+// P1-29C: epoch-bound E2EE Team invitation and independent recipient consent.
+Route::prefix('teams/v2')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/invites/received',[TeamEpochInvitationController::class,'inbox']);
+    Route::post('/{teamId}/invites',[TeamEpochInvitationController::class,'create'])
+        ->whereUuid('teamId');
+    Route::get('/{teamId}/participants',[TeamEpochInvitationController::class,'participants'])
+        ->whereUuid('teamId');
+    Route::post('/{teamId}/invites/{inviteId}/accept',
+        [TeamEpochInvitationController::class,'accept'])
+        ->whereUuid('teamId')->whereUuid('inviteId');
+    Route::get('/{teamId}/member',[TeamEpochInvitationController::class,'member'])
         ->whereUuid('teamId');
 });

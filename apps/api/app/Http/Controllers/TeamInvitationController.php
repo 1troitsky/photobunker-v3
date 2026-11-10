@@ -121,7 +121,8 @@ final class TeamInvitationController extends Controller
             ->join('team_records_v1 as t','t.id','=','i.team_id')
             ->where('i.recipient_account_id',$actor->id);
         if($after!==null)$q->where('i.id','>',$after);
-        $rows=$q->select(['i.*','a.account_spki','t.rotation_required'])
+        $rows=$q->select(['i.*','a.account_spki','t.rotation_required',
+                't.key_epoch as current_epoch'])
             ->orderBy('i.id')
             ->limit(51)->get();
         $items=$rows->take(50)->map(function($i){
@@ -135,12 +136,21 @@ final class TeamInvitationController extends Controller
                 ];
             }
             if($i->rotation_required){
-                // All historical ECDH envelopes are suspended while an
-                // exclusion awaits cryptographic re-key. Keep survivor cache
-                // but mark its live ACL unavailable until the new epoch.
+                // Never distribute the stale ECDH envelope during quarantine.
                 return [
                     'inviteId'=>$i->id,'teamId'=>$i->team_id,
                     'state'=>'suspended',
+                ];
+            }
+            if((int)$i->current_epoch>1){
+                // The original v1 envelope must not be re-delivered after a
+                // new DEK is published. An active recipient independently
+                // verifies the *current* signed epoch and individual grant.
+                return [
+                    'inviteId'=>$i->id,'teamId'=>$i->team_id,
+                    'state'=>'superseded',
+                    'ownerAccountId'=>$i->owner_account_id,
+                    'ownerAccountSpki'=>$i->account_spki,
                 ];
             }
             return [
@@ -185,13 +195,20 @@ final class TeamInvitationController extends Controller
             ->selectSub(DB::table('team_members_v1 as m')
                 ->select('m.role')->whereColumn('m.team_id','i.team_id')
                 ->whereColumn('m.account_id','i.recipient_account_id')
+                ->where('i.state','accepted')
+                ->where('m.state','active')
                 ->limit(1),'effective_role')
+            ->selectSub(DB::table('team_membership_events_v1 as e')
+                ->select('e.next_role')->whereColumn('e.invite_id','i.id')
+                ->where('e.action','change_role')
+                ->orderByDesc('e.to_revision')->limit(1),'historic_role')
             ->orderBy('i.id')->limit(51)->get();
         $items=$rows->take(50)->map(static fn($i)=>[
             'inviteId'=>$i->id,
             'recipientAccountId'=>$i->recipient_account_id,
             'recipientAccountSpki'=>$i->recipient_account_spki,
-            'role'=>$i->role,'effectiveRole'=>$i->effective_role??$i->role,
+            'role'=>$i->role,
+            'effectiveRole'=>$i->effective_role??$i->historic_role??$i->role,
             'state'=>$i->state,
             'expiresAt'=>(int)$i->expires_at,
             'contract'=>$i->contract_json,

@@ -119,11 +119,23 @@ final class TeamMembershipController extends Controller
                 // A previous removal blocks all further ACL mutations until
                 // a new key epoch has been committed to remaining members.
                 &&!$t->rotation_required,409);
-            $invite=DB::table('team_invites_v1')
+            $inviteTable='team_invites_v1';
+            $invite=DB::table($inviteTable)
                 ->where('id',$c['inviteId'])->where('team_id',$teamId)
                 ->where('recipient_account_id',$c['targetAccountId'])
                 ->lockForUpdate()->first();
+            if(!$invite){
+                $inviteTable='team_invites_v2';
+                $invite=DB::table($inviteTable)
+                    ->where('id',$c['inviteId'])->where('team_id',$teamId)
+                    ->where('recipient_account_id',$c['targetAccountId'])
+                    ->lockForUpdate()->first();
+            }
             abort_unless($invite,404);
+            if($inviteTable==='team_invites_v2'&&$invite->state==='pending')
+                abort_unless((int)$invite->key_epoch===(int)$t->key_epoch
+                    &&(int)$invite->membership_revision
+                        ===(int)$t->membership_revision,409);
             abort_unless(in_array($invite->state,['pending','accepted'],true),409);
             $member=DB::table('team_members_v1')
                 ->where('team_id',$teamId)
@@ -149,7 +161,7 @@ final class TeamMembershipController extends Controller
             }else{
                 // Remove pending or accepted invite. Preserve signed
                 // consent and contract as immutable audit evidence.
-                DB::table('team_invites_v1')->where('id',$invite->id)
+                DB::table($inviteTable)->where('id',$invite->id)
                     ->update(['state'=>'revoked','updated_at'=>now()]);
                 if($member){
                     DB::table('team_members_v1')
