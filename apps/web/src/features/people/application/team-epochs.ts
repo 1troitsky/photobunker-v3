@@ -8,6 +8,7 @@ import {
 } from '../../identity/infrastructure/crypto'
 import { pinnedPeer, ensureOwnExchangeKey } from '../../sharing/key-directory'
 import { listLocalTeams } from './team-book'
+import { listOwnerEpochRoster } from './team-epoch-invitations'
 import {
   listOwnerTeamRoster, verifiedTeamMembershipHistory, openJoinedTeam,
   cacheVerifiedJoinedTeam,assertVerifiedTeamEpochNotOlder,
@@ -83,7 +84,7 @@ async function hash(raw:string):Promise<string>{
 function ownerAad(owner:string,team:string,epoch:number,revision:number):Uint8Array<ArrayBuffer>{
   return enc.encode(ownerAadPrefix+owner+'\n'+team+'\n'+epoch+'\n'+revision)
 }
-function profileAad(c:Pick<EpochContract,'ownerAccountId'|'teamId'|'toEpoch'|'membershipRevision'|'previousEpochHash'>):Uint8Array<ArrayBuffer>{
+export function profileAad(c:Pick<EpochContract,'ownerAccountId'|'teamId'|'toEpoch'|'membershipRevision'|'previousEpochHash'>):Uint8Array<ArrayBuffer>{
   return enc.encode(profileAadPrefix+c.ownerAccountId+'\n'+c.teamId+'\n'
     +c.toEpoch+'\n'+c.membershipRevision+'\n'+c.previousEpochHash)
 }
@@ -158,8 +159,8 @@ function parseEpoch(raw:string):EpochContract{
   }
   return c
 }
-async function verifyEpochHistory(
-  teamId:string,ownerAccountId:string,ownerAccountSpki:string,originalRootHash:string,
+export async function verifyEpochHistory(
+  teamId:string,ownerAccountId:string,ownerAccountSpki:string,originalRootHash:string|null,
 ):Promise<{epoch:number;contractHash:string;latest:EpochContract|null;root:Root;
   membershipRevision:number;rotationRequired:boolean;
   retiredPendingInviteIds:string[]}>{
@@ -187,7 +188,7 @@ async function verifyEpochHistory(
     if(!root){
       root=page.root
       if(!root||typeof root.contract!=='string'
-        ||root.contractHash!==originalRootHash
+        ||(originalRootHash!==null&&root.contractHash!==originalRootHash)
         ||await hash(root.contract)!==root.contractHash
         ||!await verify(signer,createDomain+root.contract,root.signature))
         throw Error('teams.untrusted_epoch_origin')
@@ -318,10 +319,22 @@ export async function queueTeamKeyRotation(teamId:string):Promise<string>{
     ||current.membershipRevision!==history.revision
     ||current.rotationRequired!==true)
     throw Error('teams.stale_epoch_roster')
-  const surviving=members.filter(x=>x.state==='accepted')
+  // v2 members have their own signed consent history but share the
+  // authoritative Team ACL and the next owner-signed epoch grant list.
+  const epochMembers=status.keyEpoch>=2
+    ?await listOwnerEpochRoster(teamId):[]
+  same(s)
+  const combined=[...members,...epochMembers]
+  const surviving=combined.filter(x=>x.state==='accepted')
     .sort((a,b)=>a.recipientAccountId.localeCompare(b.recipientAccountId))
-  const retiredPendingInviteIds=members.filter(x=>x.state==='pending')
+  if(new Set(surviving.map(x=>x.recipientAccountId)).size!==surviving.length)
+    throw Error('teams.epoch_duplicate_active_member')
+  // IDs from BOTH protocol generations are bound in the SAME existing
+  // signed field; no new unsigned v2 retirements and no schema rewrite.
+  const retiredPendingInviteIds=combined.filter(x=>x.state==='pending')
     .map(x=>x.inviteId).sort()
+  if(new Set(retiredPendingInviteIds).size!==retiredPendingInviteIds.length)
+    throw Error('teams.epoch_duplicate_retirement')
   if(retiredPendingInviteIds.length>500)
     throw Error('teams.too_many_pending_retirements')
   if(surviving.length>100)throw Error('teams.epoch_roster_limit')
@@ -443,6 +456,186 @@ export async function syncTeamKeyRotations():Promise<void>{
     }
   }
 }
+/** A post-rotation member obtains their current DEK only through a LIVE
+ * server ACL and a completely owner-signed, chain-verified epoch. A prior
+ * invitation is an optional additional root pin; it isn't an authorization.
+ */
+export async function openVerifiedCurrentEpochMember(
+  teamId:string,expectedOwnerAccountId?:string,expectedRootHash?:string,
+):Promise<JoinedTeam>{
+  const s=requireSession()
+  if(!s.online)throw Error('teams.member_requires_online')
+  if(!uuidPattern.test(teamId))throw Error('teams.invalid_team_id')
+  const response:RecipientEpoch=await jsonApi(
+    '/teams/v1/'+encodeURIComponent(teamId)+'/epoch/member')
+  same(s)
+  if(response.teamId!==teamId
+    ||!Number.isInteger(response.keyEpoch)||response.keyEpoch<2
+    ||typeof response.ownerAccountId!=='string'
+    ||!uuidPattern.test(response.ownerAccountId)
+    ||expectedOwnerAccountId!==undefined
+      &&response.ownerAccountId!==expectedOwnerAccountId)
+    throw Error('teams.untrusted_member_epoch')
+  const pin=await pinnedPeer(response.ownerAccountId)
+  const chain=await verifyEpochHistory(
+    teamId,response.ownerAccountId,pin.accountSpki,expectedRootHash??null)
+  const c=chain.latest
+  if(!c||chain.epoch!==response.keyEpoch
+    ||chain.contractHash!==response.contractHash
+    ||chain.rotationRequired
+    ||chain.membershipRevision!==response.membershipRevision
+    ||response.contract!==JSON.stringify(c)
+    ||!await verify(await importSpki(pin.accountSpki),
+      epochDomain+response.contract,response.signature)
+    ||response.ownerAccountId!==c.ownerAccountId
+    ||response.recipient?.accountId!==s.accountId
+    ||!['curator','contributor','viewer'].includes(response.effectiveRole))
+    throw Error('teams.untrusted_member_epoch')
+  await assertVerifiedTeamEpochNotOlder(teamId,response.ownerAccountId,{
+    keyEpoch:chain.epoch,contractHash:chain.contractHash,
+  })
+  same(s)
+  const grant=c.recipients.find(x=>x.accountId===s.accountId)
+  if(!grant||!response.recipient
+    ||JSON.stringify(grant)!==JSON.stringify(response.recipient))
+    throw Error('teams.missing_member_epoch_grant')
+  const own=await ensureOwnExchangeKey()
+  if(own.directory.descriptorHash!==grant.recipientKeyDigest)
+    throw Error('teams.member_epoch_key_changed')
+  const info=recipientInfo(c,grant)
+  const wrap=await exchangeKey(own.privateKey,grant.envelope.ephemeralSpki,
+    info,unb64(grant.envelope.salt,16))
+  const raw=new Uint8Array(await crypto.subtle.decrypt({
+    name:'AES-GCM',iv:unb64(grant.envelope.iv,12),
+    additionalData:enc.encode(info),tagLength:128,
+  },wrap,unb64(grant.envelope.ciphertext,48)))
+  let plaintext:ArrayBuffer
+  try{
+    if(raw.length!==32)throw Error('teams.invalid_member_epoch_dek')
+    const dek=await crypto.subtle.importKey('raw',raw,
+      {name:'AES-GCM'},false,['decrypt'])
+    plaintext=await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(c.privateEnvelope.iv,12),
+      additionalData:profileAad(c),tagLength:128,
+    },dek,unb64(c.privateEnvelope.ciphertext))
+  }finally{raw.fill(0)}
+  let profile:{name:string;description:string}
+  try{profile=JSON.parse(dec.decode(plaintext)) as typeof profile}
+  catch{throw Error('teams.member_epoch_profile_invalid')}
+  if(!profile||typeof profile.name!=='string'||!profile.name
+    ||profile.name.trim()!==profile.name||profile.name.length>64
+    ||typeof profile.description!=='string'
+    ||profile.description.trim()!==profile.description
+    ||profile.description.length>1024
+    ||Object.keys(profile).sort().join('|')!=='description|name')
+    throw Error('teams.member_epoch_profile_invalid')
+  let role:TeamRole=grant.role
+  // Never promote unverified HTTP membershipRevision to durable freshness.
+  let verifiedRevision=c.membershipRevision
+  if(response.latestRoleEvent!==null){
+    let event:{
+      action:string;teamId:string;targetAccountId:string
+      ownerAccountId:string;nextRole:TeamRole;toRevision:number
+    }
+    try{event=JSON.parse(response.latestRoleEvent.contract) as typeof event}
+    catch{throw Error('teams.untrusted_member_role_epoch')}
+    if(event.action!=='change_role'
+      ||event.teamId!==teamId
+      ||event.ownerAccountId!==response.ownerAccountId
+      ||event.targetAccountId!==s.accountId
+      ||!['curator','contributor','viewer'].includes(event.nextRole)
+      ||!Number.isInteger(event.toRevision)
+      ||event.toRevision>response.membershipRevision
+      ||!await verify(await importSpki(pin.accountSpki),
+        roleDomain+response.latestRoleEvent.contract,
+        response.latestRoleEvent.signature))
+      throw Error('teams.untrusted_member_role_epoch')
+    // Events already baked into the signed epoch must not override that
+    // epoch's current recipient role (or revive a previous membership).
+    if(event.toRevision>c.membershipRevision){
+      role=event.nextRole
+      verifiedRevision=event.toRevision
+    }
+  }
+  if(response.effectiveRole!==role)
+    throw Error('teams.untrusted_member_effective_role')
+  same(s)
+  const joined:JoinedTeam={
+    teamId,ownerAccountId:response.ownerAccountId,
+    name:profile.name,description:profile.description,
+    role,verifiedOnline:true,
+  }
+  await cacheVerifiedJoinedTeam(joined,s.accountId,{
+    keyEpoch:chain.epoch,contractHash:chain.contractHash,
+    membershipRevision:verifiedRevision,
+  })
+  return joined
+}
+
+/** Access the CURRENT owner Team DEK from its independently verified signed
+ * epoch. Never reuse v1 root DEK to invite anyone after a rotation.
+ */
+export async function withCurrentOwnerTeamDEK<T>(
+  teamId:string,
+  action:(raw:Uint8Array<ArrayBuffer>,scope:{
+    rootContractHash:string;keyEpoch:number;keyEpochHash:string
+    membershipRevision:number
+  })=>Promise<T>,
+):Promise<T>{
+  const s=requireSession()
+  const [status,local]=await Promise.all([
+    ownerEpochStatus(teamId),listLocalTeams(),
+  ])
+  if(status.rotationRequired||status.keyEpoch<2)
+    throw Error('teams.current_epoch_unavailable')
+  const prior=await originalRootHash(teamId)
+  const chain=await verifyEpochHistory(
+    teamId,s.accountId,s.pkg.accountSpki,prior)
+  const epoch=chain.latest
+  if(!epoch||epoch.toEpoch!==status.keyEpoch
+    ||chain.epoch!==status.keyEpoch
+    ||chain.contractHash!==status.contractHash
+    ||chain.membershipRevision!==status.membershipRevision
+    ||chain.rotationRequired
+    ||!local.some(x=>x.teamId===teamId&&x.delivery==='synced'))
+    throw Error('teams.untrusted_owner_current_epoch')
+  const ownerKey=await localKey(s)
+  let bytes:Uint8Array<ArrayBuffer>
+  try{
+    bytes=new Uint8Array(await crypto.subtle.decrypt({
+      name:'AES-GCM',
+      iv:unb64(epoch.privateEnvelope.wrappedKey.iv,12),
+      additionalData:ownerAad(
+        s.accountId,teamId,epoch.toEpoch,epoch.membershipRevision),
+      tagLength:128,
+    },ownerKey,unb64(epoch.privateEnvelope.wrappedKey.ciphertext,48)))
+  }catch{throw Error('teams.invalid_current_owner_dek')}
+  try{
+    if(bytes.length!==32)throw Error('teams.invalid_current_owner_dek')
+    // Verify the owner really holds the new DEK by decrypting the profile,
+    // and that its independently signed bytes match the local owner view.
+    const key=await crypto.subtle.importKey('raw',bytes,
+      {name:'AES-GCM'},false,['decrypt'])
+    const plaintext=await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(epoch.privateEnvelope.iv,12),
+      additionalData:profileAad(epoch),tagLength:128,
+    },key,unb64(epoch.privateEnvelope.ciphertext))
+    let profile:{name:string;description:string}
+    try{profile=JSON.parse(dec.decode(plaintext)) as typeof profile}
+    catch{throw Error('teams.owner_current_profile_unreadable')}
+    const view=local.find(x=>x.teamId===teamId)
+    if(!view||profile.name!==view.name
+      ||profile.description!==view.description)
+      throw Error('teams.owner_current_profile_mismatch')
+    same(s)
+    return await action(bytes,{
+      rootContractHash:chain.root.contractHash,
+      keyEpoch:status.keyEpoch,keyEpochHash:chain.contractHash,
+      membershipRevision:status.membershipRevision,
+    })
+  }finally{bytes.fill(0)}
+}
+
 export async function openAnyJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
   const s=requireSession()
   const path='/teams/v1/'+encodeURIComponent(invite.teamId)+'/epoch/member'

@@ -276,10 +276,20 @@ final class TeamKeyEpochController extends Controller
             // These EXACT invitation IDs are part of the owner-signed
             // epoch. The atomic sweep cannot produce unsigned "revoked"
             // records that the owner client cannot independently explain.
-            $pending=DB::table('team_invites_v1')
+            $pendingV1=DB::table('team_invites_v1')
                 ->where('team_id',$teamId)->where('state','pending')
                 ->orderBy('id')->pluck('id')->all();
-            abort_unless($pending===$c['retiredPendingInviteIds'],409);
+            $pendingV2=DB::table('team_invites_v2')
+                ->where('team_id',$teamId)->where('state','pending')
+                ->orderBy('id')->pluck('id')->all();
+            // One immutable, owner-signed proof for BOTH invite protocols.
+            // Writes are serialized against invitation/consent by the
+            // same team row lock; no unsigned v2 sweep is possible.
+            $pending=array_merge($pendingV1,$pendingV2);
+            sort($pending,SORT_STRING);
+            abort_unless(count($pending)<=500
+                &&count($pending)===count(array_unique($pending))
+                &&$pending===$c['retiredPendingInviteIds'],409);
             DB::table('team_key_epochs_v1')->insert([
                 'team_id'=>$teamId,'epoch'=>$c['toEpoch'],
                 'operation_id'=>$c['operationId'],
@@ -303,9 +313,14 @@ final class TeamKeyEpochController extends Controller
             }
             // Outstanding v1 invitations carry the old Team DEK and cannot
             // be accepted once the new epoch has been committed.
-            if(count($pending)>0){
+            if(count($pendingV1)>0){
                 DB::table('team_invites_v1')->where('team_id',$teamId)
-                    ->whereIn('id',$pending)->where('state','pending')
+                    ->whereIn('id',$pendingV1)->where('state','pending')
+                    ->update(['state'=>'revoked','updated_at'=>now()]);
+            }
+            if(count($pendingV2)>0){
+                DB::table('team_invites_v2')->where('team_id',$teamId)
+                    ->whereIn('id',$pendingV2)->where('state','pending')
                     ->update(['state'=>'revoked','updated_at'=>now()]);
             }
             DB::table('team_records_v1')->where('id',$teamId)->update([
