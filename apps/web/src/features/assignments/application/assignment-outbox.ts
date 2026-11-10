@@ -155,8 +155,8 @@ export async function listAssignmentParticipants(
   const items:AssignmentParticipant[]=[]
   let after:string|null=null
   for(let pageNum=0;pageNum<100;pageNum++){
-    const suffix=after?'?after='+encodeURIComponent(after):''
-    const page=await jsonApi<AssignmentParticipantsPage>(
+    const suffix:string=after?'?after='+encodeURIComponent(after):''
+    const page:AssignmentParticipantsPage=await jsonApi<AssignmentParticipantsPage>(
       '/assignments/v1/'+encodeURIComponent(assignmentId)+'/participants'+suffix)
     assertSame(s)
     await verifyAssignmentParticipantRoster(page,assignmentId,s.accountId,s.pkg.accountSpki)
