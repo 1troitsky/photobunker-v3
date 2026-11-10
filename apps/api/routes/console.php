@@ -13,3 +13,8 @@ if (filter_var(env('PB3_ENABLE_PHOTO_CLEANUP',false),FILTER_VALIDATE_BOOL)){
 if(filter_var(env('PB3_ENABLE_MEDIA_CLEANUP',false),FILTER_VALIDATE_BOOL)){
   Schedule::command('pb3:media-maintain')->everyMinute()->withoutOverlapping();
 }
+
+// Logical assignment tombstones only, NOT S3 deletion. Operator opt-in.
+if(filter_var(env('PB3_ENABLE_ASSIGNMENT_RETENTION',false),FILTER_VALIDATE_BOOL)){
+  Schedule::command('pb3:assignment-retain')->everyMinute()->withoutOverlapping();
+}
