@@ -201,6 +201,50 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
       return (await m.listLocalTeams()).find(x=>x.name==='TEAM SECRET PROOF')!.teamId
     }))
     expect(removedStatus).toBe(404)
+
+    // P1-29C: a previously excluded B may be invited again ONLY to the
+    // new signed epoch. The owner wraps *epoch 2 DEK*, B signs new consent,
+    // and the original revoked invitation remains immutable evidence.
+    await panel.getByRole('button',{name:'Добавить участника'}).click()
+    await panel.getByTestId('team-invite-contact').selectOption(accountB)
+    await panel.getByTestId('team-invite-role').selectOption('viewer')
+    await panel.getByTestId('team-invite-submit').click()
+    await expect(panel.getByText('Приглашение отправлено',{exact:false}))
+      .toBeVisible({timeout:30000})
+    await expect(panel.getByTestId('team-member-'+accountB))
+      .toContainText('Ожидает согласия',{timeout:30000})
+    await inbox.getByRole('button',{name:'Обновить'}).click()
+    await expect(inbox.getByTestId('team-incoming-invites'))
+      .toContainText('Наблюдатель',{timeout:30000})
+    await inbox.getByRole('button',{name:'Принять'}).click()
+    await expect(inbox.getByTestId('team-joined-list'))
+      .toContainText('TEAM SECRET PROOF',{timeout:30000})
+    await expect(inbox.getByTestId('team-joined-list'))
+      .toContainText('E2EE profile visible only to accepted users')
+    await expect(inbox.getByTestId('team-revoked-notice')).toHaveCount(0)
+    await expect(panel.getByTestId('team-member-'+accountB))
+      .toContainText('Принято',{timeout:30000})
+
+    // The P1-29C local signed op and ECDH envelope are additionally
+    // AES-GCM sealed under the owner's AKEK, never indexed in plaintext.
+    const sealedInvite=await A.evaluate(async()=>{
+      return new Promise<string>((resolve,reject)=>{
+        const req=indexedDB.open('pb3-encrypted-team-invites-v2')
+        req.onerror=()=>reject(req.error)
+        req.onsuccess=()=>{
+          const db=req.result,tx=db.transaction('operations','readonly')
+          const rows=tx.objectStore('operations').getAll()
+          rows.onerror=()=>reject(rows.error)
+          tx.oncomplete=()=>{
+            resolve(JSON.stringify(rows.result));db.close()
+          }
+        }
+      })
+    })
+    for(const forbidden of [
+      accountA,accountB,'TEAM SECRET PROOF','PRIVATE NOTES',
+      'recipientAccountId','keyEpochHash','wrappedKey',
+    ])expect(sealedInvite).not.toContain(forbidden)
   }finally{
     await ctxA.close();await ctxB.close();await ctxC.close()
   }
