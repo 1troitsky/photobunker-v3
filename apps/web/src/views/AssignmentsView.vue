@@ -12,7 +12,8 @@ import {
   queueAssignmentMediaSubmission, listAssignmentMediaSubmissions,
   signedAllowedAssignmentMedia,
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
-  signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,verifyAssignmentInvite,
+  signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,
+  signedAdvancedRequirements,verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
@@ -21,6 +22,8 @@ import type {
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import { preflightAssignmentMediaGrant } from '../features/assignments/application/media-submission-preflight'
+import { parseRulesCsv, EMPTY_ADVANCED_RULES } from '../features/assignments/domain/advanced-rules'
+import type { AdvancedRules } from '../features/assignments/domain/advanced-rules'
 import {
   openOwnerAssignment, openRecipientAssignment,
 } from '../features/assignments/infrastructure/assignment-crypto'
@@ -40,6 +43,7 @@ type VisibleAssignment={
   state:string;revision:number;policyRevision:number
   requirements:CaptureRequirements;allowedMedia:AllowedAssignmentMedia
   videoRequirements:CaptureRequirements;audioRequirements:CaptureRequirements
+  photoAdvanced:AdvancedRules;videoAdvanced:AdvancedRules;audioAdvanced:AdvancedRules
   localState?:string;goal:number|null;videoGoal:number|null;audioGoal:number|null
   confirmedPhotos:number|null // null = no authenticated server receipt count yet
   confirmedVideos:number|null;confirmedAudio:number|null
@@ -74,6 +78,12 @@ const editedVideoReqGps=ref(false)
 const editedAudioReqCategory=ref(false)
 const editedAudioReqDescription=ref<string|number>(0)
 const editedAudioReqGps=ref(false)
+const editedPhotoAllowed=ref('')
+const editedPhotoTags=ref('')
+const editedVideoAllowed=ref('')
+const editedVideoTags=ref('')
+const editedAudioAllowed=ref('')
+const editedAudioTags=ref('')
 const recipientId=ref('')
 const ownerCheck=ref<SafetyCheck|null>(null)
 const contributorCheck=ref<SafetyCheck|null>(null)
@@ -188,6 +198,8 @@ async function hydrate():Promise<void>{
       requirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       videoRequirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
       audioRequirements:{requiredCategory:false,descriptionMinLength:0,requiredGps:false},
+      photoAdvanced:EMPTY_ADVANCED_RULES,videoAdvanced:EMPTY_ADVANCED_RULES,
+      audioAdvanced:EMPTY_ADVANCED_RULES,
       allowedMedia:['photo'],
       localState:item.state,goal:item.photoGoal,videoGoal:null,audioGoal:null,
       confirmedPhotos:null,confirmedVideos:null,confirmedAudio:null,
@@ -277,6 +289,9 @@ async function hydrate():Promise<void>{
       requirements:signedPolicyRequirements(item),
       videoRequirements:signedMediaRequirements(item,'video'),
       audioRequirements:signedMediaRequirements(item,'audio'),
+      photoAdvanced:signedAdvancedRequirements(item,'photo'),
+      videoAdvanced:signedAdvancedRequirements(item,'video'),
+      audioAdvanced:signedAdvancedRequirements(item,'audio'),
       localState:previous?.localState,
       goal:item.photoGoal,videoGoal:signedPolicyGoals(item).videoGoal,
       audioGoal:signedPolicyGoals(item).audioGoal,
@@ -356,6 +371,12 @@ function choose(assignmentId:string):void{
   editedAudioReqCategory.value=chosen?.audioRequirements.requiredCategory??false
   editedAudioReqDescription.value=chosen?.audioRequirements.descriptionMinLength??0
   editedAudioReqGps.value=chosen?.audioRequirements.requiredGps??false
+  editedPhotoAllowed.value=chosen?.photoAdvanced.allowedCategories.join(', ')??''
+  editedPhotoTags.value=chosen?.photoAdvanced.requiredTags.join(', ')??''
+  editedVideoAllowed.value=chosen?.videoAdvanced.allowedCategories.join(', ')??''
+  editedVideoTags.value=chosen?.videoAdvanced.requiredTags.join(', ')??''
+  editedAudioAllowed.value=chosen?.audioAdvanced.allowedCategories.join(', ')??''
+  editedAudioTags.value=chosen?.audioAdvanced.requiredTags.join(', ')??''
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
   submissions.value=[];mediaSubmissions.value=[];cleanPreview()
@@ -405,6 +426,18 @@ async function changeGoal():Promise<void>{
         requiredCategory:editedAllowVideo.value&&editedVideoReqCategory.value,
         descriptionMinLength:editedAllowVideo.value?Number(editedVideoReqDescription.value):0,
         requiredGps:editedAllowVideo.value&&editedVideoReqGps.value,
+      },
+      photoAdvanced:{
+        allowedCategories:parseRulesCsv(editedPhotoAllowed.value,16,96),
+        requiredTags:parseRulesCsv(editedPhotoTags.value,12,48),
+      },
+      videoAdvanced:{
+        allowedCategories:editedAllowVideo.value?parseRulesCsv(editedVideoAllowed.value,16,96):[],
+        requiredTags:editedAllowVideo.value?parseRulesCsv(editedVideoTags.value,12,48):[],
+      },
+      audioAdvanced:{
+        allowedCategories:editedAllowAudio.value?parseRulesCsv(editedAudioAllowed.value,16,96):[],
+        requiredTags:editedAllowAudio.value?parseRulesCsv(editedAudioTags.value,12,48):[],
       },
       audioRequirements:{
         requiredCategory:editedAllowAudio.value&&editedAudioReqCategory.value,
