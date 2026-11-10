@@ -1180,6 +1180,25 @@ final class AssignmentV1Test extends TestCase
         $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
     }
 
+    /**
+     * Extra Fieldwork with the same owner: scoped grants must still be tied
+     * to the exact assignment ID, not just to the same recipient account.
+     */
+    private function otherAssignmentForScope():string
+    {
+        $id=(string)Str::uuid();
+        DB::table('assignment_records_v1')->insert([
+            'id'=>$id,'owner_account_id'=>$this->people['owner']['account'],
+            'operation_id'=>(string)Str::uuid(),
+            'contract_hash'=>str_repeat('d',64),
+            'contract_json'=>'{}','owner_signature'=>'fixture',
+            'private_envelope_json'=>'{}',
+            'state'=>'active','starts_at'=>now()->subHour()->getTimestampMs(),
+            'ends_at'=>null,'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        return $id;
+    }
+
     public function test_submission_requires_contributor_signed_bind_and_active_photo_grant():void
     {
         $this->createAssignment();
@@ -1230,9 +1249,19 @@ final class AssignmentV1Test extends TestCase
         ]);
         $this->postJson('/assignments/v1/'.$this->assignmentId.'/submissions',$input)
             ->assertConflict();
-        // A personal v1 photo may still be explicitly granted and submitted.
+        // A grant signed for another Fieldwork (even with the SAME owner)
+        // cannot be re-used for this assignment.
         DB::table('photo_records')->where('id',$photo)->update([
             'contract_json'=>'{}',
+        ]);
+        $other=$this->otherAssignmentForScope();
+        DB::table('photo_access_grants')->where('id',$grant)->update([
+            'assignment_id'=>$other,
+        ]);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/submissions',$input)
+            ->assertForbidden();
+        DB::table('photo_access_grants')->where('id',$grant)->update([
+            'assignment_id'=>$this->assignmentId,
         ]);
         $this->postJson('/assignments/v1/'.$this->assignmentId.'/submissions',$input)
             ->assertCreated();
@@ -1579,6 +1608,12 @@ final class AssignmentV1Test extends TestCase
         $this->as('recipient');
         $this->postJson($url,$raw)->assertUnprocessable(); // stale photo-only revision
         $valid=$this->signedMediaSubmit($video,'video');
+        $other=$this->otherAssignmentForScope();
+        DB::table('media_recipient_grants_v1')->where('id',$video['grantId'])
+            ->update(['assignment_id'=>$other]);
+        $this->postJson($url,$valid)->assertForbidden();
+        DB::table('media_recipient_grants_v1')->where('id',$video['grantId'])
+            ->update(['assignment_id'=>$this->assignmentId]);
         $this->postJson($url,$valid)->assertCreated()
             ->assertJsonPath('unchanged',false);
         $this->postJson($url,$valid)->assertOk()
