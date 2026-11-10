@@ -4,6 +4,7 @@ declare(strict_types=1);
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 /**
  * P1-27: real team ownership, separate from assignment/media ACL.
@@ -36,6 +37,15 @@ return new class extends Migration {
 
     public function down():void
     {
+        // Never silently drop signed owner contracts and authoritative
+        // memberships during an attempted downgrade. Operators must stop
+        // writers before any schema operation; this check is not a lock.
+        if((Schema::hasTable('team_records_v1')
+                &&DB::table('team_records_v1')->exists())
+            ||(Schema::hasTable('team_members_v1')
+                &&DB::table('team_members_v1')->exists())){
+            throw new \RuntimeException('pb3.teams.rollback_forbidden');
+        }
         Schema::dropIfExists('team_members_v1');
         Schema::dropIfExists('team_records_v1');
     }

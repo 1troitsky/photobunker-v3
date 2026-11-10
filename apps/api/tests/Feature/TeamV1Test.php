@@ -7,6 +7,7 @@ use App\Identity\Protocol as P;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -124,6 +125,30 @@ final class TeamV1Test extends TestCase
         $wrong=$this->contract('outsider');
         $this->postJson('/teams/v1',$this->signed('owner',$wrong))->assertUnprocessable();
         $this->assertDatabaseCount('team_records_v1',1);
+    }
+
+    public function test_nonempty_team_schema_refuses_destructive_rollback():void
+    {
+        $this->as('owner');
+        $body=$this->signed('owner',$this->contract('owner'));
+        $id=json_decode($body['contract'],true)['teamId'];
+        $this->postJson('/teams/v1',$body)->assertCreated();
+        $migration=require database_path(
+            'migrations/2026_11_10_000007_create_team_records_v1.php'
+        );
+        try{
+            $migration->down();
+            $this->fail('A nonempty Teams downgrade must be refused.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.teams.rollback_forbidden',$e->getMessage());
+        }
+        $this->assertTrue(Schema::hasTable('team_records_v1'));
+        $this->assertTrue(Schema::hasTable('team_members_v1'));
+        $this->assertDatabaseHas('team_records_v1',['id'=>$id]);
+        $this->assertDatabaseHas('team_members_v1',[
+            'team_id'=>$id,'account_id'=>$this->accounts['owner']['id'],
+            'role'=>'owner',
+        ]);
     }
 
     public function test_privacy_shape_and_bounded_owner_pagination():void
