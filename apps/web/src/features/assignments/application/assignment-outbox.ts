@@ -16,7 +16,7 @@ import type { MediaPrivateFields } from '../../media/domain/media-crypto'
 import { EMPTY_ADVANCED_RULES, normalizeAdvancedRules, validateAdvancedFields } from '../domain/advanced-rules'
 import type { AdvancedRules } from '../domain/advanced-rules'
 
-export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'|'private'
+export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'|'private'|'schedule'
 export type AssignmentOperationState='queued'|'retry'|'sent'|'conflict'
 
 export interface AssignmentOperation {
@@ -61,6 +61,9 @@ export type AssignmentListing={
   privateRevision?:number
   privateAmendmentContract?:string|null
   privateAmendmentSignature?:string|null
+  scheduleRevision?:number
+  scheduleAmendmentContract?:string|null
+  scheduleAmendmentSignature?:string|null
   stateContract:string|null
   stateSignature:string|null
   privateEnvelope:AssignmentEnvelope
@@ -339,6 +342,119 @@ async function verifyPrivateHistory(item:AssignmentListing,spki:string):Promise<
     throw Error('assignment.private_history_mismatch')
 }
 
+/**
+ * Scheduling is independently owner-signed. The signed creation dates are
+ * IMMUTABLE: these functions return effective time windows for admission.
+ * Root-only legacy assignments retain their historically enforced hard gates.
+ * Call only on a listing validated with verifySignedAssignmentPolicy().
+ */
+export type AssignmentSchedule={
+  startsAt:number;endsAt:number|null
+  blockBeforeStart:boolean;blockAfterEnd:boolean
+}
+function validScheduleTime(value:unknown):value is number{
+  return typeof value==='number'&&Number.isSafeInteger(value)
+    &&value>=1577836800000&&value<=4102444800000
+}
+export function validAssignmentSchedule(value:AssignmentSchedule):boolean{
+  return validScheduleTime(value.startsAt)
+    &&(value.endsAt===null
+      ||(validScheduleTime(value.endsAt)&&value.endsAt>value.startsAt))
+    &&typeof value.blockBeforeStart==='boolean'
+    &&typeof value.blockAfterEnd==='boolean'
+    &&(value.endsAt!==null||!value.blockAfterEnd)
+}
+export function signedAssignmentSchedule(item:AssignmentListing):AssignmentSchedule{
+  if((item.scheduleRevision??1)===1)return {
+    startsAt:item.startsAt,endsAt:item.endsAt,
+    blockBeforeStart:true,blockAfterEnd:item.endsAt!==null,
+  }
+  if(!item.scheduleAmendmentContract)
+    throw Error('assignment.schedule_not_authenticated')
+  const e=JSON.parse(item.scheduleAmendmentContract) as AssignmentSchedule
+  const result={
+    startsAt:e.startsAt,endsAt:e.endsAt,
+    blockBeforeStart:e.blockBeforeStart,blockAfterEnd:e.blockAfterEnd,
+  }
+  if(!validAssignmentSchedule(result))
+    throw Error('assignment.invalid_signed_schedule')
+  return result
+}
+export function schedulePermitsAt(item:AssignmentListing,at:number):boolean{
+  const w=signedAssignmentSchedule(item)
+  return (!w.blockBeforeStart||at>=w.startsAt)
+    &&(!w.blockAfterEnd||(w.endsAt!==null&&at<w.endsAt))
+}
+function parseScheduleEvent(raw:string):Record<string,unknown>{
+  let e:Record<string,unknown>
+  try{e=JSON.parse(raw) as Record<string,unknown>}
+  catch{throw Error('assignment.schedule_not_authenticated')}
+  if(!e||typeof e!=='object'||Array.isArray(e))
+    throw Error('assignment.schedule_not_authenticated')
+  const keys=[
+    'version','operationId','assignmentId','ownerAccountId',
+    'rootPolicyHash','previousScheduleHash','fromScheduleRevision',
+    'toScheduleRevision','startsAt','endsAt','blockBeforeStart','blockAfterEnd',
+  ]
+  if(Object.keys(e).sort().join('|')!==keys.sort().join('|')
+    ||JSON.stringify(e)!==raw
+    ||typeof e.operationId!=='string'
+    ||!/^[a-f0-9]{8}-[a-f0-9-]{27}$/.test(e.operationId)
+    ||!validAssignmentSchedule(e as AssignmentSchedule))
+    throw Error('assignment.schedule_not_authenticated')
+  return e
+}
+async function verifyScheduleEvent(
+  raw:string,signature:string,spki:string,item:AssignmentListing,
+  from:number,previousHash:string,
+):Promise<void>{
+  const e=parseScheduleEvent(raw)
+  const rootHash=hex(await digest(new TextEncoder().encode(item.policyContract)))
+  if(e.version!==1||e.assignmentId!==item.assignmentId
+    ||e.ownerAccountId!==item.ownerAccountId
+    ||e.rootPolicyHash!==rootHash
+    ||e.previousScheduleHash!==previousHash
+    ||e.fromScheduleRevision!==from||e.toScheduleRevision!==from+1
+    ||!await verify(await importSpki(spki),
+      'pb3.assignment-schedule.v1\n'+raw,signature))
+    throw Error('assignment.schedule_not_authenticated')
+}
+async function verifyScheduleHistory(item:AssignmentListing,spki:string):Promise<void>{
+  const rev=item.scheduleRevision??1
+  if(rev===1)return
+  const session=requireSession()
+  const history=await jsonApi<{
+    assignmentId:string;scheduleRevision:number;rootPolicyHash:string
+    events:Array<{fromScheduleRevision:number;toScheduleRevision:number
+      contractHash:string;contract:string;signature:string;occurredAtMs:number}>
+  }>('/assignments/v1/'+encodeURIComponent(item.assignmentId)+'/schedule-history')
+  assertSame(session)
+  const enc=new TextEncoder()
+  const rootHash=hex(await digest(enc.encode(item.policyContract)))
+  if(history.assignmentId!==item.assignmentId
+    ||history.scheduleRevision!==rev||history.rootPolicyHash!==rootHash
+    ||!Array.isArray(history.events)||history.events.length!==rev-1)
+    throw Error('assignment.schedule_history_incomplete')
+  let previousHash=rootHash
+  for(let i=0;i<history.events.length;i++){
+    const event=history.events[i]!
+    if(event.fromScheduleRevision!==i+1
+      ||event.toScheduleRevision!==i+2
+      ||!Number.isSafeInteger(event.occurredAtMs)
+      ||event.occurredAtMs<1577836800000)
+      throw Error('assignment.schedule_history_invalid')
+    const hash=hex(await digest(enc.encode(event.contract)))
+    if(event.contractHash!==hash)throw Error('assignment.schedule_history_invalid')
+    await verifyScheduleEvent(event.contract,event.signature,spki,item,
+      i+1,previousHash)
+    previousHash=hash
+  }
+  const latest=history.events.at(-1)!
+  if(latest.contract!==item.scheduleAmendmentContract
+    ||latest.signature!==item.scheduleAmendmentSignature)
+    throw Error('assignment.schedule_history_mismatch')
+}
+
 class AssignmentDB extends Dexie {
   operations!:Table<AssignmentOperation,string>
   assignments!:Table<LocalAssignment,string>
@@ -382,6 +498,7 @@ function domain(kind:AssignmentOperationKind):string{
     state:'pb3.assignment-state.v1\n',
     policy:'pb3.assignment-policy.v1\n',
     private:'pb3.assignment-private.v2\n',
+    schedule:'pb3.assignment-schedule.v1\n',
   }
   return signedDomains[kind]
 }
