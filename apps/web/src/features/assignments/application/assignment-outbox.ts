@@ -654,7 +654,9 @@ export async function readCachedPrivateAssignment(
 export async function queueAssignmentPolicyChange(
   assignmentId:string,
   next:{photoGoal:number|null;videoGoal?:number|null;audioGoal?:number|null;
-    allowedMedia?:AllowedAssignmentMedia}&CaptureRequirements,
+    allowedMedia?:AllowedAssignmentMedia
+    videoRequirements?:CaptureRequirements;audioRequirements?:CaptureRequirements
+  }&CaptureRequirements,
 ):Promise<string>{
   const s=requireSession()
   const {photoGoal,requiredCategory,descriptionMinLength,requiredGps}=next
@@ -674,6 +676,8 @@ export async function queueAssignmentPolicyChange(
   const previousRules=signedPolicyRequirements(a)
   const previousMedia=signedAllowedAssignmentMedia(a)
   const previousGoals=signedPolicyGoals(a)
+  const previousVideoRules=signedMediaRequirements(a,'video')
+  const previousAudioRules=signedMediaRequirements(a,'audio')
   const allowedMedia=next.allowedMedia??previousMedia
   if(!validAllowedMedia(allowedMedia))throw Error('assignment.invalid_allowed_media')
   const videoGoal=next.videoGoal===undefined?previousGoals.videoGoal:next.videoGoal
@@ -681,10 +685,19 @@ export async function queueAssignmentPolicyChange(
   if((videoGoal!==null&&!allowedMedia.includes('video'))
     ||(audioGoal!==null&&!allowedMedia.includes('audio')))
     throw Error('assignment.goal_for_disabled_type')
+  const videoRequirements=allowedMedia.includes('video')
+    ?next.videoRequirements??previousVideoRules:{...NO_CAPTURE_REQUIREMENTS}
+  const audioRequirements=allowedMedia.includes('audio')
+    ?next.audioRequirements??previousAudioRules:{...NO_CAPTURE_REQUIREMENTS}
+  if(!validCaptureRequirements(videoRequirements)
+    ||!validCaptureRequirements(audioRequirements))
+    throw Error('assignment.invalid_media_requirements')
   const mediaChanged=JSON.stringify(allowedMedia)!==JSON.stringify(previousMedia)
   if(a.state!=='active'||(a.photoGoal===photoGoal&&!mediaChanged
     &&videoGoal===previousGoals.videoGoal
     &&audioGoal===previousGoals.audioGoal
+    &&JSON.stringify(videoRequirements)===JSON.stringify(previousVideoRules)
+    &&JSON.stringify(audioRequirements)===JSON.stringify(previousAudioRules)
     &&previousRules.requiredCategory===requiredCategory
     &&previousRules.descriptionMinLength===descriptionMinLength
     &&previousRules.requiredGps===requiredGps))
@@ -701,15 +714,14 @@ export async function queueAssignmentPolicyChange(
   const previousContract=a.policyRevision===1?a.policyContract:a.policyAmendmentContract
   if(!previousContract)throw Error('assignment.policy_revision_not_authenticated')
   const previousPolicyHash=hex(await digest(enc.encode(previousContract)))
-  // Always publish new edits as v4. Historical v1-v3 contracts
-  // remain immutable and are still verified at their original revision.
+  // New edits use v5; historical v1-v4 signatures are immutable.
   const payload={
-    version:4,operationId:crypto.randomUUID(),assignmentId,
+    version:5,operationId:crypto.randomUUID(),assignmentId,
     ownerAccountId:s.accountId,rootPolicyHash,previousPolicyHash,
     fromPolicyRevision:a.policyRevision,toPolicyRevision:a.policyRevision+1,
     photoGoal,allowedMedia,
     requiredCategory,descriptionMinLength,requiredGps,
-    videoGoal,audioGoal,
+    videoGoal,audioGoal,videoRequirements,audioRequirements,
   }
   const op=await signedOperation('policy',
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/policy',payload)
@@ -727,6 +739,8 @@ export async function queueAssignmentGoalChange(
   const targets=signedPolicyGoals(row.listing)
   return queueAssignmentPolicyChange(assignmentId,{
     photoGoal,videoGoal:targets.videoGoal,audioGoal:targets.audioGoal,...rules,
+    videoRequirements:signedMediaRequirements(row.listing,'video'),
+    audioRequirements:signedMediaRequirements(row.listing,'audio'),
   })
 }
 
@@ -897,6 +911,7 @@ export async function listAssignmentSubmissions(assignmentId:string):Promise<Arr
  */
 export async function signedMediaCaptureIntent(
   assignmentId:string,mediaType:'video'|'audio',startedAt=Date.now(),
+  privateFields:MediaPrivateFields={},
 ):Promise<Omit<MediaCaptureIntent,'finishedAt'>>{
   const session=requireSession()
   const row=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
@@ -916,6 +931,10 @@ export async function signedMediaCaptureIntent(
   if(!latest||![3,4].includes(
     (JSON.parse(latest) as {version?:number}).version??0))
     throw Error('assignment.media_policy_v3_required')
+  // Validate the exact user-supplied, private E2EE metadata before
+  // the MediaRecorder obtains any recording bytes. No server field leaks.
+  const canonical=prepareMediaPrivateFields(privateFields,startedAt)
+  validateMediaPrivateRequirements(canonical,signedMediaRequirements(policy,mediaType))
   const policyHash=hex(await digest(new TextEncoder().encode(latest)))
   assertSame(session)
   return {
