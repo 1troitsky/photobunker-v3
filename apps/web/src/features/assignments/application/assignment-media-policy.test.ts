@@ -1,6 +1,6 @@
 import {describe,expect,it} from 'vitest'
 import {
-  validAllowedMedia,signedAllowedAssignmentMedia,signedPolicyRequirements,
+  validAllowedMedia,signedAllowedAssignmentMedia,signedPolicyRequirements,signedPolicyGoals,
 } from './assignment-outbox'
 import type {AssignmentListing} from './assignment-outbox'
 
@@ -58,5 +58,46 @@ describe('P1-13 signed media type policy',()=>{
       version:3,allowedMedia:['photo','video'],
       requiredGps:'yes',requiredCategory:true,descriptionMinLength:15,
     }))).toThrow('assignment.invalid_capture_requirements')
+  })
+})
+
+describe('P1-15 independently signed multimedia target counts',()=>{
+  it('reads v4 targets but never invents old v1-v3 goals',()=>{
+    const legacy=policy(2,{version:3,allowedMedia:['photo','video']})
+    expect(signedPolicyGoals(legacy)).toEqual({
+      photoGoal:30,videoGoal:null,audioGoal:null,
+    })
+    expect(()=>signedPolicyGoals({...legacy,videoGoal:2}))
+      .toThrow('assignment.unsigned_media_goal')
+    const amended=policy(3,{
+      version:4,photoGoal:30,videoGoal:2,audioGoal:1,
+      allowedMedia:['photo','video','audio'],
+    })
+    expect(signedPolicyGoals({...amended,videoGoal:2,audioGoal:1}))
+      .toEqual({photoGoal:30,videoGoal:2,audioGoal:1})
+  })
+  it('rejects forged projections, out-of-bounds counts, and goals for disabled types',()=>{
+    const base=policy(2,{
+      version:4,photoGoal:30,videoGoal:2,audioGoal:null,
+      allowedMedia:['photo','video'],
+    })
+    expect(()=>signedPolicyGoals({...base,videoGoal:3}))
+      .toThrow('assignment.invalid_signed_goal')
+    expect(()=>signedPolicyGoals({...base,audioGoal:1,videoGoal:2}))
+      .toThrow('assignment.invalid_signed_goal')
+    for(const wrong of [0,-1,1.5,1000,'2']){
+      const mutated=policy(2,{
+        version:4,photoGoal:30,videoGoal:wrong,audioGoal:null,
+        allowedMedia:['photo','video'],
+      })
+      expect(()=>signedPolicyGoals({...mutated,videoGoal:wrong as number}))
+        .toThrow('assignment.invalid_signed_goal')
+    }
+    expect(()=>signedPolicyGoals({...policy(2,{
+      version:4,photoGoal:30,videoGoal:1,audioGoal:null,
+      allowedMedia:['photo'],
+    }),videoGoal:1})).toThrow('assignment.invalid_signed_goal')
+    expect(signedPolicyGoals({...base,videoGoal:2}))
+      .toEqual({photoGoal:30,videoGoal:2,audioGoal:null})
   })
 })
