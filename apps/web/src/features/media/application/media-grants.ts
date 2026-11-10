@@ -115,6 +115,7 @@ export function parseMediaGrantContract(input:unknown):MediaGrantContract{
  */
 export async function queueMediaRecipientGrant(
   mediaId:string,recipientAccountId:string,assignmentId?:string,
+  maxExpiresAt?:number|null,
 ):Promise<string>{
   const session=requireSession()
   if(session.accountId===recipientAccountId)
