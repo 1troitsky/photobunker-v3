@@ -12,12 +12,38 @@ import type {
   CloudMedia,StoredMedia,
 } from '../application/media-outbox'
 import type { MediaMetadata } from '../domain/media-crypto'
+import type { GPSFix } from '../../photo-sync/domain/capture-metadata'
 const local=ref<StoredMedia[]>([])
 const cloud=ref<CloudMedia[]>([])
 const cursor=ref<string|null>(null)
 const selectedUrl=ref('')
 const metadata=ref<MediaMetadata|null>(null)
 const busy=ref(false)
+const privateCategory=ref('')
+const privateDescription=ref('')
+const privateGps=ref<GPSFix|null>(null)
+const gpsError=ref('')
+const gpsLoading=ref(false)
+let gpsRequest=0
+async function obtainImportGps():Promise<void>{
+  const session=activeSession.value
+  if(!session||!navigator.geolocation){gpsError.value='media.gps_unavailable';return}
+  const request=++gpsRequest
+  gpsLoading.value=true;gpsError.value=''
+  try{
+    const position=await new Promise<GeolocationPosition>((resolve,reject)=>{
+      navigator.geolocation.getCurrentPosition(resolve,reject,{
+        enableHighAccuracy:true,maximumAge:0,timeout:12000,
+      })
+    })
+    if(request!==gpsRequest||activeSession.value!==session)return
+    privateGps.value={
+      latitude:position.coords.latitude,longitude:position.coords.longitude,
+      accuracyMeters:position.coords.accuracy,recordedAt:Math.round(position.timestamp),
+    }
+  }catch(e){if(request===gpsRequest)gpsError.value=e instanceof Error?e.message:'media.gps_unavailable'}
+  finally{if(request===gpsRequest)gpsLoading.value=false}
+}
 const notice=ref('')
 const error=ref('')
 let detach:()=>void=()=>{}
@@ -51,7 +77,10 @@ async function chooseFile(event:Event):Promise<void>{
   if(!selected||busy.value)return
   busy.value=true;notice.value='';error.value=''
   try{
-    await enqueueEncryptedMedia(selected)
+    await enqueueEncryptedMedia(selected,undefined,{
+      category:privateCategory.value,description:privateDescription.value,
+      gps:privateGps.value,
+    })
     await refresh()
     notice.value='Файл зашифрован и сохранён на устройстве. Синхронизация будет подтверждена отдельно.'
   }catch(e){error.value=explanation(e)}
@@ -97,6 +126,8 @@ async function more():Promise<void>{
   finally{busy.value=false}
 }
 watch(activeSession,()=>{
+  gpsRequest++;privateGps.value=null;gpsError.value=''
+  privateCategory.value='';privateDescription.value=''
   clearPreview()
   local.value=[];cloud.value=[];cursor.value=null
   void refresh()
@@ -113,6 +144,20 @@ onUnmounted(()=>{detach();clearPreview()})
       Имя и формат находятся внутри зашифрованных метаданных.
       В облаке сохраняется только шифротекст.
     </p>
+    <div class="foundation-card">
+      <h3>Приватные метаданные импорта</h3>
+      <label for="media-import-category">Категория</label>
+      <input id="media-import-category" v-model="privateCategory" maxlength="64" autocomplete="off">
+      <label for="media-import-description">Описание</label>
+      <textarea id="media-import-description" v-model="privateDescription" maxlength="4000" rows="3"/>
+      <div class="action-row">
+        <button type="button" :disabled="gpsLoading||busy" @click="obtainImportGps">Получить текущий GPS</button>
+        <button v-if="privateGps" type="button" @click="privateGps=null">Очистить GPS</button>
+      </div>
+      <p v-if="privateGps" class="muted">GPS текущего устройства, не подтверждение места создания импортируемого файла.</p>
+      <p v-if="gpsError" role="alert" class="error-text">{{ gpsError }}</p>
+      <p class="muted">Значения шифруются вместе с файлом. После импорта нельзя выдать ключ заданию, если его свежие подписанные требования к метаданным не выполнены.</p>
+    </div>
     <div class="action-row">
       <label class="media-file-choice">
         Выбрать файл
@@ -152,7 +197,10 @@ onUnmounted(()=>{detach();clearPreview()})
       <img v-if="metadata.mime.startsWith('image/')" :src="selectedUrl" alt="Личный файл" class="decrypted-preview">
       <video v-else-if="metadata.mime.startsWith('video/')" :src="selectedUrl" controls playsinline preload="metadata" class="decrypted-preview"/>
       <audio v-else-if="metadata.mime.startsWith('audio/')" :src="selectedUrl" controls preload="metadata"/>
-      <p class="muted">Исходное имя файла и формат прочитаны из AES-GCM метаданных, не из серверного каталога.</p>
+      <p v-if="metadata.category" class="muted">Категория: {{ metadata.category }}</p>
+      <p v-if="metadata.description" class="muted">Описание: {{ metadata.description }}</p>
+      <p v-if="metadata.gps" class="muted">GPS: {{ metadata.gps.latitude }}, {{ metadata.gps.longitude }} · ±{{ Math.round(metadata.gps.accuracyMeters) }} м</p>
+      <p class="muted">Имя, формат и приватные поля расшифрованы из AES-GCM метаданных, не из серверного каталога.</p>
       <button type="button" @click="clearPreview">Закрыть</button>
     </div>
     <p v-if="notice" role="status">{{ notice }}</p>
