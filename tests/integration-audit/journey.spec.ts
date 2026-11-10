@@ -36,7 +36,15 @@ test('independent Contacts/instructions/offline capture -> scoped grants -> A de
   await A.reload();await A.getByRole('tab',{name:'Участники'}).click()
   await expect(A.getByTestId('editor-participant-'+bId)).toContainText('Принято сервером')
   // Assignment detail authenticates and caches private revision 2 before offline camera use.
-  await B.goto('/assignments');await B.locator('.assignment-card').filter({hasText:id.slice(0,8)}).getByRole('button',{name:'Открыть',exact:true}).click()
+  await B.goto('/assignments');await ready(B)
+  await B.getByRole('button',{name:'Обновить',exact:true}).click()
+  await expect.poll(()=>B.evaluate(async({paths,id})=>{
+   const a=await import(paths.a),row=(await a.listCachedAssignmentSnapshots()).find((x:any)=>x.assignmentId===id)
+   const value=row?await a.readCachedPrivateAssignment(id,a.assignmentPrivateCacheScope(row)):null
+   return value?.version??null
+  },{paths,id})).toBe(2)
+  await B.locator('.assignment-card').filter({hasText:id.slice(0,8)}).getByRole('button',{name:'Открыть',exact:true}).click()
+  await info.attach('audit-proof',{contentType:'application/json',body:JSON.stringify({scenario:'private-cache-online-precondition',verifiedPrivateVersion:2,onlineProofCompleted:true})})
   await cb.setOffline(true)
   await B.getByRole('navigation',{name:'Главная навигация'}).getByRole('link',{name:'Камера',exact:true}).click()
   await B.locator('#camera-assignment').selectOption(id)
