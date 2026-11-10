@@ -173,6 +173,9 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await A.getByRole('tab',{name:'Участники'}).click()
     await expect(A.getByTestId('editor-participant-'+contributorId))
       .toContainText('Принято сервером',{timeout:20000})
+    // Return to the existing owner media-review flow after inspecting roster.
+    await A.goto('/assignments')
+    await A.getByRole('button',{name:'Открыть',exact:true}).first().click()
     await expect(B.locator('.assignment-card-name').getByText('Media v3 opt-in assignment'))
       .toBeVisible({timeout:20000})
     await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
