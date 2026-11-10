@@ -147,6 +147,7 @@ final class TeamKeyEpochTest extends TestCase
             'previousEpochHash'=>$this->rootHash,
             'privateEnvelope'=>self::profile(),
             'recipients'=>$recipients??[$this->recipient('contributor')],
+            'retiredPendingInviteIds'=>[],
         ];
     }
 
@@ -243,6 +244,79 @@ final class TeamKeyEpochTest extends TestCase
         $this->loginAs('stranger');
         $this->getJson('/teams/v1/'.$this->teamId.'/epoch/member')->assertNotFound();
         $this->getJson('/teams/v1/'.$this->teamId.'/epoch/owner')->assertNotFound();
+    }
+
+    /** T29B-01: pending consent may only be invalidated by the exact
+     * invitation ID embedded in the owner's signed new-epoch contract. */
+    public function test_signed_pending_retirement_is_atomic_exact_and_auditable():void
+    {
+        $id=(string)Str::uuid();
+        $c=[
+            'version'=>1,'inviteId'=>$id,'operationId'=>(string)Str::uuid(),
+            'teamId'=>$this->teamId,
+            'ownerAccountId'=>$this->accounts['owner']['id'],
+            'teamContractHash'=>$this->rootHash,
+            'recipientAccountId'=>$this->accounts['stranger']['id'],
+            'role'=>'viewer','fileAccess'=>'none',
+            'recipientKeyDigest'=>str_repeat('e',64),
+            'expiresAt'=>now()->addDay()->getTimestampMs(),
+            'envelope'=>[
+                'ephemeralSpki'=>$this->accounts['owner']['spki'],
+                'salt'=>P::encode(random_bytes(16)),
+                'iv'=>P::encode(random_bytes(12)),
+                'ciphertext'=>P::encode(random_bytes(48)),
+            ],
+        ];
+        $signedInvite=$this->signed('owner','pb3.team-invite.v1',$c);
+        DB::table('team_invites_v1')->insert([
+            'id'=>$id,'team_id'=>$this->teamId,
+            'owner_account_id'=>$this->accounts['owner']['id'],
+            'recipient_account_id'=>$this->accounts['stranger']['id'],
+            'operation_id'=>$c['operationId'],'role'=>'viewer',
+            'state'=>'pending','recipient_key_digest'=>str_repeat('e',64),
+            'contract_hash'=>hash('sha256',$signedInvite['contract']),
+            'contract_json'=>$signedInvite['contract'],
+            'owner_signature'=>$signedInvite['signature'],
+            'expires_at'=>$c['expiresAt'],
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->quarantined();
+        $this->loginAs('owner');
+        $without=$this->epoch();
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
+            $this->signed('owner','pb3.team-key-epoch.v1',$without))
+            ->assertConflict();
+        $this->assertDatabaseHas('team_invites_v1',[
+            'id'=>$id,'state'=>'pending',
+        ]);
+        $wrong=$this->epoch();
+        $wrong['retiredPendingInviteIds']=[(string)Str::uuid()];
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
+            $this->signed('owner','pb3.team-key-epoch.v1',$wrong))
+            ->assertConflict();
+        $bad=$this->epoch();
+        $bad['retiredPendingInviteIds']=[$id,$id];
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',
+            $this->signed('owner','pb3.team-key-epoch.v1',$bad))
+            ->assertUnprocessable();
+        $correct=$this->epoch();
+        $correct['retiredPendingInviteIds']=[$id];
+        $command=$this->signed('owner','pb3.team-key-epoch.v1',$correct);
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',$command)
+            ->assertCreated()->assertJsonPath('keyEpoch',2);
+        $this->postJson('/teams/v1/'.$this->teamId.'/epoch',$command)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('team_invites_v1',[
+            'id'=>$id,'state'=>'revoked','contract_json'=>$signedInvite['contract'],
+        ]);
+        $this->assertDatabaseHas('team_key_epochs_v1',[
+            'team_id'=>$this->teamId,'epoch'=>2,
+            'contract_json'=>$command['contract'],
+        ]);
+        $this->getJson('/teams/v1/'.$this->teamId.'/epoch/history')
+            ->assertOk()->assertJsonPath('items.0.contract',$command['contract']);
+        $this->assertDatabaseCount('team_key_epochs_v1',1);
+        $this->assertDatabaseCount('team_epoch_grants_v1',1);
     }
 
     public function test_nonempty_epoch_evidence_prevents_destructive_downgrade():void

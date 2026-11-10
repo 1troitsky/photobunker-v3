@@ -131,6 +131,33 @@ describe('P1-29B encrypted owner Team key epoch outbox',()=>{
     ])expect(local).not.toContain(secret)
     expect(sent).toHaveLength(0)
   })
+  it('owner signs exact sorted pending invitation IDs in the new epoch',async()=>{
+    activeSession.value={...session,online:true}
+    const p1=crypto.randomUUID(),p2=crypto.randomUUID()
+    roster.mockResolvedValue([
+      {
+        inviteId:crypto.randomUUID(),recipientAccountId:recipientId,
+        role:'viewer',state:'accepted',expiresAt:Date.now()+100000,
+      },
+      {
+        inviteId:p1,recipientAccountId:crypto.randomUUID(),
+        role:'contributor',state:'pending',expiresAt:Date.now()+100000,
+      },
+      {
+        inviteId:p2,recipientAccountId:crypto.randomUUID(),
+        role:'viewer',state:'pending',expiresAt:Date.now()+100000,
+      },
+    ])
+    await queueTeamKeyRotation(teamId)
+    await expect(syncTeamKeyRotations()).rejects.toThrow('network.lost_ack')
+    const command=JSON.parse(sent[0]!) as {contract:string;signature:string}
+    const c=JSON.parse(command.contract) as {
+      retiredPendingInviteIds:string[];recipients:Array<{accountId:string}>
+    }
+    expect(c.retiredPendingInviteIds).toEqual([p1,p2].sort())
+    expect(c.recipients).toHaveLength(1)
+    expect(c.recipients[0]?.accountId).toBe(recipientId)
+  })
   it('replays EXACT signed bytes after Lost ACK and preserves epoch AAD',async()=>{
     activeSession.value={...session,online:true}
     await queueTeamKeyRotation(teamId)
@@ -141,7 +168,7 @@ describe('P1-29B encrypted owner Team key epoch outbox',()=>{
     const command=JSON.parse(sent[0]!) as {contract:string;signature:string}
     const c=JSON.parse(command.contract) as {
       fromEpoch:number;toEpoch:number;membershipRevision:number
-      previousEpochHash:string
+      previousEpochHash:string;retiredPendingInviteIds:string[]
       recipients:Array<{accountId:string;role:string;recipientKeyDigest:string
         envelope:{ephemeralSpki:string;salt:string;iv:string;ciphertext:string}}>
       privateEnvelope:{ciphertext:string}
@@ -150,6 +177,7 @@ describe('P1-29B encrypted owner Team key epoch outbox',()=>{
     expect(c.toEpoch).toBe(2)
     expect(c.membershipRevision).toBe(2)
     expect(c.previousEpochHash).toBe(root.contractHash)
+    expect(c.retiredPendingInviteIds).toEqual([])
     expect(c.recipients).toHaveLength(1)
     expect(c.recipients[0]?.accountId).toBe(recipientId)
     expect(c.recipients[0]?.role).toBe('viewer')

@@ -63,10 +63,16 @@ type Stored={key:string;ownerScope:string;iv:string;ciphertext:string}
 class TeamMembersDB extends Dexie {
   operations!:Table<Stored,string>
   joined!:Table<Stored,string>
+  freshness!:Table<Stored,string>
   constructor(){
     super('pb3-encrypted-team-members-v1')
     this.version(1).stores({
       operations:'&key,ownerScope',joined:'&key,ownerScope',
+    })
+    // Additive schema only; do not remove encrypted local snapshots/outbox.
+    this.version(2).stores({
+      operations:'&key,ownerScope',joined:'&key,ownerScope',
+      freshness:'&key,ownerScope',
     })
   }
 }
@@ -387,6 +393,7 @@ export async function listOwnerTeamRoster(teamId:string):Promise<TeamRosterMembe
   const result:TeamRosterMember[]=[]
   const signer=await importSpki(s.pkg.accountSpki)
   const audit=await verifiedTeamMembershipHistory(teamId)
+  let independentlySignedRetirements:Set<string>|null=null
   for(let n=0;n<100;n++){
     const path:string='/teams/v1/'+encodeURIComponent(teamId)+'/participants'
       +(after?'?after='+encodeURIComponent(after):'')
@@ -426,8 +433,23 @@ export async function listOwnerTeamRoster(teamId:string):Promise<TeamRosterMembe
         if(e.action==='remove')signedRevoked=true
         else effectiveRole=e.nextRole as TeamRole
       }
+      // Automatic pending retirement is authorized by a *specific* signed
+      // key-epoch record, not an arbitrary server-provided revoked flag.
+      // A consented member may only be removed by a signed membership event.
+      let signedEpochRetirement=false
+      if(item.state==='revoked'&&!signedRevoked
+        &&item.acceptedContract===null&&item.acceptedSignature===null){
+        if(independentlySignedRetirements===null){
+          const {verifiedRetiredPendingTeamInvites}=await import('./team-epochs')
+          independentlySignedRetirements=
+            await verifiedRetiredPendingTeamInvites(teamId)
+          same(s)
+        }
+        signedEpochRetirement=independentlySignedRetirements.has(item.inviteId)
+      }
       if(item.effectiveRole!==effectiveRole
-        ||(item.state==='revoked')!==signedRevoked)
+        ||(item.state==='revoked')!==(signedRevoked||signedEpochRetirement)
+        ||signedEpochRetirement&&item.acceptedContract!==null)
         throw Error('teams.roster_acl_mismatch')
       result.push({inviteId:item.inviteId,recipientAccountId:c.recipientAccountId,
         role:effectiveRole,state:item.state,expiresAt:item.expiresAt})
@@ -594,6 +616,122 @@ export async function queueTeamAcceptance(invite:TeamInvitation):Promise<string>
 /** Accepted member-only server response: requires current ACL and a verified
  * owner signature + independently pinned identity before exposing plaintext.
  */
+
+/** Local replay floor. Deliberately NOT a global monotonic security anchor:
+ * a fully rolled-back device/database can also roll back this record.
+ */
+export type TeamVerifiedEpoch={
+  keyEpoch:number;contractHash:string;membershipRevision:number
+}
+type TeamEpochFloor=TeamVerifiedEpoch & {
+  version:1;teamId:string;ownerAccountId:string
+}
+const digestPattern=/^[a-f0-9]{64}$/
+function checkedFloor(
+  s:Session,teamId:string,ownerAccountId:string,
+  stamp:TeamVerifiedEpoch,
+):TeamEpochFloor{
+  if(!uuidPattern.test(teamId)||!uuidPattern.test(ownerAccountId)
+    ||!Number.isInteger(stamp.keyEpoch)||stamp.keyEpoch<1
+    ||stamp.keyEpoch>1000001
+    ||!Number.isInteger(stamp.membershipRevision)
+    ||stamp.membershipRevision<1||stamp.membershipRevision>1000000
+    ||typeof stamp.contractHash!=='string'
+    ||!digestPattern.test(stamp.contractHash))
+    throw Error('teams.epoch_freshness_invalid')
+  same(s)
+  return {version:1,teamId,ownerAccountId,...stamp}
+}
+function checkMonotonic(prior:TeamEpochFloor,next:TeamEpochFloor):void{
+  if(prior.version!==1||prior.teamId!==next.teamId
+    ||prior.ownerAccountId!==next.ownerAccountId)
+    throw Error('teams.verified_epoch_owner_changed')
+  if(prior.keyEpoch>next.keyEpoch)
+    throw Error('teams.verified_epoch_rollback')
+  if(prior.keyEpoch===next.keyEpoch
+    &&prior.contractHash!==next.contractHash)
+    throw Error('teams.verified_epoch_fork')
+  if(prior.membershipRevision>next.membershipRevision)
+    throw Error('teams.verified_revision_rollback')
+}
+async function sealVerifiedRecord(
+  s:Session,kind:'joined'|'freshness',teamId:string,value:unknown,
+):Promise<Stored>{
+  same(s)
+  const {ownerScope,key:rowKey}=await rowId(s,kind,teamId)
+  const iv=random(12)
+  const ciphertext=await crypto.subtle.encrypt({
+    name:'AES-GCM',iv,
+    additionalData:enc.encode(localAAD+ownerScope+'\n'+rowKey),
+    tagLength:128,
+  },await key(s),enc.encode(JSON.stringify(value)))
+  same(s)
+  return {key:rowKey,ownerScope,iv:b64(iv),ciphertext:b64(ciphertext)}
+}
+async function openFloor(
+  s:Session,row:Stored,expected:TeamEpochFloor,
+):Promise<TeamEpochFloor>{
+  const {ownerScope,key:rowKey}=await rowId(s,'freshness',expected.teamId)
+  if(row.ownerScope!==ownerScope||row.key!==rowKey)
+    throw Error('teams.epoch_freshness_corrupt')
+  let prior:TeamEpochFloor
+  try{
+    const plain=await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(row.iv,12),
+      additionalData:enc.encode(localAAD+ownerScope+'\n'+rowKey),
+      tagLength:128,
+    },await key(s),unb64(row.ciphertext))
+    prior=JSON.parse(dec.decode(plain)) as TeamEpochFloor
+  }catch{throw Error('teams.epoch_freshness_corrupt')}
+  if(!prior||typeof prior!=='object'||Array.isArray(prior)
+    ||Object.keys(prior).sort().join('|')
+      !=='contractHash|keyEpoch|membershipRevision|ownerAccountId|teamId|version'
+    ||prior.version!==1||!digestPattern.test(prior.contractHash)
+    ||!Number.isInteger(prior.keyEpoch)
+    ||!Number.isInteger(prior.membershipRevision)
+    ||prior.teamId!==expected.teamId)
+    throw Error('teams.epoch_freshness_corrupt')
+  return prior
+}
+/** Early rejection avoids needlessly decrypting an already known old Team
+ * epoch. Definitive read/compare/write happens atomically with joined cache.
+ */
+export async function assertVerifiedTeamEpochNotOlder(
+  teamId:string,ownerAccountId:string,stamp:TeamVerifiedEpoch,
+):Promise<void>{
+  const s=requireSession()
+  const next=checkedFloor(s,teamId,ownerAccountId,stamp)
+  const {key:rowKey}=await rowId(s,'freshness',teamId)
+  const row=await db.freshness.get(rowKey)
+  if(row)checkMonotonic(await openFloor(s,row,next),next)
+  same(s)
+}
+async function commitVerifiedTeamView(
+  s:Session,view:JoinedTeam,stamp:TeamVerifiedEpoch,
+):Promise<void>{
+  const next=checkedFloor(s,view.teamId,view.ownerAccountId,stamp)
+  if(!view.verifiedOnline)
+    throw Error('teams.epoch_freshness_unverified_view')
+  const [stampRow,joinedRow]=await Promise.all([
+    sealVerifiedRecord(s,'freshness',view.teamId,next),
+    sealVerifiedRecord(s,'joined',view.teamId,view),
+  ])
+  // A single IndexedDB transaction protects the verified watermark and the
+  // corresponding private joined view across competing tabs and async flows.
+  await db.transaction('rw',db.freshness,db.joined,async()=>{
+    same(s)
+    const row=await db.freshness.get(stampRow.key)
+    if(row){
+      const prior=await Dexie.waitFor(openFloor(s,row,next))
+      checkMonotonic(prior,next)
+    }
+    same(s)
+    await db.freshness.put(stampRow)
+    await db.joined.put(joinedRow)
+  })
+  same(s)
+}
+
 export async function openJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
   const s=requireSession()
   if(!s.online)throw Error('teams.member_requires_online')
@@ -666,6 +804,7 @@ export async function openJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
     ||data.description.trim()!==data.description||data.description.length>1024)
     throw Error('teams.member_profile_invalid')
   let effectiveRole:TeamRole=c.role
+  let verifiedRevision=1
   if(response.latestRoleEvent!==null){
     const event=decodeMembershipContract(response.latestRoleEvent.contract)
     if(event.action!=='change_role'
@@ -677,13 +816,17 @@ export async function openJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
         response.latestRoleEvent.signature))
       throw Error('teams.untrusted_role_change')
     effectiveRole=event.nextRole as TeamRole
+    verifiedRevision=event.toRevision
   }
   if(response.effectiveRole!==effectiveRole)
     throw Error('teams.untrusted_effective_role')
   same(s)
   const joined:JoinedTeam={teamId:c.teamId,ownerAccountId:c.ownerAccountId,
     name:data.name,description:data.description,role:effectiveRole,verifiedOnline:true}
-  await sealRow(s,'joined',c.teamId,joined)
+  await commitVerifiedTeamView(s,joined,{
+    keyEpoch:1,contractHash:c.teamContractHash,
+    membershipRevision:verifiedRevision,
+  })
   return joined
 }
 /** Best-effort local cleanup after a CURRENT online ACL revocation.
@@ -692,6 +835,7 @@ export async function openJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
  * decrypted ciphertext and role binding have all been checked. */
 export async function cacheVerifiedJoinedTeam(
   team:JoinedTeam,expectedRecipientAccountId:string,
+  epoch:TeamVerifiedEpoch,
 ):Promise<void>{
   const s=requireSession()
   if(s.accountId!==expectedRecipientAccountId)
@@ -700,7 +844,7 @@ export async function cacheVerifiedJoinedTeam(
     ||!['curator','contributor','viewer'].includes(team.role)
     ||!team.verifiedOnline)
     throw Error('teams.invalid_verified_member_cache')
-  await sealRow(s,'joined',team.teamId,team)
+  await commitVerifiedTeamView(s,team,epoch)
 }
 export async function dropRevokedJoinedTeam(teamId:string):Promise<void>{
   const s=requireSession()
