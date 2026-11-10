@@ -13,6 +13,7 @@ import type {
 } from '../application/media-outbox'
 import type { MediaMetadata } from '../domain/media-crypto'
 import type { GPSFix } from '../../photo-sync/domain/capture-metadata'
+import { parseRulesCsv } from '../../assignments/domain/advanced-rules'
 const local=ref<StoredMedia[]>([])
 const cloud=ref<CloudMedia[]>([])
 const cursor=ref<string|null>(null)
@@ -21,6 +22,7 @@ const metadata=ref<MediaMetadata|null>(null)
 const busy=ref(false)
 const privateCategory=ref('')
 const privateDescription=ref('')
+const privateTags=ref('')
 const privateGps=ref<GPSFix|null>(null)
 const gpsError=ref('')
 const gpsLoading=ref(false)
@@ -79,7 +81,7 @@ async function chooseFile(event:Event):Promise<void>{
   try{
     await enqueueEncryptedMedia(selected,undefined,{
       category:privateCategory.value,description:privateDescription.value,
-      gps:privateGps.value,
+      gps:privateGps.value,tags:parseRulesCsv(privateTags.value,12,48),
     })
     await refresh()
     notice.value='Файл зашифрован и сохранён на устройстве. Синхронизация будет подтверждена отдельно.'
@@ -127,7 +129,7 @@ async function more():Promise<void>{
 }
 watch(activeSession,()=>{
   gpsRequest++;privateGps.value=null;gpsError.value=''
-  privateCategory.value='';privateDescription.value=''
+  privateCategory.value='';privateDescription.value='';privateTags.value=''
   clearPreview()
   local.value=[];cloud.value=[];cursor.value=null
   void refresh()
@@ -150,6 +152,8 @@ onUnmounted(()=>{detach();clearPreview()})
       <input id="media-import-category" v-model="privateCategory" maxlength="64" autocomplete="off">
       <label for="media-import-description">Описание</label>
       <textarea id="media-import-description" v-model="privateDescription" maxlength="4000" rows="3"/>
+      <label for="media-import-tags">Приватные теги (через запятую)</label>
+      <input id="media-import-tags" v-model="privateTags" maxlength="600" autocomplete="off">
       <div class="action-row">
         <button type="button" :disabled="gpsLoading||busy" @click="obtainImportGps">Получить текущий GPS</button>
         <button v-if="privateGps" type="button" @click="privateGps=null">Очистить GPS</button>
@@ -199,6 +203,7 @@ onUnmounted(()=>{detach();clearPreview()})
       <audio v-else-if="metadata.mime.startsWith('audio/')" :src="selectedUrl" controls preload="metadata"/>
       <p v-if="metadata.category" class="muted">Категория: {{ metadata.category }}</p>
       <p v-if="metadata.description" class="muted">Описание: {{ metadata.description }}</p>
+      <p v-if="metadata.tags?.length" class="muted">Теги: {{ metadata.tags.join(', ') }}</p>
       <p v-if="metadata.gps" class="muted">GPS: {{ metadata.gps.latitude }}, {{ metadata.gps.longitude }} · ±{{ Math.round(metadata.gps.accuracyMeters) }} м</p>
       <p class="muted">Имя, формат и приватные поля расшифрованы из AES-GCM метаданных, не из серверного каталога.</p>
       <button type="button" @click="clearPreview">Закрыть</button>
