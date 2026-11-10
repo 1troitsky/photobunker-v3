@@ -6,6 +6,7 @@ import {
   flushAssignmentOutbox, listAssignmentOperations,
   listCachedAssignmentSnapshots, listServerAssignments,
   queueAssignmentInvitation, queueAssignmentPolicyChange,
+  queueAssignmentPrivateTextChange,effectiveAssignmentEnvelope,
   verifySignedAssignmentPolicy,
 } from '../features/assignments/application/assignment-outbox'
 import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
@@ -35,12 +36,16 @@ const error=ref('')
 const notice=ref('')
 const baseline=ref('')
 const baselineRevision=ref<number|null>(null)
+const baselinePrivateRevision=ref<number|null>(null)
+const baselineText=ref('')
 const peerId=ref('')
 const peerFingerprint=ref('')
 const peerConfirmed=ref(false)
 const peerAgreed=ref(false)
 let run=0
-const dirty=computed(()=>!!baseline.value&&JSON.stringify(draft)!==baseline.value)
+const dirtyPolicy=computed(()=>!!baseline.value&&JSON.stringify(draft)!==baseline.value)
+const dirtyText=computed(()=>!!baselineText.value&&JSON.stringify({title:title.value,instructions:instructions.value})!==baselineText.value)
+const dirty=computed(()=>dirtyPolicy.value||dirtyText.value)
 const owner=computed(()=>!!activeSession.value&&listing.value?.ownerAccountId===activeSession.value.accountId)
 const editable=computed(()=>owner.value&&listing.value?.state==='active'
   &&!pending.value&&!busy.value)
@@ -61,17 +66,24 @@ async function fromRow(row:AssignmentListing,session:NonNullable<typeof activeSe
   await verifySignedAssignmentPolicy(row,loadState.value==='offline')
   if(!sameIdentity(activeSession.value,session)||run!==generation)return
   if(row.ownerAccountId!==session.accountId)throw Error('assignment.owner_required')
-  const decrypted=await openOwnerAssignment(session.pkg,row.assignmentId,row.privateEnvelope)
+  const decrypted=await openOwnerAssignment(session.pkg,row.assignmentId,
+    row.privateEnvelope,effectiveAssignmentEnvelope(row))
   if(!sameIdentity(activeSession.value,session)||run!==generation)return
-  if(dirty.value&&baselineRevision.value!==row.policyRevision){
-    notice.value='Правила изменились на сервере. Отмените локальные правки и обновите перед сохранением.'
+  if(dirty.value&&(baselineRevision.value!==row.policyRevision
+    ||baselinePrivateRevision.value!==(row.privateRevision??1))){
+    notice.value='Подписанная версия изменилась. Отмените локальные правки и обновите перед сохранением.'
     return
   }
-  if(!dirty.value)apply(row)
-  title.value=decrypted.title
-  instructions.value=decrypted.instructions
+  if(!dirtyPolicy.value)apply(row)
+  if(!dirtyText.value){
+    title.value=decrypted.title
+    instructions.value=decrypted.instructions
+    baselineText.value=JSON.stringify({title:decrypted.title,instructions:decrypted.instructions})
+    baselinePrivateRevision.value=row.privateRevision??1
+  }
   pending.value=(await listAssignmentOperations()).some(op=>{
-    if(op.kind!=='policy'||!['queued','retry'].includes(op.state))return false
+    if(!['policy','private'].includes(op.kind)
+      ||!['queued','retry'].includes(op.state))return false
     try{return (JSON.parse(op.contract) as {assignmentId?:string}).assignmentId===row.assignmentId}
     catch{return false}
   })
@@ -112,10 +124,19 @@ async function refresh():Promise<void>{
     }
   }
 }
-function undo():void{
-  if(!listing.value)return
-  apply(listing.value)
-  error.value='';notice.value=''
+async function undo():Promise<void>{
+  const row=listing.value,session=activeSession.value
+  if(!row||!session)return
+  try{
+    const data=await openOwnerAssignment(session.pkg,row.assignmentId,
+      row.privateEnvelope,effectiveAssignmentEnvelope(row))
+    if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
+    apply(row)
+    title.value=data.title;instructions.value=data.instructions
+    baselineText.value=JSON.stringify(data)
+    baselinePrivateRevision.value=row.privateRevision??1
+    error.value='';notice.value=''
+  }catch(e){error.value=fail(e)}
 }
 async function save():Promise<void>{
   if(!editable.value||!dirty.value||!listing.value)return
@@ -133,23 +154,33 @@ async function save():Promise<void>{
         fresh=page.items.find(x=>x.assignmentId===assignmentId.value)
         cursor=page.nextCursor??undefined
       }while(!fresh&&cursor)
-      if(!fresh||fresh.policyRevision!==baselineRevision.value)
+      if(!fresh||fresh.policyRevision!==baselineRevision.value
+        ||(fresh.privateRevision??1)!==baselinePrivateRevision.value)
         throw Error('assignment.editor_revision_changed')
-    }else if(listing.value.policyRevision!==baselineRevision.value)
+    }else if(listing.value.policyRevision!==baselineRevision.value
+      ||(listing.value.privateRevision??1)!==baselinePrivateRevision.value)
       throw Error('assignment.editor_revision_changed')
     if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
-    const policy=buildEditorPolicy(draft)
-    const operationId=await queueAssignmentPolicyChange(assignmentId.value,policy)
-    pending.value=true
+    const policy=dirtyPolicy.value?buildEditorPolicy(draft):null
+    const text=dirtyText.value?{
+      version:1 as const,title:title.value.trim(),instructions:instructions.value,
+    }:null
+    // Validate BOTH representations before persisting either signed op.
+    if(text&&(!text.title||text.title.length>120||text.instructions.length>4000))
+      throw Error('assignment.invalid_text')
+    const ids:string[]=[]
+    if(policy)ids.push(await queueAssignmentPolicyChange(assignmentId.value,policy))
+    if(text)ids.push(await queueAssignmentPrivateTextChange(assignmentId.value,text))
+    pending.value=ids.length>0
     notice.value='Подписанное изменение сохранено локально в зашифрованной очереди.'
     if(session.online&&navigator.onLine){
       await flushAssignmentOutbox()
       if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
-      const op=(await listAssignmentOperations()).find(x=>x.id===operationId)
-      if(op?.state==='sent'){
+      const ops=await listAssignmentOperations()
+      if(ids.every(id=>ops.find(x=>x.id===id)?.state==='sent')){
         notice.value='Изменение подписано и принято сервером.'
         pending.value=false
-        baseline.value='' // force fresh signed snapshot to replace the draft
+        baseline.value='';baselineText.value=''
         await refresh()
       }else{
         notice.value='Подписанное изменение ожидает подтверждения сервера.'
@@ -213,6 +244,8 @@ watch(activeSession,(next,previous)=>{
     ++run
     listing.value=null;title.value='';instructions.value=''
     baseline.value='';baselineRevision.value=null
+  baselineText.value='';baselinePrivateRevision.value=null
+    baselineText.value='';baselinePrivateRevision.value=null
     Object.assign(draft,blankEditorDraft());peerReset()
     loadState.value='loading'
     void refresh()
@@ -221,12 +254,13 @@ watch(activeSession,(next,previous)=>{
 watch(assignmentId,()=>{
   title.value='';instructions.value='';listing.value=null
   baseline.value='';baselineRevision.value=null
+  baselineText.value='';baselinePrivateRevision.value=null
   Object.assign(draft,blankEditorDraft());peerReset()
   activeTab.value='main';loadState.value='loading'
   void refresh()
 })
 onMounted(()=>{void refresh()})
-onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value=''})
+onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value='';baselineText.value=''})
 </script>
 
 <template>
@@ -267,18 +301,20 @@ onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value=''})
       <div v-if="activeTab==='main'" id="editor-panel-main"
         role="tabpanel" aria-labelledby="editor-tab-main" class="fieldwork-editor-panel">
         <h2>Основное</h2>
-        <p class="muted">Название и инструкции сохранены в исходном E2EE-конверте. Изменение этих полей требует отдельного версионированного контракта: здесь они доступны только для просмотра.</p>
-        <label>Название</label>
-        <div class="fieldwork-editor-readonly" data-testid="editor-private-title">{{ title }}</div>
-        <label>Инструкции</label>
-        <div class="fieldwork-editor-readonly fieldwork-editor-instructions">{{ instructions||'Не указаны' }}</div>
+        <p class="muted">Название и инструкции шифруются до отправки. Новый подписанный E2EE-конверт сохраняет действующие ключи приглашённых участников; изменений не происходит до явного сохранения.</p>
+        <label for="editor-private-title">Название</label>
+        <input id="editor-private-title" v-model="title" data-testid="editor-private-title"
+          maxlength="120" autocomplete="off" :disabled="!editable" required>
+        <label for="editor-private-instructions">Инструкции</label>
+        <textarea id="editor-private-instructions" v-model="instructions"
+          rows="5" maxlength="4000" :disabled="!editable" placeholder="Инструкции для исполнителя"/>
         <div class="fieldwork-editor-grid">
           <div><span class="muted">Начало</span><strong>{{ listing?new Date(listing.startsAt).toLocaleString('ru-RU'):'' }}</strong></div>
           <div><span class="muted">Окончание</span><strong>{{ listing?.endsAt?new Date(listing.endsAt).toLocaleString('ru-RU'):'Не задано' }}</strong></div>
           <div><span class="muted">Состояние</span><strong>{{ listing?.state==='active'?'Активно':'Завершено' }}</strong></div>
           <div><span class="muted">Версия правил</span><strong>{{ listing?.policyRevision }}</strong></div>
         </div>
-        <p class="muted">Планирование начала, автоматическое удаление и изменение описания пока не подключены к реальному lifecycle — никаких фиктивных переключателей.</p>
+        <p class="muted">Изменение расписания и автоматическое удаление пока не подключены к реальному lifecycle — никаких фиктивных переключателей.</p>
       </div>
 
       <div v-if="activeTab==='files'" id="editor-panel-files"
@@ -375,14 +411,14 @@ onUnmounted(()=>{++run;title.value='';instructions.value='';baseline.value=''})
         <p class="muted">Public Card, редактирование оригинала и права на передачу пока не имеют подтверждённой модели E2EE scopes. Их здесь нельзя включить простым UI-переключателем.</p>
       </div>
 
-      <p v-if="pending" role="status" class="muted">Подписанная версия правил ожидает серверного подтверждения. Следующее изменение пока заблокировано.</p>
+      <p v-if="pending" role="status" class="muted">Подписанная версия правил или приватного текста ожидает серверного подтверждения. Следующее изменение пока заблокировано.</p>
       <p v-if="notice" role="status" class="status-text">{{ notice }}</p>
       <p v-if="error" role="alert" class="error-text">{{ error }}</p>
       <div class="fieldwork-editor-actions">
         <button type="button" :disabled="busy" @click="refresh">Обновить</button>
         <button type="button" :disabled="busy||!dirty||pending" @click="undo">Отменить правки</button>
         <button type="button" class="fieldwork-editor-save" :disabled="!editable||!dirty" @click="save">
-          {{ busy?'Сохранение…':'Подписать и сохранить правила' }}
+          {{ busy?'Сохранение…':'Подписать и сохранить' }}
         </button>
       </div>
     </template>
