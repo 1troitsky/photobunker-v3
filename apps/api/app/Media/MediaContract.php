@@ -61,7 +61,7 @@ final class MediaContract
                 &&$chunk['kind']===($metadata?'metadata':'data')
                 &&is_int($chunk['plainBytes'])
                 &&($metadata
-                    ?($chunk['plainBytes']>=2 && $chunk['plainBytes']<=8192)
+                    ?($chunk['plainBytes']>=2 && $chunk['plainBytes']<=24576)
                     :$chunk['plainBytes']===$expected)
                 &&is_int($chunk['bytes'])
                 &&$chunk['bytes']===$chunk['plainBytes']+16
