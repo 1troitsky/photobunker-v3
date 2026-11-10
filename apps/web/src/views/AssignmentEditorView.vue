@@ -133,7 +133,7 @@ async function undo():Promise<void>{
     if(!sameIdentity(session,activeSession.value))throw Error('identity.changed')
     apply(row)
     title.value=data.title;instructions.value=data.instructions
-    baselineText.value=JSON.stringify(data)
+    baselineText.value=JSON.stringify({title:data.title,instructions:data.instructions})
     baselinePrivateRevision.value=row.privateRevision??1
     error.value='';notice.value=''
   }catch(e){error.value=fail(e)}
@@ -169,8 +169,14 @@ async function save():Promise<void>{
     if(text&&(!text.title||text.title.length>120||text.instructions.length>4000))
       throw Error('assignment.invalid_text')
     const ids:string[]=[]
-    if(policy)ids.push(await queueAssignmentPolicyChange(assignmentId.value,policy))
-    if(text)ids.push(await queueAssignmentPrivateTextChange(assignmentId.value,text))
+    try{
+      if(policy)ids.push(await queueAssignmentPolicyChange(assignmentId.value,policy))
+      if(text)ids.push(await queueAssignmentPrivateTextChange(assignmentId.value,text))
+    }catch(e){
+      // Partial dual-event signing never becomes an invisible failure.
+      if(ids.length)pending.value=true
+      throw e
+    }
     pending.value=ids.length>0
     notice.value='Подписанное изменение сохранено локально в зашифрованной очереди.'
     if(session.online&&navigator.onLine){
@@ -237,14 +243,13 @@ function keyTab(e:KeyboardEvent):void{
 }
 onBeforeRouteLeave(()=>{
   if(dirty.value&&!pending.value)
-    return window.confirm('Отменить несохранённые изменения правил задания?')
+    return window.confirm('Отменить несохранённые изменения задания?')
 })
 watch(activeSession,(next,previous)=>{
   if(!sameIdentity(next,previous)){
     ++run
     listing.value=null;title.value='';instructions.value=''
     baseline.value='';baselineRevision.value=null
-  baselineText.value='';baselinePrivateRevision.value=null
     baselineText.value='';baselinePrivateRevision.value=null
     Object.assign(draft,blankEditorDraft());peerReset()
     loadState.value='loading'
