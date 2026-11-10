@@ -45,7 +45,7 @@ function privateText(value:unknown,max:number,field:string):string|undefined{
   if(typeof value!=='string')throw Error('media.invalid_'+field)
   const clean=value.trim()
   if(!clean)return undefined
-  if(clean.length>max||/[\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]/.test(clean))
+  if(clean.length>max||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(clean))
     throw Error('media.invalid_'+field)
   return clean
 }
@@ -136,7 +136,7 @@ export function validateMediaContract(c:MediaContract,expected?:{
       &&chunk.index===index
       &&chunk.kind===(metadata?'metadata':'data')
       &&Number.isSafeInteger(chunk.plainBytes)
-      &&(metadata?(chunk.plainBytes>=2&&chunk.plainBytes<=4096)
+      &&(metadata?(chunk.plainBytes>=2&&chunk.plainBytes<=8192)
         :chunk.plainBytes===expectedPlain)
       &&chunk.bytes===chunk.plainBytes+16
       &&typeof chunk.sha256==='string'&&digest.test(chunk.sha256)
@@ -169,7 +169,7 @@ export function parseMediaMetadata(raw:unknown,contract:MediaContract):MediaMeta
     &&(m.version===1||m.version===2)
     &&typeof m.fileName==='string'
     &&m.fileName.length>=1&&m.fileName.length<=160
-    &&!/\\u0000/.test(m.fileName)
+    &&!/[\x00-\x1f\x7f]/.test(m.fileName)
     &&typeof m.mime==='string'
     &&mediaTypeForMime(m.mime)===contract.mediaType
     &&m.plainBytes===contract.plainBytes
@@ -214,7 +214,7 @@ export async function encryptMediaFile(
       ?new Blob([encoder.encode(JSON.stringify(meta))],{type:'application/json'})
       :file.slice(i*MEDIA_CHUNK,(i+1)*MEDIA_CHUNK)
     const clear=new Uint8Array(await source.arrayBuffer())
-    validate(kind!=='metadata'||clear.length<=4096,'media.metadata_too_large')
+    validate(kind!=='metadata'||clear.length<=8192,'media.metadata_too_large')
     const iv=crypto.getRandomValues(new Uint8Array(12))
     const aad=encoder.encode(JSON.stringify({
       v:1,alg:'AES-256-GCM',accountId:contract.accountId,
