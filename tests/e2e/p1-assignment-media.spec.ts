@@ -149,6 +149,10 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await A.getByRole('button',{name:'Отправить подписанное приглашение'}).click()
     await expect(A.getByText(/Подписанное приглашение в очереди:/))
       .toBeVisible({timeout:20000})
+    // P1-23: the owner sees a real signed invite, NOT an optimistic
+    // "accepted participant" inferred from a queued outbox operation.
+    await expect(A.getByTestId('editor-participant-'+contributorId))
+      .toContainText('Ожидает принятия',{timeout:20000})
     await A.getByRole('link',{name:'Назад к заданиям'}).click()
     await A.getByRole('button',{name:'Открыть',exact:true}).first().click()
     await A.getByRole('button',{name:'Синхронизировать'}).click()
@@ -160,6 +164,32 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await B.getByLabel('Я сверил отпечаток владельца').check()
     await B.getByRole('button',{name:'Подтвердить владельца'}).click()
     await B.getByRole('button',{name:'Принять задание'}).click()
+    // The recipient cannot enumerate the owner's other participants.
+    const rosterRecipientStatus=await B.evaluate(async id=>{
+      return (await fetch('/assignments/v1/'+id+'/participants')).status
+    },assignmentId)
+    expect(rosterRecipientStatus).toBe(404)
+    await A.goto('/assignments/'+assignmentId+'/edit')
+    await A.getByRole('tab',{name:'Участники'}).click()
+    const rosterServer=await A.evaluate(async id=>{
+      const res=await fetch('/assignments/v1/'+id+'/participants')
+      const body=await res.json()
+      return {status:res.status,
+        recipients:body.items?.map((x:{recipientAccountId:string;state:string})=>
+          ({id:x.recipientAccountId,state:x.state}))??[],error:body.error??null}
+    },assignmentId)
+    expect(rosterServer.status).toBe(200)
+    expect(rosterServer.recipients).toContainEqual({
+      id:contributorId,state:'accepted',
+    })
+    // Check the entire panel for a useful diagnostic when the UI is stale.
+    await expect(A.getByTestId('editor-participant-roster'))
+      .toContainText('Принято сервером',{timeout:20000})
+    await expect(A.getByTestId('editor-participant-'+contributorId))
+      .toContainText('Принято сервером')
+    // Return to the existing owner media-review flow after inspecting roster.
+    await A.goto('/assignments')
+    await A.getByRole('button',{name:'Открыть',exact:true}).first().click()
     await expect(B.locator('.assignment-card-name').getByText('Media v3 opt-in assignment'))
       .toBeVisible({timeout:20000})
     await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
