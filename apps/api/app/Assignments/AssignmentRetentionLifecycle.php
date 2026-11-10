@@ -19,19 +19,23 @@ final class AssignmentRetentionLifecycle
     public function dueIds(int $batch):array
     {
         $now=PhotoSync::nowMs();
+        // Select each due *unrecorded* cutoff independently. A completed
+        // file-only tombstone must not monopolize batches forever when the
+        // assignment itself has no deadline (and vice versa).
         return DB::table('assignment_records_v1')->where(function($q)use($now){
-            $q->where(function($cutoff)use($now){
-                $cutoff->whereNotNull('files_access_until')
-                    ->where('files_access_until','<=',$now);
-            })->orWhere(function($cutoff)use($now){
-                $cutoff->whereNotNull('assignment_access_until')
-                    ->where('assignment_access_until','<=',$now);
+            $q->where(function($files)use($now){
+                $files->whereNotNull('files_access_until')
+                    ->where('files_access_until','<=',$now)
+                    ->whereNotIn('id',DB::table('assignment_retention_tombstones_v1')
+                        ->whereNotNull('files_marked_at')
+                        ->select('assignment_id'));
+            })->orWhere(function($assignment)use($now){
+                $assignment->whereNotNull('assignment_access_until')
+                    ->where('assignment_access_until','<=',$now)
+                    ->whereNotIn('id',DB::table('assignment_retention_tombstones_v1')
+                        ->whereNotNull('assignment_marked_at')
+                        ->select('assignment_id'));
             });
-        })->where(function($q){
-            $q->whereNotIn('id',DB::table('assignment_retention_tombstones_v1')
-                ->whereNotNull('assignment_marked_at')->select('assignment_id'))
-                ->orWhereNotIn('id',DB::table('assignment_retention_tombstones_v1')
-                    ->whereNotNull('files_marked_at')->select('assignment_id'));
         })->orderBy('id')->limit(max(1,min(500,$batch)))->pluck('id')->all();
     }
 
