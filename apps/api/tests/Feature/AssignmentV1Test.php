@@ -290,6 +290,81 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('items.0.scheduleRevision',3);
     }
 
+    public function test_p1_20_real_photo_submission_is_gated_by_authoritative_schedule():void
+    {
+        $this->createAssignment();
+        $invite=$this->invite();
+        $this->accept($invite);
+        $now=\App\Photo\PhotoSync::nowMs();
+        $future=$now+86400000;
+        $url='/assignments/v1/'.$this->assignmentId;
+        $this->as('owner');
+        $locked=$this->signedSchedule(1,$future,null,true,false);
+        $this->postJson($url.'/schedule',$locked)->assertOk();
+
+        // Real contributor grant + photo record, not a mocked policy helper.
+        $contributor=$this->people['recipient']['account'];
+        $owner=$this->people['owner']['account'];
+        $makeSubmission=function()use($contributor,$owner):array{
+            $photo=(string)Str::uuid();
+            $grant=(string)Str::uuid();
+            DB::table('photo_records')->insert([
+                'id'=>$photo,'account_id'=>$contributor,
+                'device_id'=>$this->people['recipient']['device'],
+                'operation_id'=>(string)Str::uuid(),
+                'state'=>'active','expires_at'=>now()->addDays(5)->getTimestampMs(),
+                'contract_hash'=>str_repeat('b',64),'contract_json'=>'{}',
+                'signature'=>'fixture','created_at'=>now(),'updated_at'=>now(),
+            ]);
+            DB::table('photo_access_grants')->insert([
+                'id'=>$grant,'photo_id'=>$photo,'owner_account_id'=>$contributor,
+                'recipient_account_id'=>$owner,
+                'recipient_key_digest'=>str_repeat('a',64),
+                'expires_at'=>now()->addDays(2)->getTimestampMs(),
+                'state'=>'active','contract_hash'=>str_repeat('c',64),
+                'contract_json'=>'{}','account_signature'=>'fixture',
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            return $this->signed('recipient','pb3.assignment-submit.v1',[
+                'version'=>1,'submissionId'=>(string)Str::uuid(),
+                'operationId'=>(string)Str::uuid(),
+                'assignmentId'=>$this->assignmentId,
+                'contributorAccountId'=>$contributor,
+                'photoId'=>$photo,'photoGrantId'=>$grant,
+                'policyRevision'=>1,'kind'=>'photo',
+            ]);
+        };
+        $first=$makeSubmission();
+        $this->as('recipient');
+        $this->postJson($url.'/submissions',$first)->assertConflict();
+        $this->assertDatabaseCount('assignment_submissions_v1',0);
+        $this->as('owner');
+        $unlock=$this->signedSchedule(2,$future,null,false,false);
+        $this->postJson($url.'/schedule',$unlock)->assertOk();
+        $this->as('recipient');
+        $this->postJson($url.'/submissions',$first)->assertCreated();
+        $this->postJson($url.'/submissions',$first)->assertOk()
+            ->assertJsonPath('unchanged',true);
+
+        $second=$makeSubmission();
+        $this->as('owner');
+        $startPast=$now-2*86400000;
+        $endPast=$now-86400000;
+        $after=$this->signedSchedule(3,$startPast,$endPast,false,true);
+        $this->postJson($url.'/schedule',$after)->assertOk();
+        $this->as('recipient');
+        $this->postJson($url.'/submissions',$second)->assertConflict();
+        $this->assertDatabaseCount('assignment_submissions_v1',1);
+        $this->as('owner');
+        $open=$this->signedSchedule(4,$startPast,$endPast,false,false);
+        $this->postJson($url.'/schedule',$open)->assertOk();
+        $this->as('recipient');
+        $this->postJson($url.'/submissions',$second)->assertCreated();
+        $this->assertDatabaseCount('assignment_submissions_v1',2);
+        $this->assertDatabaseCount('photo_records',2);
+        $this->assertDatabaseCount('photo_access_grants',2);
+    }
+
     public function test_r2_01_owner_state_transition_persists_exact_subsecond_receipt():void
     {
         $this->travelTo(now()->startOfSecond()->addMilliseconds(750));
