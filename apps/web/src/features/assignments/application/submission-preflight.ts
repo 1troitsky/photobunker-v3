@@ -132,7 +132,7 @@ export async function verifySignedPolicyHistory(
     catch{throw Error('assignment.policy_history_invalid')}
     if(![1,2,3,4].includes(contract.version as number)
       ||typeof contract.version!=='number'
-      ||contract.version<previousVersion)
+      ||contract.version<previousVersion
       ||contract.assignmentId!==latest.assignmentId
       ||contract.ownerAccountId!==latest.ownerAccountId
       ||contract.rootPolicyHash!==root
