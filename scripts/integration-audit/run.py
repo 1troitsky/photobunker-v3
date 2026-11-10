@@ -65,6 +65,11 @@ class Audit(module.Acceptance):
    if not self.browser(name,file):failed.append((name,file))
   # Preserve every initial result. No loop-until-green; recheck is an explicit separate command.
   (self.directory/'failed-suites.json').write_text(json.dumps(failed))
+  self.privacy()
+  self.command('product-source-after',['git','diff','--exit-code',TARGET],cwd=self.source_root)
+
+
+ def privacy(self):
   if (self.directory/'private-canaries.json').exists():
    values=json.loads((self.directory/'private-canaries.json').read_text())
    ok,dump=self.dc('private-database-scan','exec','-T','postgres','pg_dump','-U','pb3_ci','--data-only','pb3_ci_p0',private=True)
@@ -72,14 +77,30 @@ class Audit(module.Acceptance):
    result={'databaseScanned':ok,'containerLogExit':logs.returncode,'databaseCanariesAbsent':all(v not in dump for v in values),'logCanariesAbsent':all(v not in logs.stdout for v in values)}
    (self.directory/'privacy-scan.json').write_text(json.dumps(result))
    self.command('privacy-canary-check',['python3','-c','import json,sys;x=json.load(open(sys.argv[1]));print(json.dumps(x));assert x["databaseScanned"] and x["databaseCanariesAbsent"] and x["logCanariesAbsent"] and x["containerLogExit"]==0',str(self.directory/'privacy-scan.json')])
+ def focused(self):
+  self.command('product-head',['git','log','-1','--format=%H %s'],cwd=self.source_root)
+  if not self.command('product-source-clean',['git','diff','--exit-code',TARGET],cwd=self.source_root)[0]:return
+  if not all(self.available(p) for p in (8000,5173,4173)):raise RuntimeError('Fixture ports occupied')
+  if not self.command('isolation-contract',['python3','-B','tests/local-acceptance/test_isolation.py'])[0]:return
+  if not self.provision():return
+  if not self.php('composer-install','composer','install','--no-interaction','--no-progress','--prefer-dist',timeout=900)[0]:return
+  if not self.php('integration-migrate','php','artisan','migrate','--force')[0]:return
+  if not self.dc('api-integration-up','up','-d','api')[0]:return
+  if not self.health('api-integration-ready','http://127.0.0.1:8000/api/readyz'):return
+  self.background('vite',['pnpm','--filter','@pb3/web','exec','vite','--host','127.0.0.1','--port','5173','--strictPort'],cwd=self.source_root)
+  if not self.health('vite-ready','http://127.0.0.1:5173/settings'):return
+  self.browser('journey-focused','journey.spec.ts')
+  self.privacy()
   self.command('product-source-after',['git','diff','--exit-code',TARGET],cwd=self.source_root)
 
 if __name__=='__main__':
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--source-root',required=True,type=Path);p.add_argument('--baseline-root',required=True,type=Path);args=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--source-root',required=True,type=Path);p.add_argument('--baseline-root',required=True,type=Path);p.add_argument('--focused-journey',action='store_true');args=p.parse_args()
  for path,sha in [(args.source_root,TARGET),(args.baseline_root,BASE)]:
   if subprocess.check_output(['git','-C',str(path),'rev-parse','HEAD'],text=True).strip()!=sha:p.error('HEAD mismatch; stop')
  a=Audit(baseline_root=args.baseline_root,source_root=args.source_root,source_ref=TARGET)
- try:a.run()
+ try:
+  if args.focused_journey:a.focused()
+  else:a.run()
  except (Exception,KeyboardInterrupt) as e:
   a.results.append({'name':'runner','status':'FAIL','exit_code':1,'reason':str(e)});print('Runner interrupted:',e,flush=True)
  finally:a.cleanup()

@@ -29,7 +29,7 @@ test('independent Contacts/instructions/offline capture -> scoped grants -> A de
   const selected=A.getByTestId('editor-confirmed-contact-'+bId)
   await selected.getByRole('button',{name:'Выбрать'}).click()
   await expect(A.getByText('Контакт выбран, ключ подтверждён. Приглашение ещё не отправлено.')).toBeVisible()
-  expect(await A.evaluate(async({paths,id})=>(await(await import(paths.a)).listAssignmentParticipants(id)).items.length,{paths,id})).toBe(0)
+  expect(await A.evaluate(async({paths,id})=>(await(await import(paths.a)).listAssignmentParticipants(id)).length,{paths,id})).toBe(0)
   await A.getByRole('button',{name:'Отправить подписанное приглашение'}).click()
   await expect(A.getByTestId('editor-participant-'+bId)).toContainText('Ожидает принятия')
   await acceptInvite(B,id)
