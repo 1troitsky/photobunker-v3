@@ -10,7 +10,7 @@ import {
   queueAssignmentInvitation, queueAssignmentAcceptance,
   queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
   queueAssignmentMediaSubmission, listAssignmentMediaSubmissions,
-  signedAllowedAssignmentMedia,verifySignedAssignmentPolicy,
+  signedAllowedAssignmentMedia,
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
   signedPolicyRequirements,signedPolicyGoals,signedMediaRequirements,verifyAssignmentInvite,
 } from '../features/assignments/application/assignment-outbox'
