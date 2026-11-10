@@ -277,11 +277,11 @@ export async function verifiedTeamMembershipHistory(teamId:string):Promise<{
   const s=requireSession()
   if(!s.online)throw Error('teams.membership_history_requires_online')
   const verifier=await importSpki(s.pkg.accountSpki)
-  let cursor=0,expectedRev:number|null=null,quarantined:boolean|null=null
+  let cursor=1,expectedRev:number|null=null,quarantined:boolean|null=null
   const events:MembershipEvent[]=[]
   for(let n=0;n<100;n++){
     const path='/teams/v1/'+encodeURIComponent(teamId)
-      +'/membership-history'+(cursor?'?after='+cursor:'')
+      +'/membership-history'+(cursor>1?'?after='+cursor:'')
     const page:{
       items:Array<{
         operationId:string;teamId:string;targetAccountId:string;inviteId:string
@@ -307,14 +307,14 @@ export async function verifiedTeamMembershipHistory(teamId:string):Promise<{
         ||c.targetAccountId!==row.targetAccountId
         ||c.action!==row.action||c.previousRole!==row.previousRole
         ||c.nextRole!==row.nextRole
-        ||c.fromRevision!==cursor+1||c.toRevision!==cursor+2
+        ||c.fromRevision!==cursor||c.toRevision!==cursor+1
         ||!await verify(verifier,membershipDomain+row.contract,row.signature))
         throw Error('teams.untrusted_membership_history')
       events.push(c)
       cursor=c.toRevision
     }
     if(page.nextCursor===null){
-      if(cursor+1!==expectedRev
+      if(cursor!==expectedRev
         ||(events.length>0&&events[events.length-1]!.action==='remove'
           &&quarantined!==true))
         throw Error('teams.incomplete_membership_history')
@@ -509,7 +509,7 @@ export async function syncTeamMemberOperations():Promise<void>{
         const c=decodeMembershipContract(op.contract)
         if(ack.operationId!==op.operationId
           ||!Number.isInteger(ack.membershipRevision)
-          ||ack.membershipRevision!<c.toRevision
+          ||(ack.membershipRevision??0)<c.toRevision
           ||typeof ack.rotationRequired!=='boolean'
           ||typeof ack.unchanged!=='boolean')
           throw Error('teams.invalid_membership_ack')
