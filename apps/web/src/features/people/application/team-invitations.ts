@@ -328,9 +328,10 @@ export async function verifiedTeamMembershipHistory(teamId:string):Promise<{
       cursor=c.toRevision
     }
     if(page.nextCursor===null){
-      if(cursor!==expectedRev
-        ||(events.length>0&&events[events.length-1]!.action==='remove'
-          &&quarantined!==true))
+      // After an independently signed key epoch rotation the last
+      // membership event may still be "remove" while quarantine is false.
+      // Server checks authoritative membership+epoch CAS on every write.
+      if(cursor!==expectedRev)
         throw Error('teams.incomplete_membership_history')
       return {events,revision:expectedRev,rotationRequired:quarantined}
     }
@@ -680,6 +681,16 @@ export async function openJoinedTeam(invite:TeamInvitation):Promise<JoinedTeam>{
 }
 /** Best-effort local cleanup after a CURRENT online ACL revocation.
  * Previously exported plaintext and offline devices cannot be retracted. */
+/** Only invoke after independently signed current server epoch, member ACL,
+ * decrypted ciphertext and role binding have all been checked. */
+export async function cacheVerifiedJoinedTeam(team:JoinedTeam):Promise<void>{
+  const s=requireSession()
+  if(!uuidPattern.test(team.teamId)||!uuidPattern.test(team.ownerAccountId)
+    ||!['curator','contributor','viewer'].includes(team.role)
+    ||!team.verifiedOnline)
+    throw Error('teams.invalid_verified_member_cache')
+  await sealRow(s,'joined',team.teamId,team)
+}
 export async function dropRevokedJoinedTeam(teamId:string):Promise<void>{
   const s=requireSession()
   if(!uuidPattern.test(teamId))throw Error('teams.invalid_team_id')
