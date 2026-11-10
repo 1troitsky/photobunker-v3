@@ -54,7 +54,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(assignmentId).toMatch(/^[0-9a-f-]{36}$/)
     await expect(A.locator('.assignment-detail')).toContainText('Разрешённые типы: photo')
 
-    // P1-16: newly edited owner-signed v5 targets and rules.
+    // P1-17: owner-signed v6 targets, advanced vocabularies and per-kind rules.
     // Original root remains photo-only and older signed versions unchanged.
     await A.locator('#assignment-allow-video').check()
     await A.locator('#assignment-allow-audio').check()
@@ -77,7 +77,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
         audioGoal:JSON.parse(body.events[0].contract).audioGoal,
       }
     },assignmentId)
-    expect(policy).toEqual({http:200,version:5,
+    expect(policy).toEqual({http:200,version:6,
       allowed:['photo','video','audio'],videoGoal:2,audioGoal:1})
 
     await A.locator('#assignment-recipient-id').fill(contributorId)
@@ -167,11 +167,13 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     })
     expect(intact).toBe(2)
 
-    // P1-16: owner tightens only AUDIO requirements in signed v5,
+    // P1-17: owner tightens only AUDIO requirements in signed v6,
     // leaving video permissions, photo requirements, and old receipts intact.
     await A.locator('#assignment-audio-required-category').check()
     await A.locator('#assignment-audio-description-min').fill('12')
     await A.locator('#assignment-audio-required-gps').check()
+    await A.locator('#assignment-audio-allowed').fill('Report')
+    await A.locator('#assignment-audio-required-tags').fill('evidence')
     await A.getByRole('button',{name:'Подписать новые правила'}).click()
     await expect(A.getByText('Версия правил: 3')).toBeVisible({timeout:20000})
     await expect(A.getByTestId('assignment-audio-requirements'))
@@ -204,7 +206,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       .toBeEnabled({timeout:20000})
     await B.getByTestId('camera-start-recording').click()
     await expect(B.getByText('assignment.category_required')).toBeVisible()
-    await B.locator('#camera-category').fill('Report')
+    await B.locator('#camera-category').fill('Wrong')
     await B.getByTestId('camera-start-recording').click()
     await expect(B.getByText('assignment.description_too_short')).toBeVisible()
     await B.locator('#camera-description').fill('PRIVATE-AUDIO-CAPTURE-METADATA')
@@ -212,6 +214,12 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await expect(B.getByText('assignment.gps_required')).toBeVisible()
     await B.getByRole('button',{name:'Получить GPS'}).click()
     await expect(B.getByText(/GPS получен/)).toBeVisible({timeout:12000})
+    await B.getByTestId('camera-start-recording').click()
+    await expect(B.getByText('assignment.category_not_allowed')).toBeVisible()
+    await B.locator('#camera-category').fill('Report')
+    await B.getByTestId('camera-start-recording').click()
+    await expect(B.getByText('assignment.required_tags_missing')).toBeVisible()
+    await B.locator('#camera-tags').fill('evidence')
     await B.getByTestId('camera-start-recording').click()
     await expect(B.getByTestId('camera-recording-status')).toBeVisible()
     await B.waitForTimeout(1600) // actual microphone media data, not debounce
@@ -232,6 +240,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
         captureAssignment:proof.assignmentId,
         captureKind:proof.mediaType,
         hasPrivateFilename:row.capture.contract.includes('recording-'),
+        leakedActualTags:row.capture.contract.includes('evidence'),
         signed:row.capture.signature.length>64,
         ciphertextOnly,
       }
@@ -239,7 +248,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(recorded).toMatchObject({
       type:'audio',capturePolicy:3,captureMediaId:recorded.id,
       captureAssignment:assignmentId,captureKind:'audio',
-      hasPrivateFilename:false,signed:true,ciphertextOnly:true,
+      hasPrivateFilename:false,leakedActualTags:false,signed:true,ciphertextOnly:true,
     })
     await B.evaluate(async()=>{
       const media=await import('/src/features/media/application/media-outbox.ts')
@@ -277,6 +286,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       const data=await grant.readReceivedMediaGrant(id)
       return {mime:data.blob.type,bytes:data.blob.size,
         fileName:data.metadata.fileName,version:data.metadata.version,
+        tags:data.metadata.tags,
         category:data.metadata.category,description:data.metadata.description,
         gps:data.metadata.gps&&{
           latitude:data.metadata.gps.latitude,
@@ -286,7 +296,8 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(verified.mime).toMatch(/^audio\//)
     expect(verified.bytes).toBeGreaterThan(128)
     expect(verified.fileName).toMatch(/^recording-/)
-    expect(verified.version).toBe(2)
+    expect(verified.version).toBe(3)
+    expect(verified.tags).toEqual(['evidence'])
     expect(verified.category).toBe('Report')
     expect(verified.description).toBe('PRIVATE-AUDIO-CAPTURE-METADATA')
     expect(verified.gps).toEqual({latitude:41.647849,longitude:41.639411})
