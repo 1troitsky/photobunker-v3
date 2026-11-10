@@ -989,7 +989,9 @@ final class AssignmentV1Controller extends Controller
                 ->where('owner_account_id',$actor->id)
                 ->where('recipient_account_id',$a->owner_account_id)
                 ->where('state','active')->first();
-            abort_unless($grant&&$grant->expires_at>PhotoSync::nowMs(),403);
+            abort_unless($grant&&$grant->expires_at>PhotoSync::nowMs()
+                &&($grant->assignment_id===null
+                    ||$grant->assignment_id===$assignmentId),403);
             abort_if(DB::table('assignment_submissions_v1')
                 ->where('photo_id',$c['photoId'])->orWhere('operation_id',$c['operationId'])
                 ->exists(),409);
