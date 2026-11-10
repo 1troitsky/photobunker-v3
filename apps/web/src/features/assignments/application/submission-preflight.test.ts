@@ -187,7 +187,11 @@ describe('P1-08 signed historical policy and E2EE grant preflight',()=>{
       policyAmendmentContract:contract4,policyAmendmentSignature:signature4,
       videoGoal:2,audioGoal:1,
     }
-    const chain=await verifySignedPolicyHistory(latest,history)
+    // A past signed history must be refreshed on a newer signed revision,
+    // not treated as forged, and never used to authorize a stale E2EE grant.
+    await rememberSignedPolicyHistory(f.listing,f.history)
+    expect(await readSignedPolicyHistoryCache(latest)).toBeNull()
+    const chain=await rememberSignedPolicyHistory(latest,history)
     expect(chain.map(x=>x.revision)).toEqual([1,2,3,4,5])
     expect(chain[0]!.validUntil).toBe(f.startsAt+2000)
     expect(chain[3]!.validUntil).toBe(f.startsAt+10000)
