@@ -600,6 +600,25 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       .toContainText('PRIVATE VIDEO MOTION 1')
     await expect(B.locator('[data-testid="assignment-private-media-instructions"]'))
       .toContainText('PRIVATE AUDIO NOTES 1')
+    // P1-24: a contributor reopening the camera gets only the exact
+    // CURRENT signed-revision-bound, account-AEAD cached private instructions.
+    // They never become server-visible policy fields or media grants.
+    await B.goto('/camera?assignmentId='+assignmentId)
+    await expect(B.locator('#camera-assignment'))
+      .toHaveValue(assignmentId,{timeout:20000})
+    await expect(B.getByTestId('camera-private-instructions'))
+      .toContainText('PRIVATE PHOTO FRAMING 2',{timeout:20000})
+    await expect(B.getByTestId('camera-private-instructions'))
+      .not.toContainText('PRIVATE VIDEO MOTION 1')
+    await B.locator('#camera-mode').selectOption('video')
+    await expect(B.getByTestId('camera-media-instruction'))
+      .toContainText('PRIVATE VIDEO MOTION 1')
+    await expect(B.getByTestId('camera-media-instruction'))
+      .not.toContainText('PRIVATE AUDIO NOTES 1')
+    await B.locator('#camera-mode').selectOption('audio')
+    await expect(B.getByTestId('camera-media-instruction'))
+      .toContainText('PRIVATE AUDIO NOTES 1')
+    await B.goto('/assignments')
     await B.context().setOffline(true)
     const cached=await B.evaluate(async id=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
