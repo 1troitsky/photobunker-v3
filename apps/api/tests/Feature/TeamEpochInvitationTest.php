@@ -61,6 +61,7 @@ final class TeamEpochInvitationTest extends TestCase
             'fromEpoch'=>1,'toEpoch'=>2,'membershipRevision'=>2,
             'previousEpochHash'=>$this->rootHash,
             'privateEnvelope'=>self::profile(),'recipients'=>[],
+            'retiredPendingInviteIds'=>[],
         ];
         $signed=$this->signed('owner','pb3.team-key-epoch.v1',$epoch);
         $this->epochContract=$signed['contract'];
@@ -349,6 +350,7 @@ final class TeamEpochInvitationTest extends TestCase
             'fromEpoch'=>2,'toEpoch'=>3,'membershipRevision'=>3,
             'previousEpochHash'=>$this->epochHash,
             'privateEnvelope'=>self::profile(),'recipients'=>[],
+            'retiredPendingInviteIds'=>[$pending['inviteId']],
         ];
         $this->login('owner');
         $signed=$this->signed('owner','pb3.team-key-epoch.v1',$epoch3);
