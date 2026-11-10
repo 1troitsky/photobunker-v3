@@ -12,14 +12,51 @@ import {
   listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
   signedMediaCaptureIntent,signedAllowedAssignmentMedia,
   signedPolicyRequirements,signedMediaRequirements,signedAdvancedRequirements,
+  readCachedPrivateAssignment,assignmentPrivateCacheScope,verifySignedAssignmentPolicy,
 } from '../features/assignments/application/assignment-outbox'
 import type { AssignmentListing } from '../features/assignments/application/assignment-outbox'
+import type { PrivateAssignment } from '../features/assignments/infrastructure/assignment-crypto'
 
 const route=useRoute()
 const video=ref<HTMLVideoElement|null>(null)
 const policies=ref<AssignmentListing[]>([])
 const selectedAssignment=ref('')
+// Volatile display only; decrypt from account-scoped, signed-revision-bound AEAD cache.
+const assignmentPrivate=ref<PrivateAssignment|null>(null)
+const privateInstructionState=ref<'none'|'loading'|'ready'|'unavailable'>('none')
+let instructionGeneration=0
 const captureMode=ref<'photo'|'video'|'audio'>('photo')
+const currentMediaInstruction=computed(()=>{
+  const value=assignmentPrivate.value
+  if(value?.version!==2)return ''
+  return captureMode.value==='photo'?value.photoInstructions
+    :captureMode.value==='video'?value.videoInstructions:value.audioInstructions
+})
+async function loadPrivateInstructions():Promise<void>{
+  const version=++instructionGeneration
+  assignmentPrivate.value=null
+  const id=selectedAssignment.value
+  const row=policies.value.find(p=>p.assignmentId===id)
+  if(!id||!row){privateInstructionState.value='none';return}
+  const identity=cameraIdentity(activeSession.value),generation=cameraGeneration
+  privateInstructionState.value='loading'
+  try{
+    // The cached summary is AEAD-only, account-scoped and bound to the
+    // CURRENT independently verified private revision (never older plaintext).
+    await verifySignedAssignmentPolicy(row,true)
+    const data=await readCachedPrivateAssignment(id,assignmentPrivateCacheScope(row))
+    if(!ownsCamera(identity,generation)||version!==instructionGeneration
+      ||selectedAssignment.value!==id)return
+    assignmentPrivate.value=data
+    privateInstructionState.value=data?'ready':'unavailable'
+  }catch{
+    if(ownsCamera(identity,generation)&&version===instructionGeneration
+      &&selectedAssignment.value===id){
+      assignmentPrivate.value=null
+      privateInstructionState.value='unavailable'
+    }
+  }
+}
 const recording=ref(false)
 const recordLimitMs=175000
 const recorder=shallowRef<MediaRecorder|null>(null)
@@ -78,6 +115,7 @@ async function refreshPolicies():Promise<void> {
     selectedAssignment.value=found.some(x=>x.assignmentId===preferred)?preferred:''
     if(typeof requested==='string'&&requested&&!selectedAssignment.value)
       policyNotice.value='Для этого задания нет проверенной политики. Съёмка по нему заблокирована.'
+    void loadPrivateInstructions()
   }catch(e){
     if(ownsCamera(identity,generation))policyNotice.value=e instanceof Error?e.message:'assignment.policies_unavailable'
   }finally{
@@ -409,6 +447,8 @@ watch(activeSession,session=>{
     observedIdentity=identity;cameraGeneration++
     releaseStream()
     policies.value=[];selectedAssignment.value='';policyNotice.value=''
+    ++instructionGeneration;assignmentPrivate.value=null
+    privateInstructionState.value='none'
     category.value='';description.value='';privateTags.value='';clearGPS()
     message.value='';error.value=''
   }
@@ -419,6 +459,7 @@ watch(activeSession,session=>{
 onMounted(()=>{
   if(activeSession.value){void refreshPolicies();void nextTick().then(startCamera)}
 })
+watch(selectedAssignment,()=>{void loadPrivateInstructions()})
 watch(()=>route.query.assignmentId,()=>{
   if(recording.value)discardRecording()
   void refreshPolicies()
@@ -430,7 +471,10 @@ watch(captureMode,()=>{
     void nextTick().then(startCamera)
   }
 })
-onUnmounted(()=>{disposed=true;closeCamera()})
+onUnmounted(()=>{
+  disposed=true;++instructionGeneration;assignmentPrivate.value=null
+  privateInstructionState.value='none';closeCamera()
+})
 </script>
 
 <template>
@@ -463,6 +507,28 @@ onUnmounted(()=>{disposed=true;closeCamera()})
         </button>
         <p class="muted">Доступны только проверенные подписанные политики. При съёмке без сети используется последний подтверждённый снимок политики; сервер повторно проверит права при загрузке.</p>
         <p v-if="policyNotice" class="muted" role="status">{{ policyNotice }}</p>
+        <div v-if="selectedAssignment" class="camera-private-instructions"
+          data-testid="camera-private-instructions">
+          <template v-if="privateInstructionState==='ready'">
+            <h3>Зашифрованные инструкции задания</h3>
+            <p v-if="assignmentPrivate?.instructions" class="muted">
+              Общие: {{ assignmentPrivate.instructions }}
+            </p>
+            <p v-if="currentMediaInstruction" data-testid="camera-media-instruction"
+              class="muted">
+              {{ captureMode==='photo'?'Для фото':captureMode==='video'?'Для видео':'Для аудио' }}:
+              {{ currentMediaInstruction }}
+            </p>
+            <p v-else class="muted">Отдельных инструкций для выбранного типа нет.</p>
+          </template>
+          <p v-else-if="privateInstructionState==='loading'" role="status" class="muted">
+            Расшифровка инструкций…
+          </p>
+          <p v-else class="muted" role="status">
+            Приватные инструкции недоступны в проверенном кэше.
+            Откройте карточку задания, чтобы проверить и расшифровать их.
+          </p>
+        </div>
         <p v-if="captureMode!=='photo'" class="muted">
           Видео и аудио доступны только если владелец подписал разрешение
           соответствующего типа. Подтверждение записи связывается с
