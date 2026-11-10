@@ -643,6 +643,7 @@ export async function openJoinedEpochInvite(item:EpochTeamInvite):Promise<Joined
     ||chain.contractHash!==invitation.keyEpochHash
     ||chain.rotationRequired
     ||chain.membershipRevision!==response.membershipRevision
+    ||chain.membershipRevision<invitation.membershipRevision
     ||response.epoch.contractHash!==chain.contractHash
     ||response.epoch.contract!==JSON.stringify(epoch)
     ||!await verify(await importSpki(owner.accountSpki),
@@ -687,7 +688,7 @@ export async function openJoinedEpochInvite(item:EpochTeamInvite):Promise<Joined
     throw Error('teams.epoch_join_profile_invalid')
   let role:TeamRole=invitation.role
   // Only owner-signed epoch/role evidence may raise the durable floor.
-  let verifiedRevision=epoch.membershipRevision
+  let verifiedRevision=Math.max(epoch.membershipRevision,invitation.membershipRevision)
   if(response.latestRoleEvent){
     let event:MembershipChange
     try{event=JSON.parse(response.latestRoleEvent.contract) as MembershipChange}

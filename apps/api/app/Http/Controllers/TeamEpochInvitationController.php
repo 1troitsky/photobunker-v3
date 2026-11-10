@@ -344,11 +344,13 @@ final class TeamEpochInvitationController extends Controller
             ->where('account_id',$actor->id)->first();
         abort_unless($directory&&hash_equals($directory->descriptor_hash,
             $invite->recipient_key_digest),409);
+        // Rejoined memberships can share timestamp precision with old events.
+        // Only this immutable invitation's role history applies now.
         $signedEvent=DB::table('team_membership_events_v1')
             ->where('team_id',$teamId)
             ->where('target_account_id',$actor->id)
             ->where('action','change_role')
-            ->where('created_at','>=',$invite->accepted_at)
+            ->where('invite_id',$invite->id)
             ->orderByDesc('to_revision')->first();
         return $this->sync->json([
             'teamId'=>$teamId,'ownerAccountId'=>$team->owner_account_id,

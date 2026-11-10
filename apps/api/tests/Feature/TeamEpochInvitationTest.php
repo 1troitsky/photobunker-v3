@@ -412,6 +412,46 @@ final class TeamEpochInvitationTest extends TestCase
             ->assertOk()->assertJsonCount(2,'items');
     }
 
+    public function test_member_role_receipt_is_bound_to_the_current_invite_not_its_timestamp():void
+    {
+        $invite=$this->invite();$signed=$this->postInvite($invite);
+        $this->login('guest');
+        $this->postJson('/teams/v2/'.$this->teamId.'/invites/'.$invite['inviteId'].'/accept',
+            $this->signed('guest','pb3.team-accept.v2',
+                $this->consent($invite,hash('sha256',$signed['contract']))))->assertCreated();
+        $accepted=DB::table('team_invites_v2')->where('id',$invite['inviteId'])->first();
+        // Different genuine signed invitation history, same timestamp precision.
+        // A receipt for an earlier membership must never become current again.
+        $old=[
+            'version'=>1,'operationId'=>(string)Str::uuid(),'teamId'=>$this->teamId,
+            'ownerAccountId'=>$this->users['owner']['id'],'inviteId'=>(string)Str::uuid(),
+            'targetAccountId'=>$this->users['guest']['id'],'action'=>'change_role',
+            'previousRole'=>'viewer','nextRole'=>'contributor','fromRevision'=>1,'toRevision'=>2,
+        ];
+        $oldSigned=$this->signed('owner','pb3.team-membership.v1',$old);
+        DB::table('team_membership_events_v1')->insert([
+            'operation_id'=>$old['operationId'],'team_id'=>$this->teamId,
+            'target_account_id'=>$old['targetAccountId'],'invite_id'=>$old['inviteId'],
+            'action'=>'change_role','previous_role'=>'viewer','next_role'=>'contributor',
+            'from_revision'=>1,'to_revision'=>2,'contract_hash'=>hash('sha256',$oldSigned['contract']),
+            'contract_json'=>$oldSigned['contract'],'owner_signature'=>$oldSigned['signature'],
+            'created_at'=>$accepted->accepted_at,'updated_at'=>$accepted->accepted_at,
+        ]);
+        $this->getJson('/teams/v2/'.$this->teamId.'/member')->assertOk()
+            ->assertJsonPath('effectiveRole','viewer')->assertJsonPath('latestRoleEvent',null);
+        $this->login('owner');
+        $current=array_replace($old,[
+            'operationId'=>(string)Str::uuid(),'inviteId'=>$invite['inviteId'],
+            'fromRevision'=>2,'toRevision'=>3,
+        ]);
+        $currentSigned=$this->signed('owner','pb3.team-membership.v1',$current);
+        $this->postJson('/teams/v1/'.$this->teamId.'/membership',$currentSigned)->assertCreated();
+        $this->login('guest');
+        $this->getJson('/teams/v2/'.$this->teamId.'/member')->assertOk()
+            ->assertJsonPath('effectiveRole','contributor')
+            ->assertJsonPath('latestRoleEvent.contract',$currentSigned['contract']);
+    }
+
     public function test_signed_invitation_history_cannot_be_dropped():void
     {
         $this->postInvite($this->invite());
