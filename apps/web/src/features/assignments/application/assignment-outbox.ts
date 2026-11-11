@@ -208,6 +208,11 @@ type CachedPrivateAssignment={
   key:string;accountId:string;assignmentId:string;policyHash:string
   iv:string;ciphertext:Blob // AES-GCM ciphertext only, never plaintext
 }
+type CachedVerifiedRemoval={
+  key:string;accountId:string;assignmentId:string;ownerAccountId:string
+  inviteId:string;removalContract:string;removalSignature:string
+  verifiedAt:number
+}
 export type SignedCaptureBinding={
   assignmentId:string;ownerAccountId:string;policyRevision:number
   policyHash:string;capturedAt:number
@@ -702,6 +707,7 @@ class AssignmentDB extends Dexie {
   invites!:Table<CachedInvite,string>
   capturePolicies!:Table<CachedCapturePolicy,string>
   privateSummaries!:Table<CachedPrivateAssignment,string>
+  revocations!:Table<CachedVerifiedRemoval,string>
   constructor(){
     super('pb3-assignment-operation-outbox-v1')
     this.version(1).stores({
@@ -721,6 +727,14 @@ class AssignmentDB extends Dexie {
       invites:'&inviteId, assignmentId, ownerAccountId, cachedForAccountId',
       capturePolicies:'&key, accountId, [accountId+verifiedAt]',
       privateSummaries:'&key, accountId, assignmentId',
+    })
+    this.version(4).stores({
+      operations:'&id, accountId, [accountId+createdAt], [accountId+state]',
+      assignments:'&id, ownerAccountId, [ownerAccountId+createdAt]',
+      invites:'&inviteId, assignmentId, ownerAccountId, cachedForAccountId',
+      capturePolicies:'&key, accountId, [accountId+verifiedAt]',
+      privateSummaries:'&key, accountId, assignmentId',
+      revocations:'&key, accountId, assignmentId',
     })
   }
 }
@@ -1121,9 +1135,12 @@ export async function listServerAssignments(after?:string):Promise<{
   assertSame(s)
   // Cache only signed, independently authenticated policy snapshots.
   // No plaintext assignment name, DEK or recovery material is persisted.
-  await db.transaction('rw',db.capturePolicies,async()=>{
+  await db.transaction('rw',db.capturePolicies,db.revocations,async()=>{
     for(const item of result.items){
       const key=s.accountId+'/'+item.assignmentId
+      // A previously authenticated owner-signed exclusion is stronger
+      // than a later stale server overview snapshot.
+      if(await db.revocations.get(key))continue
       const previous=await db.capturePolicies.get(key)
       assertSignedPolicyProgress(previous?.listing,item)
       await db.capturePolicies.put({
@@ -1151,7 +1168,14 @@ export async function listAllServerAssignments():Promise<AssignmentListing[]>{
     const next:{items:AssignmentListing[];nextCursor:string|null}=
       appendBoundedUuidPage(items,page,after,item=>item.assignmentId)
     items=next.items
-    if(next.nextCursor===null)return items
+    if(next.nextCursor===null){
+      const revoked=await db.revocations.where('accountId')
+        .equals(session.accountId).toArray()
+      assertSame(session)
+      const denied=new Set(revoked.map(r=>r.assignmentId))
+      return items.filter(row=>row.ownerAccountId===session.accountId
+        ||!denied.has(row.assignmentId))
+    }
     after=next.nextCursor
   }
   throw Error('assignment.overview_pagination_limit')
@@ -1163,10 +1187,15 @@ export async function listAllServerAssignments():Promise<AssignmentListing[]>{
  */
 export async function listCachedAssignmentSnapshots():Promise<AssignmentListing[]>{
   const s=requireSession()
-  const rows=await db.capturePolicies.where('accountId').equals(s.accountId).toArray()
+  const [rows,removed]=await Promise.all([
+    db.capturePolicies.where('accountId').equals(s.accountId).toArray(),
+    db.revocations.where('accountId').equals(s.accountId).toArray(),
+  ])
+  const revoked=new Set(removed.map(x=>x.assignmentId))
   const verified:AssignmentListing[]=[]
   for(const row of rows){
     assertSame(s)
+    if(revoked.has(row.listing.assignmentId))continue
     try{
       await verifySignedAssignmentPolicy(row.listing,true)
       if(assignmentOpenAt(row.listing,Date.now()))
@@ -1190,7 +1219,9 @@ export async function signedCaptureBinding(
   privateFields:CaptureMetadataInput={},
 ):Promise<SignedCaptureBinding>{
   const s=requireSession()
-  const row=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
+  const key=s.accountId+'/'+assignmentId
+  if(await db.revocations.get(key))throw Error('assignment.member_removed')
+  const row=await db.capturePolicies.get(key)
   if(!row)throw new Error('assignment.policy_not_cached')
   const policy=row.listing
   // Capture is deliberately Local-First. Recheck the cached owner signature
