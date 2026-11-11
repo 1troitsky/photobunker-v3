@@ -224,6 +224,9 @@ final class SafeAssignmentEditorialLinkController extends Controller
             'safeMediaId'=>$safe->id,'sourceMediaId'=>$source->id,
             'candidateFields'=>$candidate,
             'effectivePublicFields'=>array_fill_keys(self::FIELDS,false),
+            'contract'=>$link->contract_json,
+            'signature'=>$link->account_signature,
+            'contractHash'=>$link->contract_hash,
             'published'=>false,'linked'=>true,
         ];
     }
