@@ -168,10 +168,10 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
       'unexpected_matrix_server')
     failUnless(process.env.MATRIX_CI_SERVER_NAME==='localhost',
       'wrong_matrix_server_name')
-    const nameA=process.env.MATRIX_CI_ALICE
-    const nameB=process.env.MATRIX_CI_BOB
-    const passA=process.env.MATRIX_CI_ALICE_PASSWORD
-    const passB=process.env.MATRIX_CI_BOB_PASSWORD
+    const nameA=process.env.MATRIX_CI_OUTBOX_ALICE
+    const nameB=process.env.MATRIX_CI_OUTBOX_BOB
+    const passA=process.env.MATRIX_CI_OUTBOX_ALICE_PASSWORD
+    const passB=process.env.MATRIX_CI_OUTBOX_BOB_PASSWORD
     failUnless(nameA&&nameB&&passA&&passB
       &&nameA!==nameB&&passA!==passB,'missing_disposable_credentials')
 
