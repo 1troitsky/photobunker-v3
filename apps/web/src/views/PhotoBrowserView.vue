@@ -38,6 +38,14 @@ import {
   discardObsoleteArchiveAction,
 } from '../features/browser/application/browser-archive'
 import type {ArchivePendingInspection} from '../features/browser/application/browser-archive'
+import {
+  localArchivePreferences,effectiveArchivePreferenceValues,
+  editArchivePreferences,synchronizeArchivePreferences,
+  discardArchivePreferenceDraft,
+} from '../features/browser/application/archive-preferences'
+import type {
+  ArchivePreferenceValues,
+} from '../features/browser/application/archive-preferences'
 import type {ArchivePending} from '../features/browser/application/archive-outbox'
 import type {ArchiveEntry,ArchiveAction} from '../features/browser/application/browser-archive'
 
@@ -95,6 +103,85 @@ const archiveNotice=ref('')
 const archivePending=ref<ArchivePending|null>(null)
 const archivePendingError=ref('')
 const archiveInspection=ref<ArchivePendingInspection|null>(null)
+type ArchiveLocalPrefs=Awaited<ReturnType<typeof localArchivePreferences>>
+const archivePrefs=ref<ArchiveLocalPrefs|null>(null)
+const archivePrefsBusy=ref(false)
+const archivePrefsNotice=ref('')
+const archivePrefsConflict=ref(false)
+const archivePrefsShown=computed<ArchivePreferenceValues>(()=>
+  archivePrefs.value?effectiveArchivePreferenceValues(archivePrefs.value)
+    :{useArchive:true,autoDeleteAfter7Days:true})
+const archivePrefsConfirmed=computed(()=>
+  !!archivePrefs.value?.confirmed&&!archivePrefs.value?.draft
+    &&!archivePrefs.value?.pending)
+async function loadArchivePrefState():Promise<void>{
+  const identity=activeSession.value
+  if(!identity)return
+  try{
+    const local=await localArchivePreferences()
+    if(identity!==activeSession.value)return
+    archivePrefs.value=local
+    if(identity.online&&navigator.onLine!==false)
+      await syncArchivePrefState()
+  }catch(e){
+    if(identity===activeSession.value)
+      archivePrefsNotice.value='Не удалось загрузить настройки архива: '+reason(e)
+  }
+}
+async function syncArchivePrefState():Promise<void>{
+  if(archivePrefsBusy.value||!activeSession.value?.online)return
+  const identity=activeSession.value
+  archivePrefsBusy.value=true
+  try{
+    const result=await synchronizeArchivePreferences()
+    if(identity!==activeSession.value)return
+    archivePrefs.value=result.data
+    archivePrefsConflict.value=result.state==='conflict'
+    archivePrefsNotice.value=result.state==='conflict'
+      ?'Настройки на другом устройстве изменились. Локальный вариант сохранён, перезапись запрещена.'
+      :result.state==='uploaded'?'Настройки архива подтверждены сервером.'
+        :'Настройки архива получены с сервера.'
+  }catch(e){
+    if(identity===activeSession.value)
+      archivePrefsNotice.value='Изменения сохранены локально, но не подтверждены сервером: '+reason(e)
+  }finally{
+    if(identity===activeSession.value)archivePrefsBusy.value=false
+  }
+}
+async function setArchivePref(key:keyof ArchivePreferenceValues,value:boolean):Promise<void>{
+  if(archivePrefsBusy.value)return
+  const identity=activeSession.value
+  if(!identity)return
+  try{
+    archivePrefs.value=await editArchivePreferences({[key]:value})
+    if(identity!==activeSession.value)return
+    archivePrefsNotice.value='Настройка сохранена на устройстве. Ожидает подтверждения сервера.'
+    archivePrefsConflict.value=false
+    if(identity.online&&navigator.onLine!==false)
+      void syncArchivePrefState()
+  }catch(e){
+    if(identity===activeSession.value)
+      archivePrefsNotice.value='Не удалось сохранить настройку: '+reason(e)
+  }
+}
+async function acceptServerArchivePrefs():Promise<void>{
+  if(archivePrefsBusy.value||!activeSession.value?.online
+    ||!window.confirm('Заменить неподтверждённый локальный вариант настройками с сервера? Файлы и архивные записи не удаляются.'))return
+  const identity=activeSession.value
+  archivePrefsBusy.value=true
+  try{
+    const current=await discardArchivePreferenceDraft()
+    if(identity!==activeSession.value)return
+    archivePrefs.value=current
+    archivePrefsConflict.value=false
+    archivePrefsNotice.value='Загружены подтверждённые серверные настройки.'
+  }catch(e){
+    if(identity===activeSession.value)
+      archivePrefsNotice.value='Не удалось принять серверные настройки: '+reason(e)
+  }finally{
+    if(identity===activeSession.value)archivePrefsBusy.value=false
+  }
+}
 async function refreshArchivePending():Promise<void>{
   const identity=activeSession.value
   if(!identity)return
@@ -257,7 +344,11 @@ async function archiveAction(item:CatalogItem,action:ArchiveAction):Promise<void
   if(archiveBusy.value||busy.value||!activeSession.value?.online
     ||!archiveWriteEnabled.value)return
   const entry=archivedByKey.value.get(item.key)
-  if(action!=='archive'&&!entry)return
+  if(action==='restore'&&!entry)return
+  if(action==='archive'&&!archivePrefsConfirmed.value
+    ||action==='delete'&&archiveTab.value==='all'
+      &&(!archivePrefsConfirmed.value||archivePrefsShown.value.useArchive))
+    return
   if(action==='delete'&&!window.confirm(
     'Окончательно удалить файл? Доступ будет закрыт немедленно, физическое удаление подтвердится отдельно. Восстановление невозможно.'))return
   if(action==='archive'&&!window.confirm(
@@ -695,6 +786,10 @@ watch(activeSession,(next,previous)=>{
     archivePending.value=null
     archivePendingError.value=''
     archiveInspection.value=null
+    archivePrefs.value=null
+    archivePrefsNotice.value=''
+    archivePrefsConflict.value=false
+    void loadArchivePrefState()
     void refreshArchivePending()
     void loadFolders()
     void loadMergeBackups()
@@ -707,13 +802,15 @@ watch(activeSession,(next,previous)=>{
 })
 watch([selectedFolder,filter,search],()=>{selectedKeys.value=[]})
 onMounted(()=>{
-  void loadFolders();void loadMergeBackups();void refreshArchivePending();void refresh()
+  void loadFolders();void loadMergeBackups();void loadArchivePrefState()
+  void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
   ++generation;++folderEpoch;++folderSyncEpoch
   mergePlan.value=null;mergeChoices.value={};mergeBackups.value=[]
   archivePending.value=null
   archiveInspection.value=null
+  archivePrefs.value=null
   revokePreview()
 })
 </script>
@@ -860,6 +957,41 @@ onUnmounted(()=>{
         <p v-if="folderError" role="alert" class="error-text">{{ folderError }}</p>
         <p v-if="folderNotice" role="status" class="muted">{{ folderNotice }}</p>
       </section>
+      <section class="browser-archive-preferences" data-testid="browser-archive-preferences">
+        <h2>Настройки архива</h2>
+        <label>
+          <input type="checkbox" data-testid="browser-pref-use-archive"
+            :checked="archivePrefsShown.useArchive"
+            :disabled="archivePrefsBusy||!!archivePrefs?.pending"
+            @change="setArchivePref('useArchive',($event.target as HTMLInputElement).checked)">
+          Использовать архив
+        </label>
+        <label>
+          <input type="checkbox" data-testid="browser-pref-auto-delete"
+            :checked="archivePrefsShown.autoDeleteAfter7Days"
+            :disabled="archivePrefsBusy||!!archivePrefs?.pending"
+            @change="setArchivePref('autoDeleteAfter7Days',($event.target as HTMLInputElement).checked)">
+          Автоудаление из архива через 7 дней
+        </label>
+        <p class="muted">По умолчанию обе опции включены. Отключение архива
+          не удаляет уже архивированные файлы. При отключённом архиве
+          удаление активного файла будет прямым и необратимым после подтверждения.</p>
+        <p class="muted">Срок файла и ограничения задания всегда имеют приоритет.
+          Серверные разрешения архива и физической очистки независимы от этих переключателей.</p>
+        <p v-if="!archivePrefsConfirmed" data-testid="browser-pref-unconfirmed" class="muted">
+          Настройки не подтверждены сервером: опасные действия недоступны до синхронизации.</p>
+        <p v-if="archivePrefsNotice" data-testid="browser-pref-status" role="status">
+          {{ archivePrefsNotice }}</p>
+        <div class="browser-archive-pref-actions">
+          <button type="button" data-testid="browser-pref-sync"
+            :disabled="archivePrefsBusy||!activeSession.online"
+            @click="syncArchivePrefState">Синхронизировать настройки</button>
+          <button v-if="archivePrefsConflict" type="button"
+            data-testid="browser-pref-use-server"
+            :disabled="archivePrefsBusy||!activeSession.online"
+            @click="acceptServerArchivePrefs">Принять настройки сервера</button>
+        </div>
+      </section>
       <nav class="browser-archive-tabs" aria-label="Расположение файлов">
         <button type="button" data-testid="browser-tab-active"
           :aria-pressed="archiveTab==='all'" @click="archiveTab='all'">Каталог</button>
@@ -992,10 +1124,16 @@ onUnmounted(()=>{
                   :value="folder.id">{{ folder.name }}</option>
               </select>
             </label>
-            <button v-if="archiveTab==='all'&&item.cloud" type="button"
-              :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled"
+            <button v-if="archiveTab==='all'&&item.cloud&&archivePrefsShown.useArchive"
+              type="button"
+              :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!archivePrefsConfirmed"
               :aria-label="'Архивировать файл '+item.id"
               @click="archiveAction(item,'archive')">В архив</button>
+            <button v-if="archiveTab==='all'&&item.cloud&&!archivePrefsShown.useArchive"
+              type="button"
+              :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!archivePrefsConfirmed"
+              :aria-label="'Запросить прямое удаление файла '+item.id"
+              @click="archiveAction(item,'delete')">Удалить окончательно</button>
             <template v-if="archiveTab==='archive'&&archivedByKey.get(item.key)?.state==='archived'">
               <button type="button" :disabled="archiveBusy||!activeSession.online||!archiveWriteEnabled"
                 :aria-label="'Восстановить файл '+item.id"
