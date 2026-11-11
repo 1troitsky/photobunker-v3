@@ -172,6 +172,12 @@ try{
     return countBackupSessions(backup)>0
   },100)
 
+  // Cut OFF both old clients before recovery: a new device must not
+  // obtain an old Megolm session through a live to-device gossip response.
+  // It must restore from the encrypted server backup or FAIL.
+  a.stopClient()
+  b.stopClient()
+
   // NEW device: no local Matrix crypto store and no original cross-signing
   // private keys. The only transferred material is the 32-byte SSSS seed;
   // the PB3 production transport must be AKEK sealed (P2-02D1).
@@ -185,9 +191,22 @@ try{
   assert.equal(newDefault?.[0],keyId)
   assert.equal(await next.secretStorage.checkKey(generated.privateKey,
     newDefault[1]),true)
+  assert.equal(await nc.userHasCrossSigningKeys(alice.userId,true),true,
+    'New Matrix device cannot find the previously published root')
   const remoteKeys=await nc.getUserCrossSigningKeys(alice.userId)
   assert.ok(remoteKeys?.master_key?.keys,
     'Missing original public cross-signing identity from homeserver')
+  assert.equal(Object.values(remoteKeys.master_key.keys)[0],master,
+    'Public cross-signing root rotated before 4S recovery')
+  // Preflight all original private 4S secrets BEFORE bootstrapCrossSigning:
+  // SDK otherwise can create a new identity if secret storage is empty.
+  const required=['m.cross_signing.master','m.cross_signing.self_signing',
+    'm.cross_signing.user_signing']
+  for(const name of required){
+    const oldKey=await next.secretStorage.get(name)
+    assert.ok(typeof oldKey==='string'&&oldKey.length>20,
+      'Original Matrix cross-signing secret cannot be decrypted')
+  }
 
   await nc.bootstrapCrossSigning({
     authUploadDeviceSigningKeys:
@@ -204,6 +223,21 @@ try{
   assert.equal((await nc.getKeyBackupInfo())?.version,version,
     'Fresh device did not use original backup')
 
+  // Actually decrypt the historical message that existed before the new
+  // device was created. Count of imported keys alone is NOT sufficient.
+  const historic=await until('new device sees pre-existing encrypted event',()=>{
+    return next.getRoom(roomId)?.getLiveTimeline().getEvents()
+      .find(e=>e.getId()===sent.event_id)
+  },45)
+  await until('fresh-device plaintext restored from backed-up Megolm session',
+    async()=>{
+      if(historic.getType()==='m.room.message'
+        &&historic.getContent().body===body)return true
+      try{await next.decryptEventIfNeeded(historic,{isRetry:true})}catch{}
+      return historic.getType()==='m.room.message'
+        &&historic.getContent().body===body
+    },60)
+
   // Negative: invented/rotated private 4S secret must not validate against
   // server key metadata. This does not depend on a second Matrix password.
   const forged=new Uint8Array(32)
@@ -211,7 +245,7 @@ try{
   assert.equal(await next.secretStorage.checkKey(forged,newDefault[1]),false)
   forged.fill(0)
 
-  console.log('P2-02D3 PASS: real Matrix 4S cross-signing root persisted, encrypted Megolm backup, recovered SAME root and historic session on NEW device, forged 4S denied')
+  console.log('P2-02D3 PASS: real Matrix 4S cross-signing root persisted, encrypted Megolm backup, recovered SAME root and decrypted the original historic event on NEW device without live gossip, forged 4S denied')
   generated.privateKey.fill(0)
 }finally{
   for(const c of clients){
