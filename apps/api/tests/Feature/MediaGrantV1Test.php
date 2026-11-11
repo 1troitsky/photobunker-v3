@@ -190,6 +190,187 @@ final class MediaGrantV1Test extends TestCase
         ];
     }
 
+    /**
+     * Two distinct signed-photo fixtures. The test-only ciphertext is never
+     * decrypted in PHP: it only establishes the chunk authorization boundary.
+     * The real DEK exchange is exercised independently in Chromium.
+     */
+    private function newSafePhotoAsset(?int $expiresAt=null):array
+    {
+        $owner=$this->people['owner'];
+        $mediaId=(string)Str::uuid();
+        $expires=$expiresAt??now()->addDay()->getTimestampMs();
+        $chunks=[];$firstChunk='';
+        foreach(['data','metadata'] as $kind){
+            $chunkId=(string)Str::uuid();
+            if($firstChunk==='')$firstChunk=$chunkId;
+            $cipher=random_bytes($kind==='data'?280:91);
+            $chunk=[
+                'chunkId'=>$chunkId,'index'=>count($chunks),
+                'kind'=>$kind,'plainBytes'=>strlen($cipher)-16,
+                'bytes'=>strlen($cipher),'sha256'=>hash('sha256',$cipher),
+                'iv'=>P::encode(random_bytes(12)),
+            ];
+            $chunks[]=$chunk;
+            $key='cipher/media/v1/'.$owner['id'].'/'.$mediaId.'/'.$chunkId;
+            Storage::disk('ciphertext')->put($key,$cipher);
+            DB::table('media_chunks_v1')->insert([
+                'id'=>$chunkId,'media_id'=>$mediaId,
+                'chunk_index'=>$chunk['index'],'kind'=>$kind,
+                'plain_bytes'=>$chunk['plainBytes'],
+                'bytes'=>$chunk['bytes'],'sha256'=>$chunk['sha256'],
+                'iv'=>$chunk['iv'],'state'=>'active',
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            DB::table('media_chunk_locations_v1')->insert([
+                'id'=>(string)Str::uuid(),'chunk_id'=>$chunkId,
+                'provider'=>'app_s3','object_key'=>$key,
+                'sha256'=>$chunk['sha256'],'bytes'=>$chunk['bytes'],
+                'state'=>'active','created_at'=>now(),'updated_at'=>now(),
+            ]);
+        }
+        $contract=json_encode([
+            'version'=>1,'accountId'=>$owner['id'],'mediaId'=>$mediaId,
+            'operationId'=>(string)Str::uuid(),'mediaType'=>'photo',
+            'expiresAt'=>$expires,'chunkBytes'=>1048576,
+            'plainBytes'=>$chunks[0]['plainBytes'],
+            'wrappedDEK'=>[
+                'iv'=>P::encode(random_bytes(12)),
+                'ciphertext'=>P::encode(random_bytes(48)),
+            ],'chunks'=>$chunks,
+        ],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $hash=hash('sha256',$contract);
+        DB::table('media_files_v1')->insert([
+            'id'=>$mediaId,'account_id'=>$owner['id'],
+            'device_id'=>$owner['device'],
+            'operation_id'=>(string)Str::uuid(),
+            'media_type'=>'photo','state'=>'active',
+            'expires_at'=>$expires,'plain_bytes'=>$chunks[0]['plainBytes'],
+            'cipher_bytes'=>array_sum(array_column($chunks,'bytes')),
+            'contract_hash'=>$hash,'contract_json'=>$contract,
+            'signature'=>'device-fixture',
+            'receipt'=>json_encode(['mediaId'=>$mediaId]),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        return ['id'=>$mediaId,'hash'=>$hash,
+            'chunkId'=>$firstChunk,'expiresAt'=>$expires];
+    }
+
+    private function safeGrantInput(string $recipientDigest,array $source,
+        array $derivative,?int $expiry=null):array
+    {
+        $grant=[
+            'version'=>3,'grantId'=>(string)Str::uuid(),
+            'mediaId'=>$derivative['id'],
+            'ownerAccountId'=>$this->people['owner']['id'],
+            'recipientAccountId'=>$this->people['recipient']['id'],
+            'sourceMediaId'=>$source['id'],
+            'sourceContractHash'=>$source['hash'],
+            'recipientKeyDigest'=>$recipientDigest,
+            'mediaContractHash'=>$derivative['hash'],
+            'scope'=>'safe_read',
+            'expiresAt'=>$expiry??now()->addHour()->getTimestampMs(),
+            'envelope'=>[
+                'ephemeralSpki'=>$this->people['owner']['spki'],
+                'salt'=>P::encode(random_bytes(16)),
+                'iv'=>P::encode(random_bytes(12)),
+                'ciphertext'=>P::encode(random_bytes(48)),
+            ],
+        ];
+        return $this->signedSafeGrant($grant);
+    }
+
+    private function signedSafeGrant(array $grant):array
+    {
+        $contract=json_encode(
+            $grant,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return [
+            'contract'=>$contract,
+            'signature'=>$this->signature(
+                'owner',"pb3.media-grant.v3\n".$contract),
+        ];
+    }
+
+    public function test_safe_v3_only_decryptable_derivative_chunks_and_source_lifecycle_is_enforced():void
+    {
+        $digest=$this->publishRecipientKey();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $body=$this->safeGrantInput($digest,$source,$safe);
+        $grantId=json_decode($body['contract'],true)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$body)
+            ->assertCreated()->assertJsonPath('state','active');
+        $this->postJson('/media-shares/v1/grants',$body)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('media_recipient_grants_v1',[
+            'id'=>$grantId,'media_id'=>$safe['id'],
+            'source_media_id'=>$source['id'],
+            'source_contract_hash'=>$source['hash'],
+            'media_contract_hash'=>$safe['hash'],
+        ]);
+        $this->asRole('recipient');
+        $this->getJson('/media-shares/v1/received')
+            ->assertOk()->assertJsonPath('items.0.scope','safe_read');
+        $this->getJson('/media-shares/v1/grants/'.$grantId)
+            ->assertOk()->assertJsonPath('mediaId',$safe['id'])
+            ->assertJsonPath('contract',$body['contract']);
+        $this->get('/media-shares/v1/grants/'.$grantId.'/chunks/'.
+            $safe['chunkId'])->assertOk();
+        // The grantId MUST NOT expose the source ciphertext: its DEK is
+        // different and the server cannot route source chunks by grant.
+        $this->get('/media-shares/v1/grants/'.$grantId.'/chunks/'.
+            $source['chunkId'])->assertNotFound();
+        $this->getJson('/media/v1/'.$source['id'].'/manifests')
+            ->assertNotFound();
+        // Dynamic TTL and owner state bound to BOTH signed media contracts.
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson('/media-shares/v1/grants/'.$grantId)->assertGone();
+        $this->get('/media-shares/v1/grants/'.$grantId.'/chunks/'.
+            $safe['chunkId'])->assertGone();
+        $this->getJson('/media-shares/v1/received')
+            ->assertJsonPath('items',[]);
+        // No automatic deletion or change of the original on revoke/expiry.
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$source['id'],'state'=>'active',
+        ]);
+    }
+
+    public function test_safe_v3_rejects_source_confusion_bad_scope_expiry_and_untrusted_account():void
+    {
+        $digest=$this->publishRecipientKey();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $base=json_decode($this->safeGrantInput($digest,$source,$safe)['contract'],true);
+        foreach([
+            [...$base,'mediaId'=>$source['id']],
+            [...$base,'sourceMediaId'=>$safe['id']],
+            [...$base,'sourceContractHash'=>str_repeat('e',64)],
+            [...$base,'scope'=>'read'],
+            [...$base,'scope'=>'original'],
+            [...$base,'version'=>2],
+            [...$base,'rawDEK'=>'do-not-exfiltrate'],
+            [...$base,'expiresAt'=>$source['expiresAt']+1],
+            [...$base,'sourceMediaId'=>$this->mediaId], // video, not photo
+        ] as $grant){
+            $grant['grantId']=(string)Str::uuid();
+            $response=$this->postJson('/media-shares/v1/grants',
+                $this->signedSafeGrant($grant));
+            $this->assertContains($response->getStatusCode(),[404,409,410,422]);
+        }
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        // An unrelated account cannot relabel someone else's original.
+        DB::table('media_files_v1')->where('id',$source['id'])->update([
+            'account_id'=>$this->people['unrelated']['id'],
+            'device_id'=>$this->people['unrelated']['device'],
+        ]);
+        $this->postJson('/media-shares/v1/grants',
+            $this->safeGrantInput($digest,$source,$safe))->assertNotFound();
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
     /** The recipient owns Fieldwork, but the contributor retains S3 ownership. */
     private function acceptedAssignment():string
     {
