@@ -18,12 +18,28 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await a.locator('#media-import-description').fill('Секретная заметка для клиента')
     await a.locator('#media-import-tags').fill('evidence, night')
     await aContext.setOffline(true)
+    // Changing online state must not erase a user's unsent private evidence.
+    await expect(a.locator('#media-import-category')).toHaveValue('Полевые отчёты')
+    await expect(a.locator('#media-import-description'))
+      .toHaveValue('Секретная заметка для клиента')
+    await expect(a.locator('#media-import-tags')).toHaveValue('evidence, night')
     await a.getByTestId('media-import-file').setInputFiles({
       name:secret+'.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x42),
     })
     const rows=a.locator('[data-testid^="browser-row-media:"]')
     await expect(rows).toHaveCount(1,{timeout:25000})
+    // Assert actual AEAD-decrypted persistence, not only UI search behavior.
+    const metadata=await a.evaluate(async()=>{
+      const m=await import('/src/features/media/application/media-outbox.ts')
+      const encrypted=await m.listLocalMedia()
+      return m.readLocalMediaMetadata(encrypted[0]!.mediaId)
+    })
+    expect(metadata).toMatchObject({
+      fileName:secret+'.wav',category:'Полевые отчёты',
+      description:'Секретная заметка для клиента',
+      tags:['evidence','night'],
+    })
     await a.getByTestId('browser-search').fill(secret)
     await expect(rows).toHaveCount(1,{timeout:15000})
     await expect(a.getByTestId('browser-private-search-status'))
