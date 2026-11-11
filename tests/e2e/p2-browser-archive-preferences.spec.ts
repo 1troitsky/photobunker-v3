@@ -10,6 +10,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     const recoveryKey=await a.locator('#generated-key').inputValue()
     await a.getByLabel('Я сохранил ключ восстановления').check()
     await a.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(a.getByText('Подтверждённая сессия')).toBeVisible()
     await a.goto('/browser')
     await expect(a.getByTestId('browser-pref-use-archive')).toBeChecked()
     await expect(a.getByTestId('browser-pref-auto-delete')).toBeChecked()
