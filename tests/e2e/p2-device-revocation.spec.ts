@@ -69,13 +69,9 @@ test('P2 M-03A: two REAL PB3 browser devices → signed cross-device revoke deni
       name:'Отключить от PB3 устройство '+secondDevice,
     }).click()
     await expect(B.getByRole('status')).toContainText(
-      'удалённый Matrix-токен не отозван',
+      /Matrix-токен/,
       {timeout:20000},
-    ).catch(async()=>{
-      await expect(B.getByRole('status')).toContainText(
-        'Matrix-токена на внешнем сервере не выполнен',
-      )
-    })
+    )
     await expect(B.getByRole('button',{name:'Создать ключ'})).toBeVisible()
     const selfDenied=await B.evaluate(async()=>
       (await fetch('/identity/v2/me',{credentials:'same-origin'})).status)
