@@ -259,6 +259,7 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .file-viewer-still,.file-viewer-audio-editor,.file-viewer-photo-editor{display:grid;gap:12px;border:1px solid var(--outline);
   border-radius:10px;padding:15px;background:var(--surface);margin:16px 0}
 .file-viewer-photo-editor>h2{margin:0;font-size:16px}
+.file-viewer-adjustments-heading{font-size:13px;margin:4px 0 0;color:#ddd}
 .file-viewer-photo-editor>.muted{margin:0;font-size:12px}
 .file-viewer-crop-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .file-viewer-crop-controls label{display:grid;gap:6px;font-size:12px;color:#ddd}
