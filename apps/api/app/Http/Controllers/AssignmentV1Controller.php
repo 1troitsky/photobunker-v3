@@ -724,6 +724,15 @@ final class AssignmentV1Controller extends Controller
                 })
                 ->where('m.state','active')->where('m.expires_at','>',$now)
                 ->where('g.state','active')->where('g.expires_at','>',$now)
+                // A signed archive disables grant reads before source TTL.
+                // It must also remove this contribution from live progress.
+                ->whereNotExists(static function($archive){
+                    $archive->selectRaw('1')
+                        ->from('browser_archive_entries_v1 as ba')
+                        ->where('ba.kind','media')
+                        ->whereColumn('ba.asset_id','s.media_id')
+                        ->whereIn('ba.state',['archived','deleting']);
+                })
                 ->selectRaw('COUNT(*)');
         },'confirmed_p2_photo_count');
         // Independent and full server-derived counts. Never infer progress
@@ -742,6 +751,13 @@ final class AssignmentV1Controller extends Controller
                     ->whereColumn('g.recipient_account_id','a.owner_account_id')
                     ->where('m.state','active')->where('m.expires_at','>',$now)
                     ->where('g.state','active')->where('g.expires_at','>',$now)
+                    ->whereNotExists(static function($archive){
+                        $archive->selectRaw('1')
+                            ->from('browser_archive_entries_v1 as ba')
+                            ->where('ba.kind','media')
+                            ->whereColumn('ba.asset_id','s.media_id')
+                            ->whereIn('ba.state',['archived','deleting']);
+                    })
                     ->selectRaw('COUNT(*)');
             },'confirmed_'.$kind.'_count');
         }
