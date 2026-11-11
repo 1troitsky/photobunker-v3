@@ -422,7 +422,7 @@ final class BrowserArchiveTest extends TestCase
         $this->getJson('/browser/v1/archive')->assertOk()
             ->assertJsonPath('items.0.physicalStatus','not_started');
         config()->set('browser_archive.auto_cleanup_enabled',true);
-        $service=app(\\App\\Browser\\ArchiveLifecycle::class);
+        $service=app(\App\Browser\ArchiveLifecycle::class);
         $this->assertSame(['marked'=>0,'deferred'=>0,'errors'=>0],
             $service->sweepDue(50));
         $this->mutate('owner',$this->command('owner','photo',$id,'restore',1))
