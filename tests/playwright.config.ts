@@ -2,10 +2,10 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
-  // Every versioned P1 vertical is a mandatory real-browser gate.
-  // Explicit older-file allowlist accidentally skipped MediaFile E2E
-  // in PR28–30 while the two original suites remained green.
-  testMatch: ['p1-*.spec.ts'],
+  // P1 and Browser P2 are required real-browser gates. Do not silently
+  // exclude newly added Browser tests behind the P1-only allowlist.
+  // Other P2 integration tracks (e.g. Matrix) have separate fixtures.
+  testMatch: ['p1-*.spec.ts','p2-browser-*.spec.ts'],
   workers: 1,
   retries: 0,
   timeout: 90_000,
