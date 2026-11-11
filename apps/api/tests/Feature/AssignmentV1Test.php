@@ -208,6 +208,164 @@ final class AssignmentV1Test extends TestCase
         ]);
     }
 
+    private function signedPreviewCeiling(
+        int $from=0,?string $previousHash=null,
+        ?array $fields=null,?array $actions=null,
+    ):array{
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        return $this->signed('owner','pb3.assignment-preview-ceiling.v1',[
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'rootPolicyHash'=>$a->contract_hash,
+            'fromRevision'=>$from,'toRevision'=>$from+1,
+            'previousPolicyHash'=>$previousHash??str_repeat('0',64),
+            'publication'=>'disabled',
+            'fields'=>$fields??[
+                'description'=>false,'capturedAt'=>false,
+                'updatedAt'=>false,'tags'=>false,'authorTeam'=>false,
+                'gps'=>false,'metadata'=>false,
+            ],
+            'actions'=>$actions??[
+                'view'=>false,'copy'=>false,'download'=>false,'share'=>false,
+            ],
+            'expiresAt'=>now()->addDays(2)->getTimestampMs(),
+        ]);
+    }
+
+    public function test_assignment_preview_ceiling_signed_immutable_private_and_independent_of_capture_rules():void
+    {
+        $this->createAssignment();
+        $url='/assignments/v1/'.$this->assignmentId.'/preview-ceiling';
+        $this->getJson($url)->assertNotFound();
+        $draft=$this->signedPreviewCeiling();
+        $this->postJson($url,$draft)->assertCreated()
+            ->assertJsonPath('revision',1)
+            ->assertJsonPath('published',false)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$draft)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $v=$this->getJson($url)->assertOk()
+            ->assertJsonPath('contract',$draft['contract'])
+            ->assertJsonPath('published',false)
+            ->assertJsonMissingPath('publicUrl')
+            ->assertJsonMissingPath('envelope')
+            ->assertJsonMissingPath('mediaId');
+        $hash=hash('sha256',$draft['contract']);
+        $this->assertSame($hash,$v->json('policyHash'));
+
+        $next=$this->signedPreviewCeiling(1,$hash,[
+            'description'=>true,'capturedAt'=>false,
+            'updatedAt'=>false,'tags'=>true,'authorTeam'=>false,
+            'gps'=>false,'metadata'=>false,
+        ]);
+        $this->postJson($url,$next)->assertCreated()
+            ->assertJsonPath('revision',2);
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('revision',2)
+            ->assertJsonPath('contract',$next['contract']);
+        $this->assertDatabaseCount('assignment_preview_ceiling_events_v1',2);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        $this->assertDatabaseHas('assignment_preview_ceilings_v1',[
+            'assignment_id'=>$this->assignmentId,
+            'owner_account_id'=>$this->people['owner']['account'],
+            'revision'=>2,
+        ]);
+        $this->as('recipient');
+        $this->getJson($url)->assertNotFound();
+        $this->postJson($url,$draft)->assertNotFound();
+        $this->as('outsider');
+        $this->getJson($url)->assertNotFound();
+    }
+
+    public function test_assignment_preview_ceiling_rejects_public_scope_forgery_and_revision_forks():void
+    {
+        $this->createAssignment();
+        $url='/assignments/v1/'.$this->assignmentId.'/preview-ceiling';
+        $input=$this->signedPreviewCeiling();
+        $base=json_decode($input['contract'],true);
+        foreach([
+            [...$base,'publication'=>'public'],
+            [...$base,'publication'=>'published'],
+            [...$base,'actions'=>[...$base['actions'],'view'=>true]],
+            [...$base,'actions'=>[...$base['actions'],'copy'=>true]],
+            [...$base,'actions'=>[...$base['actions'],'download'=>true]],
+            [...$base,'actions'=>[...$base['actions'],'share'=>true]],
+            [...$base,'actions'=>[...$base['actions'],'original'=>true]],
+            [...$base,'fields'=>[...$base['fields'],'gps'=>'true']],
+            [...$base,'fields'=>[...$base['fields'],'privateKey'=>true]],
+            [...$base,'ownerAccountId'=>$this->people['recipient']['account']],
+            [...$base,'assignmentId'=>(string)Str::uuid()],
+            [...$base,'rootPolicyHash'=>str_repeat('e',64)],
+            [...$base,'expiresAt'=>0],
+            [...$base,'previousPolicyHash'=>'wrong'],
+        ] as $changed){
+            $changed['operationId']=(string)Str::uuid();
+            $response=$this->postJson($url,$this->signed(
+                'owner','pb3.assignment-preview-ceiling.v1',$changed));
+            $this->assertContains($response->status(),[403,404,409,410,422]);
+        }
+        $this->assertDatabaseCount('assignment_preview_ceiling_events_v1',0);
+        $this->postJson($url,[
+            'contract'=>$input['contract'],
+            'signature'=>P::encode(random_bytes(64)),
+        ])->assertUnauthorized();
+        $this->postJson($url,$input)->assertCreated();
+        $this->postJson($url,$this->signedPreviewCeiling())
+            ->assertConflict();
+        $conflict=json_decode($input['contract'],true);
+        $conflict['fields']['gps']=true;
+        $this->postJson($url,$this->signed(
+            'owner','pb3.assignment-preview-ceiling.v1',$conflict))
+            ->assertConflict();
+        $this->assertDatabaseCount('assignment_preview_ceiling_events_v1',1);
+    }
+
+    public function test_assignment_preview_ceiling_detects_event_tamper_retention_expiry_and_rollback():void
+    {
+        $this->createAssignment();
+        $url='/assignments/v1/'.$this->assignmentId.'/preview-ceiling';
+        $this->postJson($url,$this->signedPreviewCeiling())->assertCreated();
+        $migration=require database_path(
+            'migrations/2026_11_11_000006_create_assignment_preview_ceiling_v1.php');
+        try{
+            $migration->down();
+            $this->fail('Signed preview history must survive rollback.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.assignment_preview.rollback_forbidden',
+                $e->getMessage());
+        }
+        $event=DB::table('assignment_preview_ceiling_events_v1')->first();
+        DB::table('assignment_preview_ceiling_events_v1')
+            ->where('operation_id',$event->operation_id)
+            ->update(['contract_hash'=>str_repeat('f',64)]);
+        $this->getJson($url)->assertConflict();
+        DB::table('assignment_preview_ceiling_events_v1')
+            ->where('operation_id',$event->operation_id)
+            ->update(['contract_hash'=>$event->contract_hash]);
+        $this->getJson($url)->assertOk();
+        $row=DB::table('assignment_preview_ceilings_v1')->first();
+        DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->update(['expires_at_ms'=>$row->expires_at_ms+10000]);
+        $this->getJson($url)->assertConflict();
+        DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->update(['expires_at_ms'=>$row->expires_at_ms]);
+
+        // An assignment can close access to its own preview without
+        // deleting a contributor's original or granting public access.
+        DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)
+            ->update(['files_access_until'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($url)->assertGone();
+        $this->postJson($url,$this->signedPreviewCeiling(1,
+            hash('sha256',$event->contract_json)))->assertGone();
+        $this->assertDatabaseCount('assignment_preview_ceiling_events_v1',1);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
     public function test_p1_21_retention_is_signed_and_replay_safe():void
     {
         $this->createAssignment();
