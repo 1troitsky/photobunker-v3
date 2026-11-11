@@ -7,13 +7,15 @@ import {
 import {
   attachMediaGrantLifecycle,flushMediaGrants,
   listOutgoingMediaGrants,listReceivedMediaGrants,
-  queueMediaRecipientGrant,readReceivedMediaGrant,
-  revokeMediaGrant,
+  queueMediaRecipientGrant,queueMediaSafeRecipientGrant,
+  readReceivedMediaGrant,revokeMediaGrant,parseMediaGrantContract,
 } from '../application/media-grants'
 import type {
   ReceivedMediaGrant,OutgoingMediaGrant,
 } from '../application/media-grants'
 import type {StoredMedia} from '../application/media-outbox'
+import {listSafeDerivativeCandidates} from '../application/safe-derivatives'
+import type {SafeDerivativeCandidate} from '../application/safe-derivatives'
 import type {MediaMetadata} from '../domain/media-crypto'
 
 defineProps<{localMedia:StoredMedia[]}>()
@@ -31,6 +33,7 @@ const acknowledgedRecipient=ref(false)
 const acknowledgedOwner=ref(false)
 const outgoing=ref<OutgoingMediaGrant[]>([])
 const incoming=ref<ReceivedMediaGrant[]>([])
+const safeCandidates=ref<SafeDerivativeCandidate[]>([])
 const busy=ref(false)
 const error=ref('')
 const status=ref('')
@@ -44,15 +47,18 @@ async function action(callback:()=>Promise<void>):Promise<void>{
 }
 async function hydrate():Promise<void>{
   const session=activeSession.value
-  if(!session){outgoing.value=[];incoming.value=[];return}
+  if(!session){outgoing.value=[];incoming.value=[];safeCandidates.value=[];return}
   try{
     if(session.online){
       await ensureOwnExchangeKey()
       await flushMediaGrants()
     }
-    const next=await listOutgoingMediaGrants()
+    const [next,localSafe]=await Promise.all([
+      listOutgoingMediaGrants(),listSafeDerivativeCandidates(),
+    ])
     if(activeSession.value!==session)return
     outgoing.value=next
+    safeCandidates.value=localSafe
     if(session.online){
       const result=await listReceivedMediaGrants()
       if(activeSession.value===session)incoming.value=result
@@ -89,12 +95,35 @@ function send(mediaId:string):void{
   void action(async()=>{
     const peer=recipientPeer.value
     if(!peer?.confirmed)throw Error('media_grant.peer_not_confirmed')
+    if(safeCandidates.value.some(row=>row.sourceMediaId===mediaId)
+      &&!window.confirm('Выбран ПОЛНЫЙ исходный файл, а не закрытая копия. Получатель сможет расшифровать его без масок. Для адресной Safe-передачи используйте специальную кнопку ниже. Всё равно передать оригинал?'))
+      return
     const grantId=await queueMediaRecipientGrant(mediaId,peer.id)
     outgoing.value=await listOutgoingMediaGrants()
     await flushMediaGrants()
     outgoing.value=await listOutgoingMediaGrants()
     status.value='Разрешение сохранено: '+grantId.slice(0,8)
   })
+}
+function sendSafe(candidate:SafeDerivativeCandidate):void{
+  void action(async()=>{
+    const peer=recipientPeer.value
+    if(!peer?.confirmed)throw Error('media_grant.peer_not_confirmed')
+    if(!window.confirm('Разрешить адресату читать ТОЛЬКО отдельную закрытую JPEG-копию? Оригинал останется под собственными независимыми разрешениями. Убедитесь, что чувствительные области закрыты. Это не публичная ссылка.'))
+      return
+    const grantId=await queueMediaSafeRecipientGrant(
+      candidate.sourceMediaId,candidate.safeMediaId,peer.id)
+    outgoing.value=await listOutgoingMediaGrants()
+    await flushMediaGrants()
+    outgoing.value=await listOutgoingMediaGrants()
+    status.value='Адресный Safe-грант записан: '+grantId.slice(0,8)
+  })
+}
+function grantScopeLabel(row:OutgoingMediaGrant):string{
+  try{
+    return parseMediaGrantContract(JSON.parse(row.contract)).scope==='safe_read'
+      ?'Только Safe-копия':'Полный файл (read)'
+  }catch{return 'Неизвестное разрешение'}
 }
 function checkOwner(id:string):void{
   void action(async()=>{
@@ -141,7 +170,7 @@ function refresh():void{
 }
 watch(activeSession,()=>{
   recipientPeer.value=null;ownerPeer.value=null
-  outgoing.value=[];incoming.value=[]
+  outgoing.value=[];incoming.value=[];safeCandidates.value=[]
   void hydrate()
 })
 onMounted(()=>{detach=attachMediaGrantLifecycle();void hydrate()})
@@ -176,6 +205,9 @@ onUnmounted(()=>detach())
     </div>
     <template v-if="recipientPeer?.confirmed">
       <h4>Локально подтверждённые файлы</h4>
+      <p class="muted">Кнопка «Передать медиа» выдаёт полный DEK выбранного
+        файла. Если это оригинал, получатель увидит его БЕЗ масок.
+        Для закрытой копии используйте отдельное действие Safe ниже.</p>
       <div v-for="media in localMedia.filter(x=>x.state==='synced')"
         :key="media.key" class="photo-row">
         <code>{{ media.mediaType }} · {{ media.mediaId.slice(0,8) }}</code>
@@ -183,10 +215,31 @@ onUnmounted(()=>detach())
           @click="send(media.mediaId)">Передать медиа</button>
       </div>
     </template>
+    <template v-if="recipientPeer?.confirmed">
+      <h4>Кандидаты Safe — только отдельные JPEG-копии</h4>
+      <p class="muted">Этот раздел доступен только для лично подготовленных
+        закрытых копий после подтверждения синхронизации обоих файлов.
+        Safe-грант связан с оригиналом, но никогда не выдаёт его DEK.
+        Проверьте содержание копии самостоятельно перед отправкой.
+        Существующие разрешения на оригинал не отзываются.</p>
+      <p v-if="!safeCandidates.length" class="muted"
+        data-testid="media-safe-empty">Подтверждённых Safe-кандидатов пока нет.</p>
+      <div v-for="candidate in safeCandidates" :key="candidate.key"
+        class="photo-row" data-testid="media-safe-candidate">
+        <div>
+          <small>Личная обработанная копия {{ candidate.safeMediaId.slice(0,8) }}</small>
+          <small>Источник {{ candidate.sourceMediaId.slice(0,8) }}</small>
+        </div>
+        <button type="button" :disabled="busy"
+          data-testid="media-send-safe-derivative"
+          @click="sendSafe(candidate)">Передать только Safe-копию</button>
+      </div>
+    </template>
     <h4>Исходящие разрешения медиа</h4>
     <div v-for="grant in outgoing" :key="grant.id" class="photo-row">
       <div>
         <code>{{ grant.id.slice(0,8) }} · {{ grant.state }}</code>
+        <small>{{ grantScopeLabel(grant) }}</small>
         <small>{{ grant.recipientAccountId.slice(0,8) }}</small>
       </div>
       <button v-if="grant.state==='sent'" type="button"
@@ -199,6 +252,9 @@ onUnmounted(()=>detach())
     <div v-for="grant in incoming" :key="grant.grantId" class="photo-row">
       <div>
         <code>{{ grant.mediaType }} · {{ grant.mediaId.slice(0,8) }}</code>
+        <small v-if="grant.scope==='safe_read'">
+          Адресная закрытая JPEG-копия; оригинал не передан
+        </small>
         <small>От: {{ grant.ownerAccountId.slice(0,8) }} · до
           {{ new Date(grant.expiresAt).toLocaleString('ru-RU') }}</small>
       </div>

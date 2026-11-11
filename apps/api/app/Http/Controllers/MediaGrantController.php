@@ -32,21 +32,27 @@ final class MediaGrantController extends Controller
         catch(\Throwable){abort(422);}
         abort_unless(is_array($c)&&!array_is_list($c),422);
         $v2=($c['version']??null)===2;
+        $v3=($c['version']??null)===3;
         P::exact($c,['version','grantId','mediaId','ownerAccountId',
             'recipientAccountId',...($v2?['assignmentId']:[]),
+            ...($v3?['sourceMediaId','sourceContractHash']:[]),
             'recipientKeyDigest','mediaContractHash',
             'scope','expiresAt','envelope']);
-        abort_unless(in_array($c['version'],[1,2],true)&&$c['scope']==='read'
+        abort_unless(in_array($c['version'],[1,2,3],true)
+            &&$c['scope']===($v3?'safe_read':'read')
             &&is_int($c['expiresAt'])
             &&$c['expiresAt']>PhotoSync::nowMs()
             &&$c['expiresAt']<=PhotoSync::nowMs()+86400000,422);
         foreach(['grantId','mediaId','ownerAccountId','recipientAccountId',
-            ...($v2?['assignmentId']:[])] as $field){
+            ...($v2?['assignmentId']:[]),
+            ...($v3?['sourceMediaId']:[])] as $field){
             abort_unless(is_string($c[$field]),422);
             P::uuid($c[$field]);
         }
         abort_unless($c['ownerAccountId']!==$c['recipientAccountId'],422);
-        foreach(['recipientKeyDigest','mediaContractHash'] as $field){
+        if($v3)abort_unless($c['sourceMediaId']!==$c['mediaId'],422);
+        foreach(['recipientKeyDigest','mediaContractHash',
+            ...($v3?['sourceContractHash']:[])] as $field){
             abort_unless(is_string($c[$field])
                 &&preg_match('/^[a-f0-9]{64}$/D',$c[$field])===1,422);
         }
@@ -70,8 +76,7 @@ final class MediaGrantController extends Controller
         abort_unless(is_string($body['contract'])&&is_string($body['signature']),422);
         $grant=$this->contract($body['contract']);
         abort_unless($grant['ownerAccountId']===$owner->id,403);
-        $domain=$grant['version']===2
-            ?"pb3.media-grant.v2\n":"pb3.media-grant.v1\n";
+        $domain="pb3.media-grant.v".$grant['version']."\n";
         abort_unless(P::verify($owner->account_spki,
             $domain.$body['contract'],$body['signature']),401);
         $hash=hash('sha256',$body['contract']);
@@ -91,6 +96,28 @@ final class MediaGrantController extends Controller
             abort_unless($grant['expiresAt']<=(int)$media->expires_at,422);
             abort_unless(hash_equals($media->contract_hash,
                 $grant['mediaContractHash']),409);
+
+            if($grant['version']===3){
+                abort_unless($media->media_type==='photo',422);
+                // No parent ciphertext/DEK is ever bound to this grant.
+                // A safe grant requires a DISTINCT active photo asset
+                // owned by the signer and whose TTL bounds the grant.
+                $source=DB::table('media_files_v1')
+                    ->where('id',$grant['sourceMediaId'])
+                    ->where('account_id',$owner->id)
+                    ->lockForUpdate()->first();
+                abort_unless($source,404);
+                abort_if($source->state!=='active'
+                    ||$source->expires_at<=PhotoSync::nowMs(),410);
+                abort_unless($source->media_type==='photo',422);
+                abort_unless(hash_equals($source->contract_hash,
+                    $grant['sourceContractHash']),409);
+                abort_unless($grant['expiresAt']<=(int)$source->expires_at,422);
+                abort_if(DB::table('browser_archive_entries_v1')
+                    ->where('kind','media')
+                    ->where('asset_id',$source->id)
+                    ->whereIn('state',['archived','deleting'])->exists(),410);
+            }
 
             $recipient=DB::table('identity_accounts')
                 ->where('id',$grant['recipientAccountId'])
@@ -123,6 +150,10 @@ final class MediaGrantController extends Controller
                 'recipient_account_id'=>$recipient->id,
                 'recipient_key_digest'=>$directory->descriptor_hash,
                 'assignment_id'=>$grant['version']===2?$grant['assignmentId']:null,
+                'source_media_id'=>$grant['version']===3
+                    ?$grant['sourceMediaId']:null,
+                'source_contract_hash'=>$grant['version']===3
+                    ?$grant['sourceContractHash']:null,
                 'media_contract_hash'=>$media->contract_hash,
                 'expires_at'=>$grant['expiresAt'],
                 'state'=>'active','contract_hash'=>$hash,
@@ -145,6 +176,7 @@ final class MediaGrantController extends Controller
             ->where('g.id',$grantId)
             ->where('g.recipient_account_id',$account->id)
             ->select('g.*','m.state as media_state',
+                'm.media_type as actual_media_type',
                 'm.expires_at as media_expires','m.contract_hash as actual_media_hash')
             ->first();
         abort_unless($grant,404);
@@ -155,6 +187,32 @@ final class MediaGrantController extends Controller
             ||!hash_equals($grant->media_contract_hash,
                 $grant->actual_media_hash),410);
         AScope::requireReadable($grant->assignment_id);
+        if($grant->source_media_id!==null){
+            // Re-authorize BOTH referenced immutable assets on EVERY
+            // recipient manifest and chunk read (not merely at grant time).
+            $signed=json_decode($grant->contract_json,true,32);
+            abort_if(!is_array($signed)
+                ||($signed['version']??null)!==3
+                ||($signed['scope']??null)!=='safe_read'
+                ||($signed['sourceMediaId']??null)!==$grant->source_media_id
+                ||($signed['sourceContractHash']??null)!==$grant->source_contract_hash
+                ||($signed['mediaId']??null)!==$grant->media_id,410);
+            $source=DB::table('media_files_v1')
+                ->where('id',$grant->source_media_id)
+                ->where('account_id',$grant->owner_account_id)
+                ->first();
+            abort_if(!$source||$source->state!=='active'
+                ||$source->media_type!=='photo'
+                ||$grant->actual_media_type!=='photo'
+                ||$source->expires_at<=PhotoSync::nowMs()
+                ||$grant->media_state!=='active'
+                ||!hash_equals($source->contract_hash,
+                    $grant->source_contract_hash)
+                ||DB::table('browser_archive_entries_v1')
+                    ->where('kind','media')
+                    ->whereIn('asset_id',[$source->id,$grant->media_id])
+                    ->whereIn('state',['archived','deleting'])->exists(),410);
+        }
         return $grant;
     }
 
@@ -175,6 +233,24 @@ final class MediaGrantController extends Controller
             ->where('m.expires_at','>',PhotoSync::nowMs())
             ->whereColumn('m.contract_hash','g.media_contract_hash')
             ->leftJoin('assignment_records_v1 as a','a.id','=','g.assignment_id')
+            ->leftJoin('media_files_v1 as src','src.id','=','g.source_media_id')
+            ->where(function($q){
+                $q->whereNull('g.source_media_id')
+                    ->orWhere(function($safe){
+                        $safe->where('src.state','active')
+                            ->where('src.media_type','photo')
+                            ->where('src.expires_at','>',PhotoSync::nowMs())
+                            ->whereColumn('src.account_id','g.owner_account_id')
+                            ->whereColumn('src.contract_hash','g.source_contract_hash')
+                            ->whereNotExists(static function($archives){
+                                $archives->selectRaw('1')
+                                    ->from('browser_archive_entries_v1 as ba')
+                                    ->whereColumn('ba.asset_id','src.id')
+                                    ->where('ba.kind','media')
+                                    ->whereIn('ba.state',['archived','deleting']);
+                            });
+                    });
+            })
             ->where(function($q){
                 $q->whereNull('g.assignment_id')
                     ->orWhere(function($scoped){
@@ -192,12 +268,13 @@ final class MediaGrantController extends Controller
         if($after!==null)$q->where('g.id','>',$after);
         $rows=$q->orderBy('g.id')->limit(51)
             ->get(['g.id','g.media_id','g.owner_account_id',
-                'g.expires_at','m.media_type']);
+                'g.expires_at','m.media_type','g.source_media_id']);
         $more=$rows->count()>50;
         $items=$rows->take(50)->map(static fn($g)=>[
             'grantId'=>$g->id,'mediaId'=>$g->media_id,
             'ownerAccountId'=>$g->owner_account_id,
             'mediaType'=>$g->media_type,'expiresAt'=>(int)$g->expires_at,
+            'scope'=>$g->source_media_id===null?'read':'safe_read',
         ])->values()->all();
         return $this->sync->json([
             'items'=>$items,
