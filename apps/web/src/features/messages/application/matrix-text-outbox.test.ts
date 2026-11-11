@@ -41,6 +41,7 @@ let session:Session
 let client:MatrixClient
 let sent=vi.fn(),fetchEvent=vi.fn(),members=vi.fn()
 let synced=vi.fn(),cryptoMode=vi.fn(),encrypted=vi.fn(),currentRoom=vi.fn()
+let serverState=vi.fn()
 const target={peerAccountId:peerId,safetyFingerprint:safety}
 const id='MAT_DEV_ONE',eventId='$PB3-EVENT1'
 const getRoom=()=>({
@@ -109,6 +110,13 @@ beforeEach(async()=>{
   members=vi.fn().mockResolvedValue({joined:{
     [mxOwn]:{},[mxPeer]:{},
   }})
+  serverState=vi.fn().mockResolvedValue([
+    {type:'m.room.encryption',state_key:'',
+      content:{algorithm:'m.megolm.v1.aes-sha2'}},
+    {type:'m.room.join_rules',state_key:'',content:{join_rule:'invite'}},
+    {type:'m.room.member',state_key:mxOwn,content:{membership:'join'}},
+    {type:'m.room.member',state_key:mxPeer,content:{membership:'join'}},
+  ])
   synced=vi.fn().mockReturnValue(SyncState.Syncing)
   cryptoMode=vi.fn()
   encrypted=vi.fn().mockResolvedValue(true)
@@ -123,6 +131,7 @@ beforeEach(async()=>{
     }),
     getRoom:currentRoom,
     getJoinedRoomMembers:members,
+    roomState:serverState,
     sendMessage:sent,
     fetchRoomEvent:fetchEvent,
   } as unknown as MatrixClient
@@ -234,6 +243,28 @@ describe('P2-02E durable Matrix text E2EE outbox',()=>{
     expect(api).toHaveBeenCalledWith('/matrix/v1/me')
     expect(sent).not.toHaveBeenCalled()
     expect((await listMatrixTextOutbox())[0]?.state).toBe('queued')
+  })
+  it('refuses pending invited third user or open join policy from authoritative Matrix state',async()=>{
+    await enqueueMatrixText(target,roomId,plaintext,ed25519)
+    serverState.mockResolvedValue([
+      {type:'m.room.encryption',state_key:'',
+        content:{algorithm:'m.megolm.v1.aes-sha2'}},
+      {type:'m.room.member',state_key:mxOwn,content:{membership:'join'}},
+      {type:'m.room.member',state_key:mxPeer,content:{membership:'join'}},
+      {type:'m.room.member',state_key:'@mallory:matrix.example.test',
+        content:{membership:'invite'}},
+    ])
+    expect((await flushMatrixTextOutbox(client)).accepted).toBe(0)
+    expect(sent).not.toHaveBeenCalled()
+    serverState.mockResolvedValue([
+      {type:'m.room.encryption',state_key:'',
+        content:{algorithm:'m.megolm.v1.aes-sha2'}},
+      {type:'m.room.member',state_key:mxOwn,content:{membership:'join'}},
+      {type:'m.room.member',state_key:mxPeer,content:{membership:'join'}},
+      {type:'m.room.join_rules',state_key:'',content:{join_rule:'public'}},
+    ])
+    expect((await flushMatrixTextOutbox(client)).accepted).toBe(0)
+    expect(sent).not.toHaveBeenCalled()
   })
   it('rejects unsigned/new recipient devices or changed contact key before send',async()=>{
     await enqueueMatrixText(target,roomId,plaintext,ed25519)
