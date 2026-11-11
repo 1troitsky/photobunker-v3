@@ -664,7 +664,12 @@ final class AssignmentV1Controller extends Controller
                     $sub->selectRaw('1')->from('assignment_invites_v1 as i')
                       ->whereColumn('i.assignment_id','a.id')
                       ->where('i.recipient_account_id',$actor->id)
-                      ->where('i.state','accepted');
+                      ->where('i.state','accepted')
+                        ->whereNotExists(static function($rev){
+                            $rev->selectRaw('1')
+                                ->from('assignment_member_removals_v1 as rm')
+                                ->whereColumn('rm.invite_id','i.id');
+                        });
                 });
           });
         if($after!==null)$q->where('a.id','>',$after);
@@ -701,7 +706,12 @@ final class AssignmentV1Controller extends Controller
                         ->whereColumn('i.recipient_account_id','s.contributor_account_id')
                         ->whereColumn('i.owner_account_id','a.owner_account_id')
                         ->where('i.role','contributor')
-                        ->where('i.state','accepted');
+                        ->where('i.state','accepted')
+                        ->whereNotExists(static function($rev){
+                            $rev->selectRaw('1')
+                                ->from('assignment_member_removals_v1 as rm')
+                                ->whereColumn('rm.invite_id','i.id');
+                        });
                 })
                 ->where('p.state','active')->where('p.expires_at','>',$now)
                 ->where('g.state','active')->where('g.expires_at','>',$now)
@@ -729,7 +739,12 @@ final class AssignmentV1Controller extends Controller
                         ->whereColumn('i.recipient_account_id',
                             's.contributor_account_id')
                         ->where('i.role','contributor')
-                        ->where('i.state','accepted');
+                        ->where('i.state','accepted')
+                        ->whereNotExists(static function($rev){
+                            $rev->selectRaw('1')
+                                ->from('assignment_member_removals_v1 as rm')
+                                ->whereColumn('rm.invite_id','i.id');
+                        });
                 })
                 ->where('m.state','active')->where('m.expires_at','>',$now)
                 ->where('g.state','active')->where('g.expires_at','>',$now)
@@ -749,6 +764,19 @@ final class AssignmentV1Controller extends Controller
                     ->whereColumn('g.media_id','s.media_id')
                     ->whereColumn('g.owner_account_id','s.contributor_account_id')
                     ->whereColumn('g.recipient_account_id','a.owner_account_id')
+                    ->whereExists(static function($member){
+                        $member->selectRaw('1')->from('assignment_invites_v1 as i')
+                            ->whereColumn('i.assignment_id','s.assignment_id')
+                            ->whereColumn('i.owner_account_id','a.owner_account_id')
+                            ->whereColumn('i.recipient_account_id','s.contributor_account_id')
+                            ->where('i.role','contributor')
+                            ->where('i.state','accepted')
+                            ->whereNotExists(static function($rev){
+                                $rev->selectRaw('1')
+                                    ->from('assignment_member_removals_v1 as rm')
+                                    ->whereColumn('rm.invite_id','i.id');
+                            });
+                    })
                     ->where('m.state','active')->where('m.expires_at','>',$now)
                     ->where('g.state','active')->where('g.expires_at','>',$now)
                     ->selectRaw('COUNT(*)');
@@ -948,6 +976,11 @@ final class AssignmentV1Controller extends Controller
             ->join('assignment_records_v1 as a','a.id','=','i.assignment_id')
             ->join('identity_accounts as o','o.id','=','i.owner_account_id')
             ->where('i.recipient_account_id',$actor->id)
+            ->whereNotExists(static function($rev){
+                $rev->selectRaw('1')
+                    ->from('assignment_member_removals_v1 as rm')
+                    ->whereColumn('rm.invite_id','i.id');
+            })
             ->where(function($q):void {
                 $q->whereNull('a.assignment_access_until')
                   ->orWhere('a.assignment_access_until','>',PhotoSync::nowMs());
@@ -993,6 +1026,8 @@ final class AssignmentV1Controller extends Controller
                 ->where('id',$inviteId)->where('assignment_id',$a->id)
                 ->where('recipient_account_id',$actor->id)->lockForUpdate()->first();
             abort_unless($invite,404);
+            abort_if(DB::table('assignment_member_removals_v1')
+                ->where('invite_id',$inviteId)->exists(),409);
             // Accepted operation replay is idempotent even after the invite
             // expired or the assignment was finished; new consent is not.
             if($invite->state==='accepted'){
@@ -1106,7 +1141,12 @@ final class AssignmentV1Controller extends Controller
                 &&S::permitsNow($a),409);
             $joined=DB::table('assignment_invites_v1')->where('assignment_id',$a->id)
                 ->where('recipient_account_id',$actor->id)->where('role','contributor')
-                ->where('state','accepted')->first();
+                ->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')
+                        ->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->first();
             abort_unless($joined,403);
             $photo=DB::table('photo_records')->where('id',$c['photoId'])
                 ->where('account_id',$actor->id)->first();
@@ -1179,7 +1219,12 @@ final class AssignmentV1Controller extends Controller
                     ->whereColumn('i.recipient_account_id','s.contributor_account_id')
                     ->where('i.owner_account_id',$assignment->owner_account_id)
                     ->where('i.role','contributor')
-                    ->where('i.state','accepted');
+                    ->where('i.state','accepted')
+                        ->whereNotExists(static function($rev){
+                            $rev->selectRaw('1')
+                                ->from('assignment_member_removals_v1 as rm')
+                                ->whereColumn('rm.invite_id','i.id');
+                        });
             })
             ->where('p.state','active')->where('p.expires_at','>',PhotoSync::nowMs())
             ->where('g.state','active')->where('g.expires_at','>',PhotoSync::nowMs());
