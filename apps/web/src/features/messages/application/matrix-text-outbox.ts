@@ -284,6 +284,33 @@ async function preflight(s:Session,x:PendingText,client:MatrixClient):Promise<vo
       (m.membership==='join'||m.membership==='invite')
       &&!allowed.has(m.userId)))
     throw Error('matrix.outbox_room_membership_changed')
+  // joined_members does NOT include pending invites. Fetch authoritative
+  // room state as well, so an invited third user cannot silently join
+  // immediately after the joined-members check and receive a room key.
+  const state=await client.roomState(x.roomId)
+  same(s)
+  if(!Array.isArray(state)||state.length>5000)
+    throw Error('matrix.outbox_invalid_room_state')
+  let encryption=false
+  for(const ev of state){
+    if(ev.type==='m.room.encryption'&&ev.state_key===''){
+      if(ev.content?.algorithm!=='m.megolm.v1.aes-sha2')
+        throw Error('matrix.outbox_room_not_encrypted')
+      encryption=true
+    }
+    if(ev.type==='m.room.member'
+      &&(ev.content?.membership==='join'
+        ||ev.content?.membership==='invite')
+      &&(typeof ev.state_key!=='string'||!allowed.has(ev.state_key)))
+      throw Error('matrix.outbox_room_membership_changed')
+    if(ev.type==='m.room.join_rules'&&ev.state_key===''
+      &&ev.content?.join_rule!=='invite')
+      throw Error('matrix.outbox_room_access_policy_changed')
+    if(ev.type==='m.room.history_visibility'&&ev.state_key===''
+      &&ev.content?.history_visibility==='world_readable')
+      throw Error('matrix.outbox_room_access_policy_changed')
+  }
+  if(!encryption)throw Error('matrix.outbox_room_not_encrypted')
   // The SDK owns encryption and will refuse unsigned devices. Set mode
   // again on the exact SDK client to avoid an injected lax crypto setting.
   crypto.setDeviceIsolationMode(new OnlySignedDevicesIsolationMode())
