@@ -132,8 +132,11 @@ const pendingPolicyChange=computed(()=>selectedOperations.value.some(op=>
   op.kind==='policy'&&(op.state==='queued'||op.state==='retry')))
 const eligibleMedia=computed(()=>mediaFiles.value.filter(x=>{
   if(x.state!=='synced'||x.expiresAt<=Date.now()
-    ||(x.mediaType!=='video'&&x.mediaType!=='audio')
+    ||!['photo','video','audio'].includes(x.mediaType)
     ||!selected.value?.allowedMedia.includes(x.mediaType))return false
+  // Current P2 photo import deliberately has no authenticated recording
+  // proof; the legacy camera's separate photo_records workflow is unchanged.
+  if(x.mediaType==='photo'&&x.capture)return false
   if(!x.capture)return true // personal media requires distinct confirmation
   try{
     const proof=JSON.parse(x.capture.contract) as {assignmentId?:string}
@@ -588,7 +591,7 @@ async function submitMedia(media:StoredMedia):Promise<void>{
   await operate(async()=>{
     const target=selected.value
     if(!target||target.isOwner||media.state!=='synced'
-      ||!['video','audio'].includes(media.mediaType))
+      ||!['photo','video','audio'].includes(media.mediaType))
       throw Error('assignment.media_not_synced')
     if(contributorCheck.value?.accountId!==target.ownerAccountId
       ||!contributorCheck.value.confirmed)
@@ -601,8 +604,12 @@ async function submitMedia(media:StoredMedia):Promise<void>{
     if(!window.confirm(
       (media.capture?'Эта запись была создана для задания. ':'Это личный файл вне задания. ')
       +'Передать владельцу задания E2EE-ключ всего '
-      +(media.mediaType==='video'?'видео':'аудио')
-      +', включая исходное имя и приватные метаданные? Отзыв не удалит уже скачанные копии.'
+      +(media.mediaType==='video'?'видео'
+        :media.mediaType==='audio'?'аудио':'фото P2 MediaFile')
+      +', включая исходное имя и приватные метаданные? '
+      +(media.mediaType==='photo'
+        ?'Это подтверждает вашу отправку личного импортированного файла, но НЕ факт съёмки камерой по заданию. ':'')
+      +'Отзыв не удалит уже скачанные копии.'
     ))return
     const grantId=await queueMediaRecipientGrant(media.mediaId,target.ownerAccountId,
       target.id,checked.grantExpiresAtCap)
@@ -621,7 +628,7 @@ async function openMediaSubmission(grantId:string):Promise<void>{
     previewUrl.value=URL.createObjectURL(result.blob)
     previewMime.value=result.metadata.mime
     previewPrivate.value=result.metadata
-    notice.value='Видео/аудио и приватные метаданные расшифрованы на устройстве'
+    notice.value='Фото/видео/аудио и приватные метаданные расшифрованы на устройстве'
   })
 }
 async function openSubmission(grantId:string):Promise<void>{
@@ -934,7 +941,7 @@ onUnmounted(cleanPreview)
           </div>
           <div v-for="entry in mediaSubmissions" :key="entry.submissionId" class="photo-row" data-testid="assignment-media-submission">
             <div>
-              <strong>{{ entry.mediaType==='video'?'Видео':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
+              <strong>{{ entry.mediaType==='video'?'Видео':entry.mediaType==='photo'?'Фото P2':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
               <small>{{ entry.capturedInAssignment?'Запись по заданию · подписана':'Личный файл · передан вручную' }}</small>
               <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
             </div>
@@ -958,11 +965,11 @@ onUnmounted(cleanPreview)
             <button type="button" :disabled="busy||!contributorCheck?.confirmed" @click="submit(photo)">Отправить в задание</button>
           </div>
           <p v-if="!eligiblePhotos.length" class="muted">Для этого задания нет подходящих синхронизированных фотографий.</p>
-          <template v-if="selected.allowedMedia.some(kind=>kind==='video'||kind==='audio')">
-            <h3>Видео и аудио · из Browser</h3>
-            <p class="muted">Понадобится зашифрованный файл разрешённого типа. До E2EE-передачи проверяются подписанные требования задания к категории, описанию, GPS и тегам; фактические приватные значения серверу недоступны.</p>
+          <template v-if="selected.allowedMedia.length">
+            <h3>Файлы P2 · фото, видео и аудио из Browser</h3>
+            <p class="muted">Понадобится зашифрованный файл разрешённого типа. До E2EE-передачи проверяются подписанные требования задания к категории, описанию, GPS и тегам; фактические приватные значения серверу недоступны. Фото P2, импортированное через Browser, считается <strong>личным файлом, отправленным участником</strong> — не подтверждением съёмки по заданию.</p>
             <div v-for="file in eligibleMedia" :key="file.key" class="photo-row">
-              <div><strong>{{ file.mediaType==='video'?'Видео':'Аудио' }} · {{ file.mediaId.slice(0,8) }}</strong>
+              <div><strong>{{ file.mediaType==='video'?'Видео':file.mediaType==='photo'?'Фото P2':'Аудио' }} · {{ file.mediaId.slice(0,8) }}</strong>
                 <small>{{ file.capture?'Снято по заданию · подписано':'Личный медиафайл · требуется согласие' }}</small>
                 <small>{{ file.state }} · {{ file.plainBytes.toLocaleString('ru-RU') }} байт</small>
               </div>
@@ -970,7 +977,7 @@ onUnmounted(cleanPreview)
                 @click="submitMedia(file)">Отправить медиа в задание</button>
             </div>
             <p v-if="!eligibleMedia.length" class="muted">Нет синхронизированных файлов разрешённого типа.</p>
-            <RouterLink to="/browser">Импортировать видео или аудио</RouterLink>
+            <RouterLink to="/browser">Импортировать фото, видео или аудио</RouterLink>
             <p><RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Записать видео/аудио по заданию</RouterLink></p>
           </template>
           <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Камера задания</RouterLink>

@@ -5,7 +5,8 @@ import { prepareMediaPrivateFields,validateMediaPrivateRequirements } from '../.
 import { validateAdvancedFields } from '../domain/advanced-rules'
 import {
   listServerAssignments,signedAllowedAssignmentMedia,
-  signedMediaRequirements,signedAdvancedRequirements,verifySignedAssignmentPolicy,
+  signedMediaRequirements,signedPolicyRequirements,
+  signedAdvancedRequirements,verifySignedAssignmentPolicy,
   schedulePermitsAt,assignmentFilesOpenAt,assignmentGrantExpiryCap,
 } from './assignment-outbox'
 import type { AssignmentListing } from './assignment-outbox'
@@ -19,7 +20,7 @@ const enc=new TextEncoder()
  */
 export async function preflightAssignmentMediaGrant(
   assignmentId:string,mediaId:string,expectedOwnerAccountId:string,
-):Promise<{mediaType:'video'|'audio';personalMedia:boolean;grantExpiresAtCap:number|null}>{
+):Promise<{mediaType:'photo'|'video'|'audio';personalMedia:boolean;grantExpiresAtCap:number|null}>{
   const session=requireSession()
   if(!session.online||!navigator.onLine)
     throw Error('assignment.media_grant_requires_connection')
@@ -41,15 +42,22 @@ export async function preflightAssignmentMediaGrant(
   const media=(await listLocalMedia()).find(x=>x.mediaId===mediaId)
   if(!media||media.accountId!==session.accountId
     ||media.state!=='synced'||media.expiresAt<=Date.now()
-    ||(media.mediaType!=='video'&&media.mediaType!=='audio')
+    ||!['photo','video','audio'].includes(media.mediaType)
     ||!signedAllowedAssignmentMedia(policy).includes(media.mediaType))
     throw Error('assignment.media_not_allowed')
   const {metadata}=await readLocalMedia(mediaId)
   if(activeSession.value!==session)throw Error('identity.changed')
   const fields=prepareMediaPrivateFields(metadata,metadata.createdAt)
   validateMediaPrivateRequirements(fields,
-    signedMediaRequirements(policy,media.mediaType))
+    media.mediaType==='photo'
+      ?signedPolicyRequirements(policy)
+      :signedMediaRequirements(policy,media.mediaType))
   validateAdvancedFields(fields,signedAdvancedRequirements(policy,media.mediaType))
+  // A modern imported P2 photo is a personal file. The existing P1 camera
+  // makes legacy photo_records and must not be mislabeled as P2 capture
+  // provenance. Separate signed P2 photo capture will come later.
+  if(media.mediaType==='photo'&&media.capture)
+    throw Error('assignment.p2_photo_capture_not_supported')
   if(media.capture){
     let proof:Record<string,unknown>
     try{proof=JSON.parse(media.capture.contract) as Record<string,unknown>}
