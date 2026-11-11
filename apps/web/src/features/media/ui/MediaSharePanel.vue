@@ -207,6 +207,32 @@ function openEditorial(candidate:SafeDerivativeCandidate):void{
       :'Выберите своё задание для явной редакционной привязки. Это не отчёт исполнителя и не публикация.'
   })
 }
+function refreshEditorial():void{
+  void action(async()=>{
+    const candidate=editorialCandidate.value
+    if(!candidate)throw Error('safe_editorial.missing_candidate')
+    if(!activeSession.value?.online)await reauthenticate()
+    await flushEditorialLinks()
+    editorialState.value=await editorialLinkState(candidate.safeMediaId)
+    if(editorialState.value!=='sent'){
+      status.value='Подписанная операция ожидает сервера либо требует сверки конфликта.'
+      return
+    }
+    try{editorialBinding.value=await readEditorialLink(candidate.safeMediaId)}
+    catch(e){
+      if(e instanceof Error&&e.message==='api.http_410'){
+        editorialBinding.value=null
+        editorialState.value='detached'
+        status.value='Подписанная привязка отозвана. Повторное связывание этой копии запрещено.'
+        return
+      }
+      throw e
+    }
+    status.value=editorialBinding.value
+      ?'Подпись редакционной привязки проверена, все публичные права выключены.'
+      :'Подписанной редакционной привязки ещё нет.'
+  })
+}
 function bindEditorial():void{
   void action(async()=>{
     const candidate=editorialCandidate.value
@@ -219,8 +245,10 @@ function bindEditorial():void{
     await queueEditorialLink(candidate,assignment)
     await flushEditorialLinks()
     editorialState.value=await editorialLinkState(candidate.safeMediaId)
-    if(editorialState.value!=='sent')
-      throw Error('safe_editorial.awaiting_server_or_conflict')
+    if(editorialState.value!=='sent'){
+      status.value='Привязка подписана локально и ожидает подтверждения сервера. Публичный доступ выключен.'
+      return
+    }
     editorialBinding.value=await readEditorialLink(candidate.safeMediaId)
     if(!editorialBinding.value)
       throw Error('safe_editorial.missing_server_receipt')
@@ -236,8 +264,10 @@ function detachEditorial():void{
     await queueEditorialDetach(prior)
     await flushEditorialLinks()
     editorialState.value=await editorialLinkState(prior.safeMediaId)
-    if(editorialState.value!=='sent')
-      throw Error('safe_editorial.detach_awaiting_server')
+    if(editorialState.value!=='sent'){
+      status.value='Подписанный отзыв ожидает сервера. Прежняя привязка может оставаться действующей.'
+      return
+    }
     editorialBinding.value=null
     status.value='Редакционная привязка отозвана. Файлы и ключи не затронуты.'
   })
@@ -449,6 +479,8 @@ onUnmounted(()=>{
           {{ item.assignmentId.slice(0,8) }}
         </option>
       </select>
+      <button type="button" :disabled="busy" data-testid="media-editorial-refresh"
+        @click="refreshEditorial">Проверить подтверждение</button>
       <p class="muted">Состояние: {{ editorialState }} ·
         публичный просмотр/копирование/скачивание/передача выключены</p>
       <template v-if="editorialBinding">
@@ -464,7 +496,7 @@ onUnmounted(()=>{
       </template>
       <button v-else type="button" :disabled="busy||!editorialSelection
         ||editorialState==='queued'||editorialState==='retry'
-        ||editorialState==='conflict'"
+        ||editorialState==='conflict'||editorialState==='detached'"
         data-testid="media-editorial-bind" @click="bindEditorial">
         Подписать редакционную привязку</button>
       <button type="button" :disabled="busy"
