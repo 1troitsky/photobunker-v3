@@ -1162,9 +1162,6 @@ onUnmounted(()=>{
               :disabled="showBefore||!canUndoPhoto||cropBusy"
               @click="travelPhotoEdit(-1)">↶ Отменить</button>
             <button type="button" data-testid="file-viewer-photo-redo"
-              :disabled="!canUndoPhoto||cropBusy"
-              @click="travelPhotoEdit(-1)">↶ Отменить</button>
-            <button type="button" data-testid="file-viewer-photo-redo"
               :disabled="showBefore||!canRedoPhoto||cropBusy"
               @click="travelPhotoEdit(1)">Повторить ↷</button>
             <button type="button" data-testid="file-viewer-photo-reset"
