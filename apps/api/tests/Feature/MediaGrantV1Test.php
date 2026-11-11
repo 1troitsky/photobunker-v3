@@ -404,6 +404,161 @@ final class MediaGrantV1Test extends TestCase
         $this->assertDatabaseCount('media_recipient_grants_v1',0);
     }
 
+    /** A revoked key, source archive, owner status or changed state applies
+     * to the SAME grant in the list, manifest and data chunk routes. */
+    public function test_safe_effective_acl_intersection_rejects_live_state_and_key_drift():void
+    {
+        $digest=$this->publishRecipientKey();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $input=$this->safeGrantInput($digest,$source,$safe);
+        $id=json_decode($input['contract'],true)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$input)->assertCreated();
+
+        $assertDenied=function()use($id,$safe):void{
+            $this->asRole('recipient');
+            $this->getJson('/media-shares/v1/received')
+                ->assertOk()->assertJsonPath('items',[]);
+            $this->getJson('/media-shares/v1/grants/'.$id)->assertGone();
+            $this->get('/media-shares/v1/grants/'.$id.'/chunks/'.
+                $safe['chunkId'])->assertGone();
+        };
+        $assertAllowed=function()use($id,$safe):void{
+            $this->asRole('recipient');
+            $this->getJson('/media-shares/v1/received')
+                ->assertOk()->assertJsonPath('items.0.scope','safe_read');
+            $this->getJson('/media-shares/v1/grants/'.$id)->assertOk();
+            $this->get('/media-shares/v1/grants/'.$id.'/chunks/'.
+                $safe['chunkId'])->assertOk();
+        };
+        $assertAllowed();
+
+        $ownerId=$this->people['owner']['id'];
+        $recipientId=$this->people['recipient']['id'];
+        $directory=DB::table('account_exchange_keys')
+            ->where('account_id',$recipientId)->first();
+        // Recipient exchange key generation changed: old grant no longer
+        // authorizes a new key; no silent fallback to server directory.
+        DB::table('account_exchange_keys')->where('account_id',$recipientId)
+            ->update(['descriptor_hash'=>str_repeat('b',64)]);
+        $assertDenied();
+        DB::table('account_exchange_keys')->where('account_id',$recipientId)
+            ->update(['descriptor_hash'=>$directory->descriptor_hash]);
+        $assertAllowed();
+
+        DB::table('identity_accounts')->where('id',$ownerId)
+            ->update(['status'=>'retired']);
+        $assertDenied();
+        DB::table('identity_accounts')->where('id',$ownerId)
+            ->update(['status'=>'ready']);
+        $assertAllowed();
+
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['media_type'=>'video']);
+        $assertDenied();
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['media_type'=>'photo']);
+        $assertAllowed();
+
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['contract_hash'=>str_repeat('d',64)]);
+        $assertDenied();
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['contract_hash'=>$source['hash']]);
+        $assertAllowed();
+
+        $archive=(string)Str::uuid();
+        DB::table('browser_archive_entries_v1')->insert([
+            'id'=>$archive,'account_id'=>$ownerId,
+            'kind'=>'media','asset_id'=>$safe['id'],'revision'=>1,
+            'state'=>'archived','media_type'=>'photo',
+            'asset_expires_at_ms'=>$safe['expiresAt'],
+            'archive_until_ms'=>now()->addDay()->getTimestampMs(),
+            'plain_bytes'=>300,'last_operation_id'=>(string)Str::uuid(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $assertDenied();
+        DB::table('browser_archive_entries_v1')->where('id',$archive)
+            ->update(['state'=>'restored']);
+        $assertAllowed();
+        DB::table('browser_archive_entries_v1')->where('id',$archive)
+            ->update(['asset_id'=>$source['id'],'state'=>'deleting']);
+        $assertDenied();
+        DB::table('browser_archive_entries_v1')->where('id',$archive)
+            ->update(['state'=>'restored']);
+        $assertAllowed();
+
+        // Persisted DB row mutation alone cannot relabel original/derived
+        // scope after the owner has signed the canonical grant JSON.
+        DB::table('media_recipient_grants_v1')->where('id',$id)
+            ->update(['source_media_id'=>$safe['id']]);
+        $assertDenied();
+        DB::table('media_recipient_grants_v1')->where('id',$id)
+            ->update(['source_media_id'=>$source['id']]);
+        $assertAllowed();
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$source['id'],'state'=>'active',
+        ]);
+    }
+
+    public function test_assignment_scoped_media_acl_drops_after_contributor_membership_revoked():void
+    {
+        $digest=$this->publishRecipientKey();
+        $assignmentId=$this->acceptedAssignment();
+        $this->asRole('owner');
+        $scoped=$this->scopedMediaGrant($this->grantInput($digest),$assignmentId);
+        $id=json_decode($scoped['contract'],true)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$scoped)->assertCreated();
+        $personal=$this->grantInput($digest);
+        $personalId=json_decode($personal['contract'],true)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$personal)->assertCreated();
+        $this->asRole('recipient');
+        $this->getJson('/media-shares/v1/grants/'.$id)->assertOk();
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$assignmentId)
+            ->where('recipient_account_id',$this->people['owner']['id'])
+            ->update(['state'=>'revoked']);
+        $this->getJson('/media-shares/v1/grants/'.$id)->assertGone();
+        $chunkId=array_key_first($this->chunks);
+        $this->get('/media-shares/v1/grants/'.$id.'/chunks/'.$chunkId)
+            ->assertGone();
+        $this->getJson('/media-shares/v1/received')
+            ->assertOk()->assertJsonPath('items.0.grantId',$personalId)
+            ->assertJsonCount(1,'items');
+        $this->getJson('/media-shares/v1/grants/'.$personalId)->assertOk();
+        $this->get('/media-shares/v1/grants/'.$personalId.'/chunks/'.$chunkId)
+            ->assertOk();
+        // A Fieldwork owner reassignment cannot silently expand a scoped
+        // grant to another team/assignment owner.
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$assignmentId)
+            ->update(['state'=>'accepted']);
+        DB::table('assignment_records_v1')
+            ->where('id',$assignmentId)
+            ->update(['owner_account_id'=>$this->people['unrelated']['id']]);
+        $this->getJson('/media-shares/v1/grants/'.$id)->assertGone();
+        $this->getJson('/media-shares/v1/received')
+            ->assertOk()->assertJsonCount(1,'items');
+    }
+
+    public function test_bad_stored_grant_signature_never_appears_in_received_listing():void
+    {
+        $digest=$this->publishRecipientKey();
+        $this->asRole('owner');
+        $g=$this->grantInput($digest);
+        $id=json_decode($g['contract'],true)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$g)->assertCreated();
+        $this->asRole('recipient');
+        $this->getJson('/media-shares/v1/received')
+            ->assertOk()->assertJsonPath('items.0.grantId',$id);
+        DB::table('media_recipient_grants_v1')->where('id',$id)
+            ->update(['account_signature'=>P::encode(random_bytes(64))]);
+        $this->getJson('/media-shares/v1/received')
+            ->assertOk()->assertJsonPath('items',[]);
+        $this->getJson('/media-shares/v1/grants/'.$id)->assertGone();
+    }
+
     /** The recipient owns Fieldwork, but the contributor retains S3 ownership. */
     private function acceptedAssignment():string
     {

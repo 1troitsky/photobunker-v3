@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Assignments\AssignmentGrantScope as AScope;
 use App\Identity\Protocol as P;
+use App\Media\MediaGrantEffectiveAccess as Effective;
 use App\Photo\PhotoSync;
 use App\Storage\StorageManager;
 use Illuminate\Http\Request;
@@ -180,39 +181,7 @@ final class MediaGrantController extends Controller
                 'm.expires_at as media_expires','m.contract_hash as actual_media_hash')
             ->first();
         abort_unless($grant,404);
-        abort_if($grant->state!=='active'
-            ||$grant->expires_at<=PhotoSync::nowMs()
-            ||$grant->media_state!=='active'
-            ||$grant->media_expires<=PhotoSync::nowMs()
-            ||!hash_equals($grant->media_contract_hash,
-                $grant->actual_media_hash),410);
-        AScope::requireReadable($grant->assignment_id);
-        if($grant->source_media_id!==null){
-            // Re-authorize BOTH referenced immutable assets on EVERY
-            // recipient manifest and chunk read (not merely at grant time).
-            $signed=json_decode($grant->contract_json,true,32);
-            abort_if(!is_array($signed)
-                ||($signed['version']??null)!==3
-                ||($signed['scope']??null)!=='safe_read'
-                ||($signed['sourceMediaId']??null)!==$grant->source_media_id
-                ||($signed['sourceContractHash']??null)!==$grant->source_contract_hash
-                ||($signed['mediaId']??null)!==$grant->media_id,410);
-            $source=DB::table('media_files_v1')
-                ->where('id',$grant->source_media_id)
-                ->where('account_id',$grant->owner_account_id)
-                ->first();
-            abort_if(!$source||$source->state!=='active'
-                ||$source->media_type!=='photo'
-                ||$grant->actual_media_type!=='photo'
-                ||$source->expires_at<=PhotoSync::nowMs()
-                ||$grant->media_state!=='active'
-                ||!hash_equals($source->contract_hash,
-                    $grant->source_contract_hash)
-                ||DB::table('browser_archive_entries_v1')
-                    ->where('kind','media')
-                    ->whereIn('asset_id',[$source->id,$grant->media_id])
-                    ->whereIn('state',['archived','deleting'])->exists(),410);
-        }
+        Effective::requireReadable($grant);
         return $grant;
     }
 
@@ -266,20 +235,35 @@ final class MediaGrantController extends Controller
                     });
             });
         if($after!==null)$q->where('g.id','>',$after);
-        $rows=$q->orderBy('g.id')->limit(51)
-            ->get(['g.id','g.media_id','g.owner_account_id',
-                'g.expires_at','m.media_type','g.source_media_id']);
+        $rows=$q->orderBy('g.id')->limit(51)->get([
+            'g.*','m.state as media_state',
+            'm.media_type as actual_media_type',
+            'm.expires_at as media_expires',
+            'm.contract_hash as actual_media_hash',
+        ]);
         $more=$rows->count()>50;
-        $items=$rows->take(50)->map(static fn($g)=>[
-            'grantId'=>$g->id,'mediaId'=>$g->media_id,
-            'ownerAccountId'=>$g->owner_account_id,
-            'mediaType'=>$g->media_type,'expiresAt'=>(int)$g->expires_at,
-            'scope'=>$g->source_media_id===null?'read':'safe_read',
-        ])->values()->all();
+        // A fast SQL scan is NOT authority. Re-evaluate the exact same
+        // signed dynamic policy used for manifests and ciphertext chunks,
+        // including account/key rotation, scope and assignment membership.
+        // Cursor tracks RAW scanned position so denied rows cannot force a
+        // skipped valid grant after pagination.
+        $items=[];
+        foreach($rows->take(50) as $g){
+            try{Effective::requireReadable($g);}
+            catch(\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface){
+                continue;
+            }
+            $items[]=[
+                'grantId'=>$g->id,'mediaId'=>$g->media_id,
+                'ownerAccountId'=>$g->owner_account_id,
+                'mediaType'=>$g->actual_media_type,
+                'expiresAt'=>(int)$g->expires_at,
+                'scope'=>$g->source_media_id===null?'read':'safe_read',
+            ];
+        }
         return $this->sync->json([
             'items'=>$items,
-            'nextCursor'=>$more&&$items!==[]
-                ?end($items)['grantId']:null,
+            'nextCursor'=>$more?(string)$rows[49]->id:null,
         ]);
     }
 
