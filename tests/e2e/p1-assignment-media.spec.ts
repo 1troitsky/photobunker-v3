@@ -267,6 +267,24 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
         assignmentId:grant.assignmentId,scope:grant.scope}
     },assignmentId)
     expect(photoScope).toEqual({status:200,version:2,assignmentId,scope:'read'})
+    // The owner's independently pinned contributor account key must verify
+    // actual immutable P1 consent, not simply the server confirmation count.
+    await expect(A.getByText('Подпись отправки проверена'))
+      .toBeVisible({timeout:20000})
+    const p1ReceiptProof=await A.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const proof=await import('/src/features/assignments/application/verify-photo-submission.ts')
+      const original=(await a.listAssignmentSubmissions(id))[0]!
+      const [valid,forged]=await Promise.all([
+        proof.verifyPhotoSubmissionReceiptPage([original],id),
+        proof.verifyPhotoSubmissionReceiptPage([
+          {...original,photoGrantId:crypto.randomUUID()},
+        ],id),
+      ])
+      return {verified:valid[original.submissionId],
+        forged:forged[original.submissionId]}
+    },assignmentId)
+    expect(p1ReceiptProof).toEqual({verified:true,forged:false})
     await expect(A.getByRole('button',{name:'Просмотр'})).toHaveCount(1)
     await A.getByRole('button',{name:'Просмотр'}).click()
     await expect(A.getByTestId('assignment-decrypted-private-metadata'))
