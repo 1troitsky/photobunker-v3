@@ -222,4 +222,56 @@ final class BrowserArchiveTest extends TestCase
         }
         $this->assertTrue(Schema::hasTable('browser_archive_entries_v1'));
     }
+    public function test_due_archive_marks_tombstones_only_when_explicitly_enabled():void
+    {
+        $this->as('owner');
+        $photo=$this->asset('owner','photo');
+        $media=$this->asset('owner','media');
+        foreach([['photo',$photo],['media',$media]] as [$kind,$id]){
+            $this->mutate('owner',$this->command('owner',$kind,$id,'archive',0))
+                ->assertCreated();
+        }
+        // The job is explicitly disabled on every normal deployment.
+        $service=app(\\App\\Browser\\ArchiveLifecycle::class);
+        try{$service->sweepDue(50);$this->fail('sweep must remain gated');}
+        catch(\\RuntimeException $e){
+            $this->assertSame('browser.archive_cleanup_disabled',$e->getMessage());
+        }
+        config()->set('browser_archive.auto_cleanup_enabled',true);
+        // Neither source is eligible while the archive deadline is future.
+        $this->assertSame(['marked'=>0,'deferred'=>0,'errors'=>0],
+            $service->sweepDue(50));
+        DB::table('browser_archive_entries_v1')->whereIn('asset_id',[$photo,$media])
+            ->update(['archive_until_ms'=>PhotoSync::nowMs()-1]);
+        $this->assertSame(['marked'=>2,'deferred'=>0,'errors'=>0],
+            $service->sweepDue(50));
+        $this->assertSame(['marked'=>0,'deferred'=>0,'errors'=>0],
+            $service->sweepDue(50));
+        $this->assertDatabaseHas('photo_records',
+            ['id'=>$photo,'state'=>'deleting']);
+        $this->assertDatabaseHas('media_files_v1',
+            ['id'=>$media,'state'=>'deleting']);
+        $this->assertDatabaseHas('photo_tombstones',['photo_id'=>$photo]);
+        $this->assertDatabaseHas('media_tombstones_v1',['media_id'=>$media]);
+        $this->getJson('/browser/v1/archive')->assertOk()
+            ->assertJsonCount(2,'items');
+        $this->assertDatabaseHas('browser_archive_entries_v1',
+            ['asset_id'=>$photo,'state'=>'deleting']);
+        $this->assertDatabaseHas('browser_archive_entries_v1',
+            ['asset_id'=>$media,'state'=>'deleting']);
+        $this->assertDatabaseCount('photo_records',1);
+        $this->assertDatabaseCount('media_files_v1',1);
+        // No automatic photo/media S3 delete or fabricated physical ACK.
+    }
+
+    public function test_maintenance_command_refuses_default_off_and_does_not_require_s3():void
+    {
+        $this->artisan('pb3:browser-archive-maintain')->assertFailed();
+        config()->set('browser_archive.auto_cleanup_enabled',true);
+        config()->set('browser_archive.write_enabled',false);
+        $this->artisan('pb3:browser-archive-maintain')->assertFailed();
+        config()->set('browser_archive.write_enabled',true);
+        $this->artisan('pb3:browser-archive-maintain')->assertSuccessful();
+    }
+
 }
