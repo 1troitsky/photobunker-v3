@@ -40,7 +40,24 @@ test('P2 Viewer: editable movable photo text is flattened only into new E2EE JPE
     await context.setOffline(true)
 
     await page.getByTestId('file-viewer-create-crop').click()
+    // Report the actual viewer error if a frame was not generated, instead of
+    // falsely labeling an asynchronous codec/identity failure as missing UI.
+    await expect.poll(()=>page.evaluate(()=>{
+      const preview=document.querySelector('[data-testid="file-viewer-crop-preview"]')
+      const error=document.querySelector('[data-testid="file-viewer-crop-error"]')
+      return error?'error: '+error.textContent:
+        preview?'ready':'waiting'
+    }),{timeout:30000}).toBe('ready')
     const editor=page.getByTestId('file-viewer-photo-text-editor')
+    await expect(editor).toBeVisible()
+    // A new Session object with the SAME unlocked package/device may not
+    // erase the editor or dispose the image in a Local-First workflow.
+    await page.evaluate(async()=>{
+      const m=await import('/src/features/identity/application/session.ts')
+      const current=m.activeSession.value
+      if(!current)throw Error('identity_missing')
+      m.activeSession.value={...current,online:false}
+    })
     await expect(editor).toBeVisible()
     await page.getByTestId('file-viewer-add-text').click()
     await expect(editor).toContainText('Надписи (1/12)')
