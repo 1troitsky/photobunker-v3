@@ -155,7 +155,7 @@ async function sendPending(s:Session,p:SignedPending):Promise<ArchivePreferenceS
   if(!validValues(r)||r.revision!==p.expectedRevision+1
     ||r.useArchive!==p.useArchive
     ||r.autoDeleteAfter7Days!==p.autoDeleteAfter7Days
-    ||typeof r.unchanged!=='boolean)
+    ||typeof r.unchanged!=='boolean')
     throw Error('browser.preferences_invalid_ack')
   const latest=await remote(s)
   if(latest.revision<r.revision||latest.revision===r.revision
