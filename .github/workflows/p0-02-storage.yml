@@ -129,7 +129,11 @@ jobs:
       - name: Install frozen Vue and Chromium test dependencies
         run: |
           pnpm install --frozen-lockfile
-          pnpm exec playwright install --with-deps chromium
+          # GitHub Ubuntu runners already supply Chromium's runtime libs.
+          # --with-deps invokes apt for optional fonts and can fail on
+          # transient Ubuntu mirror DNS outages BEFORE any E2E executes.
+          # The next step launches real Chromium and must still PASS.
+          pnpm exec playwright install chromium
       - name: P1 real-browser two-device E2EE photo journey
         shell: bash
         env:
