@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 test('P1-26: confirmed contact → explicit owner-signed assignment invitation, no implicit access',async({browser})=>{
-  test.setTimeout(150000)
+  test.setTimeout(190000)
   const ctxA=await browser.newContext(),ctxB=await browser.newContext()
   const A=await ctxA.newPage(),B=await ctxB.newPage()
   async function enroll(page:typeof A):Promise<string>{
@@ -86,5 +86,33 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
       return (await m.listReceivedGrants()).length
     })
     expect(mediaGrants).toBe(0)
+
+    // V-24: owner revokes the same accepted invitation using an immutable
+    // owner-account-signed operation, not a local UI-only roster flag.
+    await A.getByRole('button',{name:'Обновить список'}).click()
+    const participant=A.getByTestId('editor-participant-'+recipientId)
+    await expect(participant).toContainText('Принято сервером',{timeout:20000})
+    A.on('dialog',dialog=>dialog.accept())
+    await participant.getByRole('button',{name:'Исключить'}).click()
+    await expect(participant).toContainText('Исключён владельцем',{timeout:25000})
+    const signedRemoval=await A.evaluate(async id=>{
+      const membership=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const roster=await membership.listAssignmentParticipants(id)
+      const removed=roster.find(p=>p.state==='removed')
+      return {count:roster.length,state:removed?.state,
+        signed:!!removed?.removalContract&&!!removed?.removalSignature}
+    },assignmentId)
+    expect(signedRemoval).toEqual({count:1,state:'removed',signed:true})
+    await expect.poll(()=>B.evaluate(async id=>{
+      const [list,inbox]=await Promise.all([
+        fetch('/assignments/v1',{headers:{Accept:'application/json'}}),
+        fetch('/assignments/v1/invites/received',{
+          headers:{Accept:'application/json'},
+        }),
+      ])
+      const [items,received]=await Promise.all([list.json(),inbox.json()])
+      return {visible:items.items?.some((x:{assignmentId:string})=>
+        x.assignmentId===id),inbox:received.items?.length}
+    },assignmentId),{timeout:20000}).toEqual({visible:false,inbox:0})
   }finally{await ctxA.close();await ctxB.close()}
 })
