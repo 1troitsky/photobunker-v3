@@ -192,6 +192,88 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     await expect(share.getByText('Подписанный черновик сохранён. Публикация выключена.'))
       .toBeVisible({timeout:30000})
     await expect(futurePolicy).toContainText('Подписанная ревизия: 2')
+    // P2: an owner can sign a PRIVATE editorial association between
+    // their own assignment and the separately E2EE-encrypted masked JPEG.
+    // The signature cannot prove that a distinct contributor performed it.
+    await owner.goto('/assignments')
+    await owner.getByRole('button',{name:'Создать задание'}).click()
+    await owner.locator('#assignment-title').fill('Private masked editorial assignment')
+    await owner.locator('#assignment-instructions')
+      .fill('Original and safe copy remain encrypted; not public')
+    await owner.getByRole('button',{name:'Создать зашифрованное задание'}).click()
+    await owner.getByRole('button',{name:'Синхронизировать'}).click()
+    await expect(owner.locator('.assignment-detail code').first())
+      .toBeVisible({timeout:30000})
+    const assignmentId=(await owner.locator('.assignment-detail code').first()
+      .textContent())?.trim()??''
+    expect(assignmentId).toMatch(/^[0-9a-f-]{36}$/)
+    await owner.getByTestId('open-fieldwork-editor').click()
+    await expect(owner.getByTestId('fieldwork-assignment-editor'))
+      .toBeVisible()
+    await owner.getByRole('tab',{name:'Правила'}).click()
+    const ceiling=owner.getByTestId('assignment-preview-ceiling')
+    await expect(ceiling).toBeVisible()
+    await ceiling.getByTestId('assignment-preview-field-description').check()
+    await ceiling.getByTestId('assignment-preview-field-gps').check()
+    await ceiling.getByTestId('assignment-preview-save').click()
+    await expect(ceiling.getByText(
+      'Подписанный черновик потолка задания сохранён. Публичный доступ выключен.',
+    )).toBeVisible({timeout:30000})
+    await owner.goto('/browser')
+    const associatedPanel=owner.getByTestId('media-share-panel')
+    await expect(associatedPanel.getByTestId('media-safe-candidate'))
+      .toHaveCount(1)
+    await associatedPanel.getByTestId('media-open-editorial-binding').click()
+    const editorial=associatedPanel.getByTestId('media-editorial-assignment')
+    await expect(editorial).toBeVisible()
+    await editorial.getByTestId('media-editorial-select')
+      .selectOption(assignmentId)
+    owner.once('dialog',d=>d.accept())
+    await editorial.getByTestId('media-editorial-bind').click()
+    await expect(editorial.getByTestId('media-editorial-linked'))
+      .toBeVisible({timeout:30000})
+    const bound=await owner.evaluate(async safeId=>{
+      const res=await fetch('/media-file-preview/v1/assignment-links/'+safeId)
+      const data=await res.json()
+      return {status:res.status,linked:data.linked,
+        published:data.published,assignmentId:data.assignmentId,
+        safeMediaId:data.safeMediaId,sourceMediaId:data.sourceMediaId,
+        candidateFields:data.candidateFields,
+        effectivePublicFields:data.effectivePublicFields,
+        contractHash:data.contractHash,
+        signed:!!data.contract&&!!data.signature,
+      }
+    },edited.safeId)
+    expect(bound).toMatchObject({
+      status:200,linked:true,published:false,assignmentId,
+      safeMediaId:edited.safeId,sourceMediaId:original.id,signed:true,
+      candidateFields:{description:true,gps:false},
+    })
+    expect(Object.values(bound.effectivePublicFields).every(x=>x===false))
+      .toBe(true)
+    const foreign=await recipient.evaluate(async id=>{
+      const [link,media]=await Promise.all([
+        fetch('/media-file-preview/v1/assignment-links/'+id),
+        fetch('/media/v1/'+id+'/manifests'),
+      ])
+      return {link:link.status,media:media.status}
+    },edited.safeId)
+    expect(foreign).toEqual({link:404,media:404})
+    expect(await owner.evaluate(async()=>{
+      const g=await import('/src/features/media/application/media-grants.ts')
+      return (await g.listOutgoingMediaGrants()).length
+    })).toBe(0)
+    owner.once('dialog',d=>d.accept())
+    await editorial.getByTestId('media-editorial-detach').click()
+    await expect(associatedPanel.getByText(
+      'Редакционная привязка отозвана. Файлы и ключи не затронуты.',
+    )).toBeVisible({timeout:30000})
+    const unlinked=await owner.evaluate(async id=>{
+      const res=await fetch('/media-file-preview/v1/assignment-links/'+id)
+      return res.status
+    },edited.safeId)
+    expect(unlinked).toBe(410)
+
     await share.locator('#media-share-peer-id').fill(recipientId)
     await share.getByRole('button',{name:'Проверить получателя медиа'}).click()
     await expect(share.getByTestId('media-recipient-fingerprint')).not.toBeEmpty()
