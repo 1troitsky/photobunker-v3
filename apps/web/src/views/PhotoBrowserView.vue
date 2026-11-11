@@ -143,7 +143,7 @@ async function sync():Promise<void>{
   }catch(e){error.value=reason(e)}
   finally{busy.value=false}
 }
-async function openItem(item:CatalogItem):Promise<void>{
+async function openItem(item:CatalogItem,fromCloud=false):Promise<void>{
   const identity=activeSession.value,token=++previewGeneration
   if(!identity)return
   previewBusy.value=true;error.value=''
@@ -154,8 +154,8 @@ async function openItem(item:CatalogItem):Promise<void>{
     let captured:number|null=null
     if(item.source==='photo'){
       const [photo,metadata]=await Promise.all([
-        item.local?readLocalPhoto(item.id):readCloudPhoto(item.id),
-        item.local?readLocalPhotoMetadata(item.id):readCloudPhotoMetadata(item.id),
+        item.local&&!fromCloud?readLocalPhoto(item.id):readCloudPhoto(item.id),
+        item.local&&!fromCloud?readLocalPhotoMetadata(item.id):readCloudPhotoMetadata(item.id),
       ])
       blob=photo
       name=item.id.slice(0,8)
@@ -165,7 +165,7 @@ async function openItem(item:CatalogItem):Promise<void>{
       gps=metadata.gps??null
       captured=metadata.capturedAt
     }else{
-      const result=item.local
+      const result=item.local&&!fromCloud
         ?await readLocalMedia(item.id):await readCloudMedia(item.id)
       blob=result.blob
       name=result.metadata.fileName
@@ -261,7 +261,8 @@ onUnmounted(()=>{++generation;revokePreview()})
         Поиск пока работает по ID; метаданные открываются после локальной расшифровки.</p>
       <div :class="['browser-items',view==='grid'?'browser-grid':'browser-list']"
         data-testid="browser-catalog">
-        <div v-for="item in visible" :key="item.key" class="browser-item"
+        <div v-for="item in visible" :key="item.key"
+          :class="['browser-item', item.source==='photo'?'photo-row':'']"
           :data-testid="'browser-row-'+item.key">
           <div class="browser-item-kind" aria-hidden="true">
             {{ item.type==='photo'?'▧':item.type==='video'?'▷':'♫' }}
@@ -272,21 +273,26 @@ onUnmounted(()=>{++generation;revokePreview()})
               · {{ item.local?'На устройстве':'Только в облаке' }}
               <template v-if="item.cloud"> · Подтверждено в облаке</template>
             </small>
-            <small v-if="item.state&&item.state!=='synced'">
+            <small v-if="item.state">
               Очередь: {{ item.state }}
             </small>
             <small>Хранение до {{ new Date(item.expiresAt).toLocaleDateString('ru-RU') }}</small>
           </div>
-          <button type="button" :disabled="previewBusy||busy"
-            :aria-label="'Открыть файл '+item.id"
-            @click="openItem(item)">Открыть</button>
+          <div class="browser-item-actions">
+            <button v-if="item.local" type="button" :disabled="previewBusy||busy"
+              :aria-label="item.source==='photo'?'Открыть':'Открыть файл '+item.id"
+              @click="openItem(item)">Открыть</button>
+            <button v-if="item.cloud" type="button" :disabled="previewBusy||busy"
+              aria-label="Проверить из облака"
+              @click="openItem(item,true)">Проверить из облака</button>
+          </div>
         </div>
       </div>
       <p v-if="!visible.length" class="muted">Нет файлов для выбранного фильтра.</p>
       <button v-if="photoCursor||mediaCursor" type="button"
         :disabled="busy" @click="more">Загрузить ещё</button>
       <div class="action-row">
-        <button type="button" :disabled="busy" @click="sync">Синхронизировать фото</button>
+        <button type="button" :disabled="busy" @click="sync">Синхронизировать</button>
       </div>
       <div v-if="selectedUrl" class="foundation-card browser-preview"
         data-testid="browser-preview">
