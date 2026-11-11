@@ -279,6 +279,8 @@ onUnmounted(()=>{++generation;revokePreview()})
             <small>Хранение до {{ new Date(item.expiresAt).toLocaleDateString('ru-RU') }}</small>
           </div>
           <div class="browser-item-actions">
+            <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
+              :aria-label="'Полный просмотр файла '+item.id">Просмотр</RouterLink>
             <button v-if="item.local" type="button" :disabled="previewBusy||busy"
               :aria-label="item.source==='photo'?'Открыть':'Открыть файл '+item.id"
               @click="openItem(item)">Открыть</button>
