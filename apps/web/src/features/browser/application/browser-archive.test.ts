@@ -3,7 +3,10 @@ import {afterEach,describe,expect,it,vi} from 'vitest'
 import {activeSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
 import {freshPackage,importSpki,verify} from '../../identity/infrastructure/crypto'
-import {signedArchiveAction,getPendingArchiveAction} from './browser-archive'
+import {
+  signedArchiveAction,getPendingArchiveAction,
+  inspectPendingArchiveAction,discardObsoleteArchiveAction,
+} from './browser-archive'
 import type {ArchiveEntry} from './browser-archive'
 
 const {post}=vi.hoisted(()=>({post:vi.fn()}))
@@ -56,4 +59,59 @@ describe('signed archive action sends precise protocol bytes',()=>{
     expect(result.revision).toBe(2)
     expect(await getPendingArchiveAction()).toBeNull()
   })
+  it('preserves unresolved signed command, then discards only after newer CAS proof',async()=>{
+    const s=await identity(),assetId=crypto.randomUUID()
+    const entry:ArchiveEntry={
+      entryId:crypto.randomUUID(),kind:'media',assetId,
+      revision:1,state:'restored',archiveUntilMs:null,
+      expiresAt:Date.now()+100000,mediaType:'audio',plainBytes:300,
+      physicalStatus:'not_started',
+    }
+    post.mockRejectedValueOnce(Error('api.http_503'))
+    await expect(signedArchiveAction(entry,'archive')).rejects.toThrow('api.http_503')
+    const pending=await getPendingArchiveAction()
+    expect(pending).toMatchObject({
+      kind:'media',assetId,action:'archive',expectedRevision:1,
+    })
+    post.mockResolvedValueOnce({
+      status:'unresolved',currentRevision:1,result:null,
+    })
+    expect((await inspectPendingArchiveAction())?.status).toBe('unresolved')
+    expect((await getPendingArchiveAction())?.operationId).toBe(pending?.operationId)
+    post.mockResolvedValueOnce({
+      status:'obsolete',currentRevision:2,result:null,
+    })
+    expect((await inspectPendingArchiveAction())?.status).toBe('obsolete')
+    expect(await getPendingArchiveAction()).not.toBeNull()
+    post.mockResolvedValueOnce({
+      status:'obsolete',currentRevision:2,result:null,
+    })
+    await discardObsoleteArchiveAction()
+    expect(await getPendingArchiveAction()).toBeNull()
+    expect(s.accountId).toBeTruthy()
+  })
+  it('resolves lost ACK from immutable server operation without another archive mutation',async()=>{
+    await identity()
+    const assetId=crypto.randomUUID()
+    const entry:ArchiveEntry={
+      entryId:crypto.randomUUID(),kind:'media',assetId,
+      revision:1,state:'restored',archiveUntilMs:null,
+      expiresAt:Date.now()+100000,mediaType:'audio',plainBytes:300,
+      physicalStatus:'not_started',
+    }
+    post.mockRejectedValueOnce(Error('network-unknown'))
+    await expect(signedArchiveAction(entry,'archive')).rejects.toThrow('network-unknown')
+    const pending=await getPendingArchiveAction()
+    post.mockResolvedValueOnce({
+      status:'committed',currentRevision:2,
+      result:{entryId:entry.entryId,kind:'media',assetId,
+        state:'archived',revision:2,archiveUntilMs:Date.now()+50000,
+        expiresAt:entry.expiresAt,physicalStatus:'not_started',unchanged:false},
+    })
+    expect((await inspectPendingArchiveAction())?.status).toBe('committed')
+    expect(await getPendingArchiveAction()).toBeNull()
+    expect(pending?.operationId).toBeTruthy()
+    expect(post).toHaveBeenCalledTimes(2) // original POST + read-only inspect
+  })
+
 })
