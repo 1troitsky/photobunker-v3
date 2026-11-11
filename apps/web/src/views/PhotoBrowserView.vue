@@ -728,7 +728,7 @@ onUnmounted(()=>{
       </section>
       <nav class="browser-archive-tabs" aria-label="Расположение файлов">
         <button type="button" data-testid="browser-tab-active"
-          :aria-pressed="archiveTab==='all'" @click="archiveTab='all'">Мои файлы</button>
+          :aria-pressed="archiveTab==='all'" @click="archiveTab='all'">Каталог</button>
         <button type="button" data-testid="browser-tab-archive"
           :aria-pressed="archiveTab==='archive'" @click="archiveTab='archive'">Архив</button>
       </nav>
