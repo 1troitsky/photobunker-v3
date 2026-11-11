@@ -1,7 +1,6 @@
-import type { AssignmentMediaSubmission } from './assignment-outbox'
-
-type ReceiptPage={
-  items:AssignmentMediaSubmission[]
+type ReceiptItem={submissionId:string}
+type ReceiptPage<T extends ReceiptItem>={
+  items:T[]
   nextCursor:string|null
 }
 
@@ -10,10 +9,10 @@ type ReceiptPage={
  * reordered or backwards page into the owner's confirmed receipt list.
  * 50 is the server's exact bounded page size, not the assignment quota.
  */
-export function appendOwnerMediaReceiptPage(
-  existing:AssignmentMediaSubmission[],
-  page:ReceiptPage,after:string|null,
-):{items:AssignmentMediaSubmission[];nextCursor:string|null}{
+export function appendOwnerMediaReceiptPage<T extends ReceiptItem>(
+  existing:T[],
+  page:ReceiptPage<T>,after:string|null,
+):{items:T[];nextCursor:string|null}{
   if(!page||!Array.isArray(page.items)||page.items.length>50
     ||!Array.isArray(existing)
     ||(page.nextCursor!==null&&typeof page.nextCursor!=='string'))
