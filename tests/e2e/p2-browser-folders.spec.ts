@@ -122,6 +122,16 @@ test('P2 Browser: corrupt encrypted folder snapshot fails closed without overwri
     await page.goto('/browser')
     await page.getByRole('button',{name:'Новая папка'}).click()
     await page.getByTestId('browser-folder-name').fill('SECRET-LOCAL-FOLDER')
+    // Same-account authenticated Session replacement must NOT erase a form
+    // that the user already started editing.
+    await page.evaluate(async()=>{
+      const {activeSession}=await import('/src/features/identity/application/session.ts')
+      const previous=activeSession.value
+      if(!previous)throw Error('missing session')
+      activeSession.value={...previous,online:true}
+    })
+    await expect(page.getByTestId('browser-folder-name'))
+      .toHaveValue('SECRET-LOCAL-FOLDER')
     await page.getByRole('button',{name:'Создать',exact:true}).click()
     await expect(page.locator('.browser-folder-item')).toHaveCount(1)
 
