@@ -25,7 +25,8 @@ final class MediaFilePreviewPolicyController extends Controller
 
     public function __construct(private readonly PhotoSync $sync){}
 
-    private function validateContract(string $json,object $owner):array
+    private function validateContract(string $json,object $owner,
+        bool $requireFuture=true):array
     {
         abort_unless(strlen($json)>=350&&strlen($json)<=5000,422);
         try{$c=json_decode($json,true,16,JSON_THROW_ON_ERROR);}
@@ -45,7 +46,8 @@ final class MediaFilePreviewPolicyController extends Controller
             &&$c['toRevision']===$c['fromRevision']+1
             &&$c['publication']==='disabled'
             &&is_int($c['expiresAt'])
-            &&$c['expiresAt']>PhotoSync::nowMs(),422);
+            &&$c['expiresAt']>0
+            &&(!$requireFuture||$c['expiresAt']>PhotoSync::nowMs()),422);
         foreach(['operationId','accountId','sourceMediaId','safeMediaId'] as $key){
             abort_unless(is_string($c[$key]),422);
             P::uuid($c[$key]);
@@ -112,7 +114,7 @@ final class MediaFilePreviewPolicyController extends Controller
                 &&P::verify($owner->account_spki,
                     self::DOMAIN.$event->contract_json,
                     $event->account_signature),409);
-            $c=$this->validateContract($event->contract_json,$owner);
+            $c=$this->validateContract($event->contract_json,$owner,false);
             abort_unless($c['operationId']===$event->operation_id
                 &&$c['sourceMediaId']===$source->id
                 &&$c['safeMediaId']===$safe->id
