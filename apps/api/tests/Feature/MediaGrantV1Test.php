@@ -912,7 +912,9 @@ final class MediaGrantV1Test extends TestCase
         $this->assertDatabaseCount('safe_assignment_editorial_links_v1',1);
         $this->asRole('recipient');
         $this->getJson($url.'/'.$safe['id'])->assertNotFound();
-        $this->postJson($url,$input)->assertForbidden();
+        // This ciphertext-binding contract is signed by the owner, not
+        // the requesting recipient. Signature check precedes file lookup.
+        $this->postJson($url,$input)->assertUnauthorized();
         $this->getJson('/media/v1/'.$safe['id'].'/manifests')
             ->assertNotFound();
         $this->asRole('owner');
