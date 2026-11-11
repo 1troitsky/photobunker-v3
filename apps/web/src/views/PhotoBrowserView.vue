@@ -74,7 +74,7 @@ async function refresh():Promise<void>{
     const [photos,media]=await Promise.all([listLocalPhotos(),listLocalMedia()])
     if(identity!==activeSession.value||token!==generation)return
     localPhotos.value=photos;localMedia.value=media
-    if(!identity.online){
+    if(!identity.online||(typeof navigator!=='undefined'&&navigator.onLine===false)){
       status.value='Офлайн: показаны только зашифрованные файлы этого устройства.'
       return
     }
