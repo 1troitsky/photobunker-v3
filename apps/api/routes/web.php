@@ -194,4 +194,6 @@ Route::prefix('teams/v2')->middleware('throttle:pb3-assignments')->group(functio
 Route::prefix('folders/v1')->middleware('throttle:pb3-assignments')->group(function(){
     Route::get('/snapshot',[BrowserFolderSyncController::class,'show']);
     Route::post('/snapshot',[BrowserFolderSyncController::class,'store']);
+    Route::get('/revisions/{revision}',[BrowserFolderSyncController::class,'revision'])
+        ->whereNumber('revision');
 });
