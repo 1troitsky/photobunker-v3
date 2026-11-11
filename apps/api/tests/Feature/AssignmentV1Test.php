@@ -1769,6 +1769,36 @@ final class AssignmentV1Test extends TestCase
         $this->getJson('/assignments/v1')
             ->assertJsonPath('items.0.confirmedPhotoCount',1)
             ->assertJsonPath('items.0.confirmedVideoCount',0);
+
+        // A contributor's signed archive is enforced by the grant reader.
+        // Owner list/progress must not keep counting this unreadable JPEG.
+        $mediaRow=DB::table('media_files_v1')
+            ->where('id',$media['id'])->first();
+        DB::table('browser_archive_entries_v1')->insert([
+            'id'=>(string)Str::uuid(),
+            'account_id'=>$this->people['recipient']['account'],
+            'kind'=>'media','asset_id'=>$media['id'],
+            'revision'=>1,'state'=>'archived',
+            'asset_expires_at_ms'=>(int)$mediaRow->expires_at,
+            'archive_until_ms'=>null,'media_type'=>'photo',
+            'plain_bytes'=>null,'last_operation_id'=>(string)Str::uuid(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        foreach(['archived','deleting'] as $archiveState){
+            DB::table('browser_archive_entries_v1')
+                ->where('asset_id',$media['id'])
+                ->update(['state'=>$archiveState]);
+            $this->getJson($url)->assertOk()->assertJsonPath('items',[]);
+            $this->getJson('/assignments/v1')
+                ->assertJsonPath('items.0.confirmedPhotoCount',0);
+        }
+        DB::table('browser_archive_entries_v1')
+            ->where('asset_id',$media['id'])
+            ->update(['state'=>'restored']);
+        $this->getJson($url)->assertOk()->assertJsonCount(1,'items');
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',1);
+
         $this->as('outsider');
         $this->getJson($url)->assertNotFound();
         $this->as('owner');
