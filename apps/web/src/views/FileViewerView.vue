@@ -391,6 +391,87 @@ function stopPhotoTextDrag(event:PointerEvent):void{
   draggingMark=null
   commitPhotoEdit()
 }
+function choosePhotoTool(tool:StrokeTool):void{
+  if(cropBusy.value||!cropResult.value)return
+  if(composedPhotoUrl.value)invalidateTextOutput()
+  activePaintTool.value=activePaintTool.value===tool?null:tool
+}
+function setPaintColor(event:Event):void{
+  paintColor.value=(event.target as HTMLInputElement).value
+}
+function setPaintWidth(event:Event):void{
+  const next=Number((event.target as HTMLInputElement).value)
+  if(Number.isSafeInteger(next)&&next>=2&&next<=36)
+    paintWidth.value=next
+}
+function strokePoint(event:PointerEvent,canvas:HTMLCanvasElement):StrokePoint|null{
+  const rect=canvas.getBoundingClientRect()
+  if(rect.width<1||rect.height<1)return null
+  return {
+    x:Math.max(0,Math.min(1000,Math.round(
+      (event.clientX-rect.left)/rect.width*1000))),
+    y:Math.max(0,Math.min(1000,Math.round(
+      (event.clientY-rect.top)/rect.height*1000))),
+  }
+}
+function beginPaintStroke(event:PointerEvent):void{
+  const canvas=paintCanvas.value,tool=activePaintTool.value
+  if(!canvas||!tool||!cropResult.value||cropBusy.value
+    ||draftStroke.value||strokeMarks.value.length>=MAX_PHOTO_STROKES
+    ||event.pointerType==='mouse'&&event.button!==0)return
+  if(tool==='eraser'&&!strokeMarks.value.length)return
+  const total=strokeMarks.value.reduce((n,item)=>n+item.points.length,0)
+  if(total>=MAX_TOTAL_STROKE_POINTS)return
+  const point=strokePoint(event,canvas)
+  if(!point)return
+  strokePointer=event.pointerId
+  draftStroke.value={
+    id:crypto.randomUUID(),tool,color:paintColor.value,
+    width:paintWidth.value,points:[point],
+  }
+  canvas.setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+function updatePaintStroke(event:PointerEvent):void{
+  const stroke=draftStroke.value,canvas=paintCanvas.value
+  if(!stroke||!canvas||strokePointer!==event.pointerId
+    ||cropBusy.value)return
+  const point=strokePoint(event,canvas)
+  const last=stroke.points[stroke.points.length-1]
+  if(!point||last&&last.x===point.x&&last.y===point.y)return
+  const total=strokeMarks.value.reduce((n,item)=>n+item.points.length,0)
+  if(stroke.points.length>=MAX_STROKE_POINTS
+    ||total+stroke.points.length>=MAX_TOTAL_STROKE_POINTS)return
+  draftStroke.value={...stroke,points:[...stroke.points,point]}
+}
+function finishPaintStroke(event:PointerEvent,cancel=false):void{
+  const canvas=paintCanvas.value,stroke=draftStroke.value
+  if(strokePointer!==event.pointerId)return
+  strokePointer=null
+  if(canvas?.hasPointerCapture(event.pointerId))
+    canvas.releasePointerCapture(event.pointerId)
+  draftStroke.value=null
+  if(cancel||!stroke||cropBusy.value)return
+  strokeMarks.value=[...strokeMarks.value,stroke]
+  invalidateTextOutput()
+  commitPhotoEdit()
+}
+function renderPaintCanvas():void{
+  const canvas=paintCanvas.value,result=cropResult.value
+  if(!canvas||!result||composedPhotoUrl.value)return
+  const width=Math.max(1,Math.round(Math.min(900,
+    canvas.clientWidth*(window.devicePixelRatio||1))))
+  const height=Math.max(1,Math.round(width*result.height/result.width))
+  if(canvas.width!==width||canvas.height!==height){
+    canvas.width=width;canvas.height=height
+  }
+  const ctx=canvas.getContext('2d')
+  if(!ctx)return
+  ctx.clearRect(0,0,width,height)
+  const strokes=draftStroke.value
+    ?[...strokeMarks.value,draftStroke.value]:strokeMarks.value
+  if(strokes.length)drawPhotoStrokes(ctx,width,height,strokes)
+}
 function clearCrop():void{
   clearComposition()
   ++cropEpoch
@@ -677,10 +758,11 @@ async function createCroppedPhoto():Promise<void>{
 async function preparedCropWithText(
   source:Blob,marks:readonly PhotoTextMark[],
   shapes:readonly PhotoShapeMark[],
+  strokes:readonly PhotoStroke[],
 ):Promise<Blob>{
   validateTextMarks(marks)
-  if(!marks.length&&!shapes.length)return source
-  return (await flattenPhotoAnnotations(source,marks,shapes)).blob
+  if(!marks.length&&!shapes.length&&!strokes.length)return source
+  return (await flattenPhotoAnnotations(source,marks,shapes,strokes)).blob
 }
 function setComposedCrop(blob:Blob):void{
   clearComposition()
@@ -694,18 +776,21 @@ async function saveCroppedPhoto():Promise<void>{
   const version=textRevision
   const marks=textMarks.value.map(mark=>({...mark}))
   const shapes=shapeMarks.value.map(shape=>({...shape}))
+  const strokes=strokeMarks.value.map(stroke=>({...stroke,
+    points:stroke.points.map(point=>({...point})),
+  }))
   if(!session||!result||!name||cropBusy.value||preview.value?.type!=='photo'
     ||cropSavedId.value)return
   cropBusy.value=true;cropError.value='';cropNotice.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes)
+    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes,strokes)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
     const id=await enqueueEncryptedMedia(
       new File([flattened],name,{type:'image/jpeg'}))
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch
       &&version===textRevision){
-      if(marks.length||shapes.length)setComposedCrop(flattened)
+      if(marks.length||shapes.length||strokes.length)setComposedCrop(flattened)
       cropSavedId.value=id
       cropNotice.value='Новая JPEG-копия зашифрована в очереди Browser. Облачная синхронизация подтверждается отдельно.'
       void refreshIndex()
@@ -724,18 +809,22 @@ async function downloadCroppedPhoto():Promise<void>{
   const epoch=cropEpoch,currentEpoch=fileEpoch,version=textRevision
   const marks=textMarks.value.map(mark=>({...mark}))
   const shapes=shapeMarks.value.map(shape=>({...shape}))
+  const strokes=strokeMarks.value.map(stroke=>({...stroke,
+    points:stroke.points.map(point=>({...point})),
+  }))
   if(!session||!result||!cropUrl.value||!name||cropBusy.value
     ||preview.value?.type!=='photo')return
   if(!window.confirm('Скачать JPEG-копию на устройство? Файл будет вне защищённого Browser и может появиться в системной галерее.'))return
   cropBusy.value=true;cropError.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes)
+    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes,strokes)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
-    if((marks.length||shapes.length)&&!composedPhotoUrl.value)
+    if((marks.length||shapes.length||strokes.length)&&!composedPhotoUrl.value)
       setComposedCrop(flattened)
     const anchor=document.createElement('a')
-    anchor.href=marks.length||shapes.length?composedPhotoUrl.value:cropUrl.value
+    anchor.href=marks.length||shapes.length||strokes.length
+      ?composedPhotoUrl.value:cropUrl.value
     anchor.download=name
     anchor.rel='noopener'
     document.body.appendChild(anchor)
@@ -897,6 +986,9 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
+watch([paintCanvas,strokeMarks,draftStroke,cropResult,compositionWidth],()=>{
+  renderPaintCanvas()
+},{flush:'post'})
 watch(photoComposition,element=>{
   compositionObserver?.disconnect()
   compositionObserver=null
