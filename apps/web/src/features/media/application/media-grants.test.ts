@@ -57,4 +57,24 @@ describe('P1-11 immutable owner-signed media recipient scope',()=>{
       rawDEK:'never',
     })).toThrow()
   })
+  it('accepts only v3 signed source-bound safe_read with two distinct photos',()=>{
+    const c:MediaGrantContract={
+      ...fixture(),version:3,scope:'safe_read',
+      sourceMediaId:uuid(8),sourceContractHash:'c'.repeat(64),
+    }
+    expect(parseMediaGrantContract(c).sourceMediaId).toBe(uuid(8))
+    expect(parseMediaGrantContract(c).scope).toBe('safe_read')
+    for(const item of [
+      {...c,scope:'read'}, {...c,scope:'original'},
+      {...c,sourceMediaId:undefined},{...c,sourceMediaId:c.mediaId},
+      {...c,sourceMediaId:'wrong'},{...c,sourceContractHash:undefined},
+      {...c,sourceContractHash:'f'}, {...c,assignmentId:uuid(13)},
+      {...c,originalDEK:'plaintext'},
+      {...fixture(),sourceMediaId:uuid(8),sourceContractHash:'c'.repeat(64)},
+      {...c,version:2},
+    ]){
+      expect(()=>parseMediaGrantContract(item))
+        .toThrow('media_grant.invalid_scope')
+    }
+  })
 })
