@@ -871,10 +871,13 @@ async function preparedCropWithText(
   source:Blob,marks:readonly PhotoTextMark[],
   shapes:readonly PhotoShapeMark[],
   strokes:readonly PhotoStroke[],
+  blackouts:readonly PhotoBlackout[],
 ):Promise<Blob>{
   validateTextMarks(marks)
-  if(!marks.length&&!shapes.length&&!strokes.length)return source
-  return (await flattenPhotoAnnotations(source,marks,shapes,strokes)).blob
+  if(!marks.length&&!shapes.length&&!strokes.length&&!blackouts.length)
+    return source
+  return (await flattenPhotoAnnotations(
+    source,marks,shapes,strokes,blackouts)).blob
 }
 function setComposedCrop(blob:Blob):void{
   clearComposition()
@@ -891,18 +894,21 @@ async function saveCroppedPhoto():Promise<void>{
   const strokes=strokeMarks.value.map(stroke=>({...stroke,
     points:stroke.points.map(point=>({...point})),
   }))
+  const blackouts=photoBlackouts.value.map(item=>({...item}))
   if(!session||!result||!name||cropBusy.value||showBefore.value
     ||preview.value?.type!=='photo'||cropSavedId.value)return
   cropBusy.value=true;cropError.value='';cropNotice.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes,strokes)
+    const flattened=composedPhotoBlob??await preparedCropWithText(
+      result.blob,marks,shapes,strokes,blackouts)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
     const id=await enqueueEncryptedMedia(
       new File([flattened],name,{type:'image/jpeg'}))
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch
       &&version===textRevision){
-      if(marks.length||shapes.length||strokes.length)setComposedCrop(flattened)
+      if(marks.length||shapes.length||strokes.length||blackouts.length)
+        setComposedCrop(flattened)
       cropSavedId.value=id
       cropNotice.value='Новая JPEG-копия зашифрована в очереди Browser. Облачная синхронизация подтверждается отдельно.'
       void refreshIndex()
@@ -924,18 +930,21 @@ async function downloadCroppedPhoto():Promise<void>{
   const strokes=strokeMarks.value.map(stroke=>({...stroke,
     points:stroke.points.map(point=>({...point})),
   }))
+  const blackouts=photoBlackouts.value.map(item=>({...item}))
   if(!session||!result||!cropUrl.value||!name||cropBusy.value
     ||showBefore.value||preview.value?.type!=='photo')return
   if(!window.confirm('Скачать JPEG-копию на устройство? Файл будет вне защищённого Browser и может появиться в системной галерее.'))return
   cropBusy.value=true;cropError.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes,strokes)
+    const flattened=composedPhotoBlob??await preparedCropWithText(
+      result.blob,marks,shapes,strokes,blackouts)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
-    if((marks.length||shapes.length||strokes.length)&&!composedPhotoUrl.value)
+    if((marks.length||shapes.length||strokes.length||blackouts.length)
+      &&!composedPhotoUrl.value)
       setComposedCrop(flattened)
     const anchor=document.createElement('a')
-    anchor.href=marks.length||shapes.length||strokes.length
+    anchor.href=marks.length||shapes.length||strokes.length||blackouts.length
       ?composedPhotoUrl.value:cropUrl.value
     anchor.download=name
     anchor.rel='noopener'
