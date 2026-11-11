@@ -332,6 +332,10 @@ watch(activeSession,(next,previous)=>{
     bulkDestination.value=''
     folderNotice.value=''
     void loadFolders()
+  }else if(next&&!folderReady.value){
+    // A first load could have been fenced out while bootstrap upgraded the
+    // same device to an online Session; retry without losing a typed form.
+    void loadFolders()
   }
   void refresh()
 })
