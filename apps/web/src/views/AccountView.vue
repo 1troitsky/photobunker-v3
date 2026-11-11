@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref,watch } from 'vue'
+import {
+  listPB3Devices,revokePB3Device,
+} from '../features/identity/application/device-revocation'
 import {
   activeSession, beginRegistration, finishRegistration, logout,
   restoreAccount, reauthenticate,
@@ -11,6 +14,36 @@ const acknowledged=ref(false)
 const busy=ref(false)
 const status=ref('')
 const error=ref('')
+const devices=ref<Awaited<ReturnType<typeof listPB3Devices>>>([])
+const devicesError=ref('')
+const deviceBusy=ref(false)
+
+async function refreshDevices():Promise<void>{
+  if(!activeSession.value?.online){devices.value=[];return}
+  devicesError.value=''
+  try{devices.value=await listPB3Devices()}
+  catch(e){devicesError.value=e instanceof Error?e.message:'identity.devices_unavailable'}
+}
+async function disconnectDevice(id:string):Promise<void>{
+  if(deviceBusy.value)return
+  const self=id===activeSession.value?.deviceId
+  const message=self
+    ? 'Отключить это устройство от PB3? Локальный доступ закроется. Matrix-токен на отдельном сервере этим НЕ отзывается.'
+    : 'Отключить выбранное устройство от PB3? Его отдельный Matrix-токен на сервере этим НЕ отзывается.'
+  if(!window.confirm(message))return
+  deviceBusy.value=true;error.value='';status.value=''
+  try{
+    const result=await revokePB3Device(id)
+    status.value=result.localMatrixShutdownComplete===false&&self
+      ||result.localMatrixCredentialsCleared===false&&self
+      ? 'PB3-доступ отозван. Локальная очистка Matrix не подтверждена; удалённый Matrix-токен не отозван.'
+      : 'PB3-доступ отозван. Отзыв Matrix-токена на внешнем сервере не выполнен.'
+    if(!self)await refreshDevices()
+    else devices.value=[]
+  }catch(e){error.value=e instanceof Error?e.message:'identity.revoke_unconfirmed'}
+  finally{deviceBusy.value=false}
+}
+watch(activeSession,()=>{void refreshDevices()},{immediate:true})
 
 async function perform(action:()=>Promise<unknown>):Promise<void> {
   busy.value=true;error.value=''
@@ -69,6 +102,29 @@ async function copyKey():Promise<void> {
         <button type="button" :disabled="busy" @click="reconnect">Проверить сессию</button>
         <button type="button" :disabled="busy" @click="signOut">Выйти</button>
       </div>
+    </div>
+    <div v-if="activeSession?.online" class="foundation-card" data-testid="device-revocation">
+      <h2>Устройства PB3</h2>
+      <p class="muted">
+        «Отключить» прекращает авторизацию устройства в PB3.
+        Это НЕ отзывает отдельный Matrix-токен на его homeserver
+        и НЕ удаляет сообщения, уже расшифрованные на другом устройстве.
+      </p>
+      <div v-if="devicesError" role="alert">{{ devicesError }}</div>
+      <div v-for="item in devices" :key="item.id" class="action-row">
+        <span>
+          <code>{{ item.id }}</code>
+          {{ item.id===activeSession?.deviceId ? '— это устройство' : '' }}
+          {{ item.revoked_at ? '— отключено' : '' }}
+        </span>
+        <button v-if="!item.revoked_at" type="button"
+          :disabled="deviceBusy||busy"
+          :aria-label="'Отключить от PB3 устройство '+item.id"
+          @click="disconnectDevice(item.id)">Отключить</button>
+      </div>
+      <button type="button" :disabled="deviceBusy||busy" @click="refreshDevices">
+        Обновить список
+      </button>
     </div>
     <template v-else>
       <div class="foundation-card">
