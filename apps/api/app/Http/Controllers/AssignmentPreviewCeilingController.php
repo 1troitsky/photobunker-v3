@@ -156,6 +156,11 @@ final class AssignmentPreviewCeilingController extends Controller
     {
         $this->sync->origin($request);
         [$owner]=$this->sync->actor($request);
+        // Never reveal an assignment's existence to a non-owner even
+        // if they submit a forged accountId or an incorrectly signed body.
+        abort_unless(DB::table('assignment_records_v1')
+            ->where('id',$assignmentId)
+            ->where('owner_account_id',$owner->id)->exists(),404);
         $input=P::exact($request->json()->all(),['contract','signature']);
         abort_unless(is_string($input['contract'])
             &&is_string($input['signature']),422);
