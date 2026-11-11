@@ -133,8 +133,16 @@ final class BrowserArchiveTest extends TestCase
         $this->getJson('/photos/v1')->assertOk()
             ->assertJsonPath('items.0.photoId',$id);
         $this->getJson('/browser/v1/archive')->assertOk()
-            ->assertJsonCount(0,'items');
-        $this->assertDatabaseCount('browser_archive_events_v1',2);
+            ->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.state','restored')
+            ->assertJsonPath('items.0.revision',2);
+        // Restored rows remain in owner-scoped history. Re-archive must
+        // use revision=2, not an unsigned reset to zero.
+        $this->mutate('owner',$this->command('owner','photo',$id,'archive',0))
+            ->assertConflict();
+        $this->mutate('owner',$this->command('owner','photo',$id,'archive',2))
+            ->assertCreated()->assertJsonPath('revision',3);
+        $this->assertDatabaseCount('browser_archive_events_v1',3);
     }
 
     public function test_expiry_is_strict_and_cannot_be_extended_by_archive():void
