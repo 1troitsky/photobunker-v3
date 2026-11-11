@@ -1,0 +1,65 @@
+{
+  "product": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+  "scope": "independent runtime; no full Messenger acceptance",
+  "results": [
+    {
+      "id": "MESSAGES-OVERLAY-GATE",
+      "status": "PASS",
+      "twoRealPb3Accounts": true,
+      "independentlyComparedSafetyNumber": true,
+      "viewportGeometry": [
+        {
+          "width": 1280,
+          "height": 900,
+          "actual": {
+            "x": 0,
+            "y": 0,
+            "width": 1280,
+            "height": 900
+          },
+          "coversViewport": true,
+          "dockCovered": true
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "actual": {
+            "x": 0,
+            "y": 0,
+            "width": 390,
+            "height": 844
+          },
+          "coversViewport": true,
+          "dockCovered": true
+        }
+      ],
+      "sendStillDisabled": true,
+      "scope": "functional Chromium desktop/narrow viewport; aesthetic parity and hardware unverified"
+    },
+    {
+      "id": "OFFLINE-DRAFT-ACTUAL-RELOAD",
+      "status": "PASS",
+      "localEncryptedDraft": true,
+      "actualPageReload": true,
+      "originalBodyRestored": true,
+      "plaintextAndAccountIdsAbsentFromRawDraftRow": true,
+      "escapeAndFocusRestore": true,
+      "scope": "local draft only; not Matrix outbox, server ACK, delivery or historical recovery"
+    },
+    {
+      "id": "BROWSER-LEASE-RELOAD",
+      "status": "PASS",
+      "secondTabRefused": true,
+      "documentReloadReleasedRealWebLock": true,
+      "secondTabThenAcquired": true,
+      "scope": "actual Web Lock helper only; no fabricated SDK lease or concurrent SDK sender"
+    },
+    {
+      "id": "REAL-ACCOUNT-SWITCH-LOCAL-DRAFT",
+      "status": "PASS",
+      "genuineLogoutAndRecoveryKeyLogin": true,
+      "otherAccountDraftNotDisplayed": true,
+      "scope": "draft/UI isolation; send and Matrix crypto account-switch gate remain blocked"
+    }
+  ]
+}

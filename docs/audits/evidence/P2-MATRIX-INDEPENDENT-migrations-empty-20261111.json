@@ -1,0 +1,7 @@
+{
+  "status": "PASS",
+  "case": "empty Matrix down/up",
+  "tablesRestored": 3,
+  "command": "docker compose exec -T api php /audit/migrations.php",
+  "exitCode": 0
+}

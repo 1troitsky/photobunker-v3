@@ -1,0 +1,24 @@
+{
+  "product": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+  "scope": "independent runtime; no full Messenger acceptance",
+  "results": [
+    {
+      "id": "REAL-TLS-WHOAMI-BINDING",
+      "status": "PASS",
+      "realPb3Registration": true,
+      "realMatrixSdkSync": true,
+      "rootAndDeviceSigned": true,
+      "realWhoami": true,
+      "tlsVerificationEnabled": true,
+      "authenticationMocked": false,
+      "scope": "one focused account; full two-account Messenger remains blocked"
+    },
+    {
+      "id": "AUDIT-HARNESS",
+      "status": "NOT TESTED",
+      "stage": "enroll",
+      "errorClass": "Error",
+      "reason": "Harness stopped; private diagnostics retained; no secrets exported"
+    }
+  ]
+}

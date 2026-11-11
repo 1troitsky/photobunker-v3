@@ -1,0 +1,20 @@
+{
+  "sourceHash": {
+    "apps/web/vite.config.ts": "dc3172184aaca4ce3b7b0c2ea7cdb2527f9a3cc29e61b8fc059eefd4950c244d",
+    "apps/web/src/features/messages/application/matrix-rust-adapter.ts": "2750d3a70f4c06483b387fe47e5b4ad218a56df0cf7c0ed61fc00ca4986bb747",
+    "apps/web/src/features/messages/application/matrix-text-outbox.ts": "5773e3e360080f1bf24ee5eb5cc4caa5afbf42ab06ec563012202876a4ed45e0",
+    "apps/api/app/Http/Controllers/MatrixRecoveryEscrowController.php": "2b36f7dcb7f78f5ecc18528b4fe0a2e751ae430b6bc7dc75dc855a014ab5e2dd",
+    "apps/api/app/Http/Controllers/IdentityController.php": "c3247df7b3ed32602187043d8285b906b39f9964ac49243d202313de36a62077",
+    "apps/api/routes/web.php": "7075eced46ddc17fb6d3916d34737cd3c7fa8b934035528ad274a69457511086"
+  },
+  "developmentMatrixProxyPresent": false,
+  "identityRevocationHttpRoutePresent": false,
+  "runtimeUnmodifiedProxyUnauthenticatedStatus": 404,
+  "directApiUnauthenticatedStatus": 401,
+  "adaptation": "Temporary QA Vite config adds matrix/v1 routing only; preserves Origin, actual PB3 proof, TLS, server limits and gates.",
+  "readOnlyAcceptedUxReference": {
+    "path": "docs/_uiux/PhotoBunker_Messages_Fieldwork_1_1.html",
+    "sha256": "562ddf7b6d481e3caa4a40f8ecddbf4b81ac455b0c4fa652e4a2e4fba3179e01",
+    "visualParityVerified": false
+  }
+}

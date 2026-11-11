@@ -1,0 +1,21 @@
+{
+  "product": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+  "scope": "independent runtime; no full Messenger acceptance",
+  "results": [
+    {
+      "id": "PB3-A-B-CONTACTS",
+      "status": "PASS",
+      "realRegisteredAccounts": 2,
+      "isolatedBrowserContexts": 2,
+      "safetyComparedWithOtherAccount": true,
+      "authenticationMocked": false
+    },
+    {
+      "id": "AUDIT-HARNESS",
+      "status": "NOT TESTED",
+      "stage": "matrix_login_and_binding",
+      "errorClass": "Error",
+      "reason": "Harness stopped; private diagnostics retained; no secrets exported"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "fixtures": [
+    {
+      "fixture": "pb3-p2-matrix-run-20261111",
+      "privateDatabaseBackupCreated": true,
+      "backupSha256": "7fce2dd0caafdc75c87a0085d31de6855b1f6c38bbb6b689bafe600a1864c0e3",
+      "backupMode": "0o600",
+      "auditServicesStopped": true,
+      "synapseFilesRetained": true,
+      "volumesDeleted": false
+    },
+    {
+      "fixture": "pb3-p2-matrix-escrow-run-20261111",
+      "privateDatabaseBackupCreated": true,
+      "backupSha256": "bb71f11c838fadbe669ca247fbadf9243ff15c5303bd21e1de3058d158ed42be",
+      "backupMode": "0o600",
+      "auditServicesStopped": true,
+      "synapseFilesRetained": true,
+      "volumesDeleted": false
+    }
+  ],
+  "initialCleanupCommandExit": 1,
+  "reason": "Final unrelated main-health check refused: primary main stack had already stopped before audit. No main restart/stop performed. Fixture backups and stop succeeded.",
+  "mainStoppedBeforeAudit": true,
+  "mainLastFinishedAtUTC": "2026-11-10T22:42:19.827974066Z",
+  "firstAuditStartedAtUTC": "2026-11-11T02:16:02.794785909Z",
+  "mainHead": "a8abcc55e73ea0a2d8be3a24052f814906b8bd1d"
+}
