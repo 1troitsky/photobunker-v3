@@ -159,6 +159,10 @@ final class BrowserFolderSyncTest extends TestCase
         $this->postJson('/folders/v1/snapshot',$this->signed('alice',$bad))
             ->assertUnprocessable();
 
+        $staleKey=$this->contract('alice',1);
+        $staleKey['keyRevision']=2;
+        $this->postJson('/folders/v1/snapshot',$this->signed('alice',$staleKey))
+            ->assertConflict();
         $this->assertDatabaseCount('browser_folder_events_v1',1);
         $this->assertDatabaseHas('browser_folder_snapshots_v1',['revision'=>1]);
     }
