@@ -3,6 +3,8 @@ import {drawPhotoShapes,validateShapeMarks} from './photo-shapes'
 import type {PhotoShapeMark} from './photo-shapes'
 import {drawPhotoStrokes,validatePhotoStrokes} from './photo-strokes'
 import type {PhotoStroke} from './photo-strokes'
+import {paintPhotoBlackouts,validatePhotoBlackouts} from './photo-blackouts'
+import type {PhotoBlackout} from './photo-blackouts'
 
 export type PhotoTextMark=Readonly<{
   id:string;text:string;x:number;y:number;size:number;color:string
@@ -105,13 +107,15 @@ export async function flattenPhotoAnnotations(
   source:Blob,marks:readonly PhotoTextMark[],
   shapes:readonly PhotoShapeMark[],
   strokes:readonly PhotoStroke[]=[],
+  blackouts:readonly PhotoBlackout[]=[],
 ):Promise<AnnotatedJpeg>{
   validateTextMarks(marks)
   validateShapeMarks(shapes)
   validatePhotoStrokes(strokes)
+  validatePhotoBlackouts(blackouts)
   if(source.type!=='image/jpeg'||source.size<128
     ||source.size>MAX_MEDIA_BYTES)throw Error('viewer.text_invalid_source')
-  if(!marks.length&&!shapes.length&&!strokes.length)
+  if(!marks.length&&!shapes.length&&!strokes.length&&!blackouts.length)
     throw Error('viewer.annotation_no_marks')
   const bitmap=await createImageBitmap(source)
   const canvas=document.createElement('canvas')
@@ -140,6 +144,9 @@ export async function flattenPhotoAnnotations(
       }
     }
     drawPhotoText(ctx,bitmap.width,bitmap.height,marks)
+    // Blackouts are composited last: the masked image pixels are replaced
+    // even when previously painted shapes/text/brush cross the same region.
+    paintPhotoBlackouts(ctx,bitmap.width,bitmap.height,blackouts)
     const blob=await new Promise<Blob>((resolve,reject)=>{
       canvas.toBlob(result=>result?resolve(result):reject(
         Error('viewer.text_encode_failed')),'image/jpeg',0.91)
