@@ -19,6 +19,7 @@ afterEach(()=>{
   activeSession.value=null
   vi.mocked(jsonApi).mockReset()
   vi.mocked(pinnedPeer).mockReset()
+  vi.unstubAllGlobals()
 })
 
 async function localDb():Promise<IDBDatabase>{
@@ -75,6 +76,9 @@ async function stored(recipientId:string,assignmentId:string,inviteId:string){
   return result
 }
 async function scenario(n:number){
+  // The authenticated response is supplied by the test transport mock.
+  // Set explicit online state: Vitest's Node navigator defaults to offline.
+  vi.stubGlobal('navigator',{onLine:true})
   const recipientId=id(100+n*10),ownerId=id(101+n*10)
   const assignmentId=id(102+n*10),inviteId=id(103+n*10)
   const own=await freshPackage(recipientId)
