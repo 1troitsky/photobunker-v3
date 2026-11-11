@@ -44,8 +44,10 @@ export async function captureVideoStill(video:HTMLVideoElement):Promise<VideoSti
   canvas.width=size.width;canvas.height=size.height
   const context=canvas.getContext('2d',{alpha:false})
   if(!context)throw Error('viewer.frame_canvas_unsupported')
-  context.drawImage(video,0,0,size.width,size.height)
   try{
+    // Keep canvas plaintext lifetime bounded even if drawImage itself fails
+    // (e.g. revoked source, decoder error or disallowed source).
+    context.drawImage(video,0,0,size.width,size.height)
     const blob=await new Promise<Blob>((resolve,reject)=>{
       canvas.toBlob(result=>result?resolve(result):reject(
         Error('viewer.frame_encode_failed')),'image/jpeg',0.9)
