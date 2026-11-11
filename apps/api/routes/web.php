@@ -4,6 +4,7 @@ declare(strict_types=1);
 use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\BrowserFolderSyncController;
 use App\Http\Controllers\BrowserArchiveController;
+use App\Http\Controllers\BrowserArchivePreferencesController;
 use App\Http\Controllers\PhotoSyncController;
 use App\Http\Controllers\MediaV1Controller;
 use App\Http\Controllers\MediaGrantController;
@@ -206,4 +207,6 @@ Route::prefix('browser/v1/archive')->middleware('throttle:pb3-media')->group(fun
     Route::get('/',[BrowserArchiveController::class,'index']);
     Route::post('/actions',[BrowserArchiveController::class,'mutate']);
     Route::post('/inspect',[BrowserArchiveController::class,'inspect']);
+    Route::get('/preferences',[BrowserArchivePreferencesController::class,'show']);
+    Route::post('/preferences',[BrowserArchivePreferencesController::class,'update']);
 });

@@ -348,3 +348,15 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .browser-archive-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0}
 .browser-archive-tabs button[aria-pressed=true]{border-color:var(--accent);font-weight:700}
 .browser-item-actions>span{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+
+/* Archive preferences: user intent never replaces operator/TTL safety gates. */
+.browser-archive-preferences{display:grid;gap:10px;margin:12px 0;
+  padding:14px;border:1px solid var(--outline);border-radius:10px}
+.browser-archive-preferences h2{margin:0;font-size:15px}
+.browser-archive-preferences label{display:flex;gap:9px;align-items:center;
+  font-size:13px;cursor:pointer}
+.browser-archive-preferences input[type=checkbox]{accent-color:var(--accent);
+  width:17px;height:17px;flex:0 0 auto}
+.browser-archive-preferences .muted{font-size:12px;margin:0}
+.browser-archive-pref-actions{display:flex;gap:10px;flex-wrap:wrap}
+.browser-archive-pref-actions button{min-height:38px}

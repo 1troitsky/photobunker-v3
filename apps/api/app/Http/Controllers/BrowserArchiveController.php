@@ -63,7 +63,8 @@ final class BrowserArchiveController extends Controller
                     ->where($tombstoneKey,$r->asset_id)->exists();
                 $physical=$gone&&$marked?'verified_absent':'pending_gc';
             }elseif((int)$r->asset_expires_at_ms<=$now
-                ||(int)$r->archive_until_ms<=$now){
+                ||($r->archive_until_ms!==null
+                    &&(int)$r->archive_until_ms<=$now)){
                 $physical='past_due_pending_gc';
             }
             return [
@@ -205,6 +206,7 @@ final class BrowserArchiveController extends Controller
             }
 
             $now=PhotoSync::nowMs();
+            $preferences=BrowserArchivePreferencesController::settings($account->id);
             $asset=DB::table(self::assetTable($c['kind']))
                 ->where('id',$c['assetId'])
                 ->where('account_id',$account->id)
@@ -220,22 +222,38 @@ final class BrowserArchiveController extends Controller
             $state='archived';
             $until=$entry? $entry->archive_until_ms:null;
             if($c['action']==='archive'){
+                abort_unless($preferences['useArchive'],409);
                 abort_unless($asset->state==='active'
                     &&(int)$asset->expires_at>$now,410);
                 abort_if($entry&&$entry->state!=='restored',409);
                 self::standalone($c['kind'],$asset->id);
-                $until=min((int)$asset->expires_at,
-                    $now+((int)config('browser_archive.archive_days',7))*86400000);
-                abort_if($until<=$now,410);
+                $until=$preferences['autoDeleteAfter7Days']
+                    ?min((int)$asset->expires_at,
+                        $now+((int)config('browser_archive.archive_days',7))*86400000)
+                    :null;
+                abort_if($until!==null&&$until<=$now,410);
             }elseif($c['action']==='restore'){
                 abort_unless($entry&&$entry->state==='archived',409);
                 abort_unless($asset->state==='active'
                     &&(int)$asset->expires_at>$now
-                    &&$entry->archive_until_ms!==null
-                    &&(int)$entry->archive_until_ms>$now,410);
+                    &&($entry->archive_until_ms===null
+                        ||(int)$entry->archive_until_ms>$now),410);
                 $state='restored';$until=null;
             }else{
-                abort_unless($entry&&$entry->state==='archived',409);
+                if($entry){
+                    abort_unless($entry->state==='archived'
+                        ||(!$preferences['useArchive']
+                            &&$entry->state==='restored'
+                            &&$asset->state==='active'
+                            &&(int)$asset->expires_at>$now),409);
+                }else{
+                    // Disabling the archive requires a separately signed,
+                    // explicitly confirmed irreversible delete; never
+                    // silently hide an active asset or bypass operator gates.
+                    abort_unless(!$preferences['useArchive'],409);
+                    abort_unless($asset->state==='active'
+                        &&(int)$asset->expires_at>$now,410);
+                }
                 // Delete forbidden for assignment evidence even if the
                 // archive entry predates a later grant/submission.
                 self::standalone($c['kind'],$asset->id);

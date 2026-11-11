@@ -88,10 +88,11 @@ final class BrowserArchiveTest extends TestCase
         ];
     }
 
-    private function signed(string $role,array $c):array
+    private function signed(string $role,array $c,
+        string $domain='pb3.browser-archive.v1'):array
     {
         $json=json_encode($c,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
-        openssl_sign("pb3.browser-archive.v1\n".$json,
+        openssl_sign($domain."\n".$json,
             $der,$this->actors[$role]['key'],OPENSSL_ALGO_SHA256);
         $parts=[];$i=2;
         for($j=0;$j<2;$j++){
@@ -360,6 +361,142 @@ final class BrowserArchiveTest extends TestCase
         $this->as('outsider');
         $this->postJson($endpoint,$original)->assertUnauthorized();
         $this->assertDatabaseCount('photo_tombstones',0);
+    }
+
+    private function preference(string $role,int $revision,bool $useArchive,
+        bool $autoDelete,?string $op=null):array
+    {
+        $c=[
+            'version'=>1,'accountId'=>$this->actors[$role]['id'],
+            'writerDeviceId'=>$this->actors[$role]['device'],
+            'operationId'=>$op??(string)Str::uuid(),
+            'expectedRevision'=>$revision,'useArchive'=>$useArchive,
+            'autoDeleteAfter7Days'=>$autoDelete,
+        ];
+        $signed=$this->signed($role,$c,'pb3.browser-archive-preferences.v1');
+        return ['contract'=>$signed['command'],'signature'=>$signed['signature']];
+    }
+
+    public function test_default_signed_preferences_are_owner_scoped_and_operator_gated():void
+    {
+        $this->as('owner');
+        $this->getJson('/browser/v1/archive/preferences')->assertOk()->assertJson([
+            'revision'=>0,'useArchive'=>true,'autoDeleteAfter7Days'=>true,
+            'writeEnabled'=>true,'autoCleanupEnabled'=>false,
+        ]);
+        $this->as('outsider');
+        $this->getJson('/browser/v1/archive/preferences')->assertOk()
+            ->assertJson(['revision'=>0,'useArchive'=>true]);
+        $this->postJson('/browser/v1/archive/preferences',
+            $this->preference('owner',0,false,false))->assertUnauthorized();
+        $this->assertDatabaseCount('browser_archive_preferences_v1',0);
+
+        $this->as('owner');
+        $signed=$this->preference('owner',0,false,false);
+        $this->postJson('/browser/v1/archive/preferences',$signed)
+            ->assertCreated()
+            ->assertJson(['revision'=>1,'useArchive'=>false,
+                'autoDeleteAfter7Days'=>false,'unchanged'=>false]);
+        $this->postJson('/browser/v1/archive/preferences',$signed)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->getJson('/browser/v1/archive/preferences')->assertOk()
+            ->assertJson(['revision'=>1,'useArchive'=>false,
+                'autoDeleteAfter7Days'=>false,'autoCleanupEnabled'=>false]);
+        $this->assertDatabaseCount('browser_archive_preference_events_v1',1);
+        // Changing a personal preference cannot flip global GC permissions.
+        $this->assertFalse(config('browser_archive.auto_cleanup_enabled'));
+    }
+
+    public function test_auto_delete_preference_keeps_archive_without_a_day_seven_deadline():void
+    {
+        $this->as('owner');
+        $id=$this->asset('owner','photo',PhotoSync::nowMs()+1000000000);
+        $this->mutate('owner',$this->command('owner','photo',$id,'archive',0))
+            ->assertCreated();
+        $row=DB::table('browser_archive_entries_v1')->where('asset_id',$id)->first();
+        $this->assertNotNull($row->archive_until_ms);
+
+        $this->postJson('/browser/v1/archive/preferences',
+            $this->preference('owner',0,true,false))->assertCreated();
+        $this->assertNull(DB::table('browser_archive_entries_v1')
+            ->where('asset_id',$id)->value('archive_until_ms'));
+        $this->getJson('/browser/v1/archive')->assertOk()
+            ->assertJsonPath('items.0.physicalStatus','not_started');
+        config()->set('browser_archive.auto_cleanup_enabled',true);
+        $service=app(\App\Browser\ArchiveLifecycle::class);
+        $this->assertSame(['marked'=>0,'deferred'=>0,'errors'=>0],
+            $service->sweepDue(50));
+        $this->mutate('owner',$this->command('owner','photo',$id,'restore',1))
+            ->assertCreated()->assertJsonPath('state','restored');
+        $this->mutate('owner',$this->command('owner','photo',$id,'archive',2))
+            ->assertCreated()->assertJsonPath('archiveUntilMs',null);
+        $this->assertDatabaseCount('photo_tombstones',0);
+
+        // Re-enable signed day-seven cleanup. Only archive deadline changes.
+        $this->postJson('/browser/v1/archive/preferences',
+            $this->preference('owner',1,true,true))->assertCreated();
+        $this->assertNotNull(DB::table('browser_archive_entries_v1')
+            ->where('asset_id',$id)->value('archive_until_ms'));
+        $this->assertDatabaseHas('photo_records',[
+            'id'=>$id,'state'=>'active',
+        ]);
+    }
+
+    public function test_archive_off_direct_delete_requires_signed_owner_confirmation_and_cas():void
+    {
+        $this->as('owner');
+        $photo=$this->asset('owner','photo');
+        $media=$this->asset('owner','media');
+        // Direct delete is forbidden while the account still uses Archive.
+        $this->mutate('owner',$this->command('owner','photo',$photo,'delete',0))
+            ->assertConflict();
+        $this->postJson('/browser/v1/archive/preferences',
+            $this->preference('owner',0,false,false))->assertCreated();
+        $this->mutate('owner',$this->command('owner','photo',$photo,'archive',0))
+            ->assertConflict();
+        foreach([['photo',$photo],['media',$media]] as [$kind,$id]){
+            $c=$this->command('owner',$kind,$id,'delete',0);
+            $body=$this->signed('owner',$c);
+            $this->postJson('/browser/v1/archive/actions',$body)->assertCreated()
+                ->assertJsonPath('state','deleting')
+                ->assertJsonPath('physicalStatus','pending_gc');
+            $this->postJson('/browser/v1/archive/actions',$body)->assertOk()
+                ->assertJsonPath('unchanged',true);
+            $this->mutate('owner',$c)->assertConflict();
+            $table=$kind==='photo'?'photo_records':'media_files_v1';
+            $tomb=$kind==='photo'?'photo_tombstones':'media_tombstones_v1';
+            $column=$kind==='photo'?'photo_id':'media_id';
+            $this->assertDatabaseHas($table,['id'=>$id,'state'=>'deleting']);
+            $this->assertDatabaseHas($tomb,[$column=>$id]);
+        }
+        $this->getJson('/browser/v1/archive')->assertOk()
+            ->assertJsonCount(2,'items');
+    }
+
+    public function test_preference_409_forgery_and_cross_account_replay_fail_closed():void
+    {
+        $this->as('owner');
+        $original=$this->preference('owner',0,false,true);
+        $this->postJson('/browser/v1/archive/preferences',$original)
+            ->assertCreated();
+        $this->postJson('/browser/v1/archive/preferences',
+            $this->preference('owner',0,true,false))->assertConflict();
+        $bad=$this->preference('owner',1,true,false);
+        $bad['signature']=P::encode(random_bytes(64));
+        $this->postJson('/browser/v1/archive/preferences',$bad)
+            ->assertUnauthorized();
+        $sameOp=json_decode($original['contract'],true,8,JSON_THROW_ON_ERROR);
+        $sameOp['useArchive']=true;
+        $tamperedOp=$this->signed('owner',$sameOp,
+            'pb3.browser-archive-preferences.v1');
+        $this->postJson('/browser/v1/archive/preferences',[
+            'contract'=>$tamperedOp['command'],
+            'signature'=>$tamperedOp['signature'],
+        ])->assertConflict();
+        $this->as('outsider');
+        $this->postJson('/browser/v1/archive/preferences',$original)
+            ->assertUnauthorized();
+        $this->assertDatabaseCount('browser_archive_preference_events_v1',1);
     }
 
 }
