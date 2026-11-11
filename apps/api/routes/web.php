@@ -205,4 +205,5 @@ Route::prefix('folders/v1')->middleware('throttle:pb3-assignments')->group(funct
 Route::prefix('browser/v1/archive')->middleware('throttle:pb3-media')->group(function(){
     Route::get('/',[BrowserArchiveController::class,'index']);
     Route::post('/actions',[BrowserArchiveController::class,'mutate']);
+    Route::post('/inspect',[BrowserArchiveController::class,'inspect']);
 });
