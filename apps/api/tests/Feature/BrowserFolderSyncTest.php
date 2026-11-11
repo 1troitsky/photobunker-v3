@@ -122,6 +122,14 @@ final class BrowserFolderSyncTest extends TestCase
         $this->postJson('/folders/v1/snapshot',$this->signed('alice',$second))
             ->assertCreated()->assertJsonPath('revision',2);
         $this->assertDatabaseCount('browser_folder_events_v1',2);
+        $this->getJson('/folders/v1/revisions/1')->assertOk()
+            ->assertJson(['revision'=>1,'contract'=>$signed['contract'],
+                'signature'=>$signed['signature']]);
+        $this->getJson('/folders/v1/revisions/2')->assertOk()
+            ->assertJsonPath('revision',2);
+        $this->getJson('/folders/v1/revisions/3')->assertNotFound();
+        $this->getJson('/folders/v1/revisions/0')->assertUnprocessable();
+        $this->getJson('/folders/v1/revisions/0001')->assertUnprocessable();
 
         // An idempotent retry must originate from its original signed device.
         // Replaying that device's signed op from device2 is forbidden.
@@ -175,6 +183,7 @@ final class BrowserFolderSyncTest extends TestCase
         $this->as('mallory');
         $this->getJson('/folders/v1/snapshot')->assertOk()
             ->assertJson(['revision'=>0,'contract'=>null,'signature'=>null]);
+        $this->getJson('/folders/v1/revisions/1')->assertNotFound();
         // Signature is bound to Alice's public key: reject before exposing
         // whether that account's encrypted snapshot exists.
         $this->postJson('/folders/v1/snapshot',$body)

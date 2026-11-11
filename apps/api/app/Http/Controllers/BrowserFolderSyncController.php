@@ -39,6 +39,27 @@ final class BrowserFolderSyncController extends Controller
         ]);
     }
 
+    /**
+     * Authenticated, account-scoped immutable history to verify the exact
+     * common ancestor for three-way E2EE merge on the client. The server
+     * never sees folder names or decrypted file membership.
+     */
+    public function revision(Request $request,string $revision)
+    {
+        [$account]=$this->identity->actor($request);
+        abort_unless(ctype_digit($revision)
+            &&preg_match('/^[1-9][0-9]{0,7}$/D',$revision)===1,422);
+        $row=DB::table('browser_folder_events_v1')
+            ->where('account_id',$account->id)
+            ->where('to_revision',(int)$revision)->first();
+        abort_unless($row,404);
+        return $this->identity->json([
+            'revision'=>(int)$row->to_revision,
+            'contract'=>$row->contract_json,
+            'signature'=>$row->account_signature,
+        ]);
+    }
+
     /** Validate base64url without invoking P::b64's 8 KiB protocol limit. */
     private static function encryptedBytes(mixed $value):string
     {

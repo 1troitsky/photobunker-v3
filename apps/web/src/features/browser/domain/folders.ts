@@ -33,13 +33,19 @@ export function validateWorkspace(raw:unknown):FolderWorkspace{
   const entries=Object.entries(s.placements)
   if(folders.length>MAX_FOLDERS||entries.length>MAX_PLACEMENTS)
     throw Error('browser.folder_limit')
+  const siblingNames=new Set<string>()
   for(const [key,folder] of folders){
     assertId(key)
     if(!folder||folder.id!==key||!Number.isSafeInteger(folder.createdAt)
       ||folder.createdAt<0||folder.parentId!==null
       &&(typeof folder.parentId!=='string'||!UUID.test(folder.parentId)))
       throw Error('browser.folder_invalid_state')
-    cleanFolderName(folder.name)
+    if(cleanFolderName(folder.name)!==folder.name)
+      throw Error('browser.folder_invalid_name')
+    const siblingKey=(folder.parentId??'root')+'\\0'
+      +folder.name.toLocaleLowerCase('ru')
+    if(siblingNames.has(siblingKey))throw Error('browser.folder_duplicate_name')
+    siblingNames.add(siblingKey)
   }
   for(const [key,id] of entries){
     if(!FILE.test(key)||!UUID.test(id)||!Object.hasOwn(s.folders,id))
