@@ -166,7 +166,7 @@ describe('P2-02D1: PB3 Recovery Key sealed Matrix SSSS escrow',()=>{
     await retryMatrixRecoveryEscrow()
     expect(await matrixRecoveryPending()).toBe(false)
   })
-  it('rejects server tampering, new PB3 AKEK, foreign owner and revision',async()=>{
+  it('rejects server tampering, new PB3 AKEK and foreign owner while allowing valid rewrap',async()=>{
     const key=random(32)
     await escrowMatrixSecretStorageKey(key)
     corruptReceipt=true
@@ -182,9 +182,13 @@ describe('P2-02D1: PB3 Recovery Key sealed Matrix SSSS escrow',()=>{
     activeSession.value=outsider
     await expect(recoverMatrixSecretStorageKey())
       .rejects.toThrow('matrix.recovery_invalid_contract')
+    // Revisions with the SAME PB3 AKEK/root are now safely rewrapped:
+    // they are no longer a permanent 409 recovery dead end.
     activeSession.value={...session,pkg:{...session.pkg,revision:2}}
-    await expect(recoverMatrixSecretStorageKey())
-      .rejects.toThrow('matrix.recovery_invalid_contract')
+    const migrated=await recoverMatrixSecretStorageKey()
+    expect(Array.from(migrated??[])).toEqual(Array.from(key))
+    migrated?.fill(0)
+    expect(JSON.parse(server!.contract).accountRevision).toBe(2)
   })
   it('rewraps an old signed 4S seed after PB3 revision change, keeps rev1 forever',async()=>{
     const seed=random(32)
