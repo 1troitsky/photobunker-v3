@@ -16,6 +16,11 @@ import type {
 import type {StoredMedia} from '../application/media-outbox'
 import {listSafeDerivativeCandidates} from '../application/safe-derivatives'
 import type {SafeDerivativeCandidate} from '../application/safe-derivatives'
+import {
+  emptyPreviewFields,loadFilePreviewDraft,queueFilePreviewDraft,
+  flushFilePreviewDrafts,filePreviewDraftStatus,PREVIEW_FIELD_KEYS,
+} from '../application/media-file-preview-policy'
+import type {PreviewFields,PreviewField} from '../application/media-file-preview-policy'
 import type {MediaMetadata} from '../domain/media-crypto'
 
 defineProps<{localMedia:StoredMedia[]}>()
@@ -34,6 +39,16 @@ const acknowledgedOwner=ref(false)
 const outgoing=ref<OutgoingMediaGrant[]>([])
 const incoming=ref<ReceivedMediaGrant[]>([])
 const safeCandidates=ref<SafeDerivativeCandidate[]>([])
+const previewCandidate=ref<SafeDerivativeCandidate|null>(null)
+const previewFields=ref<PreviewFields>(emptyPreviewFields())
+const previewRevision=ref(0)
+const previewStatus=ref('none')
+const previewLabels:Record<PreviewField,string>={
+  description:'Описание',capturedAt:'Дата съёмки',
+  updatedAt:'Дата изменения',tags:'Теги',
+  authorTeam:'Автор / команда',gps:'Геолокация',
+  metadata:'Технические метаданные',
+}
 const busy=ref(false)
 const error=ref('')
 const status=ref('')
@@ -52,6 +67,7 @@ async function hydrate():Promise<void>{
     if(session.online){
       await ensureOwnExchangeKey()
       await flushMediaGrants()
+      await flushFilePreviewDrafts()
     }
     const [next,localSafe]=await Promise.all([
       listOutgoingMediaGrants(),listSafeDerivativeCandidates(),
@@ -119,6 +135,37 @@ function sendSafe(candidate:SafeDerivativeCandidate):void{
     status.value='Адресный Safe-грант записан: '+grantId.slice(0,8)
   })
 }
+function openPreviewDraft(candidate:SafeDerivativeCandidate):void{
+  void action(async()=>{
+    const data=await loadFilePreviewDraft(candidate.safeMediaId)
+    previewCandidate.value=candidate
+    previewFields.value=data.contract
+      ?{...data.contract.fields}:emptyPreviewFields()
+    previewRevision.value=data.contract?.toRevision??0
+    previewStatus.value=data.state
+    status.value='Это только закрытые настройки будущей карточки: публичный доступ и скачивание запрещены.'
+  })
+}
+function savePreviewDraft():void{
+  void action(async()=>{
+    const candidate=previewCandidate.value
+    if(!candidate)throw Error('file_preview.no_candidate')
+    const rev=await queueFilePreviewDraft(
+      candidate.sourceMediaId,candidate.safeMediaId,previewFields.value)
+    await flushFilePreviewDrafts()
+    previewRevision.value=rev
+    previewStatus.value=await filePreviewDraftStatus(candidate.safeMediaId)
+    status.value=previewStatus.value==='sent'
+      ?'Подписанный черновик сохранён. Публикация выключена.'
+      :'Подписанный черновик в локальной очереди. Публикация выключена.'
+  })
+}
+function togglePreviewField(field:PreviewField,event:Event):void{
+  previewFields.value={
+    ...previewFields.value,
+    [field]:(event.target as HTMLInputElement).checked,
+  }
+}
 function grantScopeLabel(row:OutgoingMediaGrant):string{
   try{
     return parseMediaGrantContract(JSON.parse(row.contract)).scope==='safe_read'
@@ -171,10 +218,24 @@ function refresh():void{
 watch(activeSession,()=>{
   recipientPeer.value=null;ownerPeer.value=null
   outgoing.value=[];incoming.value=[];safeCandidates.value=[]
+  previewCandidate.value=null
+  previewFields.value=emptyPreviewFields()
+  previewRevision.value=0
+  previewStatus.value='none'
   void hydrate()
 })
-onMounted(()=>{detach=attachMediaGrantLifecycle();void hydrate()})
-onUnmounted(()=>detach())
+const refreshPreviewOutbox=()=>{void flushFilePreviewDrafts()}
+onMounted(()=>{
+  detach=attachMediaGrantLifecycle()
+  window.addEventListener('online',refreshPreviewOutbox)
+  document.addEventListener('visibilitychange',refreshPreviewOutbox)
+  void hydrate()
+})
+onUnmounted(()=>{
+  detach()
+  window.removeEventListener('online',refreshPreviewOutbox)
+  document.removeEventListener('visibilitychange',refreshPreviewOutbox)
+})
 </script>
 
 <template>
@@ -215,7 +276,7 @@ onUnmounted(()=>detach())
           @click="send(media.mediaId)">Передать медиа</button>
       </div>
     </template>
-    <template v-if="recipientPeer?.confirmed">
+    <template v-if="safeCandidates.length||recipientPeer?.confirmed">
       <h4>Кандидаты Safe — только отдельные JPEG-копии</h4>
       <p class="muted">Этот раздел доступен только для лично подготовленных
         закрытых копий после подтверждения синхронизации обоих файлов.
@@ -230,11 +291,44 @@ onUnmounted(()=>detach())
           <small>Личная обработанная копия {{ candidate.safeMediaId.slice(0,8) }}</small>
           <small>Источник {{ candidate.sourceMediaId.slice(0,8) }}</small>
         </div>
-        <button type="button" :disabled="busy"
+        <button type="button" :disabled="busy||!recipientPeer?.confirmed"
           data-testid="media-send-safe-derivative"
           @click="sendSafe(candidate)">Передать только Safe-копию</button>
+        <button type="button" :disabled="busy"
+          data-testid="media-open-preview-draft"
+          @click="openPreviewDraft(candidate)">Настроить будущую карточку</button>
       </div>
     </template>
+    <section v-if="previewCandidate" class="file-preview-settings"
+      data-testid="media-file-preview-settings">
+      <strong>Черновик Public Card · публикация выключена</strong>
+      <p class="muted">Настройки видимости — только верхний предел
+        для возможной будущей публикации, не права доступа.
+        Привязаны к зашифрованной Safe-копии
+        {{ previewCandidate.safeMediaId.slice(0,8) }},
+        а не к оригиналу. Никакого публичного URL, DEK или скачивания
+        этот раздел не создаёт. Настройки задания и получателя
+        должны дополнительно ограничивать видимость.</p>
+      <p class="muted">Подписанная ревизия: {{ previewRevision }} ·
+        {{ previewStatus }}</p>
+      <div class="file-preview-field-list">
+        <label v-for="field in PREVIEW_FIELD_KEYS" :key="field">
+          <input type="checkbox" :checked="previewFields[field]"
+            :disabled="busy" :data-testid="'media-preview-field-'+field"
+            @change="togglePreviewField(field,$event)">
+          {{ previewLabels[field] }}
+        </label>
+      </div>
+      <p class="muted">Просмотр, копирование, скачивание и публикация:
+        <strong>запрещены</strong>. Включение полей не делает их доступными
+        другим аккаунтам и не отправляет приватные метаданные.</p>
+      <button type="button" :disabled="busy||previewStatus==='queued'
+        ||previewStatus==='retry'||previewStatus==='conflict'"
+        data-testid="media-save-preview-draft"
+        @click="savePreviewDraft">Сохранить подписанный черновик</button>
+      <button type="button" :disabled="busy"
+        @click="previewCandidate=null">Закрыть настройки</button>
+    </section>
     <h4>Исходящие разрешения медиа</h4>
     <div v-for="grant in outgoing" :key="grant.id" class="photo-row">
       <div>
@@ -283,4 +377,10 @@ onUnmounted(()=>detach())
 <style scoped>
 .media-share-panel{margin-top:16px}
 .media-share-panel input[type='text']{display:block;max-width:100%;margin:6px 0}
+.file-preview-settings{padding:12px;border:1px solid var(--line,#555);
+  border-radius:10px;margin:12px 0}
+.file-preview-field-list{display:grid;grid-template-columns:
+  repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:12px 0}
+.file-preview-field-list label{display:flex;gap:8px;align-items:center}
+.file-preview-field-list input{width:18px;height:18px}
 </style>

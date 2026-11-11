@@ -133,6 +133,65 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     await owner.goto('/browser')
     const share=owner.getByTestId('media-share-panel')
     await expect(share).toBeVisible()
+    // A future Public Card policy can be drafted and signed, but MUST
+    // neither grant B any read permission nor create a public token.
+    await expect(share.getByTestId('media-open-preview-draft'))
+      .toBeVisible({timeout:30000})
+    await share.getByTestId('media-open-preview-draft').click()
+    const futurePolicy=share.getByTestId('media-file-preview-settings')
+    await expect.poll(async()=>{
+      const problem=await share.locator('[role="alert"]').allTextContents()
+      if(problem.length)return 'error: '+problem.join(' | ')
+      return await futurePolicy.isVisible()?'visible':'waiting'
+    },{timeout:20000}).toBe('visible')
+    await expect(futurePolicy).toBeVisible()
+    await futurePolicy.getByTestId('media-preview-field-description').check()
+    await futurePolicy.getByTestId('media-preview-field-tags').check()
+    await expect(futurePolicy.getByText('публикация выключена'))
+      .toBeVisible()
+    await futurePolicy.getByTestId('media-save-preview-draft').click()
+    await expect(share.getByText('Подписанный черновик сохранён. Публикация выключена.'))
+      .toBeVisible({timeout:30000})
+    await expect(futurePolicy).toContainText('Подписанная ревизия: 1')
+    const previewOnly=await owner.evaluate(async safeId=>{
+      const api=await import('/src/features/media/application/media-file-preview-policy.ts')
+      const policy=await api.loadFilePreviewDraft(safeId)
+      const contract=policy.contract!
+      const res=await fetch('/media-file-preview/v1/policies/'+safeId)
+      const reply=await res.json()
+      return {state:policy.state,revision:contract.toRevision,
+        publication:contract.publication,fields:contract.fields,
+        actions:contract.actions,published:reply.published,
+        exposedTokens:JSON.stringify(reply).includes('publicUrl')
+          ||JSON.stringify(reply).includes('envelope'),
+      }
+    },edited.safeId)
+    expect(previewOnly).toMatchObject({
+      state:'sent',revision:1,publication:'disabled',
+      fields:{description:true,tags:true,gps:false},
+      actions:{view:false,copy:false,download:false,share:false},
+      published:false,exposedTokens:false,
+    })
+    const unavailable=await recipient.evaluate(async safeId=>{
+      const [policy,media]=await Promise.all([
+        fetch('/media-file-preview/v1/policies/'+safeId),
+        fetch('/media/v1/'+safeId+'/manifests'),
+      ])
+      return {policy:policy.status,media:media.status}
+    },edited.safeId)
+    expect(unavailable).toEqual({policy:404,media:404})
+    expect(await owner.evaluate(async()=>{
+      const grants=await import('/src/features/media/application/media-grants.ts')
+      return (await grants.listOutgoingMediaGrants()).length
+    })).toBe(0)
+    // Revisions form an immutable owner-signed hash chain. No publication
+    // or recipient access is created by selecting more metadata fields.
+    await futurePolicy.getByTestId('media-preview-field-tags').uncheck()
+    await futurePolicy.getByTestId('media-preview-field-updatedAt').check()
+    await futurePolicy.getByTestId('media-save-preview-draft').click()
+    await expect(share.getByText('Подписанный черновик сохранён. Публикация выключена.'))
+      .toBeVisible({timeout:30000})
+    await expect(futurePolicy).toContainText('Подписанная ревизия: 2')
     await share.locator('#media-share-peer-id').fill(recipientId)
     await share.getByRole('button',{name:'Проверить получателя медиа'}).click()
     await expect(share.getByTestId('media-recipient-fingerprint')).not.toBeEmpty()

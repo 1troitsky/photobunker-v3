@@ -9,6 +9,7 @@ use App\Http\Controllers\PhotoSyncController;
 use App\Http\Controllers\MediaV1Controller;
 use App\Http\Controllers\MediaGrantController;
 use App\Http\Controllers\MediaRevisionController;
+use App\Http\Controllers\MediaFilePreviewPolicyController;
 use App\Http\Controllers\RecipientKeyController;
 use App\Http\Controllers\TeamV1Controller;
 use App\Http\Controllers\TeamInvitationController;
@@ -76,6 +77,14 @@ Route::prefix('media/v1')->middleware('throttle:pb3-media')->group(function(){
         ->whereUuid('mediaId');
     Route::get('/{mediaId}/manifests',[MediaV1Controller::class,'manifests'])
         ->whereUuid('mediaId');
+});
+
+// P2: owner-only signed PREVIEW metadata ceilings. Never a public route,
+// never a bearer token, never a wrapped DEK or an actual publication.
+Route::prefix('media-file-preview/v1')->middleware('throttle:pb3-media')->group(function(){
+    Route::post('/policies',[MediaFilePreviewPolicyController::class,'store']);
+    Route::get('/policies/{safeMediaId}',[MediaFilePreviewPolicyController::class,'show'])
+        ->whereUuid('safeMediaId');
 });
 
 // P1-11: independently fingerprint-confirmed media recipient grants.
