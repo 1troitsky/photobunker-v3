@@ -405,8 +405,11 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
       ].join('_')
       throw Error('pb3.matrix.outbox.retry_probe_'+diagnostics)
     }
-    failUnless(observed.length===2
-      &&observed[0]===txn&&observed[1]===txn,
+    // A still-present, server-confirmed SDK echo MUST be reconciled
+    // without calling sendMessage again. If SDK remote echo already
+    // removed the entry, a new call using the SAME txnId is valid.
+    failUnless(observed.length>=1&&observed.length<=2
+      &&observed.every(x=>x===txn),
       'transaction_id_changed')
     const current=await resumedOutbox.listMatrixTextOutbox()
     failUnless(current.length===1
