@@ -309,3 +309,12 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .browser-folder-item{gap:6px}
   .browser-folder-parent select,.browser-file-move select{max-width:120px}
 }
+
+/* Bounded local-only batch move, never physical deletion or cloud mutation. */
+.browser-batch-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}
+.browser-batch-toolbar label{display:flex;align-items:center;gap:7px;font-size:12px}
+.browser-batch-toolbar select{background:#151515;color:inherit;
+  border:1px solid #4a4a4a;border-radius:7px;min-height:38px;padding:7px}
+.browser-item-select{display:grid;place-items:center;padding:5px;flex:0 0 auto}
+.browser-item-select input{width:16px;height:16px;accent-color:var(--accent)}
+@media(max-width:560px){.browser-batch-toolbar>button{font-size:11px}}
