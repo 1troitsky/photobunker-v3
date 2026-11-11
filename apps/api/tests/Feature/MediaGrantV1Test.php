@@ -1024,6 +1024,42 @@ final class MediaGrantV1Test extends TestCase
         DB::table('media_files_v1')->where('id',$source['id'])
             ->update(['state'=>'active']);
         $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        $archiveId=(string)Str::uuid();
+        DB::table('browser_archive_entries_v1')->insert([
+            'id'=>$archiveId,
+            'account_id'=>$this->people['owner']['id'],
+            'kind'=>'media','asset_id'=>$safe['id'],
+            'revision'=>1,'state'=>'archived',
+            'asset_expires_at_ms'=>$safe['expiresAt'],
+            'archive_until_ms'=>now()->addDay()->getTimestampMs(),
+            'media_type'=>'photo','plain_bytes'=>300,
+            'last_operation_id'=>(string)Str::uuid(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        DB::table('browser_archive_entries_v1')->where('id',$archiveId)
+            ->update(['state'=>'restored']);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        $current=DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$a['id'])->first();
+        DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$a['id'])
+            ->update(['contract_hash'=>str_repeat('e',64)]);
+        $this->getJson($url.'/'.$safe['id'])->assertConflict();
+        DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$a['id'])
+            ->update(['contract_hash'=>$current->contract_hash]);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['account_id'=>$this->people['unrelated']['id']]);
+        $this->getJson($url.'/'.$safe['id'])->assertNotFound();
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['account_id'=>$this->people['owner']['id']]);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
         DB::table('assignment_records_v1')->where('id',$a['id'])
             ->update(['files_access_until'=>now()->subSecond()->getTimestampMs()]);
         $this->getJson($url.'/'.$safe['id'])->assertGone();
