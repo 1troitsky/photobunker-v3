@@ -59,6 +59,8 @@ const createFolderOpen=ref(false)
 const newFolderName=ref('')
 const editingFolderId=ref<string|null>(null)
 const editFolderName=ref('')
+const selectedKeys=ref<string[]>([])
+const bulkDestination=ref('')
 const folders=computed(()=>folderChildren(folderWorkspace.value,selectedFolder.value))
 const breadcrumb=computed(()=>folderPath(folderWorkspace.value,selectedFolder.value))
 const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
@@ -135,6 +137,30 @@ async function changeItemFolder(item:CatalogItem,event:Event):Promise<void>{
   await changeFolders({kind:'move-file',key:item.key,folderId:value||null})
   ;(event.target as HTMLSelectElement).value=
     folderWorkspace.value.placements[item.key]??''
+}
+function toggleItem(key:string,checked:boolean):void{
+  if(checked){
+    if(selectedKeys.value.includes(key))return
+    if(selectedKeys.value.length>=200){
+      folderNotice.value='Для группового переноса выберите не более 200 файлов.'
+      return
+    }
+    selectedKeys.value=[...selectedKeys.value,key]
+  }else selectedKeys.value=selectedKeys.value.filter(x=>x!==key)
+}
+function selectVisible():void{
+  if(visible.value.length>200){
+    folderNotice.value='Для группового переноса выберите не более 200 файлов.'
+    return
+  }
+  selectedKeys.value=visible.value.map(x=>x.key)
+}
+async function moveSelected():Promise<void>{
+  const ids=selectedKeys.value.slice()
+  if(ids.length===0)return
+  const ok=await changeFolders({kind:'move-files',
+    keys:ids,folderId:bulkDestination.value||null})
+  if(ok)selectedKeys.value=[]
 }
 async function deleteEmptyFolder(id:string):Promise<void>{
   if(!window.confirm('Удалить пустую пользовательскую папку? Файлы и облако затронуты не будут.'))return
@@ -295,9 +321,12 @@ watch(activeSession,()=>{
   clearCatalog()
   editingFolderId.value=null
   createFolderOpen.value=false
+  selectedKeys.value=[]
+  bulkDestination.value=''
   void loadFolders()
   void refresh()
 })
+watch([selectedFolder,filter,search],()=>{selectedKeys.value=[]})
 onMounted(()=>{void loadFolders();void refresh()})
 onUnmounted(()=>{++generation;++folderEpoch;revokePreview()})
 </script>
@@ -415,11 +444,34 @@ onUnmounted(()=>{++generation;++folderEpoch;revokePreview()})
       </p>
       <p class="muted">Приватные имена, теги и GPS не входят в серверный индекс.
         Поиск пока работает по ID; метаданные открываются после локальной расшифровки.</p>
+      <div class="browser-batch-toolbar" v-if="folderReady&&!folderError">
+        <button type="button" :disabled="folderBusy||!visible.length"
+          @click="selectVisible">Выбрать всё на странице</button>
+        <button type="button" :disabled="!selectedKeys.length"
+          @click="selectedKeys=[]">Снять выделение</button>
+        <label v-if="selectedKeys.length">
+          Назначение
+          <select v-model="bulkDestination" :disabled="folderBusy"
+            data-testid="browser-bulk-destination">
+            <option value="">Мои файлы</option>
+            <option v-for="folder in allFolders" :key="folder.id"
+              :value="folder.id">{{ folder.name }}</option>
+          </select>
+        </label>
+        <button v-if="selectedKeys.length" type="button"
+          :disabled="folderBusy" @click="moveSelected">Переместить выбранные
+          ({{ selectedKeys.length }})</button>
+      </div>
       <div :class="['browser-items',view==='grid'?'browser-grid':'browser-list']"
         data-testid="browser-catalog">
         <div v-for="item in visible" :key="item.key"
           :class="['browser-item', item.source==='photo'?'photo-row':'']"
           :data-testid="'browser-row-'+item.key">
+          <label v-if="folderReady&&!folderError" class="browser-item-select">
+            <input type="checkbox" :checked="selectedKeys.includes(item.key)"
+              :aria-label="'Выбрать файл '+item.id"
+              @change="toggleItem(item.key,($event.target as HTMLInputElement).checked)">
+          </label>
           <div class="browser-item-kind" aria-hidden="true">
             {{ item.type==='photo'?'▧':item.type==='video'?'▷':'♫' }}
           </div>
