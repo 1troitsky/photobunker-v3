@@ -99,13 +99,18 @@ export async function clearAcknowledgedArchiveAction(
   operationId:string,
 ):Promise<void>{
   const s=requireSession()
+  const prior=await db.rows.get(scope(s))
+  if(!prior)throw Error('browser.archive_ack_missing')
+  const pending=await open(s,prior)
+  if(pending.operationId!==operationId)
+    throw Error('browser.archive_ack_mismatch')
+  // Do not suspend an IndexedDB write transaction on asynchronous AES-GCM.
   await db.transaction('rw',db.rows,async()=>{
     live(s)
-    const row=await db.rows.get(scope(s))
-    if(!row)throw Error('browser.archive_ack_missing')
-    const pending=await open(s,row)
-    if(pending.operationId!==operationId)
-      throw Error('browser.archive_ack_mismatch')
+    const current=await db.rows.get(scope(s))
+    if(!current||current.iv!==prior.iv
+      ||current.ciphertext!==prior.ciphertext)
+      throw Error('browser.archive_outbox_race')
     await db.rows.delete(scope(s))
   })
 }
