@@ -105,3 +105,32 @@ describe('Browser private search folder scopes',()=>{
       .toHaveLength(1)
   })
 })
+
+describe('Browser size ordering',()=>{
+  it('orders known byte counts while keeping unknown photo sizes last',()=>{
+    const rows=buildCatalog(
+      [photo('unknown',3000)],[],[
+        media('small','audio',1000),media('large','video',2000),
+      ],[],
+    ).map(row=>({...row,bytes:row.id==='small'?512:
+      row.id==='large'?8192:null}))
+    expect(filterCatalog(rows,{type:'all',query:'',sort:'size-largest'})
+      .map(x=>x.id)).toEqual(['large','small','unknown'])
+    expect(filterCatalog(rows,{type:'all',query:'',sort:'size-smallest'})
+      .map(x=>x.id)).toEqual(['small','large','unknown'])
+    // Source catalog, including encrypted outbox references, is not mutated.
+    expect(rows.map(x=>x.id)).toEqual(['unknown','small','large'])
+  })
+  it('does not interpret invalid or missing measurements as zero bytes',()=>{
+    const rows=buildCatalog(
+      [],[],[media('valid','audio',1000)],[
+        {...remoteMedia('invalid','video'),plainBytes:Number.NaN},
+      ],
+    ).map(row=>({...row,bytes:row.id==='valid'?0:row.bytes}))
+    expect(rows.find(row=>row.id==='invalid')?.bytes).toBeNull()
+    expect(filterCatalog(rows,{type:'all',query:'',sort:'size-largest'})
+      .map(x=>x.id)).toEqual(['valid','invalid'])
+    expect(filterCatalog(rows,{type:'all',query:'',sort:'size-smallest'})
+      .map(x=>x.id)).toEqual(['valid','invalid'])
+  })
+})

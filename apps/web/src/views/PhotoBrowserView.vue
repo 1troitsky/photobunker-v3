@@ -237,7 +237,8 @@ const items=computed(()=>buildCatalog(
     ...cloudMedia.value,
     ...archiveEntries.value.filter(x=>x.kind==='media'&&x.mediaType!==null
       &&x.state!=='restored').map(x=>({
-      mediaId:x.assetId,mediaType:x.mediaType!,plainBytes:x.plainBytes??0,
+      mediaId:x.assetId,mediaType:x.mediaType!,// Nullable archive byte counts must not be displayed/sorted as zero.
+       plainBytes:x.plainBytes??Number.NaN,
       expiresAt:x.expiresAt,
     })),
   ],
@@ -265,6 +266,15 @@ const visible=computed(()=>filterCatalog(searchScope.value,{
   privateMatches:privateSearchResult.value?.query===normalizePrivateSearch(search.value)
     ?privateSearchResult.value.matches:undefined,
 }))
+function catalogSizeLabel(bytes:number|null):string{
+  if(bytes===null||!Number.isSafeInteger(bytes)||bytes<0)
+    return 'Размер неизвестен'
+  const units=['Б','КиБ','МиБ','ГиБ','ТиБ'] as const
+  let value=bytes,index=0
+  while(value>=1024&&index<units.length-1){value/=1024;index++}
+  return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(value)
+    +' '+units[index]
+}
 function catalogFolderLabel(item:CatalogItem):string{
   const placement=folderWorkspace.value.placements[item.key]??null
   if(!placement)return 'Мои файлы'
@@ -1219,6 +1229,8 @@ onUnmounted(()=>{
             <option value="newest">Новые сначала</option>
             <option value="oldest">Старые сначала</option>
             <option value="expiry">Ближайшее удаление</option>
+            <option value="size-largest">Размер: большие</option>
+            <option value="size-smallest">Размер: маленькие</option>
           </select>
         </label>
         <div class="browser-view-switch" aria-label="Вид каталога">
@@ -1236,7 +1248,8 @@ onUnmounted(()=>{
       <p class="muted">Поиск по ID мгновенный. Имена, описания, категории и теги
         ищутся только после расшифровки на этом устройстве. Поисковый запрос и
         незашифрованные метаданные не передаются серверу и не сохраняются в индексе.
-        Все папки — только загруженные записи, не весь облачный аккаунт.</p>
+        Все папки — только загруженные записи, не весь облачный аккаунт.
+        При сортировке по размеру файлы с неизвестным размером идут последними.</p>
       <p v-if="search.trim()" data-testid="browser-private-search-status"
         role="status" class="muted">
         <template v-if="normalizePrivateSearch(search).length<2">
@@ -1322,6 +1335,7 @@ onUnmounted(()=>{
               Очередь: {{ item.state }}
             </small>
             <small>Хранение до {{ new Date(item.expiresAt).toLocaleDateString('ru-RU') }}</small>
+            <small>{{ catalogSizeLabel(item.bytes) }}</small>
             <small v-if="archiveTab==='all'&&search.trim()&&searchFolderScope==='all'"
               data-testid="browser-search-result-folder">
               Папка: {{ catalogFolderLabel(item) }}

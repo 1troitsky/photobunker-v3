@@ -52,3 +52,48 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(1)
   }finally{await context.close()}
 })
+
+test('P2 Browser: sort two genuinely encrypted offline files by confirmed byte size',async({browser})=>{
+  test.setTimeout(90000)
+  const context=await browser.newContext()
+  const page=await context.newPage()
+  try{
+    await page.goto('/settings')
+    await page.getByRole('button',{name:'Создать ключ'}).click()
+    await page.getByLabel('Я сохранил ключ восстановления').check()
+    await page.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await page.goto('/browser')
+    await context.setOffline(true)
+    const picker=page.getByTestId('media-import-file')
+    await picker.setInputFiles({
+      name:'LOCAL-SMALL.wav',mimeType:'audio/wav',
+      buffer:Buffer.alloc(8192,0x45),
+    })
+    const rows=page.locator('[data-testid^="browser-row-media:"]')
+    await expect(rows).toHaveCount(1,{timeout:25000})
+    await picker.setInputFiles({
+      name:'LOCAL-LARGE.webm',mimeType:'video/webm',
+      buffer:Buffer.alloc(32768,0x41),
+    })
+    await expect(rows).toHaveCount(2,{timeout:25000})
+    const bySize=await page.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      const items=await media.listLocalMedia()
+      if(items.length!==2)throw Error('expected two locally encrypted assets')
+      return items.sort((a,b)=>b.plainBytes-a.plainBytes).map(x=>x.mediaId)
+    })
+    await page.getByTestId('browser-sort').selectOption('size-largest')
+    await expect(rows.first()).toHaveAttribute('data-testid','browser-row-media:'+bySize[0])
+    await expect(rows.last()).toHaveAttribute('data-testid','browser-row-media:'+bySize[1])
+    await expect(rows.first()).toContainText('32 КиБ')
+    await page.getByTestId('browser-sort').selectOption('size-smallest')
+    await expect(rows.first()).toHaveAttribute('data-testid','browser-row-media:'+bySize[1])
+    await expect(rows.first()).toContainText('8 КиБ')
+    // Sort never modifies encrypted files, their account or durable outbox.
+    expect(await page.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      return (await media.listLocalMedia()).map(x=>x.plainBytes).sort((a,b)=>a-b)
+    })).toEqual([8192,32768])
+  }finally{await context.close()}
+})

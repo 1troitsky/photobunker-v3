@@ -3,8 +3,13 @@ import type {StoredMedia,CloudMedia} from '../../media/application/media-outbox'
 
 export type CatalogType='photo'|'video'|'audio'
 export type CatalogFilter='all'|CatalogType
-export type CatalogSort='newest'|'oldest'|'expiry'
+export type CatalogSort='newest'|'oldest'|'expiry'|'size-largest'|'size-smallest'
 export type CatalogView='list'|'grid'
+
+// Invalid or missing size is NOT equivalent to an empty 0-byte media file.
+function knownCatalogBytes(value:number):number|null{
+  return Number.isSafeInteger(value)&&value>=0?value:null
+}
 
 export type CatalogItem={
   key:string
@@ -52,7 +57,7 @@ export function buildCatalog(
     rows.set(key,{
       key,id:m.mediaId,type:m.mediaType,local:true,cloud:false,
       state:m.state,createdAt:m.createdAt,expiresAt:m.expiresAt,
-      bytes:m.plainBytes,source:'media',
+      bytes:knownCatalogBytes(m.plainBytes),source:'media',
     })
   }
   for(const m of cloudMedia){
@@ -62,7 +67,7 @@ export function buildCatalog(
     else rows.set(key,{
       key,id:m.mediaId,type:m.mediaType,local:false,cloud:true,
       state:null,createdAt:null,expiresAt:m.expiresAt,
-      bytes:m.plainBytes,source:'media',
+      bytes:knownCatalogBytes(m.plainBytes),source:'media',
     })
   }
   return [...rows.values()]
@@ -83,6 +88,20 @@ export function filterCatalog(
       const byId=a.key.localeCompare(b.key)
       if(options.sort==='expiry')
         return a.expiresAt-b.expiresAt||byId
+      if(options.sort==='size-largest'||options.sort==='size-smallest'){
+        // Photo indexes do not expose reliable plaintext byte counts.
+        // Unknown/malformed values sort LAST in either direction. Never
+        // invent a zero-byte value or download plaintext for sorting.
+        const aa=a.bytes!==null&&Number.isSafeInteger(a.bytes)&&a.bytes>=0
+          ?a.bytes:null
+        const bb=b.bytes!==null&&Number.isSafeInteger(b.bytes)&&b.bytes>=0
+          ?b.bytes:null
+        if(aa===null&&bb!==null)return 1
+        if(aa!==null&&bb===null)return -1
+        if(aa!==null&&bb!==null&&aa!==bb)
+          return options.sort==='size-largest'?bb-aa:aa-bb
+        return byId
+      }
       // Cloud-only list endpoints expose neither name nor creation time.
       // Keep unknown timestamps AFTER known timestamps in both directions.
       const aa=a.createdAt,bb=b.createdAt
