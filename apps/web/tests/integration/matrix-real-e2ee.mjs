@@ -81,6 +81,7 @@ async function getRawEvent(token,roomId,eventId){
   assert.equal(response.status,200,"Matrix event fetch failed");
   return response.json();
 }
+let success=false
 try{
   const [alice,bob]=await Promise.all([
     login(userA,passA),login(userB,passB),
@@ -167,8 +168,11 @@ try{
   assert.equal(anonymous.status,401,
     "An unauthenticated user unexpectedly read a private room event");
   console.log("P2-02C PASS: two Matrix accounts, RustCrypto Megolm ciphertext/decrypt, exact-txn Lost ACK replay, anonymous event rejected");
+  success=true
 }finally{
   for(const client of clients){
     try{client.stopClient()}catch{ /* disposable process exit */ }
   }
+  // Only a completely successful isolated test exits with code zero.
+  if(success)process.exit(0)
 }
