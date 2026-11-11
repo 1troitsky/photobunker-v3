@@ -5,7 +5,7 @@ import { activeSession, reauthenticate } from '../features/identity/application/
 import {
   queueAssignmentCreation, listLocalAssignmentDrafts, listServerAssignmentUsage,
   listAllServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
-  listAssignmentRemovalNotices,
+  listAssignmentRemovalNotices, listLocallyRevokedAssignmentIds,
   listCachedAssignmentInvites,
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
@@ -385,8 +385,12 @@ async function hydrate():Promise<void>{
     if(previous)rows[rows.indexOf(previous)]=row
     else rows.push(row)
   }
+  // A signed removal may have committed in another tab while this route
+  // decrypted a previously received private envelope. Check just before
+  // publishing reactive rows; never show revoked recipient titles again.
+  const denied=await listLocallyRevokedAssignmentIds()
   if(activeSession.value!==identity)return
-  assignments.value=rows
+  assignments.value=rows.filter(row=>row.isOwner||!denied.has(row.id))
 }
 // Coalesce overlapping initial offline hydration, subsequent online proof and
 // explicit refresh. Dropping a refresh while the old session is still being
