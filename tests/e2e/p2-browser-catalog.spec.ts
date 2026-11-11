@@ -43,8 +43,11 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     await preview.getByRole('button',{name:'Закрыть просмотр'}).click()
     await expect(preview).toHaveCount(0)
 
-    // A genuine offline reload preserves the encrypted IndexedDB row.
+    // Reload a live document then disconnect again: encrypted IndexedDB
+    // survives reload. Cold offline app boot is a separate signed-PWA gate.
+    await context.setOffline(false)
     await page.reload()
+    await context.setOffline(true)
     await expect(page.getByTestId('browser-v3')).toBeVisible()
     await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(1)
   }finally{await context.close()}
