@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest'
 import {
   emptyWorkspace,addFolder,renameFolder,moveFolder,moveFile,
-  removeEmptyFolder,folderChildren,folderPath,validateWorkspace,
+  removeEmptyFolder,folderChildren,folderPath,validateWorkspace,moveFiles,
 } from './folders'
 const a='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const b='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -22,7 +22,7 @@ describe('P2 encrypted user folders domain',()=>{
     expect(()=>addFolder(s,'../etc',null,c,3)).toThrow('browser.folder_invalid_name')
     expect(()=>addFolder(s,'root',null,c,3)).toThrow('browser.folder_duplicate_name')
     expect(()=>addFolder(s,'bad/name',null,c,3)).toThrow('browser.folder_invalid_name')
-    expect(()=>renameFolder(s,b,'ROOT')).toBeDefined()
+    expect(renameFolder(s,b,'ROOT').folders[b]?.name).toBe('ROOT')
     expect(()=>moveFolder(s,a,b)).toThrow('browser.folder_cycle')
     expect(()=>moveFolder(s,a,'not-found')).toThrow('browser.folder_missing_parent')
     expect(()=>validateWorkspace({
@@ -48,6 +48,21 @@ describe('P2 encrypted user folders domain',()=>{
     const removed=removeEmptyFolder(s,b)
     expect(Object.keys(removed.folders)).toEqual([a])
     expect(removeEmptyFolder(removed,a).folders).toEqual({})
+  })
+  it('moves a selected batch atomically and rejects duplicates or forged IDs',()=>{
+    const s=addFolder(emptyWorkspace(),'Folders',null,a,1)
+    const key1='photo:'+b,key2='media:'+c
+    const result=moveFiles(s,[key1,key2],a)
+    expect(s.placements).toEqual({})
+    expect(result.placements).toEqual({[key1]:a,[key2]:a})
+    expect(moveFiles(result,[key1,key2],null).placements).toEqual({})
+    expect(()=>moveFiles(s,[key1,key1],a))
+      .toThrow('browser.folder_invalid_selection')
+    expect(()=>moveFiles(s,['media:../escape'],a))
+      .toThrow('browser.folder_invalid_file')
+    expect(()=>moveFiles(s,[key1,key2],b)).toThrow('browser.folder_missing')
+    expect(()=>moveFiles(s,Array.from({length:201},(_,i)=>'photo:'+i),a))
+      .toThrow('browser.folder_invalid_selection')
   })
   it('rejects forged references and inconsistent stored structure',()=>{
     const s=addFolder(emptyWorkspace(),'A',null,a,1)
