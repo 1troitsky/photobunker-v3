@@ -1148,7 +1148,8 @@ export async function listAllServerAssignments():Promise<AssignmentListing[]>{
   for(let n=0;n<100;n++){
     const page=await listServerAssignments(after??undefined)
     assertSame(session)
-    const next=appendBoundedUuidPage(items,page,after,item=>item.assignmentId)
+    const next:{items:AssignmentListing[];nextCursor:string|null}=
+      appendBoundedUuidPage(items,page,after,item=>item.assignmentId)
     items=next.items
     if(next.nextCursor===null)return items
     after=next.nextCursor
@@ -1754,12 +1755,13 @@ export async function listAssignmentInvites():Promise<ReceivedAssignmentInvite[]
     let after:string|null=null
     let complete=false
     for(let n=0;n<100;n++){
-      const response=await jsonApi<{
-        items:ReceivedAssignmentInvite[];nextCursor:string|null
-      }>('/assignments/v1/invites/received'
+      const response:{items:ReceivedAssignmentInvite[];nextCursor:string|null}=
+        await jsonApi<{items:ReceivedAssignmentInvite[];nextCursor:string|null}>(
+        '/assignments/v1/invites/received'
         +(after?'?after='+encodeURIComponent(after):''))
       assertSame(s)
-      const next=appendBoundedUuidPage(items,response,after,item=>item.inviteId)
+      const next:{items:ReceivedAssignmentInvite[];nextCursor:string|null}=
+        appendBoundedUuidPage(items,response,after,item=>item.inviteId)
       items=next.items
       if(next.nextCursor===null){complete=true;break}
       after=next.nextCursor
