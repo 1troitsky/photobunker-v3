@@ -85,6 +85,9 @@ final class MediaGrantController extends Controller
             abort_unless($media,404);
             abort_if($media->state!=='active'
                 ||$media->expires_at<=PhotoSync::nowMs(),410);
+            abort_if(DB::table('browser_archive_entries_v1')
+                ->where('kind','media')->where('asset_id',$media->id)
+                ->where('state','archived')->exists(),410);
             abort_unless($grant['expiresAt']<=(int)$media->expires_at,422);
             abort_unless(hash_equals($media->contract_hash,
                 $grant['mediaContractHash']),409);
