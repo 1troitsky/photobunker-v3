@@ -1825,7 +1825,8 @@ export async function queueAssignmentMediaSubmission(
 export type AssignmentMediaSubmission={
   submissionId:string;mediaId:string;mediaGrantId:string
   mediaType:'photo'|'video'|'audio';contributorAccountId:string
-  capturedInAssignment?:boolean
+  capturedInAssignment:boolean
+  contract:string;signature:string;mediaContractHash:string
 }
 export async function listAssignmentMediaSubmissions(
   assignmentId:string,after?:string,
