@@ -22,14 +22,25 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
     await expect(row).toHaveCount(1,{timeout:20000})
     await page.locator('.media-import-p1')
       .getByRole('button',{name:'Отправить медиа'}).click()
-    await expect(row.getByRole('button',{name:'В архив'}))
+    // Import is Local-First and may already be flushing in the background.
+    // Require a genuine signed server ACK before exposing archive actions.
+    await page.evaluate(async()=>{
+      const module=await import('/src/features/media/application/media-outbox.ts')
+      await module.synchronizeMedia()
+    })
+    await expect.poll(()=>page.evaluate(async()=>{
+      const module=await import('/src/features/media/application/media-outbox.ts')
+      return (await module.listLocalMedia()).filter(x=>x.state==='synced').length
+    }),{timeout:30000}).toBe(1)
+    await page.getByRole('button',{name:'Обновить',exact:true}).first().click()
+    await expect(row.getByRole('button',{name:/Архивировать файл/}))
       .toBeVisible({timeout:30000})
     const id=await row.evaluate(element=>
       element.getAttribute('data-testid')!.slice('browser-row-media:'.length))
     expect(id).toMatch(/^[a-f0-9-]{36}$/)
 
     page.once('dialog',dialog=>dialog.accept())
-    await row.getByRole('button',{name:'В архив'}).click()
+    await row.getByRole('button',{name:/Архивировать файл/}).click()
     await expect(page.getByTestId('browser-archive-status'))
       .toContainText('помещён в архив',{timeout:20000})
     await expect(row).toHaveCount(0)
@@ -40,9 +51,9 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
     expect(active.items).toHaveLength(0)
     await page.getByTestId('browser-tab-archive').click()
     await expect(row).toHaveCount(1)
-    await expect(row.getByRole('button',{name:'Восстановить'}))
+    await expect(row.getByRole('button',{name:/Восстановить файл/}))
       .toBeVisible()
-    await row.getByRole('button',{name:'Восстановить'}).click()
+    await row.getByRole('button',{name:/Восстановить файл/}).click()
     await expect(page.getByTestId('browser-archive-status'))
       .toContainText('восстановлен из архива')
     await expect(row).toHaveCount(0)
@@ -55,15 +66,15 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
     expect(recovered.items).toHaveLength(1)
 
     page.once('dialog',dialog=>dialog.accept())
-    await row.getByRole('button',{name:'В архив'}).click()
+    await row.getByRole('button',{name:/Архивировать файл/}).click()
     await page.getByTestId('browser-tab-archive').click()
     await expect(row).toHaveCount(1)
     page.once('dialog',dialog=>dialog.accept())
-    await row.getByRole('button',{name:'Удалить окончательно'}).click()
+    await row.getByRole('button',{name:/Запросить удаление файла/}).click()
     await expect(page.getByTestId('browser-archive-status'))
       .toContainText('физическая очистка S3 ещё НЕ подтверждена')
     await expect(row).toContainText('pending_gc')
-    await expect(row.getByRole('button',{name:'Восстановить'}))
+    await expect(row.getByRole('button',{name:/Восстановить файл/}))
       .toHaveCount(0)
     const results=await page.evaluate(async mediaId=>{
       const response=await fetch('/browser/v1/archive',{credentials:'same-origin'})
