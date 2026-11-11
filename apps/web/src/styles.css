@@ -271,14 +271,23 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .file-viewer-shape-filled input{width:18px;height:18px;accent-color:var(--accent)}
 .file-viewer-photo-text-settings select{background:#191919;color:#eee;border:1px solid #555;
   padding:8px;border-radius:6px;max-width:100%}
-.file-viewer-photo-text-layer{position:absolute;display:block;z-index:2;
+.file-viewer-photo-paint-layer{position:absolute;inset:0;width:100%;height:100%;
+  z-index:2;pointer-events:none;display:block}
+.file-viewer-photo-paint-layer.drawing{pointer-events:auto;touch-action:none;cursor:crosshair}
+.file-viewer-photo-history-bar{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.file-viewer-photo-history-bar button{font-size:12px}
+.file-viewer-photo-draw-tools{display:flex;gap:6px;flex-wrap:wrap}
+.file-viewer-photo-draw-tools button{font-size:12px}
+.file-viewer-photo-draw-tools button.selected{border-color:var(--accent);
+  color:var(--accent)}
+.file-viewer-photo-text-layer{position:absolute;display:block;z-index:3;
   border:1px solid transparent;border-radius:2px;padding:0;
   margin:0;background:transparent;white-space:pre-wrap;overflow-wrap:anywhere;
   font-family:Arial,sans-serif;font-weight:700;line-height:1.2;
   text-align:left;text-shadow:0 1px 3px #000b;
   cursor:move;touch-action:none;user-select:none}
 .file-viewer-photo-text-layer.selected{border:1px dashed #f4f4f4}
-.file-viewer-photo-text-layer:disabled{cursor:default}
+.file-viewer-photo-text-layer:disabled{cursor:default;pointer-events:none}
 .file-viewer-photo-text-editor{display:grid;gap:10px;padding:13px;
   border:1px solid var(--outline);border-radius:8px;background:#252525}
 .file-viewer-photo-text-head{display:flex;gap:9px;justify-content:space-between;
