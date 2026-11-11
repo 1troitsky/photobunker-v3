@@ -105,12 +105,9 @@ final class MediaGrantEffectiveAccess
                     ->where('id',$g->assignment_id)->first();
                 abort_if(!$a
                     ||$a->owner_account_id!==$g->recipient_account_id,410);
-                abort_unless(DB::table('assignment_invites_v1')
-                    ->where('assignment_id',$g->assignment_id)
-                    ->where('owner_account_id',$g->recipient_account_id)
-                    ->where('recipient_account_id',$g->owner_account_id)
-                    ->where('role','contributor')
-                    ->where('state','accepted')->exists(),410);
+                AssignmentGrantScope::requireAccepted(
+                    $g->assignment_id,$g->recipient_account_id,
+                    $g->owner_account_id);
             }elseif($g->assignment_id!==null
                 ||isset($signed['assignmentId']))abort(410);
         }
