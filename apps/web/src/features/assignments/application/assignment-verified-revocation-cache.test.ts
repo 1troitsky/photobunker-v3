@@ -10,6 +10,7 @@ import type {AssignmentRemovalNotice} from './verify-removal-notice'
 import {
   listAssignmentRemovalNotices,listCachedAssignmentInvites,signedCaptureBinding,
   cachePrivateAssignment,readCachedPrivateAssignment,
+  listLocallyRevokedAssignmentIds,
 } from './assignment-outbox'
 
 vi.mock('../../identity/infrastructure/api',()=>({jsonApi:vi.fn()}))
@@ -119,6 +120,8 @@ describe('V-27 owner-signed revocation fences local capture authority',()=>{
     const ctx=await scenario(1)
     const result=await listAssignmentRemovalNotices()
     expect(result[0]?.verified).toBe(true)
+    expect(await listLocallyRevokedAssignmentIds())
+      .toEqual(new Set([ctx.assignmentId]))
     expect(await stored(ctx.recipientId,ctx.assignmentId,ctx.inviteId)).toEqual({
       invites:false,capturePolicies:false,privateSummaries:false,
       operations:true,revocations:true,
@@ -159,6 +162,7 @@ describe('V-27 owner-signed revocation fences local capture authority',()=>{
       new Error('share.peer_not_confirmed'))
     const result=await listAssignmentRemovalNotices()
     expect(result[0]?.verified).toBe(false)
+    expect(await listLocallyRevokedAssignmentIds()).toEqual(new Set())
     expect(await stored(ctx.recipientId,ctx.assignmentId,ctx.inviteId)).toEqual({
       invites:true,capturePolicies:true,privateSummaries:true,
       operations:true,revocations:false,
@@ -189,6 +193,7 @@ describe('V-27 owner-signed revocation fences local capture authority',()=>{
     })
     const result=await listAssignmentRemovalNotices()
     expect(result[0]?.verified).toBe(false)
+    expect(await listLocallyRevokedAssignmentIds()).toEqual(new Set())
     expect(await stored(ctx.recipientId,ctx.assignmentId,ctx.inviteId)).toEqual({
       invites:true,capturePolicies:true,privateSummaries:true,
       operations:true,revocations:false,
