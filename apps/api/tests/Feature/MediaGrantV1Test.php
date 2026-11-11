@@ -774,6 +774,333 @@ final class MediaGrantV1Test extends TestCase
         $this->assertDatabaseCount('media_recipient_grants_v1',0);
     }
 
+    private function editorialOwnedAssignment():array
+    {
+        $id=(string)Str::uuid();
+        $payload=[
+            'version'=>1,'assignmentId'=>$id,
+            'operationId'=>(string)Str::uuid(),
+            'ownerAccountId'=>$this->people['owner']['id'],
+            'revision'=>1,'policyRevision'=>1,'state'=>'active',
+            'startsAt'=>now()->getTimestampMs(),'endsAt'=>null,
+            'photoGoal'=>1,'allowedMedia'=>['photo'],
+            'privateEnvelope'=>[
+                'version'=>1,'iv'=>P::encode(random_bytes(12)),
+                'ciphertext'=>P::encode(random_bytes(64)),
+                'wrappedKey'=>[
+                    'iv'=>P::encode(random_bytes(12)),
+                    'ciphertext'=>P::encode(random_bytes(48)),
+                ],
+            ],
+        ];
+        $raw=json_encode($payload,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $this->asRole('owner');
+        $this->postJson('/assignments/v1',[
+            'contract'=>$raw,'signature'=>$this->signature(
+                'owner',"pb3.assignment.v1\n".$raw),
+        ])->assertCreated();
+        return ['id'=>$id,'hash'=>hash('sha256',$raw)];
+    }
+
+    private function editorialAssignmentCeiling(
+        array $a,int $from=0,?string $previous=null,
+        ?array $fields=null,?int $expires=null):array
+    {
+        $payload=[
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$a['id'],
+            'ownerAccountId'=>$this->people['owner']['id'],
+            'rootPolicyHash'=>$a['hash'],
+            'fromRevision'=>$from,'toRevision'=>$from+1,
+            'previousPolicyHash'=>$previous??str_repeat('0',64),
+            'publication'=>'disabled',
+            'fields'=>$fields??[
+                'description'=>true,'capturedAt'=>false,
+                'updatedAt'=>false,'tags'=>false,'authorTeam'=>false,
+                'gps'=>true,'metadata'=>false,
+            ],
+            'actions'=>[
+                'view'=>false,'copy'=>false,'download'=>false,'share'=>false,
+            ],
+            'expiresAt'=>$expires??now()->addHours(2)->getTimestampMs(),
+        ];
+        $raw=json_encode($payload,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return ['contract'=>$raw,'signature'=>$this->signature(
+            'owner',"pb3.assignment-preview-ceiling.v1\n".$raw)];
+    }
+
+    private function readyEditorialPolicies(
+        array $a,array $source,array $safe):void
+    {
+        $this->asRole('owner');
+        $this->postJson('/assignments/v1/'.$a['id'].'/preview-ceiling',
+            $this->editorialAssignmentCeiling($a))->assertCreated();
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->previewPolicyInput($source,$safe,0,null,[
+                'description'=>true,'capturedAt'=>true,
+                'updatedAt'=>false,'tags'=>false,'authorTeam'=>false,
+                'gps'=>false,'metadata'=>false,
+            ]))->assertCreated();
+    }
+
+    private function editorialLinkInput(
+        array $a,array $source,array $safe,?int $expires=null):array
+    {
+        $link=[
+            'version'=>1,'linkId'=>(string)Str::uuid(),
+            'operationId'=>(string)Str::uuid(),
+            'ownerAccountId'=>$this->people['owner']['id'],
+            'assignmentId'=>$a['id'],
+            'sourceMediaId'=>$source['id'],'safeMediaId'=>$safe['id'],
+            'sourceContractHash'=>$source['hash'],
+            'safeContractHash'=>$safe['hash'],
+            'assignmentRootHash'=>$a['hash'],
+            'expiresAt'=>$expires??now()->addHour()->getTimestampMs(),
+        ];
+        return $this->signEditorialLink($link);
+    }
+
+    private function signEditorialLink(array $link):array
+    {
+        $raw=json_encode($link,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return ['contract'=>$raw,'signature'=>$this->signature(
+            'owner',"pb3.safe-assignment-editorial-link.v1\n".$raw)];
+    }
+
+    private function editorialDetachInput(array $link):array
+    {
+        $c=[
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'linkId'=>$link['linkId'],
+            'ownerAccountId'=>$this->people['owner']['id'],
+            'safeMediaId'=>$link['safeMediaId'],
+            'linkContractHash'=>$link['contractHash'],
+            'action'=>'detach',
+        ];
+        $raw=json_encode($c,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return ['contract'=>$raw,'signature'=>$this->signature(
+            'owner',"pb3.safe-assignment-editorial-detach.v1\n".$raw)];
+    }
+
+    public function test_assignment_preview_can_outlive_a_specific_safe_photo_without_overriding_photo_ttl():void
+    {
+        $a=$this->editorialOwnedAssignment();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        // Assignment-wide visibility ceiling is independent of which file
+        // is attached and may remain private after this JPEG expires.
+        $long=now()->addDays(30)->getTimestampMs();
+        $this->postJson('/assignments/v1/'.$a['id'].'/preview-ceiling',
+            $this->editorialAssignmentCeiling($a,0,null,null,$long))
+            ->assertCreated();
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->previewPolicyInput($source,$safe))->assertCreated();
+        $body=$this->editorialLinkInput($a,$source,$safe);
+        $base='/media-file-preview/v1/assignment-links';
+        $this->postJson($base,$body)->assertCreated()
+            ->assertJsonPath('linked',true)
+            ->assertJsonPath('effectivePublicFields.description',false);
+        // The independent assignment ceiling remains valid, but the
+        // *association* is bounded by both signed source & Safe JPEG TTLs.
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($base.'/'.$safe['id'])->assertGone();
+        $this->getJson('/assignments/v1/'.$a['id'].'/preview-ceiling')
+            ->assertOk()->assertJsonPath('published',false);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
+    public function test_owner_signed_editorial_link_verifies_both_private_ceilings_and_never_grants_access():void
+    {
+        $a=$this->editorialOwnedAssignment();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->readyEditorialPolicies($a,$source,$safe);
+        $url='/media-file-preview/v1/assignment-links';
+        $input=$this->editorialLinkInput($a,$source,$safe);
+        $this->postJson($url,$input)->assertCreated()
+            ->assertJsonPath('linked',true)
+            ->assertJsonPath('published',false)
+            ->assertJsonPath('candidateFields.description',true)
+            ->assertJsonPath('candidateFields.gps',false)
+            ->assertJsonPath('candidateFields.capturedAt',false)
+            ->assertJsonPath('effectivePublicFields.description',false)
+            ->assertJsonPath('effectivePublicFields.gps',false)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$input)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $view=$this->getJson($url.'/'.$safe['id'])
+            ->assertOk()->assertJsonPath('published',false)
+            ->assertJsonMissingPath('publicUrl')
+            ->assertJsonMissingPath('envelope')
+            ->assertJsonMissingPath('plaintext');
+        $this->assertSame($input['contract'],$view->json('contract'));
+        $this->assertSame($input['signature'],$view->json('signature'));
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        $this->assertDatabaseCount('safe_assignment_editorial_links_v1',1);
+        $this->asRole('recipient');
+        $this->getJson($url.'/'.$safe['id'])->assertNotFound();
+        // This ciphertext-binding contract is signed by the owner, not
+        // the requesting recipient. Signature check precedes file lookup.
+        $this->postJson($url,$input)->assertUnauthorized();
+        $this->getJson('/media/v1/'.$safe['id'].'/manifests')
+            ->assertNotFound();
+        $this->asRole('owner');
+        $link=json_decode($input['contract'],true);
+        $link['contractHash']=hash('sha256',$input['contract']);
+        $detach=$this->editorialDetachInput($link);
+        $this->postJson($url.'/'.$safe['id'].'/detach',$detach)
+            ->assertOk()->assertJsonPath('linked',false)
+            ->assertJsonPath('published',false)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url.'/'.$safe['id'].'/detach',$detach)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        $this->postJson($url,$input)->assertConflict();
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$source['id'],'state'=>'active',
+        ]);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$safe['id'],'state'=>'active',
+        ]);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        $migration=require database_path(
+            'migrations/2026_11_11_000007_create_safe_assignment_editorial_links_v1.php');
+        try{
+            $migration->down();
+            $this->fail('Cannot erase signed detached editorial history.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.safe_assignment_link.rollback_forbidden',
+                $e->getMessage());
+        }
+    }
+
+    public function test_editorial_link_rejects_missing_policies_forgery_wrong_ownership_and_rebinding():void
+    {
+        $a=$this->editorialOwnedAssignment();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $url='/media-file-preview/v1/assignment-links';
+        $input=$this->editorialLinkInput($a,$source,$safe);
+        $this->postJson($url,$input)->assertConflict();
+        $this->readyEditorialPolicies($a,$source,$safe);
+        // Signed link cannot outlive either independent private preview
+        // ceiling: extending the assignment's general ceiling later must
+        // never extend an existing source-bound association.
+        $this->postJson($url,$this->editorialLinkInput(
+            $a,$source,$safe,now()->addHours(3)->getTimestampMs()))
+            ->assertUnprocessable();
+        $base=json_decode($input['contract'],true);
+        foreach([
+            [...$base,'sourceMediaId'=>$safe['id']],
+            [...$base,'safeMediaId'=>$source['id']],
+            [...$base,'sourceContractHash'=>str_repeat('b',64)],
+            [...$base,'safeContractHash'=>str_repeat('b',64)],
+            [...$base,'assignmentRootHash'=>str_repeat('b',64)],
+            [...$base,'ownerAccountId'=>$this->people['recipient']['id']],
+            [...$base,'expiresAt'=>$source['expiresAt']+1000],
+            [...$base,'publication'=>'enabled'],
+            [...$base,'allowOriginal'=>true],
+            [...$base,'assignmentId'=>(string)Str::uuid()],
+        ] as $c){
+            $c['linkId']=(string)Str::uuid();
+            $c['operationId']=(string)Str::uuid();
+            $response=$this->postJson($url,$this->signEditorialLink($c));
+            $this->assertContains($response->status(),
+                [403,404,409,410,422]);
+        }
+        $bad=$input;$bad['signature']=P::encode(random_bytes(64));
+        $this->postJson($url,$bad)->assertUnauthorized();
+        $this->assertDatabaseCount('safe_assignment_editorial_links_v1',0);
+        $this->postJson($url,$input)->assertCreated();
+        $this->postJson($url,$this->editorialLinkInput($a,$source,$safe))
+            ->assertConflict();
+        $this->assertDatabaseCount('safe_assignment_editorial_links_v1',1);
+    }
+
+    public function test_editorial_link_recomputes_live_fields_and_denies_archive_retention_and_tamper():void
+    {
+        $a=$this->editorialOwnedAssignment();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->readyEditorialPolicies($a,$source,$safe);
+        $url='/media-file-preview/v1/assignment-links';
+        $this->postJson($url,$this->editorialLinkInput($a,$source,$safe))
+            ->assertCreated();
+        $this->getJson($url.'/'.$safe['id'])->assertOk()
+            ->assertJsonPath('candidateFields.description',true);
+        $new=$this->previewPolicyInput($source,$safe,1,
+            DB::table('media_file_preview_policies_v1')
+                ->where('safe_media_id',$safe['id'])->value('contract_hash'),[
+                'description'=>false,'capturedAt'=>true,
+                'updatedAt'=>false,'tags'=>false,'authorTeam'=>false,
+                'gps'=>false,'metadata'=>false,
+            ]);
+        $this->postJson('/media-file-preview/v1/policies',$new)
+            ->assertCreated();
+        $this->getJson($url.'/'.$safe['id'])->assertOk()
+            ->assertJsonPath('candidateFields.description',false)
+            ->assertJsonPath('effectivePublicFields.description',false);
+        $row=DB::table('safe_assignment_editorial_links_v1')
+            ->where('safe_media_id',$safe['id'])->first();
+        DB::table('safe_assignment_editorial_links_v1')
+            ->where('safe_media_id',$safe['id'])
+            ->update(['source_contract_hash'=>str_repeat('c',64)]);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        DB::table('safe_assignment_editorial_links_v1')
+            ->where('safe_media_id',$safe['id'])
+            ->update(['source_contract_hash'=>$row->source_contract_hash]);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['state'=>'deleted']);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['state'=>'active']);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        $archiveId=(string)Str::uuid();
+        DB::table('browser_archive_entries_v1')->insert([
+            'id'=>$archiveId,
+            'account_id'=>$this->people['owner']['id'],
+            'kind'=>'media','asset_id'=>$safe['id'],
+            'revision'=>1,'state'=>'archived',
+            'asset_expires_at_ms'=>$safe['expiresAt'],
+            'archive_until_ms'=>now()->addDay()->getTimestampMs(),
+            'media_type'=>'photo','plain_bytes'=>300,
+            'last_operation_id'=>(string)Str::uuid(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        DB::table('browser_archive_entries_v1')->where('id',$archiveId)
+            ->update(['state'=>'restored']);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        $current=DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$a['id'])->first();
+        DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$a['id'])
+            ->update(['contract_hash'=>str_repeat('e',64)]);
+        $this->getJson($url.'/'.$safe['id'])->assertConflict();
+        DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$a['id'])
+            ->update(['contract_hash'=>$current->contract_hash]);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['account_id'=>$this->people['unrelated']['id']]);
+        $this->getJson($url.'/'.$safe['id'])->assertNotFound();
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['account_id'=>$this->people['owner']['id']]);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        DB::table('assignment_records_v1')->where('id',$a['id'])
+            ->update(['files_access_until'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
     /** The recipient owns Fieldwork, but the contributor retains S3 ownership. */
     private function acceptedAssignment():string
     {

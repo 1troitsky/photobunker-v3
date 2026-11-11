@@ -19,6 +19,7 @@ use App\Http\Controllers\TeamEpochInvitationController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
 use App\Http\Controllers\AssignmentPreviewCeilingController;
+use App\Http\Controllers\SafeAssignmentEditorialLinkController;
 use App\Http\Controllers\AssignmentMediaSubmissionController;
 use App\Photo\Finalization;
 use Illuminate\Support\Facades\DB;
@@ -85,6 +86,18 @@ Route::prefix('media/v1')->middleware('throttle:pb3-media')->group(function(){
 Route::prefix('media-file-preview/v1')->middleware('throttle:pb3-media')->group(function(){
     Route::post('/policies',[MediaFilePreviewPolicyController::class,'store']);
     Route::get('/policies/{safeMediaId}',[MediaFilePreviewPolicyController::class,'show'])
+        ->whereUuid('safeMediaId');
+});
+
+// P2: authenticated owner-only signed EDITORIAL Safe→Assignment binding.
+// No public URL, no anonymous access, no DEK and no contributor provenance.
+Route::prefix('media-file-preview/v1/assignment-links')
+    ->middleware('throttle:pb3-media')->group(function(){
+    Route::post('/',[SafeAssignmentEditorialLinkController::class,'create']);
+    Route::get('/{safeMediaId}',[SafeAssignmentEditorialLinkController::class,'show'])
+        ->whereUuid('safeMediaId');
+    Route::post('/{safeMediaId}/detach',
+        [SafeAssignmentEditorialLinkController::class,'detach'])
         ->whereUuid('safeMediaId');
 });
 
