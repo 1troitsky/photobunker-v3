@@ -22,7 +22,7 @@ const encoder=new TextEncoder()
 const storeDomain='pb3.matrix.rustcrypto-store.v1'
 const urlPattern=/^https:\/\/[a-z0-9][a-z0-9.-]*(?::443)?$/
 
-type Runtime={client:MatrixClient;lease:MatrixCryptoLease;unwatch:()=>void}
+type Runtime={client:MatrixClient;lease:MatrixCryptoLease;unwatch:()=>void;session:Session}
 let runtime:Runtime|null=null
 let starting:Promise<void>|null=null
 let generation=0
@@ -164,7 +164,7 @@ async function initialize(epoch:number):Promise<void>{
     unchanged(s,epoch)
     rustCrypto.setDeviceIsolationMode(new OnlySignedDevicesIsolationMode())
     const created:Runtime={
-      client,lease,unwatch:()=>{},
+      client,lease,unwatch:()=>{},session:s,
     }
     created.unwatch=watch(activeSession,()=>{
       if(!sameIdentity(s))void stopMatrixCrypto()
@@ -179,6 +179,16 @@ async function initialize(epoch:number):Promise<void>{
     if(e instanceof Error&&e.message.startsWith('matrix.'))throw e
     throw Error('matrix.crypto_initialization_failed')
   }
+}
+/** Outgoing messages can use only the SDK instance holding PB3's
+ * exclusive encrypted RustCrypto store lease for THIS browser tab.
+ * This is NOT a Matrix room/member/send authorization by itself.
+ */
+export function isLeasedMatrixClient(client:MatrixClient):boolean{
+  const current=runtime
+  return Boolean(current?.client===client
+    &&matrixCryptoStatus.value==='crypto_initialized_only'
+    &&current&&sameIdentity(current.session))
 }
 /** Explicit opt-in; deliberately not called from App, Shell or message draft UI. */
 export async function startMatrixCrypto():Promise<void>{
