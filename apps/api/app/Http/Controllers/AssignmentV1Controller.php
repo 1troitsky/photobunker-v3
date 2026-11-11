@@ -1083,6 +1083,14 @@ final class AssignmentV1Controller extends Controller
             if($existing){
                 abort_unless($existing->operation_id===$c['operationId']
                     &&hash_equals($existing->contract_hash,$hash),409);
+                // Immutable signed removal outranks a stale mutable invite
+                // row after a migration/recovery. Exact replay repairs the
+                // projection but never destroys original consent or media.
+                if($invite->state!=='removed'){
+                    DB::table('assignment_invites_v1')
+                        ->where('id',$inviteId)
+                        ->update(['state'=>'removed','updated_at'=>now()]);
+                }
                 return $this->sync->json([
                     'inviteId'=>$inviteId,'state'=>'removed','unchanged'=>true,
                 ]);
