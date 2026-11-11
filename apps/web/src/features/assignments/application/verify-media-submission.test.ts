@@ -1,6 +1,6 @@
 import {describe,it,expect,vi} from 'vitest'
 import type {AssignmentMediaSubmission} from './assignment-outbox'
-import {inspectMediaSubmissionReceipt,verifyMediaSubmissionReceipt} from './verify-media-submission'
+import {inspectMediaSubmissionReceipt,verifyMediaSubmissionReceipt,verifyMediaSubmissionReceiptPage} from './verify-media-submission'
 import {pinnedPeer} from '../../sharing/key-directory'
 
 vi.mock('../../sharing/key-directory',()=>({
@@ -85,5 +85,29 @@ describe('P2 V-17 independently pinned owner receipt verification',()=>{
     await expect(verifyMediaSubmissionReceipt(
       {...e,signature:'forged'},assignmentId,ownerAccountId,
     )).rejects.toThrow('assignment.receipt_unverified')
+  })
+  it('keeps independent peer pin checks bounded per contributor per page',async()=>{
+    const first=fixture(3)
+    const second=fixture(3)
+    const secondContract=JSON.parse(second.contract) as Record<string,unknown>
+    secondContract.submissionId=uuid(60)
+    secondContract.operationId=uuid(61)
+    const additional={...second,submissionId:uuid(60),contract:JSON.stringify(secondContract)}
+    vi.mocked(pinnedPeer).mockClear()
+    const results=await verifyMediaSubmissionReceiptPage(
+      [first,additional],assignmentId,ownerAccountId,
+    )
+    expect(results).toEqual({
+      [first.submissionId]:true,[additional.submissionId]:true,
+    })
+    expect(vi.mocked(pinnedPeer)).toHaveBeenCalledTimes(1)
+    const bad={...additional,signature:'forged'}
+    vi.mocked(pinnedPeer).mockClear()
+    const mixed=await verifyMediaSubmissionReceiptPage(
+      [first,bad],assignmentId,ownerAccountId,
+    )
+    expect(mixed[first.submissionId]).toBe(true)
+    expect(mixed[bad.submissionId]).toBe(false)
+    expect(vi.mocked(pinnedPeer)).toHaveBeenCalledTimes(1)
   })
 })
