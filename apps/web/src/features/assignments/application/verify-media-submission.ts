@@ -1,5 +1,6 @@
 import { importSpki,verify } from '../../identity/infrastructure/crypto'
 import { pinnedPeer } from '../../sharing/key-directory'
+import type { SignedDirectory } from '../../sharing/key-directory'
 import type { AssignmentMediaSubmission } from './assignment-outbox'
 
 const core=[
@@ -81,11 +82,11 @@ export function inspectMediaSubmissionReceipt(
  * Signed account consent, NOT independent camera/GPS hardware attestation.
  * An unpinned contributor, changed key or invalid signature fails closed.
  */
-export async function verifyMediaSubmissionReceipt(
-  entry:AssignmentMediaSubmission,assignmentId:string,ownerAccountId:string,
+async function verifySignedReceiptWithPinnedIdentity(
+  entry:AssignmentMediaSubmission,assignmentId:string,
+  ownerAccountId:string,peer:SignedDirectory,
 ):Promise<void>{
   const parsed=inspectMediaSubmissionReceipt(entry,assignmentId,ownerAccountId)
-  const peer=await pinnedPeer(entry.contributorAccountId)
   if(peer.accountId!==entry.contributorAccountId)
     throw Error('assignment.receipt_unverified')
   const key=await importSpki(peer.accountSpki)
@@ -98,4 +99,38 @@ export async function verifyMediaSubmissionReceipt(
       ||!await verify(key,'pb3.assignment-media-capture.v1\n'
         +parsed.captureContract,parsed.captureSignature)))
     throw Error('assignment.receipt_unverified')
+}
+
+export async function verifyMediaSubmissionReceipt(
+  entry:AssignmentMediaSubmission,assignmentId:string,ownerAccountId:string,
+):Promise<void>{
+  const peer=await pinnedPeer(entry.contributorAccountId)
+  await verifySignedReceiptWithPinnedIdentity(entry,assignmentId,ownerAccountId,peer)
+}
+
+/**
+ * Fetch each contributor's independently verified key only ONCE per page.
+ * No trusted key survives a refresh/session change in this batch cache.
+ * Each receipt still gets its own canonical and ECDSA verification result.
+ */
+export async function verifyMediaSubmissionReceiptPage(
+  entries:AssignmentMediaSubmission[],assignmentId:string,ownerAccountId:string,
+):Promise<Record<string,boolean>>{
+  const pins=new Map<string,Promise<SignedDirectory>>()
+  const checked=await Promise.all(entries.map(async entry=>{
+    try{
+      // Never request a peer key for a structurally invalid receipt.
+      inspectMediaSubmissionReceipt(entry,assignmentId,ownerAccountId)
+      let pin=pins.get(entry.contributorAccountId)
+      if(!pin){
+        pin=pinnedPeer(entry.contributorAccountId)
+        pins.set(entry.contributorAccountId,pin)
+      }
+      await verifySignedReceiptWithPinnedIdentity(entry,assignmentId,ownerAccountId,await pin)
+      return [entry.submissionId,true] as const
+    }catch{
+      return [entry.submissionId,false] as const
+    }
+  }))
+  return Object.fromEntries(checked)
 }
