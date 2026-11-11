@@ -36,6 +36,9 @@ export default defineConfig(({ mode }) => {
       host: '127.0.0.1', port: 5173,
       proxy: {
         '/identity/v2': { target:'http://127.0.0.1:8000', changeOrigin:false },
+        // PB3 Matrix binding and sealed 4S escrow live on the Laravel API,
+        // NOT the independent Matrix homeserver. Preserve browser Origin.
+        '/matrix/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/photos/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/media/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/media-shares/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
