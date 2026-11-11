@@ -92,6 +92,11 @@ function clearAudioClip():void{
 function onAudioMetadata():void{
   const duration=audioElement.value?.duration
   if(!duration||!Number.isFinite(duration)||duration<=0)return
+  if(audioDuration.value>0){
+    // A repeated metadata event must not reset a range the user has edited.
+    audioDuration.value=duration
+    return
+  }
   audioDuration.value=duration
   trimStart.value=0
   trimEnd.value=Math.min(duration,60)
