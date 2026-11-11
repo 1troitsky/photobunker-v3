@@ -17,16 +17,17 @@ function fixture(version:1|2|3=3):AssignmentMediaSubmission{
   const kind=version===3?'photo':'video'
   const mediaId=uuid(4),mediaGrantId=uuid(5),mediaContractHash='a'.repeat(64)
   const policyHash='b'.repeat(64)
+  const policyRevision=version===3?1:2
   const capture={
     version:1,assignmentId,ownerAccountId,contributorAccountId:contributorId,
-    policyRevision:1,policyHash,mediaId,mediaContractHash,
+    policyRevision,policyHash,mediaId,mediaContractHash,
     mediaType:kind,startedAt:1800000000000,finishedAt:1800000001000,
   }
   const c={
     version,submissionId:uuid(6),operationId:uuid(7),
     assignmentId,contributorAccountId:contributorId,
     mediaId,mediaGrantId,mediaContractHash,
-    policyRevision:1,policyHash,kind,
+    policyRevision,policyHash,kind,
     ...(version===2?{captureContract:JSON.stringify(capture),captureSignature:'valid'}:{}),
   }
   return {
