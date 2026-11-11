@@ -92,8 +92,9 @@ final class BrowserFolderSyncController extends Controller
 
         return DB::transaction(function()use($account,$device,$body,$d,$hash){
             // Serialize account writers and accept same signed op after Lost ACK.
-            DB::table('identity_accounts')->where('id',$account->id)
-                ->lockForUpdate()->first();
+            $lockedAccount=DB::table('identity_accounts')
+                ->where('id',$account->id)->lockForUpdate()->first();
+            abort_unless($lockedAccount && $lockedAccount->status==='ready',401);
             $already=DB::table('browser_folder_events_v1')
                 ->where('operation_id',$d['operationId'])->first();
             if($already){
@@ -104,6 +105,10 @@ final class BrowserFolderSyncController extends Controller
                     'revision'=>(int)$already->to_revision,'unchanged'=>true,
                 ]);
             }
+            // An old device may not publish a snapshot under a stale AKEK
+            // after signed Recovery Key rotation. Exact logged Lost ACK
+            // replays remain accepted ABOVE this check.
+            abort_unless($d['keyRevision']===(int)$lockedAccount->revision,409);
             $current=DB::table('browser_folder_snapshots_v1')
                 ->where('account_id',$account->id)->lockForUpdate()->first();
             $revision=$current?(int)$current->revision:0;
