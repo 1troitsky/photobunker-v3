@@ -16,6 +16,7 @@ import {captureVideoStill,stillName} from '../features/browser/application/video
 import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
 import type {CropSelection,CroppedPhoto} from '../features/browser/application/photo-crop'
+import type {PhotoAdjustments} from '../features/browser/application/photo-effects'
 import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
 import {buildCatalog} from '../features/browser/application/catalog'
@@ -36,6 +37,11 @@ const stage=ref<HTMLElement|null>(null)
 const photoElement=ref<HTMLImageElement|null>(null)
 const cropLeft=ref(0),cropTop=ref(0),cropWidth=ref(100),cropHeight=ref(100)
 const cropTurns=ref<CropSelection['turns']>(0)
+const photoBrightness=ref(100),photoContrast=ref(100),photoSaturation=ref(100)
+const photoAdjustments=computed<PhotoAdjustments>(()=>({
+  brightness:photoBrightness.value,contrast:photoContrast.value,
+  saturation:photoSaturation.value,
+}))
 const cropSelection=computed<CropSelection>(()=>({
   left:cropLeft.value,top:cropTop.value,
   width:cropWidth.value,height:cropHeight.value,turns:cropTurns.value,
@@ -92,7 +98,7 @@ let touchStart:{x:number;y:number}|null=null
 
 const croppedFileName=computed(()=>{
   if(!preview.value||!cropResult.value)return ''
-  return cropFileName(preview.value.name,cropSelection.value)
+  return cropFileName(preview.value.name,cropSelection.value,photoAdjustments.value)
 })
 function clearCrop():void{
   ++cropEpoch
@@ -153,6 +159,7 @@ function clearBlob():void{
   clearCrop()
   cropLeft.value=0;cropTop.value=0
   cropWidth.value=100;cropHeight.value=100;cropTurns.value=0
+  photoBrightness.value=100;photoContrast.value=100;photoSaturation.value=100
   clearStill()
   clearAudioClip()
   audioDuration.value=0
@@ -348,12 +355,13 @@ async function createCroppedPhoto():Promise<void>{
   if(!session||!img||!target||!source||cropBusy.value
     ||preview.value?.type!=='photo')return
   const selection={...cropSelection.value}
+  const adjustments={...photoAdjustments.value}
   clearCrop()
   const epoch=cropEpoch
   cropBusy.value=true
   try{
     if(img.currentSrc!==source)throw Error('viewer.crop_wrong_source')
-    const result=await cropPhoto(img,selection)
+    const result=await cropPhoto(img,selection,adjustments)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||fileUrl.value!==source||!current.value
       ||viewerKey(current.value)!==viewerKey(target))return
@@ -552,7 +560,8 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
-watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns],()=>{clearCrop()})
+watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
+  photoBrightness,photoContrast,photoSaturation],()=>{clearCrop()})
 watch([trimStart,trimEnd],()=>{clearAudioClip()})
 watch(activeSession,(next,previous)=>{
   // A CSRF/session reauthentication may replace Session with a new object
@@ -660,6 +669,21 @@ onUnmounted(()=>{
             </select>
           </label>
         </div>
+        <h3 class="file-viewer-adjustments-heading">Цвет и свет</h3>
+        <div class="file-viewer-crop-controls">
+          <label>Яркость · {{ photoBrightness }}%
+            <input v-model.number="photoBrightness" type="range" min="0" max="200"
+              step="10" data-testid="file-viewer-photo-brightness">
+          </label>
+          <label>Контраст · {{ photoContrast }}%
+            <input v-model.number="photoContrast" type="range" min="0" max="200"
+              step="10" data-testid="file-viewer-photo-contrast">
+          </label>
+          <label>Насыщенность · {{ photoSaturation }}%
+            <input v-model.number="photoSaturation" type="range" min="0" max="200"
+              step="10" data-testid="file-viewer-photo-saturation">
+          </label>
+        </div>
         <button type="button" :disabled="busy||cropBusy"
           data-testid="file-viewer-create-crop"
           @click="createCroppedPhoto">
@@ -685,7 +709,9 @@ onUnmounted(()=>{
           </div>
         </div>
         <p class="muted">Копия — независимый личный E2EE-файл. Доступы,
-          GPS, задание и TTL оригинала автоматически не наследуются.</p>
+          GPS, задание и TTL оригинала автоматически не наследуются.
+          Яркость, контраст и насыщенность применяются к пикселям
+          только при создании копии. Это не маска приватности.</p>
         <p v-if="cropNotice" role="status" data-testid="file-viewer-crop-status">
           {{ cropNotice }}</p>
         <p v-if="cropError" role="alert" data-testid="file-viewer-crop-error">
