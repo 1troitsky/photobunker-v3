@@ -46,12 +46,10 @@ test('P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixe
     await expect(page.getByTestId('file-viewer-tool-brush'))
       .toHaveClass(/selected/)
     await page.getByTestId('file-viewer-paint-color').fill('#00cc00')
-    await page.getByTestId('file-viewer-paint-width').evaluate((input:HTMLInputElement)=>{
-      input.value='24'
-      input.dispatchEvent(new Event('input',{bubbles:true}))
-    })
-    // Use keyboard/native slider input to reach 24 if Vue state did not
-    // ingest synthetic DOM mutation.
+    const width=page.getByTestId('file-viewer-paint-width')
+    await width.focus()
+    await width.press('Home')
+    for(let i=2;i<24;i++)await width.press('ArrowRight')
     await expect(page.getByText('Толщина · 24')).toBeVisible()
     await canvas.scrollIntoViewIfNeeded()
     let area=await canvas.boundingBox()
