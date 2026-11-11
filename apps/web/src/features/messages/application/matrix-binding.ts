@@ -219,6 +219,17 @@ export async function getBoundMatrixCredentials():Promise<{
   return {contract:validateContract(JSON.parse(record.contract),s),
     accessToken:record.accessToken}
 }
+/** Offline queue drafting may read only the existing PB3-account/device-signed
+ * binding. It MUST NOT expose the token or claim a current Matrix session.
+ * An actual send always rechecks online whoami + RustCrypto separately.
+ */
+export async function getLocalMatrixBindingForPending():Promise<MatrixBindingContract|null>{
+  const s=requireSession()
+  const record=await open(s)
+  active(s)
+  if(!record||record.status!=='bound')return null
+  return validateContract(JSON.parse(record.contract),s)
+}
 /** Local deletion only: NOT remote Matrix logout or PB3 server revoke. */
 export async function clearLocalMatrixCredentials():Promise<void>{
   return serialize(async()=>{
