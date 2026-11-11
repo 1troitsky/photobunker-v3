@@ -151,9 +151,9 @@ const eligibleMedia=computed(()=>mediaFiles.value.filter(x=>{
   if(x.state!=='synced'||x.expiresAt<=Date.now()
     ||!['photo','video','audio'].includes(x.mediaType)
     ||!selected.value?.allowedMedia.includes(x.mediaType))return false
-  // Current P2 photo import deliberately has no authenticated recording
-  // proof; the legacy camera's separate photo_records workflow is unchanged.
-  if(x.mediaType==='photo'&&x.capture)return false
+  // Imported P2 JPEG (v3) has no camera claim. A P2 camera JPEG (v4)
+  // must be scoped to THIS assignment and independently signed later.
+  // Never silently widen legacy P1 camera photo_records permissions.
   if(!x.capture)return true // personal media requires distinct confirmation
   try{
     const proof=JSON.parse(x.capture.contract) as {assignmentId?:string}
