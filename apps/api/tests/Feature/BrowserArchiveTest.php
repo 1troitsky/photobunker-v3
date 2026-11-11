@@ -487,9 +487,12 @@ final class BrowserArchiveTest extends TestCase
             ->assertUnauthorized();
         $sameOp=json_decode($original['contract'],true,8,JSON_THROW_ON_ERROR);
         $sameOp['useArchive']=true;
-        $this->postJson('/browser/v1/archive/preferences',
-            $this->signed('owner',$sameOp,'pb3.browser-archive-preferences.v1'))
-            ->assertConflict();
+        $tamperedOp=$this->signed('owner',$sameOp,
+            'pb3.browser-archive-preferences.v1');
+        $this->postJson('/browser/v1/archive/preferences',[
+            'contract'=>$tamperedOp['command'],
+            'signature'=>$tamperedOp['signature'],
+        ])->assertConflict();
         $this->as('outsider');
         $this->postJson('/browser/v1/archive/preferences',$original)
             ->assertUnauthorized();
