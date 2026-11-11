@@ -14,7 +14,12 @@ import type { CaptureMetadataInput } from '../../photo-sync/domain/capture-metad
 import { prepareMediaPrivateFields, validateMediaPrivateRequirements } from '../../media/domain/media-crypto'
 import type { MediaPrivateFields } from '../../media/domain/media-crypto'
 import { EMPTY_ADVANCED_RULES, normalizeAdvancedRules, validateAdvancedFields } from '../domain/advanced-rules'
-import {inspectAssignmentRemovalNotices} from './verify-removal-notice'
+import {
+  inspectAssignmentRemovalNotices,verifyCachedAssignmentRemovalProof,
+} from './verify-removal-notice'
+import type {
+  CachedAssignmentRemovalProof,CheckedCachedAssignmentRemovalProof,
+} from './verify-removal-notice'
 import {appendBoundedUuidPage} from './bounded-uuid-pages'
 import type {AssignmentRemovalNotice,CheckedAssignmentRemovalNotice} from './verify-removal-notice'
 import type { AdvancedRules } from '../domain/advanced-rules'
@@ -1834,6 +1839,35 @@ export async function listAssignmentRemovalNotices():Promise<CheckedAssignmentRe
   }
   assertSame(session)
   return checked
+}
+
+/**
+ * Read-only offline history: redisplay a previously independently verified
+ * owner-signed removal after rechecking the signature using ONLY a locally
+ * saved fingerprint-confirmed owner key. No API, new permission or encrypted
+ * private invitation envelope is accessed. A missing/changed pin is shown
+ * as UNVERIFIED, never as a new grant or a proof of current server state.
+ */
+export async function listCachedVerifiedAssignmentRemovals():
+  Promise<CheckedCachedAssignmentRemovalProof[]>{
+  const s=requireSession()
+  const records=await db.revocations.where('accountId').equals(s.accountId).toArray()
+  assertSame(s)
+  const result=await Promise.all(records.map(async row=>{
+    const proof:CachedAssignmentRemovalProof={
+      assignmentId:row.assignmentId,
+      inviteId:row.inviteId,ownerAccountId:row.ownerAccountId,
+      recipientAccountId:row.accountId,
+      removalContract:row.removalContract,
+      removalSignature:row.removalSignature,verifiedAt:row.verifiedAt,
+    }
+    try{
+      await verifyCachedAssignmentRemovalProof(proof,s.accountId)
+      return {proof,verified:true}
+    }catch{return {proof,verified:false}}
+  }))
+  assertSame(s)
+  return result
 }
 
 /** Display-only cached invitations; never use them as current server ACL. */
