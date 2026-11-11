@@ -214,8 +214,10 @@ function refreshEditorial():void{
     if(!activeSession.value?.online)await reauthenticate()
     await flushEditorialLinks()
     editorialState.value=await editorialLinkState(candidate.safeMediaId)
+    if(editorialState.value==='conflict')
+      throw Error('safe_editorial.conflict_requires_reconciliation')
     if(editorialState.value!=='sent'){
-      status.value='Подписанная операция ожидает сервера либо требует сверки конфликта.'
+      status.value='Подписанная операция остаётся в очереди до подтверждения сервера.'
       return
     }
     try{editorialBinding.value=await readEditorialLink(candidate.safeMediaId)}
@@ -245,6 +247,8 @@ function bindEditorial():void{
     await queueEditorialLink(candidate,assignment)
     await flushEditorialLinks()
     editorialState.value=await editorialLinkState(candidate.safeMediaId)
+    if(editorialState.value==='conflict')
+      throw Error('safe_editorial.server_rejected_binding')
     if(editorialState.value!=='sent'){
       status.value='Привязка подписана локально и ожидает подтверждения сервера. Публичный доступ выключен.'
       return
@@ -264,6 +268,8 @@ function detachEditorial():void{
     await queueEditorialDetach(prior)
     await flushEditorialLinks()
     editorialState.value=await editorialLinkState(prior.safeMediaId)
+    if(editorialState.value==='conflict')
+      throw Error('safe_editorial.server_rejected_detach')
     if(editorialState.value!=='sent'){
       status.value='Подписанный отзыв ожидает сервера. Прежняя привязка может оставаться действующей.'
       return
