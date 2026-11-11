@@ -17,7 +17,9 @@ import {audioClipName,makeWavClip} from '../features/browser/application/audio-w
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
 import type {CropSelection,CroppedPhoto} from '../features/browser/application/photo-crop'
 import type {PhotoAdjustments} from '../features/browser/application/photo-effects'
-import {flattenPhotoText,MAX_TEXT_MARKS,validateTextMarks} from '../features/browser/application/photo-text'
+import {flattenPhotoAnnotations,MAX_TEXT_MARKS,validateTextMarks} from '../features/browser/application/photo-text'
+import {MAX_SHAPE_MARKS} from '../features/browser/application/photo-shapes'
+import type {PhotoShapeMark,ShapeKind} from '../features/browser/application/photo-shapes'
 import type {PhotoTextMark} from '../features/browser/application/photo-text'
 import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
@@ -58,6 +60,11 @@ const photoComposition=ref<HTMLElement|null>(null)
 const compositionWidth=ref(0)
 let compositionObserver:ResizeObserver|null=null
 const textMarks=ref<PhotoTextMark[]>([])
+const shapeMarks=ref<PhotoShapeMark[]>([])
+const selectedShapeId=ref<string|null>(null)
+const selectedShape=computed(()=>shapeMarks.value.find(
+  mark=>mark.id===selectedShapeId.value)??null)
+let draggingShape:DragMark|null=null
 const selectedTextId=ref<string|null>(null)
 const selectedText=computed(()=>textMarks.value.find(
   item=>item.id===selectedTextId.value)??null)
@@ -117,7 +124,9 @@ const croppedFileName=computed(()=>{
   if(!preview.value||!cropResult.value)return ''
   const base=cropFileName(preview.value.name,cropSelection.value,
     photoAdjustments.value)
-  return textMarks.value.length?base.replace(/\.jpg$/,'-text.jpg'):base
+  const layers=[textMarks.value.length?'text':'',shapeMarks.value.length?'shape':'']
+    .filter(Boolean).join('-')
+  return layers?base.replace(/\.jpg$/,'-'+layers+'.jpg'):base
 })
 function clearComposition():void{
   if(composedPhotoUrl.value)URL.revokeObjectURL(composedPhotoUrl.value)
@@ -139,9 +148,105 @@ function replaceTextMarks(updated:PhotoTextMark[]):void{
 function clearTextMarks():void{
   ++textRevision
   textMarks.value=[]
+  shapeMarks.value=[]
   selectedTextId.value=null
+  selectedShapeId.value=null
   draggingMark=null
+  draggingShape=null
   clearComposition()
+}
+function replaceShapeMarks(marks:PhotoShapeMark[]):void{
+  if(cropBusy.value)return
+  shapeMarks.value=marks
+  invalidateTextOutput()
+}
+function addPhotoShape():void{
+  if(!cropResult.value||cropBusy.value||shapeMarks.value.length>=MAX_SHAPE_MARKS)return
+  const mark:PhotoShapeMark={
+    id:crypto.randomUUID(),kind:'arrow',x:20,y:25,width:35,height:25,
+    stroke:'#1ed760',strokeWidth:6,fill:'#60a5fa',filled:false,
+  }
+  replaceShapeMarks([...shapeMarks.value,mark])
+  selectedShapeId.value=mark.id
+}
+function selectPhotoShape(id:string):void{
+  if(cropBusy.value)return
+  selectedShapeId.value=id
+  clearComposition()
+}
+function editPhotoShape(change:Partial<PhotoShapeMark>):void{
+  if(!selectedShape.value||cropBusy.value)return
+  const id=selectedShape.value.id
+  replaceShapeMarks(shapeMarks.value.map(mark=>
+    mark.id===id?{...mark,...change,id}:mark))
+}
+function deletePhotoShape(id:string):void{
+  if(cropBusy.value)return
+  replaceShapeMarks(shapeMarks.value.filter(mark=>mark.id!==id))
+  if(selectedShapeId.value===id)selectedShapeId.value=null
+}
+function setShapeKind(event:Event):void{
+  const kind=(event.target as HTMLSelectElement).value
+  if(['arrow','circle','square','triangle','star'].includes(kind))
+    editPhotoShape({kind:kind as ShapeKind})
+}
+function setShapeColor(field:'stroke'|'fill',event:Event):void{
+  editPhotoShape({[field]:(event.target as HTMLInputElement).value})
+}
+function setShapeFilled(event:Event):void{
+  editPhotoShape({filled:(event.target as HTMLInputElement).checked})
+}
+function setShapeStrokeWidth(event:Event):void{
+  const value=Number((event.target as HTMLInputElement).value)
+  if(Number.isSafeInteger(value)&&value>=1&&value<=28)
+    editPhotoShape({strokeWidth:value})
+}
+function setShapeNumber(
+  field:'x'|'y'|'width'|'height',event:Event,
+):void{
+  const mark=selectedShape.value
+  const value=Number((event.target as HTMLInputElement).value)
+  if(!mark||!Number.isSafeInteger(value))return
+  const max=field==='x'?100-mark.width:field==='y'?100-mark.height:
+    field==='width'?100-mark.x:100-mark.y
+  const min=field==='x'||field==='y'?0:5
+  if(max>=min)editPhotoShape({[field]:Math.max(min,Math.min(max,value))})
+}
+function startShapeDrag(event:PointerEvent,id:string):void{
+  const composition=photoComposition.value
+  const mark=shapeMarks.value.find(item=>item.id===id)
+  if(!composition||!mark||cropBusy.value
+    ||event.pointerType==='mouse'&&event.button!==0)return
+  const rect=composition.getBoundingClientRect()
+  if(rect.width<1||rect.height<1)return
+  selectedShapeId.value=id
+  clearComposition()
+  draggingShape={
+    id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,
+    originalX:mark.x,originalY:mark.y,width:rect.width,height:rect.height,
+  }
+  ;(event.currentTarget as Element).setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+function moveShapeDrag(event:PointerEvent):void{
+  const drag=draggingShape
+  if(!drag||drag.pointerId!==event.pointerId||cropBusy.value)return
+  const mark=shapeMarks.value.find(item=>item.id===drag.id)
+  if(!mark)return
+  const x=Math.max(0,Math.min(100-mark.width,Math.round(
+    drag.originalX+(event.clientX-drag.startX)/drag.width*100)))
+  const y=Math.max(0,Math.min(100-mark.height,Math.round(
+    drag.originalY+(event.clientY-drag.startY)/drag.height*100)))
+  if(x===mark.x&&y===mark.y)return
+  replaceShapeMarks(shapeMarks.value.map(item=>
+    item.id===drag.id?{...item,x,y}:item))
+}
+function endShapeDrag(event:PointerEvent):void{
+  if(draggingShape?.pointerId!==event.pointerId)return
+  const target=event.currentTarget as Element
+  if(target.hasPointerCapture(event.pointerId))
+    target.releasePointerCapture(event.pointerId)
+  draggingShape=null
 }
 function addPhotoText():void{
   if(!cropResult.value||cropBusy.value||textMarks.value.length>=MAX_TEXT_MARKS)return
