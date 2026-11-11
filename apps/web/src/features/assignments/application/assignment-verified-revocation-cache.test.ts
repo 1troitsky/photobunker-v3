@@ -9,6 +9,7 @@ import type {SignedDirectory} from '../../sharing/key-directory'
 import type {AssignmentRemovalNotice} from './verify-removal-notice'
 import {
   listAssignmentRemovalNotices,listCachedAssignmentInvites,signedCaptureBinding,
+  cachePrivateAssignment,readCachedPrivateAssignment,
 } from './assignment-outbox'
 
 vi.mock('../../identity/infrastructure/api',()=>({jsonApi:vi.fn()}))
@@ -124,7 +125,33 @@ describe('V-27 owner-signed revocation fences local capture authority',()=>{
     })
     await expect(signedCaptureBinding(ctx.assignmentId))
       .rejects.toThrow('assignment.member_removed')
+    const privateSummary={
+      version:1 as const,title:'Formerly authorized private assignment',
+      instructions:'Contributor-only confidential instructions',
+    }
+    await expect(cachePrivateAssignment(ctx.assignmentId,'signed-policy',privateSummary))
+      .rejects.toThrow('assignment.member_removed')
+    await expect(readCachedPrivateAssignment(ctx.assignmentId,'signed-policy'))
+      .rejects.toThrow('assignment.member_removed')
     expect(await listCachedAssignmentInvites()).toEqual([])
+    // Simulate stale async code resurrecting the old encrypted summary.
+    // The read barrier must reject it before AES-GCM decryption.
+    const db=await localDb(),key=ctx.recipientId+'/'+ctx.assignmentId
+    await new Promise<void>((resolve,reject)=>{
+      const tx=db.transaction('privateSummaries','readwrite')
+      tx.objectStore('privateSummaries').put({
+        key,accountId:ctx.recipientId,assignmentId:ctx.assignmentId,
+        policyHash:'a'.repeat(64),iv:'stale-iv',
+        ciphertext:new Blob(['stale-ciphertext']),
+      })
+      tx.oncomplete=()=>resolve()
+      tx.onerror=()=>reject(tx.error)
+    })
+    db.close()
+    await expect(readCachedPrivateAssignment(ctx.assignmentId,'signed-policy'))
+      .rejects.toThrow('assignment.member_removed')
+    expect((await stored(ctx.recipientId,ctx.assignmentId,ctx.inviteId)).operations)
+      .toBe(true)
   })
   it('a missing independently pinned owner cannot remove cached local rights',async()=>{
     const ctx=await scenario(2)
@@ -136,6 +163,23 @@ describe('V-27 owner-signed revocation fences local capture authority',()=>{
       invites:true,capturePolicies:true,privateSummaries:true,
       operations:true,revocations:false,
     })
+  })
+  it('unverified owner notice does not prevent legitimate encrypted summary cache',async()=>{
+    const ctx=await scenario(4)
+    vi.mocked(pinnedPeer).mockRejectedValueOnce(
+      new Error('share.peer_not_confirmed'))
+    const result=await listAssignmentRemovalNotices()
+    expect(result[0]?.verified).toBe(false)
+    const secret={
+      version:1 as const,title:'Still locally permitted',
+      instructions:'No verified owner revocation',
+    }
+    await expect(cachePrivateAssignment(ctx.assignmentId,'policy',secret))
+      .resolves.toBeUndefined()
+    await expect(readCachedPrivateAssignment(ctx.assignmentId,'policy'))
+      .resolves.toEqual(secret)
+    expect((await stored(ctx.recipientId,ctx.assignmentId,ctx.inviteId)).revocations)
+      .toBe(false)
   })
   it('forged owner signature never purges the private summary or outbox',async()=>{
     const ctx=await scenario(3)
