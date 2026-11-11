@@ -37,32 +37,50 @@ export function privateMetadataMatches(
  */
 export async function searchPrivateMetadata(
   query:string,rows:readonly CatalogItem[],
+  stillRelevant:()=>boolean=()=>true,
 ):Promise<PrivateSearchResult>{
   const session=requireSession()
   const needle=normalizePrivateSearch(query)
   if(needle.length<2||needle.length>160)throw Error('browser.search_query_limit')
-  if(rows.length>50)throw Error('browser.search_page_limit')
+  if(rows.length>200)throw Error('browser.search_page_limit')
   if(new Set(rows.map(x=>x.key)).size!==rows.length)
     throw Error('browser.search_duplicate_row')
   const matches=new Set<string>()
   let scanned=0,failed=0,skipped=0,index=0
-  const live=()=>{if(activeSession.value!==session)
-    throw Error('browser.search_session_changed')}
+  const live=()=>{
+    if(activeSession.value!==session||!stillRelevant())
+      throw Error('browser.search_session_changed')
+  }
   async function worker():Promise<void>{
     while(index<rows.length){
       live()
       const item=rows[index++]!
       if(item.expiresAt<=Date.now()){skipped++;continue}
-      if(!item.local&&(!item.cloud||!session.online
-        ||typeof navigator!=='undefined'&&navigator.onLine===false)){
+      const cloudReachable=item.cloud&&session.online
+        &&(typeof navigator==='undefined'||navigator.onLine!==false)
+      if(!item.local&&!cloudReachable){
         skipped++;continue
       }
       try{
-        const metadata=item.source==='photo'
-          ?await(item.local?readLocalPhotoMetadata(item.id)
-            :readCloudPhotoMetadata(item.id))
-          :await(item.local?readLocalMediaMetadata(item.id)
-            :readCloudMediaMetadata(item.id))
+        // Prefer local ciphertext; if the device cache is damaged but an
+        // authenticated cloud copy exists, retry only metadata ciphertext.
+        async function readLocal():Promise<PrivateSearchRecord>{
+          return item.source==='photo'
+            ?readLocalPhotoMetadata(item.id):readLocalMediaMetadata(item.id)
+        }
+        async function readCloud():Promise<PrivateSearchRecord>{
+          return item.source==='photo'
+            ?readCloudPhotoMetadata(item.id):readCloudMediaMetadata(item.id)
+        }
+        let metadata:PrivateSearchRecord
+        if(item.local){
+          try{metadata=await readLocal()}
+          catch(e){
+            live()
+            if(!cloudReachable)throw e
+            metadata=await readCloud()
+          }
+        }else metadata=await readCloud()
         live()
         scanned++
         if(privateMetadataMatches(needle,item.source==='photo'?{
