@@ -110,6 +110,63 @@ final class BrowserArchiveController extends Controller
         }
     }
 
+    /**
+     * Read-only, signed resolution of an unknown/Lost ACK. It never cancels
+     * a command while that command might still commit at its original CAS
+     * revision. A newer immutable archive revision makes an old CAS obsolete.
+     */
+    public function inspect(Request $request)
+    {
+        $this->identity->origin($request);
+        [$account,$device]=$this->identity->actor($request);
+        $body=P::exact($request->json()->all(),['command','signature']);
+        abort_unless(is_string($body['command'])
+            &&is_string($body['signature']),422);
+        $c=C::signed($body['command'],$body['signature'],
+            $account->account_spki,self::DOMAIN,self::FIELDS,10000);
+        abort_unless($c['version']===1
+            &&$c['accountId']===$account->id
+            &&$c['writerDeviceId']===$device->id
+            &&in_array($c['kind'],['photo','media'],true)
+            &&in_array($c['action'],['archive','restore','delete'],true)
+            &&is_int($c['expectedRevision'])
+            &&$c['expectedRevision']>=0
+            &&$c['expectedRevision']<100000000,422);
+        foreach(['accountId','writerDeviceId','operationId','assetId'] as $name)
+            C::uuid($c,$name);
+        $hash=hash('sha256',$body['command']);
+        return DB::transaction(function()use($account,$body,$c,$hash){
+            $actor=DB::table('identity_accounts')->where('id',$account->id)
+                ->lockForUpdate()->first();
+            abort_unless($actor&&$actor->status==='ready',401);
+            $event=DB::table('browser_archive_events_v1')
+                ->where('operation_id',$c['operationId'])->first();
+            if($event){
+                abort_unless($event->account_id===$account->id
+                    &&hash_equals($event->contract_hash,$hash)
+                    &&hash_equals($event->account_signature,$body['signature']),409);
+                return $this->identity->json([
+                    'status'=>'committed',
+                    'currentRevision'=>(int)$event->to_revision,
+                    'result'=>json_decode($event->result_json,true,16,JSON_THROW_ON_ERROR),
+                ]);
+            }
+            $entry=DB::table('browser_archive_entries_v1')
+                ->where('account_id',$account->id)
+                ->where('kind',$c['kind'])
+                ->where('asset_id',$c['assetId'])->first();
+            $revision=$entry?(int)$entry->revision:0;
+            return $this->identity->json([
+                // An old CAS can never succeed once the immutable version
+                // has passed it, even if a late HTTP POST arrives afterward.
+                'status'=>$revision>$c['expectedRevision']
+                    ?'obsolete':'unresolved',
+                'currentRevision'=>$revision,
+                'result'=>null,
+            ]);
+        },3);
+    }
+
     public function mutate(Request $request)
     {
         abort_unless(config('browser_archive.write_enabled',false),503);
