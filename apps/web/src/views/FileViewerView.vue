@@ -408,7 +408,12 @@ function clearIndex():void{
   photoCursor.value=null;mediaCursor.value=null
 }
 function sameSession(session:typeof activeSession.value,epoch:number):boolean{
-  return activeSession.value===session&&epoch===fileEpoch
+  const active=activeSession.value
+  return !!session&&!!active&&epoch===fileEpoch
+    &&active.accountId===session.accountId
+    &&active.deviceId===session.deviceId
+    &&active.device===session.device
+    &&active.pkg===session.pkg
 }
 function explain(error:unknown):string{
   return error instanceof Error?error.message:'viewer.unavailable'
