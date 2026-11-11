@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 use App\Assignments\AssignmentGrantScope as AScope;
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
+use App\Photo\PhotoGrantEffectiveAccess as Effective;
 use App\Storage\StorageManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -132,9 +133,7 @@ final class PhotoGrantController extends Controller
             ->select('g.*','p.state as photo_state','p.expires_at as photo_expires')
             ->first();
         abort_unless($g,404);
-        abort_if($g->state!=='active' || $g->expires_at<=PhotoSync::nowMs()
-            || $g->photo_state!=='active'||$g->photo_expires<=PhotoSync::nowMs(),410);
-        AScope::requireReadable($g->assignment_id);
+        Effective::requireReadable($g);
         return $g;
     }
 
@@ -164,14 +163,27 @@ final class PhotoGrantController extends Controller
           });
         if($after!==null)$q->where('g.id','>',$after);
         $rows=$q->orderBy('g.id')->limit(51)
-          ->get(['g.id','g.photo_id','g.owner_account_id','g.expires_at']);
+          ->get(['g.*','p.state as photo_state',
+              'p.expires_at as photo_expires']);
         $hasMore=$rows->count()>50;
-        $items=$rows->take(50)->map(fn($r)=>[
-          'grantId'=>$r->id,'photoId'=>$r->photo_id,'ownerAccountId'=>$r->owner_account_id,
-          'expiresAt'=>(int)$r->expires_at,
-        ])->values()->all();
-        return $this->sync->json(['items'=>$items,
-          'nextCursor'=>$hasMore&&$items?end($items)['grantId']:null]);
+        // Preserve the raw scanned cursor: filtered forged/rotated grants
+        // must not skip a later valid signed grant on the next page.
+        $items=[];
+        foreach($rows->take(50) as $g){
+            try{Effective::requireReadable($g);}
+            catch(\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface){
+                continue;
+            }
+            $items[]=[
+                'grantId'=>$g->id,'photoId'=>$g->photo_id,
+                'ownerAccountId'=>$g->owner_account_id,
+                'expiresAt'=>(int)$g->expires_at,
+            ];
+        }
+        return $this->sync->json([
+            'items'=>$items,
+            'nextCursor'=>$hasMore?(string)$rows[49]->id:null,
+        ]);
     }
 
     public function show(Request $request,string $grantId) {
