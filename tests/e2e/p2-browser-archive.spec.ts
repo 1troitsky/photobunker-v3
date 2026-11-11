@@ -39,10 +39,51 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
       element.getAttribute('data-testid')!.slice('browser-row-media:'.length))
     expect(id).toMatch(/^[a-f0-9-]{36}$/)
 
+    // Simulate a genuine Lost ACK: Laravel commits exactly one immutable
+    // signed archive event, but the first browser response never arrives.
+    let lostAck=false
+    let exactFirst=''
+    await page.route('**/browser/v1/archive/actions',async route=>{
+      if(route.request().method()!=='POST'||lostAck){
+        await route.continue()
+        return
+      }
+      lostAck=true
+      exactFirst=route.request().postData()??''
+      const actual=await route.fetch()
+      expect(actual.status()).toBe(201)
+      await route.abort('failed')
+    })
     page.once('dialog',dialog=>dialog.accept())
     await row.getByRole('button',{name:/Архивировать файл/}).click()
     await expect(page.getByTestId('browser-archive-status'))
-      .toContainText('помещён в архив',{timeout:20000})
+      .toContainText('не подтверждена',{timeout:20000})
+    expect(lostAck).toBe(true)
+    const raw=await page.evaluate(async()=>{
+      const req=indexedDB.open('pb3-browser-device-archive-outbox-v1')
+      const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+        req.onsuccess=()=>resolve(req.result)
+        req.onerror=()=>reject(req.error)
+      })
+      try{
+        const t=db.transaction('rows','readonly')
+        const rows=t.objectStore('rows').getAll()
+        return await new Promise<string>((resolve,reject)=>{
+          rows.onsuccess=()=>resolve(JSON.stringify(rows.result))
+          rows.onerror=()=>reject(rows.error)
+        })
+      }finally{db.close()}
+    })
+    expect(raw).not.toContain(exactFirst)
+    expect(raw).not.toContain(id)
+    await page.unroute('**/browser/v1/archive/actions')
+    await page.reload()
+    await expect(page.getByTestId('browser-archive-pending'))
+      .toContainText(id.slice(0,8),{timeout:20000})
+    await page.getByTestId('browser-archive-retry').click()
+    await expect(page.getByTestId('browser-archive-status'))
+      .toContainText('Подписанный запрос восстановлен',{timeout:20000})
+    await expect(page.getByTestId('browser-archive-pending')).toHaveCount(0)
     await expect(row).toHaveCount(0)
     const active=await page.evaluate(async()=>{
       const response=await fetch('/media/v1',{credentials:'same-origin'})

@@ -32,7 +32,11 @@ import {
 } from '../features/browser/application/folder-conflict-resolution'
 import type {FolderConflictPlan} from '../features/browser/application/folder-conflict-resolution'
 import type {ConflictSide} from '../features/browser/domain/folder-merge'
-import {listArchivePage,signedArchiveAction} from '../features/browser/application/browser-archive'
+import {
+  listArchivePage,signedArchiveAction,retryPendingArchiveAction,
+  getPendingArchiveAction,
+} from '../features/browser/application/browser-archive'
+import type {ArchivePending} from '../features/browser/application/archive-outbox'
 import type {ArchiveEntry,ArchiveAction} from '../features/browser/application/browser-archive'
 
 const localPhotos=ref<StoredPhoto[]>([])
@@ -86,6 +90,22 @@ const archiveEntries=ref<ArchiveEntry[]>([])
 const archiveCursor=ref<string|null>(null)
 const archiveBusy=ref(false)
 const archiveNotice=ref('')
+const archivePending=ref<ArchivePending|null>(null)
+const archivePendingError=ref('')
+async function refreshArchivePending():Promise<void>{
+  const identity=activeSession.value
+  if(!identity)return
+  try{
+    const item=await getPendingArchiveAction()
+    if(identity===activeSession.value){
+      archivePending.value=item
+      archivePendingError.value=''
+    }
+  }catch(e){
+    if(identity===activeSession.value)
+      archivePendingError.value='Не удалось прочитать зашифрованную очередь: '+reason(e)
+  }
+}
 const archiveWriteEnabled=ref(false)
 const archiveCleanupEnabled=ref(false)
 const archivedByKey=computed(()=>new Map(
@@ -143,6 +163,35 @@ async function loadArchiveMore():Promise<void>{
     if(s===activeSession.value)archiveBusy.value=false
   }
 }
+async function retryArchivePending():Promise<void>{
+  if(archiveBusy.value||!activeSession.value?.online||!archiveWriteEnabled.value)
+    return
+  const identity=activeSession.value
+  archiveBusy.value=true
+  archiveNotice.value=''
+  try{
+    const result=await retryPendingArchiveAction()
+    if(identity!==activeSession.value)return
+    archiveNotice.value=result
+      ?'Подписанный запрос восстановлен по исходному operationId. Сервер подтвердил состояние: '+result.state
+      :'Неподтверждённых операций архива нет.'
+    const page=await listArchivePage()
+    if(identity!==activeSession.value)return
+    archiveEntries.value=page.items
+    archiveCursor.value=page.nextCursor
+    archiveWriteEnabled.value=page.writeEnabled
+    archiveCleanupEnabled.value=page.autoCleanupEnabled
+    void refresh()
+  }catch(e){
+    if(identity===activeSession.value)
+      archiveNotice.value='Операция ещё не подтверждена, подписанный запрос сохранён: '+reason(e)
+  }finally{
+    if(identity===activeSession.value){
+      archiveBusy.value=false
+      await refreshArchivePending()
+    }
+  }
+}
 async function archiveAction(item:CatalogItem,action:ArchiveAction):Promise<void>{
   if(archiveBusy.value||busy.value||!activeSession.value?.online
     ||!archiveWriteEnabled.value)return
@@ -174,7 +223,10 @@ async function archiveAction(item:CatalogItem,action:ArchiveAction):Promise<void
     if(identity===activeSession.value)
       archiveNotice.value='Операция архива не подтверждена: '+reason(e)
   }finally{
-    if(identity===activeSession.value)archiveBusy.value=false
+    if(identity===activeSession.value){
+      archiveBusy.value=false
+      await refreshArchivePending()
+    }
   }
 }
 async function loadMergeBackups():Promise<void>{
@@ -579,6 +631,9 @@ watch(activeSession,(next,previous)=>{
     archiveNotice.value=''
     archiveWriteEnabled.value=false
     archiveCleanupEnabled.value=false
+    archivePending.value=null
+    archivePendingError.value=''
+    void refreshArchivePending()
     void loadFolders()
     void loadMergeBackups()
   }else if(next&&!folderReady.value){
@@ -589,10 +644,13 @@ watch(activeSession,(next,previous)=>{
   void refresh()
 })
 watch([selectedFolder,filter,search],()=>{selectedKeys.value=[]})
-onMounted(()=>{void loadFolders();void loadMergeBackups();void refresh()})
+onMounted(()=>{
+  void loadFolders();void loadMergeBackups();void refreshArchivePending();void refresh()
+})
 onUnmounted(()=>{
   ++generation;++folderEpoch;++folderSyncEpoch
   mergePlan.value=null;mergeChoices.value={};mergeBackups.value=[]
+  archivePending.value=null
   revokePreview()
 })
 </script>
@@ -751,6 +809,18 @@ onUnmounted(()=>{
         {{ archiveCleanupEnabled?'Семидневная очистка разрешена оператором.':
           'Автоматическая очистка выключена до независимой приёмки GC.' }}
       </p>
+      <div v-if="archivePending" data-testid="browser-archive-pending"
+        class="browser-archive-pending">
+        <p role="status">Есть неподтверждённая подписанная операция архива:
+          {{ archivePending.action==='archive'?'Архивирование'
+            :archivePending.action==='restore'?'Восстановление':'Окончательное удаление' }}
+          файла {{ archivePending.assetId.slice(0,8) }}.
+          Не создавайте новую операцию, пока сервер не ответит.</p>
+        <button type="button" data-testid="browser-archive-retry"
+          :disabled="archiveBusy||!archiveWriteEnabled||!activeSession.online"
+          @click="retryArchivePending">Повторить исходный запрос</button>
+      </div>
+      <p v-if="archivePendingError" role="alert">{{ archivePendingError }}</p>
       <p v-if="archiveNotice" role="status" data-testid="browser-archive-status">
         {{ archiveNotice }}</p>
       <nav class="browser-filters" aria-label="Тип файла">
