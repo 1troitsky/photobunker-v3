@@ -214,20 +214,8 @@ final class MediaGrantV1Test extends TestCase
             $chunks[]=$chunk;
             $key='cipher/media/v1/'.$owner['id'].'/'.$mediaId.'/'.$chunkId;
             Storage::disk('ciphertext')->put($key,$cipher);
-            DB::table('media_chunks_v1')->insert([
-                'id'=>$chunkId,'media_id'=>$mediaId,
-                'chunk_index'=>$chunk['index'],'kind'=>$kind,
-                'plain_bytes'=>$chunk['plainBytes'],
-                'bytes'=>$chunk['bytes'],'sha256'=>$chunk['sha256'],
-                'iv'=>$chunk['iv'],'state'=>'active',
-                'created_at'=>now(),'updated_at'=>now(),
-            ]);
-            DB::table('media_chunk_locations_v1')->insert([
-                'id'=>(string)Str::uuid(),'chunk_id'=>$chunkId,
-                'provider'=>'app_s3','object_key'=>$key,
-                'sha256'=>$chunk['sha256'],'bytes'=>$chunk['bytes'],
-                'state'=>'active','created_at'=>now(),'updated_at'=>now(),
-            ]);
+            $pendingChunks[]=['chunk'=>$chunk,'key'=>$key];
+
         }
         $contract=json_encode([
             'version'=>1,'accountId'=>$owner['id'],'mediaId'=>$mediaId,
@@ -252,6 +240,23 @@ final class MediaGrantV1Test extends TestCase
             'receipt'=>json_encode(['mediaId'=>$mediaId]),
             'created_at'=>now(),'updated_at'=>now(),
         ]);
+        foreach($pendingChunks as $item){
+            $chunk=$item['chunk'];$key=$item['key'];$chunkId=$chunk['chunkId'];
+            DB::table('media_chunks_v1')->insert([
+                'id'=>$chunkId,'media_id'=>$mediaId,
+                'chunk_index'=>$chunk['index'],'kind'=>$kind,
+                'plain_bytes'=>$chunk['plainBytes'],
+                'bytes'=>$chunk['bytes'],'sha256'=>$chunk['sha256'],
+                'iv'=>$chunk['iv'],'state'=>'active',
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            DB::table('media_chunk_locations_v1')->insert([
+                'id'=>(string)Str::uuid(),'chunk_id'=>$chunkId,
+                'provider'=>'app_s3','object_key'=>$key,
+                'sha256'=>$chunk['sha256'],'bytes'=>$chunk['bytes'],
+                'state'=>'active','created_at'=>now(),'updated_at'=>now(),
+            ]);
+        }
         return ['id'=>$mediaId,'hash'=>$hash,
             'chunkId'=>$firstChunk,'expiresAt'=>$expires];
     }
