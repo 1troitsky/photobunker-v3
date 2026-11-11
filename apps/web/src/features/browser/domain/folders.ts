@@ -117,6 +117,26 @@ export function moveFile(s:FolderWorkspace,fileKey:string,folderId:string|null):
   else next.placements[fileKey]=folderId
   return next
 }
+export function moveFiles(
+  s:FolderWorkspace,fileKeys:readonly string[],folderId:string|null,
+):FolderWorkspace{
+  if(!Array.isArray(fileKeys)||fileKeys.length<1||fileKeys.length>200
+    ||new Set(fileKeys).size!==fileKeys.length)
+    throw Error('browser.folder_invalid_selection')
+  if(folderId!==null&&!Object.hasOwn(s.folders,folderId))
+    throw Error('browser.folder_missing')
+  for(const fileKey of fileKeys)
+    if(typeof fileKey!=='string'||!FILE.test(fileKey))
+      throw Error('browser.folder_invalid_file')
+  const next=clone(s)
+  for(const fileKey of fileKeys){
+    if(folderId===null)delete next.placements[fileKey]
+    else next.placements[fileKey]=folderId
+  }
+  if(Object.keys(next.placements).length>MAX_PLACEMENTS)
+    throw Error('browser.folder_limit')
+  return next
+}
 export function removeEmptyFolder(s:FolderWorkspace,id:string):FolderWorkspace{
   if(!Object.hasOwn(s.folders,id))throw Error('browser.folder_missing')
   if(Object.values(s.folders).some(f=>f.parentId===id)
