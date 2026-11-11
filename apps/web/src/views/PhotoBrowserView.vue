@@ -13,7 +13,8 @@ import {
   listLocalMedia,listCloudMedia,readLocalMedia,readCloudMedia,
 } from '../features/media/application/media-outbox'
 import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
-import {buildCatalog,filterCatalog} from '../features/browser/application/catalog'
+import {buildCatalog,filterCatalog,scopeCatalogFolders}
+  from '../features/browser/application/catalog'
 import {normalizePrivateSearch,searchPrivateMetadata}
   from '../features/browser/application/private-search'
 import type {PrivateSearchResult}
@@ -65,6 +66,8 @@ const filter=ref<CatalogFilter>('all')
 const sort=ref<CatalogSort>('newest')
 const view=ref<CatalogView>('list')
 const search=ref('')
+// Ephemeral search UI preference, never persisted or sent to the server.
+const searchFolderScope=ref<'current'|'all'>('current')
 // Search terms and decrypted match membership are VOLATILE: never persisted,
 // synced or placed in a server query parameter.
 const privateSearchResult=ref<PrivateSearchResult|null>(null)
@@ -239,19 +242,35 @@ const items=computed(()=>buildCatalog(
     })),
   ],
 ))
-const searchScope=computed(()=>filterCatalog(items.value,{
-  type:filter.value,query:'',sort:sort.value,
-}).filter(item=>{
-  const archived=archivedByKey.value.get(item.key)?.state
-  if(archiveTab.value==='archive')return archived==='archived'||archived==='deleting'
-  return archived!=='archived'&&archived!=='deleting'&&(!folderReady.value
-    ||(folderWorkspace.value.placements[item.key]??null)===selectedFolder.value)
-}))
+const searchScope=computed(()=>{
+  const authenticatedRows=filterCatalog(items.value,{
+    type:filter.value,query:'',sort:sort.value,
+  }).filter(item=>{
+    const archived=archivedByKey.value.get(item.key)?.state
+    if(archiveTab.value==='archive')
+      return archived==='archived'||archived==='deleting'
+    return archived!=='archived'&&archived!=='deleting'
+  })
+  // Folders are encrypted virtual client metadata. An all-folder query
+  // sees ONLY rows already loaded from authenticated catalog endpoints.
+  // Archive already has its own scope, independent of the active folder.
+  if(archiveTab.value==='archive'||!folderReady.value)return authenticatedRows
+  return scopeCatalogFolders(
+    authenticatedRows,folderWorkspace.value.placements,selectedFolder.value,
+    search.value.trim().length>0&&searchFolderScope.value==='all',
+  )
+})
 const visible=computed(()=>filterCatalog(searchScope.value,{
   type:'all',query:search.value,sort:sort.value,
   privateMatches:privateSearchResult.value?.query===normalizePrivateSearch(search.value)
     ?privateSearchResult.value.matches:undefined,
 }))
+function catalogFolderLabel(item:CatalogItem):string{
+  const placement=folderWorkspace.value.placements[item.key]??null
+  if(!placement)return 'Мои файлы'
+  return folderPath(folderWorkspace.value,placement)
+    .map(folder=>folder.name).join(' / ')
+}
 function schedulePrivateSearch():void{
   const epoch=++privateSearchEpoch
   if(privateSearchTimer!==null){
@@ -913,6 +932,7 @@ watch(activeSession,(next,previous)=>{
     archivePrefsNotice.value=''
     archivePrefsConflict.value=false
     search.value=''
+    searchFolderScope.value='current'
     privateSearchResult.value=null
     void refreshArchivePending()
     void loadFolders()
@@ -928,7 +948,7 @@ watch(activeSession,(next,previous)=>{
   if(next)void loadArchivePrefState()
   void refresh()
 })
-watch([selectedFolder,filter,search,archiveTab],()=>{selectedKeys.value=[]})
+watch([selectedFolder,filter,search,searchFolderScope,archiveTab],()=>{selectedKeys.value=[]})
 watch([search,searchScope,activeSession],schedulePrivateSearch)
 onMounted(()=>{
   schedulePrivateSearch()
@@ -941,6 +961,7 @@ onUnmounted(()=>{
   privateSearchTimer=null
   privateSearchResult.value=null
   search.value=''
+  searchFolderScope.value='current'
   archivePrefsBusy.value=false
   mergePlan.value=null;mergeChoices.value={};mergeBackups.value=[]
   archivePending.value=null
@@ -1184,6 +1205,14 @@ onUnmounted(()=>{
             placeholder="ID, название, описание, категория, тег"
             data-testid="browser-search">
         </label>
+        <label v-if="archiveTab==='all'">
+          <span class="browser-sr-only">Область поиска по загруженным файлам</span>
+          <select v-model="searchFolderScope"
+            data-testid="browser-search-folder-scope">
+            <option value="current">Текущая папка</option>
+            <option value="all">Все папки (загруженные файлы)</option>
+          </select>
+        </label>
         <label>
           <span class="browser-sr-only">Сортировка</span>
           <select v-model="sort" data-testid="browser-sort">
@@ -1206,7 +1235,8 @@ onUnmounted(()=>{
       </p>
       <p class="muted">Поиск по ID мгновенный. Имена, описания, категории и теги
         ищутся только после расшифровки на этом устройстве. Поисковый запрос и
-        незашифрованные метаданные не передаются серверу и не сохраняются в индексе.</p>
+        незашифрованные метаданные не передаются серверу и не сохраняются в индексе.
+        Все папки — только загруженные записи, не весь облачный аккаунт.</p>
       <p v-if="search.trim()" data-testid="browser-private-search-status"
         role="status" class="muted">
         <template v-if="normalizePrivateSearch(search).length<2">
@@ -1292,6 +1322,10 @@ onUnmounted(()=>{
               Очередь: {{ item.state }}
             </small>
             <small>Хранение до {{ new Date(item.expiresAt).toLocaleDateString('ru-RU') }}</small>
+            <small v-if="archiveTab==='all'&&search.trim()&&searchFolderScope==='all'"
+              data-testid="browser-search-result-folder">
+              Папка: {{ catalogFolderLabel(item) }}
+            </small>
           </div>
           <div class="browser-item-actions">
             <label v-if="archiveTab==='all'&&folderReady&&!folderError"

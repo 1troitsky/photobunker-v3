@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest'
-import {buildCatalog,filterCatalog} from './catalog'
+import {buildCatalog,filterCatalog,scopeCatalogFolders} from './catalog'
 import type {StoredPhoto,CloudPhoto} from '../../photo-sync/application/p1-photo'
 import type {StoredMedia,CloudMedia} from '../../media/application/media-outbox'
 
@@ -78,5 +78,30 @@ describe('Browser v3 encrypted catalog union',()=>{
     )
     expect(filterCatalog(rows,{type:'all',query:'',sort:'expiry'})
       .map(x=>x.id)).toEqual(['late','soon'])
+  })
+})
+
+describe('Browser private search folder scopes',()=>{
+  it('searches only current folder by default, including root placement',()=>{
+    const rows=buildCatalog(
+      [photo('root',1000),photo('nested',2000),photo('other',3000)],[],[],[],
+    )
+    const placements={'photo:nested':'folder-a','photo:other':'folder-b'}
+    expect(scopeCatalogFolders(rows,placements,null,false).map(x=>x.id))
+      .toEqual(['root'])
+    expect(scopeCatalogFolders(rows,placements,'folder-a',false).map(x=>x.id))
+      .toEqual(['nested'])
+  })
+  it('searches all loaded, authorized rows without changing file placement',()=>{
+    const rows=buildCatalog(
+      [photo('root',1000),photo('nested',2000),photo('other',3000)],[],[],[],
+    )
+    const placements={'photo:nested':'folder-a','photo:other':'folder-b'}
+    expect(scopeCatalogFolders(rows,placements,null,true).map(x=>x.id))
+      .toEqual(['root','nested','other'])
+    expect(placements).toEqual({'photo:nested':'folder-a','photo:other':'folder-b'})
+    // A private query never populates missing remote catalog pages.
+    expect(scopeCatalogFolders(rows.slice(0,1),placements,null,true))
+      .toHaveLength(1)
   })
 })

@@ -57,6 +57,30 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await a.getByTestId('browser-search').fill('')
     await expect(rows).toHaveCount(1)
 
+    // Search across virtual folders must not change encrypted placement or
+    // send private keywords to the backend. Only loaded rows are in scope.
+    const movedId=await a.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      return (await media.listLocalMedia())[0]!.mediaId
+    })
+    await a.getByRole('button',{name:'Новая папка'}).click()
+    await a.getByTestId('browser-folder-name').fill('Секретный раздел')
+    await a.getByRole('button',{name:'Создать',exact:true}).click()
+    await rows.getByRole('combobox',{name:'Папка файла '+movedId})
+      .selectOption({label:'Секретный раздел'})
+    await expect(rows).toHaveCount(0)
+    await a.getByTestId('browser-search').fill('секретная заметка')
+    await expect(rows).toHaveCount(0)
+    await a.getByTestId('browser-search-folder-scope').selectOption('all')
+    await expect(a.getByTestId('browser-private-search-status'))
+      .toContainText('Проверено 1 из 1',{timeout:20000})
+    await expect(rows).toHaveCount(1)
+    await expect(a.getByTestId('browser-search-result-folder'))
+      .toHaveText('Папка: Секретный раздел')
+    await a.getByTestId('browser-search-folder-scope').selectOption('current')
+    await expect(rows).toHaveCount(0)
+    await a.getByTestId('browser-search').fill('')
+
     await aContext.setOffline(false)
     await a.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
