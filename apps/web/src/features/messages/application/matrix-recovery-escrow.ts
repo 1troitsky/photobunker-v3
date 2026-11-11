@@ -203,6 +203,105 @@ async function upload(s:Session,signed:SignedEscrow):Promise<void>{
   same(s)
 }
 
+/** The account-level Matrix binding is available to a freshly recovered
+ * PB3 device WITHOUT requiring that new device to have a Matrix token.
+ * This endpoint requires a genuine authenticated PB3 root session.
+ */
+async function accountBinding(s:Session):Promise<{
+  homeserverUrl:string;matrixUserId:string
+}>{
+  const mine=await jsonApi<{
+    configured:boolean;homeserverUrl:string;matrixUserId:string|null
+  }>('/matrix/v1/me')
+  same(s)
+  if(!mine.configured||!mine.homeserverUrl||!mine.matrixUserId)
+    throw Error('matrix.recovery_account_binding_missing')
+  return {homeserverUrl:mine.homeserverUrl,matrixUserId:mine.matrixUserId}
+}
+
+async function unwrapSignedSeed(s:Session,c:EscrowContract
+):Promise<Uint8Array<ArrayBuffer>>{
+  let key:ArrayBuffer
+  try{
+    key=await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(c.iv,12),tagLength:128,
+      additionalData:aad(context(c)),
+    },await aes(s,'ssss',context(c),'decrypt',c.version),
+      unb64(c.ciphertext))
+  }catch{throw Error('matrix.recovery_unwrap_failed')}
+  same(s)
+  const bytes=new Uint8Array(key)
+  if(bytes.length!==32)throw Error('matrix.recovery_invalid_key_bytes')
+  return bytes
+}
+
+/** A new epoch MUST be a fresh authenticated encryption of the SAME seed.
+ * Its parent is an independently root-signed, decrypted older envelope.
+ * The v1 table is untouched and no second Matrix login is needed.
+ */
+async function rewrapPrevious(s:Session):Promise<void>{
+  const account=await accountBinding(s)
+  const pending=await readPending(s)
+  if(pending){
+    const queued=await checkSigned(pending,s)
+    if(queued.version!==2||queued.homeserverUrl!==account.homeserverUrl
+      ||queued.matrixUserId!==account.matrixUserId)
+      throw Error('matrix.recovery_pending_revision_conflict')
+    await upload(s,pending)
+    return
+  }
+  const previous=await jsonApi<{
+    present:boolean;contract?:string;signature?:string
+  }>('/matrix/v1/recovery/ssss/previous')
+  same(s)
+  if(!previous.present)
+    throw Error('matrix.recovery_previous_unavailable')
+  const original={
+    contract:previous.contract??'',signature:previous.signature??'',
+  }
+  const old=await checkSigned(original,s,true)
+  if(old.homeserverUrl!==account.homeserverUrl
+    ||old.matrixUserId!==account.matrixUserId)
+    throw Error('matrix.recovery_binding_mismatch')
+  // If the AKEK or account root was rotated, do NOT re-encrypt garbage.
+  // Retain the historical ciphertext for an explicit separately reviewed
+  // migration; never delete or downgrade the recovery floor.
+  const secret=await unwrapSignedSeed(s,old)
+  try{
+    const previousContractHash=hex(await digest(enc.encode(original.contract)))
+    const keyId=b64(random(16)),iv=random(12)
+    const fields={
+      version:2 as const,
+      accountId:s.accountId,accountRevision:s.pkg.revision,
+      homeserverUrl:account.homeserverUrl,
+      matrixUserId:account.matrixUserId,keyId,
+    }
+    const cipher=await crypto.subtle.encrypt({
+      name:'AES-GCM',iv,tagLength:128,
+      additionalData:aad(context(fields)),
+    },await aes(s,'ssss',context(fields),'encrypt',2),secret)
+    same(s)
+    const contract:EscrowContract={
+      version:2,operationId:uuid(),
+      accountId:s.accountId,accountRevision:s.pkg.revision,
+      homeserverUrl:account.homeserverUrl,
+      matrixUserId:account.matrixUserId,purpose:'matrix-ssss-key',
+      keyId,iv:b64(iv),ciphertext:b64(cipher),
+      previousContractHash,
+    }
+    validate(contract,s)
+    const serialized=JSON.stringify(contract)
+    const signed:SignedEscrow={
+      contract:serialized,
+      signature:await sign(await importSigner(s.pkg.accountPkcs8),
+        domainV2+'\\n'+serialized),
+    }
+    same(s)
+    await putPending(s,signed)
+    await upload(s,signed)
+  }finally{secret.fill(0)}
+}
+
 /**
  * The SDK must first create/provide its Matrix 4S private key; the owner
  * explicitly opts to escrow that key. NOT a Matrix login or key backup.
@@ -220,6 +319,7 @@ export async function escrowMatrixSecretStorageKey(key:Uint8Array):Promise<void>
     const b=await binding(s)
     const keyId=b64(random(16)),iv=random(12)
     const fields={
+      version:1 as const,
       accountId:s.accountId,accountRevision:s.pkg.revision,
       homeserverUrl:b.homeserverUrl,matrixUserId:b.matrixUserId,keyId,
     }
@@ -255,9 +355,11 @@ export async function retryMatrixRecoveryEscrow():Promise<void>{
     const s=online()
     const previous=await readPending(s)
     if(!previous)throw Error('matrix.recovery_no_pending')
-    const b=await binding(s),contract=await checkSigned(previous,s)
-    if(contract.homeserverUrl!==b.homeserverUrl
-      ||contract.matrixUserId!==b.matrixUserId)
+    const contract=await checkSigned(previous,s)
+    const account=contract.version===2
+      ?await accountBinding(s):await binding(s)
+    if(contract.homeserverUrl!==account.homeserverUrl
+      ||contract.matrixUserId!==account.matrixUserId)
       throw Error('matrix.recovery_binding_mismatch')
     await upload(s,previous)
   })
@@ -265,19 +367,20 @@ export async function retryMatrixRecoveryEscrow():Promise<void>{
 /** PB3 Recovery Key yields the same AKEK on an enrolled NEW PB3 device. */
 export async function recoverMatrixSecretStorageKey():Promise<Uint8Array<ArrayBuffer>|null>{
   const s=online()
-  // A brand-new PB3 device cannot possess its Matrix access token or
-  // per-device binding yet. Requiring getBoundMatrixCredentials() here
-  // would deadlock Recovery-Key-only enrollment. /me returns the existing
-  // ACCOUNT-level Matrix binding to an authenticated PB3 root session.
-  const own=await jsonApi<{
-    configured:boolean;homeserverUrl:string;matrixUserId:string|null
-  }>('/matrix/v1/me')
-  same(s)
-  if(!own.configured||!own.homeserverUrl||!own.matrixUserId)
-    throw Error('matrix.recovery_account_binding_missing')
-  const row=await jsonApi<{
-    present:boolean;contract?:string;signature?:string
-  }>('/matrix/v1/recovery/ssss')
+  const own=await accountBinding(s)
+  let row:{present:boolean;contract?:string;signature?:string}
+  try{
+    row=await jsonApi('/matrix/v1/recovery/ssss')
+  }catch(e){
+    // 409 = authenticated account has an obsolete signed escrow epoch.
+    // Never expose an old revision as a current receipt. First rewrap
+    // its verified plaintext into fresh current-epoch AEAD and signature,
+    // then independently read the exact server-confirmed new contract.
+    if(!(e instanceof Error&&e.message==='api.http_409')
+      ||s.pkg.revision<=1)throw e
+    await rewrapPrevious(s)
+    row=await jsonApi('/matrix/v1/recovery/ssss')
+  }
   same(s)
   if(!row.present)return null
   const c=await checkSigned({
@@ -286,17 +389,7 @@ export async function recoverMatrixSecretStorageKey():Promise<Uint8Array<ArrayBu
   if(c.homeserverUrl!==own.homeserverUrl
     ||c.matrixUserId!==own.matrixUserId)
     throw Error('matrix.recovery_binding_mismatch')
-  let key:ArrayBuffer
-  try{
-    key=await crypto.subtle.decrypt({
-      name:'AES-GCM',iv:unb64(c.iv,12),tagLength:128,
-      additionalData:aad(context(c)),
-    },await aes(s,'ssss',context(c),'decrypt'),unb64(c.ciphertext))
-  }catch{throw Error('matrix.recovery_unwrap_failed')}
-  same(s)
-  const bytes=new Uint8Array(key)
-  if(bytes.length!==32)throw Error('matrix.recovery_invalid_key_bytes')
-  return bytes // Caller must zero this view after passing it to Matrix SDK.
+  return unwrapSignedSeed(s,c)
 }
 /** Not a network delete; only displays the encrypted pending status. */
 export async function matrixRecoveryPending():Promise<boolean>{
