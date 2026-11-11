@@ -1765,7 +1765,10 @@ final class AssignmentV1Test extends TestCase
         $this->getJson($url)->assertOk()->assertJsonCount(1,'items')
             ->assertJsonPath('items.0.mediaId',$media['id'])
             ->assertJsonPath('items.0.mediaType','photo')
-            ->assertJsonPath('items.0.capturedInAssignment',false);
+            ->assertJsonPath('items.0.capturedInAssignment',false)
+            ->assertJsonPath('items.0.contract',$submission['contract'])
+            ->assertJsonPath('items.0.signature',$submission['signature'])
+            ->assertJsonPath('items.0.mediaContractHash',$media['hash']);
         $this->getJson('/assignments/v1')
             ->assertJsonPath('items.0.confirmedPhotoCount',1)
             ->assertJsonPath('items.0.confirmedVideoCount',0);
