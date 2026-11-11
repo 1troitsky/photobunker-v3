@@ -14,6 +14,10 @@ import {
 } from '../features/media/application/media-outbox'
 import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
 import {buildCatalog,filterCatalog} from '../features/browser/application/catalog'
+import {normalizePrivateSearch,searchPrivateMetadata}
+  from '../features/browser/application/private-search'
+import type {PrivateSearchResult}
+  from '../features/browser/application/private-search'
 import type {CatalogFilter,CatalogSort,CatalogView,CatalogItem} from '../features/browser/application/catalog'
 import {
   emptyWorkspace,folderChildren,folderPath,
@@ -61,6 +65,14 @@ const filter=ref<CatalogFilter>('all')
 const sort=ref<CatalogSort>('newest')
 const view=ref<CatalogView>('list')
 const search=ref('')
+// Search terms and decrypted match membership are VOLATILE: never persisted,
+// synced or placed in a server query parameter.
+const privateSearchResult=ref<PrivateSearchResult|null>(null)
+const privateSearchBusy=ref(false)
+const privateSearchError=ref('')
+const privateSearchUnscanned=ref(0)
+let privateSearchEpoch=0
+let privateSearchTimer:ReturnType<typeof setTimeout>|null=null
 const busy=ref(false)
 const previewBusy=ref(false)
 const status=ref('')
@@ -227,14 +239,53 @@ const items=computed(()=>buildCatalog(
     })),
   ],
 ))
-const visible=computed(()=>filterCatalog(items.value,{
-  type:filter.value,query:search.value,sort:sort.value,
+const searchScope=computed(()=>filterCatalog(items.value,{
+  type:filter.value,query:'',sort:sort.value,
 }).filter(item=>{
   const archived=archivedByKey.value.get(item.key)?.state
   if(archiveTab.value==='archive')return archived==='archived'||archived==='deleting'
   return archived!=='archived'&&archived!=='deleting'&&(!folderReady.value
     ||(folderWorkspace.value.placements[item.key]??null)===selectedFolder.value)
 }))
+const visible=computed(()=>filterCatalog(searchScope.value,{
+  type:'all',query:search.value,sort:sort.value,
+  privateMatches:privateSearchResult.value?.query===normalizePrivateSearch(search.value)
+    ?privateSearchResult.value.matches:undefined,
+}))
+function schedulePrivateSearch():void{
+  const epoch=++privateSearchEpoch
+  if(privateSearchTimer!==null){
+    clearTimeout(privateSearchTimer)
+    privateSearchTimer=null
+  }
+  privateSearchResult.value=null
+  privateSearchError.value=''
+  privateSearchBusy.value=false
+  privateSearchUnscanned.value=0
+  const query=normalizePrivateSearch(search.value)
+  const identity=activeSession.value
+  if(!identity||query.length<2||query.length>160)return
+  const rows=searchScope.value
+  privateSearchUnscanned.value=Math.max(0,rows.length-200)
+  privateSearchBusy.value=true
+  privateSearchTimer=setTimeout(()=>{
+    privateSearchTimer=null
+    void searchPrivateMetadata(query,rows.slice(0,200),
+      ()=>epoch===privateSearchEpoch&&activeSession.value===identity)
+      .then(result=>{
+        if(epoch===privateSearchEpoch&&activeSession.value===identity)
+          privateSearchResult.value=result
+      })
+      .catch(e=>{
+        if(epoch===privateSearchEpoch&&activeSession.value===identity)
+          privateSearchError.value='Поиск не завершён: '+reason(e)
+      })
+      .finally(()=>{
+        if(epoch===privateSearchEpoch)
+          privateSearchBusy.value=false
+      })
+  },250)
+}
 const pendingCount=computed(()=>items.value.filter(x=>!['archived','deleting'].includes(
   archivedByKey.value.get(x.key)?.state??'')&&x.local
   &&x.state!=='synced').length)
@@ -861,6 +912,8 @@ watch(activeSession,(next,previous)=>{
     archivePrefs.value=null
     archivePrefsNotice.value=''
     archivePrefsConflict.value=false
+    search.value=''
+    privateSearchResult.value=null
     void refreshArchivePending()
     void loadFolders()
     void loadMergeBackups()
@@ -876,12 +929,18 @@ watch(activeSession,(next,previous)=>{
   void refresh()
 })
 watch([selectedFolder,filter,search,archiveTab],()=>{selectedKeys.value=[]})
+watch([search,searchScope,activeSession],schedulePrivateSearch)
 onMounted(()=>{
+  schedulePrivateSearch()
   void loadFolders();void loadMergeBackups();void loadArchivePrefState()
   void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
-  ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch
+  ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch;++privateSearchEpoch
+  if(privateSearchTimer!==null)clearTimeout(privateSearchTimer)
+  privateSearchTimer=null
+  privateSearchResult.value=null
+  search.value=''
   archivePrefsBusy.value=false
   mergePlan.value=null;mergeChoices.value={};mergeBackups.value=[]
   archivePending.value=null
@@ -1119,9 +1178,11 @@ onUnmounted(()=>{
       </nav>
       <div class="browser-toolbar">
         <label class="browser-search">
-          <span class="browser-sr-only">Поиск по ID файла</span>
+          <span class="browser-sr-only">Приватный поиск по ID, имени, описанию, категории или тегам</span>
           <input v-model="search" type="search" autocomplete="off"
-            placeholder="Поиск по ID файла" data-testid="browser-search">
+            maxlength="160" spellcheck="false"
+            placeholder="ID, название, описание, категория, тег"
+            data-testid="browser-search">
         </label>
         <label>
           <span class="browser-sr-only">Сортировка</span>
@@ -1143,8 +1204,29 @@ onUnmounted(()=>{
         {{ visible.length }} файлов в загруженном каталоге
         · {{ pendingCount }} локальных не подтверждены облаком
       </p>
-      <p class="muted">Приватные имена, теги и GPS не входят в серверный индекс.
-        Поиск пока работает по ID; метаданные открываются после локальной расшифровки.</p>
+      <p class="muted">Поиск по ID мгновенный. Имена, описания, категории и теги
+        ищутся только после расшифровки на этом устройстве. Поисковый запрос и
+        незашифрованные метаданные не передаются серверу и не сохраняются в индексе.</p>
+      <p v-if="search.trim()" data-testid="browser-private-search-status"
+        role="status" class="muted">
+        <template v-if="normalizePrivateSearch(search).length<2">
+          Для поиска по приватным полям введите хотя бы 2 символа; поиск по ID уже доступен.
+        </template>
+        <template v-else-if="privateSearchBusy">
+          Идёт проверка зашифрованных метаданных загруженных файлов…
+        </template>
+        <template v-else-if="privateSearchError">{{ privateSearchError }}</template>
+        <template v-else-if="privateSearchResult?.query===normalizePrivateSearch(search)">
+          Проверено {{ privateSearchResult.scanned }} из {{ privateSearchResult.total }}
+          загруженных файлов.
+          <span v-if="privateSearchResult.failed||privateSearchResult.skipped||privateSearchUnscanned">
+            Результат неполный: {{ privateSearchResult.failed }} ошибок,
+            {{ privateSearchResult.skipped }} недоступны или истекли,
+            {{ privateSearchUnscanned }} за пределом проверки (200 за поиск).
+          </span>
+          <span v-else>Все загруженные файлы проверены.</span>
+        </template>
+      </p>
       <div class="browser-batch-toolbar" v-if="folderReady&&!folderError">
         <button type="button" :disabled="folderBusy||!visible.length"
           @click="selectVisible">Выбрать всё на странице</button>
