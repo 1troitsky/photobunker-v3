@@ -14,6 +14,8 @@ import type { CaptureMetadataInput } from '../../photo-sync/domain/capture-metad
 import { prepareMediaPrivateFields, validateMediaPrivateRequirements } from '../../media/domain/media-crypto'
 import type { MediaPrivateFields } from '../../media/domain/media-crypto'
 import { EMPTY_ADVANCED_RULES, normalizeAdvancedRules, validateAdvancedFields } from '../domain/advanced-rules'
+import {inspectAssignmentRemovalNotices} from './verify-removal-notice'
+import type {AssignmentRemovalNotice,CheckedAssignmentRemovalNotice} from './verify-removal-notice'
 import type { AdvancedRules } from '../domain/advanced-rules'
 
 export type AssignmentOperationKind='create'|'invite'|'accept'|'remove-member'|'submit'|'media-submit'|'state'|'policy'|'private'|'schedule'|'retention'
@@ -1659,6 +1661,58 @@ export async function queueAssignmentMemberRemoval(
       +'/invites/'+encodeURIComponent(person.inviteId)+'/remove',payload)
   await persist(op)
   return operationId
+}
+
+/**
+ * Distinct recipient-only history, never part of the accepted invite inbox.
+ * Fetch all bounded pages; a single page must not starve other live invites.
+ * Only independently authenticated owner-signed removal may invalidate a
+ * previously cached accepted invite. A bad / unpinned proof is not authority.
+ */
+export async function listAssignmentRemovalNotices():Promise<CheckedAssignmentRemovalNotice[]>{
+  const session=requireSession()
+  if(!session.online||(typeof navigator!=='undefined'&&!navigator.onLine))
+    throw Error('assignment.removals_require_online')
+  const all:AssignmentRemovalNotice[]=[]
+  const seen=new Set<string>()
+  let after:string|null=null
+  for(let n=0;n<100;n++){
+    const result:{items:AssignmentRemovalNotice[];nextCursor:string|null}=
+      await jsonApi<{items:AssignmentRemovalNotice[];nextCursor:string|null}>(
+        '/assignments/v1/invites/removals'+(after
+          ?'?after='+encodeURIComponent(after):''))
+    assertSame(session)
+    if(!result||!Array.isArray(result.items)||result.items.length>50
+      ||(result.nextCursor!==null&&(
+        typeof result.nextCursor!=='string'||result.items.length!==50
+        ||result.nextCursor!==result.items[49]?.inviteId)))
+      throw Error('assignment.removals_invalid_page')
+    for(const item of result.items){
+      if(!item||typeof item.inviteId!=='string'
+        ||seen.has(item.inviteId)
+        ||(after!==null&&item.inviteId<=after)
+        ||(all.length&&item.inviteId<=all[all.length-1]!.inviteId))
+        throw Error('assignment.removals_invalid_page')
+      seen.add(item.inviteId)
+      all.push(item)
+    }
+    if(result.nextCursor===null)break
+    if(n===99)throw Error('assignment.removals_pagination_limit')
+    after=result.nextCursor
+  }
+  const checked=await inspectAssignmentRemovalNotices(all,session.accountId)
+  assertSame(session)
+  const verified=checked.filter(x=>x.verified).map(x=>x.notice.inviteId)
+  if(verified.length){
+    await db.transaction('rw',db.invites,async()=>{
+      for(const id of verified){
+        const old=await db.invites.get(id)
+        if(old?.cachedForAccountId===session.accountId)await db.invites.delete(id)
+      }
+    })
+  }
+  assertSame(session)
+  return checked
 }
 
 /** Display-only cached invitations; never use them as current server ACL. */
