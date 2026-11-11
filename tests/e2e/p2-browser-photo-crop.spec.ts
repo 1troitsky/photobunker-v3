@@ -54,11 +54,22 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
     await setRange('file-viewer-crop-left',10,0)
     await setRange('file-viewer-crop-top',10,0)
     await page.getByTestId('file-viewer-crop-turn').selectOption('1')
+    // Native slider input must be reflected in the final encrypted pixels,
+    // not merely in a CSS filter on an unmodified image preview.
+    const brightness=page.getByTestId('file-viewer-photo-brightness')
+    await brightness.focus()
+    await brightness.press('ArrowRight')
+    await brightness.press('ArrowRight')
+    const saturation=page.getByTestId('file-viewer-photo-saturation')
+    await saturation.focus()
+    await saturation.press('Home')
     const editor=page.getByTestId('file-viewer-photo-editor')
     await expect(editor).toContainText('Ширина · 50%')
     await expect(editor).toContainText('Высота · 60%')
     await expect(editor).toContainText('Слева · 10%')
     await expect(editor).toContainText('Сверху · 10%')
+    await expect(editor).toContainText('Яркость · 120%')
+    await expect(editor).toContainText('Насыщенность · 0%')
 
     let downloads=0;page.on('download',()=>{downloads++})
     await page.getByTestId('file-viewer-create-crop').click()
@@ -85,6 +96,12 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
       const bytes=new Uint8Array(await result.blob.arrayBuffer())
       const image=await createImageBitmap(result.blob)
       const size={width:image.width,height:image.height}
+      const canvas=document.createElement('canvas')
+      canvas.width=image.width;canvas.height=image.height
+      const ctx=canvas.getContext('2d')
+      if(!ctx)throw Error('missing_derived_canvas')
+      ctx.drawImage(image,0,0)
+      const grayscale=[...ctx.getImageData(30,20,1,1).data.slice(0,3)]
       image.close()
       return {
         count:rows.length,originalBytes:origin.plainBytes,
@@ -93,7 +110,8 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
         fileName:result.metadata.fileName,category:result.metadata.category??null,
         tags:result.metadata.tags??[],gps:result.metadata.gps??null,
         capture:derivative.capture??null,head:[...bytes.slice(0,3)],
-        size,derivedId:derivative.mediaId,leaked:JSON.stringify(derivative)
+        size,grayscale,derivedId:derivative.mediaId,
+        leaked:JSON.stringify(derivative)
           .includes('PRIVATE-ORIGINAL-PHOTO'),
       }
     },original.id)
@@ -104,7 +122,12 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
       size:{width:60,height:100},leaked:false,
     })
     expect(result.fileName)
-      .toBe('PRIVATE-ORIGINAL-PHOTO-crop-10-10-50-60-r90.jpg')
+      .toBe('PRIVATE-ORIGINAL-PHOTO-crop-10-10-50-60-r90-fx-120-100-0.jpg')
+    // Source is split red/blue; actual exported grayscale JPEG must have
+    // nearly equal channels even after lossy compression.
+    const [rr,gg,bb]=result.grayscale
+    expect(Math.abs(rr-gg)).toBeLessThanOrEqual(3)
+    expect(Math.abs(gg-bb)).toBeLessThanOrEqual(3)
     expect(downloads).toBe(0)
 
     page.once('dialog',dialog=>dialog.accept())
