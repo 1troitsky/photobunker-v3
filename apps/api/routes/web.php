@@ -18,6 +18,7 @@ use App\Http\Controllers\TeamKeyEpochController;
 use App\Http\Controllers\TeamEpochInvitationController;
 use App\Http\Controllers\PhotoGrantController;
 use App\Http\Controllers\AssignmentV1Controller;
+use App\Http\Controllers\AssignmentPreviewCeilingController;
 use App\Http\Controllers\AssignmentMediaSubmissionController;
 use App\Photo\Finalization;
 use Illuminate\Support\Facades\DB;
@@ -117,6 +118,14 @@ Route::prefix('shares/v1')->middleware('throttle:40,1')->group(function(){
 
 // P1-04: signed, encrypted assignment + explicit recipient consent.
 // No grants arise automatically from contacts or team membership.
+// Private owner-only future Public Card ceiling, never a publication URL.
+Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/{assignmentId}/preview-ceiling',
+        [AssignmentPreviewCeilingController::class,'show'])->whereUuid('assignmentId');
+    Route::post('/{assignmentId}/preview-ceiling',
+        [AssignmentPreviewCeilingController::class,'store'])->whereUuid('assignmentId');
+});
+
 Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(function(){
     Route::get('/',[AssignmentV1Controller::class,'index']);
     Route::get('/usage',[AssignmentV1Controller::class,'usage']);
