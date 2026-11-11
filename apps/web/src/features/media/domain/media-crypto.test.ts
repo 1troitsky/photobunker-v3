@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest'
 import {freshPackage} from '../../identity/infrastructure/crypto'
 import {
-  encryptMediaFile,decryptMediaChunks,validateMediaContract,
+  encryptMediaFile,decryptMediaChunks,decryptMediaMetadataOnly,validateMediaContract,
   MEDIA_CHUNK,prepareMediaPrivateFields,validateMediaPrivateRequirements,
 } from './media-crypto'
 import type {MediaContract} from './media-crypto'
@@ -82,6 +82,31 @@ describe('P1-10 multi-media E2EE authenticated chunks',()=>{
     expect(()=>validateMediaContract({
       ...f.contract,extra:'clear' ,
     } as MediaContract)).toThrow('media.contract_fields')
+  })
+})
+
+describe('P2 Browser metadata-only E2EE search primitive',()=>{
+  it('decrypts authenticated private names without reading any large media chunks',async()=>{
+    const f=await fixture('video',MEDIA_CHUNK+257)
+    const encryptedMetadata=f.chunks.at(-1)!.blob
+    const record=await decryptMediaMetadataOnly(f.pkg,f.contract,
+      encryptedMetadata,check)
+    expect(record.fileName).toBe(f.file.name)
+    expect(record.mime).toBe('video/webm')
+    expect(JSON.stringify(f.contract)).not.toContain('SECRET-PERSONAL')
+    // Only the metadata blob is supplied; the 1 MiB data chunks are absent.
+    const tampered=new Uint8Array(await encryptedMetadata.arrayBuffer())
+    tampered[5]^=1
+    await expect(decryptMediaMetadataOnly(f.pkg,f.contract,
+      new Blob([tampered]),check)).rejects.toThrow('media.chunk_corrupt')
+    const {pkg:outsider}=await freshPackage(crypto.randomUUID())
+    await expect(decryptMediaMetadataOnly(outsider,f.contract,
+      encryptedMetadata,check)).rejects.toThrow('media.wrong_identity')
+    const wrong={...f.contract,
+      chunks:f.contract.chunks.map((p,i)=>i===f.contract.chunks.length-1
+        ?{...p,iv:f.contract.chunks[0]!.iv}:p)}
+    await expect(decryptMediaMetadataOnly(f.pkg,wrong,
+      encryptedMetadata,check)).rejects.toThrow()
   })
 })
 
