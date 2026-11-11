@@ -29,9 +29,9 @@ describe('signed E2EE folder three-way merge (pure client domain)',()=>{
     expect(undecided.conflicts).toMatchObject([{
       key:'folder:'+a,kind:'folder',local:'My label (корень)',cloud:'Their label (корень)',
     }])
-    expect(mergeFolderWorkspaces(base,local,cloud,{'folder:'+a:'local'})
+    expect(mergeFolderWorkspaces(base,local,cloud,{['folder:'+a]:'local'})
       .workspace!.folders[a]?.name).toBe('My label')
-    expect(mergeFolderWorkspaces(base,local,cloud,{'folder:'+a:'cloud'})
+    expect(mergeFolderWorkspaces(base,local,cloud,{['folder:'+a]:'cloud'})
       .workspace!.folders[a]?.name).toBe('Their label')
   })
   it('requires independent explicit choices when same file was moved into different folders',()=>{
@@ -68,7 +68,7 @@ describe('signed E2EE folder three-way merge (pure client domain)',()=>{
     const result=mergeFolderWorkspaces(base,local,cloud)
     expect(result.conflicts.map(x=>x.key)).toContain('folder:'+a)
     expect(result.workspace).toBeNull()
-    expect(mergeFolderWorkspaces(base,local,cloud,{'folder:'+a:'cloud'})
+    expect(mergeFolderWorkspaces(base,local,cloud,{['folder:'+a]:'cloud'})
       .workspace!.folders[a]?.name).toBe('Changed')
     // Distinct moves can create a new cycle even when each snapshot is valid.
     const ours=moveFolder(base,a,b)
