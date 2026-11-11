@@ -985,7 +985,7 @@ onUnmounted(()=>{
         <div class="browser-archive-pref-actions">
           <button type="button" data-testid="browser-pref-sync"
             :disabled="archivePrefsBusy||!activeSession.online"
-            @click="syncArchivePrefState">Синхронизировать настройки</button>
+            @click="syncArchivePrefState">Подтвердить настройки на сервере</button>
           <button v-if="archivePrefsConflict" type="button"
             data-testid="browser-pref-use-server"
             :disabled="archivePrefsBusy||!activeSession.online"
