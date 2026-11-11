@@ -355,9 +355,23 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
       sentEvent=receipt.event_id
       throw Error('pb3.ci.synthetic_ack_loss')
     })
-    let first=await resumedOutbox.flushMatrixTextOutbox(alice)
-    failUnless(first.attempted===1&&first.accepted===0
-      &&first.pending===1&&sentEvent,'lost_ack_not_preserved')
+    const first=await resumedOutbox.flushMatrixTextOutbox(alice)
+    if(!(first.attempted===1&&first.accepted===0
+      &&first.pending===1&&sentEvent)){
+      // Counts/states only. Never print room IDs, message text, access
+      // tokens, Matrix events, fingerprints or derived keys.
+      const diagnostic=[
+        first.attempted,first.accepted,first.pending,
+        Number(Boolean(sentEvent)),spy.mock.calls.length,
+        vi.mocked(resumedLease.isLeasedMatrixClient).mock.calls.length,
+        vi.mocked(resumedBinding.getBoundMatrixCredentials).mock.calls.length,
+        vi.mocked(resumedApi.jsonApi).mock.calls.length,
+        vi.mocked(resumedContacts.listConfirmedContacts).mock.calls.length,
+        vi.mocked(resumedPeer.getMatrixContactMapping).mock.calls.length,
+        vi.mocked(resumedTrust.inspectVerifiedMatrixDevice).mock.calls.length,
+      ].join('_')
+      throw Error('pb3.matrix.outbox.restart_probe_'+diagnostic)
+    }
 
     // Restore original SDK method but still observe txnId used on retry.
     spy.mockRestore()
