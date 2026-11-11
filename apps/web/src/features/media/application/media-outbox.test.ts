@@ -4,7 +4,7 @@ import {activeSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
 import {freshPackage,newSigning} from '../../identity/infrastructure/crypto'
 import {
-  enqueueEncryptedMedia,listLocalMedia,readLocalMedia,
+  enqueueEncryptedMedia,listLocalMedia,readLocalMedia,readLocalMediaMetadata,
 } from './media-outbox'
 
 afterEach(()=>{activeSession.value=null})
@@ -40,6 +40,9 @@ describe('P1-10 offline media outbox security',()=>{
       expect(raw).not.toContain('PRIVATE-FIRST-VOICE')
     }
     const read=await readLocalMedia(id)
+    const only=await readLocalMediaMetadata(id)
+    expect(only.fileName).toBe(file.name)
+    expect(only.mime).toBe('audio/wav')
     expect(read.metadata.fileName).toBe(file.name)
     expect(read.blob.type).toBe('audio/wav')
     expect(new Uint8Array(await read.blob.arrayBuffer())).toEqual(bytes)
@@ -51,5 +54,7 @@ describe('P1-10 offline media outbox security',()=>{
     await identity()
     expect(await listLocalMedia()).toHaveLength(0)
     await expect(readLocalMedia(id)).rejects.toThrow('media.not_available')
+    await expect(readLocalMediaMetadata(id))
+      .rejects.toThrow('media.not_available')
   })
 })
