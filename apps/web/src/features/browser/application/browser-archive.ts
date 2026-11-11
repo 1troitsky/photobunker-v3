@@ -59,18 +59,74 @@ async function postPending(pending:ArchivePending):Promise<ArchiveAck>{
     command:pending.command,signature:pending.signature,
   })
   if(activeSession.value!==session)throw Error('identity.changed')
-  const correctState=pending.action==='archive'?'archived'
-    :pending.action==='restore'?'restored':'deleting'
-  if(response.assetId!==pending.assetId||response.kind!==pending.kind
-    ||response.revision!==pending.expectedRevision+1
-    ||response.state!==correctState
-    ||typeof response.unchanged!=='boolean')
-    throw Error('browser.archive_invalid_ack')
+  validateAck(pending,response)
   // The same exact command/signature may return unchanged:true (Lost ACK),
   // but a new command with the same expectedRevision MUST NOT be substituted.
   await clearAcknowledgedArchiveAction(pending.operationId)
   return response
 }
+export type ArchivePendingInspection={
+  status:'committed'|'obsolete'|'unresolved'
+  currentRevision:number
+  result:ArchiveAck|null
+}
+function validateAck(pending:ArchivePending,result:ArchiveAck):void{
+  const desired=pending.action==='archive'?'archived'
+    :pending.action==='restore'?'restored':'deleting'
+  if(result.assetId!==pending.assetId||result.kind!==pending.kind
+    ||result.revision!==pending.expectedRevision+1
+    ||result.state!==desired||typeof result.unchanged!=='boolean')
+    throw Error('browser.archive_invalid_ack')
+}
+/**
+ * Server introspection is read-only even if the destructive archive gate is
+ * OFF. Never discard an unknown pending operation: if its source revision is
+ * still current, an in-flight original POST may yet commit.
+ */
+export async function inspectPendingArchiveAction():Promise<ArchivePendingInspection|null>{
+  const session=requireSession()
+  const pending=await getPendingArchiveAction()
+  if(!pending)return null
+  if(!session.online||typeof navigator!=='undefined'&&navigator.onLine===false)
+    throw Error('browser.archive_offline')
+  const answer=await jsonApi<ArchivePendingInspection>('/browser/v1/archive/inspect','POST',{
+    command:pending.command,signature:pending.signature,
+  })
+  if(activeSession.value!==session)throw Error('identity.changed')
+  if(!Number.isSafeInteger(answer.currentRevision)
+    ||answer.currentRevision<0
+    ||!['committed','obsolete','unresolved'].includes(answer.status))
+    throw Error('browser.archive_invalid_inspection')
+  if(answer.status==='committed'){
+    if(!answer.result)throw Error('browser.archive_invalid_inspection')
+    validateAck(pending,answer.result)
+    await clearAcknowledgedArchiveAction(pending.operationId)
+  }else{
+    if(answer.result!==null
+      ||answer.status==='obsolete'
+        &&answer.currentRevision<=pending.expectedRevision
+      ||answer.status==='unresolved'
+        &&answer.currentRevision>pending.expectedRevision)
+      throw Error('browser.archive_invalid_inspection')
+  }
+  return answer
+}
+/**
+ * Explicit owner-reviewed discard ONLY after a second fresh signed server
+ * check proves that the archive CAS revision moved beyond the old intent.
+ * No timer, offline fallback, or network-failure response may invoke this.
+ */
+export async function discardObsoleteArchiveAction():Promise<void>{
+  const session=requireSession()
+  const pending=await getPendingArchiveAction()
+  if(!pending)throw Error('browser.archive_pending_missing')
+  const answer=await inspectPendingArchiveAction()
+  if(activeSession.value!==session)throw Error('identity.changed')
+  if(answer?.status!=='obsolete')
+    throw Error('browser.archive_pending_not_obsolete')
+  await clearAcknowledgedArchiveAction(pending.operationId)
+}
+
 /** Explicit retry after reload/failure. Never sign a second command. */
 export async function retryPendingArchiveAction():Promise<ArchiveAck|null>{
   const pending=await getPendingArchiveAction()

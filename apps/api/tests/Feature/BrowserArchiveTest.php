@@ -317,4 +317,49 @@ final class BrowserArchiveTest extends TestCase
         $this->artisan('pb3:browser-archive-maintain')->assertSuccessful();
     }
 
+    public function test_signed_archive_inspection_proves_committed_unresolved_or_obsolete():void
+    {
+        $this->as('owner');
+        $id=$this->asset('owner','photo');
+        $original=$this->signed('owner',$this->command(
+            'owner','photo',$id,'archive',0));
+        $alternate=$this->signed('owner',$this->command(
+            'owner','photo',$id,'archive',0));
+        $endpoint='/browser/v1/archive/inspect';
+
+        // No server side effect; a pending request with still-current CAS
+        // cannot be discarded because an in-flight POST may yet succeed.
+        $this->postJson($endpoint,$original)->assertOk()
+            ->assertJson(['status'=>'unresolved','currentRevision'=>0,'result'=>null]);
+        $this->assertDatabaseCount('browser_archive_events_v1',0);
+        $this->assertDatabaseCount('browser_archive_entries_v1',0);
+
+        $this->postJson('/browser/v1/archive/actions',$original)
+            ->assertCreated();
+        $this->postJson($endpoint,$original)->assertOk()
+            ->assertJsonPath('status','committed')
+            ->assertJsonPath('result.revision',1)
+            ->assertJsonPath('result.state','archived');
+        $this->postJson($endpoint,$alternate)->assertOk()
+            ->assertJson(['status'=>'obsolete','currentRevision'=>1,'result'=>null]);
+        $this->assertDatabaseCount('browser_archive_events_v1',1);
+
+        // Read-only reconciliation still works after operators disable
+        // new archive mutations. It never triggers S3 deletion.
+        config()->set('browser_archive.write_enabled',false);
+        $this->postJson($endpoint,$original)->assertOk()
+            ->assertJsonPath('status','committed');
+        $this->postJson($endpoint,$alternate)->assertOk()
+            ->assertJsonPath('status','obsolete');
+
+        $other=$this->signed('owner',$this->command(
+            'owner','photo',$id,'restore',0,
+            json_decode($original['command'],true,8,JSON_THROW_ON_ERROR)['operationId']
+        ));
+        $this->postJson($endpoint,$other)->assertConflict();
+        $this->as('outsider');
+        $this->postJson($endpoint,$original)->assertUnauthorized();
+        $this->assertDatabaseCount('photo_tombstones',0);
+    }
+
 }
