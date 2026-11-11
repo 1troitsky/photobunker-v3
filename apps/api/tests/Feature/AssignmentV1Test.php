@@ -269,6 +269,81 @@ final class AssignmentV1Test extends TestCase
         $this->assertDatabaseCount('assignment_member_removals_v1',1);
     }
 
+    public function test_p2_26_fifty_two_signed_assignments_and_received_invites_are_cursor_paged():void
+    {
+        $this->createAssignment();
+        $firstInvite=$this->invite();
+        $this->accept($firstInvite);
+        $root=(array)DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $inv=(array)DB::table('assignment_invites_v1')
+            ->where('id',$firstInvite)->first();
+        // Generate independently signed, synthetic but FK-correct siblings
+        // without consuming a real user's limited monthly creation quota.
+        for($i=0;$i<51;$i++){
+            $assignment=(string)Str::uuid();
+            $op=(string)Str::uuid();
+            $rootPayload=json_decode($root['contract_json'],true,32,JSON_THROW_ON_ERROR);
+            $rootPayload['assignmentId']=$assignment;
+            $rootPayload['operationId']=$op;
+            $rootSigned=$this->signed('owner','pb3.assignment.v1',$rootPayload);
+            DB::table('assignment_records_v1')->insert([
+                ...$root,'id'=>$assignment,'operation_id'=>$op,
+                'contract_json'=>$rootSigned['contract'],
+                'contract_hash'=>hash('sha256',$rootSigned['contract']),
+                'owner_signature'=>$rootSigned['signature'],
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            $inviteId=(string)Str::uuid();
+            $invitePayload=json_decode($inv['contract_json'],true,32,JSON_THROW_ON_ERROR);
+            $invitePayload['inviteId']=$inviteId;
+            $invitePayload['assignmentId']=$assignment;
+            $signedInvite=$this->signed('owner','pb3.assignment-invite.v1',$invitePayload);
+            $acceptedOp=(string)Str::uuid();
+            $accept=$this->signed('recipient','pb3.assignment-accept.v1',[
+                'version'=>1,'action'=>'accept','inviteId'=>$inviteId,
+                'assignmentId'=>$assignment,
+                'recipientAccountId'=>$this->people['recipient']['account'],
+                'operationId'=>$acceptedOp,
+            ]);
+            DB::table('assignment_invites_v1')->insert([
+                ...$inv,'id'=>$inviteId,'assignment_id'=>$assignment,
+                'contract_json'=>$signedInvite['contract'],
+                'owner_signature'=>$signedInvite['signature'],
+                'contract_hash'=>hash('sha256',$signedInvite['contract']),
+                'accepted_contract'=>$accept['contract'],
+                'accepted_signature'=>$accept['signature'],
+                'accepted_operation_id'=>$acceptedOp,
+                'accepted_at'=>now(),'state'=>'accepted',
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+        }
+        $this->as('recipient');
+        $url='/assignments/v1/invites/received';
+        $first=$this->getJson($url)->assertOk()
+            ->assertJsonCount(50,'items')->json();
+        $this->assertSame($first['items'][49]['inviteId'],$first['nextCursor']);
+        $second=$this->getJson($url.'?after='.$first['nextCursor'])
+            ->assertOk()->assertJsonCount(2,'items')->json();
+        $this->assertNull($second['nextCursor']);
+        $this->assertCount(52,array_unique(array_merge(
+            array_column($first['items'],'inviteId'),
+            array_column($second['items'],'inviteId'),
+        )));
+        $this->getJson($url.'?after=broken-cursor')->assertUnprocessable();
+        $this->getJson($url.'?after='.$second['items'][1]['inviteId'])
+            ->assertOk()->assertJsonPath('items',[]);
+        $overview='/assignments/v1';
+        $page1=$this->getJson($overview)->assertOk()
+            ->assertJsonCount(50,'items')->json();
+        $page2=$this->getJson($overview.'?after='.$page1['nextCursor'])
+            ->assertOk()->assertJsonCount(2,'items')->json();
+        $this->assertNull($page2['nextCursor']);
+        $this->as('outsider');
+        $this->getJson($url)->assertOk()->assertJsonPath('items',[]);
+        $this->getJson($overview)->assertOk()->assertJsonPath('items',[]);
+    }
+
     private function signedState(string $role,string $action,int $from,
         ?string $operationId=null):array
     {
