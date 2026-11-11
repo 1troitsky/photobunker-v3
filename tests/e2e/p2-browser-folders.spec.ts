@@ -86,5 +86,24 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await expect(page.getByText('browser.folder_not_empty')).toBeVisible()
     await expect(page.locator('.browser-folder-open').filter({hasText:'Съёмки'}))
       .toBeVisible()
+
+    // Batch operations commit a single encrypted revision for selected files.
+    const filePicker=page.getByTestId('media-import-file')
+    await filePicker.setInputFiles({
+      name:'PRIVATE-BATCH-A.wav',mimeType:'audio/wav',
+      buffer:Buffer.alloc(8192,0x48),
+    })
+    await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(1)
+    await filePicker.setInputFiles({
+      name:'PRIVATE-BATCH-B.webm',mimeType:'video/webm',
+      buffer:Buffer.alloc(8192,0x49),
+    })
+    await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(2)
+    await page.getByRole('button',{name:'Выбрать всё на странице'}).click()
+    await page.getByTestId('browser-bulk-destination').selectOption({label:'Съёмки'})
+    await page.getByRole('button',{name:/Переместить выбранные/}).click()
+    await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(0)
+    await page.locator('.browser-folder-open').filter({hasText:'Съёмки'}).click()
+    await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(2)
   }finally{await context.close()}
 })
