@@ -283,6 +283,31 @@ final class PhotoGrantTest extends TestCase
             ->update(['state'=>'accepted']);
         $this->getJson($scopedPath)->assertOk();
         $this->get($scopedPath.$asset)->assertOk();
+        // A signed removal record wins even if an operator/migration
+        // accidentally reverts the mutable membership to 'accepted'.
+        $invite=DB::table('assignment_invites_v1')
+            ->where('assignment_id',$assignmentId)->first();
+        $operationId=(string)Str::uuid();
+        $proof=json_encode([
+            'version'=>1,'action'=>'remove','operationId'=>$operationId,
+            'assignmentId'=>$assignmentId,'inviteId'=>$invite->id,
+            'ownerAccountId'=>$this->people['recipient']['id'],
+            'recipientAccountId'=>$this->people['owner']['id'],
+        ],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        DB::table('assignment_member_removals_v1')->insert([
+            'operation_id'=>$operationId,'assignment_id'=>$assignmentId,
+            'invite_id'=>$invite->id,
+            'owner_account_id'=>$this->people['recipient']['id'],
+            'recipient_account_id'=>$this->people['owner']['id'],
+            'contract_hash'=>hash('sha256',$proof),'contract_json'=>$proof,
+            'owner_signature'=>$this->signature('recipient',
+                "pb3.assignment-member-remove.v1\n".$proof),
+            'created_at'=>now(),
+        ]);
+        $this->getJson($scopedPath)->assertGone();
+        $this->get($scopedPath.$asset)->assertGone();
+        $this->getJson($personalPath)->assertOk();
+        $this->get($personalPath.$asset)->assertOk();
     }
 
     public function test_p1_22_scoped_grant_rejects_pending_wrong_owner_bad_domain_and_cutoff():void
