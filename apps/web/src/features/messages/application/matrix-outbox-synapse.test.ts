@@ -81,13 +81,37 @@ async function until(label:string,condition:()=>Promise<boolean>|boolean,
   }
   throw Error('pb3.matrix.outbox.integration_timeout_'+label)
 }
+async function loginWithBoundedRetry(identity:MatrixClient,
+  name:string,password:string){
+  for(let attempt=0;attempt<9;attempt++){
+    try{
+      return await identity.loginRequest({
+        type:'m.login.password',
+        identifier:{type:'m.id.user',user:name},
+        password,initial_device_display_name:'PB3-CI-OUTBOX',
+      })
+    }catch(e){
+      const err=e as {
+        httpStatus?:number;errcode?:string
+        data?:{retry_after_ms?:number}
+      }
+      // Previous gates legitimately use the SAME disposable Synapse login
+      // rate-limit bucket. Obey 429; do not disable the server's controls.
+      if(err.httpStatus!==429&&err.errcode!=='M_LIMIT_EXCEEDED')
+        throw Error('pb3.matrix.ci.login_failed')
+      if(attempt===8)throw Error('pb3.matrix.ci.login_rate_limit_exhausted')
+      const ms=err.data?.retry_after_ms
+      const delay=typeof ms==='number'&&Number.isFinite(ms)&&ms>=0
+        ? Math.max(1800,Math.min(16000,ms+500))
+        : Math.min(16000,4000+attempt*1500)
+      await sleep(delay)
+    }
+  }
+  throw Error('pb3.matrix.ci.login_rate_limit_exhausted')
+}
 async function register(name:string,password:string){
   const identity=createClient({baseUrl:host})
-  const login=await identity.loginRequest({
-    type:'m.login.password',
-    identifier:{type:'m.id.user',user:name},
-    password,initial_device_display_name:'PB3-CI-OUTBOX',
-  })
+  const login=await loginWithBoundedRetry(identity,name,password)
   const client=createClient({
     baseUrl:host,userId:login.user_id,deviceId:login.device_id,
     accessToken:login.access_token,
@@ -156,9 +180,11 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
     await d.table('items').clear()
     d.close()
 
-    const identities=await Promise.all([
-      register(nameA,passA),register(nameB,passB),
-    ])
+    // Do not burst two additional logins while the preceding E2EE/4S
+    // protocol gates are still inside Synapse's login rate limit window.
+    const identities=[
+      await register(nameA,passA),await register(nameB,passB),
+    ]
     alice=identities[0]!.client
     bob=identities[1]!.client
     aliceUser=identities[0]!.login.user_id
