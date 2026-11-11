@@ -4,7 +4,7 @@ import { RouterLink } from 'vue-router'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
   queueAssignmentCreation, listLocalAssignmentDrafts, listServerAssignmentUsage,
-  listServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
+  listAllServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
   listAssignmentRemovalNotices,
   listCachedAssignmentInvites,
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
@@ -272,9 +272,9 @@ async function hydrate():Promise<void>{
   }else{
     try{
       const [server,invitesFromServer]=await Promise.all([
-        listServerAssignments(),listAssignmentInvites(),
+        listAllServerAssignments(),listAssignmentInvites(),
       ])
-      snapshots=server.items
+      snapshots=server
       received=invitesFromServer
     }catch(e){
       // navigator.onLine may remain true during API/S3 outages or captive
