@@ -208,6 +208,11 @@ type CachedPrivateAssignment={
   key:string;accountId:string;assignmentId:string;policyHash:string
   iv:string;ciphertext:Blob // AES-GCM ciphertext only, never plaintext
 }
+type CachedVerifiedRemoval={
+  key:string;accountId:string;assignmentId:string;ownerAccountId:string
+  inviteId:string;removalContract:string;removalSignature:string
+  verifiedAt:number
+}
 export type SignedCaptureBinding={
   assignmentId:string;ownerAccountId:string;policyRevision:number
   policyHash:string;capturedAt:number
@@ -702,6 +707,7 @@ class AssignmentDB extends Dexie {
   invites!:Table<CachedInvite,string>
   capturePolicies!:Table<CachedCapturePolicy,string>
   privateSummaries!:Table<CachedPrivateAssignment,string>
+  revocations!:Table<CachedVerifiedRemoval,string>
   constructor(){
     super('pb3-assignment-operation-outbox-v1')
     this.version(1).stores({
@@ -721,6 +727,14 @@ class AssignmentDB extends Dexie {
       invites:'&inviteId, assignmentId, ownerAccountId, cachedForAccountId',
       capturePolicies:'&key, accountId, [accountId+verifiedAt]',
       privateSummaries:'&key, accountId, assignmentId',
+    })
+    this.version(4).stores({
+      operations:'&id, accountId, [accountId+createdAt], [accountId+state]',
+      assignments:'&id, ownerAccountId, [ownerAccountId+createdAt]',
+      invites:'&inviteId, assignmentId, ownerAccountId, cachedForAccountId',
+      capturePolicies:'&key, accountId, [accountId+verifiedAt]',
+      privateSummaries:'&key, accountId, assignmentId',
+      revocations:'&key, accountId, assignmentId',
     })
   }
 }
@@ -1121,9 +1135,12 @@ export async function listServerAssignments(after?:string):Promise<{
   assertSame(s)
   // Cache only signed, independently authenticated policy snapshots.
   // No plaintext assignment name, DEK or recovery material is persisted.
-  await db.transaction('rw',db.capturePolicies,async()=>{
+  await db.transaction('rw',db.capturePolicies,db.revocations,async()=>{
     for(const item of result.items){
       const key=s.accountId+'/'+item.assignmentId
+      // A previously authenticated owner-signed exclusion is stronger
+      // than a later stale server overview snapshot.
+      if(await db.revocations.get(key))continue
       const previous=await db.capturePolicies.get(key)
       assertSignedPolicyProgress(previous?.listing,item)
       await db.capturePolicies.put({
@@ -1151,7 +1168,14 @@ export async function listAllServerAssignments():Promise<AssignmentListing[]>{
     const next:{items:AssignmentListing[];nextCursor:string|null}=
       appendBoundedUuidPage(items,page,after,item=>item.assignmentId)
     items=next.items
-    if(next.nextCursor===null)return items
+    if(next.nextCursor===null){
+      const revoked=await db.revocations.where('accountId')
+        .equals(session.accountId).toArray()
+      assertSame(session)
+      const denied=new Set(revoked.map(r=>r.assignmentId))
+      return items.filter(row=>row.ownerAccountId===session.accountId
+        ||!denied.has(row.assignmentId))
+    }
     after=next.nextCursor
   }
   throw Error('assignment.overview_pagination_limit')
@@ -1163,10 +1187,15 @@ export async function listAllServerAssignments():Promise<AssignmentListing[]>{
  */
 export async function listCachedAssignmentSnapshots():Promise<AssignmentListing[]>{
   const s=requireSession()
-  const rows=await db.capturePolicies.where('accountId').equals(s.accountId).toArray()
+  const [rows,removed]=await Promise.all([
+    db.capturePolicies.where('accountId').equals(s.accountId).toArray(),
+    db.revocations.where('accountId').equals(s.accountId).toArray(),
+  ])
+  const revoked=new Set(removed.map(x=>x.assignmentId))
   const verified:AssignmentListing[]=[]
   for(const row of rows){
     assertSame(s)
+    if(revoked.has(row.listing.assignmentId))continue
     try{
       await verifySignedAssignmentPolicy(row.listing,true)
       if(assignmentOpenAt(row.listing,Date.now()))
@@ -1190,7 +1219,9 @@ export async function signedCaptureBinding(
   privateFields:CaptureMetadataInput={},
 ):Promise<SignedCaptureBinding>{
   const s=requireSession()
-  const row=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
+  const key=s.accountId+'/'+assignmentId
+  if(await db.revocations.get(key))throw Error('assignment.member_removed')
+  const row=await db.capturePolicies.get(key)
   if(!row)throw new Error('assignment.policy_not_cached')
   const policy=row.listing
   // Capture is deliberately Local-First. Recheck the cached owner signature
@@ -1724,13 +1755,48 @@ export async function listAssignmentRemovalNotices():Promise<CheckedAssignmentRe
   }
   const checked=await inspectAssignmentRemovalNotices(all,session.accountId)
   assertSame(session)
-  const verified=checked.filter(x=>x.verified).map(x=>x.notice.inviteId)
+  const verified=checked.filter(x=>x.verified).map(x=>x.notice)
   if(verified.length){
-    await db.transaction('rw',db.invites,async()=>{
-      for(const id of verified){
-        const old=await db.invites.get(id)
-        if(old?.cachedForAccountId===session.accountId)await db.invites.delete(id)
-      }
+    // A verified, exact owner-signed removal is a durable denial of stale
+    // offline Fieldwork capture authority. Never clear personal photos,
+    // encrypted outbox entries, owner-created assignments or file grants.
+    await db.transaction('rw',
+      db.invites,db.capturePolicies,db.privateSummaries,db.revocations,
+      async()=>{
+        assertSame(session)
+        for(const notice of verified){
+          const key=session.accountId+'/'+notice.assignmentId
+          if(notice.recipientAccountId!==session.accountId
+            ||notice.ownerAccountId===session.accountId)
+            throw Error('assignment.invalid_revocation_scope')
+          // Write tombstone FIRST, within the same atomic transaction as
+          // removing the former local Fieldwork permissions and summary.
+          await db.revocations.put({
+            key,accountId:session.accountId,
+            assignmentId:notice.assignmentId,
+            ownerAccountId:notice.ownerAccountId,
+            inviteId:notice.inviteId,
+            removalContract:notice.removalContract,
+            removalSignature:notice.removalSignature,
+            verifiedAt:Date.now(),
+          })
+          const old=await db.invites.get(notice.inviteId)
+          if(old?.cachedForAccountId===session.accountId
+            &&old.assignmentId===notice.assignmentId
+            &&old.ownerAccountId===notice.ownerAccountId)
+            await db.invites.delete(notice.inviteId)
+          const snapshot=await db.capturePolicies.get(key)
+          if(snapshot?.accountId===session.accountId
+            &&snapshot.listing.assignmentId===notice.assignmentId
+            &&snapshot.listing.ownerAccountId===notice.ownerAccountId)
+            await db.capturePolicies.delete(key)
+          // Only a disposable account-encrypted summary of this revoked
+          // assignment is purged. Contributor's own media/outbox is untouched.
+          const summary=await db.privateSummaries.get(key)
+          if(summary?.accountId===session.accountId
+            &&summary.assignmentId===notice.assignmentId)
+            await db.privateSummaries.delete(key)
+        }
     })
   }
   assertSame(session)
@@ -1740,12 +1806,17 @@ export async function listAssignmentRemovalNotices():Promise<CheckedAssignmentRe
 /** Display-only cached invitations; never use them as current server ACL. */
 export async function listCachedAssignmentInvites():Promise<ReceivedAssignmentInvite[]>{
   const s=requireSession()
-  const cached=await db.invites.where('cachedForAccountId').equals(s.accountId).toArray()
+  const [cached,removed]=await Promise.all([
+    db.invites.where('cachedForAccountId').equals(s.accountId).toArray(),
+    db.revocations.where('accountId').equals(s.accountId).toArray(),
+  ])
   assertSame(s)
-  return cached.map(({cachedForAccountId:_account,...item})=>{
-    void _account
-    return item
-  })
+  const denied=new Set(removed.map(x=>x.assignmentId))
+  return cached.filter(item=>!denied.has(item.assignmentId))
+    .map(({cachedForAccountId:_account,...item})=>{
+      void _account
+      return item
+    })
 }
 
 export async function listAssignmentInvites():Promise<ReceivedAssignmentInvite[]>{
@@ -1767,15 +1838,22 @@ export async function listAssignmentInvites():Promise<ReceivedAssignmentInvite[]
       after=next.nextCursor
     }
     if(!complete)throw Error('assignment.inbox_pagination_limit')
-    // Do not treat a partial/failed page chain as an authoritative inbox.
-    // Cache all validated pages only after the chain is complete.
-    await db.transaction('rw',db.invites,async()=>{
-      for(const item of items)await db.invites.put({
-        ...item,cachedForAccountId:s.accountId,
-      })
+    // A signed historical removal is stronger than a stale received-inbox
+    // response. Keep the cache transaction ordered with tombstones.
+    await db.transaction('rw',db.invites,db.revocations,async()=>{
+      assertSame(s)
+      for(const item of items){
+        if(await db.revocations.get(s.accountId+'/'+item.assignmentId))
+          continue
+        await db.invites.put({...item,cachedForAccountId:s.accountId})
+      }
     })
     assertSame(s)
-    return items
+    const denied=await db.revocations.where('accountId')
+      .equals(s.accountId).toArray()
+    assertSame(s)
+    const blocked=new Set(denied.map(x=>x.assignmentId))
+    return items.filter(item=>!blocked.has(item.assignmentId))
   }
   // No authority is claimed for stale local grants; these are display-only
   // ciphertext invitations until a fresh server-authenticated accept.

@@ -299,9 +299,16 @@ async function hydrate():Promise<void>{
       const notices=await listAssignmentRemovalNotices()
       if(activeSession.value!==identity)return
       removalNotices.value=notices
-      const verifiedIds=new Set(notices.filter(x=>x.verified)
-        .map(x=>x.notice.inviteId))
-      received=received.filter(item=>!verifiedIds.has(item.inviteId))
+      const verified=notices.filter(x=>x.verified).map(x=>x.notice)
+      const verifiedIds=new Set(verified.map(x=>x.inviteId))
+      const verifiedAssignments=new Set(verified.map(x=>x.assignmentId))
+      received=received.filter(item=>!verifiedIds.has(item.inviteId)
+        &&!verifiedAssignments.has(item.assignmentId))
+      // Even if an old server read or stale local snapshot slips through,
+      // an independently authenticated owner removal cannot be shown as a
+      // live recipient assignment. Owner-authored tasks are unaffected.
+      snapshots=snapshots.filter(item=>item.ownerAccountId===identity.accountId
+        ||!verifiedAssignments.has(item.assignmentId))
     }catch(e){
       if(activeSession.value!==identity)return
       removalNoticesError.value=explain(e)

@@ -86,6 +86,14 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
       return (await m.listReceivedGrants()).length
     })
     expect(mediaGrants).toBe(0)
+    // The accepted recipient has an authenticated offline-capture policy
+    // snapshot before exclusion. This is what must be invalidated.
+    const beforeRemovalCache=await B.evaluate(async id=>{
+      const m=await import('/src/features/assignments/application/assignment-outbox.ts')
+      return (await m.listCachedAssignmentSnapshots())
+        .some(item=>item.assignmentId===id)
+    },assignmentId)
+    expect(beforeRemovalCache).toBe(true)
 
     // V-24: owner revokes the same accepted invitation using an immutable
     // owner-account-signed operation, not a local UI-only roster flag.
@@ -147,5 +155,45 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
     expect(cryptographicRemoval).toEqual({
       total:1,verified:true,forged:false,cachedInvites:0,
     })
+    // A cryptographically VERIFIED removal also atomically invalidates the
+    // signed cached capture policy and encrypted assignment summary, while
+    // preserving contributor photos/outbox records.
+    await B.context().setOffline(true)
+    const offlineRevocation=await B.evaluate(async id=>{
+      const m=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const snapshots=await m.listCachedAssignmentSnapshots()
+      const invites=await m.listCachedAssignmentInvites()
+      let denied=false
+      try{await m.signedCaptureBinding(id)}
+      catch(e){denied=e instanceof Error&&e.message==='assignment.member_removed'}
+      const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+        const req=indexedDB.open('pb3-assignment-operation-outbox-v1')
+        req.onsuccess=()=>resolve(req.result)
+        req.onerror=()=>reject(req.error)
+      })
+      const account=(await import('/src/features/identity/application/session.ts'))
+        .requireSession().accountId
+      const key=account+'/'+id
+      const raw=await new Promise<{revoked:boolean;policy:boolean;privateSummary:boolean}>(
+        (resolve,reject)=>{
+          const tx=db.transaction(['revocations','capturePolicies','privateSummaries'],'readonly')
+          const rem=tx.objectStore('revocations').get(key)
+          const policy=tx.objectStore('capturePolicies').get(key)
+          const summary=tx.objectStore('privateSummaries').get(key)
+          tx.oncomplete=()=>resolve({
+            revoked:!!rem.result,policy:!!policy.result,
+            privateSummary:!!summary.result,
+          })
+          tx.onerror=()=>reject(tx.error)
+        })
+      db.close()
+      return {snapshots:snapshots.some(x=>x.assignmentId===id),
+        cachedInvites:invites.length,denied,...raw}
+    },assignmentId)
+    expect(offlineRevocation).toEqual({
+      snapshots:false,cachedInvites:0,denied:true,
+      revoked:true,policy:false,privateSummary:false,
+    })
+    await B.context().setOffline(false)
   }finally{await ctxA.close();await ctxB.close()}
 })
