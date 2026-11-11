@@ -264,15 +264,15 @@ export async function exportOwnMatrixIdentityCard():Promise<string>{
     bindingDeviceSignature:mine.deviceBinding.deviceSignature,
   }
   const serialized=JSON.stringify(card)
-  await verifyCard({version:1,card:serialized,
-    signature:await sign(await importSigner(s.pkg.accountPkcs8),
-      trustDomain+serialized)},s.accountId,s.pkg.accountSpki)
-  current(s)
   const signed:SignedCard={
     version:1,card:serialized,
     signature:await sign(await importSigner(s.pkg.accountPkcs8),
       trustDomain+serialized),
   }
+  // Do not expose a card if either PB3 device/owner signature from the
+  // server's Matrix binding or this owner signature fails verification.
+  await verifyCard(signed,s.accountId,s.pkg.accountSpki)
+  current(s)
   return prefix+b64(enc.encode(JSON.stringify(signed)))
 }
 
