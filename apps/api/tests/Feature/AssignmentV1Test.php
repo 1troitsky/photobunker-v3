@@ -1777,6 +1777,18 @@ final class AssignmentV1Test extends TestCase
         $this->getJson($url)->assertJsonPath('items',[]);
         $this->getJson('/assignments/v1')
             ->assertJsonPath('items.0.confirmedPhotoCount',0);
+        // A revoked assignment membership may not leave a "confirmed"
+        // P2 photo receipt visible merely because the personal JPEG exists.
+        DB::table('media_recipient_grants_v1')
+            ->where('id',$media['grantId'])->update(['state'=>'active']);
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',
+                $this->people['recipient']['account'])
+            ->update(['state'=>'pending']);
+        $this->getJson($url)->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',0);
         $this->assertDatabaseHas('media_files_v1',[
             'id'=>$media['id'],'state'=>'active',
         ]);
