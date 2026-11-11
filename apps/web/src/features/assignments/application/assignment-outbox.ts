@@ -1182,6 +1182,19 @@ export async function listAllServerAssignments():Promise<AssignmentListing[]>{
 }
 
 /**
+ * Account-scoped, previously verified owner removal IDs. This is only a
+ * local display-denial fence; server permissions still require live ACL.
+ * Used at final Vue hydration commit to prevent async decryption and
+ * stale server responses reviving private assignment titles in memory.
+ */
+export async function listLocallyRevokedAssignmentIds():Promise<Set<string>>{
+  const s=requireSession()
+  const rows=await db.revocations.where('accountId').equals(s.accountId).toArray()
+  assertSame(s)
+  return new Set(rows.map(item=>item.assignmentId))
+}
+
+/**
  * A previously verified policy can be read offline for local-only capture.
  * A server can still reject a later upload if membership or state changed.
  */
@@ -1251,6 +1264,9 @@ export async function signedCaptureBinding(
     ?policy.policyContract:policy.policyAmendmentContract
   if(!effectiveContract)throw new Error('assignment.policy_revision_not_authenticated')
   const policyHash=hex(await digest(new TextEncoder().encode(effectiveContract)))
+  // Recheck at the FINAL consent point: a previously verified signed
+  // removal may have committed while slow P-256/metadata checks ran.
+  if(await db.revocations.get(key))throw Error('assignment.member_removed')
   assertSame(s)
   return {
     assignmentId:policy.assignmentId,ownerAccountId:policy.ownerAccountId,
@@ -1293,9 +1309,18 @@ export async function cachePrivateAssignment(
     additionalData:summaryContext(s.accountId,assignmentId,policyHash),tagLength:128,
   },key,summaryEncoder.encode(JSON.stringify(data)))
   assertSame(s)
-  await db.privateSummaries.put({
-    key:s.accountId+'/'+assignmentId,accountId:s.accountId,
-    assignmentId,policyHash,iv:b64(iv),ciphertext:new Blob([encrypted]),
+  const cacheKey=s.accountId+'/'+assignmentId
+  // The completed AES-GCM encryption may have overlapped a verified
+  // exclusion. The tombstone read and summary put must be ONE IndexedDB
+  // transaction, never separate checks vulnerable to a lost race.
+  await db.transaction('rw',db.privateSummaries,db.revocations,async()=>{
+    assertSame(s)
+    if(await db.revocations.get(cacheKey))
+      throw Error('assignment.member_removed')
+    await db.privateSummaries.put({
+      key:cacheKey,accountId:s.accountId,
+      assignmentId,policyHash,iv:b64(iv),ciphertext:new Blob([encrypted]),
+    })
   })
   assertSame(s)
 }
@@ -1303,7 +1328,12 @@ export async function readCachedPrivateAssignment(
   assignmentId:string,policyContract:string,
 ):Promise<PrivateAssignment|null>{
   const s=requireSession()
-  const row=await db.privateSummaries.get(s.accountId+'/'+assignmentId)
+  const cacheKey=s.accountId+'/'+assignmentId
+  // This private cache is disposable; an authenticated removal always wins
+  // over a stale copy or a concurrent pre-revocation decrypt.
+  if(await db.revocations.get(cacheKey))
+    throw Error('assignment.member_removed')
+  const row=await db.privateSummaries.get(cacheKey)
   if(!row)return null
   const policyHash=hex(await digest(summaryEncoder.encode(policyContract)))
   if(row.accountId!==s.accountId||row.assignmentId!==assignmentId
@@ -1316,6 +1346,9 @@ export async function readCachedPrivateAssignment(
   assertSame(s)
   const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(decrypted)) as PrivateAssignment
   checkSummary(data)
+  if(await db.revocations.get(cacheKey))
+    throw Error('assignment.member_removed')
+  assertSame(s)
   return data
 }
 

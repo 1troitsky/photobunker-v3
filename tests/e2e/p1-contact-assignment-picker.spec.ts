@@ -187,12 +187,31 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
           tx.onerror=()=>reject(tx.error)
         })
       db.close()
+      let summaryWriteDenied=false
+      let summaryReadDenied=false
+      try{
+        await m.cachePrivateAssignment(id,'stale-owner-policy',{
+          version:1,title:'Stale private Fieldwork',
+          instructions:'Must not survive a signed removal',
+        })
+      }catch(e){
+        summaryWriteDenied=e instanceof Error
+          &&e.message==='assignment.member_removed'
+      }
+      try{
+        await m.readCachedPrivateAssignment(id,'stale-owner-policy')
+      }catch(e){
+        summaryReadDenied=e instanceof Error
+          &&e.message==='assignment.member_removed'
+      }
       return {snapshots:snapshots.some(x=>x.assignmentId===id),
-        cachedInvites:invites.length,denied,...raw}
+        cachedInvites:invites.length,denied,...raw,
+        summaryWriteDenied,summaryReadDenied}
     },assignmentId)
     expect(offlineRevocation).toEqual({
       snapshots:false,cachedInvites:0,denied:true,
       revoked:true,policy:false,privateSummary:false,
+      summaryWriteDenied:true,summaryReadDenied:true,
     })
     await B.context().setOffline(false)
   }finally{await ctxA.close();await ctxB.close()}
