@@ -67,9 +67,9 @@ describe('signed Archive batch preflight and fail-fast',()=>{
       tab:'all',useArchive:true,action:'archive',
     })
     const send=vi.fn(async(t:CatalogItem|ArchiveEntry)=>{
-      if(t.assetId===ids[1]||'id' in t&&t.id===ids[1])
-        throw Error('lost-ack')
-      return ack('id' in t?t.id:t.assetId,'archived')
+      const id='id' in t?t.id:t.assetId
+      if(id===ids[1])throw Error('lost-ack')
+      return ack(id,'archived')
     })
     const removed:string[]=[]
     const r=await executeArchiveBatch(plan,send,()=>true,key=>removed.push(key))
