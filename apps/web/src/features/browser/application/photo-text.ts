@@ -1,6 +1,8 @@
 import {MAX_MEDIA_BYTES} from '../../media/domain/media-crypto'
 import {drawPhotoShapes,validateShapeMarks} from './photo-shapes'
 import type {PhotoShapeMark} from './photo-shapes'
+import {drawPhotoStrokes,validatePhotoStrokes} from './photo-strokes'
+import type {PhotoStroke} from './photo-strokes'
 
 export type PhotoTextMark=Readonly<{
   id:string;text:string;x:number;y:number;size:number;color:string
@@ -102,12 +104,14 @@ export async function flattenPhotoText(
 export async function flattenPhotoAnnotations(
   source:Blob,marks:readonly PhotoTextMark[],
   shapes:readonly PhotoShapeMark[],
+  strokes:readonly PhotoStroke[]=[],
 ):Promise<AnnotatedJpeg>{
   validateTextMarks(marks)
   validateShapeMarks(shapes)
+  validatePhotoStrokes(strokes)
   if(source.type!=='image/jpeg'||source.size<128
     ||source.size>MAX_MEDIA_BYTES)throw Error('viewer.text_invalid_source')
-  if(marks.length===0&&shapes.length===0)
+  if(!marks.length&&!shapes.length&&!strokes.length)
     throw Error('viewer.annotation_no_marks')
   const bitmap=await createImageBitmap(source)
   const canvas=document.createElement('canvas')
@@ -121,6 +125,20 @@ export async function flattenPhotoAnnotations(
     if(!ctx)throw Error('viewer.text_canvas_unsupported')
     ctx.drawImage(bitmap,0,0)
     drawPhotoShapes(ctx,bitmap.width,bitmap.height,shapes)
+    if(strokes.length){
+      // Eraser MUST NOT punch holes in the private original, shape or text.
+      // It only subtracts marks from this isolated transparent paint layer.
+      const paint=document.createElement('canvas')
+      paint.width=bitmap.width;paint.height=bitmap.height
+      try{
+        const brush=paint.getContext('2d')
+        if(!brush)throw Error('viewer.stroke_canvas_unsupported')
+        drawPhotoStrokes(brush,bitmap.width,bitmap.height,strokes)
+        ctx.drawImage(paint,0,0)
+      }finally{
+        paint.width=0;paint.height=0
+      }
+    }
     drawPhotoText(ctx,bitmap.width,bitmap.height,marks)
     const blob=await new Promise<Blob>((resolve,reject)=>{
       canvas.toBlob(result=>result?resolve(result):reject(
