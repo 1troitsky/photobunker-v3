@@ -5,6 +5,7 @@ import {MsgType,SyncState,type MatrixClient} from 'matrix-js-sdk'
 import {activeSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
 import {freshPackage} from '../../identity/infrastructure/crypto'
+import {jsonApi} from '../../identity/infrastructure/api'
 import {listConfirmedContacts} from '../../people/application/contact-book'
 import {
   getLocalMatrixBindingForPending,getBoundMatrixCredentials,
@@ -15,6 +16,7 @@ import {
   enqueueMatrixText,listMatrixTextOutbox,flushMatrixTextOutbox,
 } from './matrix-text-outbox'
 
+vi.mock('../../identity/infrastructure/api',()=>({jsonApi:vi.fn()}))
 vi.mock('../../people/application/contact-book',
   ()=>({listConfirmedContacts:vi.fn()}))
 vi.mock('./matrix-binding',()=>({
@@ -23,6 +25,7 @@ vi.mock('./matrix-binding',()=>({
 }))
 vi.mock('./matrix-peer-identity',()=>({getMatrixContactMapping:vi.fn()}))
 vi.mock('./matrix-verified-device',()=>({inspectVerifiedMatrixDevice:vi.fn()}))
+const api=vi.mocked(jsonApi)
 const contacts=vi.mocked(listConfirmedContacts)
 const local=vi.mocked(getLocalMatrixBindingForPending)
 const active=vi.mocked(getBoundMatrixCredentials)
@@ -79,6 +82,11 @@ beforeEach(async()=>{
   }
   local.mockResolvedValue(contract)
   active.mockResolvedValue({contract,accessToken:'secret-matrix-token'})
+  api.mockResolvedValue({
+    bound:true,homeserverUrl:contract.homeserverUrl,
+    matrixUserId:contract.matrixUserId,
+    deviceBinding:{contract:JSON.stringify(contract)},
+  } as never)
   mapped.mockResolvedValue({
     homeserverUrl:contract.homeserverUrl,
     matrixUserId:mxPeer,matrixDeviceId:'REMOTE_DEV_ONE',
@@ -215,6 +223,17 @@ describe('P2-02E durable Matrix text E2EE outbox',()=>{
     }})
     expect((await flushMatrixTextOutbox(client)).accepted).toBe(0)
     expect(sent).not.toHaveBeenCalled()
+  })
+  it('refuses a revoked authoritative PB3 Matrix binding even if local token still exists',async()=>{
+    await enqueueMatrixText(target,roomId,plaintext,ed25519)
+    api.mockResolvedValue({
+      bound:false,homeserverUrl:'https://matrix.example.test',
+      matrixUserId:mxOwn,deviceBinding:null,
+    } as never)
+    expect((await flushMatrixTextOutbox(client)).accepted).toBe(0)
+    expect(api).toHaveBeenCalledWith('/matrix/v1/me')
+    expect(sent).not.toHaveBeenCalled()
+    expect((await listMatrixTextOutbox())[0]?.state).toBe('queued')
   })
   it('rejects unsigned/new recipient devices or changed contact key before send',async()=>{
     await enqueueMatrixText(target,roomId,plaintext,ed25519)
