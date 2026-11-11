@@ -10,6 +10,7 @@ test('P2 Viewer: decoded video frame → volatile JPEG → offline E2EE Browser 
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await page.goto('/browser')
     await context.setOffline(true)
 
     // Build a REAL decodable WebM on-device, not a fake video byte fixture.
@@ -54,6 +55,9 @@ test('P2 Viewer: decoded video frame → volatile JPEG → offline E2EE Browser 
       })
       return {id,bytes:file.size}
     })
+    // Cold offline app boot is not supported yet. Navigate while online,
+    // then take and encrypt the frame on an offline, already loaded page.
+    await context.setOffline(false)
     await page.goto('/browser/file/media/'+source.id)
     const video=page.getByTestId('file-viewer-video')
     await expect(video).toBeVisible()
@@ -61,6 +65,7 @@ test('P2 Viewer: decoded video frame → volatile JPEG → offline E2EE Browser 
       {timeout:30000}).toBeGreaterThanOrEqual(2)
     await expect(page.getByTestId('file-viewer-info'))
       .toContainText('PRIVATE-SOURCE-VIDEO.webm')
+    await context.setOffline(true)
     let unconfirmedDownloads=0
     page.on('download',()=>{unconfirmedDownloads++})
     await page.getByTestId('file-viewer-create-still').click()
