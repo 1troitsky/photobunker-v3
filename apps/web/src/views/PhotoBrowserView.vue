@@ -257,7 +257,7 @@ const searchScope=computed(()=>{
   if(archiveTab.value==='archive'||!folderReady.value)return authenticatedRows
   return scopeCatalogFolders(
     authenticatedRows,folderWorkspace.value.placements,selectedFolder.value,
-    search.trim().length>0&&searchFolderScope.value==='all',
+    search.value.trim().length>0&&searchFolderScope.value==='all',
   )
 })
 const visible=computed(()=>filterCatalog(searchScope.value,{
