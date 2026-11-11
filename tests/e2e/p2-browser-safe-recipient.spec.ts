@@ -235,10 +235,23 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     await expect(editorial).toBeVisible()
     await editorial.getByTestId('media-editorial-select')
       .selectOption(assignmentId)
+    // Sign the editorial association while offline; no cloud ACK may be
+    // invented. Sync on reconnect and verify the real owner-signed receipt.
+    await ownerContext.setOffline(true)
     owner.once('dialog',d=>d.accept())
     await editorial.getByTestId('media-editorial-bind').click()
-    // Surface the real server/client failure, not an opaque "missing UI"
-    // timeout. The test still requires confirmed, signed cloud receipt.
+    await expect(associatedPanel.getByText(
+      'Привязка подписана локально и ожидает подтверждения сервера. Публичный доступ выключен.',
+    )).toBeVisible({timeout:25000})
+    await expect(editorial).toContainText('Состояние: queued')
+    await ownerContext.setOffline(false)
+    await owner.evaluate(async()=>{
+      const auth=await import('/src/features/identity/application/session.ts')
+      await auth.reauthenticate()
+      const editorial=await import('/src/features/media/application/safe-assignment-editorial.ts')
+      await editorial.flushEditorialLinks()
+    })
+    await editorial.getByTestId('media-editorial-refresh').click()
     await expect.poll(async()=>{
       if(await editorial.getByTestId('media-editorial-linked').isVisible())
         return 'confirmed'
@@ -246,7 +259,7 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
         .allTextContents()
       if(errors.length)return 'error: '+errors.join(' | ')
       return 'pending'
-    },{timeout:20000}).toBe('confirmed')
+    },{timeout:30000}).toBe('confirmed')
     const bound=await owner.evaluate(async safeId=>{
       const res=await fetch('/media-file-preview/v1/assignment-links/'+safeId)
       const data=await res.json()
