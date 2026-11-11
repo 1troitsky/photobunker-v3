@@ -295,6 +295,16 @@ final class SafeAssignmentEditorialLinkController extends Controller
             // signed PRIVATE preview ceilings, not just arbitrary IDs.
             $this->policy('file',$safe->id,$owner,$c,$a,$source,$safe);
             $this->policy('assignment',$a->id,$owner,$c,$a,$source,$safe);
+            // This immutable signed link must never promise a longer
+            // lifetime than either independently signed preview ceiling.
+            // A future ceiling extension does not expand an older link.
+            $fileCeiling=DB::table('media_file_preview_policies_v1')
+                ->where('safe_media_id',$safe->id)->value('expires_at_ms');
+            $assignmentCeiling=DB::table('assignment_preview_ceilings_v1')
+                ->where('assignment_id',$a->id)->value('expires_at_ms');
+            abort_unless($fileCeiling!==null&&$assignmentCeiling!==null
+                &&$c['expiresAt']<=min(
+                    (int)$fileCeiling,(int)$assignmentCeiling),422);
             $existing=DB::table('safe_assignment_editorial_links_v1')
                 ->where('safe_media_id',$safe->id)->lockForUpdate()->first();
             if($existing){
