@@ -67,6 +67,7 @@ test('P2 Viewer: before/after shows original without exporting or changing edite
     await expect(preview).toHaveAttribute('src',originalUrl!)
     await expect(page.getByTestId('file-viewer-save-crop')).toHaveCount(0)
     await expect(page.getByTestId('file-viewer-download-crop')).toHaveCount(0)
+    await expect(page.getByTestId('file-viewer-create-crop')).toBeDisabled()
     await expect(page.getByTestId('file-viewer-photo-paint-canvas')).toHaveCount(0)
     const before=await readPixel()
     expect(before[0]!).toBeGreaterThan(before[1]!+80)
