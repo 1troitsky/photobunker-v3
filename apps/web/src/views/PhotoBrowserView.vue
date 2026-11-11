@@ -34,8 +34,10 @@ import type {FolderConflictPlan} from '../features/browser/application/folder-co
 import type {ConflictSide} from '../features/browser/domain/folder-merge'
 import {
   listArchivePage,signedArchiveAction,retryPendingArchiveAction,
-  getPendingArchiveAction,
+  getPendingArchiveAction,inspectPendingArchiveAction,
+  discardObsoleteArchiveAction,
 } from '../features/browser/application/browser-archive'
+import type {ArchivePendingInspection} from '../features/browser/application/browser-archive'
 import type {ArchivePending} from '../features/browser/application/archive-outbox'
 import type {ArchiveEntry,ArchiveAction} from '../features/browser/application/browser-archive'
 
@@ -92,6 +94,7 @@ const archiveBusy=ref(false)
 const archiveNotice=ref('')
 const archivePending=ref<ArchivePending|null>(null)
 const archivePendingError=ref('')
+const archiveInspection=ref<ArchivePendingInspection|null>(null)
 async function refreshArchivePending():Promise<void>{
   const identity=activeSession.value
   if(!identity)return
@@ -99,6 +102,7 @@ async function refreshArchivePending():Promise<void>{
     const item=await getPendingArchiveAction()
     if(identity===activeSession.value){
       archivePending.value=item
+      if(!item)archiveInspection.value=null
       archivePendingError.value=''
     }
   }catch(e){
@@ -161,6 +165,63 @@ async function loadArchiveMore():Promise<void>{
     if(s===activeSession.value)archiveNotice.value='Архив: '+reason(e)
   }finally{
     if(s===activeSession.value)archiveBusy.value=false
+  }
+}
+async function inspectArchivePending():Promise<void>{
+  if(archiveBusy.value||!archivePending.value||!activeSession.value?.online)
+    return
+  const session=activeSession.value
+  archiveBusy.value=true
+  archiveNotice.value=''
+  try{
+    const result=await inspectPendingArchiveAction()
+    if(session!==activeSession.value)return
+    archiveInspection.value=result
+    archiveNotice.value=result?.status==='committed'
+      ?'Сервер подтвердил ранее принятую подписанную операцию.'
+      :result?.status==='obsolete'
+        ?'Сервер подтвердил конфликт: исходная ревизия больше не действительна. Запрос не выполнен и не может быть принят позднее.'
+        :'Исходная операция ещё может быть выполнена сервером. Снимать её с очереди небезопасно.'
+    await refreshArchivePending()
+    if(result?.status==='committed'){
+      const page=await listArchivePage()
+      if(session!==activeSession.value)return
+      archiveEntries.value=page.items
+      archiveCursor.value=page.nextCursor
+      void refresh()
+    }
+  }catch(e){
+    if(session===activeSession.value)
+      archiveNotice.value='Не удалось подтвердить состояние запроса: '+reason(e)
+  }finally{
+    if(session===activeSession.value)archiveBusy.value=false
+  }
+}
+async function discardArchiveObsolete():Promise<void>{
+  if(archiveBusy.value||archiveInspection.value?.status!=='obsolete'
+    ||!activeSession.value?.online
+    ||!window.confirm('Снять запрос, который сервер подтвердил как устаревший? Это не выполняет удаление файла. Состояние архива будет загружено заново.'))return
+  const session=activeSession.value
+  archiveBusy.value=true
+  try{
+    await discardObsoleteArchiveAction()
+    if(session!==activeSession.value)return
+    archiveInspection.value=null
+    archiveNotice.value='Устаревший запрос безопасно снят после повторной серверной проверки.'
+    await refreshArchivePending()
+    const page=await listArchivePage()
+    if(session!==activeSession.value)return
+    archiveEntries.value=page.items
+    archiveCursor.value=page.nextCursor
+    void refresh()
+  }catch(e){
+    if(session===activeSession.value)
+      archiveNotice.value='Не удалось снять неподтверждённый запрос: '+reason(e)
+  }finally{
+    if(session===activeSession.value){
+      archiveBusy.value=false
+      await refreshArchivePending()
+    }
   }
 }
 async function retryArchivePending():Promise<void>{
@@ -633,6 +694,7 @@ watch(activeSession,(next,previous)=>{
     archiveCleanupEnabled.value=false
     archivePending.value=null
     archivePendingError.value=''
+    archiveInspection.value=null
     void refreshArchivePending()
     void loadFolders()
     void loadMergeBackups()
@@ -651,6 +713,7 @@ onUnmounted(()=>{
   ++generation;++folderEpoch;++folderSyncEpoch
   mergePlan.value=null;mergeChoices.value={};mergeBackups.value=[]
   archivePending.value=null
+  archiveInspection.value=null
   revokePreview()
 })
 </script>
@@ -819,6 +882,21 @@ onUnmounted(()=>{
         <button type="button" data-testid="browser-archive-retry"
           :disabled="archiveBusy||!archiveWriteEnabled||!activeSession.online"
           @click="retryArchivePending">Повторить исходный запрос</button>
+        <button type="button" data-testid="browser-archive-inspect"
+          :disabled="archiveBusy||!activeSession.online"
+          @click="inspectArchivePending">Проверить результат на сервере</button>
+        <div v-if="archiveInspection?.status==='obsolete'"
+          data-testid="browser-archive-obsolete">
+          <p>Серверная ревизия {{ archiveInspection.currentRevision }}
+            уже новее исходной команды. После повторной проверки можно
+            снять только эту устаревшую команду; она не может изменить файл.</p>
+          <button type="button" data-testid="browser-archive-discard"
+            :disabled="archiveBusy||!activeSession.online"
+            @click="discardArchiveObsolete">Снять устаревший запрос</button>
+        </div>
+        <p v-if="archiveInspection?.status==='unresolved'" role="status">
+          Сервер пока не доказал, что операция отменена или выполнена.
+          Оставляем подписанный запрос в зашифрованной очереди.</p>
       </div>
       <p v-if="archivePendingError" role="alert">{{ archivePendingError }}</p>
       <p v-if="archiveNotice" role="status" data-testid="browser-archive-status">
