@@ -416,7 +416,7 @@ onUnmounted(()=>{++generation;++folderEpoch;revokePreview()})
           <button type="button" data-testid="browser-folder-sync"
             :disabled="folderSyncBusy||folderBusy||!folderReady||!!folderError||!activeSession.online"
             @click="syncFoldersCloud">
-            {{ folderSyncBusy?'Синхронизация…':'Синхронизировать папки' }}
+            {{ folderSyncBusy?'Передаём папки…':'Обновить папки в облаке' }}
           </button>
           <span v-if="folderSyncStatus" data-testid="browser-folder-sync-status"
             role="status" class="muted">{{ folderSyncStatus }}</span>
