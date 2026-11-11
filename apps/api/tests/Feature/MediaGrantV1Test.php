@@ -750,6 +750,19 @@ final class MediaGrantV1Test extends TestCase
             ->where('operation_id',$event->operation_id)
             ->update(['contract_hash'=>$event->contract_hash]);
 
+        // The current-row TTL is materialized, never independently
+        // authoritative over the owner-signed expiry.
+        $policy=DB::table('media_file_preview_policies_v1')
+            ->where('safe_media_id',$safe['id'])->first();
+        DB::table('media_file_preview_policies_v1')
+            ->where('safe_media_id',$safe['id'])
+            ->update(['expires_at_ms'=>$policy->expires_at_ms+1000]);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertConflict();
+        DB::table('media_file_preview_policies_v1')
+            ->where('safe_media_id',$safe['id'])
+            ->update(['expires_at_ms'=>$policy->expires_at_ms]);
+
         DB::table('media_files_v1')->where('id',$source['id'])
             ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
         $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
