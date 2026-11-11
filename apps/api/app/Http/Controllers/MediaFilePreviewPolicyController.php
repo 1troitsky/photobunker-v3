@@ -149,12 +149,16 @@ final class MediaFilePreviewPolicyController extends Controller
                 $current->safe_contract_hash),409);
         $history=$this->verifiedHistory($safeMediaId,$owner,$source,$safe);
         $last=$history['events']->last();
+        $signed=json_decode($current->contract_json,true,16,JSON_THROW_ON_ERROR);
         abort_unless($last
             &&(int)$current->revision===$history['revision']
             &&hash_equals($history['hash'],$current->contract_hash)
             &&hash_equals($last->contract_json,$current->contract_json)
             &&hash_equals($last->account_signature,$current->account_signature)
-            &&(int)$last->to_revision===(int)$current->revision,409);
+            &&(int)$last->to_revision===(int)$current->revision
+            &&(int)$current->expires_at_ms===$signed['expiresAt']
+            &&(int)$current->expires_at_ms<=(int)$source->expires_at
+            &&(int)$current->expires_at_ms<=(int)$safe->expires_at,409);
         // An already expired preview policy cannot be treated as a valid
         // permission ceiling, even though nothing was ever published.
         abort_if($current->expires_at_ms<=PhotoSync::nowMs(),410);
