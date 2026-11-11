@@ -38,6 +38,8 @@ import {
   discardObsoleteArchiveAction,
 } from '../features/browser/application/browser-archive'
 import type {ArchivePendingInspection} from '../features/browser/application/browser-archive'
+import {planArchiveBatch,executeArchiveBatch}
+  from '../features/browser/application/archive-batch'
 import {
   localArchivePreferences,effectiveArchivePreferenceValues,
   editArchivePreferences,synchronizeArchivePreferences,
@@ -100,6 +102,8 @@ const archiveEntries=ref<ArchiveEntry[]>([])
 const archiveCursor=ref<string|null>(null)
 const archiveBusy=ref(false)
 const archiveNotice=ref('')
+const archiveBatchNotice=ref('')
+const archiveBatchProgress=ref(0)
 const archivePending=ref<ArchivePending|null>(null)
 const archivePendingError=ref('')
 const archiveInspection=ref<ArchivePendingInspection|null>(null)
@@ -374,6 +378,68 @@ async function archiveAction(item:CatalogItem,action:ArchiveAction):Promise<void
   }catch(e){
     if(identity===activeSession.value)
       archiveNotice.value='Операция архива не подтверждена: '+reason(e)
+  }finally{
+    if(identity===activeSession.value){
+      archiveBusy.value=false
+      await refreshArchivePending()
+    }
+  }
+}
+async function runArchiveBatch(action:ArchiveAction):Promise<void>{
+  if(archiveBusy.value||folderBusy.value||busy.value
+    ||archivePending.value||!archiveWriteEnabled.value
+    ||!archivePrefsConfirmed.value||!activeSession.value?.online)return
+  let plan
+  try{
+    plan=planArchiveBatch({
+      selectedKeys:selectedKeys.value,
+      visible:visible.value,archived:archivedByKey.value,
+      tab:archiveTab.value,useArchive:archivePrefsShown.value.useArchive,
+      action,
+    })
+  }catch(e){
+    archiveBatchNotice.value='Массовая операция отклонена до отправки: '+reason(e)
+    return
+  }
+  const irreversible=action==='delete'
+  const prompt=irreversible
+    ?'Окончательно удалить '+plan.rows.length+' файлов? Это необратимо, доступ будет закрываться последовательно по подтверждениям сервера. Физическая очистка S3 проверяется отдельно.'
+    :action==='archive'
+      ?'Переместить '+plan.rows.length+' файлов в архив? Каждый запрос будет подтверждён отдельно сервером.'
+      :'Восстановить '+plan.rows.length+' файлов из архива без продления TTL?'
+  if(!window.confirm(prompt))return
+  const identity=activeSession.value
+  archiveBusy.value=true
+  archiveBatchNotice.value=''
+  archiveBatchProgress.value=0
+  try{
+    const result=await executeArchiveBatch(
+      plan,signedArchiveAction,
+      ()=>activeSession.value===identity,
+      key=>{
+        selectedKeys.value=selectedKeys.value.filter(x=>x!==key)
+        archiveBatchProgress.value++
+      },
+    )
+    if(identity!==activeSession.value)return
+    archiveBatchNotice.value=result.failedKey
+      ?'Подтверждено '+result.completed.length+' из '+plan.rows.length+
+        '. Остановлено на следующем файле: '+reason(result.failure)+
+        '. Неподтверждённая подписанная операция сохранена; остальные файлы не затронуты.'
+      :'Все '+result.completed.length+' операций подтверждены сервером. Физическое удаление не заявлено.'
+    // Refresh authoritative list after partial success too; a failed
+    // signed request must remain visible in the existing durable outbox.
+    try{
+      const page=await listArchivePage()
+      if(identity!==activeSession.value)return
+      archiveEntries.value=page.items
+      archiveCursor.value=page.nextCursor
+      archiveWriteEnabled.value=page.writeEnabled
+      archiveCleanupEnabled.value=page.autoCleanupEnabled
+    }catch(e){
+      archiveBatchNotice.value+=' Архивный список пока не обновлён: '+reason(e)
+    }
+    void refresh()
   }finally{
     if(identity===activeSession.value){
       archiveBusy.value=false
@@ -786,6 +852,9 @@ watch(activeSession,(next,previous)=>{
     archivePending.value=null
     archivePendingError.value=''
     archiveInspection.value=null
+    archiveBatchNotice.value=''
+    archiveBatchProgress.value=0
+    archiveBusy.value=false
     archivePrefs.value=null
     archivePrefsNotice.value=''
     archivePrefsConflict.value=false
@@ -800,7 +869,7 @@ watch(activeSession,(next,previous)=>{
   }
   void refresh()
 })
-watch([selectedFolder,filter,search],()=>{selectedKeys.value=[]})
+watch([selectedFolder,filter,search,archiveTab],()=>{selectedKeys.value=[]})
 onMounted(()=>{
   void loadFolders();void loadMergeBackups();void loadArchivePrefState()
   void refreshArchivePending();void refresh()
@@ -1069,12 +1138,12 @@ onUnmounted(()=>{
       </p>
       <p class="muted">Приватные имена, теги и GPS не входят в серверный индекс.
         Поиск пока работает по ID; метаданные открываются после локальной расшифровки.</p>
-      <div class="browser-batch-toolbar" v-if="archiveTab==='all'&&folderReady&&!folderError">
+      <div class="browser-batch-toolbar" v-if="folderReady&&!folderError">
         <button type="button" :disabled="folderBusy||!visible.length"
           @click="selectVisible">Выбрать всё на странице</button>
         <button type="button" :disabled="!selectedKeys.length"
           @click="selectedKeys=[]">Снять выделение</button>
-        <label v-if="selectedKeys.length">
+        <label v-if="selectedKeys.length&&archiveTab==='all'">
           Назначение
           <select v-model="bulkDestination" :disabled="folderBusy"
             data-testid="browser-bulk-destination">
@@ -1083,16 +1152,39 @@ onUnmounted(()=>{
               :value="folder.id">{{ folder.name }}</option>
           </select>
         </label>
-        <button v-if="selectedKeys.length" type="button"
+        <button v-if="selectedKeys.length&&archiveTab==='all'" type="button"
           :disabled="folderBusy" @click="moveSelected">Переместить выбранные
           ({{ selectedKeys.length }})</button>
+        <button v-if="selectedKeys.length&&archiveTab==='all'" type="button"
+          data-testid="browser-bulk-archive"
+          :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!archivePrefsConfirmed||!!archivePending"
+          @click="runArchiveBatch(archivePrefsShown.useArchive?'archive':'delete')">
+          {{ archivePrefsShown.useArchive?'В архив выбранные':'Удалить окончательно выбранные' }}
+          ({{ selectedKeys.length }})</button>
+        <template v-if="selectedKeys.length&&archiveTab==='archive'">
+          <button type="button" data-testid="browser-bulk-restore"
+            :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!!archivePending"
+            @click="runArchiveBatch('restore')">Восстановить выбранные
+            ({{ selectedKeys.length }})</button>
+          <button type="button" data-testid="browser-bulk-delete"
+            :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!!archivePending"
+            @click="runArchiveBatch('delete')">Удалить окончательно выбранные
+            ({{ selectedKeys.length }})</button>
+        </template>
       </div>
+      <p v-if="archiveBatchNotice" data-testid="browser-bulk-status"
+        role="status">{{ archiveBatchNotice }}</p>
+      <p v-if="archiveBusy&&archiveBatchProgress" class="muted"
+        data-testid="browser-bulk-progress">
+        Подтверждено {{ archiveBatchProgress }} операций.
+      </p>
       <div :class="['browser-items',view==='grid'?'browser-grid':'browser-list']"
         data-testid="browser-catalog">
         <div v-for="item in visible" :key="item.key"
           :class="['browser-item', item.source==='photo'?'photo-row':'']"
           :data-testid="'browser-row-'+item.key">
-          <label v-if="archiveTab==='all'&&folderReady&&!folderError"
+          <label v-if="folderReady&&!folderError
+              &&(archiveTab==='all'||archivedByKey.get(item.key)?.state==='archived')"
             class="browser-item-select">
             <input type="checkbox" :checked="selectedKeys.includes(item.key)"
               :aria-label="'Выбрать файл '+item.id"
