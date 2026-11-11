@@ -88,6 +88,10 @@ test('P2 Viewer: editable movable photo text is flattened only into new E2EE JPE
     const layer=page.locator('.file-viewer-photo-text-layer')
     await expect(layer).toHaveCount(1)
     await expect(layer).toContainText('СЕКРЕТ')
+    // Editing the form can scroll the image above the viewport.
+    // Playwright page.mouse coordinates are viewport-relative, so always
+    // bring the actual draggable layer into view before pointer input.
+    await layer.scrollIntoViewIfNeeded()
     const rect=await layer.boundingBox()
     if(!rect)throw Error('text_layer_not_positioned')
     await page.mouse.move(rect.x+Math.min(7,rect.width/2),
