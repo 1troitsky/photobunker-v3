@@ -172,3 +172,48 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .shell-header-actions button { background:transparent; color:#999; border:1px solid #424242;
   border-radius:8px; padding:8px 10px; font:inherit; }
 .shell-header-actions button:disabled { opacity:.5; cursor:not-allowed; }
+
+
+/* P2 Browser v3: real encrypted local/cloud catalog, independent of Matrix. */
+.browser-v3{max-width:980px}
+.browser-title{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.browser-title h1{margin-bottom:4px}
+.browser-filters{display:flex;border-bottom:1px solid var(--outline);margin-top:18px;gap:0}
+.browser-filters button{flex:1;border:0;border-radius:0;background:transparent;
+  border-bottom:2px solid transparent;color:#aaa;padding:12px 8px}
+.browser-filters button.selected{border-bottom-color:var(--accent);color:#f5f5f5}
+.browser-toolbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:16px 0}
+.browser-search{flex:1;min-width:150px}
+.browser-search input,.browser-toolbar select{min-height:40px;width:100%;background:#151515;
+  border:1px solid #444;border-radius:8px;color:inherit;padding:8px 10px;font:inherit}
+.browser-toolbar select{width:auto;max-width:100%}
+.browser-view-switch{display:flex;border:1px solid #444;border-radius:8px;overflow:hidden}
+.browser-view-switch button{border:0;border-radius:0}
+.browser-view-switch button[aria-pressed=true]{background:#324235;color:#d8f4db}
+.browser-sr-only{position:absolute;clip:rect(0,0,0,0);width:1px;height:1px;
+  overflow:hidden;white-space:nowrap}
+.browser-items{margin:10px 0 18px}
+.browser-item{display:flex;align-items:center;gap:14px;min-width:0;
+  background:var(--surface);border:1px solid var(--outline);padding:12px;
+  border-radius:9px;margin:7px 0}
+.browser-item-kind{font-size:22px;width:42px;height:42px;flex:0 0 42px;
+  display:grid;place-items:center;background:#292f2b;border-radius:8px}
+.browser-item-detail{display:flex;flex:1;flex-direction:column;min-width:0;gap:4px}
+.browser-item-detail strong{font-size:13px;font-family:ui-monospace,monospace}
+.browser-item-detail small{font-size:11px;color:#aaa;overflow-wrap:anywhere}
+.browser-item button{flex:0 0 auto}
+.browser-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.browser-grid .browser-item{flex-direction:column;align-items:stretch;margin:0}
+.browser-grid .browser-item-kind{width:100%;height:95px}
+.browser-preview audio{width:100%}
+.browser-operations{margin-top:32px;border-top:1px solid #393939;padding-top:17px}
+.browser-operations h2{font-size:16px}
+@media(max-width:600px){
+  .browser-toolbar{align-items:stretch}
+  .browser-toolbar>.browser-search{flex-basis:100%}
+  .browser-toolbar>label:nth-child(2){flex:1;min-width:160px}
+  .browser-view-switch{flex:1}
+  .browser-item{gap:9px;padding:10px}
+  .browser-item-kind{width:34px;height:34px;flex-basis:34px}
+  .browser-item button{padding:8px}
+}
