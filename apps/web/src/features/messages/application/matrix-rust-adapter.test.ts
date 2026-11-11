@@ -8,6 +8,7 @@ import {acquireMatrixCryptoLease} from './matrix-crypto-lease'
 import {getVerifiedPB3Matrix4SKey} from './matrix-ssss-bridge'
 import {
   matrixCryptoStatus,startMatrixCrypto,stopMatrixCrypto,
+  isLeasedMatrixClient,
 } from './matrix-rust-adapter'
 
 const mocks=vi.hoisted(()=>({
@@ -71,6 +72,8 @@ describe('P2 RustCrypto bootstrap has no unverified message send path',()=>{
   it('checks PB3 and Matrix whoami before encrypted Rust IDB initialization',async()=>{
     await startMatrixCrypto()
     expect(matrixCryptoStatus.value).toBe('crypto_initialized_only')
+    expect(isLeasedMatrixClient(mocks.create.mock.results[0]?.value)).toBe(true)
+    expect(isLeasedMatrixClient({} as never)).toBe(false)
     expect(mocks.create).toHaveBeenCalledWith({
       baseUrl:config.homeserverUrl,userId:config.matrixUserId,
       deviceId:config.matrixDeviceId,accessToken,
@@ -100,6 +103,7 @@ describe('P2 RustCrypto bootstrap has no unverified message send path',()=>{
     expect(mocks.stop).toHaveBeenCalledTimes(1)
     expect(mocks.release).toHaveBeenCalledTimes(1)
     expect(matrixCryptoStatus.value).toBe('inactive')
+    expect(isLeasedMatrixClient(mocks.create.mock.results[0]?.value)).toBe(false)
   })
   it('rejects mismatched signed PB3 binding before creating Matrix client',async()=>{
     vi.mocked(jsonApi).mockResolvedValue({
@@ -123,6 +127,15 @@ describe('P2 RustCrypto bootstrap has no unverified message send path',()=>{
     vi.mocked(acquireMatrixCryptoLease).mockRejectedValue(Error('matrix.web_locks_unavailable'))
     await expect(startMatrixCrypto()).rejects.toThrow('matrix.web_locks_unavailable')
     expect(mocks.create).not.toHaveBeenCalled()
+  })
+  it('lease proof fails immediately on PB3 account change before async shutdown',async()=>{
+    await startMatrixCrypto()
+    const exact=mocks.create.mock.results[0]?.value
+    expect(isLeasedMatrixClient(exact)).toBe(true)
+    activeSession.value={...session,accountId:crypto.randomUUID()}
+    expect(isLeasedMatrixClient(exact)).toBe(false)
+    await vi.waitFor(()=>expect(mocks.release).toHaveBeenCalledTimes(1))
+    expect(isLeasedMatrixClient(exact)).toBe(false)
   })
   it('stops and releases exclusive ownership when PB3 account locks',async()=>{
     await startMatrixCrypto()
