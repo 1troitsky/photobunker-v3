@@ -26,6 +26,7 @@ import type {
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import { preflightAssignmentMediaGrant } from '../features/assignments/application/media-submission-preflight'
 import { verifyMediaSubmissionReceiptPage } from '../features/assignments/application/verify-media-submission'
+import { verifyPhotoSubmissionReceiptPage } from '../features/assignments/application/verify-photo-submission'
 import { appendOwnerMediaReceiptPage } from '../features/assignments/application/owner-media-receipt-pagination'
 import { parseRulesCsv, EMPTY_ADVANCED_RULES } from '../features/assignments/domain/advanced-rules'
 import type { AdvancedRules } from '../features/assignments/domain/advanced-rules'
@@ -72,6 +73,7 @@ const mediaNextCursor=ref<string|null>(null)
 const loadingMoreMedia=ref(false)
 const verifiedMediaReceipts=ref<Record<string,boolean>>({})
 const submissions=ref<Submission[]>([])
+const verifiedPhotoReceipts=ref<Record<string,boolean>>({})
 const photoNextCursor=ref<string|null>(null)
 const loadingMorePhotos=ref(false)
 const selectedId=ref('')
@@ -190,7 +192,7 @@ function resetSensitive():void {
   mediaFiles.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
   mediaNextCursor.value=null
   monthlyUsage.value=null
-  submissions.value=[];photoNextCursor.value=null
+  submissions.value=[];photoNextCursor.value=null;verifiedPhotoReceipts.value={}
   selectedId.value='';ownerCheck.value=null
   contributorCheck.value=null;showingOfflineSnapshot.value=false;cleanPreview()
 }
@@ -430,7 +432,7 @@ function choose(assignmentId:string):void{
   populateOwnerPolicyForm(chosen)
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
-  submissions.value=[];photoNextCursor.value=null
+  submissions.value=[];photoNextCursor.value=null;verifiedPhotoReceipts.value={}
   mediaSubmissions.value=[];verifiedMediaReceipts.value={}
   mediaNextCursor.value=null
   cleanPreview()
@@ -448,12 +450,15 @@ async function loadSubmissions():Promise<void>{
     // A server count or an unverified string is NOT a contributor signature.
     // Only the independently fingerprint-pinned contributor root can verify
     // the immutable consent receipt. An unpinned/changed key remains unverified.
-    const checks=await verifyMediaSubmissionReceiptPage(
-      mediaResult.items,id,owner.ownerAccountId)
+    const [checks,photoChecks]=await Promise.all([
+      verifyMediaSubmissionReceiptPage(mediaResult.items,id,owner.ownerAccountId),
+      verifyPhotoSubmissionReceiptPage(result.items,id),
+    ])
     if(selectedId.value===id&&activeSession.value===identity){
       const page=appendOwnerMediaReceiptPage([],mediaResult,null)
       const photoPage=appendOwnerMediaReceiptPage([],result,null)
       submissions.value=photoPage.items;photoNextCursor.value=photoPage.nextCursor
+      verifiedPhotoReceipts.value=photoChecks
       mediaSubmissions.value=page.items
       mediaNextCursor.value=page.nextCursor
       verifiedMediaReceipts.value=checks
@@ -472,10 +477,12 @@ async function loadMorePhotoSubmissions():Promise<void>{
   try{
     const page=await listAssignmentSubmissionsPage(id,after)
     const appended=appendOwnerMediaReceiptPage(submissions.value,page,after)
+    const photoChecks=await verifyPhotoSubmissionReceiptPage(page.items,id)
     if(selectedId.value!==id||activeSession.value!==identity
       ||photoNextCursor.value!==after)return
     submissions.value=appended.items
     photoNextCursor.value=appended.nextCursor
+    verifiedPhotoReceipts.value={...verifiedPhotoReceipts.value,...photoChecks}
   }catch(e){error.value=explain(e)}
   finally{loadingMorePhotos.value=false}
 }
@@ -1000,7 +1007,11 @@ onUnmounted(cleanPreview)
           <button type="button" :disabled="busy" @click="loadSubmissions">Обновить материалы</button>
           <p v-if="!submissions.length&&!mediaSubmissions.length" class="muted">Нет подтверждённых отправок или доступа по E2EE grant.</p>
           <div v-for="entry in submissions" :key="entry.submissionId" class="photo-row">
-            <div><strong>{{ entry.photoId.slice(0,8) }}</strong><small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small></div>
+            <div>
+              <strong>{{ entry.photoId.slice(0,8) }}</strong>
+              <small>{{ verifiedPhotoReceipts[entry.submissionId]?'Подпись отправки проверена':'Подпись отправки не проверена — подтвердите ключ участника' }}</small>
+              <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
+            </div>
             <button type="button" :disabled="busy" @click="openSubmission(entry.photoGrantId)">Просмотр</button>
           </div>
           <button v-if="photoNextCursor" type="button"
