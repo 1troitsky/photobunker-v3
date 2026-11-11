@@ -448,7 +448,19 @@ function download():void{
   anchor.remove()
 }
 watch([trimStart,trimEnd],()=>{clearAudioClip()})
-watch(activeSession,()=>{
+watch(activeSession,(next,previous)=>{
+  // A CSRF/session reauthentication may replace Session with a new object
+  // containing the SAME key package and physical device. Never erase a
+  // user's current trim bounds or volatile preview just for online status.
+  // A new key package/device/account is a REAL trust boundary: wipe.
+  if(next&&previous
+    &&next.accountId===previous.accountId
+    &&next.deviceId===previous.deviceId
+    &&next.pkg===previous.pkg
+    &&next.device===previous.device){
+    void refreshIndex()
+    return
+  }
   clearBlob();clearIndex()
   void refreshIndex()
   void openFile()
