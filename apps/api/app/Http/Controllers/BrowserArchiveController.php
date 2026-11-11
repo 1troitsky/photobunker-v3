@@ -91,20 +91,18 @@ final class BrowserArchiveController extends Controller
      * Keep assignment proof and outstanding signed share grants intact.
      * The owner must revoke active grants separately before archiving.
      */
-    private static function standalone(string $kind,string $id,int $now):void
+    private static function standalone(string $kind,string $id):void
     {
         if($kind==='photo'){
             abort_if(DB::table('assignment_submissions_v1')
                 ->where('photo_id',$id)->exists(),409);
             abort_if(DB::table('photo_access_grants')
-                ->where('photo_id',$id)->where('state','active')
-                ->where('expires_at','>',$now)->exists(),409);
+                ->where('photo_id',$id)->exists(),409);
         }else{
             abort_if(DB::table('assignment_media_submissions_v1')
                 ->where('media_id',$id)->exists(),409);
             abort_if(DB::table('media_recipient_grants_v1')
-                ->where('media_id',$id)->where('state','active')
-                ->where('expires_at','>',$now)->exists(),409);
+                ->where('media_id',$id)->exists(),409);
         }
     }
 
@@ -164,7 +162,7 @@ final class BrowserArchiveController extends Controller
                 abort_unless($asset->state==='active'
                     &&(int)$asset->expires_at>$now,410);
                 abort_if($entry&&$entry->state!=='restored',409);
-                self::standalone($c['kind'],$asset->id,$now);
+                self::standalone($c['kind'],$asset->id);
                 $until=min((int)$asset->expires_at,
                     $now+((int)config('browser_archive.archive_days',7))*86400000);
                 abort_if($until<=$now,410);
@@ -179,7 +177,7 @@ final class BrowserArchiveController extends Controller
                 abort_unless($entry&&$entry->state==='archived',409);
                 // Delete forbidden for assignment evidence even if the
                 // archive entry predates a later grant/submission.
-                self::standalone($c['kind'],$asset->id,$now);
+                self::standalone($c['kind'],$asset->id);
                 if($c['kind']==='photo')$this->photos->mark($asset->id,'archived_delete');
                 else $this->media->mark($asset->id);
                 $state='deleting';$until=$now;
