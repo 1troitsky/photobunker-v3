@@ -181,6 +181,13 @@ final class AssignmentV1Test extends TestCase
         $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
         $this->getJson('/assignments/v1/invites/received')
             ->assertJsonPath('items',[]);
+        // An inconsistent mutable projection is NOT a new membership:
+        // the immutable signed removal event permanently wins.
+        DB::table('assignment_invites_v1')->where('id',$inviteId)
+            ->update(['state'=>'accepted']);
+        $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1/invites/received')
+            ->assertJsonPath('items',[]);
         $acceptRecord=DB::table('assignment_invites_v1')
             ->where('id',$inviteId)->first();
         $this->postJson('/assignments/v1/'.$this->assignmentId
@@ -189,6 +196,11 @@ final class AssignmentV1Test extends TestCase
                 'signature'=>$acceptRecord->accepted_signature,
             ])->assertConflict();
         $this->as('owner');
+        $this->postJson($url,$proof)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('assignment_invites_v1',[
+            'id'=>$inviteId,'state'=>'removed',
+        ]);
         $finish=$this->signedState('owner','finish',1);
         $this->postJson('/assignments/v1/'.$this->assignmentId.'/state',$finish)
             ->assertOk()->assertJsonPath('state','finished');
@@ -2107,6 +2119,22 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('items.0.confirmedVideoCount',1)
             ->assertJsonPath('items.0.confirmedAudioCount',1);
         $this->getJson($url)->assertOk()->assertJsonCount(2,'items');
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'pending']);
+        $this->getJson($url)->assertOk()->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedVideoCount',0)
+            ->assertJsonPath('items.0.confirmedAudioCount',0);
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'accepted']);
+        $this->getJson($url)->assertOk()->assertJsonCount(2,'items');
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedVideoCount',1)
+            ->assertJsonPath('items.0.confirmedAudioCount',1);
         $this->as('outsider');
         $this->getJson($url)->assertNotFound();
 
