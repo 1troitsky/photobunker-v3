@@ -173,14 +173,20 @@ final class SafeAssignmentEditorialLinkController extends Controller
                 $events->last()->account_signature??$events->last()->owner_signature)
             &&(int)$head->expires_at_ms===$current['expiresAt'],409);
         abort_unless($current['expiresAt']>PhotoSync::nowMs(),410);
-        $limits=[$source->expires_at,$safe->expires_at];
+        // File-specific ceiling is bounded by BOTH photo TTLs. The
+        // independent assignment-wide ceiling is NOT bound to whichever
+        // Safe file happens to be evaluated; it may outlive that photo.
+        // Its own cap is assignment retention only. The association and
+        // future actual access still use the minimum of all live scopes.
+        $limits=$file?[(int)$source->expires_at,(int)$safe->expires_at]:[];
         if(!$file){
             foreach([$assignment->files_access_until,
                 $assignment->assignment_access_until] as $deadline){
                 if($deadline!==null)$limits[]=(int)$deadline;
             }
         }
-        abort_unless($current['expiresAt']<=min($limits),409);
+        abort_unless($limits===[]
+            ||$current['expiresAt']<=min($limits),409);
         return $current['fields'];
     }
 
