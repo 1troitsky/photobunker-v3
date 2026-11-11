@@ -280,6 +280,20 @@ final class AssignmentContract
             self::uuid($d,$key);
     }
 
+    /** Owner-signed revocation of the invitation's current live authority. */
+    public static function memberRemoval(
+        array $d,string $owner,string $assignment,string $invite
+    ):void {
+        abort_unless(($d['version']??null)===1
+            &&($d['action']??null)==='remove'
+            &&($d['assignmentId']??null)===$assignment
+            &&($d['inviteId']??null)===$invite
+            &&($d['ownerAccountId']??null)===$owner
+            &&($d['recipientAccountId']??null)!==$owner,422);
+        foreach(['operationId','assignmentId','inviteId',
+            'ownerAccountId','recipientAccountId'] as $key)self::uuid($d,$key);
+    }
+
     /**
      * Only a tiny signed lifecycle vertical: finish/resume. Never delete
      * contributor-owned photos or mutate the original signed capture policy.
