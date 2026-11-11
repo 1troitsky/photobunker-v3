@@ -36,18 +36,19 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
       (img:HTMLImageElement)=>img.naturalWidth)).toBe(200)
     await context.setOffline(true)
 
-    const setRange=async(id:string,value:string)=>{
-      await page.getByTestId(id).evaluate((element:HTMLInputElement,next:string)=>{
-        element.value=next
-        element.dispatchEvent(new Event('input',{bubbles:true}))
-        element.dispatchEvent(new Event('change',{bubbles:true}))
-      },value)
+    // Exercise real native range events. Direct DOM value assignment can
+    // bypass Vue's state update and produce a false screenshot-only pass.
+    const setRange=async(id:string,value:number,min:number)=>{
+      const slider=page.getByTestId(id)
+      await slider.focus()
+      await slider.press('Home')
+      for(let i=min;i<value;i++)await slider.press('ArrowRight')
     }
     // Shrink before shifting — user cannot move a 100%-wide crop off-image.
-    await setRange('file-viewer-crop-width','50')
-    await setRange('file-viewer-crop-height','60')
-    await setRange('file-viewer-crop-left','10')
-    await setRange('file-viewer-crop-top','10')
+    await setRange('file-viewer-crop-width',50,10)
+    await setRange('file-viewer-crop-height',60,10)
+    await setRange('file-viewer-crop-left',10,0)
+    await setRange('file-viewer-crop-top',10,0)
     await page.getByTestId('file-viewer-crop-turn').selectOption('1')
     const editor=page.getByTestId('file-viewer-photo-editor')
     await expect(editor).toContainText('Ширина · 50%')
