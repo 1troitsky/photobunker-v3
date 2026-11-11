@@ -698,6 +698,26 @@ final class AssignmentV1Controller extends Controller
                 ->where('g.state','active')->where('g.expires_at','>',$now)
                 ->selectRaw('COUNT(*)');
         },'confirmed_photo_count');
+        // The legacy photo_records and modern encrypted P2 Photo MediaFile
+        // submission stores are distinct. Count both LIVE, assignment-scoped
+        // ciphertext grants, never queued optimistic client entries.
+        $rows->selectSub(function($sub)use($now){
+            $sub->from('assignment_media_submissions_v1 as s')
+                ->join('media_files_v1 as m','m.id','=','s.media_id')
+                ->join('media_recipient_grants_v1 as g','g.id','=','s.media_grant_id')
+                ->whereColumn('s.assignment_id','a.id')
+                ->where('s.media_type','photo')
+                ->where('m.media_type','photo')
+                ->whereColumn('m.account_id','s.contributor_account_id')
+                ->whereColumn('m.contract_hash','s.media_contract_hash')
+                ->whereColumn('g.media_id','s.media_id')
+                ->whereColumn('g.owner_account_id','s.contributor_account_id')
+                ->whereColumn('g.recipient_account_id','a.owner_account_id')
+                ->whereColumn('g.assignment_id','s.assignment_id')
+                ->where('m.state','active')->where('m.expires_at','>',$now)
+                ->where('g.state','active')->where('g.expires_at','>',$now)
+                ->selectRaw('COUNT(*)');
+        },'confirmed_p2_photo_count');
         // Independent and full server-derived counts. Never infer progress
         // from the first 50 paginated receipts or a client-reported count.
         foreach(['video','audio'] as $kind){
@@ -736,7 +756,7 @@ final class AssignmentV1Controller extends Controller
             })(),
             'confirmedPhotoCount'=>$x->files_access_until!==null
                 &&(int)$x->files_access_until<=PhotoSync::nowMs()
-                ?0:(int)$x->confirmed_photo_count,
+                ?0:(int)$x->confirmed_photo_count+(int)$x->confirmed_p2_photo_count,
             'confirmedVideoCount'=>$x->files_access_until!==null
                 &&(int)$x->files_access_until<=PhotoSync::nowMs()
                 ?0:(int)$x->confirmed_video_count,
