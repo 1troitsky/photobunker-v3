@@ -4,7 +4,7 @@ import { jsonApi } from '../../identity/infrastructure/api'
 import { importSigner, sign, verify, importSpki, digest, hex, b64, unb64 } from '../../identity/infrastructure/crypto'
 import { pinnedPeer } from '../../sharing/key-directory'
 import { listOutgoingGrants } from '../../sharing/grant-flow'
-import { listOutgoingMediaGrants } from '../../media/application/media-grants'
+import { listOutgoingMediaGrants,parseMediaGrantContract } from '../../media/application/media-grants'
 import { listLocalMedia } from '../../media/application/media-outbox'
 import type { MediaCaptureIntent } from '../../media/application/media-outbox'
 import { sealAssignment, resealOwnerAssignment, openOwnerAssignment, wrapAssignmentForRecipient, validatePrivateAssignment, upgradePrivateAssignment } from '../infrastructure/assignment-crypto'
@@ -721,7 +721,9 @@ async function signedOperation(
 ):Promise<AssignmentOperation>{
   const s=requireSession()
   const contract=JSON.stringify(payload)
-  const signingDomain=kind==='media-submit'&&payload.version===2
+  const signingDomain=kind==='media-submit'&&payload.version===3
+    ?'pb3.assignment-media-submit.v3\n'
+    :kind==='media-submit'&&payload.version===2
     ?'pb3.assignment-media-submit.v2\n'
     :kind==='policy'&&payload.version===6
       ?'pb3.assignment-policy.v6\n'
@@ -1755,8 +1757,10 @@ export async function queueAssignmentMediaSubmission(
     throw Error('assignment.not_accepting_submissions')
   const media=(await listLocalMedia()).find(x=>x.mediaId===mediaId)
   if(!media||media.state!=='synced'||media.expiresAt<=Date.now()
-    ||(media.mediaType!=='video'&&media.mediaType!=='audio'))
+    ||!['photo','video','audio'].includes(media.mediaType))
     throw Error('assignment.media_not_synced')
+  if(media.mediaType==='photo'&&media.capture)
+    throw Error('assignment.p2_photo_capture_not_supported')
   if(!signedAllowedAssignmentMedia(listing).includes(media.mediaType))
     throw Error('assignment.media_type_not_allowed')
   const grant=(await listOutgoingMediaGrants()).find(x=>
@@ -1765,11 +1769,25 @@ export async function queueAssignmentMediaSubmission(
     &&x.ownerAccountId===session.accountId
     &&x.state!=='conflict')
   if(!grant)throw Error('assignment.media_grant_required')
-  const policy=listing.policyAmendmentContract
+  const isP2Photo=media.mediaType==='photo'
+  const policy=listing.policyAmendmentContract??(
+    isP2Photo?listing.policyContract:null)
   if(!policy)throw Error('assignment.media_policy_v3_required')
   const activePolicy=JSON.parse(policy) as {version?:number}
-  if(![3,4,5,6].includes(activePolicy.version??0))
+  if(!isP2Photo&&![3,4,5,6].includes(activePolicy.version??0))
     throw Error('assignment.media_policy_v3_required')
+  if(isP2Photo){
+    const c=parseMediaGrantContract(JSON.parse(grant.contract))
+    if(c.version!==2||c.scope!=='read'
+      ||c.assignmentId!==assignmentId
+      ||c.mediaId!==mediaId
+      ||c.ownerAccountId!==session.accountId
+      ||c.recipientAccountId!==listing.ownerAccountId)
+      throw Error('assignment.p2_photo_scoped_e2ee_required')
+    if(!await verify(await importSpki(session.pkg.accountSpki),
+      'pb3.media-grant.v2\n'+grant.contract,grant.signature))
+      throw Error('assignment.p2_photo_invalid_grant_signature')
+  }
   const policyHash=hex(await digest(new TextEncoder().encode(policy)))
   const mediaContractHash=hex(await digest(
     new TextEncoder().encode(JSON.stringify(media.contract))))
@@ -1793,7 +1811,7 @@ export async function queueAssignmentMediaSubmission(
   }
   const op=await signedOperation('media-submit',
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/media-submissions',{
-      version:media.capture?2:1,submissionId:crypto.randomUUID(),
+      version:isP2Photo?3:media.capture?2:1,submissionId:crypto.randomUUID(),
       operationId:crypto.randomUUID(),assignmentId,
       contributorAccountId:session.accountId,
       mediaId,mediaGrantId,mediaContractHash,
@@ -1806,7 +1824,7 @@ export async function queueAssignmentMediaSubmission(
 }
 export type AssignmentMediaSubmission={
   submissionId:string;mediaId:string;mediaGrantId:string
-  mediaType:'video'|'audio';contributorAccountId:string
+  mediaType:'photo'|'video'|'audio';contributorAccountId:string
   capturedInAssignment?:boolean
 }
 export async function listAssignmentMediaSubmissions(
