@@ -71,12 +71,14 @@ export function buildCatalog(
 export function filterCatalog(
   rows:readonly CatalogItem[],options:{
     type:CatalogFilter;query:string;sort:CatalogSort
+    privateMatches?:ReadonlySet<string>
   },
 ):CatalogItem[]{
   const query=options.query.trim().toLowerCase()
   return rows
     .filter(row=>(options.type==='all'||row.type===options.type)
-      &&(!query||row.id.toLowerCase().includes(query)))
+      &&(!query||row.id.toLowerCase().includes(query)
+        ||options.privateMatches?.has(row.key)===true))
     .sort((a,b)=>{
       const byId=a.key.localeCompare(b.key)
       if(options.sort==='expiry')

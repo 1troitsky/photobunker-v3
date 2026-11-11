@@ -4,7 +4,7 @@ import { jsonApi, putCiphertext, readCiphertext } from '../../identity/infrastru
 import { importSigner, sign } from '../../identity/infrastructure/crypto'
 import { sha } from '../../local-storage/infrastructure/cipher'
 import {
-  encryptMediaFile,decryptMediaChunks,validateMediaContract,
+  encryptMediaFile,decryptMediaChunks,decryptMediaMetadataOnly,validateMediaContract,
 } from '../domain/media-crypto'
 import type {
   MediaContract,MediaMetadata,StoredMediaChunk,MediaType,MediaPrivateFields,
@@ -152,6 +152,47 @@ export async function readLocalMedia(mediaId:string):Promise<{
   return decryptMediaChunks(session.pkg,item.contract,
     item.chunks.map(c=>c.blob),()=>same(session))
 }
+/**
+ * Private metadata lookup avoids decrypting data chunks in the Browser.
+ * No unencrypted names/keywords are written to IndexedDB or sent in search.
+ */
+export async function readLocalMediaMetadata(mediaId:string):Promise<MediaMetadata>{
+  const session=requireSession()
+  const item=await db.files.get(session.accountId+'/'+mediaId)
+  same(session)
+  if(!item||item.expiresAt<=Date.now())throw Error('media.not_available')
+  const part=item.chunks.find(x=>x.kind==='metadata')
+  if(!part)throw Error('media.metadata_missing')
+  return decryptMediaMetadataOnly(session.pkg,item.contract,part.blob,
+    ()=>same(session))
+}
+export async function readCloudMediaMetadata(mediaId:string):Promise<MediaMetadata>{
+  const session=requireSession()
+  if(!session.online)throw Error('identity.offline')
+  const response=await jsonApi<{
+    mediaId:string;contract:string;signature:string;receipt:MediaReceipt
+  }>(apiPath(mediaId)+'/manifests')
+  same(session)
+  if(response.mediaId!==mediaId||typeof response.contract!=='string'
+    ||response.contract.length>80000||typeof response.signature!=='string')
+    throw Error('media.manifest_invalid')
+  const contract=JSON.parse(response.contract) as MediaContract
+  validateMediaContract(contract,{accountId:session.accountId,mediaId})
+  if(contract.expiresAt<=Date.now())throw Error('media.expired')
+  await verifyReceipt(contract,response.receipt)
+  // Never request any data chunk for filename/category/tag search.
+  const part=contract.chunks.find(x=>x.kind==='metadata')
+  if(!part)throw Error('media.metadata_missing')
+  same(session)
+  const cipher=await readCiphertext(
+    apiPath(mediaId)+'/chunks/'+encodeURIComponent(part.chunkId))
+  same(session)
+  if(cipher.blob.size!==part.bytes||cipher.digest!==part.sha256)
+    throw Error('media.chunk_corrupt')
+  return decryptMediaMetadataOnly(session.pkg,contract,cipher.blob,
+    ()=>same(session))
+}
+
 export async function readCloudMedia(mediaId:string):Promise<{
   blob:Blob;metadata:MediaMetadata
 }>{

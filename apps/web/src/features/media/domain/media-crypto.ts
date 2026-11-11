@@ -244,6 +244,40 @@ export async function encryptMediaFile(
   validateMediaContract(contract,{accountId:pkg.accountId,mediaId})
   return {contract,chunks}
 }
+/**
+ * Search needs only the encrypted metadata chunk, NEVER a full 128 MiB
+ * media download. Verify SHA-256 and AEAD with the original full-contract AAD.
+ * Keep private filename/tags/descriptions in volatile caller memory only.
+ */
+export async function decryptMediaMetadataOnly(
+  pkg:PackageV2,contract:MediaContract,blob:Blob,
+  assertCurrent:()=>void,
+):Promise<MediaMetadata>{
+  validateMediaContract(contract,{accountId:pkg.accountId,mediaId:contract.mediaId})
+  validate(contract.expiresAt>Date.now(),'media.expired')
+  const chunk=contract.chunks.find(x=>x.kind==='metadata')
+  if(!chunk)throw Error('media.metadata_missing')
+  assertCurrent()
+  validate(blob.size===chunk.bytes,'media.chunk_truncated')
+  const ciphertext=new Uint8Array(await blob.arrayBuffer())
+  try{
+    validate(await sha(ciphertext)===chunk.sha256,'media.chunk_corrupt')
+    assertCurrent()
+    const key=await unwrapAssetDEK(pkg,contract.mediaId,
+      String(contract.expiresAt),contract.wrappedDEK)
+    const clear=new Uint8Array(await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:hexIV(chunk.iv),
+      additionalData:context(contract,chunk.index,'metadata',chunk.plainBytes),
+      tagLength:128,
+    },key,ciphertext))
+    try{
+      assertCurrent()
+      validate(clear.byteLength===chunk.plainBytes,'media.chunk_length')
+      return parseMediaMetadata(JSON.parse(decoder.decode(clear)) as unknown,contract)
+    }finally{clear.fill(0)}
+  }finally{ciphertext.fill(0)}
+}
+
 export async function decryptMediaChunks(
   pkg:PackageV2,contract:MediaContract,
   chunks:readonly Blob[],assertCurrent:()=>void,
