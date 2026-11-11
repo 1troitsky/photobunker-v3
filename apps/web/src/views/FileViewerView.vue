@@ -796,8 +796,9 @@ onUnmounted(()=>{
       <section v-if="preview?.type==='photo'&&fileUrl"
         class="file-viewer-photo-editor" data-testid="file-viewer-photo-editor">
         <h2>Кадрирование и поворот</h2>
-        <p class="muted">Создайте отдельную JPEG-копию. Маски приватности,
-          текстовые аннотации и редактирование оригинала в этот модуль не входят.</p>
+        <p class="muted">Создайте отдельную JPEG-копию, затем добавьте,
+          переместите и отредактируйте надписи прямо на её предпросмотре.
+          Маски приватности и изменение оригинала недоступны.</p>
         <div class="file-viewer-crop-controls">
           <label>Слева · {{ cropLeft }}%
             <input v-model.number="cropLeft" type="range" min="0" step="1"
@@ -846,10 +847,91 @@ onUnmounted(()=>{
           {{ cropBusy?'Обработка…':'Создать JPEG-копию' }}
         </button>
         <div v-if="cropResult&&cropUrl" class="file-viewer-still-preview">
-          <img :src="cropUrl" :alt="croppedFileName"
-            data-testid="file-viewer-crop-preview">
+          <div class="file-viewer-photo-composition-wrap">
+            <div ref="photoComposition" class="file-viewer-photo-composition"
+              data-testid="file-viewer-photo-composition">
+              <img :src="composedPhotoUrl||cropUrl" :alt="croppedFileName"
+                data-testid="file-viewer-crop-preview" draggable="false">
+              <template v-if="!composedPhotoUrl">
+                <button v-for="mark in textMarks" :key="mark.id"
+                  type="button" class="file-viewer-photo-text-layer"
+                  :class="{selected:selectedTextId===mark.id}"
+                  :data-testid="'file-viewer-text-layer-'+mark.id"
+                  :disabled="cropBusy" :style="{
+                    left:mark.x+'%',top:mark.y+'%',
+                    maxWidth:(100-mark.x)+'%',
+                    fontSize:mark.size+'cqw',color:mark.color,
+                  }"
+                  @click="selectPhotoText(mark.id)"
+                  @pointerdown="startPhotoTextDrag($event,mark.id)"
+                  @pointermove="movePhotoTextDrag"
+                  @pointerup="stopPhotoTextDrag"
+                  @pointercancel="stopPhotoTextDrag">
+                  {{ mark.text }}
+                </button>
+              </template>
+            </div>
+          </div>
           <p class="muted">{{ cropResult.width }} × {{ cropResult.height }}
             · {{ croppedFileName }}</p>
+          <div class="file-viewer-photo-text-editor"
+            data-testid="file-viewer-photo-text-editor">
+            <div class="file-viewer-photo-text-head">
+              <strong>Надписи ({{ textMarks.length }}/{{ MAX_TEXT_MARKS }})</strong>
+              <button type="button" data-testid="file-viewer-add-text"
+                :disabled="cropBusy||textMarks.length>=MAX_TEXT_MARKS"
+                @click="addPhotoText">Добавить текст</button>
+            </div>
+            <p v-if="!textMarks.length" class="muted">Добавьте надпись.
+              Перетаскивайте её по фотографии мышью или пальцем.
+              Координаты можно изменить вручную.</p>
+            <div v-for="(mark,index) in textMarks" :key="mark.id"
+              class="file-viewer-photo-text-row"
+              :class="{selected:selectedTextId===mark.id}">
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-select-text-'+index"
+                @click="selectPhotoText(mark.id)">
+                {{ mark.text||'Пустая надпись' }}
+              </button>
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-delete-text-'+index"
+                :aria-label="'Удалить надпись '+(index+1)"
+                @click="deletePhotoText(mark.id)">Удалить</button>
+            </div>
+            <div v-if="selectedText" class="file-viewer-photo-text-settings">
+              <label>Текст
+                <textarea :value="selectedText.text" maxlength="220" rows="2"
+                  :disabled="cropBusy" data-testid="file-viewer-edit-text"
+                  @input="setTextValue"/>
+              </label>
+              <label>Цвет текста
+                <input type="color" :value="selectedText.color"
+                  :disabled="cropBusy" data-testid="file-viewer-text-color"
+                  @input="setTextColor">
+              </label>
+              <label>Размер · {{ selectedText.size }}% ширины кадра
+                <input type="range" min="2" max="12" step="1"
+                  :value="selectedText.size" :disabled="cropBusy"
+                  data-testid="file-viewer-text-size"
+                  @input="setTextSize">
+              </label>
+              <label>Позиция по X (%)
+                <input type="number" min="0" max="85" step="1"
+                  :value="selectedText.x" :disabled="cropBusy"
+                  data-testid="file-viewer-text-x"
+                  @input="setTextCoordinate('x',$event)">
+              </label>
+              <label>Позиция по Y (%)
+                <input type="number" min="0" max="85" step="1"
+                  :value="selectedText.y" :disabled="cropBusy"
+                  data-testid="file-viewer-text-y"
+                  @input="setTextCoordinate('y',$event)">
+              </label>
+            </div>
+          </div>
+          <p v-if="textMarks.length" class="muted">При сохранении или скачивании
+            надписи превращаются в пиксели JPEG. Они не отправляются
+            отдельным текстом на сервер и не сохраняются как открытый черновик.</p>
           <div class="file-viewer-still-actions">
             <button type="button" :disabled="cropBusy||!!cropSavedId"
               data-testid="file-viewer-save-crop" @click="saveCroppedPhoto">
@@ -867,7 +949,8 @@ onUnmounted(()=>{
         <p class="muted">Копия — независимый личный E2EE-файл. Доступы,
           GPS, задание и TTL оригинала автоматически не наследуются.
           Яркость, контраст и насыщенность применяются к пикселям
-          только при создании копии. Это не маска приватности.</p>
+          только при создании копии. Надписи накладываются поверх итогового
+          кадра. Это не маска приватности.</p>
         <p v-if="cropNotice" role="status" data-testid="file-viewer-crop-status">
           {{ cropNotice }}</p>
         <p v-if="cropError" role="alert" data-testid="file-viewer-crop-error">
