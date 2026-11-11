@@ -459,9 +459,10 @@ function finishPaintStroke(event:PointerEvent,cancel=false):void{
 function renderPaintCanvas():void{
   const canvas=paintCanvas.value,result=cropResult.value
   if(!canvas||!result||composedPhotoUrl.value)return
-  const width=Math.max(1,Math.round(Math.min(900,
-    canvas.clientWidth*(window.devicePixelRatio||1))))
-  const height=Math.max(1,Math.round(width*result.height/result.width))
+  const scale=Math.min(1,900/result.width,900/result.height,
+    (canvas.clientWidth||result.width)*(window.devicePixelRatio||1)/result.width)
+  const width=Math.max(1,Math.round(result.width*scale))
+  const height=Math.max(1,Math.round(result.height*scale))
   if(canvas.width!==width||canvas.height!==height){
     canvas.width=width;canvas.height=height
   }
@@ -695,9 +696,19 @@ async function navigate(item:CatalogItem|null):Promise<void>{
   })
 }
 function onKeyDown(event:KeyboardEvent):void{
-  if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey
-    ||event.target instanceof HTMLElement&&event.target.closest(
-      'input,textarea,select,video,audio,button,[contenteditable="true"]'))return
+  if(event.defaultPrevented||event.altKey)return
+  const editing=event.target instanceof HTMLElement&&!!event.target.closest(
+    'input,textarea,select,video,audio,button,[contenteditable="true"]')
+  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'
+    &&!editing&&cropResult.value){
+    const direction=event.shiftKey?1:-1
+    if(direction===-1?canUndoPhoto.value:canRedoPhoto.value){
+      event.preventDefault()
+      travelPhotoEdit(direction)
+    }
+    return
+  }
+  if(event.ctrlKey||event.metaKey||editing)return
   if(event.key==='ArrowLeft'&&adjacent.value.previous){
     event.preventDefault();void navigate(adjacent.value.previous)
   }else if(event.key==='ArrowRight'&&adjacent.value.next){
@@ -1197,7 +1208,7 @@ onUnmounted(()=>{
                   type="button" class="file-viewer-photo-text-layer"
                   :class="{selected:selectedTextId===mark.id}"
                   :data-testid="'file-viewer-text-layer-'+mark.id"
-                  :disabled="cropBusy" :style="{
+                  :disabled="cropBusy||!!activePaintTool" :style="{
                     left:mark.x+'%',top:mark.y+'%',
                     maxWidth:(100-mark.x)+'%',
                     fontSize:photoTextFont(mark),color:mark.color,
