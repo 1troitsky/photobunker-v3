@@ -82,6 +82,19 @@ jobs:
           docker exec pb3-ci-synapse register_new_matrix_user \
             -c /data/homeserver.yaml -u pb3_ci_bob -p "$bob" \
             --no-admin http://localhost:8008 >/dev/null
+          # Separate accounts for the outbox integration: the E2EE and 4S
+          # gates legitimately exhaust the previous account login bucket.
+          # Preserve Synapse's authentication rate limits unchanged.
+          outbox_alice="$(openssl rand -hex 24)"
+          outbox_bob="$(openssl rand -hex 24)"
+          echo "::add-mask::$outbox_alice"
+          echo "::add-mask::$outbox_bob"
+          docker exec pb3-ci-synapse register_new_matrix_user \
+            -c /data/homeserver.yaml -u pb3_ci_outbox_alice -p "$outbox_alice" \
+            --no-admin http://localhost:8008 >/dev/null
+          docker exec pb3-ci-synapse register_new_matrix_user \
+            -c /data/homeserver.yaml -u pb3_ci_outbox_bob -p "$outbox_bob" \
+            --no-admin http://localhost:8008 >/dev/null
           {
             echo "MATRIX_CI_BASE_URL=http://127.0.0.1:18008"
             echo "MATRIX_CI_DISPOSABLE=1"
@@ -90,6 +103,10 @@ jobs:
             echo "MATRIX_CI_BOB=pb3_ci_bob"
             echo "MATRIX_CI_ALICE_PASSWORD=$alice"
             echo "MATRIX_CI_BOB_PASSWORD=$bob"
+            echo "MATRIX_CI_OUTBOX_ALICE=pb3_ci_outbox_alice"
+            echo "MATRIX_CI_OUTBOX_BOB=pb3_ci_outbox_bob"
+            echo "MATRIX_CI_OUTBOX_ALICE_PASSWORD=$outbox_alice"
+            echo "MATRIX_CI_OUTBOX_BOB_PASSWORD=$outbox_bob"
           } >> "$GITHUB_ENV"
       - name: Real two-user encrypted room and recipient ciphertext decryption
         timeout-minutes: 9
