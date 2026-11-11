@@ -941,7 +941,7 @@ onUnmounted(cleanPreview)
           </div>
           <div v-for="entry in mediaSubmissions" :key="entry.submissionId" class="photo-row" data-testid="assignment-media-submission">
             <div>
-              <strong>{{ entry.mediaType==='video'?'Видео':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
+              <strong>{{ entry.mediaType==='video'?'Видео':entry.mediaType==='photo'?'Фото P2':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
               <small>{{ entry.capturedInAssignment?'Запись по заданию · подписана':'Личный файл · передан вручную' }}</small>
               <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
             </div>
