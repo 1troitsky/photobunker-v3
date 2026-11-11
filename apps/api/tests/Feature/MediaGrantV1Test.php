@@ -559,6 +559,176 @@ final class MediaGrantV1Test extends TestCase
         $this->getJson('/media-shares/v1/grants/'.$id)->assertGone();
     }
 
+    private function previewPolicyInput(array $source,array $safe,
+        int $fromRevision=0,?string $previousHash=null,
+        ?array $fields=null,?array $actions=null):array
+    {
+        $contract=[
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'accountId'=>$this->people['owner']['id'],
+            'sourceMediaId'=>$source['id'],'safeMediaId'=>$safe['id'],
+            'sourceContractHash'=>$source['hash'],
+            'safeContractHash'=>$safe['hash'],
+            'fromRevision'=>$fromRevision,
+            'toRevision'=>$fromRevision+1,
+            'previousPolicyHash'=>$previousHash??str_repeat('0',64),
+            'publication'=>'disabled',
+            'fields'=>$fields??[
+                'description'=>true,'capturedAt'=>false,
+                'updatedAt'=>false,'tags'=>false,
+                'authorTeam'=>false,'gps'=>false,'metadata'=>false,
+            ],
+            'actions'=>$actions??[
+                'view'=>false,'copy'=>false,
+                'download'=>false,'share'=>false,
+            ],
+            'expiresAt'=>now()->addHours(2)->getTimestampMs(),
+        ];
+        return $this->signPreviewPolicy($contract);
+    }
+
+    private function signPreviewPolicy(array $contract):array
+    {
+        $json=json_encode($contract,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return ['contract'=>$json,'signature'=>$this->signature(
+            'owner',"pb3.media-file-preview-policy.v1\n".$json)];
+    }
+
+    public function test_file_preview_policy_is_signed_owner_only_and_never_publishes():void
+    {
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $p1=$this->previewPolicyInput($source,$safe);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertNotFound();
+        $this->postJson('/media-file-preview/v1/policies',$p1)
+            ->assertCreated()->assertJsonPath('revision',1)
+            ->assertJsonPath('unchanged',false)
+            ->assertJsonPath('published',false);
+        $this->postJson('/media-file-preview/v1/policies',$p1)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $get=$this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertOk()->assertJsonPath('published',false)
+            ->assertJsonPath('contract',$p1['contract'])
+            ->assertJsonMissingPath('token')
+            ->assertJsonMissingPath('envelope')
+            ->assertJsonMissingPath('publicUrl');
+        $previous=$get->json('policyHash');
+        $this->assertSame(hash('sha256',$p1['contract']),$previous);
+        $p2=$this->previewPolicyInput($source,$safe,1,$previous,[
+            'description'=>false,'capturedAt'=>true,
+            'updatedAt'=>false,'tags'=>true,'authorTeam'=>false,
+            'gps'=>false,'metadata'=>false,
+        ]);
+        $this->postJson('/media-file-preview/v1/policies',$p2)
+            ->assertCreated()->assertJsonPath('revision',2)
+            ->assertJsonPath('published',false);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertOk()->assertJsonPath('revision',2)
+            ->assertJsonPath('contract',$p2['contract']);
+        $this->assertDatabaseCount('media_file_preview_policy_events_v1',2);
+        $this->assertDatabaseHas('media_file_preview_policies_v1',[
+            'account_id'=>$this->people['owner']['id'],
+            'source_media_id'=>$source['id'],
+            'safe_media_id'=>$safe['id'],'revision'=>2,
+            'source_contract_hash'=>$source['hash'],
+            'safe_contract_hash'=>$safe['hash'],
+        ]);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        $this->asRole('recipient');
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertNotFound();
+        $this->postJson('/media-file-preview/v1/policies',$p1)
+            ->assertForbidden();
+        // Nothing in the policy route grants a recipient a ciphertext chunk.
+        $this->getJson('/media/v1/'.$safe['id'].'/manifests')
+            ->assertNotFound();
+    }
+
+    public function test_file_preview_rejects_public_actions_replay_forgery_and_revision_fork():void
+    {
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $p=$this->previewPolicyInput($source,$safe);
+        $data=json_decode($p['contract'],true,16,JSON_THROW_ON_ERROR);
+        foreach([
+            [...$data,'publication'=>'public'],
+            [...$data,'publication'=>'published'],
+            [...$data,'actions'=>[...$data['actions'],'download'=>true]],
+            [...$data,'actions'=>[...$data['actions'],'view'=>true]],
+            [...$data,'actions'=>[...$data['actions'],'share'=>true]],
+            [...$data,'actions'=>[...$data['actions'],'copy'=>true]],
+            [...$data,'fields'=>[...$data['fields'],'gps'=>'true']],
+            [...$data,'fields'=>[...$data['fields'],'extra'=>true]],
+            [...$data,'actions'=>[...$data['actions'],'original'=>true]],
+            [...$data,'sourceMediaId'=>$safe['id']],
+            [...$data,'sourceContractHash'=>str_repeat('f',64)],
+            [...$data,'safeContractHash'=>str_repeat('f',64)],
+            [...$data,'expiresAt'=>$source['expiresAt']+1],
+            [...$data,'extra'=>'untrusted'],
+        ] as $mutated){
+            $mutated['operationId']=(string)Str::uuid();
+            $response=$this->postJson('/media-file-preview/v1/policies',
+                $this->signPreviewPolicy($mutated));
+            $this->assertContains($response->getStatusCode(),[404,409,410,422]);
+        }
+        $this->assertDatabaseCount('media_file_preview_policy_events_v1',0);
+        $forged=$p;
+        $forged['signature']=P::encode(random_bytes(64));
+        $this->postJson('/media-file-preview/v1/policies',$forged)
+            ->assertUnauthorized();
+        $this->postJson('/media-file-preview/v1/policies',$p)
+            ->assertCreated();
+        // Lost-ACK mismatch cannot rewrite the signed operation ID.
+        $reused=json_decode($p['contract'],true);
+        $reused['fields']['gps']=true;
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->signPreviewPolicy($reused))->assertConflict();
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->previewPolicyInput($source,$safe))
+            ->assertConflict(); // cannot create another revision 1
+        $this->assertDatabaseCount('media_file_preview_policy_events_v1',1);
+    }
+
+    public function test_file_preview_checks_two_asset_ttls_archive_tamper_and_rollback():void
+    {
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->previewPolicyInput($source,$safe))->assertCreated();
+
+        $migration=require database_path(
+            'migrations/2026_11_11_000005_create_media_file_preview_policies_v1.php');
+        try{
+            $migration->down();
+            $this->fail('Cannot discard existing signed file policies.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.file_preview.rollback_forbidden',
+                $e->getMessage());
+        }
+        $this->assertTrue(Schema::hasTable('media_file_preview_policy_events_v1'));
+
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['contract_hash'=>str_repeat('e',64)]);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertConflict();
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['contract_hash'=>$safe['hash']]);
+
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertGone();
+        // Signed policy can never erase either independent media file.
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$source['id'],'state'=>'active',
+        ]);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
     /** The recipient owns Fieldwork, but the contributor retains S3 ownership. */
     private function acceptedAssignment():string
     {
