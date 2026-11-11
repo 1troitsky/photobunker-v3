@@ -8,6 +8,7 @@ import {
 } from '../infrastructure/crypto'
 import {stopMatrixCrypto} from '../../messages/application/matrix-rust-adapter'
 import {clearLocalMatrixCredentials} from '../../messages/application/matrix-binding'
+import {prepareOwnMatrixTokenLogout} from '../../messages/application/matrix-self-logout'
 import {listPB3Devices,revokePB3Device} from './device-revocation'
 
 vi.mock('../infrastructure/api',()=>({jsonApi:vi.fn()}))
@@ -18,11 +19,14 @@ vi.mock('../../messages/application/matrix-rust-adapter',
   ()=>({stopMatrixCrypto:vi.fn()}))
 vi.mock('../../messages/application/matrix-binding',
   ()=>({clearLocalMatrixCredentials:vi.fn()}))
+vi.mock('../../messages/application/matrix-self-logout',
+  ()=>({prepareOwnMatrixTokenLogout:vi.fn()}))
 import {logout} from './session'
 const api=vi.mocked(jsonApi)
 const localStop=vi.mocked(stopMatrixCrypto)
 const localClear=vi.mocked(clearLocalMatrixCredentials)
 const localLogout=vi.mocked(logout)
+const prepareMatrixLogout=vi.mocked(prepareOwnMatrixTokenLogout)
 let s:Session
 const tokenStatus={
   pb3Revoked:true,unchanged:false,
@@ -43,6 +47,7 @@ beforeEach(async()=>{
   activeSession.value=s
   localStop.mockResolvedValue(undefined)
   localClear.mockResolvedValue(undefined)
+  prepareMatrixLogout.mockResolvedValue(null)
   localLogout.mockImplementation(async()=>{activeSession.value=null})
   api.mockImplementation(async(path,method)=>{
     if(path==='/identity/v2/devices'&&method===undefined)
@@ -65,6 +70,7 @@ describe('signed PB3 device revoke does not invent Matrix remote token revocatio
     expect(localStop).not.toHaveBeenCalled()
     expect(localClear).not.toHaveBeenCalled()
     expect(localLogout).not.toHaveBeenCalled()
+    expect(prepareMatrixLogout).not.toHaveBeenCalled()
     const [url,method,payload]=api.mock.calls[0] as [
       string,string,{contract:string;accountSignature:string;deviceSignature:string},
     ]
@@ -87,11 +93,13 @@ describe('signed PB3 device revoke does not invent Matrix remote token revocatio
     expect(raw).not.toContain(s.pkg.akek)
     expect(raw).not.toContain('accessToken')
   })
-  it('self revoke closes crypto, wipes local Matrix credential then locks PB3 but NOT remote Matrix',async()=>{
+  it('self revoke closes crypto, wipes local Matrix credential and locks PB3 even without bound Matrix',async()=>{
     const result=await revokePB3Device(s.deviceId)
     expect(result).toMatchObject(tokenStatus)
     expect(result.localMatrixCredentialsCleared).toBe(true)
     expect(result.localMatrixShutdownComplete).toBe(true)
+    expect(result.matrixOwnTokenLogout).toBe('not_attempted')
+    expect(prepareMatrixLogout).toHaveBeenCalledTimes(1)
     expect(localStop).toHaveBeenCalledTimes(1)
     expect(localClear).toHaveBeenCalledTimes(1)
     expect(localLogout).toHaveBeenCalledTimes(1)
@@ -104,6 +112,31 @@ describe('signed PB3 device revoke does not invent Matrix remote token revocatio
     expect(result.localMatrixShutdownComplete).toBe(false)
     expect(result.localMatrixCredentialsCleared).toBe(false)
     expect(result.matrixRemoteRevoked).toBe(false)
+    expect(result.matrixOwnTokenLogout).toBe('not_attempted')
+    expect(localLogout).toHaveBeenCalledTimes(1)
+  })
+  it('confirms only the CURRENT device Matrix bearer after signed PB3 self-revocation',async()=>{
+    const matrixLogout=vi.fn().mockResolvedValue(true)
+    prepareMatrixLogout.mockResolvedValue(matrixLogout)
+    const result=await revokePB3Device(s.deviceId)
+    expect(result.matrixOwnTokenLogout).toBe('confirmed')
+    expect(result.matrixRemoteRevoked).toBe(false) // Server does not claim all Matrix sessions revoked.
+    expect(matrixLogout).toHaveBeenCalledTimes(1)
+    const paths=api.mock.calls.map(x=>x[0])
+    expect(paths).toContain('/identity/v2/devices/'+s.deviceId+'/revoke')
+    expect(localLogout).toHaveBeenCalledTimes(1)
+  })
+  it('remains locally revoked when remote Matrix logout or its preflight fails',async()=>{
+    prepareMatrixLogout.mockResolvedValue(vi.fn().mockResolvedValue(false))
+    const result=await revokePB3Device(s.deviceId)
+    expect(result.matrixOwnTokenLogout).toBe('unconfirmed')
+    expect(localClear).toHaveBeenCalledTimes(1)
+    expect(localLogout).toHaveBeenCalledTimes(1)
+  })
+  it('does not block signed PB3 revoke when Matrix lookup is unavailable',async()=>{
+    prepareMatrixLogout.mockRejectedValue(Error('homeserver unavailable'))
+    const result=await revokePB3Device(s.deviceId)
+    expect(result.matrixOwnTokenLogout).toBe('unconfirmed')
     expect(localLogout).toHaveBeenCalledTimes(1)
   })
   it('refuses unsigned/offline and malicious server remote-revoked claim',async()=>{
