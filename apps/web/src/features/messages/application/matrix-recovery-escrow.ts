@@ -294,7 +294,7 @@ async function rewrapPrevious(s:Session):Promise<void>{
     const signed:SignedEscrow={
       contract:serialized,
       signature:await sign(await importSigner(s.pkg.accountPkcs8),
-        domainV2+'\\n'+serialized),
+        domainV2+'\n'+serialized),
     }
     same(s)
     await putPending(s,signed)
