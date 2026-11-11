@@ -1,11 +1,13 @@
 import type {PhotoTextMark} from './photo-text'
 import type {PhotoShapeMark} from './photo-shapes'
 import type {PhotoStroke} from './photo-strokes'
+import type {PhotoBlackout} from './photo-blackouts'
 
 export type PhotoEditSnapshot=Readonly<{
   text:readonly PhotoTextMark[]
   shapes:readonly PhotoShapeMark[]
   strokes:readonly PhotoStroke[]
+  blackouts:readonly PhotoBlackout[]
 }>
 export type PhotoEditHistory=Readonly<{
   states:readonly PhotoEditSnapshot[]
@@ -13,7 +15,7 @@ export type PhotoEditHistory=Readonly<{
 }>
 export const MAX_PHOTO_HISTORY=50
 export function emptyPhotoSnapshot():PhotoEditSnapshot{
-  return {text:[],shapes:[],strokes:[]}
+  return {text:[],shapes:[],strokes:[],blackouts:[]}
 }
 function cloneSnapshot(s:PhotoEditSnapshot):PhotoEditSnapshot{
   return {
@@ -22,6 +24,7 @@ function cloneSnapshot(s:PhotoEditSnapshot):PhotoEditSnapshot{
     strokes:s.strokes.map(stroke=>({
       ...stroke,points:stroke.points.map(p=>({...p})),
     })),
+    blackouts:s.blackouts.map(mask=>({...mask})),
   }
 }
 export function initialPhotoHistory():PhotoEditHistory{
