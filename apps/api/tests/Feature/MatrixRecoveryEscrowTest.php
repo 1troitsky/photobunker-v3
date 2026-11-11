@@ -69,20 +69,23 @@ final class MatrixRecoveryEscrowTest extends TestCase
         }
         return P::encode(implode('',$parts));
     }
-    private function payload(string $who):array {
+    private function payload(string $who,int $revision=1,?string $parent=null):array {
         $p=$this->people[$who];
-        $contract=json_encode([
-            'version'=>1,'operationId'=>(string)Str::uuid(),
-            'accountId'=>$p['account'],'accountRevision'=>1,
+        $fields=[
+            'version'=>$parent===null?1:2,'operationId'=>(string)Str::uuid(),
+            'accountId'=>$p['account'],'accountRevision'=>$revision,
             'homeserverUrl'=>self::HOMESERVER,'matrixUserId'=>$p['mxid'],
             'purpose'=>'matrix-ssss-key',
             'keyId'=>P::encode(random_bytes(16)),
             'iv'=>P::encode(random_bytes(12)),
             'ciphertext'=>P::encode(random_bytes(48)),
-        ],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        ];
+        if($parent!==null)$fields['previousContractHash']=$parent;
+        $contract=json_encode($fields,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
         return ['contract'=>$contract,
             'signature'=>$this->rawSignature($p['key'],
-                "pb3.matrix-ssss-escrow.v1\n".$contract),
+                ($parent===null?"pb3.matrix-ssss-escrow.v1\n"
+                    :"pb3.matrix-ssss-escrow.v2\n").$contract),
         ];
     }
 
@@ -199,6 +202,102 @@ final class MatrixRecoveryEscrowTest extends TestCase
             ->update(['revoked_at'=>now()]);
         $this->getJson('/matrix/v1/recovery/ssss')->assertUnauthorized();
         $this->assertDatabaseCount('matrix_recovery_escrows_v1',1);
+    }
+
+    public function test_rotation_rewrap_is_append_only_current_revision_and_exact_retry():void {
+        $this->as('alice');
+        $v1=$this->payload('alice');
+        $this->postJson('/matrix/v1/recovery/ssss',$v1)->assertCreated();
+        $originalHash=hash('sha256',$v1['contract']);
+        DB::table('identity_accounts')->where('id',$this->people['alice']['account'])
+            ->update(['revision'=>2]);
+        // Old ciphertext is NOT a current-revision receipt; it is available
+        // only to the authenticated owner for verified client-side rewrap.
+        $this->getJson('/matrix/v1/recovery/ssss')->assertConflict();
+        $this->getJson('/matrix/v1/recovery/ssss/previous')
+            ->assertOk()->assertJsonPath('contract',$v1['contract'])
+            ->assertJsonPath('signature',$v1['signature']);
+        $v2=$this->payload('alice',2,$originalHash);
+        $this->postJson('/matrix/v1/recovery/ssss',$v2)
+            ->assertCreated()->assertJsonPath('unchanged',false);
+        $this->postJson('/matrix/v1/recovery/ssss',$v2)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->getJson('/matrix/v1/recovery/ssss')
+            ->assertOk()->assertJsonPath('contract',$v2['contract']);
+        $this->getJson('/matrix/v1/recovery/ssss/previous')->assertConflict();
+        $this->assertDatabaseCount('matrix_recovery_escrows_v1',1);
+        $this->assertDatabaseCount('matrix_recovery_escrow_revisions_v2',1);
+        $this->assertDatabaseHas('matrix_recovery_escrows_v1',[
+            'account_id'=>$this->people['alice']['account'],
+            'account_revision'=>1,'contract_hash'=>$originalHash,
+        ]);
+        $this->assertDatabaseHas('matrix_recovery_escrow_revisions_v2',[
+            'account_id'=>$this->people['alice']['account'],
+            'account_revision'=>2,'parent_contract_hash'=>$originalHash,
+            'contract_hash'=>hash('sha256',$v2['contract']),
+        ]);
+        $this->postJson('/matrix/v1/recovery/ssss',$this->payload('alice',2,$originalHash))
+            ->assertConflict();
+    }
+
+    public function test_rotation_rejects_forged_parent_stale_and_foreign_escrow():void {
+        $this->as('alice');
+        $base=$this->payload('alice');
+        $this->postJson('/matrix/v1/recovery/ssss',$base)->assertCreated();
+        $hash=hash('sha256',$base['contract']);
+        DB::table('identity_accounts')->where('id',$this->people['alice']['account'])
+            ->update(['revision'=>2]);
+        $this->postJson('/matrix/v1/recovery/ssss',$this->payload('alice',2,str_repeat('0',64)))
+            ->assertConflict();
+        $this->postJson('/matrix/v1/recovery/ssss',$this->payload('alice',1,$hash))
+            ->assertUnprocessable();
+        $unsigned=$this->payload('alice',2,$hash);
+        $unsigned['signature']=P::encode(random_bytes(64));
+        $this->postJson('/matrix/v1/recovery/ssss',$unsigned)
+            ->assertUnauthorized();
+        $this->assertDatabaseCount('matrix_recovery_escrow_revisions_v2',0);
+        $this->as('bob');
+        $this->getJson('/matrix/v1/recovery/ssss/previous')
+            ->assertConflict();
+        $this->postJson('/matrix/v1/recovery/ssss',$this->payload('alice',2,$hash))
+            ->assertUnprocessable();
+        $this->as('alice');
+        $good=$this->payload('alice',2,$hash);
+        $this->postJson('/matrix/v1/recovery/ssss',$good)->assertCreated();
+        DB::table('identity_accounts')->where('id',$this->people['alice']['account'])
+            ->update(['revision'=>3]);
+        $this->getJson('/matrix/v1/recovery/ssss/previous')
+            ->assertOk()->assertJsonPath('contract',$good['contract']);
+        // A rev3 writer may not fork behind the highest signed epoch.
+        $this->postJson('/matrix/v1/recovery/ssss',$this->payload('alice',3,$hash))
+            ->assertConflict();
+        $v3=$this->payload('alice',3,hash('sha256',$good['contract']));
+        $this->postJson('/matrix/v1/recovery/ssss',$v3)->assertCreated();
+        $this->assertDatabaseCount('matrix_recovery_escrow_revisions_v2',2);
+        $this->assertDatabaseHas('matrix_recovery_escrows_v1',[
+            'account_id'=>$this->people['alice']['account'],
+            'contract_hash'=>$hash,
+        ]);
+    }
+
+    public function test_versioned_migration_rollback_retains_signed_escrows():void {
+        $this->as('alice');
+        $v1=$this->payload('alice');
+        $this->postJson('/matrix/v1/recovery/ssss',$v1)->assertCreated();
+        DB::table('identity_accounts')->where('id',$this->people['alice']['account'])
+            ->update(['revision'=>2]);
+        $v2=$this->payload('alice',2,hash('sha256',$v1['contract']));
+        $this->postJson('/matrix/v1/recovery/ssss',$v2)->assertCreated();
+        $migration=require database_path(
+            'migrations/2026_11_11_000003_create_matrix_recovery_escrow_revisions_v2.php'
+        );
+        try{$migration->down();$this->fail('Versioned escrow rollback must be refused');}
+        catch(\RuntimeException $e){
+            $this->assertSame('pb3.matrix_recovery_v2.rollback_forbidden',$e->getMessage());
+        }
+        $this->assertTrue(Schema::hasTable('matrix_recovery_escrow_revisions_v2'));
+        $this->assertDatabaseCount('matrix_recovery_escrows_v1',1);
+        $this->assertDatabaseCount('matrix_recovery_escrow_revisions_v2',1);
     }
 
     public function test_schema_rollback_refuses_destroying_live_key_escrow():void {
