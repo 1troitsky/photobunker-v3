@@ -40,7 +40,6 @@ final class MediaFilePreviewPolicyController extends Controller
             'expiresAt',
         ]);
         abort_unless($c['version']===1
-            &&$c['accountId']===$owner->id
             &&is_int($c['fromRevision'])&&$c['fromRevision']>=0
             &&$c['fromRevision']<100
             &&$c['toRevision']===$c['fromRevision']+1
@@ -52,6 +51,7 @@ final class MediaFilePreviewPolicyController extends Controller
             abort_unless(is_string($c[$key]),422);
             P::uuid($c[$key]);
         }
+        abort_unless($c['accountId']===$owner->id,403);
         abort_unless($c['sourceMediaId']!==$c['safeMediaId'],422);
         foreach(['sourceContractHash','safeContractHash',
             'previousPolicyHash'] as $key){
