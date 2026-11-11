@@ -315,7 +315,9 @@ export async function flushMatrixTextOutbox(client:MatrixClient):Promise<{
           ||remote.content?.algorithm!=='m.megolm.v1.aes-sha2'
           ||typeof remote.content.ciphertext!=='string'
           ||remote.content.ciphertext.length<32
-          ||JSON.stringify(remote).includes(item.body))
+          ||Object.prototype.hasOwnProperty.call(remote.content,'body')
+          ||Object.prototype.hasOwnProperty.call(remote.content,'msgtype')
+          ||(item.body.length>16&&JSON.stringify(remote).includes(item.body)))
           throw Error('matrix.outbox_remote_ciphertext_unverified')
         const updated:PendingText={
           ...item,state:'server_accepted',eventId:response.event_id,
@@ -326,12 +328,20 @@ export async function flushMatrixTextOutbox(client:MatrixClient):Promise<{
         // tab modifies the same row; the Matrix crypto Web Lock also
         // prevents two legitimate SDK writers for the same device.
         const {key}=await identifiers(s,item.operationId)
+        const before=await db.items.get(key)
+        if(!before)throw Error('matrix.outbox_local_row_lost')
+        const previous=await unwrap(s,before)
+        same(s)
+        if(previous.state!=='queued'
+          ||previous.operationId!==item.operationId)
+          throw Error('matrix.outbox_row_changed')
         await db.transaction('rw',db.items,async()=>{
           const current=await db.items.get(key)
-          if(!current)throw Error('matrix.outbox_local_row_lost')
-          const previous=await unwrap(s,current)
-          if(previous.state!=='queued'
-            ||previous.operationId!==item.operationId)
+          // Do NOT await WebCrypto inside a Dexie transaction: IndexedDB
+          // would auto-commit before our CAS/write, losing an ACK.
+          if(!current||current.iv!==before.iv
+            ||current.ciphertext!==before.ciphertext
+            ||current.scope!==before.scope)
             throw Error('matrix.outbox_row_changed')
           await db.items.put(sealed)
         })
