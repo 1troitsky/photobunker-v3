@@ -11,9 +11,12 @@ import {
 
 const mocks=vi.hoisted(()=>({
   create:vi.fn(),whoami:vi.fn(),init:vi.fn(),
-  getCrypto:vi.fn(),stop:vi.fn(),start:vi.fn(),release:vi.fn(),
+  getCrypto:vi.fn(),isolation:vi.fn(),stop:vi.fn(),start:vi.fn(),release:vi.fn(),
 }))
 vi.mock('matrix-js-sdk',()=>({createClient:mocks.create}))
+vi.mock('matrix-js-sdk/lib/crypto-api',()=>({
+  OnlySignedDevicesIsolationMode:class OnlySignedDevicesIsolationMode{},
+}))
 vi.mock('../../identity/infrastructure/api',()=>({jsonApi:vi.fn()}))
 vi.mock('./matrix-binding',()=>({getBoundMatrixCredentials:vi.fn()}))
 vi.mock('./matrix-crypto-lease',()=>({acquireMatrixCryptoLease:vi.fn()}))
@@ -44,7 +47,7 @@ beforeEach(async()=>{
     is_guest:false,
   })
   mocks.init.mockResolvedValue(undefined)
-  mocks.getCrypto.mockReturnValue({})
+  mocks.getCrypto.mockReturnValue({setDeviceIsolationMode:mocks.isolation})
   vi.mocked(getBoundMatrixCredentials).mockResolvedValue({
     contract:{...config},accessToken,
   })
@@ -76,6 +79,9 @@ describe('P2 RustCrypto bootstrap has no unverified message send path',()=>{
     expect(args.cryptoDatabasePrefix).toMatch(/^pb3-matrix-crypto-[a-f0-9]{64}$/)
     expect(args.storageKey).toHaveLength(32)
     expect([...args.storageKey]).toEqual(Array(32).fill(0)) // no lingering raw key
+    expect(mocks.isolation).toHaveBeenCalledTimes(1)
+    expect(mocks.isolation.mock.calls[0]?.[0]?.constructor?.name)
+      .toBe('OnlySignedDevicesIsolationMode')
     expect(mocks.start).not.toHaveBeenCalled()
     await expect(startMatrixCrypto()).rejects.toThrow('matrix.client_already_active')
     await stopMatrixCrypto()
