@@ -140,8 +140,9 @@ final class BrowserArchiveController extends Controller
                 abort_unless($old->account_id===$account->id
                     &&hash_equals($old->contract_hash,$hash)
                     &&hash_equals($old->account_signature,$body['signature']),409);
-                return $this->identity->json(json_decode(
-                    $old->result_json,true,16,JSON_THROW_ON_ERROR));
+                $replayed=json_decode($old->result_json,true,16,JSON_THROW_ON_ERROR);
+                $replayed['unchanged']=true;
+                return $this->identity->json($replayed);
             }
 
             $now=PhotoSync::nowMs();
