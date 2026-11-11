@@ -103,7 +103,7 @@ export async function signedArchiveAction(
       operationId:crypto.randomUUID(),kind,assetId,action,expectedRevision,
     })
     const signature=await sign(await importSigner(session.pkg.accountPkcs8),
-      'pb3.browser-archive.v1\\n'+command)
+      'pb3.browser-archive.v1\n'+command)
     if(activeSession.value!==session)throw Error('identity.changed')
     pending=await savePendingArchiveAction({
       command,signature,kind,assetId,action,expectedRevision,
