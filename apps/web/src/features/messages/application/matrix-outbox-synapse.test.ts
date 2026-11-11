@@ -1,3 +1,4 @@
+/// <reference types="node" />
 /**
  * P2-02E2: run the REAL PB3 encrypted Dexie outbox and the REAL official
  * Matrix SDK/RustCrypto against disposable Synapse.
@@ -15,7 +16,7 @@ import Dexie from 'dexie'
 import {randomUUID} from 'node:crypto'
 import {setTimeout as sleep} from 'node:timers/promises'
 import {
-  describe,it,beforeAll,afterAll,expect,vi,
+  describe,it,beforeAll,afterAll,vi,
 } from 'vitest'
 import {
   createClient,ClientEvent,SyncState,MsgType,
@@ -70,7 +71,6 @@ let aliceUser='',bobUser='',roomId=''
 let session!:Session
 let senderDevice='',peerDevice=''
 let sentEvent=''
-let recordedTxn=''
 
 async function until(label:string,condition:()=>Promise<boolean>|boolean,
   seconds=60):Promise<void>{
@@ -170,8 +170,8 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
       crossSign(alice,nameA,passA),crossSign(bob,nameB,passB),
     ])
     const created=await alice.createRoom({
-      preset:'private_chat',
-      visibility:'private',
+      preset:'private_chat' as Parameters<MatrixClient['createRoom']>[0]['preset'],
+      visibility:'private' as Parameters<MatrixClient['createRoom']>[0]['visibility'],
       invite:[bobUser],
       initial_state:[{
         type:'m.room.encryption',state_key:'',
@@ -235,7 +235,6 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
   it('commits only ciphertext when offline; original Matrix txnId survives a simulated lost ACK and recipient decrypts exactly one event',async()=>{
     activeSession.value={...session,online:false}
     const txn=await enqueueMatrixText(contact,roomId,text,approvedEd)
-    recordedTxn=txn
     const sealed=await rawRows()
     failUnless(sealed.length===1,'queue_not_durable')
     const serialized=JSON.stringify(sealed)
@@ -260,9 +259,9 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
     const observed:string[]=[]
     const spy=vi.spyOn(alice,'sendMessage')
     spy.mockImplementationOnce(async(...args)=>{
-      const room=args[0] as string
-      const payload=args[1] as {msgtype:MsgType;body:string}
-      const transaction=args[2] as string
+      const [room,payload,transaction]=args as unknown as [
+        string,{msgtype:MsgType;body:string},string,
+      ]
       observed.push(transaction)
       const receipt=await original(room,payload,transaction)
       sentEvent=receipt.event_id
@@ -276,9 +275,9 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
     spy.mockRestore()
     const secondSpy=vi.spyOn(alice,'sendMessage')
     secondSpy.mockImplementationOnce(async(...args)=>{
-      const room=args[0] as string
-      const payload=args[1] as {msgtype:MsgType;body:string}
-      const transaction=args[2] as string
+      const [room,payload,transaction]=args as unknown as [
+        string,{msgtype:MsgType;body:string},string,
+      ]
       observed.push(transaction)
       return original(room,payload,transaction)
     })
