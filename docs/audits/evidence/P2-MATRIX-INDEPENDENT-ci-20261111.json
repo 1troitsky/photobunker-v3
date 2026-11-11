@@ -1,0 +1,34 @@
+{
+  "product": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+  "origin": "GitHub reported; not independently rerun",
+  "runs": [
+    {
+      "id": 42942155113,
+      "name": "P0 security floor and contract checks",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42942155113"
+    },
+    {
+      "id": 42942155349,
+      "name": "P2-02C disposable Synapse real RustCrypto E2EE",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42942155349"
+    },
+    {
+      "id": 42942155087,
+      "name": "P0-02 real Laravel + Vue foundation",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42942155087"
+    },
+    {
+      "id": 42942155022,
+      "name": "P0-02 isolated PostgreSQL 18 and Garage 2.5",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/42942155022"
+    }
+  ]
+}

@@ -1,0 +1,215 @@
+{
+  "product": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+  "mainReadOnly": "a8abcc55e73ea0a2d8be3a24052f814906b8bd1d",
+  "commonAncestor": "2c8ad9f6f18da9e87797d8df2cc0d6c3cf4eb7a6",
+  "prs": [
+    {
+      "pr": 64,
+      "base": "main",
+      "recordedBaseSha": "2c8ad9f6f18da9e87797d8df2cc0d6c3cf4eb7a6",
+      "actualBaseTip": "a8abcc55e73ea0a2d8be3a24052f814906b8bd1d",
+      "head": "fbf09ab796aa60cbce539c62277cdfaed53984db",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        "apps/web/src/App.vue",
+        "apps/web/src/features/messages/application/message-drafts.test.ts",
+        "apps/web/src/features/messages/application/message-drafts.ts",
+        "apps/web/src/router.ts",
+        "apps/web/src/styles.css",
+        "apps/web/src/views/MessagesView.vue",
+        "docs/planning/P2-01-MESSAGES-ENCRYPTED-DRAFTS.md",
+        "tests/e2e/p2-messages-drafts.spec.ts",
+        "tests/playwright.config.ts"
+      ]
+    },
+    {
+      "pr": 66,
+      "base": "p2/01-messages-shell-encrypted-drafts",
+      "recordedBaseSha": "fbf09ab796aa60cbce539c62277cdfaed53984db",
+      "actualBaseTip": "fbf09ab796aa60cbce539c62277cdfaed53984db",
+      "head": "f927ce80d3b7e574e5d3afab32ff619216595210",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        ".github/workflows/p0-02-foundation.yml",
+        ".github/workflows/p0-02-storage.yml",
+        "apps/web/src/views/MessagesView.vue",
+        "tests/e2e/p2-messages-drafts.spec.ts"
+      ]
+    },
+    {
+      "pr": 67,
+      "base": "fix/p2-01-draft-save-navigation-guard",
+      "recordedBaseSha": "f927ce80d3b7e574e5d3afab32ff619216595210",
+      "actualBaseTip": "f927ce80d3b7e574e5d3afab32ff619216595210",
+      "head": "c972a8977313b6c437cbef79aaaeeadb255c2490",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        "apps/web/src/App.vue",
+        "apps/web/src/features/appearance/application/dock-preferences.test.ts",
+        "apps/web/src/features/appearance/application/dock-preferences.ts",
+        "apps/web/src/router.ts",
+        "apps/web/src/styles.css",
+        "apps/web/src/views/AccountView.vue",
+        "apps/web/src/views/AppearanceView.vue",
+        "tests/e2e/p2-appearance-dock.spec.ts"
+      ]
+    },
+    {
+      "pr": 68,
+      "base": "p2/appearance-dock-local-first",
+      "recordedBaseSha": "c972a8977313b6c437cbef79aaaeeadb255c2490",
+      "actualBaseTip": "c972a8977313b6c437cbef79aaaeeadb255c2490",
+      "head": "b8e0e13f9b2d4ce6915c9cb417b13f0e2991000c",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        "apps/api/.env.example",
+        "apps/api/app/Http/Controllers/MatrixBindingController.php",
+        "apps/api/config/matrix.php",
+        "apps/api/database/migrations/2026_11_11_000001_create_matrix_bindings_v1.php",
+        "apps/api/routes/web.php",
+        "apps/api/tests/Feature/MatrixBindingV1Test.php",
+        "apps/web/src/features/messages/application/matrix-binding.test.ts",
+        "apps/web/src/features/messages/application/matrix-binding.ts",
+        "docs/planning/P2-02A-MATRIX-SIGNED-BINDING.md"
+      ]
+    },
+    {
+      "pr": 69,
+      "base": "p2/02a-matrix-signed-binding",
+      "recordedBaseSha": "b8e0e13f9b2d4ce6915c9cb417b13f0e2991000c",
+      "actualBaseTip": "b8e0e13f9b2d4ce6915c9cb417b13f0e2991000c",
+      "head": "163a4cfd83507e2a9ac059dd395aeb960bcbe136",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        "apps/web/package.json",
+        "apps/web/src/features/messages/application/matrix-crypto-lease.test.ts",
+        "apps/web/src/features/messages/application/matrix-crypto-lease.ts",
+        "apps/web/src/features/messages/application/matrix-rust-adapter.test.ts",
+        "apps/web/src/features/messages/application/matrix-rust-adapter.ts",
+        "docs/planning/P2-02B-MATRIX-RUST-CRYPTO.md",
+        "pnpm-lock.yaml",
+        "tests/e2e/p2-matrix-crypto-lock.spec.ts"
+      ]
+    },
+    {
+      "pr": 70,
+      "base": "p2/02b-rust-matrix-client",
+      "recordedBaseSha": "163a4cfd83507e2a9ac059dd395aeb960bcbe136",
+      "actualBaseTip": "163a4cfd83507e2a9ac059dd395aeb960bcbe136",
+      "head": "e2ac226583ce12a3f0a01c9d57643df523ec7e17",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        ".github/workflows/p2-matrix-real-e2ee.yml",
+        "apps/web/tests/integration/matrix-real-e2ee.mjs",
+        "docs/planning/P2-02C-MATRIX-REAL-E2EE-GATE.md"
+      ]
+    },
+    {
+      "pr": 71,
+      "base": "p2/02c-disposable-matrix-e2ee",
+      "recordedBaseSha": "e2ac226583ce12a3f0a01c9d57643df523ec7e17",
+      "actualBaseTip": "e2ac226583ce12a3f0a01c9d57643df523ec7e17",
+      "head": "5fde4baa055771665b3f21d015fab2cbc5e40e53",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        ".github/workflows/p2-matrix-real-e2ee.yml",
+        "apps/api/app/Http/Controllers/MatrixRecoveryEscrowController.php",
+        "apps/api/database/migrations/2026_11_11_000002_create_matrix_recovery_escrows_v1.php",
+        "apps/api/routes/web.php",
+        "apps/api/tests/Feature/MatrixRecoveryEscrowTest.php",
+        "apps/web/src/features/messages/application/matrix-recovery-escrow.test.ts",
+        "apps/web/src/features/messages/application/matrix-recovery-escrow.ts",
+        "docs/planning/P2-02D1-MATRIX-KEYONLY-ESCROW.md"
+      ]
+    },
+    {
+      "pr": 72,
+      "base": "p2/02d-keyonly-matrix-recovery-escrow",
+      "recordedBaseSha": "5fde4baa055771665b3f21d015fab2cbc5e40e53",
+      "actualBaseTip": "5fde4baa055771665b3f21d015fab2cbc5e40e53",
+      "head": "fdbaf8ee89453aff2043051c66b2fd74a7faa2e4",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        "apps/web/src/features/messages/application/matrix-peer-identity.test.ts",
+        "apps/web/src/features/messages/application/matrix-peer-identity.ts",
+        "docs/planning/P2-02D2-MATRIX-PEER-IDENTITY-CARDS.md"
+      ]
+    },
+    {
+      "pr": 73,
+      "base": "p2/02d2-signed-matrix-peer-card",
+      "recordedBaseSha": "fdbaf8ee89453aff2043051c66b2fd74a7faa2e4",
+      "actualBaseTip": "fdbaf8ee89453aff2043051c66b2fd74a7faa2e4",
+      "head": "d4d9bc9316a32ee284dbfcdbf8931da315e1ad49",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        ".github/workflows/p2-matrix-real-e2ee.yml",
+        "apps/web/src/features/media/domain/media-crypto.test.ts",
+        "apps/web/src/features/messages/application/matrix-rust-adapter.test.ts",
+        "apps/web/src/features/messages/application/matrix-rust-adapter.ts",
+        "apps/web/src/features/messages/application/matrix-ssss-bridge.test.ts",
+        "apps/web/src/features/messages/application/matrix-ssss-bridge.ts",
+        "apps/web/src/features/messages/application/matrix-verified-device.test.ts",
+        "apps/web/src/features/messages/application/matrix-verified-device.ts",
+        "apps/web/tests/integration/matrix-real-4s-recovery.mjs",
+        "apps/web/tests/integration/matrix-real-e2ee.mjs",
+        "docs/planning/P2-02D3-MATRIX-VERIFIED-DEVICES.md",
+        "docs/status/CURRENT.md",
+        "docs/status/history/2026-11-11-p2-matrix-security-checkpoint.md"
+      ]
+    },
+    {
+      "pr": 74,
+      "base": "p2/02d3-matrix-verified-device-trust",
+      "recordedBaseSha": "d4d9bc9316a32ee284dbfcdbf8931da315e1ad49",
+      "actualBaseTip": "d4d9bc9316a32ee284dbfcdbf8931da315e1ad49",
+      "head": "2b1c66740064a1e28c46f3ca013014ee2eddd028",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        "apps/web/src/features/messages/application/matrix-binding.ts",
+        "apps/web/src/features/messages/application/matrix-rust-adapter.test.ts",
+        "apps/web/src/features/messages/application/matrix-rust-adapter.ts",
+        "apps/web/src/features/messages/application/matrix-text-outbox.test.ts",
+        "apps/web/src/features/messages/application/matrix-text-outbox.ts",
+        "apps/web/tests/integration/matrix-real-e2ee.mjs",
+        "docs/planning/P2-02E1-MATRIX-ENCRYPTED-TEXT-OUTBOX.md",
+        "docs/status/CURRENT.md"
+      ]
+    },
+    {
+      "pr": 75,
+      "base": "p2/02e-matrix-encrypted-text-outbox",
+      "recordedBaseSha": "2b1c66740064a1e28c46f3ca013014ee2eddd028",
+      "actualBaseTip": "2b1c66740064a1e28c46f3ca013014ee2eddd028",
+      "head": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+      "headMatchesFetchedRef": true,
+      "recordedBaseIsAncestor": true,
+      "changedFiles": [
+        ".github/workflows/p2-matrix-real-e2ee.yml",
+        "apps/web/src/features/messages/application/matrix-outbox-synapse.test.ts",
+        "apps/web/src/features/messages/application/matrix-text-outbox.test.ts",
+        "apps/web/src/features/messages/application/matrix-text-outbox.ts",
+        "docs/planning/P2-02E2-REAL-SYNAPSE-OUTBOX-GATE.md",
+        "docs/status/CURRENT.md"
+      ]
+    }
+  ],
+  "ephemeralMergeTree": "3a7cd2841dfe9d1304df82a51362c8b32c45d58c",
+  "mainDocsPreserved": 36,
+  "matrixMigrations": [
+    "apps/api/database/migrations/2026_11_11_000001_create_matrix_bindings_v1.php",
+    "apps/api/database/migrations/2026_11_11_000002_create_matrix_recovery_escrows_v1.php"
+  ],
+  "candidateRuntimeTested": false,
+  "status": "PASS"
+}

@@ -1,0 +1,110 @@
+{
+  "product": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+  "scope": "independent runtime; no full Messenger acceptance",
+  "results": [
+    {
+      "id": "REAL-TLS-WHOAMI-BINDING",
+      "status": "PASS",
+      "realPb3Registration": true,
+      "realMatrixSdkSync": true,
+      "rootAndDeviceSigned": true,
+      "realWhoami": true,
+      "tlsVerificationEnabled": true,
+      "authenticationMocked": false,
+      "scope": "one focused account; full two-account Messenger remains blocked"
+    },
+    {
+      "id": "ACTUAL-RELOAD-SEALED-CREDENTIAL",
+      "status": "PASS",
+      "actualPageReload": true,
+      "pb3OnlineHydration": true,
+      "originalBoundCredentialSurvived": true,
+      "scope": "credential/identity bootstrap; no Matrix message delivery or PWA cold-offline claim"
+    },
+    {
+      "id": "REAL-PB3-NEW-DEVICE-4S-UNWRAP",
+      "status": "PASS",
+      "genuineNewBrowserRecoveryKeyLogin": true,
+      "sameOriginalMatrix4SKey": true,
+      "original4SMacChecked": true,
+      "originalCrossSigningRootUnchanged": true,
+      "wrong4SRejected": true,
+      "unknownRecoveryLocatorHttp": 404,
+      "scope": "real PB3 escrow transport and live 4S MAC, not old-Megolm/browser-SDK recovery"
+    },
+    {
+      "id": "POPULATED-MATRIX-MIGRATIONS",
+      "status": "PASS",
+      "case": "populated rollback refuses both",
+      "guards": [
+        "pb3.matrix_recovery.rollback_forbidden",
+        "pb3.matrix.rollback_forbidden"
+      ],
+      "rowsAndCiphertextPreserved": true,
+      "postgres": "18.6"
+    },
+    {
+      "id": "M-02-GENUINE-RECOVERY-KEY-ROTATION",
+      "status": "FAIL",
+      "signedRotateAccepted": true,
+      "genuineRev2LoginOnNewBrowser": true,
+      "revisionBefore": 1,
+      "revisionAfter": 2,
+      "rev1EscrowGet": 200,
+      "rev2EscrowGet": 409,
+      "validRootSignedRev2Post": 409,
+      "originalCiphertextHashUnchanged": true,
+      "oldRowStillRevision": 1,
+      "noEscrowOverwritePerformed": true,
+      "scope": "same root/AKEK, new genuine recovery credential"
+    },
+    {
+      "id": "M-03-REVOKE-PANIC",
+      "status": "BLOCKED",
+      "revokeHttp": 404,
+      "routeMissing": true,
+      "actualPb3RevocationPerformed": false,
+      "matrixSdkWhoamiAfterBoundBrowserLocalCredentialDeleteAndLogout": true,
+      "ordinaryLogoutNotMisreportedAsPanic": true,
+      "reason": "No routed revoke/Panic lifecycle; no claim of successful revoke or an exploited token after real revocation"
+    },
+    {
+      "id": "LOCAL-LOG-CREDENTIAL-SCAN",
+      "status": "PASS",
+      "sources": [
+        "PB3 API stdout/stderr",
+        "disposable Synapse stdout/stderr"
+      ],
+      "matchedRecoveryKeys": 0,
+      "matchedMatrixAccessTokens": 0,
+      "matched4SSeeds": 0,
+      "scope": "exact exercised values; raw logs remain private, no general logging proof"
+    },
+    {
+      "id": "M-01-FULL-PB3-MATRIX",
+      "status": "BLOCKED",
+      "reason": "UI Send disabled; no public production synced client or SAS/QR ceremony",
+      "noTrustMocksInjected": true
+    },
+    {
+      "id": "M-04-ACL-RACE",
+      "status": "NOT TESTED",
+      "reason": "M-01 prevents production preflight/send; no room-key release or unauthorized decryption claim"
+    },
+    {
+      "id": "M-05-OUTBOX-RELOAD-LOST-ACK",
+      "status": "BLOCKED",
+      "reason": "Full product Messenger not reachable. Actual credential/identity reload checked separately; existing module-reset CI was not relabelled as browser acceptance."
+    },
+    {
+      "id": "HISTORICAL-MEGOLM-RESTORE",
+      "status": "BLOCKED",
+      "reason": "PB3 4S bytes recovered and MAC checked; no browser SDK provisioning/history restore. Node Matrix CI not repeated or called full PB3 recovery."
+    },
+    {
+      "id": "NATIVE-SAFARI-IOS-ANDROID",
+      "status": "NOT TESTED",
+      "reason": "No physical mobile hardware or native Safari run in this audit"
+    }
+  ]
+}

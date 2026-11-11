@@ -1,0 +1,87 @@
+{
+  "product": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+  "attempts": [
+    {
+      "scenario": "topology initial",
+      "exitCode": 1,
+      "category": "QA harness",
+      "cause": "Git C-quoted Cyrillic paths; fixed core.quotepath=false; rerun exit0"
+    },
+    {
+      "scenario": "general attempt01",
+      "exitCode": 1,
+      "category": "QA harness",
+      "cause": "Exact status locator omitted the visible prefix; registration itself succeeded"
+    },
+    {
+      "scenario": "general attempt02",
+      "exitCode": 1,
+      "category": "QA HTTPS adapter",
+      "cause": "SDK passed URL object; fixture handled strings/Request only; fixed without disabling TLS"
+    },
+    {
+      "scenario": "general attempt03",
+      "exitCode": null,
+      "termination": "SIGTERM after scenario failure; lingering SDK timer",
+      "category": "PRODUCT integration defect",
+      "cause": "Matrix browser binding HTTP404: stock Vite missing matrix/v1 proxy; direct API401. QA-only proxy subsequently added."
+    },
+    {
+      "scenario": "general attempt04",
+      "exitCode": 1,
+      "category": "environment security limit",
+      "cause": "Shared PB3 40/min throttle returned429; limits retained, real requests paced"
+    },
+    {
+      "scenario": "general attempt05",
+      "exitCode": 1,
+      "category": "QA harness",
+      "cause": "Default5s expectation too short for paced HTTP requests; corrected bounded25s expectation"
+    },
+    {
+      "scenario": "general attempt06",
+      "exitCode": 1,
+      "category": "environment security limit",
+      "cause": "Disposable Synapse login429 from prior diagnostic logins; general loop STOPPED, limits unchanged"
+    },
+    {
+      "scenario": "focused escrow attempt01",
+      "exitCode": 1,
+      "category": "QA harness",
+      "cause": "Playwright1.56 async waitForFunction predicate fulfilled a truthy Promise before real online hydration; replaced by bounded awaited expect.poll"
+    },
+    {
+      "scenario": "focused escrow attempt02 (fresh third fixture user)",
+      "exitCode": 0,
+      "category": "completed observations",
+      "cause": "Real signed rotation, rev2 escrow409, original cipher preserved; FAIL is product criterion, not a false green test"
+    },
+    {
+      "scenario": "UI attempt01",
+      "exitCode": 1,
+      "category": "QA harness timing, confirmed by successful stable measurement",
+      "cause": "Geometry sampled during CSS160ms entering transition; wait for actual Animation.finished before measurement; product unchanged"
+    },
+    {
+      "scenario": "UI attempt02",
+      "exitCode": 0,
+      "category": "completed observations",
+      "cause": "Animation.finished awaited; desktop/narrow geometry, offline draft reload, real Web Lock release and genuine account switch all passed"
+    },
+    {
+      "scenario": "artifact checker initial",
+      "exitCode": 1,
+      "category": "QA JSON shape",
+      "cause": "Refs artifact is an array, others objects; checker corrected to validate both shapes; final check exit0"
+    },
+    {
+      "scenario": "cleanup health postcheck",
+      "exitCode": 1,
+      "category": "pre-existing local environment state",
+      "cause": "Unrelated primary main stack stopped before audit; timestamps verified. Audit fixtures backed up/stopped; main runtime not modified"
+    }
+  ],
+  "oldFixtureAndOldEscrowsRetained": true,
+  "serverLimitsDisabled": false,
+  "originalProductModified": false
+}

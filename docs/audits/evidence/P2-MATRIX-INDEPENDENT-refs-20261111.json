@@ -1,0 +1,134 @@
+[
+  {
+    "number": 64,
+    "base": "main",
+    "base_sha": "2c8ad9f6f18da9e87797d8df2cc0d6c3cf4eb7a6",
+    "head": "p2/01-messages-shell-encrypted-drafts",
+    "head_sha": "fbf09ab796aa60cbce539c62277cdfaed53984db",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2-01: approved Messages 1.1 fullscreen UI and AKEK-encrypted local drafts"
+  },
+  {
+    "number": 66,
+    "base": "p2/01-messages-shell-encrypted-drafts",
+    "base_sha": "fbf09ab796aa60cbce539c62277cdfaed53984db",
+    "head": "fix/p2-01-draft-save-navigation-guard",
+    "head_sha": "f927ce80d3b7e574e5d3afab32ff619216595210",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2-01 follow-up: keep encrypted draft visible on failed save and guard dialog navigation"
+  },
+  {
+    "number": 67,
+    "base": "fix/p2-01-draft-save-navigation-guard",
+    "base_sha": "f927ce80d3b7e574e5d3afab32ff619216595210",
+    "head": "p2/appearance-dock-local-first",
+    "head_sha": "c972a8977313b6c437cbef79aaaeeadb255c2490",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2 Appearance 1.3: real configurable Dock with encrypted local-first preferences"
+  },
+  {
+    "number": 68,
+    "base": "p2/appearance-dock-local-first",
+    "base_sha": "c972a8977313b6c437cbef79aaaeeadb255c2490",
+    "head": "p2/02a-matrix-signed-binding",
+    "head_sha": "b8e0e13f9b2d4ce6915c9cb417b13f0e2991000c",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2-02A: signed PB3 ↔ Matrix account/device binding with trusted whoami"
+  },
+  {
+    "number": 69,
+    "base": "p2/02a-matrix-signed-binding",
+    "base_sha": "b8e0e13f9b2d4ce6915c9cb417b13f0e2991000c",
+    "head": "p2/02b-rust-matrix-client",
+    "head_sha": "163a4cfd83507e2a9ac059dd395aeb960bcbe136",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2-02B: pinned Matrix RustCrypto encrypted store with exclusive tab ownership"
+  },
+  {
+    "number": 70,
+    "base": "p2/02b-rust-matrix-client",
+    "base_sha": "163a4cfd83507e2a9ac059dd395aeb960bcbe136",
+    "head": "p2/02c-disposable-matrix-e2ee",
+    "head_sha": "e2ac226583ce12a3f0a01c9d57643df523ec7e17",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2-02C: disposable real Synapse + two-user RustCrypto encrypted message/decrypt gate"
+  },
+  {
+    "number": 71,
+    "base": "p2/02c-disposable-matrix-e2ee",
+    "base_sha": "e2ac226583ce12a3f0a01c9d57643df523ec7e17",
+    "head": "p2/02d-keyonly-matrix-recovery-escrow",
+    "head_sha": "5fde4baa055771665b3f21d015fab2cbc5e40e53",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2-02D1: PB3 Recovery Key sealed Matrix 4S seed escrow and durable Lost-ACK replay"
+  },
+  {
+    "number": 72,
+    "base": "p2/02d-keyonly-matrix-recovery-escrow",
+    "base_sha": "5fde4baa055771665b3f21d015fab2cbc5e40e53",
+    "head": "p2/02d2-signed-matrix-peer-card",
+    "head_sha": "fdbaf8ee89453aff2043051c66b2fd74a7faa2e4",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2-02D2: PB3-root-signed Matrix contact identity cards with encrypted explicit trust pins"
+  },
+  {
+    "number": 73,
+    "base": "p2/02d2-signed-matrix-peer-card",
+    "base_sha": "fdbaf8ee89453aff2043051c66b2fd74a7faa2e4",
+    "head": "p2/02d3-matrix-verified-device-trust",
+    "head_sha": "d4d9bc9316a32ee284dbfcdbf8931da315e1ad49",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2-02D3: fail-closed Matrix cross-signing and independently pinned device key gate"
+  },
+  {
+    "number": 74,
+    "base": "p2/02d3-matrix-verified-device-trust",
+    "base_sha": "d4d9bc9316a32ee284dbfcdbf8931da315e1ad49",
+    "head": "p2/02e-matrix-encrypted-text-outbox",
+    "head_sha": "2b1c66740064a1e28c46f3ca013014ee2eddd028",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2-02E1: Local-First encrypted Matrix text outbox with trusted recipient and strict ciphertext ACK"
+  },
+  {
+    "number": 75,
+    "base": "p2/02e-matrix-encrypted-text-outbox",
+    "base_sha": "2b1c66740064a1e28c46f3ca013014ee2eddd028",
+    "head": "p2/02e2-real-synapse-outbox-gate",
+    "head_sha": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "P2-02E2: real PB3 encrypted outbox → Synapse RustCrypto → recipient decrypt, lost-ACK replay"
+  },
+  {
+    "number": 76,
+    "base": "p2/02e2-real-synapse-outbox-gate",
+    "base_sha": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+    "head": "qa/p2-matrix-stack-audit-20261111",
+    "head_sha": "41b46bc8b5ac24ea42ee3af231e9d082c6cebee1",
+    "state": "open",
+    "draft": true,
+    "merged": false,
+    "title": "QA only — P2 Matrix #64–#75 security/integration desk audit and independent acceptance gate"
+  }
+]

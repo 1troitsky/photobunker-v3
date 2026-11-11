@@ -1,0 +1,101 @@
+{
+  "os": "macOS-26.6.2-arm64-arm-64bit",
+  "commands": [
+    {
+      "command": [
+        "docker",
+        "compose",
+        "--env-file",
+        "/private/tmp/pb3-p2-matrix-run-20261111/.env",
+        "-f",
+        "/private/tmp/pb3-p2-matrix-run-20261111/compose.json",
+        "exec",
+        "-T",
+        "api",
+        "php",
+        "-r",
+        "echo PHP_VERSION,\"\\n\"; require \"vendor/autoload.php\"; echo Illuminate\\Foundation\\Application::VERSION,\"\\n\";"
+      ],
+      "exitCode": 0,
+      "output": "8.4.27\n13.39.0"
+    },
+    {
+      "command": [
+        "docker",
+        "compose",
+        "--env-file",
+        "/private/tmp/pb3-p2-matrix-run-20261111/.env",
+        "-f",
+        "/private/tmp/pb3-p2-matrix-run-20261111/compose.json",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "pb3",
+        "-d",
+        "pb3_audit",
+        "-Atc",
+        "show server_version"
+      ],
+      "exitCode": 0,
+      "output": "18.6"
+    },
+    {
+      "command": [
+        "docker",
+        "compose",
+        "--env-file",
+        "/private/tmp/pb3-p2-matrix-run-20261111/.env",
+        "-f",
+        "/private/tmp/pb3-p2-matrix-run-20261111/compose.json",
+        "exec",
+        "-T",
+        "api",
+        "php",
+        "artisan",
+        "route:list",
+        "--path=identity/v2",
+        "--json"
+      ],
+      "exitCode": 0,
+      "output": "[{\"domain\":null,\"method\":\"POST\",\"uri\":\"identity\\/v2\\/challenges\",\"name\":null,\"action\":\"App\\\\Http\\\\Controllers\\\\IdentityController@challenge\",\"middleware\":[\"web\",\"throttle:40,1\"],\"path\":null},{\"domain\":null,\"method\":\"GET|HEAD\",\"uri\":\"identity\\/v2\\/csrf\",\"name\":null,\"action\":\"App\\\\Http\\\\Controllers\\\\IdentityController@csrf\",\"middleware\":[\"web\",\"throttle:40,1\"],\"path\":null},{\"domain\":null,\"method\":\"GET|HEAD\",\"uri\":\"identity\\/v2\\/devices\",\"name\":null,\"action\":\"App\\\\Http\\\\Controllers\\\\IdentityController@devices\",\"middleware\":[\"web\",\"throttle:40,1\"],\"path\":null},{\"domain\":null,\"method\":\"POST\",\"uri\":\"identity\\/v2\\/logout\",\"name\":null,\"action\":\"App\\\\Http\\\\Controllers\\\\IdentityController@logout\",\"middleware\":[\"web\",\"throttle:40,1\"],\"path\":null},{\"domain\":null,\"method\":\"GET|HEAD\",\"uri\":\"identity\\/v2\\/me\",\"name\":null,\"action\":\"App\\\\Http\\\\Controllers\\\\IdentityController@me\",\"middleware\":[\"web\",\"throttle:40,1\"],\"path\":null},{\"domain\":null,\"method\":\"POST\",\"uri\":\"identity\\/v2\\/prepare\",\"name\":null,\"action\":\"App\\\\Http\\\\Controllers\\\\IdentityController@prepare\",\"middleware\":[\"web\",\"throttle:40,1\"],\"path\":null},{\"domain\":null,\"method\":\"POST\",\"uri\":\"identity\\/v2\\/proof\",\"name\":null,\"action\":\"App\\\\Http\\\\Controllers\\\\IdentityController@proof\",\"middleware\":[\"web\",\"throttle:40,1\"],\"path\":null},{\"domain\":null,\"method\":\"GET|HEAD\",\"uri\":\"identity\\/v2\\/recovery\\/{locator}\",\"name\":null,\"action\":\"App\\\\Http\\\\Controllers\\\\IdentityController@recovery\",\"middleware\":[\"web\",\"throttle:40,1\"],\"path\":null},{\"domain\":null,\"method\":\"GET|HEAD\",\"uri\":\"identity\\/v2\\/time\",\"name\":null,\"action\":\"App\\\\Http\\\\Controllers\\\\IdentityController@time\",\"middleware\":[\"web\",\"throttle:40,1\"],\"path\":null}]"
+    },
+    {
+      "command": [
+        "node",
+        "--version"
+      ],
+      "exitCode": 0,
+      "output": "v22.23.3"
+    },
+    {
+      "command": [
+        "pnpm",
+        "--version"
+      ],
+      "exitCode": 0,
+      "output": "10.20.0"
+    },
+    {
+      "command": [
+        "docker",
+        "image",
+        "inspect",
+        "matrixdotorg/synapse:v1.161.0",
+        "--format",
+        "{{json .RepoDigests}}"
+      ],
+      "exitCode": 0,
+      "output": "[\"matrixdotorg/synapse@sha256:6b95dd129e35e97e8032cb759e5db4a516a5f7ef6c98d34d716fea1ae239b62a\"]"
+    }
+  ],
+  "productSourceMountedReadOnly": true,
+  "separateAuditPorts": [
+    5175,
+    8002,
+    443
+  ],
+  "mainAlreadyStoppedBeforeAudit": true,
+  "mainRuntimeStateNotChangedByAudit": true
+}

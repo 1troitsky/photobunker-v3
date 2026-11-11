@@ -1,0 +1,11 @@
+{
+  "command": "docker compose exec -T postgres psql -Atc aggregate-counts",
+  "exitCode": 0,
+  "syntheticCounts": [
+    "2",
+    "2",
+    "11"
+  ],
+  "manualIdentityOrBindingDbInserts": false,
+  "scope": "first fixture; genuine HTTP binds reached before card/rate failure; no full two-user Matrix messaging claim"
+}

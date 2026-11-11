@@ -1,0 +1,10 @@
+{
+  "command": "python3 scripts/p2-matrix-audit/check.py PRODUCT",
+  "exitCode": 0,
+  "output": "PASS QA-only scope, exact untouched product, valid evidence, syntax, no exported key/token patterns; product M-02 remains FAIL",
+  "actualFixtureEnvAndPasswordsAbsent": true,
+  "rawSyntheticUuidsAbsentFromJson": true,
+  "productUnmodified": true,
+  "primaryMainHead": "a8abcc55e73ea0a2d8be3a24052f814906b8bd1d",
+  "mainRuntimeChanged": false
+}

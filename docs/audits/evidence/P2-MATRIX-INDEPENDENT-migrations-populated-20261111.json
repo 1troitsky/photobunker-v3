@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "case": "populated rollback refuses both",
+  "guards": [
+    "pb3.matrix_recovery.rollback_forbidden",
+    "pb3.matrix.rollback_forbidden"
+  ],
+  "rowsAndCiphertextPreserved": true,
+  "postgres": "18.6",
+  "command": "docker compose exec -T api php /audit/migrations.php",
+  "exitCode": 0
+}
