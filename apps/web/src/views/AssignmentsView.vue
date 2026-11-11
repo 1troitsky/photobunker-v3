@@ -25,6 +25,7 @@ import type {
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import { preflightAssignmentMediaGrant } from '../features/assignments/application/media-submission-preflight'
+import { verifyMediaSubmissionReceipt } from '../features/assignments/application/verify-media-submission'
 import { parseRulesCsv, EMPTY_ADVANCED_RULES } from '../features/assignments/domain/advanced-rules'
 import type { AdvancedRules } from '../features/assignments/domain/advanced-rules'
 import {
@@ -66,6 +67,7 @@ const monthlyUsage=ref<AssignmentMonthlyUsage|null>(null)
 const photos=ref<StoredPhoto[]>([])
 const mediaFiles=ref<StoredMedia[]>([])
 const mediaSubmissions=ref<AssignmentMediaSubmission[]>([])
+const verifiedMediaReceipts=ref<Record<string,boolean>>({})
 const submissions=ref<Submission[]>([])
 const selectedId=ref('')
 const title=ref('')
@@ -180,7 +182,7 @@ function cleanPreview():void{
 }
 function resetSensitive():void {
   assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
-  mediaFiles.value=[];mediaSubmissions.value=[]
+  mediaFiles.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
   monthlyUsage.value=null
   submissions.value=[];selectedId.value='';ownerCheck.value=null
   contributorCheck.value=null;showingOfflineSnapshot.value=false;cleanPreview()
@@ -421,19 +423,33 @@ function choose(assignmentId:string):void{
   populateOwnerPolicyForm(chosen)
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
-  submissions.value=[];mediaSubmissions.value=[];cleanPreview()
+  submissions.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
+  cleanPreview()
   if(selected.value?.isOwner)void loadSubmissions()
 }
 async function loadSubmissions():Promise<void>{
   const id=selectedId.value
   const owner=selected.value
-  if(!owner?.isOwner||!activeSession.value?.online)return
+  const identity=activeSession.value
+  if(!owner?.isOwner||!identity?.online)return
   try{
     const [result,mediaResult]=await Promise.all([
       listAssignmentSubmissions(id),listAssignmentMediaSubmissions(id),
     ])
-    if(selectedId.value===id){
+    // A server count or an unverified string is NOT a contributor signature.
+    // Only the independently fingerprint-pinned contributor root can verify
+    // the immutable consent receipt. An unpinned/changed key remains unverified.
+    const checks=await Promise.all(mediaResult.items.map(async entry=>{
+      try{
+        await verifyMediaSubmissionReceipt(entry,id,owner.ownerAccountId)
+        return [entry.submissionId,true] as const
+      }catch{
+        return [entry.submissionId,false] as const
+      }
+    }))
+    if(selectedId.value===id&&activeSession.value===identity){
       submissions.value=result;mediaSubmissions.value=mediaResult.items
+      verifiedMediaReceipts.value=Object.fromEntries(checks)
     }
   }catch(e){error.value=explain(e)}
 }
@@ -942,7 +958,8 @@ onUnmounted(cleanPreview)
           <div v-for="entry in mediaSubmissions" :key="entry.submissionId" class="photo-row" data-testid="assignment-media-submission">
             <div>
               <strong>{{ entry.mediaType==='video'?'Видео':entry.mediaType==='photo'?'Фото P2':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
-              <small>{{ entry.capturedInAssignment?'Запись по заданию · подписана':'Личный файл · передан вручную' }}</small>
+              <small>{{ entry.capturedInAssignment?'Заявлена запись по заданию (не доказательство камеры)':'Личный файл · передан вручную' }}</small>
+              <small>{{ verifiedMediaReceipts[entry.submissionId]?'Подпись согласия исполнителя проверена':'Подпись согласия не проверена: подтвердите ключ участника' }}</small>
               <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
             </div>
             <button type="button" :disabled="busy" @click="openMediaSubmission(entry.mediaGrantId)">Открыть медиа задания</button>
