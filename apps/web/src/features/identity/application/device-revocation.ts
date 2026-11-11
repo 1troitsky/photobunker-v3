@@ -3,6 +3,7 @@ import type {Session} from './session'
 import {jsonApi} from '../infrastructure/api'
 import {importSigner,sign,uuid} from '../infrastructure/crypto'
 import {clearLocalMatrixCredentials} from '../../messages/application/matrix-binding'
+import {prepareOwnMatrixTokenLogout} from '../../messages/application/matrix-self-logout'
 
 const uuidRe=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
 type Device={id:string;created_at:string;revoked_at:string|null}
@@ -16,6 +17,7 @@ type Revoked={
 export type DeviceRevokeResult=Revoked&{
   localMatrixCredentialsCleared:boolean
   localMatrixShutdownComplete:boolean
+  matrixOwnTokenLogout:'confirmed'|'unconfirmed'|'not_attempted'
 }
 
 function same(s:Session):void{
@@ -54,6 +56,16 @@ export async function revokePB3Device(targetDeviceId:string
 ):Promise<DeviceRevokeResult>{
   if(!uuidRe.test(targetDeviceId))throw Error('identity.revoke_bad_device_id')
   const s=online()
+  // Prepare before server-side PB3 revocation makes /matrix/v1/me reject
+  // this browser's cookie. Remote Matrix requests run only AFTER the signed
+  // PB3 revocation commits. A broken Matrix service must not block PB3 revoke.
+  let matrixLogout:(()=>Promise<boolean>)|null=null
+  let matrixPreparationFailed=false
+  if(targetDeviceId===s.deviceId){
+    try{matrixLogout=await prepareOwnMatrixTokenLogout()}
+    catch{matrixPreparationFailed=true}
+    same(s)
+  }
   const contract=JSON.stringify({
     version:1,operationId:uuid(),accountId:s.accountId,
     actorDeviceId:s.deviceId,targetDeviceId,accountRevision:s.pkg.revision,
@@ -81,14 +93,23 @@ export async function revokePB3Device(targetDeviceId:string
   if(targetDeviceId!==s.deviceId)return {
     ...result,localMatrixCredentialsCleared:false,
     localMatrixShutdownComplete:false,
+    matrixOwnTokenLogout:'not_attempted',
   }
   let stopped=true,cleared=true
+  let matrixOwnTokenLogout:'confirmed'|'unconfirmed'|'not_attempted'=
+    matrixPreparationFailed?'unconfirmed':'not_attempted'
   try{
     // Do not load the 7.8 MB Matrix RustCrypto WASM on ordinary PB3
     // settings/identity startup. Matrix stays an explicit lazy capability.
     const {stopMatrixCrypto}=await import('../../messages/application/matrix-rust-adapter')
     await stopMatrixCrypto()
   }catch{stopped=false}
+  if(matrixLogout){
+    // A Synapse logout ACK is not sufficient: the same bearer must now
+    // fail /account/whoami with HTTP 401. No claims about OTHER devices.
+    try{matrixOwnTokenLogout=await matrixLogout()?'confirmed':'unconfirmed'}
+    catch{matrixOwnTokenLogout='unconfirmed'}
+  }
   try{await clearLocalMatrixCredentials()}catch{cleared=false}
   // Server-side self-revocation has already completed. Always lock PB3,
   // even if local Matrix cleanup fails; NEVER claim a remote Matrix wipe.
@@ -96,5 +117,6 @@ export async function revokePB3Device(targetDeviceId:string
   return {...result,
     localMatrixCredentialsCleared:cleared,
     localMatrixShutdownComplete:stopped,
+    matrixOwnTokenLogout,
   }
 }

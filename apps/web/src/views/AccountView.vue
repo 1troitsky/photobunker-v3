@@ -28,16 +28,24 @@ async function disconnectDevice(id:string):Promise<void>{
   if(deviceBusy.value)return
   const self=id===activeSession.value?.deviceId
   const message=self
-    ? 'Отключить это устройство от PB3? Локальный доступ закроется. Matrix-токен на отдельном сервере этим НЕ отзывается.'
+    ? 'Отключить это устройство от PB3? После отзыва PB3 приложение попробует отозвать Matrix-токен ЭТОГО устройства на homeserver. При ошибке сети отзыв Matrix не гарантирован.'
     : 'Отключить выбранное устройство от PB3? Его отдельный Matrix-токен на сервере этим НЕ отзывается.'
   if(!window.confirm(message))return
   deviceBusy.value=true;error.value='';status.value=''
   try{
     const result=await revokePB3Device(id)
-    status.value=result.localMatrixShutdownComplete===false&&self
-      ||result.localMatrixCredentialsCleared===false&&self
-      ? 'PB3-доступ отозван. Локальная очистка Matrix не подтверждена; удалённый Matrix-токен не отозван.'
-      : 'PB3-доступ отозван. Отзыв Matrix-токена на внешнем сервере не выполнен.'
+    if(!self){
+      status.value='PB3-доступ отозван. Отзыв Matrix-токена другого устройства на homeserver не выполнен.'
+    }else{
+      const remote=result.matrixOwnTokenLogout==='confirmed'
+        ? 'Matrix-токен этого устройства отозван на homeserver и проверен повторным запросом.'
+        : 'Удалённый отзыв Matrix-токена этого устройства НЕ подтверждён.'
+      const local=!result.localMatrixShutdownComplete
+        ||!result.localMatrixCredentialsCleared
+        ? ' Локальная очистка Matrix не подтверждена.'
+        : ''
+      status.value='PB3-доступ отозван. '+remote+local
+    }
     if(!self)await refreshDevices()
     else devices.value=[]
   }catch(e){error.value=e instanceof Error?e.message:'identity.revoke_unconfirmed'}
@@ -107,8 +115,10 @@ async function copyKey():Promise<void> {
       <h2>Устройства PB3</h2>
       <p class="muted">
         «Отключить» прекращает авторизацию устройства в PB3.
-        Это НЕ отзывает отдельный Matrix-токен на его homeserver
-        и НЕ удаляет сообщения, уже расшифрованные на другом устройстве.
+        Для этого устройства приложение дополнительно пытается отозвать
+        его собственный Matrix-токен и проверяет результат на homeserver.
+        Matrix-токены других устройств это НЕ отзывает. Ранее
+        расшифрованные сообщения не удаляются.
       </p>
       <div v-if="devicesError" role="alert">{{ devicesError }}</div>
       <div v-for="item in devices" :key="item.id" class="action-row">

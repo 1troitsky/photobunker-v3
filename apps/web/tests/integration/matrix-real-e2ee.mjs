@@ -192,7 +192,32 @@ try{
   });
   assert.equal(anonymous.status,401,
     "An unauthenticated user unexpectedly read a private room event");
-  console.log("P2-02C PASS: two Matrix accounts, RustCrypto Megolm ciphertext/decrypt, exact-txn Lost ACK replay, anonymous event rejected");
+  // M-03B protocol gate. This is a REAL disposable Synapse bearer,
+  // not a mocked HTTP 200 and not PB3 cross-device delegated revocation.
+  // Stop the owning SDK first; prove the device, log out this token alone,
+  // and confirm Synapse now rejects that SAME token with HTTP 401.
+  stage='real Synapse own-device bearer logout'
+  ca.stopClient()
+  const selfHeaders={Authorization:'Bearer '+alice.token,Accept:'application/json'}
+  const beforeLogout=await fetch(baseUrl+'/_matrix/client/v3/account/whoami',{
+    headers:selfHeaders,signal:AbortSignal.timeout(5000),
+  })
+  assert.equal(beforeLogout.status,200,'Original Matrix bearer not live')
+  const identityBefore=await beforeLogout.json()
+  assert.equal(identityBefore.user_id,alice.userId)
+  assert.equal(identityBefore.device_id,ca.getDeviceId())
+  const remoteLogout=await fetch(baseUrl+'/_matrix/client/v3/logout',{
+    method:'POST',headers:{...selfHeaders,'Content-Type':'application/json'},
+    body:'{}',signal:AbortSignal.timeout(5000),
+  })
+  assert.equal(remoteLogout.status,200,'Real Matrix logout request failed')
+  const rejected=await fetch(baseUrl+'/_matrix/client/v3/account/whoami',{
+    headers:selfHeaders,signal:AbortSignal.timeout(5000),
+  })
+  assert.equal(rejected.status,401,
+    'Matrix bearer STILL valid after homeserver logout ACK')
+
+  console.log("P2-02C/M-03B PASS: encrypted delivery, Lost ACK, plus real Synapse own-token logout and HTTP 401 proof");
   success=true
 }catch(e){
   console.error('P2-02C CI FAIL at '+stage+
