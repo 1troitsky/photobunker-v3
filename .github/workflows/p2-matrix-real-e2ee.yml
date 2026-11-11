@@ -103,3 +103,92 @@ jobs:
         run: |
           docker rm -f pb3-ci-synapse >/dev/null 2>&1 || true
           sudo rm -rf "$RUNNER_TEMP/pb3-matrix-synapse"
+
+  outbox-synapse:
+    name: Real PB3 encrypted Dexie outbox + isolated Synapse + recipient RustCrypto
+    if: github.repository == '1troitsky/photobunker-v3'
+    # Independent server, authentication/rate-limit buckets and DB. This
+    # prevents the prior E2EE/4S gate from consuming the login-IP allowance.
+    # NO changes to Synapse's default login protections or production config.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install frozen SDK, actual outbox and test dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Generate dedicated disposable loopback Synapse for PB3 outbox
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/pb3-outbox-synapse"
+          install -d -m 0777 "$dir"
+          image='matrixdotorg/synapse:v1.161.0'
+          docker run --rm -v "$dir:/data" \
+            -e SYNAPSE_SERVER_NAME=localhost \
+            -e SYNAPSE_REPORT_STATS=no \
+            "$image" generate
+          config="$dir/homeserver.yaml"
+          test -s "$config"
+          secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$secret"
+          if grep -q '^registration_shared_secret:' "$config"; then
+            sudo sed -i "/^registration_shared_secret:/d" "$config"
+          fi
+          printf '\nregistration_shared_secret: "%s"\n' "$secret" | sudo tee -a "$config" >/dev/null
+          unset secret
+          docker run -d --name pb3-ci-outbox-synapse \
+            -p 127.0.0.1:18008:8008 \
+            -v "$dir:/data" \
+            -e SYNAPSE_LOG_LEVEL=WARNING \
+            "$image" >/dev/null
+          for attempt in $(seq 1 90); do
+            if curl -fsS --max-time 3 http://127.0.0.1:18008/_matrix/client/versions >/dev/null; then
+              break
+            fi
+            if ! docker ps --format '{{.Names}}' | grep -qx pb3-ci-outbox-synapse; then
+              echo 'PB3 disposable outbox Synapse stopped before healthy'; exit 1
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:18008/_matrix/client/versions >/dev/null
+      - name: Create ONLY two dedicated disposable outbox test accounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          alice="$(openssl rand -hex 24)"
+          bob="$(openssl rand -hex 24)"
+          echo "::add-mask::$alice"
+          echo "::add-mask::$bob"
+          docker exec pb3-ci-outbox-synapse register_new_matrix_user \
+            -c /data/homeserver.yaml -u pb3_ci_outbox_alice -p "$alice" \
+            --no-admin http://localhost:8008 >/dev/null
+          docker exec pb3-ci-outbox-synapse register_new_matrix_user \
+            -c /data/homeserver.yaml -u pb3_ci_outbox_bob -p "$bob" \
+            --no-admin http://localhost:8008 >/dev/null
+          {
+            echo "MATRIX_CI_BASE_URL=http://127.0.0.1:18008"
+            echo "MATRIX_CI_DISPOSABLE=1"
+            echo "MATRIX_CI_SERVER_NAME=localhost"
+            echo "MATRIX_CI_OUTBOX_ALICE=pb3_ci_outbox_alice"
+            echo "MATRIX_CI_OUTBOX_BOB=pb3_ci_outbox_bob"
+            echo "MATRIX_CI_OUTBOX_ALICE_PASSWORD=$alice"
+            echo "MATRIX_CI_OUTBOX_BOB_PASSWORD=$bob"
+          } >> "$GITHUB_ENV"
+      - name: Actual PB3 AES-GCM outbox to real Synapse and recipient decrypt
+        timeout-minutes: 8
+        # The actual PB3 queue, WebCrypto and official RustCrypto run here.
+        # PB3 Contacts/Identity/lease are explicit isolated test interfaces.
+        run: pnpm --filter @pb3/web exec vitest run src/features/messages/application/matrix-outbox-synapse.test.ts --testTimeout 180000 --hookTimeout 160000 --maxWorkers 1 --no-file-parallelism
+      - name: Stop and erase disposable outbox Synapse
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f pb3-ci-outbox-synapse >/dev/null 2>&1 || true
+          sudo rm -rf "$RUNNER_TEMP/pb3-outbox-synapse"

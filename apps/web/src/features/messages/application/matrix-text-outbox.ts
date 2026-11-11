@@ -1,5 +1,5 @@
 import Dexie,{type Table} from 'dexie'
-import {MsgType,SyncState,type MatrixClient} from 'matrix-js-sdk'
+import {MsgType,SyncState,EventStatus,type MatrixClient} from 'matrix-js-sdk'
 import {OnlySignedDevicesIsolationMode} from 'matrix-js-sdk/lib/crypto-api'
 import {activeSession,requireSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
@@ -343,17 +343,50 @@ export async function flushMatrixTextOutbox(client:MatrixClient):Promise<{
         same(s)
         if(!isLeasedMatrixClient(client))
           throw Error('matrix.outbox_crypto_lease_lost')
-        // The official Matrix SDK encrypts before sendMessage(). Do not
-        // persist a second, plaintext network payload in local storage.
-        const response=await client.sendMessage(item.roomId,{
-          msgtype:MsgType.Text,body:item.body,
-        },item.operationId)
+        // matrix-js-sdk maintains a local txnId → MatrixEvent mapping.
+        // Repeating sendMessage() with a txnId still present in that map
+        // THROWS before reaching Synapse (Room.addPendingEvent). This
+        // matters when our PB3 queue loses its ACK but the SDK received it.
+        // Converge a SENT local echo via a fresh server ciphertext read;
+        // retry a NOT_SENT local echo with the SDK's official resendEvent.
+        // Only an absent local echo permits sendMessage(original txnId).
+        const room=client.getRoom(item.roomId)
+        if(!room)throw Error('matrix.outbox_room_unavailable')
+        const echo=room.getEventForTxnId(item.operationId)
+        let remoteEventId:string
+        if(echo){
+          if(echo.getTxnId()!==item.operationId
+            ||echo.getRoomId()!==item.roomId
+            ||echo.getSender()!==client.getUserId())
+            throw Error('matrix.outbox_local_echo_identity_mismatch')
+          if(echo.status===EventStatus.SENT){
+            const id=echo.getId()
+            if(!id||!eventRe.test(id))
+              throw Error('matrix.outbox_local_echo_not_confirmed')
+            remoteEventId=id
+          }else if(echo.status===EventStatus.NOT_SENT){
+            const result=await client.resendEvent(echo,room)
+            if(!result?.event_id||!eventRe.test(result.event_id))
+              throw Error('matrix.outbox_invalid_ack')
+            remoteEventId=result.event_id
+          }else{
+            // Still in-flight, queued or cancelled. NEVER generate a
+            // second local echo or claim a server ACK in this case.
+            throw Error('matrix.outbox_local_echo_inflight')
+          }
+        }else{
+          // The official Matrix SDK encrypts the text before network I/O.
+          const result=await client.sendMessage(item.roomId,{
+            msgtype:MsgType.Text,body:item.body,
+          },item.operationId)
+          if(!result?.event_id||!eventRe.test(result.event_id))
+            throw Error('matrix.outbox_invalid_ack')
+          remoteEventId=result.event_id
+        }
         same(s)
-        if(!response?.event_id||!eventRe.test(response.event_id))
-          throw Error('matrix.outbox_invalid_ack')
-        const remote=await client.fetchRoomEvent(item.roomId,response.event_id)
+        const remote=await client.fetchRoomEvent(item.roomId,remoteEventId)
         same(s)
-        if(remote.event_id!==response.event_id
+        if(remote.event_id!==remoteEventId
           ||remote.room_id!==item.roomId
           ||remote.sender!==client.getUserId()
           ||remote.type!=='m.room.encrypted'
@@ -365,7 +398,7 @@ export async function flushMatrixTextOutbox(client:MatrixClient):Promise<{
           ||(item.body.length>16&&JSON.stringify(remote).includes(item.body)))
           throw Error('matrix.outbox_remote_ciphertext_unverified')
         const updated:PendingText={
-          ...item,state:'server_accepted',eventId:response.event_id,
+          ...item,state:'server_accepted',eventId:remoteEventId,
         }
         const sealed=await wrap(s,updated)
         same(s)
