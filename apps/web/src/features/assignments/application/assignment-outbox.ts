@@ -16,7 +16,7 @@ import type { MediaPrivateFields } from '../../media/domain/media-crypto'
 import { EMPTY_ADVANCED_RULES, normalizeAdvancedRules, validateAdvancedFields } from '../domain/advanced-rules'
 import type { AdvancedRules } from '../domain/advanced-rules'
 
-export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'|'private'|'schedule'|'retention'
+export type AssignmentOperationKind='create'|'invite'|'accept'|'remove-member'|'submit'|'media-submit'|'state'|'policy'|'private'|'schedule'|'retention'
 export type AssignmentOperationState='queued'|'retry'|'sent'|'conflict'
 
 export interface AssignmentOperation {
@@ -89,8 +89,9 @@ export type ReceivedAssignmentInvite={
 /** P1-23: freshly fetched owner-only roster; never an offline entitlement. */
 export type AssignmentParticipant={
   inviteId:string;recipientAccountId:string;role:'contributor'
-  state:'pending'|'accepted';expiresAt:number;expired:boolean
+  state:'pending'|'accepted'|'removed';expiresAt:number;expired:boolean
   contract:string;signature:string
+  removalContract?:string|null;removalSignature?:string|null
 }
 type AssignmentParticipantsPage={
   items:AssignmentParticipant[];nextCursor:string|null;serverNowMs:number
@@ -113,7 +114,7 @@ export async function verifyAssignmentParticipantRoster(
       ||typeof item.recipientAccountId!=='string'
       ||ids.has(item.inviteId)
       ||item.role!=='contributor'
-      ||!['pending','accepted'].includes(item.state)
+      ||!['pending','accepted','removed'].includes(item.state)
       ||!Number.isSafeInteger(item.expiresAt)
       ||item.expired!==(item.state==='pending'&&item.expiresAt<=page.serverNowMs)
       ||typeof item.contract!=='string'||typeof item.signature!=='string')
@@ -130,6 +131,32 @@ export async function verifyAssignmentParticipantRoster(
       ||signed.role!==item.role||signed.expiresAt!==item.expiresAt
       ||!await verify(signer,domain('invite')+item.contract,item.signature))
       throw Error('assignment.roster_untrusted_invite')
+    if(item.state==='removed'){
+      if(typeof item.removalContract!=='string'
+        ||typeof item.removalSignature!=='string')
+        throw Error('assignment.roster_untrusted_removal')
+      let removal:Record<string,unknown>
+      try{removal=JSON.parse(item.removalContract) as Record<string,unknown>}
+      catch{throw Error('assignment.roster_untrusted_removal')}
+      const fields=['version','action','operationId','assignmentId','inviteId',
+        'ownerAccountId','recipientAccountId']
+      const keys=removal&&typeof removal==='object'&&!Array.isArray(removal)
+        ?Object.keys(removal):[]
+      if(keys.sort().join('|')!==fields.sort().join('|')
+        ||JSON.stringify(removal)!==item.removalContract
+        ||removal.version!==1||removal.action!=='remove'
+        ||removal.assignmentId!==assignmentId
+        ||removal.inviteId!==item.inviteId
+        ||removal.ownerAccountId!==ownerAccountId
+        ||removal.recipientAccountId!==item.recipientAccountId
+        ||typeof removal.operationId!=='string'
+        ||!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(removal.operationId)
+        ||!await verify(signer,domain('remove-member')+item.removalContract,
+          item.removalSignature))
+        throw Error('assignment.roster_untrusted_removal')
+    }else if(item.removalContract!=null||item.removalSignature!=null){
+      throw Error('assignment.roster_untrusted_removal')
+    }
   }
   if(page.nextCursor!==null
     &&(typeof page.nextCursor!=='string'
@@ -704,6 +731,7 @@ function domain(kind:AssignmentOperationKind):string{
     create:'pb3.assignment.v1\n',
     invite:'pb3.assignment-invite.v1\n',
     accept:'pb3.assignment-accept.v1\n',
+    'remove-member':'pb3.assignment-member-remove.v1\n',
     submit:'pb3.assignment-submit.v1\n',
     'media-submit':'pb3.assignment-media-submit.v1\n',
     state:'pb3.assignment-state.v1\n',
@@ -1596,6 +1624,41 @@ export async function queueAssignmentInvitation(
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/invites',payload)
   await persist(op)
   return inviteId
+}
+
+/**
+ * Signed, durable owner removal. The UI must pass a freshly authenticated
+ * roster item; the server checks live membership and only an owner signature
+ * can revoke it. Offline outbox never pretends the removal has succeeded.
+ */
+export async function queueAssignmentMemberRemoval(
+  assignmentId:string,person:AssignmentParticipant,
+):Promise<string>{
+  const session=requireSession()
+  const cached=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  if(!cached||cached.listing.ownerAccountId!==session.accountId)
+    throw Error('assignment.removal_requires_owner_policy')
+  await verifySignedAssignmentPolicy(cached.listing,true)
+  if(!['accepted','pending'].includes(person.state)
+    ||person.role!=='contributor'
+    ||person.recipientAccountId===session.accountId)
+    throw Error('assignment.invalid_member_removal')
+  const existing=await listAssignmentOperations()
+  if(existing.some(op=>op.kind==='remove-member'
+    &&['queued','retry'].includes(op.state)
+    &&(JSON.parse(op.contract) as {inviteId?:string}).inviteId===person.inviteId))
+    throw Error('assignment.member_removal_pending')
+  const operationId=crypto.randomUUID()
+  const payload={
+    version:1,action:'remove',operationId,assignmentId,
+    inviteId:person.inviteId,ownerAccountId:session.accountId,
+    recipientAccountId:person.recipientAccountId,
+  }
+  const op=await signedOperation('remove-member',
+    '/assignments/v1/'+encodeURIComponent(assignmentId)
+      +'/invites/'+encodeURIComponent(person.inviteId)+'/remove',payload)
+  await persist(op)
+  return operationId
 }
 
 /** Display-only cached invitations; never use them as current server ACL. */

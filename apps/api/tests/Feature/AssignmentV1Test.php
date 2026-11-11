@@ -148,6 +148,106 @@ final class AssignmentV1Test extends TestCase
         $this->postJson($url,$input)->assertOk()->assertJsonPath('unchanged',true);
     }
 
+    public function test_p2_owner_signed_member_removal_is_immutable_replayable_and_closes_live_membership():void
+    {
+        $this->createAssignment();
+        $inviteId=$this->invite();
+        $this->accept($inviteId);
+        $url='/assignments/v1/'.$this->assignmentId
+            .'/invites/'.$inviteId.'/remove';
+        $payload=[
+            'version'=>1,'action'=>'remove',
+            'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,'inviteId'=>$inviteId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'recipientAccountId'=>$this->people['recipient']['account'],
+        ];
+        $proof=$this->signed('owner','pb3.assignment-member-remove.v1',$payload);
+        $this->as('recipient');
+        $this->postJson($url,$proof)->assertUnauthorized();
+        $this->as('owner');
+        $this->postJson($url,$proof)->assertOk()
+            ->assertJsonPath('state','removed')
+            ->assertJsonPath('unchanged',false);
+        $this->assertDatabaseHas('assignment_invites_v1',[
+            'id'=>$inviteId,'state'=>'removed',
+        ]);
+        $this->assertDatabaseCount('assignment_member_removals_v1',1);
+        $this->getJson('/assignments/v1/'.$this->assignmentId.'/participants')
+            ->assertOk()->assertJsonPath('items.0.state','removed')
+            ->assertJsonPath('items.0.removalContract',$proof['contract'])
+            ->assertJsonPath('items.0.removalSignature',$proof['signature']);
+        $this->as('recipient');
+        $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1/invites/received')
+            ->assertJsonPath('items',[]);
+        // An inconsistent mutable projection is NOT a new membership:
+        // the immutable signed removal event permanently wins.
+        DB::table('assignment_invites_v1')->where('id',$inviteId)
+            ->update(['state'=>'accepted']);
+        $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1/invites/received')
+            ->assertJsonPath('items',[]);
+        foreach(['/policy-history','/schedule-history',
+            '/retention-history','/private-history'] as $suffix){
+            $this->getJson('/assignments/v1/'.$this->assignmentId.$suffix)
+                ->assertNotFound();
+        }
+        $acceptRecord=DB::table('assignment_invites_v1')
+            ->where('id',$inviteId)->first();
+        $this->postJson('/assignments/v1/'.$this->assignmentId
+            .'/invites/'.$inviteId.'/accept',[
+                'contract'=>$acceptRecord->accepted_contract,
+                'signature'=>$acceptRecord->accepted_signature,
+            ])->assertConflict();
+        $this->as('owner');
+        $this->postJson($url,$proof)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('assignment_invites_v1',[
+            'id'=>$inviteId,'state'=>'removed',
+        ]);
+        $finish=$this->signedState('owner','finish',1);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/state',$finish)
+            ->assertOk()->assertJsonPath('state','finished');
+        $this->postJson($url,$proof)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $fork=$this->signed('owner','pb3.assignment-member-remove.v1',
+            [...$payload,'operationId'=>(string)Str::uuid()]);
+        $this->postJson($url,$fork)->assertConflict();
+        $this->assertDatabaseCount('assignment_member_removals_v1',1);
+    }
+
+    public function test_p2_pending_invitation_can_be_cancelled_with_signed_removal():void
+    {
+        $this->createAssignment();
+        $inviteId=$this->invite();
+        $payload=[
+            'version'=>1,'action'=>'remove',
+            'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,'inviteId'=>$inviteId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'recipientAccountId'=>$this->people['recipient']['account'],
+        ];
+        $proof=$this->signed('owner','pb3.assignment-member-remove.v1',$payload);
+        $this->as('owner');
+        $url='/assignments/v1/'.$this->assignmentId
+            .'/invites/'.$inviteId.'/remove';
+        $this->postJson($url,$proof)->assertOk()
+            ->assertJsonPath('state','removed');
+        $this->as('recipient');
+        $this->getJson('/assignments/v1/invites/received')
+            ->assertJsonPath('items',[]);
+        $bad=$this->signed('recipient','pb3.assignment-accept.v1',[
+            'version'=>1,'action'=>'accept','inviteId'=>$inviteId,
+            'assignmentId'=>$this->assignmentId,
+            'recipientAccountId'=>$this->people['recipient']['account'],
+            'operationId'=>(string)Str::uuid(),
+        ]);
+        $this->postJson('/assignments/v1/'.$this->assignmentId
+            .'/invites/'.$inviteId.'/accept',$bad)->assertConflict();
+        $this->assertDatabaseCount('assignment_member_removals_v1',1);
+    }
+
     private function signedState(string $role,string $action,int $from,
         ?string $operationId=null):array
     {
@@ -1438,6 +1538,28 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('items.0.signature',$input['signature'])
             ->assertJsonPath('items.0.contractHash',hash('sha256',$input['contract']))
             ->assertJsonPath('items.0.policyRevision',1);
+        // A member is no longer accepted: both progress and P1 owner
+        // receipt projection must stop at once, not just P2 MediaFile.
+        $this->as('owner');
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'pending']);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',0);
+        $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
+            ->assertJsonPath('items',[]);
+        // Historical signed receipt remains immutable and recoverable if
+        // membership is later restored. No personal E2EE file is deleted.
+        $this->assertDatabaseCount('assignment_submissions_v1',1);
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'accepted']);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',1);
+        $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
+            ->assertJsonCount(1,'items');
         $this->as('outsider');
         $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
             ->assertNotFound();
@@ -2002,6 +2124,22 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('items.0.confirmedVideoCount',1)
             ->assertJsonPath('items.0.confirmedAudioCount',1);
         $this->getJson($url)->assertOk()->assertJsonCount(2,'items');
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'pending']);
+        $this->getJson($url)->assertOk()->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedVideoCount',0)
+            ->assertJsonPath('items.0.confirmedAudioCount',0);
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'accepted']);
+        $this->getJson($url)->assertOk()->assertJsonCount(2,'items');
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedVideoCount',1)
+            ->assertJsonPath('items.0.confirmedAudioCount',1);
         $this->as('outsider');
         $this->getJson($url)->assertNotFound();
 

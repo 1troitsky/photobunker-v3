@@ -158,6 +158,8 @@ Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(f
     Route::post('/{assignmentId}/invites',[AssignmentV1Controller::class,'invite'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/invites/{inviteId}/accept',
         [AssignmentV1Controller::class,'accept'])->whereUuid('assignmentId')->whereUuid('inviteId');
+    Route::post('/{assignmentId}/invites/{inviteId}/remove',
+        [AssignmentV1Controller::class,'removeMember'])->whereUuid('assignmentId')->whereUuid('inviteId');
     Route::post('/{assignmentId}/submissions',[AssignmentV1Controller::class,'submit'])->whereUuid('assignmentId');
     Route::get('/{assignmentId}/submissions',[AssignmentV1Controller::class,'submissions'])->whereUuid('assignmentId');
     Route::post('/{assignmentId}/media-submissions',
