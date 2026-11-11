@@ -17,6 +17,8 @@ import {audioClipName,makeWavClip} from '../features/browser/application/audio-w
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
 import type {CropSelection,CroppedPhoto} from '../features/browser/application/photo-crop'
 import type {PhotoAdjustments} from '../features/browser/application/photo-effects'
+import {flattenPhotoText,MAX_TEXT_MARKS,validateTextMarks} from '../features/browser/application/photo-text'
+import type {PhotoTextMark} from '../features/browser/application/photo-text'
 import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
 import {buildCatalog} from '../features/browser/application/catalog'
@@ -52,6 +54,21 @@ const cropBusy=ref(false)
 const cropError=ref('')
 const cropNotice=ref('')
 const cropSavedId=ref<string|null>(null)
+const photoComposition=ref<HTMLElement|null>(null)
+const compositionWidth=ref(0)
+let compositionObserver:ResizeObserver|null=null
+const textMarks=ref<PhotoTextMark[]>([])
+const selectedTextId=ref<string|null>(null)
+const selectedText=computed(()=>textMarks.value.find(
+  item=>item.id===selectedTextId.value)??null)
+const composedPhotoUrl=ref('')
+let composedPhotoBlob:Blob|null=null
+let textRevision=0
+type DragMark={
+  id:string;pointerId:number;startX:number;startY:number
+  originalX:number;originalY:number;width:number;height:number
+}
+let draggingMark:DragMark|null=null
 let cropEpoch=0
 const videoElement=ref<HTMLVideoElement|null>(null)
 const audioElement=ref<HTMLAudioElement|null>(null)
@@ -98,9 +115,115 @@ let touchStart:{x:number;y:number}|null=null
 
 const croppedFileName=computed(()=>{
   if(!preview.value||!cropResult.value)return ''
-  return cropFileName(preview.value.name,cropSelection.value,photoAdjustments.value)
+  const base=cropFileName(preview.value.name,cropSelection.value,
+    photoAdjustments.value)
+  return textMarks.value.length?base.replace(/\.jpg$/,'-text.jpg'):base
 })
+function clearComposition():void{
+  if(composedPhotoUrl.value)URL.revokeObjectURL(composedPhotoUrl.value)
+  composedPhotoUrl.value=''
+  composedPhotoBlob=null
+}
+function invalidateTextOutput():void{
+  ++textRevision
+  clearComposition()
+  cropSavedId.value=null
+  cropNotice.value=''
+  cropError.value=''
+}
+function replaceTextMarks(updated:PhotoTextMark[]):void{
+  if(cropBusy.value)return
+  textMarks.value=updated
+  invalidateTextOutput()
+}
+function clearTextMarks():void{
+  ++textRevision
+  textMarks.value=[]
+  selectedTextId.value=null
+  draggingMark=null
+  clearComposition()
+}
+function addPhotoText():void{
+  if(!cropResult.value||cropBusy.value||textMarks.value.length>=MAX_TEXT_MARKS)return
+  const mark:PhotoTextMark={
+    id:crypto.randomUUID(),text:'Надпись',x:10,y:15,size:6,color:'#ffffff',
+  }
+  replaceTextMarks([...textMarks.value,mark])
+  selectedTextId.value=mark.id
+}
+function selectPhotoText(id:string):void{
+  if(cropBusy.value)return
+  selectedTextId.value=id
+  clearComposition()
+}
+function editPhotoText(change:Partial<PhotoTextMark>):void{
+  if(!selectedText.value||cropBusy.value)return
+  const id=selectedText.value.id
+  replaceTextMarks(textMarks.value.map(mark=>
+    mark.id===id?{...mark,...change,id}:mark))
+}
+function setTextValue(event:Event):void{
+  editPhotoText({text:(event.target as HTMLTextAreaElement).value})
+}
+function setTextColor(event:Event):void{
+  editPhotoText({color:(event.target as HTMLInputElement).value})
+}
+function setTextSize(event:Event):void{
+  const value=Number((event.target as HTMLInputElement).value)
+  if(Number.isSafeInteger(value)&&value>=2&&value<=12)
+    editPhotoText({size:value})
+}
+function setTextCoordinate(axis:'x'|'y',event:Event):void{
+  const value=Number((event.target as HTMLInputElement).value)
+  if(Number.isSafeInteger(value))
+    editPhotoText({[axis]:Math.max(0,Math.min(85,value))})
+}
+function deletePhotoText(id:string):void{
+  if(cropBusy.value)return
+  replaceTextMarks(textMarks.value.filter(mark=>mark.id!==id))
+  if(selectedTextId.value===id)selectedTextId.value=null
+}
+function startPhotoTextDrag(event:PointerEvent,id:string):void{
+  const composition=photoComposition.value
+  const mark=textMarks.value.find(item=>item.id===id)
+  if(!composition||!mark||cropBusy.value
+    ||event.pointerType==='mouse'&&event.button!==0)return
+  const rect=composition.getBoundingClientRect()
+  if(rect.width<1||rect.height<1)return
+  selectedTextId.value=id
+  clearComposition()
+  draggingMark={
+    id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,
+    originalX:mark.x,originalY:mark.y,width:rect.width,height:rect.height,
+  }
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+function movePhotoTextDrag(event:PointerEvent):void{
+  const drag=draggingMark
+  if(!drag||drag.pointerId!==event.pointerId||cropBusy.value)return
+  const x=Math.max(0,Math.min(85,Math.round(
+    drag.originalX+(event.clientX-drag.startX)/drag.width*100)))
+  const y=Math.max(0,Math.min(85,Math.round(
+    drag.originalY+(event.clientY-drag.startY)/drag.height*100)))
+  const mark=textMarks.value.find(item=>item.id===drag.id)
+  if(!mark||mark.x===x&&mark.y===y)return
+  replaceTextMarks(textMarks.value.map(item=>
+    item.id===drag.id?{...item,x,y}:item))
+}
+function photoTextFont(mark:PhotoTextMark):string{
+  const width=compositionWidth.value||cropResult.value?.width||200
+  return Math.max(1,Math.round(width*mark.size/100))+'px'
+}
+function stopPhotoTextDrag(event:PointerEvent):void{
+  if(draggingMark?.pointerId!==event.pointerId)return
+  const element=event.currentTarget as HTMLElement
+  if(element.hasPointerCapture(event.pointerId))
+    element.releasePointerCapture(event.pointerId)
+  draggingMark=null
+}
 function clearCrop():void{
+  clearComposition()
   ++cropEpoch
   if(cropUrl.value)URL.revokeObjectURL(cropUrl.value)
   cropUrl.value=''
@@ -156,6 +279,7 @@ function clearStill():void{
   stillSavedId.value=null
 }
 function clearBlob():void{
+  clearTextMarks()
   clearCrop()
   cropLeft.value=0;cropTop.value=0
   cropWidth.value=100;cropHeight.value=100;cropTurns.value=0
@@ -179,7 +303,15 @@ function clearIndex():void{
   photoCursor.value=null;mediaCursor.value=null
 }
 function sameSession(session:typeof activeSession.value,epoch:number):boolean{
-  return activeSession.value===session&&epoch===fileEpoch
+  const active=activeSession.value
+  // A same-device reauthentication replaces a Session object but retains
+  // exactly the same unlocked key package and device. It is not a different
+  // trust root. Real account/key/device changes still invalidate via clearBlob.
+  return !!session&&!!active&&epoch===fileEpoch
+    &&active.accountId===session.accountId
+    &&active.deviceId===session.deviceId
+    &&active.device===session.device
+    &&active.pkg===session.pkg
 }
 function explain(error:unknown):string{
   return error instanceof Error?error.message:'viewer.unavailable'
@@ -376,17 +508,36 @@ async function createCroppedPhoto():Promise<void>{
       cropBusy.value=false
   }
 }
+async function preparedCropWithText(
+  source:Blob,marks:readonly PhotoTextMark[],
+):Promise<Blob>{
+  validateTextMarks(marks)
+  if(marks.length===0)return source
+  return (await flattenPhotoText(source,marks)).blob
+}
+function setComposedCrop(blob:Blob):void{
+  clearComposition()
+  composedPhotoBlob=blob
+  composedPhotoUrl.value=URL.createObjectURL(blob)
+}
 async function saveCroppedPhoto():Promise<void>{
   const session=activeSession.value,result=cropResult.value
   const name=croppedFileName.value
   const epoch=cropEpoch,currentEpoch=fileEpoch
-  if(!session||!result||!name||cropBusy.value||preview.value?.type!=='photo')
-    return
+  const version=textRevision
+  const marks=textMarks.value.map(mark=>({...mark}))
+  if(!session||!result||!name||cropBusy.value||preview.value?.type!=='photo'
+    ||cropSavedId.value)return
   cropBusy.value=true;cropError.value='';cropNotice.value=''
   try{
+    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks)
+    if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
+      ||version!==textRevision)return
     const id=await enqueueEncryptedMedia(
-      new File([result.blob],name,{type:'image/jpeg'}))
-    if(sameSession(session,currentEpoch)&&epoch===cropEpoch){
+      new File([flattened],name,{type:'image/jpeg'}))
+    if(sameSession(session,currentEpoch)&&epoch===cropEpoch
+      &&version===textRevision){
+      if(marks.length)setComposedCrop(flattened)
       cropSavedId.value=id
       cropNotice.value='Новая JPEG-копия зашифрована в очереди Browser. Облачная синхронизация подтверждается отдельно.'
       void refreshIndex()
@@ -399,18 +550,34 @@ async function saveCroppedPhoto():Promise<void>{
       cropBusy.value=false
   }
 }
-function downloadCroppedPhoto():void{
-  if(!activeSession.value||!cropResult.value||!cropUrl.value
-    ||!croppedFileName.value||cropBusy.value||preview.value?.type!=='photo')
-    return
+async function downloadCroppedPhoto():Promise<void>{
+  const session=activeSession.value,result=cropResult.value
+  const name=croppedFileName.value
+  const epoch=cropEpoch,currentEpoch=fileEpoch,version=textRevision
+  const marks=textMarks.value.map(mark=>({...mark}))
+  if(!session||!result||!cropUrl.value||!name||cropBusy.value
+    ||preview.value?.type!=='photo')return
   if(!window.confirm('Скачать JPEG-копию на устройство? Файл будет вне защищённого Browser и может появиться в системной галерее.'))return
-  const anchor=document.createElement('a')
-  anchor.href=cropUrl.value
-  anchor.download=croppedFileName.value
-  anchor.rel='noopener'
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
+  cropBusy.value=true;cropError.value=''
+  try{
+    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks)
+    if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
+      ||version!==textRevision)return
+    if(marks.length&&!composedPhotoUrl.value)setComposedCrop(flattened)
+    const anchor=document.createElement('a')
+    anchor.href=marks.length?composedPhotoUrl.value:cropUrl.value
+    anchor.download=name
+    anchor.rel='noopener'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+  }catch(e){
+    if(sameSession(session,currentEpoch)&&epoch===cropEpoch
+      &&version===textRevision)cropError.value=explain(e)
+  }finally{
+    if(sameSession(session,currentEpoch)&&epoch===cropEpoch)
+      cropBusy.value=false
+  }
 }
 async function makeAudioFragment():Promise<void>{
   const session=activeSession.value
@@ -560,8 +727,22 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
+watch(photoComposition,element=>{
+  compositionObserver?.disconnect()
+  compositionObserver=null
+  compositionWidth.value=0
+  if(!element||typeof ResizeObserver==='undefined')return
+  compositionWidth.value=element.getBoundingClientRect().width
+  compositionObserver=new ResizeObserver(entries=>{
+    compositionWidth.value=entries[0]?.contentRect.width??0
+  })
+  compositionObserver.observe(element)
+})
 watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
-  photoBrightness,photoContrast,photoSaturation],()=>{clearCrop()})
+  photoBrightness,photoContrast,photoSaturation],()=>{
+  clearTextMarks()
+  clearCrop()
+})
 watch([trimStart,trimEnd],()=>{clearAudioClip()})
 watch(activeSession,(next,previous)=>{
   // A CSRF/session reauthentication may replace Session with a new object
@@ -583,6 +764,7 @@ watch(activeSession,(next,previous)=>{
 watch([()=>route.params.protocol,()=>route.params.id],()=>{void openFile()})
 onMounted(()=>window.addEventListener('keydown',onKeyDown))
 onUnmounted(()=>{
+  compositionObserver?.disconnect()
   window.removeEventListener('keydown',onKeyDown)
   clearBlob();clearIndex()
 })
@@ -640,8 +822,9 @@ onUnmounted(()=>{
       <section v-if="preview?.type==='photo'&&fileUrl"
         class="file-viewer-photo-editor" data-testid="file-viewer-photo-editor">
         <h2>Кадрирование и поворот</h2>
-        <p class="muted">Создайте отдельную JPEG-копию. Маски приватности,
-          текстовые аннотации и редактирование оригинала в этот модуль не входят.</p>
+        <p class="muted">Создайте отдельную JPEG-копию, затем добавьте,
+          переместите и отредактируйте надписи прямо на её предпросмотре.
+          Маски приватности и изменение оригинала недоступны.</p>
         <div class="file-viewer-crop-controls">
           <label>Слева · {{ cropLeft }}%
             <input v-model.number="cropLeft" type="range" min="0" step="1"
@@ -690,10 +873,91 @@ onUnmounted(()=>{
           {{ cropBusy?'Обработка…':'Создать JPEG-копию' }}
         </button>
         <div v-if="cropResult&&cropUrl" class="file-viewer-still-preview">
-          <img :src="cropUrl" :alt="croppedFileName"
-            data-testid="file-viewer-crop-preview">
+          <div class="file-viewer-photo-composition-wrap">
+            <div ref="photoComposition" class="file-viewer-photo-composition"
+              data-testid="file-viewer-photo-composition">
+              <img :src="composedPhotoUrl||cropUrl" :alt="croppedFileName"
+                data-testid="file-viewer-crop-preview" draggable="false">
+              <template v-if="!composedPhotoUrl">
+                <button v-for="mark in textMarks" :key="mark.id"
+                  type="button" class="file-viewer-photo-text-layer"
+                  :class="{selected:selectedTextId===mark.id}"
+                  :data-testid="'file-viewer-text-layer-'+mark.id"
+                  :disabled="cropBusy" :style="{
+                    left:mark.x+'%',top:mark.y+'%',
+                    maxWidth:(100-mark.x)+'%',
+                    fontSize:photoTextFont(mark),color:mark.color,
+                  }"
+                  @click="selectPhotoText(mark.id)"
+                  @pointerdown="startPhotoTextDrag($event,mark.id)"
+                  @pointermove="movePhotoTextDrag"
+                  @pointerup="stopPhotoTextDrag"
+                  @pointercancel="stopPhotoTextDrag">
+                  {{ mark.text }}
+                </button>
+              </template>
+            </div>
+          </div>
           <p class="muted">{{ cropResult.width }} × {{ cropResult.height }}
             · {{ croppedFileName }}</p>
+          <div class="file-viewer-photo-text-editor"
+            data-testid="file-viewer-photo-text-editor">
+            <div class="file-viewer-photo-text-head">
+              <strong>Надписи ({{ textMarks.length }}/{{ MAX_TEXT_MARKS }})</strong>
+              <button type="button" data-testid="file-viewer-add-text"
+                :disabled="cropBusy||textMarks.length>=MAX_TEXT_MARKS"
+                @click="addPhotoText">Добавить текст</button>
+            </div>
+            <p v-if="!textMarks.length" class="muted">Добавьте надпись.
+              Перетаскивайте её по фотографии мышью или пальцем.
+              Координаты можно изменить вручную.</p>
+            <div v-for="(mark,index) in textMarks" :key="mark.id"
+              class="file-viewer-photo-text-row"
+              :class="{selected:selectedTextId===mark.id}">
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-select-text-'+index"
+                @click="selectPhotoText(mark.id)">
+                {{ mark.text||'Пустая надпись' }}
+              </button>
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-delete-text-'+index"
+                :aria-label="'Удалить надпись '+(index+1)"
+                @click="deletePhotoText(mark.id)">Удалить</button>
+            </div>
+            <div v-if="selectedText" class="file-viewer-photo-text-settings">
+              <label>Текст
+                <textarea :value="selectedText.text" maxlength="220" rows="2"
+                  :disabled="cropBusy" data-testid="file-viewer-edit-text"
+                  @input="setTextValue"/>
+              </label>
+              <label>Цвет текста
+                <input type="color" :value="selectedText.color"
+                  :disabled="cropBusy" data-testid="file-viewer-text-color"
+                  @input="setTextColor">
+              </label>
+              <label>Размер · {{ selectedText.size }}% ширины кадра
+                <input type="range" min="2" max="12" step="1"
+                  :value="selectedText.size" :disabled="cropBusy"
+                  data-testid="file-viewer-text-size"
+                  @input="setTextSize">
+              </label>
+              <label>Позиция по X (%)
+                <input type="number" min="0" max="85" step="1"
+                  :value="selectedText.x" :disabled="cropBusy"
+                  data-testid="file-viewer-text-x"
+                  @input="setTextCoordinate('x',$event)">
+              </label>
+              <label>Позиция по Y (%)
+                <input type="number" min="0" max="85" step="1"
+                  :value="selectedText.y" :disabled="cropBusy"
+                  data-testid="file-viewer-text-y"
+                  @input="setTextCoordinate('y',$event)">
+              </label>
+            </div>
+          </div>
+          <p v-if="textMarks.length" class="muted">При сохранении или скачивании
+            надписи превращаются в пиксели JPEG. Они не отправляются
+            отдельным текстом на сервер и не сохраняются как открытый черновик.</p>
           <div class="file-viewer-still-actions">
             <button type="button" :disabled="cropBusy||!!cropSavedId"
               data-testid="file-viewer-save-crop" @click="saveCroppedPhoto">
@@ -711,7 +975,8 @@ onUnmounted(()=>{
         <p class="muted">Копия — независимый личный E2EE-файл. Доступы,
           GPS, задание и TTL оригинала автоматически не наследуются.
           Яркость, контраст и насыщенность применяются к пикселям
-          только при создании копии. Это не маска приватности.</p>
+          только при создании копии. Надписи накладываются поверх итогового
+          кадра. Это не маска приватности.</p>
         <p v-if="cropNotice" role="status" data-testid="file-viewer-crop-status">
           {{ cropNotice }}</p>
         <p v-if="cropError" role="alert" data-testid="file-viewer-crop-error">
