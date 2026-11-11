@@ -6,6 +6,8 @@ const id=(n:number)=>'00000000-0000-4000-8000-'+n.toString(16).padStart(12,'0')
 const fixture=(n:number):AssignmentPhotoSubmission=>({
   submissionId:id(n),photoId:id(n+100),
   photoGrantId:id(n+200),contributorAccountId:id(999),
+  policyRevision:1,contract:'{}',signature:'fixture',
+  contractHash:'a'.repeat(64),
 })
 describe('P2 legacy P1 photo owner pagination',()=>{
   it('loads 52 separately authorized legacy photo receipts without truncating at 50',()=>{
