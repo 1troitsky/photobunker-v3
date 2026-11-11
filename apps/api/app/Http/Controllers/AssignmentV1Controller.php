@@ -1104,12 +1104,19 @@ final class AssignmentV1Controller extends Controller
             ->where('g.state','active')->where('g.expires_at','>',PhotoSync::nowMs());
         if($after!==null)$query->where('s.id','>',$after);
         $rows=$query->orderBy('s.id')->limit(51)
-            ->get(['s.id','s.photo_id','s.photo_grant_id','s.contributor_account_id']);
+            ->get(['s.id','s.photo_id','s.photo_grant_id','s.contributor_account_id',
+                // Immutable account-signed consent evidence. Never plaintext media/DEK.
+                's.policy_revision','s.contract_json','s.contract_hash',
+                's.contributor_signature']);
         $more=$rows->count()>50;
         $items=$rows->take(50)->map(static fn($x)=>[
             'submissionId'=>$x->id,'photoId'=>$x->photo_id,
             'photoGrantId'=>$x->photo_grant_id,
             'contributorAccountId'=>$x->contributor_account_id,
+            'policyRevision'=>(int)$x->policy_revision,
+            'contract'=>$x->contract_json,
+            'contractHash'=>$x->contract_hash,
+            'signature'=>$x->contributor_signature,
         ])->values()->all();
         return $this->sync->json([
             'items'=>$items,
