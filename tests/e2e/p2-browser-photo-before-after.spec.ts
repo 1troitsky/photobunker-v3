@@ -47,7 +47,8 @@ test('P2 Viewer: before/after shows original without exporting or changing edite
     const preview=page.getByTestId('file-viewer-crop-preview')
     await expect(preview).toBeVisible({timeout:30000})
     const readPixel=async()=>{
-      return preview.evaluate((el:HTMLImageElement)=>{
+      return preview.evaluate(async(el:HTMLImageElement)=>{
+        await el.decode()
         const c=document.createElement('canvas')
         c.width=el.naturalWidth;c.height=el.naturalHeight
         const ctx=c.getContext('2d')!
