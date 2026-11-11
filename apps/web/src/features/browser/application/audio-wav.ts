@@ -12,8 +12,12 @@ export type WavClip={
   blob:Blob;startMs:number;endMs:number
   sampleRate:number;channels:number;frames:number
 }
+// Use the broad typed-array contract: AudioBuffer returns ArrayBuffer-backed
+// data, while pure tests may supply ordinary ArrayBufferLike float arrays.
 type DecodedPCM=Pick<AudioBuffer,
-  'sampleRate'|'numberOfChannels'|'length'|'duration'|'getChannelData'>
+  'sampleRate'|'numberOfChannels'|'length'> & {
+  getChannelData(channel:number):Float32Array
+}
 
 function validRange(start:number,end:number,duration:number):void{
   if(!Number.isFinite(start)||!Number.isFinite(end)
