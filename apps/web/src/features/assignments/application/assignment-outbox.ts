@@ -765,18 +765,27 @@ function domain(kind:AssignmentOperationKind):string{
   return signedDomains[kind]
 }
 
+/**
+ * Never fall back to a v1 signature for a new media submission version.
+ * Sender, server and independently pinned recipient must agree on the
+ * exact domain string; changing a version without updating this map
+ * must fail CLOSED.
+ */
+export function mediaSubmissionSigningDomain(version:unknown):string{
+  if(!Number.isSafeInteger(version)
+    ||![1,2,3,4].includes(version as number))
+    throw Error('assignment.unsupported_media_submission_version')
+  return 'pb3.assignment-media-submit.v'+version+'\n'
+}
+
 async function signedOperation(
   kind:AssignmentOperationKind,path:string,payload:Record<string,unknown>,
   requirementGrantId?:string,
 ):Promise<AssignmentOperation>{
   const s=requireSession()
   const contract=JSON.stringify(payload)
-  const signingDomain=kind==='media-submit'&&payload.version===4
-    ?'pb3.assignment-media-submit.v4\n'
-    :kind==='media-submit'&&payload.version===3
-    ?'pb3.assignment-media-submit.v3\n'
-    :kind==='media-submit'&&payload.version===2
-    ?'pb3.assignment-media-submit.v2\n'
+  const signingDomain=kind==='media-submit'
+    ?mediaSubmissionSigningDomain(payload.version)
     :kind==='policy'&&payload.version===6
       ?'pb3.assignment-policy.v6\n'
       :kind==='policy'&&payload.version===5
