@@ -376,17 +376,35 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
     // Restore original SDK method but still observe txnId used on retry.
     spy.mockRestore()
     const secondSpy=vi.spyOn(alice,'sendMessage')
+    const fetchSpy=vi.spyOn(alice,'fetchRoomEvent')
+    let replaySdkError='none'
     secondSpy.mockImplementationOnce(async(...args)=>{
       const [room,payload,transaction]=args as unknown as [
         string,{msgtype:MsgType;body:string},string,
       ]
       observed.push(transaction)
-      return original(room,payload,transaction)
+      try{return await original(room,payload,transaction)}
+      catch(e){
+        // Only error KIND from SDK, never raw message text/token/event.
+        const safe=e as {errcode?:string;name?:string}
+        replaySdkError=safe.errcode??safe.name??'unknown'
+        throw e
+      }
     })
     const retried=await resumedOutbox.flushMatrixTextOutbox(alice)
+    const replayCalls=secondSpy.mock.calls.length
+    const fetched=fetchSpy.mock.calls.length
     secondSpy.mockRestore()
-    failUnless(retried.attempted===1&&retried.accepted===1
-      &&retried.pending===0,'outbox_lost_ack_replay_failed')
+    fetchSpy.mockRestore()
+    if(!(retried.attempted===1&&retried.accepted===1
+      &&retried.pending===0)){
+      const diagnostics=[
+        retried.attempted,retried.accepted,retried.pending,
+        replayCalls,fetched,
+        observed.length,Number(Boolean(sentEvent)),replaySdkError,
+      ].join('_')
+      throw Error('pb3.matrix.outbox.retry_probe_'+diagnostics)
+    }
     failUnless(observed.length===2
       &&observed[0]===txn&&observed[1]===txn,
       'transaction_id_changed')
