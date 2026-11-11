@@ -771,7 +771,9 @@ async function signedOperation(
 ):Promise<AssignmentOperation>{
   const s=requireSession()
   const contract=JSON.stringify(payload)
-  const signingDomain=kind==='media-submit'&&payload.version===3
+  const signingDomain=kind==='media-submit'&&payload.version===4
+    ?'pb3.assignment-media-submit.v4\n'
+    :kind==='media-submit'&&payload.version===3
     ?'pb3.assignment-media-submit.v3\n'
     :kind==='media-submit'&&payload.version===2
     ?'pb3.assignment-media-submit.v2\n'
