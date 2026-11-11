@@ -12,6 +12,7 @@ import {
 } from './matrix-binding'
 import {getMatrixContactMapping} from './matrix-peer-identity'
 import {inspectVerifiedMatrixDevice} from './matrix-verified-device'
+import {isLeasedMatrixClient} from './matrix-rust-adapter'
 import {
   enqueueMatrixText,listMatrixTextOutbox,flushMatrixTextOutbox,
 } from './matrix-text-outbox'
@@ -25,11 +26,13 @@ vi.mock('./matrix-binding',()=>({
 }))
 vi.mock('./matrix-peer-identity',()=>({getMatrixContactMapping:vi.fn()}))
 vi.mock('./matrix-verified-device',()=>({inspectVerifiedMatrixDevice:vi.fn()}))
+vi.mock('./matrix-rust-adapter',()=>({isLeasedMatrixClient:vi.fn()}))
 const api=vi.mocked(jsonApi)
 const contacts=vi.mocked(listConfirmedContacts)
 const local=vi.mocked(getLocalMatrixBindingForPending)
 const active=vi.mocked(getBoundMatrixCredentials)
 const trust=vi.mocked(inspectVerifiedMatrixDevice)
+const lease=vi.mocked(isLeasedMatrixClient)
 const mapped=vi.mocked(getMatrixContactMapping)
 const mxOwn='@owner:matrix.example.test',mxPeer='@peer:matrix.example.test'
 const roomId='!ROOM1:matrix.example.test'
@@ -93,6 +96,7 @@ beforeEach(async()=>{
     matrixUserId:mxPeer,matrixDeviceId:'REMOTE_DEV_ONE',
     verification:'pb3-account-signed-only',
   })
+  lease.mockReturnValue(true)
   trust.mockResolvedValue({
     matrixUserId:mxPeer,matrixDeviceId:'REMOTE_DEV_ONE',
     matrixEd25519:ed25519,crossSigningChecked:true,
@@ -232,6 +236,15 @@ describe('P2-02E durable Matrix text E2EE outbox',()=>{
     }})
     expect((await flushMatrixTextOutbox(client)).accepted).toBe(0)
     expect(sent).not.toHaveBeenCalled()
+  })
+  it('never sends through an unleased or replaced RustCrypto SDK client',async()=>{
+    await enqueueMatrixText(target,roomId,plaintext,ed25519)
+    lease.mockReturnValue(false)
+    expect((await flushMatrixTextOutbox(client)).accepted).toBe(0)
+    expect(sent).not.toHaveBeenCalled()
+    lease.mockReturnValue(true)
+    expect((await flushMatrixTextOutbox(client)).accepted).toBe(1)
+    expect(lease).toHaveBeenCalled()
   })
   it('refuses a revoked authoritative PB3 Matrix binding even if local token still exists',async()=>{
     await enqueueMatrixText(target,roomId,plaintext,ed25519)
