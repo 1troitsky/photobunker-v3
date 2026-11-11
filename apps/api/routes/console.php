@@ -18,3 +18,12 @@ if(filter_var(env('PB3_ENABLE_MEDIA_CLEANUP',false),FILTER_VALIDATE_BOOL)){
 if(filter_var(env('PB3_ENABLE_ASSIGNMENT_RETENTION',false),FILTER_VALIDATE_BOOL)){
   Schedule::command('pb3:assignment-retain')->everyMinute()->withoutOverlapping();
 }
+
+
+// Browser archive 7-day expiry is explicitly opt-in AND independent of the
+// separately operator-approved photo/media physical GC. Default OFF.
+if(filter_var(env('PB3_ENABLE_BROWSER_ARCHIVE',false),FILTER_VALIDATE_BOOL)
+  &&filter_var(env('PB3_ENABLE_ARCHIVE_AUTO_CLEANUP',false),FILTER_VALIDATE_BOOL)){
+  Schedule::command('pb3:browser-archive-maintain')
+    ->everyMinute()->withoutOverlapping();
+}
