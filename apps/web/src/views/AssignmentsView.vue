@@ -583,6 +583,40 @@ async function changeGoal():Promise<void>{
   })
 }
 
+/**
+ * A newly fingerprint-confirmed contributor may own receipts on page 5.
+ * Reverify only that contributor's already loaded P1/P2 receipts in place:
+ * no page rewind, no optimistic signed status, no media or DEK download.
+ */
+async function reverifyContributorReceipts(accountId:string):Promise<void>{
+  const target=selected.value
+  const identity=activeSession.value
+  if(!target?.isOwner||!identity?.online)return
+  const photos=submissions.value.filter(item=>item.contributorAccountId===accountId)
+  const media=mediaSubmissions.value.filter(item=>item.contributorAccountId===accountId)
+  const epoch=++receiptProofEpoch
+  const [photoProofs,mediaProofs]=await Promise.all([
+    verifyPhotoSubmissionReceiptPage(photos,target.id),
+    verifyMediaSubmissionReceiptPage(media,target.id,target.ownerAccountId),
+  ])
+  if(activeSession.value!==identity||selectedId.value!==target.id
+    ||receiptProofEpoch!==epoch)return
+  verifiedPhotoReceipts.value={...verifiedPhotoReceipts.value,...photoProofs}
+  verifiedMediaReceipts.value={...verifiedMediaReceipts.value,...mediaProofs}
+}
+/** Unverified row action starts a real independent fingerprint check. */
+async function inspectContributorReceipt(accountId:string):Promise<void>{
+  recipientId.value=accountId
+  ownerCheck.value=null
+  await inspectRecipient()
+  if(ownerCheck.value?.accountId===accountId&&ownerCheck.value.confirmed){
+    try{await reverifyContributorReceipts(accountId)}
+    catch(e){error.value=explain(e)}
+  }
+  await nextTick()
+  document.getElementById('assignment-contributor-key-verification')
+    ?.scrollIntoView({behavior:'smooth',block:'center'})
+}
 async function inspectRecipient():Promise<void>{
   await operate(async()=>{
     const id=recipientId.value.trim().toLowerCase()
@@ -600,7 +634,8 @@ async function approveRecipient():Promise<void>{
     const {accountId,fingerprint}=ownerCheck.value
     await confirmPeer(accountId,fingerprint)
     ownerCheck.value={accountId,fingerprint,confirmed:true}
-    notice.value='Ключ получателя подтверждён на этом устройстве'
+    await reverifyContributorReceipts(accountId)
+    notice.value='Ключ подтверждён на этом устройстве; подписи загруженных материалов перепроверены'
   })
 }
 async function invite():Promise<void>{
