@@ -14,6 +14,8 @@ import type {StoredMedia,CloudMedia} from '../features/media/application/media-o
 import {enqueueEncryptedMedia} from '../features/media/application/media-outbox'
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
 import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
+import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
+import type {CropSelection,CroppedPhoto} from '../features/browser/application/photo-crop'
 import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
 import {buildCatalog} from '../features/browser/application/catalog'
@@ -31,6 +33,20 @@ type Preview={
 const route=useRoute()
 const router=useRouter()
 const stage=ref<HTMLElement|null>(null)
+const photoElement=ref<HTMLImageElement|null>(null)
+const cropLeft=ref(0),cropTop=ref(0),cropWidth=ref(100),cropHeight=ref(100)
+const cropTurns=ref<CropSelection['turns']>(0)
+const cropSelection=computed<CropSelection>(()=>({
+  left:cropLeft.value,top:cropTop.value,
+  width:cropWidth.value,height:cropHeight.value,turns:cropTurns.value,
+}))
+const cropResult=ref<CroppedPhoto|null>(null)
+const cropUrl=ref('')
+const cropBusy=ref(false)
+const cropError=ref('')
+const cropNotice=ref('')
+const cropSavedId=ref<string|null>(null)
+let cropEpoch=0
 const videoElement=ref<HTMLVideoElement|null>(null)
 const audioElement=ref<HTMLAudioElement|null>(null)
 const audioDuration=ref(0)
@@ -74,6 +90,24 @@ let catalogEpoch=0
 let fileEpoch=0
 let touchStart:{x:number;y:number}|null=null
 
+const croppedFileName=computed(()=>{
+  if(!preview.value||!cropResult.value)return ''
+  return cropFileName(preview.value.name,cropSelection.value)
+})
+function clearCrop():void{
+  ++cropEpoch
+  if(cropUrl.value)URL.revokeObjectURL(cropUrl.value)
+  cropUrl.value=''
+  cropResult.value=null
+  cropBusy.value=false
+  cropError.value=''
+  cropNotice.value=''
+  cropSavedId.value=null
+}
+function setCropTurns(event:Event):void{
+  const next=Number((event.target as HTMLSelectElement).value)
+  if(next===0||next===1||next===2||next===3)cropTurns.value=next
+}
 const audioClipFileName=computed(()=>{
   if(!preview.value||!audioClip.value)return ''
   return audioClipName(preview.value.name,
@@ -116,6 +150,9 @@ function clearStill():void{
   stillSavedId.value=null
 }
 function clearBlob():void{
+  clearCrop()
+  cropLeft.value=0;cropTop.value=0
+  cropWidth.value=100;cropHeight.value=100;cropTurns.value=0
   clearStill()
   clearAudioClip()
   audioDuration.value=0
@@ -304,6 +341,69 @@ async function toggleFullscreen():Promise<void>{
     else notice.value='Полноэкранный режим не поддерживается браузером.'
   }catch{notice.value='Полноэкранный режим недоступен.'}
 }
+async function createCroppedPhoto():Promise<void>{
+  const session=activeSession.value
+  const img=photoElement.value,target=current.value
+  const source=fileUrl.value,currentEpoch=fileEpoch
+  if(!session||!img||!target||!source||cropBusy.value
+    ||preview.value?.type!=='photo')return
+  const selection={...cropSelection.value}
+  clearCrop()
+  const epoch=cropEpoch
+  cropBusy.value=true
+  try{
+    if(img.currentSrc!==source)throw Error('viewer.crop_wrong_source')
+    const result=await cropPhoto(img,selection)
+    if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
+      ||fileUrl.value!==source||!current.value
+      ||viewerKey(current.value)!==viewerKey(target))return
+    cropResult.value=result
+    cropUrl.value=URL.createObjectURL(result.blob)
+    cropNotice.value='JPEG подготовлен в памяти. Оригинал не изменён.'
+  }catch(e){
+    if(sameSession(session,currentEpoch)&&epoch===cropEpoch)
+      cropError.value=explain(e)
+  }finally{
+    if(sameSession(session,currentEpoch)&&epoch===cropEpoch)
+      cropBusy.value=false
+  }
+}
+async function saveCroppedPhoto():Promise<void>{
+  const session=activeSession.value,result=cropResult.value
+  const name=croppedFileName.value
+  const epoch=cropEpoch,currentEpoch=fileEpoch
+  if(!session||!result||!name||cropBusy.value||preview.value?.type!=='photo')
+    return
+  cropBusy.value=true;cropError.value='';cropNotice.value=''
+  try{
+    const id=await enqueueEncryptedMedia(
+      new File([result.blob],name,{type:'image/jpeg'}))
+    if(sameSession(session,currentEpoch)&&epoch===cropEpoch){
+      cropSavedId.value=id
+      cropNotice.value='Новая JPEG-копия зашифрована в очереди Browser. Облачная синхронизация подтверждается отдельно.'
+      void refreshIndex()
+    }
+  }catch(e){
+    if(sameSession(session,currentEpoch)&&epoch===cropEpoch)
+      cropError.value=explain(e)
+  }finally{
+    if(sameSession(session,currentEpoch)&&epoch===cropEpoch)
+      cropBusy.value=false
+  }
+}
+function downloadCroppedPhoto():void{
+  if(!activeSession.value||!cropResult.value||!cropUrl.value
+    ||!croppedFileName.value||cropBusy.value||preview.value?.type!=='photo')
+    return
+  if(!window.confirm('Скачать JPEG-копию на устройство? Файл будет вне защищённого Browser и может появиться в системной галерее.'))return
+  const anchor=document.createElement('a')
+  anchor.href=cropUrl.value
+  anchor.download=croppedFileName.value
+  anchor.rel='noopener'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+}
 async function makeAudioFragment():Promise<void>{
   const session=activeSession.value
   const target=current.value
@@ -452,6 +552,7 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
+watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns],()=>{clearCrop()})
 watch([trimStart,trimEnd],()=>{clearAudioClip()})
 watch(activeSession,(next,previous)=>{
   // A CSRF/session reauthentication may replace Session with a new object
@@ -513,8 +614,8 @@ onUnmounted(()=>{
         data-testid="file-viewer-stage"
         @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
         <div v-if="busy" role="status" class="file-viewer-wait">Открываем защищённый файл…</div>
-        <img v-else-if="fileUrl&&preview?.type==='photo'" :src="fileUrl"
-          :alt="preview?.name??'Фото'" draggable="false"
+        <img v-else-if="fileUrl&&preview?.type==='photo'" ref="photoElement"
+          :src="fileUrl" :alt="preview?.name??'Фото'" draggable="false"
           data-testid="file-viewer-image">
         <video v-else-if="fileUrl&&preview?.type==='video'" :key="fileUrl"
           ref="videoElement" :src="fileUrl" controls playsinline preload="metadata"
@@ -527,6 +628,69 @@ onUnmounted(()=>{
         </div>
         <p v-else class="muted">Файл не открыт.</p>
       </div>
+      <section v-if="preview?.type==='photo'&&fileUrl"
+        class="file-viewer-photo-editor" data-testid="file-viewer-photo-editor">
+        <h2>Кадрирование и поворот</h2>
+        <p class="muted">Создайте отдельную JPEG-копию. Маски приватности,
+          текстовые аннотации и редактирование оригинала в этот модуль не входят.</p>
+        <div class="file-viewer-crop-controls">
+          <label>Слева · {{ cropLeft }}%
+            <input v-model.number="cropLeft" type="range" min="0" step="1"
+              :max="100-cropWidth" data-testid="file-viewer-crop-left">
+          </label>
+          <label>Сверху · {{ cropTop }}%
+            <input v-model.number="cropTop" type="range" min="0" step="1"
+              :max="100-cropHeight" data-testid="file-viewer-crop-top">
+          </label>
+          <label>Ширина · {{ cropWidth }}%
+            <input v-model.number="cropWidth" type="range" min="10" step="1"
+              :max="100-cropLeft" data-testid="file-viewer-crop-width">
+          </label>
+          <label>Высота · {{ cropHeight }}%
+            <input v-model.number="cropHeight" type="range" min="10" step="1"
+              :max="100-cropTop" data-testid="file-viewer-crop-height">
+          </label>
+          <label>Поворот
+            <select :value="cropTurns" data-testid="file-viewer-crop-turn"
+              @change="setCropTurns">
+              <option value="0">0°</option>
+              <option value="1">90°</option>
+              <option value="2">180°</option>
+              <option value="3">270°</option>
+            </select>
+          </label>
+        </div>
+        <button type="button" :disabled="busy||cropBusy"
+          data-testid="file-viewer-create-crop"
+          @click="createCroppedPhoto">
+          {{ cropBusy?'Обработка…':'Создать JPEG-копию' }}
+        </button>
+        <div v-if="cropResult&&cropUrl" class="file-viewer-still-preview">
+          <img :src="cropUrl" :alt="croppedFileName"
+            data-testid="file-viewer-crop-preview">
+          <p class="muted">{{ cropResult.width }} × {{ cropResult.height }}
+            · {{ croppedFileName }}</p>
+          <div class="file-viewer-still-actions">
+            <button type="button" :disabled="cropBusy||!!cropSavedId"
+              data-testid="file-viewer-save-crop" @click="saveCroppedPhoto">
+              {{ cropSavedId?'Сохранено в Browser':'Сохранить зашифрованно в Browser' }}
+            </button>
+            <button type="button" :disabled="cropBusy"
+              data-testid="file-viewer-download-crop"
+              @click="downloadCroppedPhoto">Скачать JPEG на устройство</button>
+            <RouterLink v-if="cropSavedId"
+              :to="{name:'browser-viewer',params:{protocol:'media',id:cropSavedId}}">
+              Открыть сохранённую копию
+            </RouterLink>
+          </div>
+        </div>
+        <p class="muted">Копия — независимый личный E2EE-файл. Доступы,
+          GPS, задание и TTL оригинала автоматически не наследуются.</p>
+        <p v-if="cropNotice" role="status" data-testid="file-viewer-crop-status">
+          {{ cropNotice }}</p>
+        <p v-if="cropError" role="alert" data-testid="file-viewer-crop-error">
+          {{ cropError }}</p>
+      </section>
       <section v-if="preview?.type==='audio'&&fileUrl"
         class="file-viewer-audio-editor" data-testid="file-viewer-audio-editor">
         <div class="file-viewer-still-heading">
