@@ -124,7 +124,11 @@ export async function localArchivePreferences():Promise<LocalPreferences>{
 export function effectiveArchivePreferenceValues(
   x:LocalPreferences,
 ):ArchivePreferenceValues{
-  return x.draft??x.confirmed??defaults
+  const values=x.draft??x.confirmed??defaults
+  // Never spread server-only revision/operator capability fields into the
+  // device draft or sign them as user choices.
+  return {useArchive:values.useArchive,
+    autoDeleteAfter7Days:values.autoDeleteAfter7Days}
 }
 /** Local-First draft. Never claims that it changes server cleanup gates. */
 export async function editArchivePreferences(
