@@ -128,7 +128,7 @@ final class BrowserFolderSyncTest extends TestCase
         $this->getJson('/folders/v1/revisions/2')->assertOk()
             ->assertJsonPath('revision',2);
         $this->getJson('/folders/v1/revisions/3')->assertNotFound();
-        $this->getJson('/folders/v1/revisions/0')->assertNotFound();
+        $this->getJson('/folders/v1/revisions/0')->assertUnprocessable();
         $this->getJson('/folders/v1/revisions/0001')->assertUnprocessable();
 
         // An idempotent retry must originate from its original signed device.
