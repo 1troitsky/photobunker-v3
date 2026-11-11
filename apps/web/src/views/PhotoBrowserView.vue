@@ -32,6 +32,8 @@ import {
 } from '../features/browser/application/folder-conflict-resolution'
 import type {FolderConflictPlan} from '../features/browser/application/folder-conflict-resolution'
 import type {ConflictSide} from '../features/browser/domain/folder-merge'
+import {listArchivePage,signedArchiveAction} from '../features/browser/application/browser-archive'
+import type {ArchiveEntry,ArchiveAction} from '../features/browser/application/browser-archive'
 
 const localPhotos=ref<StoredPhoto[]>([])
 const cloudPhotos=ref<CloudPhoto[]>([])
@@ -79,21 +81,93 @@ const editingFolderId=ref<string|null>(null)
 const editFolderName=ref('')
 const selectedKeys=ref<string[]>([])
 const bulkDestination=ref('')
+const archiveTab=ref<'all'|'archive'>('all')
+const archiveEntries=ref<ArchiveEntry[]>([])
+const archiveCursor=ref<string|null>(null)
+const archiveBusy=ref(false)
+const archiveNotice=ref('')
+const archivedByKey=computed(()=>new Map(
+  archiveEntries.value.map(entry=>[entry.kind+':'+entry.assetId,entry] as const)
+))
 const folders=computed(()=>folderChildren(folderWorkspace.value,selectedFolder.value))
 const breadcrumb=computed(()=>folderPath(folderWorkspace.value,selectedFolder.value))
 const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
   .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
 
 const items=computed(()=>buildCatalog(
-  localPhotos.value,cloudPhotos.value,localMedia.value,cloudMedia.value,
+  localPhotos.value,[
+    ...cloudPhotos.value,
+    ...archiveEntries.value.filter(x=>x.kind==='photo').map(x=>({
+      photoId:x.assetId,expiresAt:x.expiresAt,metadataAssetId:null,
+    })),
+  ],localMedia.value,[
+    ...cloudMedia.value,
+    ...archiveEntries.value.filter(x=>x.kind==='media'&&x.mediaType!==null).map(x=>({
+      mediaId:x.assetId,mediaType:x.mediaType!,plainBytes:x.plainBytes??0,
+      expiresAt:x.expiresAt,
+    })),
+  ],
 ))
 const visible=computed(()=>filterCatalog(items.value,{
   type:filter.value,query:search.value,sort:sort.value,
-}).filter(item=>!folderReady.value
-  ||(folderWorkspace.value.placements[item.key]??null)===selectedFolder.value))
-const pendingCount=computed(()=>items.value.filter(x=>x.local
+}).filter(item=>{
+  const archived=archivedByKey.value.has(item.key)
+  if(archiveTab.value==='archive')return archived
+  return !archived&&(!folderReady.value
+    ||(folderWorkspace.value.placements[item.key]??null)===selectedFolder.value)
+}))
+const pendingCount=computed(()=>items.value.filter(x=>!archivedByKey.value.has(x.key)&&x.local
   &&x.state!=='synced').length)
 
+async function loadArchiveMore():Promise<void>{
+  const s=activeSession.value
+  if(!s?.online||archiveBusy.value||!archiveCursor.value)return
+  archiveBusy.value=true
+  const cursor=archiveCursor.value
+  try{
+    const page=await listArchivePage(cursor)
+    if(s!==activeSession.value)return
+    const ids=new Set(archiveEntries.value.map(x=>x.entryId))
+    archiveEntries.value=[...archiveEntries.value,
+      ...page.items.filter(x=>!ids.has(x.entryId))]
+    archiveCursor.value=page.nextCursor
+  }catch(e){
+    if(s===activeSession.value)archiveNotice.value='Архив: '+reason(e)
+  }finally{
+    if(s===activeSession.value)archiveBusy.value=false
+  }
+}
+async function archiveAction(item:CatalogItem,action:ArchiveAction):Promise<void>{
+  if(archiveBusy.value||busy.value||!activeSession.value?.online)return
+  const entry=archivedByKey.value.get(item.key)
+  if(action!=='archive'&&!entry)return
+  if(action==='delete'&&!window.confirm(
+    'Окончательно удалить файл? Доступ будет закрыт немедленно, физическое удаление подтвердится отдельно. Восстановление невозможно.'))return
+  if(action==='archive'&&!window.confirm(
+    'Переместить файл в архив? Срок файла не продлится. Для общих материалов могут потребоваться предварительный отзыв доступа и проверка задания.'))return
+  const identity=activeSession.value
+  archiveBusy.value=true
+  archiveNotice.value=''
+  try{
+    const result=await signedArchiveAction(entry??item,action)
+    if(identity!==activeSession.value)return
+    archiveNotice.value=result.state==='archived'
+      ?'Файл помещён в архив на сервере.'
+      :result.state==='restored'
+        ?'Файл восстановлен из архива. Срок хранения не изменился.'
+        :'Удаление запрошено. Доступ закрыт; физическая очистка S3 ещё НЕ подтверждена.'
+    const page=await listArchivePage()
+    if(identity!==activeSession.value)return
+    archiveEntries.value=page.items
+    archiveCursor.value=page.nextCursor
+    void refresh()
+  }catch(e){
+    if(identity===activeSession.value)
+      archiveNotice.value='Операция архива не подтверждена: '+reason(e)
+  }finally{
+    if(identity===activeSession.value)archiveBusy.value=false
+  }
+}
 async function loadMergeBackups():Promise<void>{
   const session=activeSession.value
   if(!session)return
@@ -349,8 +423,8 @@ async function refresh():Promise<void>{
     }
     // Independent server endpoints: failure of one catalog cannot erase the
     // other. A cloud row is visible only after an authenticated server read.
-    const [cloudP,cloudM]=await Promise.allSettled([
-      listCloudPhotos(),listCloudMedia(),
+    const [cloudP,cloudM,archive]=await Promise.allSettled([
+      listCloudPhotos(),listCloudMedia(),listArchivePage(),
     ])
     if(identity!==activeSession.value||token!==generation)return
     if(cloudP.status==='fulfilled'){
@@ -360,6 +434,12 @@ async function refresh():Promise<void>{
     if(cloudM.status==='fulfilled'){
       cloudMedia.value=cloudM.value.items
       mediaCursor.value=cloudM.value.nextCursor
+    }
+    if(archive.status==='fulfilled'){
+      archiveEntries.value=archive.value.items
+      archiveCursor.value=archive.value.nextCursor
+    }else{
+      archiveNotice.value='Статус архива не проверен: '+reason(archive.reason)
     }
     if(cloudP.status==='rejected'||cloudM.status==='rejected')
       status.value='Не все облачные списки доступны. Локальные файлы сохранены.'
@@ -482,6 +562,10 @@ watch(activeSession,(next,previous)=>{
     mergePlan.value=null
     mergeChoices.value={}
     mergeBackups.value=[]
+    archiveTab.value='all'
+    archiveEntries.value=[]
+    archiveCursor.value=null
+    archiveNotice.value=''
     void loadFolders()
     void loadMergeBackups()
   }else if(next&&!folderReady.value){
@@ -642,6 +726,19 @@ onUnmounted(()=>{
         <p v-if="folderError" role="alert" class="error-text">{{ folderError }}</p>
         <p v-if="folderNotice" role="status" class="muted">{{ folderNotice }}</p>
       </section>
+      <nav class="browser-archive-tabs" aria-label="Расположение файлов">
+        <button type="button" data-testid="browser-tab-active"
+          :aria-pressed="archiveTab==='all'" @click="archiveTab='all'">Мои файлы</button>
+        <button type="button" data-testid="browser-tab-archive"
+          :aria-pressed="archiveTab==='archive'" @click="archiveTab='archive'">Архив</button>
+      </nav>
+      <p v-if="archiveTab==='archive'" class="muted">
+        Файлы остаются зашифрованными и доступны владельцу до подтверждённого
+        окончательного удаления. Архив не продлевает TTL; автоудаление
+        остаётся выключено до независимой приёмки GC.
+      </p>
+      <p v-if="archiveNotice" role="status" data-testid="browser-archive-status">
+        {{ archiveNotice }}</p>
       <nav class="browser-filters" aria-label="Тип файла">
         <button v-for="tab in (['all','photo','video','audio'] as const)" :key="tab"
           type="button" :aria-pressed="filter===tab"
@@ -678,7 +775,7 @@ onUnmounted(()=>{
       </p>
       <p class="muted">Приватные имена, теги и GPS не входят в серверный индекс.
         Поиск пока работает по ID; метаданные открываются после локальной расшифровки.</p>
-      <div class="browser-batch-toolbar" v-if="folderReady&&!folderError">
+      <div class="browser-batch-toolbar" v-if="archiveTab==='all'&&folderReady&&!folderError">
         <button type="button" :disabled="folderBusy||!visible.length"
           @click="selectVisible">Выбрать всё на странице</button>
         <button type="button" :disabled="!selectedKeys.length"
@@ -701,7 +798,8 @@ onUnmounted(()=>{
         <div v-for="item in visible" :key="item.key"
           :class="['browser-item', item.source==='photo'?'photo-row':'']"
           :data-testid="'browser-row-'+item.key">
-          <label v-if="folderReady&&!folderError" class="browser-item-select">
+          <label v-if="archiveTab==='all'&&folderReady&&!folderError"
+            class="browser-item-select">
             <input type="checkbox" :checked="selectedKeys.includes(item.key)"
               :aria-label="'Выбрать файл '+item.id"
               @change="toggleItem(item.key,($event.target as HTMLInputElement).checked)">
@@ -721,7 +819,8 @@ onUnmounted(()=>{
             <small>Хранение до {{ new Date(item.expiresAt).toLocaleDateString('ru-RU') }}</small>
           </div>
           <div class="browser-item-actions">
-            <label v-if="folderReady&&!folderError" class="browser-file-move">
+            <label v-if="archiveTab==='all'&&folderReady&&!folderError"
+              class="browser-file-move">
               <span>Папка</span>
               <select :value="folderWorkspace.placements[item.key]??''"
                 :disabled="folderBusy||busy" :aria-label="'Папка файла '+item.id"
@@ -731,6 +830,21 @@ onUnmounted(()=>{
                   :value="folder.id">{{ folder.name }}</option>
               </select>
             </label>
+            <button v-if="archiveTab==='all'&&item.cloud" type="button"
+              :disabled="archiveBusy||busy||!activeSession.online"
+              :aria-label="'Архивировать файл '+item.id"
+              @click="archiveAction(item,'archive')">В архив</button>
+            <template v-if="archiveTab==='archive'&&archivedByKey.get(item.key)?.state==='archived'">
+              <button type="button" :disabled="archiveBusy||!activeSession.online"
+                :aria-label="'Восстановить файл '+item.id"
+                @click="archiveAction(item,'restore')">Восстановить</button>
+              <button type="button" :disabled="archiveBusy||!activeSession.online"
+                :aria-label="'Запросить удаление файла '+item.id"
+                @click="archiveAction(item,'delete')">Удалить окончательно</button>
+            </template>
+            <span v-if="archivedByKey.get(item.key)?.state==='deleting'">
+              Удаление ожидает подтверждения GC:
+              {{ archivedByKey.get(item.key)?.physicalStatus }}</span>
             <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
               :aria-label="'Полный просмотр файла '+item.id">Просмотр</RouterLink>
             <button v-if="item.local" type="button" :disabled="previewBusy||busy"
@@ -743,7 +857,13 @@ onUnmounted(()=>{
         </div>
       </div>
       <p v-if="!visible.length&&folderReady" class="muted">Нет файлов для выбранного фильтра или папки.</p>
-      <p class="muted">Архив пока недоступен: для его безопасного удаления нужна подтверждённая серверная процедура tombstone/GC.</p>
+      <button v-if="archiveTab==='archive'&&archiveCursor" type="button"
+        :disabled="archiveBusy||busy" @click="loadArchiveMore">
+        Ещё записи архива</button>
+      <p v-if="archiveTab==='all'" class="muted">
+        Для записи в архив требуется подтверждённая серверная операция
+        (до приёмки выключена конфигурацией). Автоматическое удаление
+        из архива пока НЕ включено.</p>
       <button v-if="photoCursor||mediaCursor" type="button"
         :disabled="busy" @click="more">Загрузить ещё</button>
       <div class="action-row">
