@@ -34,6 +34,10 @@ const selectedUrl=ref('')
 const selectedType=ref<CatalogItem['type']|null>(null)
 const selectedName=ref('')
 const selectedDescription=ref('')
+const selectedCategory=ref('')
+const selectedTags=ref<string[]>([])
+const selectedGps=ref<{latitude:number;longitude:number;accuracyMeters:number}|null>(null)
+const selectedCaptured=ref<number|null>(null)
 const selectedExpiry=ref<number|null>(null)
 let generation=0
 let previewGeneration=0
@@ -54,6 +58,10 @@ function revokePreview():void{
   selectedType.value=null
   selectedName.value=''
   selectedDescription.value=''
+  selectedCategory.value=''
+  selectedTags.value=[]
+  selectedGps.value=null
+  selectedCaptured.value=null
   selectedExpiry.value=null
 }
 function clearCatalog():void{
@@ -140,7 +148,10 @@ async function openItem(item:CatalogItem):Promise<void>{
   if(!identity)return
   previewBusy.value=true;error.value=''
   try{
-    let blob:Blob,name='',description=''
+    let blob:Blob,name='',description='',category=''
+    let tags:string[]=[]
+    let gps:{latitude:number;longitude:number;accuracyMeters:number}|null=null
+    let captured:number|null=null
     if(item.source==='photo'){
       const [photo,metadata]=await Promise.all([
         item.local?readLocalPhoto(item.id):readCloudPhoto(item.id),
@@ -149,12 +160,20 @@ async function openItem(item:CatalogItem):Promise<void>{
       blob=photo
       name=item.id.slice(0,8)
       description=metadata.description??''
+      category=metadata.category??''
+      tags=metadata.tags??[]
+      gps=metadata.gps??null
+      captured=metadata.capturedAt
     }else{
       const result=item.local
         ?await readLocalMedia(item.id):await readCloudMedia(item.id)
       blob=result.blob
       name=result.metadata.fileName
       description=result.metadata.description??''
+      category=result.metadata.category??''
+      tags=result.metadata.tags??[]
+      gps=result.metadata.gps??null
+      captured=result.metadata.createdAt
     }
     if(identity!==activeSession.value||token!==previewGeneration)return
     revokePreview()
@@ -162,6 +181,10 @@ async function openItem(item:CatalogItem):Promise<void>{
     selectedType.value=item.type
     selectedName.value=name
     selectedDescription.value=description
+    selectedCategory.value=category
+    selectedTags.value=tags
+    selectedGps.value=gps
+    selectedCaptured.value=captured
     selectedExpiry.value=item.expiresAt
   }catch(e){
     if(identity===activeSession.value&&token===previewGeneration)
@@ -275,6 +298,10 @@ onUnmounted(()=>{++generation;revokePreview()})
         <audio v-else-if="selectedType==='audio'" :src="selectedUrl"
           controls preload="metadata"/>
         <p v-if="selectedDescription">{{ selectedDescription }}</p>
+        <p v-if="selectedCaptured">Дата: {{ new Date(selectedCaptured).toLocaleString('ru-RU') }}</p>
+        <p v-if="selectedCategory">Категория: {{ selectedCategory }}</p>
+        <p v-if="selectedTags.length">Теги: {{ selectedTags.join(', ') }}</p>
+        <p v-if="selectedGps">GPS: {{ selectedGps.latitude }}, {{ selectedGps.longitude }} · точность ±{{ Math.round(selectedGps.accuracyMeters) }} м</p>
         <p v-if="selectedExpiry">Хранение до {{ new Date(selectedExpiry).toLocaleDateString('ru-RU') }}</p>
         <p class="muted">Файл расшифрован на этом устройстве. Экспорт в системную галерею не выполнялся.</p>
         <button type="button" @click="revokePreview">Закрыть просмотр</button>
