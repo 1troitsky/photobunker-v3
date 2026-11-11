@@ -21,7 +21,7 @@ import {
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
   CaptureRequirements, AssignmentMonthlyUsage, AllowedAssignmentMedia,
-  AssignmentMediaSubmission,
+  AssignmentMediaSubmission, AssignmentPhotoSubmission,
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import { preflightAssignmentMediaGrant } from '../features/assignments/application/media-submission-preflight'
@@ -60,7 +60,7 @@ type VisibleAssignment={
   blockBeforeStart:boolean;blockAfterEnd:boolean
 }
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
-type Submission={submissionId:string;photoId:string;photoGrantId:string;contributorAccountId:string}
+type Submission=AssignmentPhotoSubmission
 
 const assignments=ref<VisibleAssignment[]>([])
 const invites=ref<ReceivedAssignmentInvite[]>([])
@@ -609,7 +609,9 @@ async function inspectContributorReceipt(accountId:string):Promise<void>{
   recipientId.value=accountId
   ownerCheck.value=null
   await inspectRecipient()
-  if(ownerCheck.value?.accountId===accountId&&ownerCheck.value.confirmed){
+  // inspectRecipient updates this ref asynchronously inside its operation.
+  const check=ownerCheck.value as SafetyCheck|null
+  if(check?.accountId===accountId&&check.confirmed){
     try{await reverifyContributorReceipts(accountId)}
     catch(e){error.value=explain(e)}
   }
