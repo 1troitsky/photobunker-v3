@@ -83,9 +83,12 @@ export function parseFolderContract(raw:string):FolderSyncContract{
   return parsed as FolderSyncContract
 }
 
-function accountKey(session:Session,usage:KeyUsage):Promise<CryptoKey>{
-  return crypto.subtle.importKey('raw',unb64(session.pkg.akek,32),
-    {name:'AES-GCM'},false,[usage])
+async function accountKey(session:Session,usage:KeyUsage):Promise<CryptoKey>{
+  const bytes=unb64(session.pkg.akek,32)
+  try{
+    return await crypto.subtle.importKey('raw',bytes,
+      {name:'AES-GCM'},false,[usage])
+  }finally{bytes.fill(0)}
 }
 
 /**
@@ -145,10 +148,15 @@ export async function verifyAndOpenFolderSync(
     throw Error('browser.sync_signature_invalid')
   const wrapped=unb64(d.envelope.wrappedKey.ciphertext,48)
   const key=await accountKey(session,'decrypt')
-  const raw=new Uint8Array(await crypto.subtle.decrypt({
-    name:'AES-GCM',iv:unb64(d.envelope.wrappedKey.iv,12),
-    additionalData:aad(session.accountId,d.keyRevision,'dek'),tagLength:128,
-  },key,wrapped))
+  let raw:Uint8Array<ArrayBuffer>
+  try{
+    raw=new Uint8Array(await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(d.envelope.wrappedKey.iv,12),
+      additionalData:aad(session.accountId,d.keyRevision,'dek'),tagLength:128,
+    },key,wrapped))
+  }catch{
+    throw Error('browser.sync_key_or_cipher_unavailable')
+  }
   try{
     if(raw.length!==32)throw Error('browser.sync_invalid_key')
     const dek=await crypto.subtle.importKey('raw',raw,
@@ -164,7 +172,7 @@ export async function verifyAndOpenFolderSync(
   }catch(e){
     // Older snapshot may have been sealed under an AKEK rotated elsewhere.
     // Refuse to overwrite either the server or the pending local workspace.
-    if(e instanceof DOMException&&e.name==='OperationError')
+    if(e instanceof Error&&e.name==='OperationError')
       throw Error('browser.sync_key_or_cipher_unavailable')
     throw e
   }finally{raw.fill(0)}
