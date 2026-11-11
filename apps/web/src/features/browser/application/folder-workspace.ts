@@ -4,7 +4,7 @@ import type {Session} from '../../identity/application/session'
 import {b64,unb64} from '../../identity/infrastructure/crypto'
 import {
   emptyWorkspace,validateWorkspace,addFolder,renameFolder,
-  moveFolder,moveFile,removeEmptyFolder,
+  moveFolder,moveFile,moveFiles,removeEmptyFolder,
 } from '../domain/folders'
 import type {FolderWorkspace} from '../domain/folders'
 
@@ -77,6 +77,7 @@ type Change={kind:'add';name:string;parentId:string|null;id:string;at:number}
   |{kind:'rename';id:string;name:string}
   |{kind:'move-folder';id:string;parentId:string|null}
   |{kind:'move-file';key:string;folderId:string|null}
+  |{kind:'move-files';keys:string[];folderId:string|null}
   |{kind:'remove-empty';id:string}
 function apply(s:FolderWorkspace,change:Change):FolderWorkspace{
   switch(change.kind){
@@ -84,6 +85,7 @@ function apply(s:FolderWorkspace,change:Change):FolderWorkspace{
     case 'rename':return renameFolder(s,change.id,change.name)
     case 'move-folder':return moveFolder(s,change.id,change.parentId)
     case 'move-file':return moveFile(s,change.key,change.folderId)
+    case 'move-files':return moveFiles(s,change.keys,change.folderId)
     case 'remove-empty':return removeEmptyFolder(s,change.id)
   }
 }
