@@ -64,7 +64,7 @@ beforeEach(async()=>{
   await d.table('peers').clear();d.close()
   alice=await user();bob=await user()
   const binding={
-    version:1,operationId:crypto.randomUUID(),
+    version:1 as const,operationId:crypto.randomUUID(),
     accountId:alice.accountId,pb3DeviceId:alice.deviceId,
     homeserverUrl:home,matrixUserId:mxid,matrixDeviceId:'MATRIX_DEVICE_A',
   }
