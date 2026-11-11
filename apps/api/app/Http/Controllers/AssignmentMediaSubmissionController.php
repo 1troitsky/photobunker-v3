@@ -271,7 +271,16 @@ final class AssignmentMediaSubmissionController extends Controller
                     });
             })
             ->where('m.state','active')->where('m.expires_at','>',$now)
-            ->where('g.state','active')->where('g.expires_at','>',$now);
+            ->where('g.state','active')->where('g.expires_at','>',$now)
+            // The grant read path already rejects archived/deleting ciphertext.
+            // Do not present an inaccessible file as an active submission.
+            ->whereNotExists(static function($archive){
+                $archive->selectRaw('1')
+                    ->from('browser_archive_entries_v1 as ba')
+                    ->where('ba.kind','media')
+                    ->whereColumn('ba.asset_id','s.media_id')
+                    ->whereIn('ba.state',['archived','deleting']);
+            });
         if($after!==null)$q->where('s.id','>',$after);
         $rows=$q->orderBy('s.id')->limit(51)->get([
             's.id','s.media_id','s.media_grant_id',
