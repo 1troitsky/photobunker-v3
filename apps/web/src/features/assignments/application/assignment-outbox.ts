@@ -1182,6 +1182,19 @@ export async function listAllServerAssignments():Promise<AssignmentListing[]>{
 }
 
 /**
+ * Account-scoped, previously verified owner removal IDs. This is only a
+ * local display-denial fence; server permissions still require live ACL.
+ * Used at final Vue hydration commit to prevent async decryption and
+ * stale server responses reviving private assignment titles in memory.
+ */
+export async function listLocallyRevokedAssignmentIds():Promise<Set<string>>{
+  const s=requireSession()
+  const rows=await db.revocations.where('accountId').equals(s.accountId).toArray()
+  assertSame(s)
+  return new Set(rows.map(item=>item.assignmentId))
+}
+
+/**
  * A previously verified policy can be read offline for local-only capture.
  * A server can still reject a later upload if membership or state changed.
  */
