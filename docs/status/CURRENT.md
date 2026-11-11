@@ -1,5 +1,31 @@
 # PB3 — актуальный прогресс и интеграционный checkpoint
 
+## Актуальный checkpoint · P2 Matrix Messenger · 11 ноября 2026
+
+**Подтверждённый `main`:** `a8abcc55e73ea0a2d8be3a24052f814906b8bd1d` (Teams интегрирован через #62; старый раздел P1 ниже сохранён как историческое свидетельство, а не как инструкция повторного merge).
+
+**Разработка Matrix остаётся НЕ В MAIN и НЕ ПРИНЯТА в production.** Текущая зависимая Draft-цепочка от `main`: #64 → #66 → #67 → #68 → #69 → #70 → #71 → #72 → **[#73](https://github.com/1troitsky/photobunker-v3/pull/73)**. Эти PR нужно интегрировать только после отдельного согласования и проверки фактического dependency graph; прямой merge вершины без учёта баз запрещён.
+
+| Matrix-подмодуль | Фактически реализовано | Проверено / статус |
+|---|---|---|
+| Messages 1.1 | Полноэкранный overlay поверх Fieldwork, AKEK-зашифрованные локальные черновики, защита закрытия при ошибке записи | #64/#66 Draft; Chromium |
+| Matrix key-only binding | Подписи PB3 аккаунта + устройства, server-pinned HTTPS Matrix whoami, не сохраняем access token в Laravel; локальный sealed token / Lost ACK | #68 Draft; PHP+Vitest |
+| RustCrypto | `matrix-js-sdk@44.0.0`, зашифрованный Rust IndexedDB, Web Locks single-writer, fail-closed `OnlySignedDevicesIsolationMode` | #69/#73 Draft; Vitest + две вкладки Chromium |
+| Протокол E2EE | Два disposable Matrix-аккаунта, настоящий Synapse Megolm ciphertext → реальная расшифровка у получателя, повтор txnId и приватность без токена | #70 Draft; CI real Synapse PASS |
+| PB3 Recovery Key → Matrix 4S | Root-signed immutable AKEK-sealed seed escrow, новый PB3-сеанс восстанавливает seed до Matrix-токена; SDK проверяет текущие Matrix key ID и MAC перед выдачей ключа | #71/#73 Draft; PHP+Vitest; единый production-путь ещё не E2E |
+| Identity/Contact trust | Подписанные PB3↔MXID карточки, отдельное подтверждение safety number, зашифрованный pin; fail-closed Matrix cross-signing/Ed25519/all-devices check, без ложной авторизации отправки | #72/#73 Draft; Vitest |
+| Действительная 4S/key backup | Disposable Synapse v1.161 + RustCrypto 44: исходный cross-signing root восстановлен на новом устройстве, импорт Megolm-сессий, неверный 4S отклоняется; усиленный тест проверяет исходный ciphertext на новом устройстве без живого gossip | #73 Draft; real-Synapse тест (результат точного HEAD сверять с CI) |
+
+**Границы готовности:** пользовательская отправка **выключена**; нет production key-only Matrix provisioning/настроенного homeserver, полного доверенного SAS/QR, cross-device verified membership/ACL, Local-First outbox/ACK для реальной переписки, вложений, Panic/revoke и единого браузерного E2E `PB3 Recovery Key → server Matrix 4S → decrypt`. Native Safari/iPhone/Android — **не проверены**. Процент готовности Messenger **не оценён**, пока нет подтверждённого перечня всех сквозных критериев. Зелёный CI ≠ принятие владельцем.
+
+**Доказательства:** [План P2-02D3](../planning/P2-02D3-MATRIX-VERIFIED-DEVICES.md), [Draft #73](https://github.com/1troitsky/photobunker-v3/pull/73); [реальный Synapse CI с историческим E2EE restore](https://github.com/1troitsky/photobunker-v3/actions/runs/42932785610) — PASS на `b8ee8dd17fef37ba73fc681b981bb7eb23772c6c`. Итоговый SHA после документирования требует собственной проверки CI.
+
+**Следующее:** сначала сохранить текущую длинную Draft-цепочку без merge, провести P2-02D независимую проверку безопасности интеграции, затем P2-02E — принятый Messages UI → реальная проверка Matrix peer device/room ACL → зашифрованный durable outbox и передача E2EE текста/вложения на двух независимых устройствах. Перед первым merge требуется согласованный порядок и отдельное разрешение.
+
+---
+
+## Исторический checkpoint Teams (до merge #62; НЕ текущая инструкция)
+
 **Дата:** 2026-11-11. **Source of truth:** `AGENTS.md`, `ts.md`, Github commits/PR/CI.
 
 ## Интеграционный рубеж Teams: P1-27 → P1-29C
