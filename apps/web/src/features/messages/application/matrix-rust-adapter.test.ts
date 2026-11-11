@@ -5,6 +5,7 @@ import {freshPackage} from '../../identity/infrastructure/crypto'
 import {jsonApi} from '../../identity/infrastructure/api'
 import {getBoundMatrixCredentials} from './matrix-binding'
 import {acquireMatrixCryptoLease} from './matrix-crypto-lease'
+import {getVerifiedPB3Matrix4SKey} from './matrix-ssss-bridge'
 import {
   matrixCryptoStatus,startMatrixCrypto,stopMatrixCrypto,
 } from './matrix-rust-adapter'
@@ -20,6 +21,7 @@ vi.mock('matrix-js-sdk/lib/crypto-api',()=>({
 vi.mock('../../identity/infrastructure/api',()=>({jsonApi:vi.fn()}))
 vi.mock('./matrix-binding',()=>({getBoundMatrixCredentials:vi.fn()}))
 vi.mock('./matrix-crypto-lease',()=>({acquireMatrixCryptoLease:vi.fn()}))
+vi.mock('./matrix-ssss-bridge',()=>({getVerifiedPB3Matrix4SKey:vi.fn()}))
 
 const config={
   version:1 as const,
@@ -58,6 +60,7 @@ beforeEach(async()=>{
   vi.mocked(acquireMatrixCryptoLease).mockResolvedValue({
     release:mocks.release,
   })
+  vi.mocked(getVerifiedPB3Matrix4SKey).mockResolvedValue(null)
 })
 afterEach(async()=>{
   await stopMatrixCrypto()
@@ -71,7 +74,16 @@ describe('P2 RustCrypto bootstrap has no unverified message send path',()=>{
     expect(mocks.create).toHaveBeenCalledWith({
       baseUrl:config.homeserverUrl,userId:config.matrixUserId,
       deviceId:config.matrixDeviceId,accessToken,
+      cryptoCallbacks:{getSecretStorageKey:expect.any(Function)},
     })
+    const createOptions=mocks.create.mock.calls[0]?.[0] as {
+      cryptoCallbacks:{getSecretStorageKey:(args:unknown,name:string)=>Promise<unknown>}
+    }
+    const options={keys:{SSSS_KEY:{algorithm:'m.secret_storage.v1.aes-hmac-sha2'}}}
+    await expect(createOptions.cryptoCallbacks.getSecretStorageKey(
+      options,'m.cross_signing.master')).resolves.toBeNull()
+    expect(getVerifiedPB3Matrix4SKey).toHaveBeenCalledWith(
+      mocks.create.mock.results[0]?.value,options,'m.cross_signing.master')
     const args=mocks.init.mock.calls[0]?.[0] as {
       useIndexedDB:boolean;cryptoDatabasePrefix:string;storageKey:Uint8Array
     }
