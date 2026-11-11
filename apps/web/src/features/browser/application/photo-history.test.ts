@@ -3,7 +3,7 @@ import {
   initialPhotoHistory,recordPhotoEdit,travelPhotoHistory,
   canPhotoUndo,canPhotoRedo,MAX_PHOTO_HISTORY,
 } from './photo-history'
-const a={text:[],shapes:[],strokes:[{
+const a={text:[],shapes:[],blackouts:[],strokes:[{
   id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',tool:'brush' as const,
   color:'#ff0000',width:8,points:[{x:100,y:100}],
 }]}
@@ -29,6 +29,7 @@ describe('P2 volatile photo editor Undo/Redo',()=>{
     expect(canPhotoRedo(h)).toBe(false)
     expect(travelPhotoHistory(h,1)).toBeNull()
     expect(travelPhotoHistory(h,-1)!.snapshot.strokes).toHaveLength(1)
+    expect(travelPhotoHistory(h,-1)!.snapshot.blackouts).toEqual([])
   })
   it('does not duplicate unchanged state and caps all in-memory history',()=>{
     let h=initialPhotoHistory()
