@@ -5,7 +5,7 @@ import { activeSession } from '../features/identity/application/session'
 import {
   flushAssignmentOutbox, listAssignmentOperations,
   listCachedAssignmentSnapshots, listServerAssignments,
-  queueAssignmentInvitation, queueAssignmentPolicyChange,
+  queueAssignmentInvitation, queueAssignmentMemberRemoval, queueAssignmentPolicyChange,
   queueAssignmentPrivateTextChange,effectiveAssignmentEnvelope,
   queueAssignmentScheduleChange,signedAssignmentSchedule,
   queueAssignmentRetentionChange,signedAssignmentRetention,
@@ -503,6 +503,34 @@ async function invite():Promise<void>{
   }catch(e){error.value=fail(e)}
   finally{busy.value=false}
 }
+async function removeMember(person:AssignmentParticipant):Promise<void>{
+  if(!owner.value||busy.value||rosterStatus.value!=='ready'
+    ||!['pending','accepted'].includes(person.state))return
+  // Revocation immediately stops assignment grants; it does NOT delete the
+  // contributor's personal files. Re-invitation requires a future protocol.
+  if(!window.confirm('Исключить исполнителя из задания? Доступ по разрешениям задания будет закрыт. Личные файлы не удаляются. Повторное приглашение пока недоступно.'))return
+  busy.value=true;error.value='';notice.value=''
+  const session=activeSession.value,generation=run
+  try{
+    const operationId=await queueAssignmentMemberRemoval(
+      assignmentId.value,person)
+    let accepted=false
+    if(session?.online&&navigator.onLine){
+      await flushAssignmentOutbox()
+      const ops=await listAssignmentOperations()
+      accepted=ops.some(op=>op.kind==='remove-member'&&op.state==='sent'
+        &&(JSON.parse(op.contract) as {operationId?:string}).operationId===operationId)
+    }
+    if(!sameIdentity(session,activeSession.value)||generation!==run)return
+    if(accepted){
+      await refreshRoster()
+      notice.value='Исключение подписано и принято сервером. Права задания отозваны.'
+    }else{
+      notice.value='Исключение подписано и сохранено в очереди. Пока сервер его не примет, права не изменятся.'
+    }
+  }catch(e){error.value=fail(e)}
+  finally{busy.value=false}
+}
 function keyTab(e:KeyboardEvent):void{
   if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return
   e.preventDefault()
@@ -743,9 +771,13 @@ onUnmounted(()=>{
               :data-testid="'editor-participant-'+person.recipientAccountId">
               <code>{{ person.recipientAccountId }}</code>
               <span> · Исполнитель · {{
+                person.state==='removed'?'Исключён владельцем':
                 person.state==='accepted'?'Принято сервером':
                 person.expired?'Приглашение истекло':'Ожидает принятия'
               }}</span>
+              <button v-if="person.state!=='removed'" type="button"
+                :disabled="busy||rosterStatus!=='ready'"
+                @click="removeMember(person)">Исключить</button>
             </li>
           </ul>
           <button type="button" :disabled="busy||rosterStatus==='loading'||!activeSession?.online"
