@@ -217,3 +217,10 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .browser-item-kind{width:34px;height:34px;flex-basis:34px}
   .browser-item button{padding:8px}
 }
+
+.browser-item-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.browser-item.photo-row .browser-item-kind{display:grid;place-items:center}
+.browser-item.photo-row .browser-item-detail{display:flex;flex-direction:column}
+.browser-item.photo-row .browser-item-actions{display:flex;flex-direction:row}
+.browser-item.photo-row{border-top:1px solid var(--outline)}
+@media(max-width:600px){.browser-item-actions button{padding:7px 9px}}
