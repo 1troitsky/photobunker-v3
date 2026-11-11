@@ -113,11 +113,14 @@ final class BrowserArchiveTest extends TestCase
         $this->as('owner');
         $id=$this->asset('owner','photo');
         $archive=$this->command('owner','photo',$id,'archive',0);
-        $created=$this->mutate('owner',$archive)->assertCreated()
-            ->assertJsonPath('state','archived')->json();
+        // Lost ACK replays EXACT signed bytes, never re-signs the same
+        // operation ID with a new randomized ECDSA signature.
+        $archiveBody=$this->signed('owner',$archive);
+        $created=$this->postJson('/browser/v1/archive/actions',$archiveBody)
+            ->assertCreated()->assertJsonPath('state','archived')->json();
         $this->assertLessThanOrEqual(PhotoSync::nowMs()+604800000,
             $created['archiveUntilMs']);
-        $this->mutate('owner',$archive)->assertOk()
+        $this->postJson('/browser/v1/archive/actions',$archiveBody)->assertOk()
             ->assertJsonPath('unchanged',true);
         $this->getJson('/photos/v1')->assertOk()->assertJsonCount(0,'items');
         $this->getJson('/browser/v1/archive')->assertOk()
@@ -160,11 +163,12 @@ final class BrowserArchiveTest extends TestCase
             $this->mutate('owner',$this->command('owner',$kind,$id,'archive',0))
                 ->assertCreated();
             $delete=$this->command('owner',$kind,$id,'delete',1);
-            $this->mutate('owner',$delete)->assertCreated()
-                ->assertJsonPath('state','deleting')
+            $signedDelete=$this->signed('owner',$delete);
+            $this->postJson('/browser/v1/archive/actions',$signedDelete)
+                ->assertCreated()->assertJsonPath('state','deleting')
                 ->assertJsonPath('physicalStatus','pending_gc');
-            $this->mutate('owner',$delete)->assertOk()
-                ->assertJsonPath('unchanged',true);
+            $this->postJson('/browser/v1/archive/actions',$signedDelete)
+                ->assertOk()->assertJsonPath('unchanged',true);
             $table=$kind==='photo'?'photo_records':'media_files_v1';
             $tombstone=$kind==='photo'?'photo_tombstones':'media_tombstones_v1';
             $pk=$kind==='photo'?'photo_id':'media_id';
