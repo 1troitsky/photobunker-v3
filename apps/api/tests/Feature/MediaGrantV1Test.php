@@ -296,6 +296,34 @@ final class MediaGrantV1Test extends TestCase
         ];
     }
 
+    public function test_safe_v3_migration_refuses_to_drop_live_source_binding():void
+    {
+        $digest=$this->publishRecipientKey();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $body=$this->safeGrantInput($digest,$source,$safe);
+        $this->postJson('/media-shares/v1/grants',$body)->assertCreated();
+        $migration=require database_path(
+            'migrations/2026_11_11_000004_add_media_safe_derivative_scope_v3.php'
+        );
+        try{
+            $migration->down();
+            $this->fail('Must not remove source binding of a signed safe grant.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.safe_grants.rollback_forbidden',
+                $e->getMessage());
+        }
+        $this->assertTrue(Schema::hasColumn(
+            'media_recipient_grants_v1','source_media_id'));
+        $this->assertTrue(Schema::hasColumn(
+            'media_recipient_grants_v1','source_contract_hash'));
+        $this->assertDatabaseHas('media_recipient_grants_v1',[
+            'source_media_id'=>$source['id'],
+            'media_id'=>$safe['id'],
+        ]);
+    }
+
     public function test_safe_v3_only_decryptable_derivative_chunks_and_source_lifecycle_is_enforced():void
     {
         $digest=$this->publishRecipientKey();
