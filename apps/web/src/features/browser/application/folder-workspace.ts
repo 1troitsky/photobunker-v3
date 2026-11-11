@@ -19,15 +19,21 @@ export type FolderSyncMarker={
   key:string;baseRevision:number;confirmedLocalRevision:number
   pending:FolderPendingUpload|null
 }
+export type FolderConflictBackup={
+  id:string;scope:string;createdAt:number;fromLocalRevision:number
+  fromBaseRevision:number;row:SealedWorkspace
+}
 class FolderDB extends Dexie{
   rows!:Table<SealedWorkspace,string>
   sync!:Table<FolderSyncMarker,string>
+  backups!:Table<FolderConflictBackup,string>
   constructor(){
     super('pb3-browser-device-folders-v1')
     this.version(1).stores({rows:'&key'})
     // Migration preserves ALL v1 device ciphertext; no plaintext or destructive
     // schema replacement. The sync cursor stores only versions + ciphertext.
     this.version(2).stores({rows:'&key',sync:'&key'})
+    this.version(3).stores({rows:'&key',sync:'&key',backups:'&id,scope'})
   }
 }
 const db=new FolderDB()
@@ -217,4 +223,96 @@ export async function installRemoteFolderWorkspace(
       confirmedLocalRevision:expectedLocal+1,pending:null})
     return true
   })
+}
+
+
+/**
+ * A three-way reconciliation must never silently discard an offline outbox.
+ * Before moving the local cursor to a newer signed cloud revision, preserve
+ * the original device AEAD ciphertext in a bounded encrypted recovery record.
+ * CAS checks local revision, cloud base and pending operation identity.
+ */
+export async function applyFolderConflictResolution(
+  workspace:FolderWorkspace,expectedLocal:number,expectedBase:number,
+  expectedPendingId:string|null,newCloudRevision:number,
+):Promise<boolean>{
+  const s=requireSession()
+  if(!Number.isSafeInteger(newCloudRevision)||newCloudRevision<=expectedBase
+    ||newCloudRevision>100000000)
+    throw Error('browser.merge_invalid_revision')
+  const encrypted=await seal(s,workspace,expectedLocal+1)
+  return db.transaction('rw',db.rows,db.sync,db.backups,async()=>{
+    same(s)
+    const row=await db.rows.get(scoped(s))
+    const marker=await db.sync.get(scoped(s))??defaultMarker(s)
+    if(!row||row.revision!==expectedLocal
+      ||marker.baseRevision!==expectedBase
+      ||(marker.pending?.operationId??null)!==expectedPendingId
+      ||marker.confirmedLocalRevision>expectedLocal)return false
+    const count=await db.backups.where('scope').equals(scoped(s)).count()
+    if(count>=20)throw Error('browser.merge_backup_limit')
+    await db.backups.add({
+      id:crypto.randomUUID(),scope:scoped(s),createdAt:Date.now(),
+      fromLocalRevision:expectedLocal,fromBaseRevision:expectedBase,
+      row:{...row},
+    })
+    await db.rows.put(encrypted)
+    await db.sync.put({
+      ...marker,baseRevision:newCloudRevision,
+      // The merged tree is NEW local work, not yet server-authoritative.
+      confirmedLocalRevision:expectedLocal,pending:null,
+    })
+    return true
+  })
+}
+export async function listFolderConflictBackups():Promise<
+  Omit<FolderConflictBackup,'row'>[]
+>{
+  const s=requireSession()
+  const rows=await db.backups.where('scope').equals(scoped(s)).toArray()
+  same(s)
+  return rows.map(({row:_,...metadata})=>metadata)
+    .sort((a,b)=>b.createdAt-a.createdAt)
+}
+/** Explicit recovery: never silently replace current local work. */
+export async function restoreFolderConflictBackup(id:string):Promise<FolderWorkspace>{
+  const s=requireSession()
+  const entry=await db.backups.get(id)
+  if(!entry||entry.scope!==scoped(s))throw Error('browser.merge_backup_missing')
+  const workspace=await unseal(s,entry.row)
+  // The cursor remains pinned to the most recent confirmed cloud base.
+  // Restored content is dirty and requires a fresh user-authorized sync.
+  for(let attempt=0;attempt<4;attempt++){
+    same(s)
+    const old=await db.rows.get(scoped(s))
+    const marker=await db.sync.get(scoped(s))??defaultMarker(s)
+    if(!old||marker.pending)throw Error('browser.merge_pending_upload')
+    const encrypted=await seal(s,workspace,old.revision+1)
+    try{
+      await db.transaction('rw',db.rows,db.sync,db.backups,async()=>{
+        const current=await db.rows.get(scoped(s))
+        const latest=await db.sync.get(scoped(s))??defaultMarker(s)
+        if(!current||current.revision!==old.revision
+          ||latest.baseRevision!==marker.baseRevision
+          ||latest.pending!==null
+          ||latest.confirmedLocalRevision!==marker.confirmedLocalRevision)
+          throw Error('browser.folder_write_race')
+        if(await db.backups.where('scope').equals(scoped(s)).count()>=20)
+          throw Error('browser.merge_backup_limit')
+        await db.backups.add({
+          id:crypto.randomUUID(),scope:scoped(s),createdAt:Date.now(),
+          fromLocalRevision:old.revision,fromBaseRevision:marker.baseRevision,
+          row:{...old},
+        })
+        await db.rows.put(encrypted)
+      })
+      same(s)
+      return workspace
+    }catch(e){
+      if(e instanceof Error&&e.message==='browser.folder_write_race'&&attempt<3)
+        continue
+      throw e
+    }
+  }
+  throw Error('browser.folder_write_race')
 }
