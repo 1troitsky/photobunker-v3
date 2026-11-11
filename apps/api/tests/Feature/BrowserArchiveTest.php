@@ -373,7 +373,8 @@ final class BrowserArchiveTest extends TestCase
             'expectedRevision'=>$revision,'useArchive'=>$useArchive,
             'autoDeleteAfter7Days'=>$autoDelete,
         ];
-        return $this->signed($role,$c,'pb3.browser-archive-preferences.v1');
+        $signed=$this->signed($role,$c,'pb3.browser-archive-preferences.v1');
+        return ['contract'=>$signed['command'],'signature'=>$signed['signature']];
     }
 
     public function test_default_signed_preferences_are_owner_scoped_and_operator_gated():void
