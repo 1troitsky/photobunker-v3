@@ -78,6 +78,11 @@ final class PhotoGrantController extends Controller
             abort_unless($photo,404);
             abort_if($photo->state!=='active'
                 ||(int)$photo->expires_at<=PhotoSync::nowMs(),410);
+            // Serialized on owner account row with Browser Archive action:
+            // archived ciphertext cannot gain NEW recipient grants.
+            abort_if(DB::table('browser_archive_entries_v1')
+                ->where('kind','photo')->where('asset_id',$photo->id)
+                ->where('state','archived')->exists(),410);
             abort_unless($grant['expiresAt']<=(int)$photo->expires_at,422);
             $recipient=DB::table('identity_accounts')
                 ->where('id',$grant['recipientAccountId'])->where('status','ready')->first();

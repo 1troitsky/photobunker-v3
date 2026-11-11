@@ -343,3 +343,8 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .browser-merge-backup{display:flex;align-items:center;
   justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px}
 @media(max-width:600px){.browser-merge-choices{flex-direction:column}}
+
+/* Signed archive is a server lifecycle, not a local hidden checkbox. */
+.browser-archive-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0}
+.browser-archive-tabs button[aria-pressed=true]{border-color:var(--accent);font-weight:700}
+.browser-item-actions>span{font-size:12px;color:var(--muted);overflow-wrap:anywhere}

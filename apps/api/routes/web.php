@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\BrowserFolderSyncController;
+use App\Http\Controllers\BrowserArchiveController;
 use App\Http\Controllers\PhotoSyncController;
 use App\Http\Controllers\MediaV1Controller;
 use App\Http\Controllers\MediaGrantController;
@@ -196,4 +197,12 @@ Route::prefix('folders/v1')->middleware('throttle:pb3-assignments')->group(funct
     Route::post('/snapshot',[BrowserFolderSyncController::class,'store']);
     Route::get('/revisions/{revision}',[BrowserFolderSyncController::class,'revision'])
         ->whereNumber('revision');
+});
+
+
+// P2 Browser Archive: state-changing actions are account-signed and operator-
+// gated. StorageManager tombstone/verified GC remain independent P1 safety.
+Route::prefix('browser/v1/archive')->middleware('throttle:pb3-media')->group(function(){
+    Route::get('/',[BrowserArchiveController::class,'index']);
+    Route::post('/actions',[BrowserArchiveController::class,'mutate']);
 });
