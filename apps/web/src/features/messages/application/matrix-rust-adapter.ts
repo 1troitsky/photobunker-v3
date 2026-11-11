@@ -180,6 +180,15 @@ async function initialize(epoch:number):Promise<void>{
     throw Error('matrix.crypto_initialization_failed')
   }
 }
+/** Outgoing messages can use only the SDK instance holding PB3's
+ * exclusive encrypted RustCrypto store lease for THIS browser tab.
+ * This is NOT a Matrix room/member/send authorization by itself.
+ */
+export function isLeasedMatrixClient(client:MatrixClient):boolean{
+  return runtime?.client===client
+    &&matrixCryptoStatus.value==='crypto_initialized_only'
+    &&sameIdentity(activeSession.value as Session)
+}
 /** Explicit opt-in; deliberately not called from App, Shell or message draft UI. */
 export async function startMatrixCrypto():Promise<void>{
   if(starting||runtime||stopping)throw Error('matrix.client_already_active')
