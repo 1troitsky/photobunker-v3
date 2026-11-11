@@ -6,6 +6,7 @@ import {
   queueAssignmentCreation, listLocalAssignmentDrafts, listServerAssignmentUsage,
   listAllServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
   listAssignmentRemovalNotices, listLocallyRevokedAssignmentIds,
+  listCachedVerifiedAssignmentRemovals,
   listCachedAssignmentInvites,
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
@@ -31,7 +32,9 @@ import { verifyPhotoSubmissionReceiptPage } from '../features/assignments/applic
 import { appendOwnerMediaReceiptPage } from '../features/assignments/application/owner-media-receipt-pagination'
 import { parseRulesCsv, EMPTY_ADVANCED_RULES } from '../features/assignments/domain/advanced-rules'
 import type { AdvancedRules } from '../features/assignments/domain/advanced-rules'
-import type { CheckedAssignmentRemovalNotice } from '../features/assignments/application/verify-removal-notice'
+import type {
+  CheckedAssignmentRemovalNotice, CheckedCachedAssignmentRemovalProof,
+} from '../features/assignments/application/verify-removal-notice'
 import {
   openOwnerAssignment, openRecipientAssignment,
 } from '../features/assignments/infrastructure/assignment-crypto'
@@ -67,6 +70,7 @@ type Submission=AssignmentPhotoSubmission
 const assignments=ref<VisibleAssignment[]>([])
 const invites=ref<ReceivedAssignmentInvite[]>([])
 const removalNotices=ref<CheckedAssignmentRemovalNotice[]>([])
+const cachedRemovalNotices=ref<CheckedCachedAssignmentRemovalProof[]>([])
 const removalNoticesError=ref('')
 const operations=ref<AssignmentOperation[]>([])
 const monthlyUsage=ref<AssignmentMonthlyUsage|null>(null)
@@ -195,6 +199,7 @@ let receiptProofEpoch=0
 function resetSensitive():void {
   receiptProofEpoch++
   assignments.value=[];invites.value=[];removalNotices.value=[]
+  cachedRemovalNotices.value=[]
   removalNoticesError.value='';operations.value=[];photos.value=[]
   mediaFiles.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
   mediaNextCursor.value=null
@@ -293,6 +298,7 @@ async function hydrate():Promise<void>{
   // Receipt history is always read separately from live membership; it
   // cannot make a removed assignment visible again.
   removalNotices.value=[]
+  cachedRemovalNotices.value=[]
   removalNoticesError.value=''
   if(!offline){
     try{
@@ -313,6 +319,18 @@ async function hydrate():Promise<void>{
       if(activeSession.value!==identity)return
       removalNoticesError.value=explain(e)
     }
+  }
+  // Offline history is NOT a fresh server authorization. Reverify the
+  // persisted owner's signature against the independently pinned LOCAL
+  // key without network access; do not resurrect deleted invitations.
+  try{
+    const cached=await listCachedVerifiedAssignmentRemovals()
+    if(activeSession.value!==identity)return
+    const current=new Set(removalNotices.value.map(row=>row.notice.inviteId))
+    cachedRemovalNotices.value=cached.filter(row=>!current.has(row.proof.inviteId))
+  }catch(e){
+    if(activeSession.value!==identity)return
+    if(!removalNoticesError.value)removalNoticesError.value=explain(e)
   }
   invites.value=received
   const rows=[...localRows]
@@ -1160,7 +1178,7 @@ onUnmounted(cleanPreview)
           <button type="button" :disabled="busy||contributorCheck?.accountId!==invitation.ownerAccountId||!contributorCheck.confirmed" @click="accept(invitation)">Принять задание</button>
         </div>
       </div>
-      <div v-if="removalNotices.length||removalNoticesError"
+      <div v-if="removalNotices.length||cachedRemovalNotices.length||removalNoticesError"
         class="foundation-card" data-testid="assignment-removal-notices">
         <h2>История участия</h2>
         <p v-if="removalNoticesError" class="error-text" role="alert">
@@ -1183,6 +1201,25 @@ onUnmounted(cleanPreview)
             <button type="button" :disabled="busy" @click="inspectOwner(row.notice)">
               Сверить ключ владельца
             </button>
+          </template>
+        </div>
+        <div v-for="row in cachedRemovalNotices" :key="'cached-'+row.proof.inviteId"
+          class="assignment-invite"
+          :data-testid="'assignment-offline-removal-'+row.proof.inviteId">
+          <template v-if="row.verified">
+            <div>
+              <strong>Исключён владельцем</strong>
+              <p class="muted">Задание {{ row.proof.assignmentId.slice(0,8) }}
+                · Подпись исключения повторно проверена по ранее подтверждённому ключу владельца.
+                Это сохранённая история, не новое подтверждение от сервера.</p>
+            </div>
+          </template>
+          <template v-else>
+            <div>
+              <strong>Сохранённое уведомление пока не проверено</strong>
+              <p class="muted">Нет подтверждённого локального ключа или подпись не совпала.
+                Для актуального статуса потребуется защищённое подключение.</p>
+            </div>
           </template>
         </div>
         <p class="muted">Исключение закрывает будущий доступ по разрешениям задания. Уже расшифрованные офлайн-копии нельзя дистанционно отозвать.</p>

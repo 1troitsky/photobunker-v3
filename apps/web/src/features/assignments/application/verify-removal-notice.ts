@@ -74,6 +74,52 @@ export async function verifyAssignmentRemovalNotice(
       +item.removalContract,item.removalSignature))
     throw Error('assignment.removal_notice_unverified')
 }
+/**
+ * A recipient's *previously* authenticated and saved signed removal can be
+ * redisplayed offline, but only after checking the retained P-256 signature
+ * against that recipient's independently pinned owner key (NO network).
+ * The original invite envelope is intentionally not retained in this local
+ * tombstone; the online path verified both original invite + removal first.
+ */
+export type CachedAssignmentRemovalProof={
+  assignmentId:string;inviteId:string;ownerAccountId:string
+  recipientAccountId:string;removalContract:string
+  removalSignature:string;verifiedAt:number
+}
+export type CheckedCachedAssignmentRemovalProof={
+  proof:CachedAssignmentRemovalProof;verified:boolean
+}
+export async function verifyCachedAssignmentRemovalProof(
+  item:CachedAssignmentRemovalProof,recipientId:string,
+):Promise<void>{
+  if(!item||![
+    item.inviteId,item.assignmentId,item.ownerAccountId,
+    item.recipientAccountId,
+  ].every(x=>typeof x==='string'&&uuid.test(x))
+    ||item.recipientAccountId!==recipientId
+    ||item.ownerAccountId===recipientId
+    ||typeof item.removalSignature!=='string'
+    ||!Number.isSafeInteger(item.verifiedAt)||item.verifiedAt<0)
+    throw Error('assignment.cached_removal_unverified')
+  let removal:Record<string,unknown>
+  try{removal=exactContract(item.removalContract,removeFields)}
+  catch{throw Error('assignment.cached_removal_unverified')}
+  if(removal.version!==1||removal.action!=='remove'
+    ||removal.assignmentId!==item.assignmentId
+    ||removal.inviteId!==item.inviteId
+    ||removal.ownerAccountId!==item.ownerAccountId
+    ||removal.recipientAccountId!==recipientId
+    ||typeof removal.operationId!=='string'
+    ||!uuid.test(removal.operationId))
+    throw Error('assignment.cached_removal_unverified')
+  const trusted=await pinnedPeer(item.ownerAccountId,false)
+  if(trusted.accountId!==item.ownerAccountId
+    ||!await verify(await importSpki(trusted.accountSpki),
+      'pb3.assignment-member-remove.v1\n'+item.removalContract,
+      item.removalSignature))
+    throw Error('assignment.cached_removal_unverified')
+}
+
 /** Each notice has its own signature, directory lookup shared per owner. */
 export async function inspectAssignmentRemovalNotices(
   items:AssignmentRemovalNotice[],recipientId:string,

@@ -213,6 +213,16 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
       revoked:true,policy:false,privateSummary:false,
       summaryWriteDenied:true,summaryReadDenied:true,
     })
+    // Offline reload retains the REASON this user's assignment vanished,
+    // by re-verifying the saved owner's original removal signature using
+    // only the fingerprint-confirmed local owner pin, without fetching media.
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    const offlineHistory=B.locator('[data-testid^="assignment-offline-removal-"]')
+    await expect(offlineHistory).toHaveCount(1)
+    await expect(offlineHistory).toContainText('Исключён владельцем')
+    await expect(offlineHistory).toContainText(
+      'Подпись исключения повторно проверена по ранее подтверждённому ключу')
+    await expect(B.locator('.assignment-card-name')).toHaveCount(0)
     await B.context().setOffline(false)
   }finally{await ctxA.close();await ctxB.close()}
 })
