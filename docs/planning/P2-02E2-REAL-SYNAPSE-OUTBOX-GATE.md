@@ -6,7 +6,7 @@
 
 Prior CI was **two separate proofs**: (1) the real `matrix-text-outbox.ts` implementation running against mocked Matrix SDK/ACL callbacks under real browser WebCrypto/fake-indexeddb; (2) a separate disposable Synapse + official Matrix v44 RustCrypto E2EE protocol test. Neither by itself proves that the real PB3 outbox can call the official SDK, survive lost ACK, verify the raw ciphertext receipt, or cause the other SDK client to decrypt.
 
-`apps/web/src/features/messages/application/matrix-outbox-synapse.test.ts` now runs the **actual** PB3 outbox code and the **actual** `matrix-js-sdk@44.0.0` RustCrypto against the existing localhost-only disposable Synapse v1.161.0 GitHub Actions server, with separately authenticated Alice and Bob.
+`apps/web/src/features/messages/application/matrix-outbox-synapse.test.ts` now runs the **actual** PB3 outbox code and the **actual** `matrix-js-sdk@44.0.0` RustCrypto against a **separate** localhost-only disposable Synapse v1.161.0 GitHub Actions job and two freshly provisioned users. The E2EE/4S protocol gate retains its own independent homeserver job.
 
 ## Exact verified behaviors (subject to live CI)
 
@@ -23,7 +23,7 @@ Prior CI was **two separate proofs**: (1) the real `matrix-text-outbox.ts` imple
 - The intended browser experience is not exercised because the approved Messages UI still has Send disabled. Actual reload of the PWA module and installed iOS Safari are still separate. This test verifies the queue row is durable in IndexedDB across connection reuse but does not simulate terminating/reloading the entire application runtime.
 - Disposable Matrix CI intentionally uses HTTP **127.0.0.1** only on a loopback port for isolation; PB3 **production** Matrix origin validation remains HTTPS + configured host + PB3 server whoami check. No production credentials are used.
 - No media/attachment, independent PB3 account provisioning from the Recovery Key, reader-receipt, group membership, Panic credential revocation, secondary homeserver or physical device tests are claimed. No production Send switch is enabled.
-- The test is guarded by `MATRIX_CI_DISPOSABLE=1` and verifies exact localhost URL, server name and two non-identical synthetic passwords before opening a connection. Ordinary Vitest collects it but **skips it** when there is no disposable Synapse. The CI server is destroyed afterward. The test provisions an **independent** pair of synthetic Matrix users (not the identities used in the earlier E2EE/4S tests) so per-account login throttling remains active but does not bleed into this gate; bounded HTTP 429 retries remain as a backstop.
+- The test is guarded by `MATRIX_CI_DISPOSABLE=1` and verifies exact localhost URL, server name and two non-identical synthetic passwords before opening a connection. Ordinary Vitest collects it but **skips it** when there is no disposable Synapse. The CI server is destroyed afterward. The test runs on a **separate** disposable Synapse process/runner and uses its own pair of synthetic users; no cross-suite authentication/IP rate-limit state can bleed from the earlier E2EE/4S tests. Synapse's login rate limits remain at their standard defaults; bounded HTTP 429 retries are only a safety backstop. The earlier same-server runs failed with genuine HTTP 429, and are retained in GitHub CI as evidence.
 
 ## Acceptance and next step
 
