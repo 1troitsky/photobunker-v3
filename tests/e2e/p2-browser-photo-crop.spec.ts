@@ -11,6 +11,10 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
+    await expect.poll(()=>page.evaluate(async()=>{
+      const m=await import('/src/features/identity/application/session.ts')
+      return !!m.activeSession.value?.accountId
+    }),{timeout:30000}).toBe(true)
     await context.setOffline(true)
     const original=await page.evaluate(async()=>{
       const canvas=document.createElement('canvas')
