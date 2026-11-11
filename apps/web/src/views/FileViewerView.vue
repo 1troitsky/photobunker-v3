@@ -1135,6 +1135,19 @@ onUnmounted(()=>{
           {{ cropBusy?'Обработка…':'Создать JPEG-копию' }}
         </button>
         <div v-if="cropResult&&cropUrl" class="file-viewer-still-preview">
+          <div class="file-viewer-photo-history-bar">
+            <button type="button" data-testid="file-viewer-photo-undo"
+              :disabled="!canUndoPhoto||cropBusy"
+              @click="travelPhotoEdit(-1)">↶ Отменить</button>
+            <button type="button" data-testid="file-viewer-photo-redo"
+              :disabled="!canRedoPhoto||cropBusy"
+              @click="travelPhotoEdit(1)">Повторить ↷</button>
+            <button type="button" data-testid="file-viewer-photo-reset"
+              :disabled="cropBusy||!canUndoPhoto"
+              @click="resetPhotoAnnotations">Сбросить аннотации</button>
+          </div>
+          <p class="muted">Undo/Redo восстанавливает текст, фигуры и штрихи.
+            Кадрирование и цветовые параметры пока не входят в историю.</p>
           <div class="file-viewer-photo-composition-wrap">
             <div ref="photoComposition" class="file-viewer-photo-composition"
               data-testid="file-viewer-photo-composition">
@@ -1171,6 +1184,15 @@ onUnmounted(()=>{
                   <path v-else d="M50 2 L63 34 L97 37
                     L72 59 L80 95 L50 78 L20 95 L28 59 L3 37 L37 34 Z"/>
                 </svg>
+                <canvas ref="paintCanvas"
+                  class="file-viewer-photo-paint-layer"
+                  :class="{drawing:!!activePaintTool}"
+                  :aria-label="activePaintTool?'Рисование на фотографии':'Слой рисунка'"
+                  data-testid="file-viewer-photo-paint-canvas"
+                  @pointerdown="beginPaintStroke"
+                  @pointermove="updatePaintStroke"
+                  @pointerup="finishPaintStroke"
+                  @pointercancel="finishPaintStroke($event,true)"/>
                 <button v-for="mark in textMarks" :key="mark.id"
                   type="button" class="file-viewer-photo-text-layer"
                   :class="{selected:selectedTextId===mark.id}"
@@ -1192,6 +1214,40 @@ onUnmounted(()=>{
           </div>
           <p class="muted">{{ cropResult.width }} × {{ cropResult.height }}
             · {{ croppedFileName }}</p>
+          <div class="file-viewer-photo-text-editor"
+            data-testid="file-viewer-photo-draw-editor">
+            <div class="file-viewer-photo-text-head">
+              <strong>Рисовать ({{ strokeMarks.length }}/{{ MAX_PHOTO_STROKES }})</strong>
+              <div class="file-viewer-photo-draw-tools">
+                <button type="button" data-testid="file-viewer-tool-brush"
+                  :class="{selected:activePaintTool==='brush'}"
+                  :disabled="cropBusy" @click="choosePhotoTool('brush')">Кисть</button>
+                <button type="button" data-testid="file-viewer-tool-pencil"
+                  :class="{selected:activePaintTool==='pencil'}"
+                  :disabled="cropBusy" @click="choosePhotoTool('pencil')">Карандаш</button>
+                <button type="button" data-testid="file-viewer-tool-eraser"
+                  :class="{selected:activePaintTool==='eraser'}"
+                  :disabled="cropBusy" @click="choosePhotoTool('eraser')">Ластик</button>
+              </div>
+            </div>
+            <div class="file-viewer-photo-text-settings">
+              <label>Цвет кисти / карандаша
+                <input type="color" :value="paintColor"
+                  :disabled="cropBusy" data-testid="file-viewer-paint-color"
+                  @input="setPaintColor">
+              </label>
+              <label>Толщина · {{ paintWidth }}
+                <input type="range" min="2" max="36" step="1"
+                  :value="paintWidth" :disabled="cropBusy"
+                  data-testid="file-viewer-paint-width"
+                  @input="setPaintWidth">
+              </label>
+            </div>
+            <p class="muted">Выберите инструмент и рисуйте на фотографии.
+              Ластик стирает только нанесённые штрихи, не оригинал,
+              текст или фигуры. Рисунок хранится только в памяти
+              до зашифрованного сохранения копии.</p>
+          </div>
           <div class="file-viewer-photo-text-editor"
             data-testid="file-viewer-photo-text-editor">
             <div class="file-viewer-photo-text-head">
@@ -1327,10 +1383,10 @@ onUnmounted(()=>{
               </label>
             </div>
           </div>
-          <p v-if="textMarks.length||shapeMarks.length" class="muted">
-            При сохранении или скачивании надписи и фигуры превращаются
-            в пиксели JPEG. Ни черновики, ни параметры фигур не отправляются
-            серверу открытым текстом.</p>
+          <p v-if="textMarks.length||shapeMarks.length||strokeMarks.length"
+            class="muted">При сохранении или скачивании надписи, фигуры
+            и штрихи превращаются в пиксели JPEG. Ни черновики, ни параметры
+            рисунка не отправляются серверу открытым текстом.</p>
           <div class="file-viewer-still-actions">
             <button type="button" :disabled="cropBusy||!!cropSavedId"
               data-testid="file-viewer-save-crop" @click="saveCroppedPhoto">
@@ -1348,8 +1404,10 @@ onUnmounted(()=>{
         <p class="muted">Копия — независимый личный E2EE-файл. Доступы,
           GPS, задание и TTL оригинала автоматически не наследуются.
           Яркость, контраст и насыщенность применяются к пикселям
-          только при создании копии. Надписи и фигуры накладываются
-          поверх итогового кадра. Это не маска приватности.</p>
+          только при создании копии. Надписи, фигуры и отдельный
+          рисованный слой накладываются поверх итогового кадра.
+          Ластик не удаляет пиксели исходной фотографии.
+          Это не маска приватности.</p>
         <p v-if="cropNotice" role="status" data-testid="file-viewer-crop-status">
           {{ cropNotice }}</p>
         <p v-if="cropError" role="alert" data-testid="file-viewer-crop-error">
