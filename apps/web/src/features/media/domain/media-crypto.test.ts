@@ -35,7 +35,7 @@ describe('P1-10 multi-media E2EE authenticated chunks',()=>{
     expect(out.metadata.mime).toBe('video/webm')
     expect(out.blob.type).toBe('video/webm')
     expect(new Uint8Array(await out.blob.arrayBuffer())).toEqual(f.data)
-  })
+  },20000) // Large real WebCrypto + Blob roundtrip: CI runner contention may exceed 5 s.
   it('supports photo/audio and authenticates metadata independently',async()=>{
     for(const type of ['photo','audio'] as const){
       const f=await fixture(type,1032)
