@@ -12,6 +12,7 @@ import {
 } from './matrix-binding'
 import {getMatrixContactMapping} from './matrix-peer-identity'
 import {inspectVerifiedMatrixDevice} from './matrix-verified-device'
+import {isLeasedMatrixClient} from './matrix-rust-adapter'
 
 /**
  * P2-02E1 — durable, E2EE *intent* queue, not yet user-enabled Messenger.
@@ -233,6 +234,8 @@ export async function listMatrixTextOutbox():Promise<Array<{
   }))
 }
 async function preflight(s:Session,x:PendingText,client:MatrixClient):Promise<void>{
+  if(!isLeasedMatrixClient(client))
+    throw Error('matrix.outbox_crypto_lease_required')
   const binding=await getBoundMatrixCredentials()
   same(s)
   if(!binding||binding.contract.accountId!==s.accountId
@@ -338,6 +341,8 @@ export async function flushMatrixTextOutbox(client:MatrixClient):Promise<{
       try{
         await preflight(s,item,client)
         same(s)
+        if(!isLeasedMatrixClient(client))
+          throw Error('matrix.outbox_crypto_lease_lost')
         // The official Matrix SDK encrypts before sendMessage(). Do not
         // persist a second, plaintext network payload in local storage.
         const response=await client.sendMessage(item.roomId,{
