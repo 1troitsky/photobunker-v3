@@ -980,6 +980,36 @@ onUnmounted(()=>{
               <img :src="composedPhotoUrl||cropUrl" :alt="croppedFileName"
                 data-testid="file-viewer-crop-preview" draggable="false">
               <template v-if="!composedPhotoUrl">
+                <svg v-for="shape in shapeMarks" :key="shape.id"
+                  class="file-viewer-photo-shape-layer"
+                  :class="{selected:selectedShapeId===shape.id}"
+                  :data-testid="'file-viewer-shape-layer-'+shape.id"
+                  :style="{left:shape.x+'%',top:shape.y+'%',
+                    width:shape.width+'%',height:shape.height+'%'}"
+                  viewBox="0 0 100 100"
+                  :preserveAspectRatio="shape.kind==='circle'||shape.kind==='square'
+                    ?'xMinYMin meet':'none'"
+                  :stroke="shape.stroke"
+                  :stroke-width="shape.strokeWidth*10000/(900*shape.width)"
+                  stroke-linejoin="round" stroke-linecap="round"
+                  :fill="shape.filled&&shape.kind!=='arrow'?shape.fill:'none'"
+                  @click="selectPhotoShape(shape.id)"
+                  @pointerdown="startShapeDrag($event,shape.id)"
+                  @pointermove="moveShapeDrag"
+                  @pointerup="endShapeDrag" @pointercancel="endShapeDrag">
+                  <rect x="0" y="0" width="100" height="100"
+                    fill="transparent" stroke="none"/>
+                  <path v-if="shape.kind==='arrow'"
+                    d="M5 95 L95 5 M60 5 H95 V40"/>
+                  <circle v-else-if="shape.kind==='circle'"
+                    cx="50" cy="50" r="48"/>
+                  <rect v-else-if="shape.kind==='square'"
+                    x="2" y="2" width="96" height="96"/>
+                  <path v-else-if="shape.kind==='triangle'"
+                    d="M50 2 L98 98 L2 98 Z"/>
+                  <path v-else d="M50 2 L63 34 L97 37
+                    L72 59 L80 95 L50 78 L20 95 L28 59 L3 37 L37 34 Z"/>
+                </svg>
                 <button v-for="mark in textMarks" :key="mark.id"
                   type="button" class="file-viewer-photo-text-layer"
                   :class="{selected:selectedTextId===mark.id}"
@@ -1056,9 +1086,90 @@ onUnmounted(()=>{
               </label>
             </div>
           </div>
-          <p v-if="textMarks.length" class="muted">При сохранении или скачивании
-            надписи превращаются в пиксели JPEG. Они не отправляются
-            отдельным текстом на сервер и не сохраняются как открытый черновик.</p>
+          <div class="file-viewer-photo-text-editor"
+            data-testid="file-viewer-photo-shape-editor">
+            <div class="file-viewer-photo-text-head">
+              <strong>Фигуры ({{ shapeMarks.length }}/{{ MAX_SHAPE_MARKS }})</strong>
+              <button type="button" data-testid="file-viewer-add-shape"
+                :disabled="cropBusy||shapeMarks.length>=MAX_SHAPE_MARKS"
+                @click="addPhotoShape">Добавить фигуру</button>
+            </div>
+            <p v-if="!shapeMarks.length" class="muted">Можно добавить стрелку,
+              круг, квадрат, треугольник или звезду, настроить рамку и заливку,
+              переместить фигуру на изображении.</p>
+            <div v-for="(shape,index) in shapeMarks" :key="shape.id"
+              class="file-viewer-photo-text-row"
+              :class="{selected:selectedShapeId===shape.id}">
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-select-shape-'+index"
+                @click="selectPhotoShape(shape.id)">{{ shape.kind }}</button>
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-delete-shape-'+index"
+                :aria-label="'Удалить фигуру '+(index+1)"
+                @click="deletePhotoShape(shape.id)">Удалить</button>
+            </div>
+            <div v-if="selectedShape" class="file-viewer-photo-text-settings">
+              <label>Фигура
+                <select :value="selectedShape.kind" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-kind" @change="setShapeKind">
+                  <option value="arrow">Стрелка</option>
+                  <option value="circle">Круг</option>
+                  <option value="square">Квадрат</option>
+                  <option value="triangle">Треугольник</option>
+                  <option value="star">Звезда</option>
+                </select>
+              </label>
+              <label>Цвет рамки
+                <input type="color" :value="selectedShape.stroke"
+                  :disabled="cropBusy" data-testid="file-viewer-shape-stroke"
+                  @input="setShapeColor('stroke',$event)">
+              </label>
+              <label>Толщина рамки · {{ selectedShape.strokeWidth }}
+                <input type="range" min="1" max="28" step="1"
+                  :value="selectedShape.strokeWidth" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-stroke-width"
+                  @input="setShapeStrokeWidth">
+              </label>
+              <label>Цвет заливки
+                <input type="color" :value="selectedShape.fill"
+                  :disabled="cropBusy" data-testid="file-viewer-shape-fill"
+                  @input="setShapeColor('fill',$event)">
+              </label>
+              <label class="file-viewer-shape-filled">Залить фигуру
+                <input type="checkbox" :checked="selectedShape.filled"
+                  :disabled="cropBusy" data-testid="file-viewer-shape-filled"
+                  @change="setShapeFilled">
+              </label>
+              <label>Позиция X (%)
+                <input type="number" min="0" :max="100-selectedShape.width"
+                  step="1" :value="selectedShape.x" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-x"
+                  @input="setShapeNumber('x',$event)">
+              </label>
+              <label>Позиция Y (%)
+                <input type="number" min="0" :max="100-selectedShape.height"
+                  step="1" :value="selectedShape.y" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-y"
+                  @input="setShapeNumber('y',$event)">
+              </label>
+              <label>Ширина (%)
+                <input type="number" min="5" :max="100-selectedShape.x"
+                  step="1" :value="selectedShape.width" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-width"
+                  @input="setShapeNumber('width',$event)">
+              </label>
+              <label>Высота (%)
+                <input type="number" min="5" :max="100-selectedShape.y"
+                  step="1" :value="selectedShape.height" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-height"
+                  @input="setShapeNumber('height',$event)">
+              </label>
+            </div>
+          </div>
+          <p v-if="textMarks.length||shapeMarks.length" class="muted">
+            При сохранении или скачивании надписи и фигуры превращаются
+            в пиксели JPEG. Ни черновики, ни параметры фигур не отправляются
+            серверу открытым текстом.</p>
           <div class="file-viewer-still-actions">
             <button type="button" :disabled="cropBusy||!!cropSavedId"
               data-testid="file-viewer-save-crop" @click="saveCroppedPhoto">
@@ -1076,8 +1187,8 @@ onUnmounted(()=>{
         <p class="muted">Копия — независимый личный E2EE-файл. Доступы,
           GPS, задание и TTL оригинала автоматически не наследуются.
           Яркость, контраст и насыщенность применяются к пикселям
-          только при создании копии. Надписи накладываются поверх итогового
-          кадра. Это не маска приватности.</p>
+          только при создании копии. Надписи и фигуры накладываются
+          поверх итогового кадра. Это не маска приватности.</p>
         <p v-if="cropNotice" role="status" data-testid="file-viewer-crop-status">
           {{ cropNotice }}</p>
         <p v-if="cropError" role="alert" data-testid="file-viewer-crop-error">
