@@ -20,6 +20,16 @@ import type {PhotoAdjustments} from '../features/browser/application/photo-effec
 import {flattenPhotoAnnotations,MAX_TEXT_MARKS,validateTextMarks} from '../features/browser/application/photo-text'
 import {MAX_SHAPE_MARKS} from '../features/browser/application/photo-shapes'
 import type {PhotoShapeMark,ShapeKind} from '../features/browser/application/photo-shapes'
+import {
+  drawPhotoStrokes,MAX_PHOTO_STROKES,MAX_STROKE_POINTS,
+  MAX_TOTAL_STROKE_POINTS,
+} from '../features/browser/application/photo-strokes'
+import type {PhotoStroke,StrokeTool,StrokePoint} from '../features/browser/application/photo-strokes'
+import {
+  initialPhotoHistory,recordPhotoEdit,travelPhotoHistory,
+  canPhotoUndo,canPhotoRedo,
+} from '../features/browser/application/photo-history'
+import type {PhotoEditHistory,PhotoEditSnapshot} from '../features/browser/application/photo-history'
 import type {PhotoTextMark} from '../features/browser/application/photo-text'
 import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
@@ -60,6 +70,16 @@ const photoComposition=ref<HTMLElement|null>(null)
 const compositionWidth=ref(0)
 let compositionObserver:ResizeObserver|null=null
 const textMarks=ref<PhotoTextMark[]>([])
+const strokeMarks=ref<PhotoStroke[]>([])
+const draftStroke=ref<PhotoStroke|null>(null)
+const paintCanvas=ref<HTMLCanvasElement|null>(null)
+const activePaintTool=ref<StrokeTool|null>(null)
+const paintColor=ref('#1ed760')
+const paintWidth=ref(8)
+const paintHistory=ref<PhotoEditHistory>(initialPhotoHistory())
+const canUndoPhoto=computed(()=>canPhotoUndo(paintHistory.value))
+const canRedoPhoto=computed(()=>canPhotoRedo(paintHistory.value))
+let strokePointer:number|null=null
 const shapeMarks=ref<PhotoShapeMark[]>([])
 const selectedShapeId=ref<string|null>(null)
 const selectedShape=computed(()=>shapeMarks.value.find(
@@ -124,8 +144,11 @@ const croppedFileName=computed(()=>{
   if(!preview.value||!cropResult.value)return ''
   const base=cropFileName(preview.value.name,cropSelection.value,
     photoAdjustments.value)
-  const layers=[textMarks.value.length?'text':'',shapeMarks.value.length?'shape':'']
-    .filter(Boolean).join('-')
+  const layers=[
+    textMarks.value.length?'text':'',
+    shapeMarks.value.length?'shape':'',
+    strokeMarks.value.length?'draw':'',
+  ].filter(Boolean).join('-')
   return layers?base.replace(/\.jpg$/,'-'+layers+'.jpg'):base
 })
 function clearComposition():void{
@@ -140,15 +163,53 @@ function invalidateTextOutput():void{
   cropNotice.value=''
   cropError.value=''
 }
+function currentPhotoEdits():PhotoEditSnapshot{
+  return {text:textMarks.value,shapes:shapeMarks.value,strokes:strokeMarks.value}
+}
+function commitPhotoEdit():void{
+  paintHistory.value=recordPhotoEdit(paintHistory.value,currentPhotoEdits())
+}
+function travelPhotoEdit(delta:-1|1):void{
+  if(cropBusy.value||draftStroke.value)return
+  const next=travelPhotoHistory(paintHistory.value,delta)
+  if(!next)return
+  paintHistory.value=next.history
+  textMarks.value=[...next.snapshot.text]
+  shapeMarks.value=[...next.snapshot.shapes]
+  strokeMarks.value=[...next.snapshot.strokes]
+  if(!textMarks.value.some(mark=>mark.id===selectedTextId.value))
+    selectedTextId.value=null
+  if(!shapeMarks.value.some(mark=>mark.id===selectedShapeId.value))
+    selectedShapeId.value=null
+  invalidateTextOutput()
+}
+function resetPhotoAnnotations():void{
+  if(cropBusy.value||draftStroke.value)return
+  if(!textMarks.value.length&&!shapeMarks.value.length
+    &&!strokeMarks.value.length)return
+  textMarks.value=[]
+  shapeMarks.value=[]
+  strokeMarks.value=[]
+  selectedTextId.value=null
+  selectedShapeId.value=null
+  invalidateTextOutput()
+  commitPhotoEdit()
+}
 function replaceTextMarks(updated:PhotoTextMark[]):void{
   if(cropBusy.value)return
   textMarks.value=updated
   invalidateTextOutput()
+  if(!draggingMark)commitPhotoEdit()
 }
 function clearTextMarks():void{
   ++textRevision
   textMarks.value=[]
   shapeMarks.value=[]
+  strokeMarks.value=[]
+  draftStroke.value=null
+  strokePointer=null
+  activePaintTool.value=null
+  paintHistory.value=initialPhotoHistory()
   selectedTextId.value=null
   selectedShapeId.value=null
   draggingMark=null
@@ -159,6 +220,7 @@ function replaceShapeMarks(marks:PhotoShapeMark[]):void{
   if(cropBusy.value)return
   shapeMarks.value=marks
   invalidateTextOutput()
+  if(!draggingShape)commitPhotoEdit()
 }
 function addPhotoShape():void{
   if(!cropResult.value||cropBusy.value||shapeMarks.value.length>=MAX_SHAPE_MARKS)return
@@ -247,6 +309,7 @@ function endShapeDrag(event:PointerEvent):void{
   if(target.hasPointerCapture(event.pointerId))
     target.releasePointerCapture(event.pointerId)
   draggingShape=null
+  commitPhotoEdit()
 }
 function addPhotoText():void{
   if(!cropResult.value||cropBusy.value||textMarks.value.length>=MAX_TEXT_MARKS)return
@@ -326,6 +389,89 @@ function stopPhotoTextDrag(event:PointerEvent):void{
   if(element.hasPointerCapture(event.pointerId))
     element.releasePointerCapture(event.pointerId)
   draggingMark=null
+  commitPhotoEdit()
+}
+function choosePhotoTool(tool:StrokeTool):void{
+  if(cropBusy.value||!cropResult.value)return
+  if(composedPhotoUrl.value)invalidateTextOutput()
+  activePaintTool.value=activePaintTool.value===tool?null:tool
+}
+function setPaintColor(event:Event):void{
+  paintColor.value=(event.target as HTMLInputElement).value
+}
+function setPaintWidth(event:Event):void{
+  const next=Number((event.target as HTMLInputElement).value)
+  if(Number.isSafeInteger(next)&&next>=2&&next<=36)
+    paintWidth.value=next
+}
+function strokePoint(event:PointerEvent,canvas:HTMLCanvasElement):StrokePoint|null{
+  const rect=canvas.getBoundingClientRect()
+  if(rect.width<1||rect.height<1)return null
+  return {
+    x:Math.max(0,Math.min(1000,Math.round(
+      (event.clientX-rect.left)/rect.width*1000))),
+    y:Math.max(0,Math.min(1000,Math.round(
+      (event.clientY-rect.top)/rect.height*1000))),
+  }
+}
+function beginPaintStroke(event:PointerEvent):void{
+  const canvas=paintCanvas.value,tool=activePaintTool.value
+  if(!canvas||!tool||!cropResult.value||cropBusy.value
+    ||draftStroke.value||strokeMarks.value.length>=MAX_PHOTO_STROKES
+    ||event.pointerType==='mouse'&&event.button!==0)return
+  if(tool==='eraser'&&!strokeMarks.value.length)return
+  const total=strokeMarks.value.reduce((n,item)=>n+item.points.length,0)
+  if(total>=MAX_TOTAL_STROKE_POINTS)return
+  const point=strokePoint(event,canvas)
+  if(!point)return
+  strokePointer=event.pointerId
+  draftStroke.value={
+    id:crypto.randomUUID(),tool,color:paintColor.value,
+    width:paintWidth.value,points:[point],
+  }
+  canvas.setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+function updatePaintStroke(event:PointerEvent):void{
+  const stroke=draftStroke.value,canvas=paintCanvas.value
+  if(!stroke||!canvas||strokePointer!==event.pointerId
+    ||cropBusy.value)return
+  const point=strokePoint(event,canvas)
+  const last=stroke.points[stroke.points.length-1]
+  if(!point||last&&last.x===point.x&&last.y===point.y)return
+  const total=strokeMarks.value.reduce((n,item)=>n+item.points.length,0)
+  if(stroke.points.length>=MAX_STROKE_POINTS
+    ||total+stroke.points.length>=MAX_TOTAL_STROKE_POINTS)return
+  draftStroke.value={...stroke,points:[...stroke.points,point]}
+}
+function finishPaintStroke(event:PointerEvent,cancel=false):void{
+  const canvas=paintCanvas.value,stroke=draftStroke.value
+  if(strokePointer!==event.pointerId)return
+  strokePointer=null
+  if(canvas?.hasPointerCapture(event.pointerId))
+    canvas.releasePointerCapture(event.pointerId)
+  draftStroke.value=null
+  if(cancel||!stroke||cropBusy.value)return
+  strokeMarks.value=[...strokeMarks.value,stroke]
+  invalidateTextOutput()
+  commitPhotoEdit()
+}
+function renderPaintCanvas():void{
+  const canvas=paintCanvas.value,result=cropResult.value
+  if(!canvas||!result||composedPhotoUrl.value)return
+  const scale=Math.min(1,900/result.width,900/result.height,
+    (canvas.clientWidth||result.width)*(window.devicePixelRatio||1)/result.width)
+  const width=Math.max(1,Math.round(result.width*scale))
+  const height=Math.max(1,Math.round(result.height*scale))
+  if(canvas.width!==width||canvas.height!==height){
+    canvas.width=width;canvas.height=height
+  }
+  const ctx=canvas.getContext('2d')
+  if(!ctx)return
+  ctx.clearRect(0,0,width,height)
+  const strokes=draftStroke.value
+    ?[...strokeMarks.value,draftStroke.value]:strokeMarks.value
+  if(strokes.length)drawPhotoStrokes(ctx,width,height,strokes)
 }
 function clearCrop():void{
   clearComposition()
@@ -550,9 +696,19 @@ async function navigate(item:CatalogItem|null):Promise<void>{
   })
 }
 function onKeyDown(event:KeyboardEvent):void{
-  if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey
-    ||event.target instanceof HTMLElement&&event.target.closest(
-      'input,textarea,select,video,audio,button,[contenteditable="true"]'))return
+  if(event.defaultPrevented||event.altKey)return
+  const editing=event.target instanceof HTMLElement&&!!event.target.closest(
+    'input,textarea,select,video,audio,button,[contenteditable="true"]')
+  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'
+    &&!editing&&cropResult.value){
+    const direction=event.shiftKey?1:-1
+    if(direction===-1?canUndoPhoto.value:canRedoPhoto.value){
+      event.preventDefault()
+      travelPhotoEdit(direction)
+    }
+    return
+  }
+  if(event.ctrlKey||event.metaKey||editing)return
   if(event.key==='ArrowLeft'&&adjacent.value.previous){
     event.preventDefault();void navigate(adjacent.value.previous)
   }else if(event.key==='ArrowRight'&&adjacent.value.next){
@@ -613,10 +769,11 @@ async function createCroppedPhoto():Promise<void>{
 async function preparedCropWithText(
   source:Blob,marks:readonly PhotoTextMark[],
   shapes:readonly PhotoShapeMark[],
+  strokes:readonly PhotoStroke[],
 ):Promise<Blob>{
   validateTextMarks(marks)
-  if(!marks.length&&!shapes.length)return source
-  return (await flattenPhotoAnnotations(source,marks,shapes)).blob
+  if(!marks.length&&!shapes.length&&!strokes.length)return source
+  return (await flattenPhotoAnnotations(source,marks,shapes,strokes)).blob
 }
 function setComposedCrop(blob:Blob):void{
   clearComposition()
@@ -630,18 +787,21 @@ async function saveCroppedPhoto():Promise<void>{
   const version=textRevision
   const marks=textMarks.value.map(mark=>({...mark}))
   const shapes=shapeMarks.value.map(shape=>({...shape}))
+  const strokes=strokeMarks.value.map(stroke=>({...stroke,
+    points:stroke.points.map(point=>({...point})),
+  }))
   if(!session||!result||!name||cropBusy.value||preview.value?.type!=='photo'
     ||cropSavedId.value)return
   cropBusy.value=true;cropError.value='';cropNotice.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes)
+    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes,strokes)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
     const id=await enqueueEncryptedMedia(
       new File([flattened],name,{type:'image/jpeg'}))
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch
       &&version===textRevision){
-      if(marks.length||shapes.length)setComposedCrop(flattened)
+      if(marks.length||shapes.length||strokes.length)setComposedCrop(flattened)
       cropSavedId.value=id
       cropNotice.value='Новая JPEG-копия зашифрована в очереди Browser. Облачная синхронизация подтверждается отдельно.'
       void refreshIndex()
@@ -660,18 +820,22 @@ async function downloadCroppedPhoto():Promise<void>{
   const epoch=cropEpoch,currentEpoch=fileEpoch,version=textRevision
   const marks=textMarks.value.map(mark=>({...mark}))
   const shapes=shapeMarks.value.map(shape=>({...shape}))
+  const strokes=strokeMarks.value.map(stroke=>({...stroke,
+    points:stroke.points.map(point=>({...point})),
+  }))
   if(!session||!result||!cropUrl.value||!name||cropBusy.value
     ||preview.value?.type!=='photo')return
   if(!window.confirm('Скачать JPEG-копию на устройство? Файл будет вне защищённого Browser и может появиться в системной галерее.'))return
   cropBusy.value=true;cropError.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes)
+    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes,strokes)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
-    if((marks.length||shapes.length)&&!composedPhotoUrl.value)
+    if((marks.length||shapes.length||strokes.length)&&!composedPhotoUrl.value)
       setComposedCrop(flattened)
     const anchor=document.createElement('a')
-    anchor.href=marks.length||shapes.length?composedPhotoUrl.value:cropUrl.value
+    anchor.href=marks.length||shapes.length||strokes.length
+      ?composedPhotoUrl.value:cropUrl.value
     anchor.download=name
     anchor.rel='noopener'
     document.body.appendChild(anchor)
@@ -833,6 +997,9 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
+watch([paintCanvas,strokeMarks,draftStroke,cropResult,compositionWidth],()=>{
+  renderPaintCanvas()
+},{flush:'post'})
 watch(photoComposition,element=>{
   compositionObserver?.disconnect()
   compositionObserver=null
@@ -979,6 +1146,19 @@ onUnmounted(()=>{
           {{ cropBusy?'Обработка…':'Создать JPEG-копию' }}
         </button>
         <div v-if="cropResult&&cropUrl" class="file-viewer-still-preview">
+          <div class="file-viewer-photo-history-bar">
+            <button type="button" data-testid="file-viewer-photo-undo"
+              :disabled="!canUndoPhoto||cropBusy"
+              @click="travelPhotoEdit(-1)">↶ Отменить</button>
+            <button type="button" data-testid="file-viewer-photo-redo"
+              :disabled="!canRedoPhoto||cropBusy"
+              @click="travelPhotoEdit(1)">Повторить ↷</button>
+            <button type="button" data-testid="file-viewer-photo-reset"
+              :disabled="cropBusy||!canUndoPhoto"
+              @click="resetPhotoAnnotations">Сбросить аннотации</button>
+          </div>
+          <p class="muted">Undo/Redo восстанавливает текст, фигуры и штрихи.
+            Кадрирование и цветовые параметры пока не входят в историю.</p>
           <div class="file-viewer-photo-composition-wrap">
             <div ref="photoComposition" class="file-viewer-photo-composition"
               data-testid="file-viewer-photo-composition">
@@ -1015,11 +1195,20 @@ onUnmounted(()=>{
                   <path v-else d="M50 2 L63 34 L97 37
                     L72 59 L80 95 L50 78 L20 95 L28 59 L3 37 L37 34 Z"/>
                 </svg>
+                <canvas ref="paintCanvas"
+                  class="file-viewer-photo-paint-layer"
+                  :class="{drawing:!!activePaintTool}"
+                  :aria-label="activePaintTool?'Рисование на фотографии':'Слой рисунка'"
+                  data-testid="file-viewer-photo-paint-canvas"
+                  @pointerdown="beginPaintStroke"
+                  @pointermove="updatePaintStroke"
+                  @pointerup="finishPaintStroke"
+                  @pointercancel="finishPaintStroke($event,true)"/>
                 <button v-for="mark in textMarks" :key="mark.id"
                   type="button" class="file-viewer-photo-text-layer"
                   :class="{selected:selectedTextId===mark.id}"
                   :data-testid="'file-viewer-text-layer-'+mark.id"
-                  :disabled="cropBusy" :style="{
+                  :disabled="cropBusy||!!activePaintTool" :style="{
                     left:mark.x+'%',top:mark.y+'%',
                     maxWidth:(100-mark.x)+'%',
                     fontSize:photoTextFont(mark),color:mark.color,
@@ -1036,6 +1225,40 @@ onUnmounted(()=>{
           </div>
           <p class="muted">{{ cropResult.width }} × {{ cropResult.height }}
             · {{ croppedFileName }}</p>
+          <div class="file-viewer-photo-text-editor"
+            data-testid="file-viewer-photo-draw-editor">
+            <div class="file-viewer-photo-text-head">
+              <strong>Рисовать ({{ strokeMarks.length }}/{{ MAX_PHOTO_STROKES }})</strong>
+              <div class="file-viewer-photo-draw-tools">
+                <button type="button" data-testid="file-viewer-tool-brush"
+                  :class="{selected:activePaintTool==='brush'}"
+                  :disabled="cropBusy" @click="choosePhotoTool('brush')">Кисть</button>
+                <button type="button" data-testid="file-viewer-tool-pencil"
+                  :class="{selected:activePaintTool==='pencil'}"
+                  :disabled="cropBusy" @click="choosePhotoTool('pencil')">Карандаш</button>
+                <button type="button" data-testid="file-viewer-tool-eraser"
+                  :class="{selected:activePaintTool==='eraser'}"
+                  :disabled="cropBusy" @click="choosePhotoTool('eraser')">Ластик</button>
+              </div>
+            </div>
+            <div class="file-viewer-photo-text-settings">
+              <label>Цвет кисти / карандаша
+                <input type="color" :value="paintColor"
+                  :disabled="cropBusy" data-testid="file-viewer-paint-color"
+                  @input="setPaintColor">
+              </label>
+              <label>Толщина · {{ paintWidth }}
+                <input type="range" min="2" max="36" step="1"
+                  :value="paintWidth" :disabled="cropBusy"
+                  data-testid="file-viewer-paint-width"
+                  @input="setPaintWidth">
+              </label>
+            </div>
+            <p class="muted">Выберите инструмент и рисуйте на фотографии.
+              Ластик стирает только нанесённые штрихи, не оригинал,
+              текст или фигуры. Рисунок хранится только в памяти
+              до зашифрованного сохранения копии.</p>
+          </div>
           <div class="file-viewer-photo-text-editor"
             data-testid="file-viewer-photo-text-editor">
             <div class="file-viewer-photo-text-head">
@@ -1171,10 +1394,10 @@ onUnmounted(()=>{
               </label>
             </div>
           </div>
-          <p v-if="textMarks.length||shapeMarks.length" class="muted">
-            При сохранении или скачивании надписи и фигуры превращаются
-            в пиксели JPEG. Ни черновики, ни параметры фигур не отправляются
-            серверу открытым текстом.</p>
+          <p v-if="textMarks.length||shapeMarks.length||strokeMarks.length"
+            class="muted">При сохранении или скачивании надписи, фигуры
+            и штрихи превращаются в пиксели JPEG. Ни черновики, ни параметры
+            рисунка не отправляются серверу открытым текстом.</p>
           <div class="file-viewer-still-actions">
             <button type="button" :disabled="cropBusy||!!cropSavedId"
               data-testid="file-viewer-save-crop" @click="saveCroppedPhoto">
@@ -1192,8 +1415,10 @@ onUnmounted(()=>{
         <p class="muted">Копия — независимый личный E2EE-файл. Доступы,
           GPS, задание и TTL оригинала автоматически не наследуются.
           Яркость, контраст и насыщенность применяются к пикселям
-          только при создании копии. Надписи и фигуры накладываются
-          поверх итогового кадра. Это не маска приватности.</p>
+          только при создании копии. Надписи, фигуры и отдельный
+          рисованный слой накладываются поверх итогового кадра.
+          Ластик не удаляет пиксели исходной фотографии.
+          Это не маска приватности.</p>
         <p v-if="cropNotice" role="status" data-testid="file-viewer-crop-status">
           {{ cropNotice }}</p>
         <p v-if="cropError" role="alert" data-testid="file-viewer-crop-error">
