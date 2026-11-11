@@ -15,6 +15,7 @@ import { prepareMediaPrivateFields, validateMediaPrivateRequirements } from '../
 import type { MediaPrivateFields } from '../../media/domain/media-crypto'
 import { EMPTY_ADVANCED_RULES, normalizeAdvancedRules, validateAdvancedFields } from '../domain/advanced-rules'
 import {inspectAssignmentRemovalNotices} from './verify-removal-notice'
+import {appendBoundedUuidPage} from './bounded-uuid-pages'
 import type {AssignmentRemovalNotice,CheckedAssignmentRemovalNotice} from './verify-removal-notice'
 import type { AdvancedRules } from '../domain/advanced-rules'
 
@@ -1136,6 +1137,26 @@ export async function listServerAssignments(after?:string):Promise<{
 }
 
 /**
+ * Owner and contributor overview: fetch every authenticated, signed server
+ * page instead of silently hiding all assignments past the first 50.
+ * Keep each exact source policy's existing independent verification.
+ */
+export async function listAllServerAssignments():Promise<AssignmentListing[]>{
+  const session=requireSession()
+  let items:AssignmentListing[]=[]
+  let after:string|null=null
+  for(let n=0;n<100;n++){
+    const page=await listServerAssignments(after??undefined)
+    assertSame(session)
+    const next=appendBoundedUuidPage(items,page,after,item=>item.assignmentId)
+    items=next.items
+    if(next.nextCursor===null)return items
+    after=next.nextCursor
+  }
+  throw Error('assignment.overview_pagination_limit')
+}
+
+/**
  * A previously verified policy can be read offline for local-only capture.
  * A server can still reject a later upload if membership or state changed.
  */
@@ -1729,13 +1750,30 @@ export async function listCachedAssignmentInvites():Promise<ReceivedAssignmentIn
 export async function listAssignmentInvites():Promise<ReceivedAssignmentInvite[]>{
   const s=requireSession()
   if(s.online&&(typeof navigator==='undefined'||navigator.onLine)){
-    const response=await jsonApi<{items:ReceivedAssignmentInvite[]}>(
-      '/assignments/v1/invites/received')
-    assertSame(s)
+    let items:ReceivedAssignmentInvite[]=[]
+    let after:string|null=null
+    let complete=false
+    for(let n=0;n<100;n++){
+      const response=await jsonApi<{
+        items:ReceivedAssignmentInvite[];nextCursor:string|null
+      }>('/assignments/v1/invites/received'
+        +(after?'?after='+encodeURIComponent(after):''))
+      assertSame(s)
+      const next=appendBoundedUuidPage(items,response,after,item=>item.inviteId)
+      items=next.items
+      if(next.nextCursor===null){complete=true;break}
+      after=next.nextCursor
+    }
+    if(!complete)throw Error('assignment.inbox_pagination_limit')
+    // Do not treat a partial/failed page chain as an authoritative inbox.
+    // Cache all validated pages only after the chain is complete.
     await db.transaction('rw',db.invites,async()=>{
-      for(const item of response.items)await db.invites.put({...item,cachedForAccountId:s.accountId})
+      for(const item of items)await db.invites.put({
+        ...item,cachedForAccountId:s.accountId,
+      })
     })
-    return response.items
+    assertSame(s)
+    return items
   }
   // No authority is claimed for stale local grants; these are display-only
   // ciphertext invitations until a fresh server-authenticated accept.
