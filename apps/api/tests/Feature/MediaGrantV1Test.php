@@ -718,6 +718,38 @@ final class MediaGrantV1Test extends TestCase
         DB::table('media_files_v1')->where('id',$safe['id'])
             ->update(['contract_hash'=>$safe['hash']]);
 
+        // Archived derivatives must not remain available even to the owner
+        // through a stored preview policy. Restoring just the archive flag
+        // does not emit or publish any new grant.
+        $archiveId=(string)Str::uuid();
+        DB::table('browser_archive_entries_v1')->insert([
+            'id'=>$archiveId,
+            'account_id'=>$this->people['owner']['id'],
+            'kind'=>'media','asset_id'=>$safe['id'],
+            'revision'=>1,'state'=>'archived',
+            'asset_expires_at_ms'=>$safe['expiresAt'],
+            'archive_until_ms'=>now()->addDay()->getTimestampMs(),
+            'media_type'=>'photo','plain_bytes'=>300,
+            'last_operation_id'=>(string)Str::uuid(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertGone();
+        DB::table('browser_archive_entries_v1')->where('id',$archiveId)
+            ->update(['state'=>'restored']);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertOk()->assertJsonPath('published',false);
+
+        $event=DB::table('media_file_preview_policy_events_v1')->first();
+        DB::table('media_file_preview_policy_events_v1')
+            ->where('operation_id',$event->operation_id)
+            ->update(['contract_hash'=>str_repeat('f',64)]);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertConflict();
+        DB::table('media_file_preview_policy_events_v1')
+            ->where('operation_id',$event->operation_id)
+            ->update(['contract_hash'=>$event->contract_hash]);
+
         DB::table('media_files_v1')->where('id',$source['id'])
             ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
         $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
