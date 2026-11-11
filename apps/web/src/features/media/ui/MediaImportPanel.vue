@@ -130,11 +130,19 @@ async function more():Promise<void>{
   }catch(e){error.value=explanation(e)}
   finally{busy.value=false}
 }
-watch(activeSession,()=>{
-  gpsRequest++;privateGps.value=null;gpsError.value=''
-  privateCategory.value='';privateDescription.value='';privateTags.value=''
-  clearPreview()
-  local.value=[];cloud.value=[];cursor.value=null
+watch(activeSession,(next,previous)=>{
+  // Changing connectivity or refreshing auth replaces the Session object.
+  // Never erase a user's typed private import metadata on the SAME device:
+  // this form is Local-First and may be completed fully offline.
+  const switched=next?.accountId!==previous?.accountId
+    ||next?.deviceId!==previous?.deviceId
+  if(switched){
+    gpsRequest++;gpsLoading.value=false
+    privateGps.value=null;gpsError.value=''
+    privateCategory.value='';privateDescription.value='';privateTags.value=''
+    clearPreview()
+    local.value=[];cloud.value=[];cursor.value=null
+  }
   void refresh()
 })
 onMounted(()=>{detach=attachMediaOutboxLifecycle();void refresh()})
