@@ -291,7 +291,22 @@ function refresh():void{
     await hydrate()
   })
 }
-watch(activeSession,()=>{
+function sameIdentity(
+  a:typeof activeSession.value,b:typeof activeSession.value,
+):boolean{
+  return !!a&&!!b&&a.accountId===b.accountId
+    &&a.deviceId===b.deviceId
+    &&a.pkg.accountSpki===b.pkg.accountSpki
+    &&a.pkg.revision===b.pkg.revision
+}
+watch(activeSession,(next,previous)=>{
+  // Background proof/online refresh may replace the Session object while
+  // a user is editing a private preview or signing an editorial link.
+  // Never destroy that work unless the cryptographic identity changed.
+  if(sameIdentity(next,previous)){
+    if(next?.online&&!previous?.online)void hydrate()
+    return
+  }
   recipientPeer.value=null;ownerPeer.value=null
   outgoing.value=[];incoming.value=[];safeCandidates.value=[]
   previewCandidate.value=null
