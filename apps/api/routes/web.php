@@ -197,5 +197,8 @@ Route::prefix('matrix/v1')->middleware('throttle:40,1')->group(function(){
     // Only the authenticated PB3 owner may read/store a signed opaque
     // Matrix 4S key envelope. Never a public recipient/room-key endpoint.
     Route::get('/recovery/ssss',[MatrixRecoveryEscrowController::class,'mine']);
+    // Rewrap-only access to the last signed encrypted revision: owner auth
+    // and client AEAD/root verification required, never a current receipt.
+    Route::get('/recovery/ssss/previous',[MatrixRecoveryEscrowController::class,'previous']);
     Route::post('/recovery/ssss',[MatrixRecoveryEscrowController::class,'store']);
 });
