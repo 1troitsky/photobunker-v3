@@ -1341,6 +1341,20 @@ onUnmounted(()=>{
                   @pointercancel="stopPhotoTextDrag">
                   {{ mark.text }}
                 </button>
+                <button v-for="mask in photoBlackouts" :key="mask.id"
+                  type="button" class="file-viewer-photo-blackout-layer"
+                  :class="{selected:selectedBlackoutId===mask.id}"
+                  :data-testid="'file-viewer-blackout-layer-'+mask.id"
+                  :disabled="cropBusy||!!activePaintTool"
+                  :style="{left:mask.x+'%',top:mask.y+'%',
+                    width:mask.width+'%',height:mask.height+'%'}"
+                  :aria-label="'Закрытая область '+mask.x+' '+mask.y"
+                  @click="selectPhotoBlackout(mask.id)"
+                  @pointerdown="beginBlackoutDrag($event,mask.id)"
+                  @pointermove="moveBlackoutDrag"
+                  @pointerup="endBlackoutDrag"
+                  @pointercancel="endBlackoutDrag">
+                </button>
               </template>
             </div>
           </div>
@@ -1515,10 +1529,66 @@ onUnmounted(()=>{
               </label>
             </div>
           </div>
-          <p v-if="textMarks.length||shapeMarks.length||strokeMarks.length"
-            class="muted">При сохранении или скачивании надписи, фигуры
-            и штрихи превращаются в пиксели JPEG. Ни черновики, ни параметры
-            рисунка не отправляются серверу открытым текстом.</p>
+          <div v-if="!showBefore" class="file-viewer-photo-text-editor"
+            data-testid="file-viewer-photo-blackout-editor">
+            <div class="file-viewer-photo-text-head">
+              <strong>Закрыть области ({{ photoBlackouts.length }}/{{ MAX_PHOTO_BLACKOUTS }})</strong>
+              <button type="button" data-testid="file-viewer-add-blackout"
+                :disabled="cropBusy||photoBlackouts.length>=MAX_PHOTO_BLACKOUTS"
+                @click="addPhotoBlackout">Закрыть область</button>
+            </div>
+            <p class="muted">Полностью непрозрачный чёрный прямоугольник.
+              Его пиксели записываются поверх готового изображения
+              в новой личной JPEG-копии. Исходный файл остаётся доступным
+              в рамках собственных разрешений.</p>
+            <div v-for="(mask,index) in photoBlackouts" :key="mask.id"
+              class="file-viewer-photo-text-row"
+              :class="{selected:selectedBlackoutId===mask.id}">
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-select-blackout-'+index"
+                @click="selectPhotoBlackout(mask.id)">
+                Область {{ index+1 }} · {{ mask.width }}×{{ mask.height }}%
+              </button>
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-delete-blackout-'+index"
+                @click="deletePhotoBlackout(mask.id)">Удалить</button>
+            </div>
+            <div v-if="selectedBlackout" class="file-viewer-photo-text-settings">
+              <label>Слева (%)
+                <input type="number" min="0" :max="100-selectedBlackout.width"
+                  step="1" :value="selectedBlackout.x" :disabled="cropBusy"
+                  data-testid="file-viewer-blackout-x"
+                  @input="editPhotoBlackout('x',$event)">
+              </label>
+              <label>Сверху (%)
+                <input type="number" min="0" :max="100-selectedBlackout.height"
+                  step="1" :value="selectedBlackout.y" :disabled="cropBusy"
+                  data-testid="file-viewer-blackout-y"
+                  @input="editPhotoBlackout('y',$event)">
+              </label>
+              <label>Ширина (%)
+                <input type="number" min="5" :max="100-selectedBlackout.x"
+                  step="1" :value="selectedBlackout.width" :disabled="cropBusy"
+                  data-testid="file-viewer-blackout-width"
+                  @input="editPhotoBlackout('width',$event)">
+              </label>
+              <label>Высота (%)
+                <input type="number" min="5" :max="100-selectedBlackout.y"
+                  step="1" :value="selectedBlackout.height" :disabled="cropBusy"
+                  data-testid="file-viewer-blackout-height"
+                  @input="editPhotoBlackout('height',$event)">
+              </label>
+            </div>
+            <p class="muted">Это не публикация Safe Media и не отзыв
+              доступа к оригиналу. Безопасность публичной версии требует
+              отдельной проверки прав доступа и метаданных.</p>
+          </div>
+          <p v-if="textMarks.length||shapeMarks.length||strokeMarks.length
+            ||photoBlackouts.length" class="muted">
+            При сохранении или скачивании надписи, фигуры, штрихи и
+            закрытые области превращаются в пиксели нового JPEG.
+            Редактируемые черновики не отправляются серверу открытым текстом.
+          </p>
           <div v-if="!showBefore" class="file-viewer-still-actions">
             <button type="button" :disabled="cropBusy||!!cropSavedId"
               data-testid="file-viewer-save-crop" @click="saveCroppedPhoto">
