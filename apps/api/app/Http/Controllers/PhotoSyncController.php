@@ -21,7 +21,13 @@ final class PhotoSyncController extends Controller
         }
         $query=DB::table('photo_records')
           ->where('account_id',$account->id)
-          ->where('state','active')->where('expires_at','>',PhotoSync::nowMs());
+          ->where('state','active')->where('expires_at','>',PhotoSync::nowMs())
+          ->whereNotExists(static function($q){
+              $q->selectRaw('1')->from('browser_archive_entries_v1 as archive')
+                  ->whereColumn('archive.asset_id','photo_records.id')
+                  ->where('archive.kind','photo')
+                  ->whereIn('archive.state',['archived','deleting']);
+          });
         if ($after!==null) $query->where('id','>',$after);
         $rows=$query->orderBy('id')->limit(51)
           ->get(['id','expires_at','metadata_asset_id']);
