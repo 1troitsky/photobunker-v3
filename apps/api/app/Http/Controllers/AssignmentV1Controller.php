@@ -988,7 +988,12 @@ final class AssignmentV1Controller extends Controller
     public function inbox(Request $r)
     {
         [$actor]=$this->sync->actor($r);
-        $rows=DB::table('assignment_invites_v1 as i')
+        $after=$r->query('after');
+        if($after!==null){
+            abort_unless(is_string($after),422);
+            P::uuid($after);
+        }
+        $q=DB::table('assignment_invites_v1 as i')
             ->join('assignment_records_v1 as a','a.id','=','i.assignment_id')
             ->join('identity_accounts as o','o.id','=','i.owner_account_id')
             ->where('i.recipient_account_id',$actor->id)
@@ -1011,19 +1016,25 @@ final class AssignmentV1Controller extends Controller
                               ->orWhere('a.files_access_until','>',PhotoSync::nowMs());
                         });
                 });
-            })
-            ->orderBy('i.id')->limit(50)
+            });
+        if($after!==null)$q->where('i.id','>',$after);
+        $rows=$q->orderBy('i.id')->limit(51)
             ->get(['i.id','i.assignment_id','i.state','i.role',
               'i.contract_json','i.owner_signature','i.expires_at',
               'o.account_spki','i.owner_account_id']);
-        return $this->sync->json(['items'=>$rows->map(fn($x)=>[
-            'inviteId'=>$x->id,'assignmentId'=>$x->assignment_id,
-            'ownerAccountId'=>$x->owner_account_id,
-            'ownerAccountSpki'=>$x->account_spki,
-            'role'=>$x->role,'state'=>$x->state,
-            'expiresAt'=>(int)$x->expires_at,
-            'contract'=>$x->contract_json,'signature'=>$x->owner_signature,
-        ])->all()]);
+        $more=$rows->count()>50;
+        $page=$rows->take(50);
+        return $this->sync->json([
+            'items'=>$page->map(static fn($x)=>[
+                'inviteId'=>$x->id,'assignmentId'=>$x->assignment_id,
+                'ownerAccountId'=>$x->owner_account_id,
+                'ownerAccountSpki'=>$x->account_spki,
+                'role'=>$x->role,'state'=>$x->state,
+                'expiresAt'=>(int)$x->expires_at,
+                'contract'=>$x->contract_json,'signature'=>$x->owner_signature,
+            ])->values()->all(),
+            'nextCursor'=>$more?$page->last()->id:null,
+        ]);
     }
 
     /**
