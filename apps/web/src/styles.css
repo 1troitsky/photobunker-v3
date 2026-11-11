@@ -224,3 +224,56 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .browser-item.photo-row .browser-item-actions{display:flex;flex-direction:row}
 .browser-item.photo-row{border-top:1px solid var(--outline)}
 @media(max-width:600px){.browser-item-actions button{padding:7px 9px}}
+
+
+/* P2 File Viewer 1.0: one media stage; no automatic export or OS gallery write. */
+.browser-item-actions a{display:inline-flex;align-items:center;justify-content:center;
+  min-height:36px;padding:7px 12px;border:1px solid #555;border-radius:7px;
+  color:inherit;text-decoration:none;font-size:12px}
+.browser-item-actions a:focus-visible,.file-viewer a:focus-visible,
+.file-viewer button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.file-viewer{max-width:960px}
+.file-viewer-header{display:flex;gap:16px;align-items:center;justify-content:space-between}
+.file-viewer-header h1{font-size:20px;margin:0 0 4px}
+.file-viewer-header>div{min-width:0;flex:1}
+.file-viewer-header .muted{margin:0;font-family:ui-monospace,monospace}
+.file-viewer-back{text-decoration:none;color:var(--accent);white-space:nowrap}
+.file-viewer-navigation{display:flex;gap:15px;align-items:center;justify-content:center;
+  padding:14px 0}
+.file-viewer-navigation button{width:42px;height:42px;display:grid;place-items:center;
+  font-size:28px;line-height:1}
+.file-viewer-navigation span{font-size:12px;min-width:145px;text-align:center}
+.file-viewer-stage{height:min(55dvh,535px);min-height:240px;background:#090909;
+  border:1px solid #343434;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  position:relative}
+.file-viewer-stage:fullscreen{height:100dvh;border:0;border-radius:0;background:#000}
+.file-viewer-stage img,.file-viewer-stage video{width:100%;height:100%;object-fit:contain;
+  user-select:none}
+.file-viewer-stage video{max-width:100%;max-height:100%}
+.file-viewer-wait{text-align:center;color:#aaa;font-size:13px}
+.file-viewer-audio{display:flex;flex-direction:column;align-items:center;
+  gap:26px;width:100%;padding:18px;max-width:620px}
+.file-viewer-audio>span{font-size:68px;color:#a0caaa}
+.file-viewer-audio audio{display:block;width:100%}
+.file-viewer-information{margin:14px 0;padding:14px 0}
+.file-viewer-info-heading{display:flex;gap:14px;justify-content:space-between;align-items:flex-start}
+.file-viewer-info-heading>div{flex:1;min-width:0}
+.file-viewer-info-heading h2{font-size:17px;overflow-wrap:anywhere;margin:0 0 5px}
+.file-viewer-info-heading .muted{margin:0}
+.file-viewer-information dl{display:grid;grid-template-columns:minmax(100px,155px) minmax(0,1fr);
+  gap:10px 12px;margin:16px 0;font-size:12px}
+.file-viewer-information dt{color:#aaa}
+.file-viewer-information dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.file-viewer-information dd code{font-size:11px;user-select:all}
+@media(max-width:560px){
+  .file-viewer-header{gap:8px;flex-wrap:wrap}
+  .file-viewer-header h1{font-size:16px}
+  .file-viewer-header button{font-size:11px;padding:9px}
+  .file-viewer-stage{height:47dvh;min-height:210px}
+  .file-viewer-navigation{gap:8px}
+  .file-viewer-information dl{grid-template-columns:95px minmax(0,1fr)}
+}
+@media(prefers-reduced-motion:reduce){
+  .file-viewer *{scroll-behavior:auto;transition:none;animation:none}
+}

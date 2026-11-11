@@ -2,6 +2,11 @@
 import { useRoute } from 'vue-router'
 import { brand } from './config/brand'
 const route = useRoute()
+function isActive(to:string):boolean {
+  return route.path===to
+    ||to==='/assignments'&&route.path.startsWith('/assignments/')
+    ||to==='/browser'&&route.path.startsWith('/browser/')
+}
 // Canonical default only. User-editable 3–6 Dock (with mandatory Settings)
 // belongs to accepted App Appearance 1.3 and will be wired in P2.
 const dock = [
@@ -34,8 +39,8 @@ const dock = [
     <nav class="shell-dock" aria-label="Главная навигация">
       <RouterLink
         v-for="item in dock" :key="item.to" :to="item.to"
-        :class="{ active: (route.path === item.to || (item.to === '/assignments' && route.path.startsWith('/assignments/'))) }"
-        :aria-current="(route.path === item.to || (item.to === '/assignments' && route.path.startsWith('/assignments/'))) ? 'page' : undefined"
+        :class="{ active: isActive(item.to) }"
+        :aria-current="isActive(item.to) ? 'page' : undefined"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
