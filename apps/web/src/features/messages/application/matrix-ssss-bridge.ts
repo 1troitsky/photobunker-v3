@@ -56,17 +56,18 @@ export async function getVerifiedPB3Matrix4SKey(
   const raw=await recoverMatrixSecretStorageKey()
   checked()
   if(!raw)return null
-  let allowed=false
+  let released=false
   try{
-    allowed=await client.secretStorage.checkKey(raw,info)
+    const allowed=await client.secretStorage.checkKey(raw,info)
       &&await client.secretStorage.checkKey(raw,offered.keys[keyId]!)
     checked()
     if(!allowed)throw Error('matrix.ssss_wrong_key')
     // Ownership of these fresh bytes passes directly to the official SDK;
     // the wrapper never logs or persists them. SDK may retain a temporary
     // copy; the next integration must verify its lifetime on real devices.
+    released=true
     return [keyId,raw]
   }finally{
-    if(!allowed)raw.fill(0)
+    if(!released)raw.fill(0)
   }
 }
