@@ -9,7 +9,7 @@ import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
 import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../features/assignments/domain/advanced-rules'
 import {
-  listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
+  listAllServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
   signedMediaCaptureIntent,signedAllowedAssignmentMedia,
   signedPolicyRequirements,signedMediaRequirements,signedAdvancedRequirements,
   readCachedPrivateAssignment,assignmentPrivateCacheScope,verifySignedAssignmentPolicy,
@@ -129,7 +129,7 @@ async function refreshPolicies():Promise<void> {
   policyNotice.value=''
   try{
     if(session.online && navigator.onLine){
-      try{await listServerAssignments()}
+      try{await listAllServerAssignments()}
       catch{if(ownsCamera(identity,generation))policyNotice.value='Не удалось обновить политики. Используются ранее проверенные.'}
     }
     const found=await listVerifiedCapturePolicies()
@@ -431,6 +431,12 @@ async function capture():Promise<void> {
   busy.value=true;error.value='';message.value=''
   try{
     if(captureMode.value!=='photo')throw Error('camera.photo_mode_changed')
+    // Snapshot private fields at shutter click, before asynchronous JPEG
+    // rendering. User edits during toBlob cannot silently change evidence.
+    const privateFields={
+      category:category.value,description:description.value,gps:gps.value,
+      tags:parseRulesCsv(privateTags.value,12,48),
+    }
     const ratio=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight))
     const canvas=document.createElement('canvas')
     canvas.width=Math.max(1,Math.round(v.videoWidth*ratio))
@@ -452,12 +458,8 @@ async function capture():Promise<void> {
     // An offline photo carries an independently verified, versioned and
     // device-signed snapshot of the assignment policy. Personal v1 stays available.
     const capturedAt=startedAt
-    // Snapshot these fields once. Validation and the encrypted metadata
-    // must refer to the same input even if UI changes during async binding.
-    const privateFields={
-      category:category.value,description:description.value,gps:gps.value,
-      tags:parseRulesCsv(privateTags.value,12,48),
-    }
+    // The policy binding and encrypted metadata use the SAME fields
+    // frozen at shutter click, not values edited while Canvas ran.
     const binding=assignmentAtCapture
       ?await signedCaptureBinding(assignmentAtCapture,capturedAt,privateFields)
       :undefined
