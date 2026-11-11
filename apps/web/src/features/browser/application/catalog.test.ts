@@ -123,8 +123,11 @@ describe('Browser size ordering',()=>{
   })
   it('does not interpret invalid or missing measurements as zero bytes',()=>{
     const rows=buildCatalog(
-      [],[],[media('valid','audio',1000),media('invalid','video',2000)],[],
-    ).map(row=>({...row,bytes:row.id==='valid'?0:Number.NaN}))
+      [],[],[media('valid','audio',1000)],[
+        {...remoteMedia('invalid','video'),plainBytes:Number.NaN},
+      ],
+    ).map(row=>({...row,bytes:row.id==='valid'?0:row.bytes}))
+    expect(rows.find(row=>row.id==='invalid')?.bytes).toBeNull()
     expect(filterCatalog(rows,{type:'all',query:'',sort:'size-largest'})
       .map(x=>x.id)).toEqual(['valid','invalid'])
     expect(filterCatalog(rows,{type:'all',query:'',sort:'size-smallest'})
