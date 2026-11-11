@@ -29,7 +29,11 @@ final class AssignmentGrantScope
             ->where('assignment_id',$assignmentId)
             ->where('recipient_account_id',$contributorId)
             ->where('role','contributor')
-            ->where('state','accepted')->exists();
+            ->where('state','accepted')
+            ->whereNotExists(static function($rev){
+                $rev->selectRaw('1')->from('assignment_member_removals_v1 as removed')
+                    ->whereColumn('removed.invite_id','assignment_invites_v1.id');
+            })->exists();
         abort_unless($member,403);
         foreach([
             $assignment->files_access_until,
@@ -38,6 +42,22 @@ final class AssignmentGrantScope
             abort_unless($cutoff===null
                 ||$grantExpiresAt<=(int)$cutoff,422);
         }
+    }
+
+    /** An immutable owner-signed removal outranks stale mutable invite state. */
+    public static function requireAccepted(
+        string $assignmentId,string $ownerAccountId,string $contributorId
+    ):void {
+        abort_unless(DB::table('assignment_invites_v1 as i')
+            ->where('i.assignment_id',$assignmentId)
+            ->where('i.owner_account_id',$ownerAccountId)
+            ->where('i.recipient_account_id',$contributorId)
+            ->where('i.role','contributor')
+            ->where('i.state','accepted')
+            ->whereNotExists(static function($rev){
+                $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                    ->whereColumn('rm.invite_id','i.id');
+            })->exists(),410);
     }
 
     public static function requireReadable(?string $assignmentId):void
