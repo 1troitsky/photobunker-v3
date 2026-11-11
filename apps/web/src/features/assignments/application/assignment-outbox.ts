@@ -2073,8 +2073,6 @@ export async function queueAssignmentMediaSubmission(
   if(!media||media.state!=='synced'||media.expiresAt<=Date.now()
     ||!['photo','video','audio'].includes(media.mediaType))
     throw Error('assignment.media_not_synced')
-  if(media.mediaType==='photo'&&media.capture)
-    throw Error('assignment.p2_photo_capture_not_supported')
   if(!signedAllowedAssignmentMedia(listing).includes(media.mediaType))
     throw Error('assignment.media_type_not_allowed')
   const grant=(await listOutgoingMediaGrants()).find(x=>
@@ -2125,7 +2123,8 @@ export async function queueAssignmentMediaSubmission(
   }
   const op=await signedOperation('media-submit',
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/media-submissions',{
-      version:isP2Photo?3:media.capture?2:1,submissionId:crypto.randomUUID(),
+      version:isP2Photo?(media.capture?4:3):media.capture?2:1,
+      submissionId:crypto.randomUUID(),
       operationId:crypto.randomUUID(),assignmentId,
       contributorAccountId:session.accountId,
       mediaId,mediaGrantId,mediaContractHash,
