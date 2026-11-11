@@ -1,6 +1,6 @@
 # PB3 · 2026-11-11 · P2 Matrix trust / real recovery checkpoint
 
-**Фактическая база:** `main @ a8abcc55e73ea0a2d8be3a24052f814906b8bd1d`. Все Matrix-изменения пока в **зависимой Draft-цепочке** #64 → #66 → #67 → #68 → #69 → #70 → #71 → #72 → #73. Не merge/deploy.
+**Фактический `main`:** `a8abcc55e73ea0a2d8be3a24052f814906b8bd1d`. **Общий предок Matrix-ветки и `main`:** `2c8ad9f6` (сравнение: 96 commits впереди и 1 документационный commit позади). Reconciliation перед merge НЕ выполнен. Все Matrix-изменения пока в **зависимой Draft-цепочке** #64 → #66 → #67 → #68 → #69 → #70 → #71 → #72 → #73. Не merge/deploy.
 
 ## Что доказано
 
