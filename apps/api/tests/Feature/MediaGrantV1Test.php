@@ -200,7 +200,7 @@ final class MediaGrantV1Test extends TestCase
         $owner=$this->people['owner'];
         $mediaId=(string)Str::uuid();
         $expires=$expiresAt??now()->addDay()->getTimestampMs();
-        $chunks=[];$firstChunk='';
+        $chunks=[];$pendingChunks=[];$firstChunk='';
         foreach(['data','metadata'] as $kind){
             $chunkId=(string)Str::uuid();
             if($firstChunk==='')$firstChunk=$chunkId;
@@ -214,7 +214,7 @@ final class MediaGrantV1Test extends TestCase
             $chunks[]=$chunk;
             $key='cipher/media/v1/'.$owner['id'].'/'.$mediaId.'/'.$chunkId;
             Storage::disk('ciphertext')->put($key,$cipher);
-            $pendingChunks[]=['chunk'=>$chunk,'key'=>$key];
+            $pendingChunks[]=['chunk'=>$chunk,'key'=>$key,'kind'=>$kind];
 
         }
         $contract=json_encode([
@@ -241,7 +241,7 @@ final class MediaGrantV1Test extends TestCase
             'created_at'=>now(),'updated_at'=>now(),
         ]);
         foreach($pendingChunks as $item){
-            $chunk=$item['chunk'];$key=$item['key'];$chunkId=$chunk['chunkId'];
+            $chunk=$item['chunk'];$key=$item['key'];$chunkId=$chunk['chunkId'];$kind=$item['kind'];
             DB::table('media_chunks_v1')->insert([
                 'id'=>$chunkId,'media_id'=>$mediaId,
                 'chunk_index'=>$chunk['index'],'kind'=>$kind,
