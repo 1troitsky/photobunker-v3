@@ -302,7 +302,11 @@ final class AssignmentV1Controller extends Controller
             abort_unless(DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
                 ->where('recipient_account_id',$actor->id)
-                ->where('state','accepted')->exists(),404);
+                ->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->exists(),404);
         }
         $events=DB::table('assignment_private_events_v1')
             ->where('assignment_id',$assignmentId)
@@ -418,7 +422,11 @@ final class AssignmentV1Controller extends Controller
             abort_unless(DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
                 ->where('recipient_account_id',$actor->id)
-                ->where('state','accepted')->exists(),404);
+                ->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->exists(),404);
         }
         $events=DB::table('assignment_retention_events_v1')
             ->where('assignment_id',$assignmentId)->orderBy('to_revision')
@@ -550,7 +558,11 @@ final class AssignmentV1Controller extends Controller
             abort_unless(DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
                 ->where('recipient_account_id',$actor->id)
-                ->where('state','accepted')->exists(),404);
+                ->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->exists(),404);
         }
         $events=DB::table('assignment_schedule_events_v1')
             ->where('assignment_id',$assignmentId)
@@ -849,7 +861,11 @@ final class AssignmentV1Controller extends Controller
             abort_unless(DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
                 ->where('recipient_account_id',$actor->id)
-                ->where('state','accepted')->exists(),404);
+                ->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->exists(),404);
         }
         $events=DB::table('assignment_policy_events_v1')
             ->where('assignment_id',$assignmentId)
