@@ -232,9 +232,9 @@ final class BrowserArchiveTest extends TestCase
                 ->assertCreated();
         }
         // The job is explicitly disabled on every normal deployment.
-        $service=app(\\App\\Browser\\ArchiveLifecycle::class);
+        $service=app(\App\Browser\ArchiveLifecycle::class);
         try{$service->sweepDue(50);$this->fail('sweep must remain gated');}
-        catch(\\RuntimeException $e){
+        catch(\RuntimeException $e){
             $this->assertSame('browser.archive_cleanup_disabled',$e->getMessage());
         }
         config()->set('browser_archive.auto_cleanup_enabled',true);
