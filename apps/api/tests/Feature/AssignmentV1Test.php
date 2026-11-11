@@ -1460,6 +1460,69 @@ final class AssignmentV1Test extends TestCase
         ]);
     }
 
+    public function test_p1_owner_photo_submissions_paginate_beyond_fifty_with_scoped_cursor():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $contributor=$this->people['recipient']['account'];
+        $owner=$this->people['owner']['account'];
+        $device=$this->people['recipient']['device'];
+        $expiry=now()->addDay()->getTimestampMs();
+        $grantExpiry=now()->addHour()->getTimestampMs();
+        $photos=[];$grants=[];$receipts=[];
+        for($i=0;$i<52;$i++){
+            $photo=(string)Str::uuid();
+            $grant=(string)Str::uuid();
+            $photos[]=[
+                'id'=>$photo,'account_id'=>$contributor,'device_id'=>$device,
+                'operation_id'=>(string)Str::uuid(),'state'=>'active',
+                'expires_at'=>$expiry,'contract_hash'=>str_repeat('a',64),
+                'contract_json'=>'{}','signature'=>'fixture',
+                'created_at'=>now(),'updated_at'=>now(),
+            ];
+            $grants[]=[
+                'id'=>$grant,'photo_id'=>$photo,'owner_account_id'=>$contributor,
+                'recipient_account_id'=>$owner,
+                'recipient_key_digest'=>str_repeat('b',64),
+                'expires_at'=>$grantExpiry,'state'=>'active',
+                'contract_hash'=>str_repeat('c',64),
+                'contract_json'=>'{}','account_signature'=>'fixture',
+                'created_at'=>now(),'updated_at'=>now(),
+            ];
+            $receipts[]=[
+                'id'=>(string)Str::uuid(),'assignment_id'=>$this->assignmentId,
+                'contributor_account_id'=>$contributor,'photo_id'=>$photo,
+                'photo_grant_id'=>$grant,'operation_id'=>(string)Str::uuid(),
+                'policy_revision'=>1,'contract_hash'=>str_repeat('d',64),
+                'contract_json'=>'{}','contributor_signature'=>'fixture',
+                'created_at'=>now(),
+            ];
+        }
+        DB::table('photo_records')->insert($photos);
+        DB::table('photo_access_grants')->insert($grants);
+        DB::table('assignment_submissions_v1')->insert($receipts);
+        $this->as('owner');
+        $url='/assignments/v1/'.$this->assignmentId.'/submissions';
+        $first=$this->getJson($url)->assertOk()
+            ->assertJsonCount(50,'items')->json();
+        $this->assertSame($first['items'][49]['submissionId'],
+            $first['nextCursor']);
+        $second=$this->getJson($url.'?after='.$first['nextCursor'])
+            ->assertOk()->assertJsonCount(2,'items')->json();
+        $this->assertNull($second['nextCursor']);
+        $this->assertCount(52,array_unique(array_merge(
+            array_column($first['items'],'submissionId'),
+            array_column($second['items'],'submissionId'),
+        )));
+        $this->getJson($url.'?after=not-a-uuid')
+            ->assertUnprocessable();
+        $this->getJson($url.'?after='.$second['items'][1]['submissionId'])
+            ->assertOk()->assertJsonPath('items',[]);
+        $this->as('outsider');
+        $this->getJson($url.'?after='.$first['nextCursor'])
+            ->assertNotFound();
+    }
+
     private function signedMediaPolicyV3(array $allowed,int $from=1):array
     {
         $a=DB::table('assignment_records_v1')

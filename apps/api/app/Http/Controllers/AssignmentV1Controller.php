@@ -1087,7 +1087,12 @@ final class AssignmentV1Controller extends Controller
         $assignment=$this->assignment($assignmentId);
         abort_unless($assignment->owner_account_id===$actor->id,404);
         abort_unless(R::filesOpen($assignment),404);
-        $rows=DB::table('assignment_submissions_v1 as s')
+        $after=$r->query('after');
+        if($after!==null){
+            abort_unless(is_string($after),422);
+            P::uuid($after);
+        }
+        $query=DB::table('assignment_submissions_v1 as s')
             ->join('photo_records as p','p.id','=','s.photo_id')
             ->join('photo_access_grants as g','g.id','=','s.photo_grant_id')
             ->where('s.assignment_id',$assignmentId)
@@ -1096,13 +1101,19 @@ final class AssignmentV1Controller extends Controller
             ->whereColumn('g.owner_account_id','s.contributor_account_id')
             ->where('g.recipient_account_id',$assignment->owner_account_id)
             ->where('p.state','active')->where('p.expires_at','>',PhotoSync::nowMs())
-            ->where('g.state','active')->where('g.expires_at','>',PhotoSync::nowMs())
-            ->orderBy('s.id')->limit(50)
+            ->where('g.state','active')->where('g.expires_at','>',PhotoSync::nowMs());
+        if($after!==null)$query->where('s.id','>',$after);
+        $rows=$query->orderBy('s.id')->limit(51)
             ->get(['s.id','s.photo_id','s.photo_grant_id','s.contributor_account_id']);
-        return $this->sync->json(['items'=>$rows->map(fn($x)=>[
+        $more=$rows->count()>50;
+        $items=$rows->take(50)->map(static fn($x)=>[
             'submissionId'=>$x->id,'photoId'=>$x->photo_id,
             'photoGrantId'=>$x->photo_grant_id,
             'contributorAccountId'=>$x->contributor_account_id,
-        ])->all()]);
+        ])->values()->all();
+        return $this->sync->json([
+            'items'=>$items,
+            'nextCursor'=>$more&&$items!==[]?end($items)['submissionId']:null,
+        ]);
     }
 }

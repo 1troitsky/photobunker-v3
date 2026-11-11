@@ -8,7 +8,7 @@ import {
   listCachedAssignmentInvites,
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
-  queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
+  queueAssignmentSubmission, listAssignmentSubmissionsPage, flushAssignmentOutbox,
   queueAssignmentMediaSubmission, listAssignmentMediaSubmissions,
   signedAllowedAssignmentMedia,
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
@@ -72,6 +72,8 @@ const mediaNextCursor=ref<string|null>(null)
 const loadingMoreMedia=ref(false)
 const verifiedMediaReceipts=ref<Record<string,boolean>>({})
 const submissions=ref<Submission[]>([])
+const photoNextCursor=ref<string|null>(null)
+const loadingMorePhotos=ref(false)
 const selectedId=ref('')
 const title=ref('')
 const instructions=ref('')
@@ -188,7 +190,8 @@ function resetSensitive():void {
   mediaFiles.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
   mediaNextCursor.value=null
   monthlyUsage.value=null
-  submissions.value=[];selectedId.value='';ownerCheck.value=null
+  submissions.value=[];photoNextCursor.value=null
+  selectedId.value='';ownerCheck.value=null
   contributorCheck.value=null;showingOfflineSnapshot.value=false;cleanPreview()
 }
 function explain(e:unknown):string{
@@ -427,7 +430,8 @@ function choose(assignmentId:string):void{
   populateOwnerPolicyForm(chosen)
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
-  submissions.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
+  submissions.value=[];photoNextCursor.value=null
+  mediaSubmissions.value=[];verifiedMediaReceipts.value={}
   mediaNextCursor.value=null
   cleanPreview()
   if(selected.value?.isOwner)void loadSubmissions()
@@ -439,7 +443,7 @@ async function loadSubmissions():Promise<void>{
   if(!owner?.isOwner||!identity?.online)return
   try{
     const [result,mediaResult]=await Promise.all([
-      listAssignmentSubmissions(id),listAssignmentMediaSubmissions(id),
+      listAssignmentSubmissionsPage(id),listAssignmentMediaSubmissions(id),
     ])
     // A server count or an unverified string is NOT a contributor signature.
     // Only the independently fingerprint-pinned contributor root can verify
@@ -448,11 +452,32 @@ async function loadSubmissions():Promise<void>{
       mediaResult.items,id,owner.ownerAccountId)
     if(selectedId.value===id&&activeSession.value===identity){
       const page=appendOwnerMediaReceiptPage([],mediaResult,null)
-      submissions.value=result;mediaSubmissions.value=page.items
+      const photoPage=appendOwnerMediaReceiptPage([],result,null)
+      submissions.value=photoPage.items;photoNextCursor.value=photoPage.nextCursor
+      mediaSubmissions.value=page.items
       mediaNextCursor.value=page.nextCursor
       verifiedMediaReceipts.value=checks
     }
   }catch(e){error.value=explain(e)}
+}
+/** The legacy P1 photo list is also server-paged; count is not a page size. */
+async function loadMorePhotoSubmissions():Promise<void>{
+  const id=selectedId.value
+  const owner=selected.value
+  const identity=activeSession.value
+  const after=photoNextCursor.value
+  if(loadingMorePhotos.value||!after||!owner?.isOwner||!identity?.online)return
+  loadingMorePhotos.value=true
+  error.value=''
+  try{
+    const page=await listAssignmentSubmissionsPage(id,after)
+    const appended=appendOwnerMediaReceiptPage(submissions.value,page,after)
+    if(selectedId.value!==id||activeSession.value!==identity
+      ||photoNextCursor.value!==after)return
+    submissions.value=appended.items
+    photoNextCursor.value=appended.nextCursor
+  }catch(e){error.value=explain(e)}
+  finally{loadingMorePhotos.value=false}
 }
 /** Explicit bounded pagination; only server-visible submissions are displayed. */
 async function loadMoreMediaSubmissions():Promise<void>{
@@ -978,6 +1003,10 @@ onUnmounted(cleanPreview)
             <div><strong>{{ entry.photoId.slice(0,8) }}</strong><small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small></div>
             <button type="button" :disabled="busy" @click="openSubmission(entry.photoGrantId)">Просмотр</button>
           </div>
+          <button v-if="photoNextCursor" type="button"
+            :disabled="busy||loadingMorePhotos" @click="loadMorePhotoSubmissions">
+            {{ loadingMorePhotos?'Загрузка фотографий…':'Загрузить ещё фотографии' }}
+          </button>
           <div v-for="entry in mediaSubmissions" :key="entry.submissionId" class="photo-row" data-testid="assignment-media-submission">
             <div>
               <strong>{{ entry.mediaType==='video'?'Видео':entry.mediaType==='photo'?'Фото P2':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>

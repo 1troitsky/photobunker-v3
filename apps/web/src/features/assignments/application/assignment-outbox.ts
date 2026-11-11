@@ -1682,16 +1682,26 @@ export async function queueAssignmentSubmission(
   return operationId
 }
 
-export async function listAssignmentSubmissions(assignmentId:string):Promise<Array<{
+export type AssignmentPhotoSubmission={
   submissionId:string;photoId:string;photoGrantId:string;contributorAccountId:string
-}>>{
+}
+export async function listAssignmentSubmissionsPage(
+  assignmentId:string,after?:string,
+):Promise<{items:AssignmentPhotoSubmission[];nextCursor:string|null}>{
   const s=requireSession()
   if(!s.online)throw new Error('assignment.offline')
-  const result=await jsonApi<{items:Array<{
-    submissionId:string;photoId:string;photoGrantId:string;contributorAccountId:string
-  }>}>('/assignments/v1/'+encodeURIComponent(assignmentId)+'/submissions')
+  const result=await jsonApi<{
+    items:AssignmentPhotoSubmission[];nextCursor:string|null
+  }>('/assignments/v1/'+encodeURIComponent(assignmentId)+'/submissions'
+    +(after?'?after='+encodeURIComponent(after):''))
   assertSame(s)
-  return result.items
+  return result
+}
+/** Preserve the old first-page helper for existing consumer compatibility. */
+export async function listAssignmentSubmissions(
+  assignmentId:string,
+):Promise<AssignmentPhotoSubmission[]>{
+  return (await listAssignmentSubmissionsPage(assignmentId)).items
 }
 
 /** Media submission is not a legacy photo capture. The owner must
