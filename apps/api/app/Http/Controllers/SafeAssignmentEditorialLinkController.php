@@ -128,7 +128,7 @@ final class SafeAssignmentEditorialLinkController extends Controller
                 &&hash_equals(hash('sha256',$event->contract_json),
                     $event->contract_hash)
                 &&P::verify($actor->account_spki,$domain.$event->contract_json,
-                    $event->account_signature),409);
+                    $file?$event->account_signature:$event->owner_signature),409);
             try{$data=json_decode($event->contract_json,true,16,JSON_THROW_ON_ERROR);}
             catch(\Throwable){abort(409);}
             abort_unless(is_array($data)&&!array_is_list($data)
