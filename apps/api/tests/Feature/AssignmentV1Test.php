@@ -1438,6 +1438,28 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('items.0.signature',$input['signature'])
             ->assertJsonPath('items.0.contractHash',hash('sha256',$input['contract']))
             ->assertJsonPath('items.0.policyRevision',1);
+        // A member is no longer accepted: both progress and P1 owner
+        // receipt projection must stop at once, not just P2 MediaFile.
+        $this->as('owner');
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'pending']);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',0);
+        $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
+            ->assertJsonPath('items',[]);
+        // Historical signed receipt remains immutable and recoverable if
+        // membership is later restored. No personal E2EE file is deleted.
+        $this->assertDatabaseCount('assignment_submissions_v1',1);
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'accepted']);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',1);
+        $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
+            ->assertJsonCount(1,'items');
         $this->as('outsider');
         $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
             ->assertNotFound();
