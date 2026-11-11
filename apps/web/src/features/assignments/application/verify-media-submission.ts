@@ -29,7 +29,7 @@ function hexHash(value:unknown):boolean{
  */
 export function inspectMediaSubmissionReceipt(
   entry:AssignmentMediaSubmission,assignmentId:string,ownerAccountId:string,
-):{version:1|2|3;captureContract?:string;captureSignature?:string}{
+):{version:1|2|3|4;captureContract?:string;captureSignature?:string}{
   if(typeof entry.contract!=='string'||entry.contract.length>30000
     ||typeof entry.signature!=='string'||!hexHash(entry.mediaContractHash))
     throw Error('assignment.receipt_unverified')
@@ -37,8 +37,9 @@ export function inspectMediaSubmissionReceipt(
   try{c=JSON.parse(entry.contract)}catch{throw Error('assignment.receipt_unverified')}
   if(!object(c))throw Error('assignment.receipt_unverified')
   const version=c.version
-  if(version!==1&&version!==2&&version!==3
-    ||!exact(c,version===2?[...core,'captureContract','captureSignature']:core)
+  if(version!==1&&version!==2&&version!==3&&version!==4
+    ||!exact(c,version===2||version===4
+      ?[...core,'captureContract','captureSignature']:core)
     ||JSON.stringify(c)!==entry.contract
     ||c.submissionId!==entry.submissionId
     ||c.assignmentId!==assignmentId
@@ -48,12 +49,14 @@ export function inspectMediaSubmissionReceipt(
     ||c.kind!==entry.mediaType
     ||typeof c.policyRevision!=='number'
     ||!Number.isSafeInteger(c.policyRevision)
-    ||c.policyRevision<(version===3?1:2)||c.policyRevision>1001
+    ||c.policyRevision<(version===3||version===4?1:2)
+    ||c.policyRevision>1001
     ||!hexHash(c.policyHash)
-    ||entry.capturedInAssignment!==(version===2)
-    ||(version===3?entry.mediaType!=='photo':entry.mediaType==='photo'))
+    ||entry.capturedInAssignment!==(version===2||version===4)
+    ||([3,4].includes(version)
+      ?entry.mediaType!=='photo':entry.mediaType==='photo'))
     throw Error('assignment.receipt_unverified')
-  if(version!==2)return {version}
+  if(version!==2&&version!==4)return {version}
   if(typeof c.captureContract!=='string'
     ||typeof c.captureSignature!=='string')throw Error('assignment.receipt_unverified')
   let capture:unknown
@@ -94,7 +97,7 @@ async function verifySignedReceiptWithPinnedIdentity(
     'pb3.assignment-media-submit.v'+parsed.version+'\n'+entry.contract,
     entry.signature))
     throw Error('assignment.receipt_unverified')
-  if(parsed.version===2
+  if((parsed.version===2||parsed.version===4)
     &&(!parsed.captureContract||!parsed.captureSignature
       ||!await verify(key,'pb3.assignment-media-capture.v1\n'
         +parsed.captureContract,parsed.captureSignature)))
