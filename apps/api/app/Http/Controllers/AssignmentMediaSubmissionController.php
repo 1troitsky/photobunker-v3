@@ -122,7 +122,11 @@ final class AssignmentMediaSubmissionController extends Controller
             $membership=DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
                 ->where('recipient_account_id',$actor->id)
-                ->where('role','contributor')->where('state','accepted')->first();
+                ->where('role','contributor')->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->first();
             abort_unless($membership,403);
 
             $media=DB::table('media_files_v1')
@@ -261,7 +265,11 @@ final class AssignmentMediaSubmissionController extends Controller
                     ->whereColumn('i.recipient_account_id',
                         's.contributor_account_id')
                     ->where('i.role','contributor')
-                    ->where('i.state','accepted');
+                    ->where('i.state','accepted')
+                    ->whereNotExists(static function($rev){
+                        $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                            ->whereColumn('rm.invite_id','i.id');
+                    });
             })
             ->where(function($scope){
                 // P2 imported JPEG always requires an assignment-scoped
