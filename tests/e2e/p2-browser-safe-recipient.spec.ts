@@ -145,6 +145,13 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
       return await futurePolicy.isVisible()?'visible':'waiting'
     },{timeout:20000}).toBe('visible')
     await expect(futurePolicy).toBeVisible()
+    // An equivalent identity proof refresh must not destroy the already
+    // opened owner's preview form. Switching account/key still does.
+    await owner.evaluate(async()=>{
+      const auth=await import('/src/features/identity/application/session.ts')
+      await auth.reauthenticate()
+    })
+    await expect(futurePolicy).toBeVisible()
     await futurePolicy.getByTestId('media-preview-field-description').check()
     await futurePolicy.getByTestId('media-preview-field-tags').check()
     await expect(futurePolicy.getByText('публикация выключена'))
