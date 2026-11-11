@@ -25,6 +25,8 @@ import {
   MAX_TOTAL_STROKE_POINTS,
 } from '../features/browser/application/photo-strokes'
 import type {PhotoStroke,StrokeTool,StrokePoint} from '../features/browser/application/photo-strokes'
+import {MAX_PHOTO_BLACKOUTS} from '../features/browser/application/photo-blackouts'
+import type {PhotoBlackout} from '../features/browser/application/photo-blackouts'
 import {
   initialPhotoHistory,recordPhotoEdit,travelPhotoHistory,
   canPhotoUndo,canPhotoRedo,
@@ -71,6 +73,10 @@ const photoComposition=ref<HTMLElement|null>(null)
 const compositionWidth=ref(0)
 let compositionObserver:ResizeObserver|null=null
 const textMarks=ref<PhotoTextMark[]>([])
+const photoBlackouts=ref<PhotoBlackout[]>([])
+const selectedBlackoutId=ref<string|null>(null)
+const selectedBlackout=computed(()=>photoBlackouts.value.find(
+  item=>item.id===selectedBlackoutId.value)??null)
 const strokeMarks=ref<PhotoStroke[]>([])
 const draftStroke=ref<PhotoStroke|null>(null)
 const paintCanvas=ref<HTMLCanvasElement|null>(null)
@@ -86,6 +92,7 @@ const selectedShapeId=ref<string|null>(null)
 const selectedShape=computed(()=>shapeMarks.value.find(
   mark=>mark.id===selectedShapeId.value)??null)
 let draggingShape:DragMark|null=null
+let draggingBlackout:DragMark|null=null
 const selectedTextId=ref<string|null>(null)
 const selectedText=computed(()=>textMarks.value.find(
   item=>item.id===selectedTextId.value)??null)
@@ -149,6 +156,7 @@ const croppedFileName=computed(()=>{
     textMarks.value.length?'text':'',
     shapeMarks.value.length?'shape':'',
     strokeMarks.value.length?'draw':'',
+    photoBlackouts.value.length?'blackout':'',
   ].filter(Boolean).join('-')
   return layers?base.replace(/\.jpg$/,'-'+layers+'.jpg'):base
 })
@@ -165,7 +173,10 @@ function invalidateTextOutput():void{
   cropError.value=''
 }
 function currentPhotoEdits():PhotoEditSnapshot{
-  return {text:textMarks.value,shapes:shapeMarks.value,strokes:strokeMarks.value}
+  return {
+    text:textMarks.value,shapes:shapeMarks.value,strokes:strokeMarks.value,
+    blackouts:photoBlackouts.value,
+  }
 }
 function commitPhotoEdit():void{
   paintHistory.value=recordPhotoEdit(paintHistory.value,currentPhotoEdits())
@@ -178,6 +189,9 @@ function travelPhotoEdit(delta:-1|1):void{
   textMarks.value=[...next.snapshot.text]
   shapeMarks.value=[...next.snapshot.shapes]
   strokeMarks.value=[...next.snapshot.strokes]
+  photoBlackouts.value=[...next.snapshot.blackouts]
+  if(!photoBlackouts.value.some(mark=>mark.id===selectedBlackoutId.value))
+    selectedBlackoutId.value=null
   if(!textMarks.value.some(mark=>mark.id===selectedTextId.value))
     selectedTextId.value=null
   if(!shapeMarks.value.some(mark=>mark.id===selectedShapeId.value))
@@ -187,13 +201,91 @@ function travelPhotoEdit(delta:-1|1):void{
 function resetPhotoAnnotations():void{
   if(cropBusy.value||draftStroke.value||showBefore.value)return
   if(!textMarks.value.length&&!shapeMarks.value.length
-    &&!strokeMarks.value.length)return
+    &&!strokeMarks.value.length&&!photoBlackouts.value.length)return
   textMarks.value=[]
   shapeMarks.value=[]
   strokeMarks.value=[]
+  photoBlackouts.value=[]
+  selectedBlackoutId.value=null
   selectedTextId.value=null
   selectedShapeId.value=null
   invalidateTextOutput()
+  commitPhotoEdit()
+}
+function replaceBlackouts(marks:PhotoBlackout[]):void{
+  if(cropBusy.value||showBefore.value)return
+  photoBlackouts.value=marks
+  invalidateTextOutput()
+  if(!draggingBlackout)commitPhotoEdit()
+}
+function addPhotoBlackout():void{
+  if(!cropResult.value||cropBusy.value||showBefore.value
+    ||photoBlackouts.value.length>=MAX_PHOTO_BLACKOUTS)return
+  const item:PhotoBlackout={
+    id:crypto.randomUUID(),x:25,y:25,width:25,height:25,
+  }
+  replaceBlackouts([...photoBlackouts.value,item])
+  selectedBlackoutId.value=item.id
+}
+function selectPhotoBlackout(id:string):void{
+  if(cropBusy.value||showBefore.value)return
+  selectedBlackoutId.value=id
+  clearComposition()
+}
+function editPhotoBlackout(
+  key:'x'|'y'|'width'|'height',event:Event,
+):void{
+  const item=selectedBlackout.value
+  const value=Number((event.target as HTMLInputElement).value)
+  if(!item||cropBusy.value||showBefore.value||!Number.isSafeInteger(value))return
+  const max=key==='x'?100-item.width:key==='y'?100-item.height
+    :key==='width'?100-item.x:100-item.y
+  const min=key==='x'||key==='y'?0:5
+  if(max<min)return
+  replaceBlackouts(photoBlackouts.value.map(m=>m.id===item.id
+    ?{...m,[key]:Math.max(min,Math.min(max,value))}:m))
+}
+function deletePhotoBlackout(id:string):void{
+  if(cropBusy.value||showBefore.value)return
+  replaceBlackouts(photoBlackouts.value.filter(item=>item.id!==id))
+  if(selectedBlackoutId.value===id)selectedBlackoutId.value=null
+}
+function beginBlackoutDrag(event:PointerEvent,id:string):void{
+  const composition=photoComposition.value
+  const item=photoBlackouts.value.find(mark=>mark.id===id)
+  if(!composition||!item||cropBusy.value||showBefore.value
+    ||event.pointerType==='mouse'&&event.button!==0)return
+  const rect=composition.getBoundingClientRect()
+  if(rect.width<1||rect.height<1)return
+  selectedBlackoutId.value=id
+  clearComposition()
+  draggingBlackout={
+    id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,
+    originalX:item.x,originalY:item.y,width:rect.width,height:rect.height,
+  }
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+function moveBlackoutDrag(event:PointerEvent):void{
+  const drag=draggingBlackout
+  if(!drag||drag.pointerId!==event.pointerId||cropBusy.value||showBefore.value)
+    return
+  const item=photoBlackouts.value.find(mark=>mark.id===drag.id)
+  if(!item)return
+  const x=Math.max(0,Math.min(100-item.width,Math.round(
+    drag.originalX+(event.clientX-drag.startX)/drag.width*100)))
+  const y=Math.max(0,Math.min(100-item.height,Math.round(
+    drag.originalY+(event.clientY-drag.startY)/drag.height*100)))
+  if(x===item.x&&y===item.y)return
+  replaceBlackouts(photoBlackouts.value.map(mark=>mark.id===drag.id
+    ?{...mark,x,y}:mark))
+}
+function endBlackoutDrag(event:PointerEvent):void{
+  if(draggingBlackout?.pointerId!==event.pointerId)return
+  const element=event.currentTarget as HTMLElement
+  if(element.hasPointerCapture(event.pointerId))
+    element.releasePointerCapture(event.pointerId)
+  draggingBlackout=null
   commitPhotoEdit()
 }
 function replaceTextMarks(updated:PhotoTextMark[]):void{
@@ -207,6 +299,9 @@ function clearTextMarks():void{
   textMarks.value=[]
   shapeMarks.value=[]
   strokeMarks.value=[]
+  photoBlackouts.value=[]
+  selectedBlackoutId.value=null
+  draggingBlackout=null
   draftStroke.value=null
   strokePointer=null
   activePaintTool.value=null
