@@ -44,7 +44,7 @@ test('P2 M-03A: two REAL PB3 browser devices → signed cross-device revoke deni
       name:'Отключить от PB3 устройство '+firstDevice,
     }).click()
     await expect(B.getByRole('status')).toContainText(
-      'Отзыв Matrix-токена на внешнем сервере не выполнен',
+      'Отзыв Matrix-токена другого устройства на homeserver не выполнен',
     )
     await expect(B.getByTestId('device-revocation'))
       .toContainText('отключено')
@@ -62,8 +62,8 @@ test('P2 M-03A: two REAL PB3 browser devices → signed cross-device revoke deni
     // No claim is made about an independent Matrix homeserver bearer:
     // we have NOT revoked one or verified it remotely here.
 
-    // PB3 device B can revoke itself, ending its session. Matrix's
-    // independent bearer is explicitly NOT marked remotely revoked.
+    // PB3 device B can revoke itself, ending its session. Without a local
+    // Matrix binding this test cannot claim remote token revocation.
     B.once('dialog',async dialog=>{await dialog.accept()})
     await B.getByRole('button',{
       name:'Отключить от PB3 устройство '+secondDevice,
