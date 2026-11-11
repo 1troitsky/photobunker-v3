@@ -40,7 +40,7 @@ describe('owner archive preferences, Local-First + signed CAS',()=>{
     const s=await identity()
     let revision=0,stored={useArchive:true,autoDeleteAfter7Days:true}
     const operations:string[]=[]
-    api.mockImplementation(async(path:string,method?:string,body?:{
+    api.mockImplementation(async(_path:string,method?:string,body?:{
       contract:string;signature:string,
     })=>{
       expect(path).toBe('/browser/v1/archive/preferences')
