@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\IdentityController;
+use App\Http\Controllers\BrowserFolderSyncController;
 use App\Http\Controllers\PhotoSyncController;
 use App\Http\Controllers\MediaV1Controller;
 use App\Http\Controllers\MediaGrantController;
@@ -185,4 +186,12 @@ Route::prefix('teams/v2')->middleware('throttle:pb3-assignments')->group(functio
         ->whereUuid('teamId')->whereUuid('inviteId');
     Route::get('/{teamId}/member',[TeamEpochInvitationController::class,'member'])
         ->whereUuid('teamId');
+});
+
+
+// P2 Browser: authenticated account-signed opaque folder snapshots only.
+// No plaintext metadata, implied shared-media grants or physical S3 deletes.
+Route::prefix('folders/v1')->middleware('throttle:pb3-assignments')->group(function(){
+    Route::get('/snapshot',[BrowserFolderSyncController::class,'show']);
+    Route::post('/snapshot',[BrowserFolderSyncController::class,'store']);
 });
