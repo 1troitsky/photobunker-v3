@@ -13,6 +13,13 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     await owner.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(owner.getByText('Подтверждённая сессия')).toBeVisible()
     await owner.goto('/browser')
+    // Registration can leave the initial browser session offline until
+    // account proof is refreshed. Test the real authenticated outbox,
+    // not a queued-only local bootstrap.
+    await owner.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+    })
     const original=await owner.evaluate(async()=>{
       const canvas=document.createElement('canvas')
       canvas.width=320;canvas.height=240
@@ -29,6 +36,10 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
         tags:['never-share-original'],
       })
       return {id,size:source.size}
+    })
+    await owner.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      await media.synchronizeMedia()
     })
     await expect.poll(()=>owner.evaluate(async sourceId=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
