@@ -6,6 +6,11 @@ export type CatalogFilter='all'|CatalogType
 export type CatalogSort='newest'|'oldest'|'expiry'|'size-largest'|'size-smallest'
 export type CatalogView='list'|'grid'
 
+// Invalid or missing size is NOT equivalent to an empty 0-byte media file.
+function knownCatalogBytes(value:number):number|null{
+  return Number.isSafeInteger(value)&&value>=0?value:null
+}
+
 export type CatalogItem={
   key:string
   id:string
@@ -52,7 +57,7 @@ export function buildCatalog(
     rows.set(key,{
       key,id:m.mediaId,type:m.mediaType,local:true,cloud:false,
       state:m.state,createdAt:m.createdAt,expiresAt:m.expiresAt,
-      bytes:m.plainBytes,source:'media',
+      bytes:knownCatalogBytes(m.plainBytes),source:'media',
     })
   }
   for(const m of cloudMedia){
@@ -62,7 +67,7 @@ export function buildCatalog(
     else rows.set(key,{
       key,id:m.mediaId,type:m.mediaType,local:false,cloud:true,
       state:null,createdAt:null,expiresAt:m.expiresAt,
-      bytes:m.plainBytes,source:'media',
+      bytes:knownCatalogBytes(m.plainBytes),source:'media',
     })
   }
   return [...rows.values()]
