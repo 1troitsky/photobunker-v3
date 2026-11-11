@@ -55,6 +55,7 @@ test('P2 Viewer: shape stroke and fill flatten into separate E2EE JPEG without l
     await expect(page.getByTestId('file-viewer-shape-x')).toHaveValue('25')
     await expect(page.getByTestId('file-viewer-shape-y')).toHaveValue('30')
     const overlay=page.locator('.file-viewer-photo-shape-layer')
+    await overlay.scrollIntoViewIfNeeded()
     const box=await overlay.boundingBox()
     if(!box)throw Error('shape_not_positioned')
     await page.mouse.move(box.x+box.width/2,box.y+box.height/2)
