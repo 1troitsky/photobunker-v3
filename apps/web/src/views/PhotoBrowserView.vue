@@ -86,6 +86,8 @@ const archiveEntries=ref<ArchiveEntry[]>([])
 const archiveCursor=ref<string|null>(null)
 const archiveBusy=ref(false)
 const archiveNotice=ref('')
+const archiveWriteEnabled=ref(false)
+const archiveCleanupEnabled=ref(false)
 const archivedByKey=computed(()=>new Map(
   archiveEntries.value.map(entry=>[entry.kind+':'+entry.assetId,entry] as const)
 ))
@@ -131,6 +133,8 @@ async function loadArchiveMore():Promise<void>{
     archiveEntries.value=[...archiveEntries.value,
       ...page.items.filter(x=>!ids.has(x.entryId))]
     archiveCursor.value=page.nextCursor
+    archiveWriteEnabled.value=page.writeEnabled
+    archiveCleanupEnabled.value=page.autoCleanupEnabled
   }catch(e){
     if(s===activeSession.value)archiveNotice.value='Архив: '+reason(e)
   }finally{
@@ -138,7 +142,8 @@ async function loadArchiveMore():Promise<void>{
   }
 }
 async function archiveAction(item:CatalogItem,action:ArchiveAction):Promise<void>{
-  if(archiveBusy.value||busy.value||!activeSession.value?.online)return
+  if(archiveBusy.value||busy.value||!activeSession.value?.online
+    ||!archiveWriteEnabled.value)return
   const entry=archivedByKey.value.get(item.key)
   if(action!=='archive'&&!entry)return
   if(action==='delete'&&!window.confirm(
@@ -160,6 +165,8 @@ async function archiveAction(item:CatalogItem,action:ArchiveAction):Promise<void
     if(identity!==activeSession.value)return
     archiveEntries.value=page.items
     archiveCursor.value=page.nextCursor
+    archiveWriteEnabled.value=page.writeEnabled
+    archiveCleanupEnabled.value=page.autoCleanupEnabled
     void refresh()
   }catch(e){
     if(identity===activeSession.value)
@@ -438,6 +445,8 @@ async function refresh():Promise<void>{
     if(archive.status==='fulfilled'){
       archiveEntries.value=archive.value.items
       archiveCursor.value=archive.value.nextCursor
+      archiveWriteEnabled.value=archive.value.writeEnabled
+      archiveCleanupEnabled.value=archive.value.autoCleanupEnabled
     }else{
       archiveNotice.value='Статус архива не проверен: '+reason(archive.reason)
     }
@@ -566,6 +575,8 @@ watch(activeSession,(next,previous)=>{
     archiveEntries.value=[]
     archiveCursor.value=null
     archiveNotice.value=''
+    archiveWriteEnabled.value=false
+    archiveCleanupEnabled.value=false
     void loadFolders()
     void loadMergeBackups()
   }else if(next&&!folderReady.value){
@@ -733,9 +744,10 @@ onUnmounted(()=>{
           :aria-pressed="archiveTab==='archive'" @click="archiveTab='archive'">Архив</button>
       </nav>
       <p v-if="archiveTab==='archive'" class="muted">
-        Файлы остаются зашифрованными и доступны владельцу до подтверждённого
-        окончательного удаления. Архив не продлевает TTL; автоудаление
-        остаётся выключено до независимой приёмки GC.
+        Файлы остаются зашифрованными до подтверждённого окончательного
+        удаления. Архив не продлевает TTL.
+        {{ archiveCleanupEnabled?'Семидневная очистка разрешена оператором.':
+          'Автоматическая очистка выключена до независимой приёмки GC.' }}
       </p>
       <p v-if="archiveNotice" role="status" data-testid="browser-archive-status">
         {{ archiveNotice }}</p>
@@ -831,14 +843,14 @@ onUnmounted(()=>{
               </select>
             </label>
             <button v-if="archiveTab==='all'&&item.cloud" type="button"
-              :disabled="archiveBusy||busy||!activeSession.online"
+              :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled"
               :aria-label="'Архивировать файл '+item.id"
               @click="archiveAction(item,'archive')">В архив</button>
             <template v-if="archiveTab==='archive'&&archivedByKey.get(item.key)?.state==='archived'">
-              <button type="button" :disabled="archiveBusy||!activeSession.online"
+              <button type="button" :disabled="archiveBusy||!activeSession.online||!archiveWriteEnabled"
                 :aria-label="'Восстановить файл '+item.id"
                 @click="archiveAction(item,'restore')">Восстановить</button>
-              <button type="button" :disabled="archiveBusy||!activeSession.online"
+              <button type="button" :disabled="archiveBusy||!activeSession.online||!archiveWriteEnabled"
                 :aria-label="'Запросить удаление файла '+item.id"
                 @click="archiveAction(item,'delete')">Удалить окончательно</button>
             </template>
@@ -861,9 +873,13 @@ onUnmounted(()=>{
         :disabled="archiveBusy||busy" @click="loadArchiveMore">
         Ещё записи архива</button>
       <p v-if="archiveTab==='all'" class="muted">
-        Для записи в архив требуется подтверждённая серверная операция
-        (до приёмки выключена конфигурацией). Автоматическое удаление
-        из архива пока НЕ включено.</p>
+        {{ archiveWriteEnabled
+          ?'Архив доступен только для собственных файлов без действующих/исторических передач и связей с заданиями.'
+          :'Операции архива отключены сервером до приёмки.' }}
+        {{ archiveCleanupEnabled
+          ?'Серверная семидневная очистка разрешена оператором.'
+          :'Автоудаление из архива пока отключено.' }}
+      </p>
       <button v-if="photoCursor||mediaCursor" type="button"
         :disabled="busy" @click="more">Загрузить ещё</button>
       <div class="action-row">
