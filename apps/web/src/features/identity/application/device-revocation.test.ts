@@ -139,6 +139,16 @@ describe('signed PB3 device revoke does not invent Matrix remote token revocatio
     expect(result.matrixOwnTokenLogout).toBe('unconfirmed')
     expect(localLogout).toHaveBeenCalledTimes(1)
   })
+  it('does NOT log out the Matrix bearer when the PB3 signed revoke fails',async()=>{
+    const remoteLogout=vi.fn().mockResolvedValue(true)
+    prepareMatrixLogout.mockResolvedValue(remoteLogout)
+    api.mockRejectedValueOnce(Error('api.http_503'))
+    await expect(revokePB3Device(s.deviceId))
+      .rejects.toThrow('api.http_503')
+    expect(remoteLogout).not.toHaveBeenCalled()
+    expect(localClear).not.toHaveBeenCalled()
+    expect(localLogout).not.toHaveBeenCalled()
+  })
   it('refuses unsigned/offline and malicious server remote-revoked claim',async()=>{
     activeSession.value={...s,online:false}
     await expect(revokePB3Device(crypto.randomUUID()))
