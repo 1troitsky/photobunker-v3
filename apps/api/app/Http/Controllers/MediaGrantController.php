@@ -176,6 +176,7 @@ final class MediaGrantController extends Controller
             ->where('g.id',$grantId)
             ->where('g.recipient_account_id',$account->id)
             ->select('g.*','m.state as media_state',
+                'm.media_type as actual_media_type',
                 'm.expires_at as media_expires','m.contract_hash as actual_media_hash')
             ->first();
         abort_unless($grant,404);
@@ -202,12 +203,14 @@ final class MediaGrantController extends Controller
                 ->first();
             abort_if(!$source||$source->state!=='active'
                 ||$source->media_type!=='photo'
+                ||$grant->actual_media_type!=='photo'
                 ||$source->expires_at<=PhotoSync::nowMs()
                 ||$grant->media_state!=='active'
                 ||!hash_equals($source->contract_hash,
                     $grant->source_contract_hash)
                 ||DB::table('browser_archive_entries_v1')
-                    ->where('kind','media')->where('asset_id',$source->id)
+                    ->where('kind','media')
+                    ->whereIn('asset_id',[$source->id,$grant->media_id])
                     ->whereIn('state',['archived','deleting'])->exists(),410);
         }
         return $grant;
