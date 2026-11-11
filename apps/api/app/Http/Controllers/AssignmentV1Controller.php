@@ -911,12 +911,16 @@ final class AssignmentV1Controller extends Controller
             P::uuid($after);
         }
         $now=PhotoSync::nowMs();
-        $q=DB::table('assignment_invites_v1')
-            ->where('assignment_id',$a->id);
-        if($after!==null)$q->where('id','>',$after);
-        $rows=$q->orderBy('id')->limit(51)->get([
-            'id','recipient_account_id','role','state','expires_at',
-            'contract_json','owner_signature',
+        $q=DB::table('assignment_invites_v1 as i')
+            ->leftJoin('assignment_member_removals_v1 as rev',
+                'rev.invite_id','=','i.id')
+            ->where('i.assignment_id',$a->id);
+        if($after!==null)$q->where('i.id','>',$after);
+        $rows=$q->orderBy('i.id')->limit(51)->get([
+            'i.id','i.recipient_account_id','i.role','i.state','i.expires_at',
+            'i.contract_json','i.owner_signature',
+            'rev.contract_json as removal_contract',
+            'rev.owner_signature as removal_signature',
         ]);
         $more=$rows->count()>50;
         $page=$rows->take(50);
@@ -929,6 +933,8 @@ final class AssignmentV1Controller extends Controller
                 'expired'=>$x->state==='pending'&&(int)$x->expires_at<=$now,
                 'contract'=>$x->contract_json,
                 'signature'=>$x->owner_signature,
+                'removalContract'=>$x->removal_contract,
+                'removalSignature'=>$x->removal_signature,
             ])->all(),
             'nextCursor'=>$more?$page->last()->id:null,
             'serverNowMs'=>$now,
@@ -1008,6 +1014,64 @@ final class AssignmentV1Controller extends Controller
             ]);
             return $this->sync->json(['inviteId'=>$inviteId,
               'state'=>'accepted','unchanged'=>false]);
+        },3);
+    }
+
+    /**
+     * Owner-signed and durable. Removes live assignment membership, NOT the
+     * original consent record, any independent personal share or ciphertext.
+     * A replay of the SAME signed command ACKs after finish or retention.
+     */
+    public function removeMember(Request $r,string $assignmentId,string $inviteId)
+    {
+        $this->sync->origin($r);
+        [$actor]=$this->sync->actor($r);
+        $c=$this->signed($r,$actor,'pb3.assignment-member-remove.v1',[
+            'version','action','operationId','assignmentId',
+            'inviteId','ownerAccountId','recipientAccountId',
+        ]);
+        C::memberRemoval($c,$actor->id,$assignmentId,$inviteId);
+        $hash=hash('sha256',$r->json('contract'));
+        return DB::transaction(function()use($actor,$c,$assignmentId,$inviteId,$hash,$r){
+            $a=DB::table('assignment_records_v1')
+                ->where('id',$assignmentId)->lockForUpdate()->first();
+            abort_unless($a&&$a->owner_account_id===$actor->id,404);
+            $invite=DB::table('assignment_invites_v1')
+                ->where('id',$inviteId)
+                ->where('assignment_id',$assignmentId)
+                ->where('owner_account_id',$actor->id)
+                ->where('recipient_account_id',$c['recipientAccountId'])
+                ->lockForUpdate()->first();
+            abort_unless($invite,404);
+            $existing=DB::table('assignment_member_removals_v1')
+                ->where('invite_id',$inviteId)->first();
+            if($existing){
+                abort_unless($existing->operation_id===$c['operationId']
+                    &&hash_equals($existing->contract_hash,$hash),409);
+                return $this->sync->json([
+                    'inviteId'=>$inviteId,'state'=>'removed','unchanged'=>true,
+                ]);
+            }
+            // Cancel pending invitations too, but never silently re-add an
+            // invitation whose original owner signed removal is recorded.
+            abort_unless(in_array($invite->state,['pending','accepted'],true),409);
+            DB::table('assignment_member_removals_v1')->insert([
+                'operation_id'=>$c['operationId'],
+                'assignment_id'=>$assignmentId,
+                'invite_id'=>$inviteId,
+                'owner_account_id'=>$actor->id,
+                'recipient_account_id'=>$c['recipientAccountId'],
+                'contract_hash'=>$hash,
+                'contract_json'=>$r->json('contract'),
+                'owner_signature'=>$r->json('signature'),
+                'created_at'=>now(),
+            ]);
+            DB::table('assignment_invites_v1')->where('id',$inviteId)->update([
+                'state'=>'removed','updated_at'=>now(),
+            ]);
+            return $this->sync->json([
+                'inviteId'=>$inviteId,'state'=>'removed','unchanged'=>false,
+            ]);
         },3);
     }
 
