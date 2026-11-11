@@ -204,7 +204,7 @@ async function navigate(item:CatalogItem|null):Promise<void>{
 function onKeyDown(event:KeyboardEvent):void{
   if(event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey
     ||event.target instanceof HTMLElement&&event.target.closest(
-      'input,textarea,select,[contenteditable="true"]'))return
+      'input,textarea,select,video,audio,button,[contenteditable="true"]'))return
   if(event.key==='ArrowLeft'&&adjacent.value.previous){
     event.preventDefault();void navigate(adjacent.value.previous)
   }else if(event.key==='ArrowRight'&&adjacent.value.next){
