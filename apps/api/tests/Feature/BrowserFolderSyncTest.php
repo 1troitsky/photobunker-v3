@@ -123,7 +123,10 @@ final class BrowserFolderSyncTest extends TestCase
             ->assertCreated()->assertJsonPath('revision',2);
         $this->assertDatabaseCount('browser_folder_events_v1',2);
 
-        // Lost ACK retry must report its exact original revision, not new rev2.
+        // An idempotent retry must originate from its original signed device.
+        // Replaying that device's signed op from device2 is forbidden.
+        $this->postJson('/folders/v1/snapshot',$signed)->assertUnprocessable();
+        $this->as('alice');
         $this->postJson('/folders/v1/snapshot',$signed)->assertOk()
             ->assertJson(['revision'=>1,'unchanged'=>true]);
         $this->getJson('/folders/v1/snapshot')->assertOk()
@@ -168,8 +171,10 @@ final class BrowserFolderSyncTest extends TestCase
         $this->as('mallory');
         $this->getJson('/folders/v1/snapshot')->assertOk()
             ->assertJson(['revision'=>0,'contract'=>null,'signature'=>null]);
+        // Signature is bound to Alice's public key: reject before exposing
+        // whether that account's encrypted snapshot exists.
         $this->postJson('/folders/v1/snapshot',$body)
-            ->assertUnprocessable();
+            ->assertUnauthorized();
         $this->assertDatabaseCount('browser_folder_snapshots_v1',1);
     }
 
