@@ -99,12 +99,13 @@ const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
 const items=computed(()=>buildCatalog(
   localPhotos.value,[
     ...cloudPhotos.value,
-    ...archiveEntries.value.filter(x=>x.kind==='photo').map(x=>({
+    ...archiveEntries.value.filter(x=>x.kind==='photo'&&x.state!=='restored').map(x=>({
       photoId:x.assetId,expiresAt:x.expiresAt,metadataAssetId:null,
     })),
   ],localMedia.value,[
     ...cloudMedia.value,
-    ...archiveEntries.value.filter(x=>x.kind==='media'&&x.mediaType!==null).map(x=>({
+    ...archiveEntries.value.filter(x=>x.kind==='media'&&x.mediaType!==null
+      &&x.state!=='restored').map(x=>({
       mediaId:x.assetId,mediaType:x.mediaType!,plainBytes:x.plainBytes??0,
       expiresAt:x.expiresAt,
     })),
@@ -113,12 +114,13 @@ const items=computed(()=>buildCatalog(
 const visible=computed(()=>filterCatalog(items.value,{
   type:filter.value,query:search.value,sort:sort.value,
 }).filter(item=>{
-  const archived=archivedByKey.value.has(item.key)
-  if(archiveTab.value==='archive')return archived
-  return !archived&&(!folderReady.value
+  const archived=archivedByKey.value.get(item.key)?.state
+  if(archiveTab.value==='archive')return archived==='archived'||archived==='deleting'
+  return archived!=='archived'&&archived!=='deleting'&&(!folderReady.value
     ||(folderWorkspace.value.placements[item.key]??null)===selectedFolder.value)
 }))
-const pendingCount=computed(()=>items.value.filter(x=>!archivedByKey.value.has(x.key)&&x.local
+const pendingCount=computed(()=>items.value.filter(x=>!['archived','deleting'].includes(
+  archivedByKey.value.get(x.key)?.state??'')&&x.local
   &&x.state!=='synced').length)
 
 async function loadArchiveMore():Promise<void>{
