@@ -37,17 +37,19 @@ final class AssignmentMediaSubmissionController extends Controller
         $candidate=json_decode($raw['contract'],true,32);
         $v2=is_array($candidate)&&($candidate['version']??null)===2;
         $v3=is_array($candidate)&&($candidate['version']??null)===3;
+        $v4=is_array($candidate)&&($candidate['version']??null)===4;
         $keys=[
             'version','submissionId','operationId','assignmentId',
             'contributorAccountId','mediaId','mediaGrantId',
             'mediaContractHash','policyRevision','policyHash','kind',
         ];
-        if($v2)array_push($keys,'captureContract','captureSignature');
+        if($v2||$v4)array_push($keys,'captureContract','captureSignature');
         $d=C::signed($raw['contract'],$raw['signature'],
-            $actor->account_spki,$v3
-                ?'pb3.assignment-media-submit.v3'
-                :($v2?'pb3.assignment-media-submit.v2'
-                    :'pb3.assignment-media-submit.v1'),$keys);
+            $actor->account_spki,$v4
+                ?'pb3.assignment-media-submit.v4'
+                :($v3?'pb3.assignment-media-submit.v3'
+                    :($v2?'pb3.assignment-media-submit.v2'
+                        :'pb3.assignment-media-submit.v1')),$keys);
         C::mediaSubmission($d,$actor->id,$assignmentId);
         $hash=hash('sha256',$raw['contract']);
 
@@ -74,11 +76,12 @@ final class AssignmentMediaSubmissionController extends Controller
                 &&R::filesOpen($a,$now)
                 &&S::permits($a,$now)
                 &&(int)$a->policy_revision===$d['policyRevision'],409);
-            // V3 is deliberately ONLY the contributor's P2 PhotoMediaFile
-            // *submission consent*, NOT a recording/provenance attestation.
+            // V3 is imported P2 PhotoMediaFile consent without a camera claim.
+            // V4 requires an additional contributor account-signed camera
+            // capture assertion; it is NOT hardware/GPS provenance attestation.
             // Legacy photo_records + existing v1/v2 AV semantics stay intact.
             // Photo-only root assignments remain legitimately photo-capable.
-            $p2Photo=$d['version']===3;
+            $p2Photo=in_array($d['version'],[3,4],true);
             $policy=$a->latest_policy_contract??$a->contract_json;
             abort_unless(is_string($policy),409);
             $p=json_decode($policy,true,32,JSON_THROW_ON_ERROR);
@@ -139,7 +142,7 @@ final class AssignmentMediaSubmissionController extends Controller
                     $d['mediaContractHash']),409);
 
             $capture=null;
-            if($d['version']===2){
+            if(in_array($d['version'],[2,4],true)){
                 abort_unless(is_string($d['captureContract']??null)
                     &&is_string($d['captureSignature']??null),422);
                 $capture=C::signed($d['captureContract'],
@@ -163,11 +166,17 @@ final class AssignmentMediaSubmissionController extends Controller
                 // Server acceptance of the signed policy predates capture.
                 // Allow only bounded client clock skew. Neither this check
                 // nor the account signature attests real-world recording time.
-                $policyAccepted=DB::table('assignment_policy_events_v1')
-                    ->where('assignment_id',$assignmentId)
-                    ->where('to_revision',$d['policyRevision'])
-                    ->value('occurred_at_ms');
+                // Photo-only roots use their already signed creation as the
+                // policy's initial acceptance; AV v2 still requires an
+                // explicit signed policy amendment event.
+                $policyAccepted=$d['policyRevision']===1&&$p2Photo
+                    ?(strtotime((string)$a->created_at)*1000)
+                    :DB::table('assignment_policy_events_v1')
+                        ->where('assignment_id',$assignmentId)
+                        ->where('to_revision',$d['policyRevision'])
+                        ->value('occurred_at_ms');
                 abort_unless($policyAccepted!==null
+                    &&$policyAccepted!==false
                     &&$capture['startedAt']>=(int)$policyAccepted-120000,409);
             }
 
@@ -222,9 +231,9 @@ final class AssignmentMediaSubmissionController extends Controller
                 'policy_revision'=>$d['policyRevision'],
                 'policy_hash'=>$d['policyHash'],
                 'media_contract_hash'=>$media->contract_hash,
-                'capture_contract_json'=>$d['version']===2
+                'capture_contract_json'=>in_array($d['version'],[2,4],true)
                     ?$d['captureContract']:null,
-                'capture_signature'=>$d['version']===2
+                'capture_signature'=>in_array($d['version'],[2,4],true)
                     ?$d['captureSignature']:null,
                 'created_at'=>now(),
             ]);
