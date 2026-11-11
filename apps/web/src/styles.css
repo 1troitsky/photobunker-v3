@@ -276,6 +276,7 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .file-viewer-photo-paint-layer.drawing{pointer-events:auto;touch-action:none;cursor:crosshair}
 .file-viewer-photo-history-bar{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .file-viewer-photo-history-bar button{font-size:12px}
+.file-viewer-photo-history-bar button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
 .file-viewer-photo-draw-tools{display:flex;gap:6px;flex-wrap:wrap}
 .file-viewer-photo-draw-tools button{font-size:12px}
 .file-viewer-photo-draw-tools button.selected{border-color:var(--accent);
