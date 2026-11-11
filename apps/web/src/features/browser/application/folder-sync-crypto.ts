@@ -106,7 +106,7 @@ export async function createFolderSyncContract(
     throw Error('browser.sync_invalid_revision')
   const toRevision=fromRevision+1,keyRevision=session.pkg.revision
   const clear=encoder.encode(JSON.stringify(workspace))
-  if(clear.length>120000)throw Error('browser.folder_limit')
+  if(clear.length>120000){clear.fill(0);throw Error('browser.folder_limit')}
   const raw=crypto.getRandomValues(new Uint8Array(32))
   const iv=crypto.getRandomValues(new Uint8Array(12))
   const wrapIv=crypto.getRandomValues(new Uint8Array(12))
