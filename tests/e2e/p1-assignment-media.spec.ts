@@ -285,6 +285,35 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
         forged:forged[original.submissionId]}
     },assignmentId)
     expect(p1ReceiptProof).toEqual({verified:true,forged:false})
+    // Simulate an untrusted fresh owner device by removing ONLY its local
+    // contributor fingerprint pin. No server grant or ciphertext is touched.
+    // The owner must re-confirm the author before claiming signed consent.
+    await A.evaluate(async ({ownerId,contributorId})=>{
+      const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+        const request=indexedDB.open('pb3-recipient-peer-pins-v1')
+        request.onsuccess=()=>resolve(request.result)
+        request.onerror=()=>reject(request.error)
+      })
+      await new Promise<void>((resolve,reject)=>{
+        const tx=db.transaction('peers','readwrite')
+        tx.objectStore('peers').delete(ownerId+'/'+contributorId)
+        tx.oncomplete=()=>resolve()
+        tx.onerror=()=>reject(tx.error)
+      })
+      db.close()
+    },{ownerId,contributorId})
+    await A.getByRole('button',{name:'Обновить материалы'}).click()
+    await expect(A.getByText('Подпись отправки не проверена'))
+      .toBeVisible({timeout:20000})
+    await A.getByRole('button',{name:'Сверить ключ автора'}).click()
+    await expect(A.locator('#assignment-recipient-id')).toHaveValue(contributorId)
+    await expect(A.locator('#assignment-contributor-key-verification')).toBeVisible()
+    await A.getByLabel('Я сверил отпечаток исполнителя').check()
+    await A.getByRole('button',{name:'Подтвердить исполнителя'}).click()
+    // No reloading pages, no fake optimistic grant: only after freshly
+    // verified contributor P-256 receipt does the owner UI turn verified.
+    await expect(A.getByText('Подпись отправки проверена'))
+      .toBeVisible({timeout:20000})
     await expect(A.getByRole('button',{name:'Просмотр'})).toHaveCount(1)
     await A.getByRole('button',{name:'Просмотр'}).click()
     await expect(A.getByTestId('assignment-decrypted-private-metadata'))

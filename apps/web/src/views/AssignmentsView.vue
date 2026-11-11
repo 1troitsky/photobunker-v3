@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
@@ -21,7 +21,7 @@ import {
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
   CaptureRequirements, AssignmentMonthlyUsage, AllowedAssignmentMedia,
-  AssignmentMediaSubmission,
+  AssignmentMediaSubmission, AssignmentPhotoSubmission,
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import { preflightAssignmentMediaGrant } from '../features/assignments/application/media-submission-preflight'
@@ -60,7 +60,7 @@ type VisibleAssignment={
   blockBeforeStart:boolean;blockAfterEnd:boolean
 }
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
-type Submission={submissionId:string;photoId:string;photoGrantId:string;contributorAccountId:string}
+type Submission=AssignmentPhotoSubmission
 
 const assignments=ref<VisibleAssignment[]>([])
 const invites=ref<ReceivedAssignmentInvite[]>([])
@@ -187,7 +187,9 @@ function cleanPreview():void{
   if(previewUrl.value){URL.revokeObjectURL(previewUrl.value);previewUrl.value=''}
   previewPrivate.value=null
 }
+let receiptProofEpoch=0
 function resetSensitive():void {
+  receiptProofEpoch++
   assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
   mediaFiles.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
   mediaNextCursor.value=null
@@ -427,6 +429,7 @@ function populateOwnerPolicyForm(chosen:VisibleAssignment|undefined):void{
   ownerFormTouched.value=false
 }
 function choose(assignmentId:string):void{
+  receiptProofEpoch++
   selectedId.value=assignmentId
   const chosen=assignments.value.find(a=>a.id===assignmentId)
   populateOwnerPolicyForm(chosen)
@@ -443,6 +446,7 @@ async function loadSubmissions():Promise<void>{
   const owner=selected.value
   const identity=activeSession.value
   if(!owner?.isOwner||!identity?.online)return
+  const epoch=++receiptProofEpoch
   try{
     const [result,mediaResult]=await Promise.all([
       listAssignmentSubmissionsPage(id),listAssignmentMediaSubmissions(id),
@@ -454,7 +458,8 @@ async function loadSubmissions():Promise<void>{
       verifyMediaSubmissionReceiptPage(mediaResult.items,id,owner.ownerAccountId),
       verifyPhotoSubmissionReceiptPage(result.items,id),
     ])
-    if(selectedId.value===id&&activeSession.value===identity){
+    if(selectedId.value===id&&activeSession.value===identity
+      &&receiptProofEpoch===epoch){
       const page=appendOwnerMediaReceiptPage([],mediaResult,null)
       const photoPage=appendOwnerMediaReceiptPage([],result,null)
       submissions.value=photoPage.items;photoNextCursor.value=photoPage.nextCursor
@@ -471,6 +476,7 @@ async function loadMorePhotoSubmissions():Promise<void>{
   const owner=selected.value
   const identity=activeSession.value
   const after=photoNextCursor.value
+  const epoch=receiptProofEpoch
   if(loadingMorePhotos.value||!after||!owner?.isOwner||!identity?.online)return
   loadingMorePhotos.value=true
   error.value=''
@@ -479,6 +485,7 @@ async function loadMorePhotoSubmissions():Promise<void>{
     const appended=appendOwnerMediaReceiptPage(submissions.value,page,after)
     const photoChecks=await verifyPhotoSubmissionReceiptPage(page.items,id)
     if(selectedId.value!==id||activeSession.value!==identity
+      ||receiptProofEpoch!==epoch
       ||photoNextCursor.value!==after)return
     submissions.value=appended.items
     photoNextCursor.value=appended.nextCursor
@@ -492,6 +499,7 @@ async function loadMoreMediaSubmissions():Promise<void>{
   const owner=selected.value
   const identity=activeSession.value
   const after=mediaNextCursor.value
+  const epoch=receiptProofEpoch
   if(loadingMoreMedia.value||!after||!owner?.isOwner||!identity?.online)return
   loadingMoreMedia.value=true
   error.value=''
@@ -501,6 +509,7 @@ async function loadMoreMediaSubmissions():Promise<void>{
     const checks=await verifyMediaSubmissionReceiptPage(
       page.items,id,owner.ownerAccountId)
     if(selectedId.value!==id||activeSession.value!==identity
+      ||receiptProofEpoch!==epoch
       ||mediaNextCursor.value!==after)return
     mediaSubmissions.value=appended.items
     mediaNextCursor.value=appended.nextCursor
@@ -574,6 +583,42 @@ async function changeGoal():Promise<void>{
   })
 }
 
+/**
+ * A newly fingerprint-confirmed contributor may own receipts on page 5.
+ * Reverify only that contributor's already loaded P1/P2 receipts in place:
+ * no page rewind, no optimistic signed status, no media or DEK download.
+ */
+async function reverifyContributorReceipts(accountId:string):Promise<void>{
+  const target=selected.value
+  const identity=activeSession.value
+  if(!target?.isOwner||!identity?.online)return
+  const photos=submissions.value.filter(item=>item.contributorAccountId===accountId)
+  const media=mediaSubmissions.value.filter(item=>item.contributorAccountId===accountId)
+  const epoch=++receiptProofEpoch
+  const [photoProofs,mediaProofs]=await Promise.all([
+    verifyPhotoSubmissionReceiptPage(photos,target.id),
+    verifyMediaSubmissionReceiptPage(media,target.id,target.ownerAccountId),
+  ])
+  if(activeSession.value!==identity||selectedId.value!==target.id
+    ||receiptProofEpoch!==epoch)return
+  verifiedPhotoReceipts.value={...verifiedPhotoReceipts.value,...photoProofs}
+  verifiedMediaReceipts.value={...verifiedMediaReceipts.value,...mediaProofs}
+}
+/** Unverified row action starts a real independent fingerprint check. */
+async function inspectContributorReceipt(accountId:string):Promise<void>{
+  recipientId.value=accountId
+  ownerCheck.value=null
+  await inspectRecipient()
+  // inspectRecipient updates this ref asynchronously inside its operation.
+  const check=ownerCheck.value as SafetyCheck|null
+  if(check?.accountId===accountId&&check.confirmed){
+    try{await reverifyContributorReceipts(accountId)}
+    catch(e){error.value=explain(e)}
+  }
+  await nextTick()
+  document.getElementById('assignment-contributor-key-verification')
+    ?.scrollIntoView({behavior:'smooth',block:'center'})
+}
 async function inspectRecipient():Promise<void>{
   await operate(async()=>{
     const id=recipientId.value.trim().toLowerCase()
@@ -591,7 +636,8 @@ async function approveRecipient():Promise<void>{
     const {accountId,fingerprint}=ownerCheck.value
     await confirmPeer(accountId,fingerprint)
     ownerCheck.value={accountId,fingerprint,confirmed:true}
-    notice.value='Ключ получателя подтверждён на этом устройстве'
+    await reverifyContributorReceipts(accountId)
+    notice.value='Ключ подтверждён на этом устройстве; подписи загруженных материалов перепроверены'
   })
 }
 async function invite():Promise<void>{
@@ -992,7 +1038,7 @@ onUnmounted(cleanPreview)
           <label for="assignment-recipient-id">ID аккаунта исполнителя</label>
           <input id="assignment-recipient-id" v-model="recipientId" autocomplete="off" spellcheck="false" placeholder="UUID аккаунта">
           <button type="button" :disabled="busy||!recipientId" @click="inspectRecipient">Проверить ключ исполнителя</button>
-          <div v-if="ownerCheck" class="fingerprint-panel">
+          <div v-if="ownerCheck" id="assignment-contributor-key-verification" class="fingerprint-panel">
             <strong>Отпечаток исполнителя</strong>
             <code>{{ ownerCheck.fingerprint }}</code>
             <template v-if="!ownerCheck.confirmed">
@@ -1009,9 +1055,10 @@ onUnmounted(cleanPreview)
           <div v-for="entry in submissions" :key="entry.submissionId" class="photo-row">
             <div>
               <strong>{{ entry.photoId.slice(0,8) }}</strong>
-              <small>{{ verifiedPhotoReceipts[entry.submissionId]?'Подпись отправки проверена':'Подпись отправки не проверена — подтвердите ключ участника' }}</small>
+              <small>{{ verifiedPhotoReceipts[entry.submissionId]?'Подпись отправки проверена':'Подпись отправки не проверена' }}</small>
               <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
             </div>
+            <button v-if="!verifiedPhotoReceipts[entry.submissionId]" type="button" :disabled="busy" @click="inspectContributorReceipt(entry.contributorAccountId)">Сверить ключ автора</button>
             <button type="button" :disabled="busy" @click="openSubmission(entry.photoGrantId)">Просмотр</button>
           </div>
           <button v-if="photoNextCursor" type="button"
@@ -1022,9 +1069,10 @@ onUnmounted(cleanPreview)
             <div>
               <strong>{{ entry.mediaType==='video'?'Видео':entry.mediaType==='photo'?'Фото P2':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
               <small>{{ entry.capturedInAssignment?'Заявлена запись по заданию (не доказательство камеры)':'Личный файл · передан вручную' }}</small>
-              <small>{{ verifiedMediaReceipts[entry.submissionId]?'Подпись согласия исполнителя проверена':'Подпись согласия не проверена: подтвердите ключ участника' }}</small>
+              <small>{{ verifiedMediaReceipts[entry.submissionId]?'Подпись согласия исполнителя проверена':'Подпись согласия исполнителя не проверена' }}</small>
               <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
             </div>
+            <button v-if="!verifiedMediaReceipts[entry.submissionId]" type="button" :disabled="busy" @click="inspectContributorReceipt(entry.contributorAccountId)">Сверить ключ автора</button>
             <button type="button" :disabled="busy" @click="openMediaSubmission(entry.mediaGrantId)">Открыть медиа задания</button>
           </div>
           <button v-if="mediaNextCursor" type="button"
