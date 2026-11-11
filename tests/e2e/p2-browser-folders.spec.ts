@@ -125,50 +125,40 @@ test('P2 Browser: corrupt encrypted folder snapshot fails closed without overwri
     await page.getByRole('button',{name:'Создать',exact:true}).click()
     await expect(page.locator('.browser-folder-item')).toHaveCount(1)
 
-    const corrupted=await page.evaluate(async()=>{
+    const corrupted=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{
       const request=indexedDB.open('pb3-browser-device-folders-v1')
-      const db=await new Promise<IDBDatabase>((resolve,reject)=>{
-        request.onsuccess=()=>resolve(request.result)
-        request.onerror=()=>reject(request.error)
-      })
-      try{
+      request.onerror=()=>reject(request.error)
+      request.onsuccess=()=>{
+        const db=request.result
+        let modified=''
         const tx=db.transaction('rows','readwrite')
-        const store=tx.objectStore('rows')
-        const get=store.getAll()
-        const rows=await new Promise<Array<{key:string;ciphertext:string}>>((resolve,reject)=>{
-          get.onsuccess=()=>resolve(get.result)
-          get.onerror=()=>reject(get.error)
-        })
-        const row=rows[0]!
-        row.ciphertext=(row.ciphertext[0]==='A'?'B':'A')+row.ciphertext.slice(1)
-        store.put(row)
-        await new Promise<void>((resolve,reject)=>{
-          tx.oncomplete=()=>resolve()
-          tx.onabort=()=>reject(tx.error)
-          tx.onerror=()=>reject(tx.error)
-        })
-        return row.ciphertext
-      }finally{db.close()}
-    })
+        tx.oncomplete=()=>{db.close();resolve(modified)}
+        tx.onerror=()=>{db.close();reject(tx.error)}
+        tx.onabort=()=>{db.close();reject(tx.error)}
+        const get=tx.objectStore('rows').getAll()
+        get.onerror=()=>tx.abort()
+        get.onsuccess=()=>{
+          const row=get.result[0]
+          if(!row){tx.abort();return}
+          modified=(row.ciphertext[0]==='A'?'B':'A')+row.ciphertext.slice(1)
+          tx.objectStore('rows').put({...row,ciphertext:modified})
+        }
+      }
+    }))
     await page.reload()
     await expect(page.getByText(/Не удалось расшифровать локальные папки/))
       .toBeVisible()
     await expect(page.getByRole('button',{name:'Новая папка'})).toBeDisabled()
-    const after=await page.evaluate(async()=>{
+    const after=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{
       const request=indexedDB.open('pb3-browser-device-folders-v1')
-      const db=await new Promise<IDBDatabase>((resolve,reject)=>{
-        request.onsuccess=()=>resolve(request.result)
-        request.onerror=()=>reject(request.error)
-      })
-      try{
-        const tx=db.transaction('rows','readonly')
-        const get=tx.objectStore('rows').getAll()
-        return await new Promise<string>((resolve,reject)=>{
-          get.onsuccess=()=>resolve(get.result[0].ciphertext)
-          get.onerror=()=>reject(get.error)
-        })
-      }finally{db.close()}
-    })
+      request.onerror=()=>reject(request.error)
+      request.onsuccess=()=>{
+        const db=request.result
+        const get=db.transaction('rows','readonly').objectStore('rows').getAll()
+        get.onsuccess=()=>{db.close();resolve(get.result[0]?.ciphertext??'')}
+        get.onerror=()=>{db.close();reject(get.error)}
+      }
+    }))
     expect(after).toBe(corrupted)
   }finally{await context.close()}
 })
