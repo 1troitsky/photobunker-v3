@@ -21,6 +21,15 @@ import {
   flushFilePreviewDrafts,filePreviewDraftStatus,PREVIEW_FIELD_KEYS,
 } from '../application/media-file-preview-policy'
 import type {PreviewFields,PreviewField} from '../application/media-file-preview-policy'
+import {
+  queueEditorialLink,queueEditorialDetach,readEditorialLink,
+  flushEditorialLinks,editorialLinkState,
+} from '../application/safe-assignment-editorial'
+import type {EditorialBinding} from '../application/safe-assignment-editorial'
+import {
+  listServerAssignments,verifySignedAssignmentPolicy,
+} from '../../assignments/application/assignment-outbox'
+import type {AssignmentListing} from '../../assignments/application/assignment-outbox'
 import type {MediaMetadata} from '../domain/media-crypto'
 
 defineProps<{localMedia:StoredMedia[]}>()
@@ -43,6 +52,11 @@ const previewCandidate=ref<SafeDerivativeCandidate|null>(null)
 const previewFields=ref<PreviewFields>(emptyPreviewFields())
 const previewRevision=ref(0)
 const previewStatus=ref('none')
+const editorialCandidate=ref<SafeDerivativeCandidate|null>(null)
+const editorialAssignments=ref<AssignmentListing[]>([])
+const editorialSelection=ref('')
+const editorialBinding=ref<EditorialBinding|null>(null)
+const editorialState=ref('none')
 const previewLabels:Record<PreviewField,string>={
   description:'Описание',capturedAt:'Дата съёмки',
   updatedAt:'Дата изменения',tags:'Теги',
@@ -68,6 +82,7 @@ async function hydrate():Promise<void>{
       await ensureOwnExchangeKey()
       await flushMediaGrants()
       await flushFilePreviewDrafts()
+      await flushEditorialLinks()
     }
     const [next,localSafe]=await Promise.all([
       listOutgoingMediaGrants(),listSafeDerivativeCandidates(),
@@ -166,6 +181,67 @@ function togglePreviewField(field:PreviewField,event:Event):void{
     [field]:(event.target as HTMLInputElement).checked,
   }
 }
+function openEditorial(candidate:SafeDerivativeCandidate):void{
+  void action(async()=>{
+    if(!activeSession.value?.online)await reauthenticate()
+    editorialCandidate.value=candidate
+    editorialBinding.value=null
+    editorialAssignments.value=[]
+    editorialSelection.value=''
+    let cursor:string|undefined
+    do{
+      const page=await listServerAssignments(cursor)
+      for(const row of page.items){
+        if(row.ownerAccountId!==activeSession.value?.accountId)continue
+        await verifySignedAssignmentPolicy(row,false)
+        editorialAssignments.value.push(row)
+      }
+      cursor=page.nextCursor??undefined
+    }while(cursor&&editorialAssignments.value.length<60)
+    editorialState.value=await editorialLinkState(candidate.safeMediaId)
+    editorialBinding.value=await readEditorialLink(candidate.safeMediaId)
+    if(editorialBinding.value)
+      editorialSelection.value=editorialBinding.value.assignmentId
+    status.value=editorialBinding.value
+      ?'Редакционная привязка подписана и подтверждена сервером. Публичный доступ выключен.'
+      :'Выберите своё задание для явной редакционной привязки. Это не отчёт исполнителя и не публикация.'
+  })
+}
+function bindEditorial():void{
+  void action(async()=>{
+    const candidate=editorialCandidate.value
+    const assignment=editorialAssignments.value.find(
+      a=>a.assignmentId===editorialSelection.value)
+    if(!candidate||!assignment)
+      throw Error('safe_editorial.choose_owned_assignment')
+    if(!window.confirm('Связать вашу собственную закрытую копию с ВАШИМ заданием? Это только редакционная привязка, не доказательство выполнения другим участником и не публичная ссылка.'))
+      return
+    await queueEditorialLink(candidate,assignment)
+    await flushEditorialLinks()
+    editorialState.value=await editorialLinkState(candidate.safeMediaId)
+    if(editorialState.value!=='sent')
+      throw Error('safe_editorial.awaiting_server_or_conflict')
+    editorialBinding.value=await readEditorialLink(candidate.safeMediaId)
+    if(!editorialBinding.value)
+      throw Error('safe_editorial.missing_server_receipt')
+    status.value='Подписанная редакционная привязка подтверждена. Публичные поля все закрыты.'
+  })
+}
+function detachEditorial():void{
+  void action(async()=>{
+    const prior=editorialBinding.value
+    if(!prior)return
+    if(!window.confirm('Отвязать закрытую копию от задания? Подписанная история сохраняется; повторная привязка этой копии пока запрещена. Сам файл и E2EE-разрешения не удаляются.'))
+      return
+    await queueEditorialDetach(prior)
+    await flushEditorialLinks()
+    editorialState.value=await editorialLinkState(prior.safeMediaId)
+    if(editorialState.value!=='sent')
+      throw Error('safe_editorial.detach_awaiting_server')
+    editorialBinding.value=null
+    status.value='Редакционная привязка отозвана. Файлы и ключи не затронуты.'
+  })
+}
 function grantScopeLabel(row:OutgoingMediaGrant):string{
   try{
     return parseMediaGrantContract(JSON.parse(row.contract)).scope==='safe_read'
@@ -222,9 +298,17 @@ watch(activeSession,()=>{
   previewFields.value=emptyPreviewFields()
   previewRevision.value=0
   previewStatus.value='none'
+  editorialCandidate.value=null
+  editorialBinding.value=null
+  editorialAssignments.value=[]
+  editorialSelection.value=''
+  editorialState.value='none'
   void hydrate()
 })
-const refreshPreviewOutbox=()=>{void flushFilePreviewDrafts()}
+const refreshPreviewOutbox=()=>{
+  void flushFilePreviewDrafts()
+  void flushEditorialLinks()
+}
 onMounted(()=>{
   detach=attachMediaGrantLifecycle()
   window.addEventListener('online',refreshPreviewOutbox)
@@ -297,6 +381,9 @@ onUnmounted(()=>{
         <button type="button" :disabled="busy"
           data-testid="media-open-preview-draft"
           @click="openPreviewDraft(candidate)">Настроить будущую карточку</button>
+        <button type="button" :disabled="busy"
+          data-testid="media-open-editorial-binding"
+          @click="openEditorial(candidate)">Связать с моим заданием</button>
       </div>
     </template>
     <section v-if="previewCandidate" class="file-preview-settings"
@@ -328,6 +415,45 @@ onUnmounted(()=>{
         @click="savePreviewDraft">Сохранить подписанный черновик</button>
       <button type="button" :disabled="busy"
         @click="previewCandidate=null">Закрыть настройки</button>
+    </section>
+    <section v-if="editorialCandidate" class="file-preview-settings"
+      data-testid="media-editorial-assignment">
+      <strong>Редакционная привязка к вашему заданию</strong>
+      <p class="muted">Это только ваше собственное фото и его отдельная Safe-копия.
+        Привязка подписывается ключом вашего аккаунта и проверяется сервером.
+        Она НЕ подтверждает выполнение задания другим участником,
+        НЕ создаёт Public Card и НЕ передаёт оригинал или ключи.</p>
+      <label for="safe-editorial-assignment">Моё задание</label>
+      <select id="safe-editorial-assignment" v-model="editorialSelection"
+        data-testid="media-editorial-select"
+        :disabled="busy||!!editorialBinding||editorialState==='queued'
+          ||editorialState==='retry'||editorialState==='conflict'">
+        <option value="">Выберите своё задание</option>
+        <option v-for="item in editorialAssignments"
+          :key="item.assignmentId" :value="item.assignmentId">
+          {{ item.assignmentId.slice(0,8) }}
+        </option>
+      </select>
+      <p class="muted">Состояние: {{ editorialState }} ·
+        публичный просмотр/копирование/скачивание/передача выключены</p>
+      <template v-if="editorialBinding">
+        <p data-testid="media-editorial-linked">Сервер подтвердил подпись:
+          {{ editorialBinding.linkId.slice(0,8) }} ·
+          задание {{ editorialBinding.assignmentId.slice(0,8) }}</p>
+        <p class="muted">Математическое пересечение закрытых черновиков:
+          {{ Object.entries(editorialBinding.candidateFields)
+            .filter(([,enabled])=>enabled).map(([name])=>name).join(', ')||'нет полей' }}.
+          Все эффективные публичные права по-прежнему выключены.</p>
+        <button type="button" :disabled="busy" data-testid="media-editorial-detach"
+          @click="detachEditorial">Отвязать (подписанный отзыв)</button>
+      </template>
+      <button v-else type="button" :disabled="busy||!editorialSelection
+        ||editorialState==='queued'||editorialState==='retry'
+        ||editorialState==='conflict'"
+        data-testid="media-editorial-bind" @click="bindEditorial">
+        Подписать редакционную привязку</button>
+      <button type="button" :disabled="busy"
+        @click="editorialCandidate=null">Закрыть</button>
     </section>
     <h4>Исходящие разрешения медиа</h4>
     <div v-for="grant in outgoing" :key="grant.id" class="photo-row">
@@ -383,4 +509,6 @@ onUnmounted(()=>{
   repeat(auto-fit,minmax(180px,1fr));gap:8px;margin:12px 0}
 .file-preview-field-list label{display:flex;gap:8px;align-items:center}
 .file-preview-field-list input{width:18px;height:18px}
+.file-preview-settings select{max-width:100%;min-height:36px}
+.file-preview-settings button{margin:4px}
 </style>
