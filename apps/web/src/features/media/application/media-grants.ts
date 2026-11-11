@@ -10,6 +10,7 @@ import {
   ensureOwnExchangeKey,pinnedPeer,
 } from '../../sharing/key-directory'
 import {listLocalMedia,verifyReceipt} from './media-outbox'
+import {requireSafeDerivativeCandidate} from './safe-derivatives'
 import type {MediaReceipt} from './media-outbox'
 import {
   decryptMediaChunksWithDEK,validateMediaContract,
@@ -19,17 +20,19 @@ import type {MediaContract,MediaMetadata,MediaType} from '../domain/media-crypto
 const enc=new TextEncoder()
 const GRANT_DOMAIN='pb3.media-grant.v1\n'
 const SCOPED_GRANT_DOMAIN='pb3.media-grant.v2\n'
+const SAFE_GRANT_DOMAIN='pb3.media-grant.v3\n'
 const REVOKE_DOMAIN='pb3.media-revoke.v1\n'
 const URI='/media-shares/v1'
 export type MediaEnvelope={
   ephemeralSpki:string;salt:string;iv:string;ciphertext:string
 }
 export type MediaGrantContract={
-  version:1|2;grantId:string;mediaId:string
+  version:1|2|3;grantId:string;mediaId:string
   ownerAccountId:string;recipientAccountId:string
   assignmentId?:string
+  sourceMediaId?:string;sourceContractHash?:string
   recipientKeyDigest:string;mediaContractHash:string
-  scope:'read';expiresAt:number;envelope:MediaEnvelope
+  scope:'read'|'safe_read';expiresAt:number;envelope:MediaEnvelope
 }
 export type OutgoingMediaGrant={
   id:string;ownerAccountId:string;recipientAccountId:string
@@ -38,7 +41,7 @@ export type OutgoingMediaGrant={
 }
 export type ReceivedMediaGrant={
   grantId:string;mediaId:string;ownerAccountId:string
-  mediaType:MediaType;expiresAt:number
+  mediaType:MediaType;expiresAt:number;scope?:'read'|'safe_read'
 }
 type RecipientDetail={
   grantId:string;mediaId:string;ownerAccountId:string
@@ -62,9 +65,13 @@ function same(session:ReturnType<typeof requireSession>):void{
 function wrappingInfo(scope:{
   ownerAccountId:string;recipientAccountId:string
   mediaId:string;grantId:string;expiresAt:number;mediaContractHash:string
-  assignmentId?:string
+  assignmentId?:string;sourceMediaId?:string;sourceContractHash?:string
 }):string{
-  const {assignmentId,...base}=scope
+  const {assignmentId,sourceMediaId,sourceContractHash,...base}=scope
+  if(sourceMediaId&&sourceContractHash)
+    return 'pb3.media-recipient-dek.v3\n'+JSON.stringify({
+      version:3,scope:'safe_read',...base,sourceMediaId,sourceContractHash,
+    })
   return assignmentId
     ?'pb3.media-recipient-dek.v2\n'+JSON.stringify({
       version:2,scope:'read',...base,assignmentId,
@@ -80,9 +87,18 @@ export function parseMediaGrantContract(input:unknown):MediaGrantContract{
   if(Object.keys(c).sort().join('|')!==[
     'version','grantId','mediaId','ownerAccountId','recipientAccountId',
     ...(c.version===2?['assignmentId']:[]),
+    ...(c.version===3?['sourceMediaId','sourceContractHash']:[]),
     'recipientKeyDigest','mediaContractHash','scope','expiresAt','envelope',
   ].sort().join('|')
-    ||(c.version!==1&&c.version!==2)||c.scope!=='read'
+    ||(c.version!==1&&c.version!==2&&c.version!==3)
+    ||c.scope!==(c.version===3?'safe_read':'read')
+    ||(c.version===3
+      ?typeof c.sourceMediaId!=='string'
+        ||!/^([0-9a-f]{8}-[0-9a-f-]{27,})$/.test(c.sourceMediaId)
+        ||c.sourceMediaId===c.mediaId
+        ||typeof c.sourceContractHash!=='string'
+        ||!/^[a-f0-9]{64}$/.test(c.sourceContractHash)
+      :c.sourceMediaId!==undefined||c.sourceContractHash!==undefined)
     ||(c.version===2
       ?typeof c.assignmentId!=='string'
         ||!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(c.assignmentId)
@@ -115,13 +131,23 @@ export function parseMediaGrantContract(input:unknown):MediaGrantContract{
  */
 export async function queueMediaRecipientGrant(
   mediaId:string,recipientAccountId:string,assignmentId?:string,
-  maxExpiresAt?:number|null,
+  maxExpiresAt?:number|null,safeSourceMediaId?:string,
 ):Promise<string>{
   const session=requireSession()
   if(session.accountId===recipientAccountId)
     throw Error('media_grant.cannot_share_self')
+  if(safeSourceMediaId&&assignmentId)
+    throw Error('media_grant.safe_not_assignment')
+  const candidate=safeSourceMediaId
+    ?await requireSafeDerivativeCandidate(safeSourceMediaId,mediaId):null
   const peer=await pinnedPeer(recipientAccountId)
-  const row=(await listLocalMedia()).find(x=>x.mediaId===mediaId)
+  const local=await listLocalMedia()
+  const row=local.find(x=>x.mediaId===mediaId)
+  const source=safeSourceMediaId
+    ?local.find(x=>x.mediaId===safeSourceMediaId):null
+  if(candidate&&(!source||source.state!=='synced'
+    ||row?.mediaType!=='photo'||source.mediaType!=='photo'))
+    throw Error('media_grant.safe_photos_must_be_synced')
   if(!row||row.state!=='synced'||row.expiresAt<=Date.now())
     throw Error('media_grant.media_must_be_synced')
   validateMediaContract(row.contract,{
@@ -130,12 +156,17 @@ export async function queueMediaRecipientGrant(
   const grantId=crypto.randomUUID()
   const mediaContractHash=await sha(enc.encode(JSON.stringify(row.contract)))
   const expiresAt=Math.min(row.expiresAt,Date.now()+86400000,
+    source?source.expiresAt:Number.POSITIVE_INFINITY,
     assignmentId&&maxExpiresAt!=null?maxExpiresAt:Number.POSITIVE_INFINITY)
   if(expiresAt<=Date.now())throw Error('media_grant.assignment_access_expired')
   const scope={
     ownerAccountId:session.accountId,recipientAccountId,
     mediaId,grantId,expiresAt,mediaContractHash,
     ...(assignmentId?{assignmentId}:{}),
+    ...(candidate?{
+      sourceMediaId:candidate.sourceMediaId,
+      sourceContractHash:candidate.sourceContractHash,
+    }:{}),
   }
   const info=wrappingInfo(scope)
   const pair=await crypto.subtle.generateKey(
@@ -149,16 +180,21 @@ export async function queueMediaRecipientGrant(
       name:'AES-GCM',iv,additionalData:enc.encode(info),tagLength:128,
     },derived,raw)))
   const contract:MediaGrantContract={
-    version:assignmentId?2:1,grantId,mediaId,
+    version:candidate?3:assignmentId?2:1,grantId,mediaId,
     ownerAccountId:session.accountId,recipientAccountId,
     ...(assignmentId?{assignmentId}:{}),
+    ...(candidate?{
+      sourceMediaId:candidate.sourceMediaId,
+      sourceContractHash:candidate.sourceContractHash,
+    }:{}),
     recipientKeyDigest:peer.descriptorHash,mediaContractHash,
-    scope:'read',expiresAt,
+    scope:candidate?'safe_read':'read',expiresAt,
     envelope:{ephemeralSpki,salt:b64(salt),iv:b64(iv),ciphertext},
   }
   const json=JSON.stringify(contract)
   const signature=await sign(await importSigner(session.pkg.accountPkcs8),
-    (assignmentId?SCOPED_GRANT_DOMAIN:GRANT_DOMAIN)+json)
+    (candidate?SAFE_GRANT_DOMAIN:
+      assignmentId?SCOPED_GRANT_DOMAIN:GRANT_DOMAIN)+json)
   same(session)
   await db.grants.put({
     id:grantId,ownerAccountId:session.accountId,
@@ -166,6 +202,16 @@ export async function queueMediaRecipientGrant(
   })
   void flushMediaGrants()
   return grantId
+}
+/**
+ * A source-bound safe_read only exposes the distinct owner-reviewed derivative
+ * MediaFile DEK. It cannot mint an original DEK or a public anonymous token.
+ */
+export async function queueMediaSafeRecipientGrant(
+  sourceMediaId:string,safeMediaId:string,recipientAccountId:string,
+):Promise<string>{
+  return queueMediaRecipientGrant(
+    safeMediaId,recipientAccountId,undefined,undefined,sourceMediaId)
 }
 export async function listOutgoingMediaGrants():Promise<OutgoingMediaGrant[]>{
   const session=requireSession()
@@ -252,7 +298,8 @@ export async function readReceivedMediaGrant(grantId:string):Promise<{
   const peer=await pinnedPeer(contract.ownerAccountId)
   if(peer.accountSpki!==detail.ownerAccountSpki
     ||!await verify(await importSpki(peer.accountSpki),
-      (contract.version===2?SCOPED_GRANT_DOMAIN:GRANT_DOMAIN)
+      (contract.version===3?SAFE_GRANT_DOMAIN:
+        contract.version===2?SCOPED_GRANT_DOMAIN:GRANT_DOMAIN)
         +detail.contract,detail.signature))
     throw Error('media_grant.unauthenticated_owner')
   const own=await ensureOwnExchangeKey()
@@ -267,7 +314,8 @@ export async function readReceivedMediaGrant(grantId:string):Promise<{
   })
   if(JSON.stringify(media)!==detail.mediaContract
     ||media.expiresAt<=Date.now()
-    ||contract.expiresAt>media.expiresAt)
+    ||contract.expiresAt>media.expiresAt
+    ||(contract.version===3&&media.mediaType!=='photo'))
     throw Error('media_grant.invalid_media_contract')
   await verifyReceipt(media,detail.receipt)
   const info=wrappingInfo({
@@ -277,6 +325,10 @@ export async function readReceivedMediaGrant(grantId:string):Promise<{
     expiresAt:contract.expiresAt,
     mediaContractHash:contract.mediaContractHash,
     ...(contract.version===2?{assignmentId:contract.assignmentId}:{}),
+    ...(contract.version===3?{
+      sourceMediaId:contract.sourceMediaId,
+      sourceContractHash:contract.sourceContractHash,
+    }:{}),
   })
   const env=contract.envelope
   const derived=await exchangeKey(
