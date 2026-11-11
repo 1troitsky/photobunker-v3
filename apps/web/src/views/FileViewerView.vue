@@ -17,7 +17,9 @@ import {audioClipName,makeWavClip} from '../features/browser/application/audio-w
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
 import type {CropSelection,CroppedPhoto} from '../features/browser/application/photo-crop'
 import type {PhotoAdjustments} from '../features/browser/application/photo-effects'
-import {flattenPhotoText,MAX_TEXT_MARKS,validateTextMarks} from '../features/browser/application/photo-text'
+import {flattenPhotoAnnotations,MAX_TEXT_MARKS,validateTextMarks} from '../features/browser/application/photo-text'
+import {MAX_SHAPE_MARKS} from '../features/browser/application/photo-shapes'
+import type {PhotoShapeMark,ShapeKind} from '../features/browser/application/photo-shapes'
 import type {PhotoTextMark} from '../features/browser/application/photo-text'
 import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
@@ -58,6 +60,11 @@ const photoComposition=ref<HTMLElement|null>(null)
 const compositionWidth=ref(0)
 let compositionObserver:ResizeObserver|null=null
 const textMarks=ref<PhotoTextMark[]>([])
+const shapeMarks=ref<PhotoShapeMark[]>([])
+const selectedShapeId=ref<string|null>(null)
+const selectedShape=computed(()=>shapeMarks.value.find(
+  mark=>mark.id===selectedShapeId.value)??null)
+let draggingShape:DragMark|null=null
 const selectedTextId=ref<string|null>(null)
 const selectedText=computed(()=>textMarks.value.find(
   item=>item.id===selectedTextId.value)??null)
@@ -117,7 +124,9 @@ const croppedFileName=computed(()=>{
   if(!preview.value||!cropResult.value)return ''
   const base=cropFileName(preview.value.name,cropSelection.value,
     photoAdjustments.value)
-  return textMarks.value.length?base.replace(/\.jpg$/,'-text.jpg'):base
+  const layers=[textMarks.value.length?'text':'',shapeMarks.value.length?'shape':'']
+    .filter(Boolean).join('-')
+  return layers?base.replace(/\.jpg$/,'-'+layers+'.jpg'):base
 })
 function clearComposition():void{
   if(composedPhotoUrl.value)URL.revokeObjectURL(composedPhotoUrl.value)
@@ -139,9 +148,105 @@ function replaceTextMarks(updated:PhotoTextMark[]):void{
 function clearTextMarks():void{
   ++textRevision
   textMarks.value=[]
+  shapeMarks.value=[]
   selectedTextId.value=null
+  selectedShapeId.value=null
   draggingMark=null
+  draggingShape=null
   clearComposition()
+}
+function replaceShapeMarks(marks:PhotoShapeMark[]):void{
+  if(cropBusy.value)return
+  shapeMarks.value=marks
+  invalidateTextOutput()
+}
+function addPhotoShape():void{
+  if(!cropResult.value||cropBusy.value||shapeMarks.value.length>=MAX_SHAPE_MARKS)return
+  const mark:PhotoShapeMark={
+    id:crypto.randomUUID(),kind:'arrow',x:20,y:25,width:35,height:25,
+    stroke:'#1ed760',strokeWidth:6,fill:'#60a5fa',filled:false,
+  }
+  replaceShapeMarks([...shapeMarks.value,mark])
+  selectedShapeId.value=mark.id
+}
+function selectPhotoShape(id:string):void{
+  if(cropBusy.value)return
+  selectedShapeId.value=id
+  clearComposition()
+}
+function editPhotoShape(change:Partial<PhotoShapeMark>):void{
+  if(!selectedShape.value||cropBusy.value)return
+  const id=selectedShape.value.id
+  replaceShapeMarks(shapeMarks.value.map(mark=>
+    mark.id===id?{...mark,...change,id}:mark))
+}
+function deletePhotoShape(id:string):void{
+  if(cropBusy.value)return
+  replaceShapeMarks(shapeMarks.value.filter(mark=>mark.id!==id))
+  if(selectedShapeId.value===id)selectedShapeId.value=null
+}
+function setShapeKind(event:Event):void{
+  const kind=(event.target as HTMLSelectElement).value
+  if(['arrow','circle','square','triangle','star'].includes(kind))
+    editPhotoShape({kind:kind as ShapeKind})
+}
+function setShapeColor(field:'stroke'|'fill',event:Event):void{
+  editPhotoShape({[field]:(event.target as HTMLInputElement).value})
+}
+function setShapeFilled(event:Event):void{
+  editPhotoShape({filled:(event.target as HTMLInputElement).checked})
+}
+function setShapeStrokeWidth(event:Event):void{
+  const value=Number((event.target as HTMLInputElement).value)
+  if(Number.isSafeInteger(value)&&value>=1&&value<=28)
+    editPhotoShape({strokeWidth:value})
+}
+function setShapeNumber(
+  field:'x'|'y'|'width'|'height',event:Event,
+):void{
+  const mark=selectedShape.value
+  const value=Number((event.target as HTMLInputElement).value)
+  if(!mark||!Number.isSafeInteger(value))return
+  const max=field==='x'?100-mark.width:field==='y'?100-mark.height:
+    field==='width'?100-mark.x:100-mark.y
+  const min=field==='x'||field==='y'?0:5
+  if(max>=min)editPhotoShape({[field]:Math.max(min,Math.min(max,value))})
+}
+function startShapeDrag(event:PointerEvent,id:string):void{
+  const composition=photoComposition.value
+  const mark=shapeMarks.value.find(item=>item.id===id)
+  if(!composition||!mark||cropBusy.value
+    ||event.pointerType==='mouse'&&event.button!==0)return
+  const rect=composition.getBoundingClientRect()
+  if(rect.width<1||rect.height<1)return
+  selectedShapeId.value=id
+  clearComposition()
+  draggingShape={
+    id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,
+    originalX:mark.x,originalY:mark.y,width:rect.width,height:rect.height,
+  }
+  ;(event.currentTarget as Element).setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+function moveShapeDrag(event:PointerEvent):void{
+  const drag=draggingShape
+  if(!drag||drag.pointerId!==event.pointerId||cropBusy.value)return
+  const mark=shapeMarks.value.find(item=>item.id===drag.id)
+  if(!mark)return
+  const x=Math.max(0,Math.min(100-mark.width,Math.round(
+    drag.originalX+(event.clientX-drag.startX)/drag.width*100)))
+  const y=Math.max(0,Math.min(100-mark.height,Math.round(
+    drag.originalY+(event.clientY-drag.startY)/drag.height*100)))
+  if(x===mark.x&&y===mark.y)return
+  replaceShapeMarks(shapeMarks.value.map(item=>
+    item.id===drag.id?{...item,x,y}:item))
+}
+function endShapeDrag(event:PointerEvent):void{
+  if(draggingShape?.pointerId!==event.pointerId)return
+  const target=event.currentTarget as Element
+  if(target.hasPointerCapture(event.pointerId))
+    target.releasePointerCapture(event.pointerId)
+  draggingShape=null
 }
 function addPhotoText():void{
   if(!cropResult.value||cropBusy.value||textMarks.value.length>=MAX_TEXT_MARKS)return
@@ -304,9 +409,6 @@ function clearIndex():void{
 }
 function sameSession(session:typeof activeSession.value,epoch:number):boolean{
   const active=activeSession.value
-  // A same-device reauthentication replaces a Session object but retains
-  // exactly the same unlocked key package and device. It is not a different
-  // trust root. Real account/key/device changes still invalidate via clearBlob.
   return !!session&&!!active&&epoch===fileEpoch
     &&active.accountId===session.accountId
     &&active.deviceId===session.deviceId
@@ -510,10 +612,11 @@ async function createCroppedPhoto():Promise<void>{
 }
 async function preparedCropWithText(
   source:Blob,marks:readonly PhotoTextMark[],
+  shapes:readonly PhotoShapeMark[],
 ):Promise<Blob>{
   validateTextMarks(marks)
-  if(marks.length===0)return source
-  return (await flattenPhotoText(source,marks)).blob
+  if(!marks.length&&!shapes.length)return source
+  return (await flattenPhotoAnnotations(source,marks,shapes)).blob
 }
 function setComposedCrop(blob:Blob):void{
   clearComposition()
@@ -526,18 +629,19 @@ async function saveCroppedPhoto():Promise<void>{
   const epoch=cropEpoch,currentEpoch=fileEpoch
   const version=textRevision
   const marks=textMarks.value.map(mark=>({...mark}))
+  const shapes=shapeMarks.value.map(shape=>({...shape}))
   if(!session||!result||!name||cropBusy.value||preview.value?.type!=='photo'
     ||cropSavedId.value)return
   cropBusy.value=true;cropError.value='';cropNotice.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks)
+    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
     const id=await enqueueEncryptedMedia(
       new File([flattened],name,{type:'image/jpeg'}))
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch
       &&version===textRevision){
-      if(marks.length)setComposedCrop(flattened)
+      if(marks.length||shapes.length)setComposedCrop(flattened)
       cropSavedId.value=id
       cropNotice.value='Новая JPEG-копия зашифрована в очереди Browser. Облачная синхронизация подтверждается отдельно.'
       void refreshIndex()
@@ -555,17 +659,19 @@ async function downloadCroppedPhoto():Promise<void>{
   const name=croppedFileName.value
   const epoch=cropEpoch,currentEpoch=fileEpoch,version=textRevision
   const marks=textMarks.value.map(mark=>({...mark}))
+  const shapes=shapeMarks.value.map(shape=>({...shape}))
   if(!session||!result||!cropUrl.value||!name||cropBusy.value
     ||preview.value?.type!=='photo')return
   if(!window.confirm('Скачать JPEG-копию на устройство? Файл будет вне защищённого Browser и может появиться в системной галерее.'))return
   cropBusy.value=true;cropError.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks)
+    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
-    if(marks.length&&!composedPhotoUrl.value)setComposedCrop(flattened)
+    if((marks.length||shapes.length)&&!composedPhotoUrl.value)
+      setComposedCrop(flattened)
     const anchor=document.createElement('a')
-    anchor.href=marks.length?composedPhotoUrl.value:cropUrl.value
+    anchor.href=marks.length||shapes.length?composedPhotoUrl.value:cropUrl.value
     anchor.download=name
     anchor.rel='noopener'
     document.body.appendChild(anchor)
@@ -879,6 +985,36 @@ onUnmounted(()=>{
               <img :src="composedPhotoUrl||cropUrl" :alt="croppedFileName"
                 data-testid="file-viewer-crop-preview" draggable="false">
               <template v-if="!composedPhotoUrl">
+                <svg v-for="shape in shapeMarks" :key="shape.id"
+                  class="file-viewer-photo-shape-layer"
+                  :class="{selected:selectedShapeId===shape.id}"
+                  :data-testid="'file-viewer-shape-layer-'+shape.id"
+                  :style="{left:shape.x+'%',top:shape.y+'%',
+                    width:shape.width+'%',height:shape.height+'%'}"
+                  viewBox="0 0 100 100"
+                  :preserveAspectRatio="shape.kind==='circle'||shape.kind==='square'
+                    ?'xMinYMin meet':'none'"
+                  :stroke="shape.stroke"
+                  :stroke-width="shape.strokeWidth*10000/(900*shape.width)"
+                  stroke-linejoin="round" stroke-linecap="round"
+                  :fill="shape.filled&&shape.kind!=='arrow'?shape.fill:'none'"
+                  @click="selectPhotoShape(shape.id)"
+                  @pointerdown="startShapeDrag($event,shape.id)"
+                  @pointermove="moveShapeDrag"
+                  @pointerup="endShapeDrag" @pointercancel="endShapeDrag">
+                  <rect x="0" y="0" width="100" height="100"
+                    fill="transparent" stroke="none"/>
+                  <path v-if="shape.kind==='arrow'"
+                    d="M5 95 L95 5 M60 5 H95 V40"/>
+                  <circle v-else-if="shape.kind==='circle'"
+                    cx="50" cy="50" r="48"/>
+                  <rect v-else-if="shape.kind==='square'"
+                    x="2" y="2" width="96" height="96"/>
+                  <path v-else-if="shape.kind==='triangle'"
+                    d="M50 2 L98 98 L2 98 Z"/>
+                  <path v-else d="M50 2 L63 34 L97 37
+                    L72 59 L80 95 L50 78 L20 95 L28 59 L3 37 L37 34 Z"/>
+                </svg>
                 <button v-for="mark in textMarks" :key="mark.id"
                   type="button" class="file-viewer-photo-text-layer"
                   :class="{selected:selectedTextId===mark.id}"
@@ -955,9 +1091,90 @@ onUnmounted(()=>{
               </label>
             </div>
           </div>
-          <p v-if="textMarks.length" class="muted">При сохранении или скачивании
-            надписи превращаются в пиксели JPEG. Они не отправляются
-            отдельным текстом на сервер и не сохраняются как открытый черновик.</p>
+          <div class="file-viewer-photo-text-editor"
+            data-testid="file-viewer-photo-shape-editor">
+            <div class="file-viewer-photo-text-head">
+              <strong>Фигуры ({{ shapeMarks.length }}/{{ MAX_SHAPE_MARKS }})</strong>
+              <button type="button" data-testid="file-viewer-add-shape"
+                :disabled="cropBusy||shapeMarks.length>=MAX_SHAPE_MARKS"
+                @click="addPhotoShape">Добавить фигуру</button>
+            </div>
+            <p v-if="!shapeMarks.length" class="muted">Можно добавить стрелку,
+              круг, квадрат, треугольник или звезду, настроить рамку и заливку,
+              переместить фигуру на изображении.</p>
+            <div v-for="(shape,index) in shapeMarks" :key="shape.id"
+              class="file-viewer-photo-text-row"
+              :class="{selected:selectedShapeId===shape.id}">
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-select-shape-'+index"
+                @click="selectPhotoShape(shape.id)">{{ shape.kind }}</button>
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-delete-shape-'+index"
+                :aria-label="'Удалить фигуру '+(index+1)"
+                @click="deletePhotoShape(shape.id)">Удалить</button>
+            </div>
+            <div v-if="selectedShape" class="file-viewer-photo-text-settings">
+              <label>Фигура
+                <select :value="selectedShape.kind" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-kind" @change="setShapeKind">
+                  <option value="arrow">Стрелка</option>
+                  <option value="circle">Круг</option>
+                  <option value="square">Квадрат</option>
+                  <option value="triangle">Треугольник</option>
+                  <option value="star">Звезда</option>
+                </select>
+              </label>
+              <label>Цвет рамки
+                <input type="color" :value="selectedShape.stroke"
+                  :disabled="cropBusy" data-testid="file-viewer-shape-stroke"
+                  @input="setShapeColor('stroke',$event)">
+              </label>
+              <label>Толщина рамки · {{ selectedShape.strokeWidth }}
+                <input type="range" min="1" max="28" step="1"
+                  :value="selectedShape.strokeWidth" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-stroke-width"
+                  @input="setShapeStrokeWidth">
+              </label>
+              <label>Цвет заливки
+                <input type="color" :value="selectedShape.fill"
+                  :disabled="cropBusy" data-testid="file-viewer-shape-fill"
+                  @input="setShapeColor('fill',$event)">
+              </label>
+              <label class="file-viewer-shape-filled">Залить фигуру
+                <input type="checkbox" :checked="selectedShape.filled"
+                  :disabled="cropBusy" data-testid="file-viewer-shape-filled"
+                  @change="setShapeFilled">
+              </label>
+              <label>Позиция X (%)
+                <input type="number" min="0" :max="100-selectedShape.width"
+                  step="1" :value="selectedShape.x" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-x"
+                  @input="setShapeNumber('x',$event)">
+              </label>
+              <label>Позиция Y (%)
+                <input type="number" min="0" :max="100-selectedShape.height"
+                  step="1" :value="selectedShape.y" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-y"
+                  @input="setShapeNumber('y',$event)">
+              </label>
+              <label>Ширина (%)
+                <input type="number" min="5" :max="100-selectedShape.x"
+                  step="1" :value="selectedShape.width" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-width"
+                  @input="setShapeNumber('width',$event)">
+              </label>
+              <label>Высота (%)
+                <input type="number" min="5" :max="100-selectedShape.y"
+                  step="1" :value="selectedShape.height" :disabled="cropBusy"
+                  data-testid="file-viewer-shape-height"
+                  @input="setShapeNumber('height',$event)">
+              </label>
+            </div>
+          </div>
+          <p v-if="textMarks.length||shapeMarks.length" class="muted">
+            При сохранении или скачивании надписи и фигуры превращаются
+            в пиксели JPEG. Ни черновики, ни параметры фигур не отправляются
+            серверу открытым текстом.</p>
           <div class="file-viewer-still-actions">
             <button type="button" :disabled="cropBusy||!!cropSavedId"
               data-testid="file-viewer-save-crop" @click="saveCroppedPhoto">
@@ -975,8 +1192,8 @@ onUnmounted(()=>{
         <p class="muted">Копия — независимый личный E2EE-файл. Доступы,
           GPS, задание и TTL оригинала автоматически не наследуются.
           Яркость, контраст и насыщенность применяются к пикселям
-          только при создании копии. Надписи накладываются поверх итогового
-          кадра. Это не маска приватности.</p>
+          только при создании копии. Надписи и фигуры накладываются
+          поверх итогового кадра. Это не маска приватности.</p>
         <p v-if="cropNotice" role="status" data-testid="file-viewer-crop-status">
           {{ cropNotice }}</p>
         <p v-if="cropError" role="alert" data-testid="file-viewer-crop-error">

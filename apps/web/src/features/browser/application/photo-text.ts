@@ -1,4 +1,6 @@
 import {MAX_MEDIA_BYTES} from '../../media/domain/media-crypto'
+import {drawPhotoShapes,validateShapeMarks} from './photo-shapes'
+import type {PhotoShapeMark} from './photo-shapes'
 
 export type PhotoTextMark=Readonly<{
   id:string;text:string;x:number;y:number;size:number;color:string
@@ -93,10 +95,20 @@ export function drawPhotoText(
 export async function flattenPhotoText(
   source:Blob,marks:readonly PhotoTextMark[],
 ):Promise<AnnotatedJpeg>{
+  return flattenPhotoAnnotations(source,marks,[])
+}
+
+/** One JPEG encoder pass with shapes below text, both client-only. */
+export async function flattenPhotoAnnotations(
+  source:Blob,marks:readonly PhotoTextMark[],
+  shapes:readonly PhotoShapeMark[],
+):Promise<AnnotatedJpeg>{
   validateTextMarks(marks)
+  validateShapeMarks(shapes)
   if(source.type!=='image/jpeg'||source.size<128
     ||source.size>MAX_MEDIA_BYTES)throw Error('viewer.text_invalid_source')
-  if(marks.length===0)throw Error('viewer.text_no_annotations')
+  if(marks.length===0&&shapes.length===0)
+    throw Error('viewer.annotation_no_marks')
   const bitmap=await createImageBitmap(source)
   const canvas=document.createElement('canvas')
   try{
@@ -108,6 +120,7 @@ export async function flattenPhotoText(
     const ctx=canvas.getContext('2d',{alpha:false})
     if(!ctx)throw Error('viewer.text_canvas_unsupported')
     ctx.drawImage(bitmap,0,0)
+    drawPhotoShapes(ctx,bitmap.width,bitmap.height,shapes)
     drawPhotoText(ctx,bitmap.width,bitmap.height,marks)
     const blob=await new Promise<Blob>((resolve,reject)=>{
       canvas.toBlob(result=>result?resolve(result):reject(
