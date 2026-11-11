@@ -20,6 +20,16 @@ import type {PhotoAdjustments} from '../features/browser/application/photo-effec
 import {flattenPhotoAnnotations,MAX_TEXT_MARKS,validateTextMarks} from '../features/browser/application/photo-text'
 import {MAX_SHAPE_MARKS} from '../features/browser/application/photo-shapes'
 import type {PhotoShapeMark,ShapeKind} from '../features/browser/application/photo-shapes'
+import {
+  drawPhotoStrokes,MAX_PHOTO_STROKES,MAX_STROKE_POINTS,
+  MAX_TOTAL_STROKE_POINTS,
+} from '../features/browser/application/photo-strokes'
+import type {PhotoStroke,StrokeTool,StrokePoint} from '../features/browser/application/photo-strokes'
+import {
+  initialPhotoHistory,recordPhotoEdit,travelPhotoHistory,
+  canPhotoUndo,canPhotoRedo,
+} from '../features/browser/application/photo-history'
+import type {PhotoEditHistory,PhotoEditSnapshot} from '../features/browser/application/photo-history'
 import type {PhotoTextMark} from '../features/browser/application/photo-text'
 import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
@@ -60,6 +70,16 @@ const photoComposition=ref<HTMLElement|null>(null)
 const compositionWidth=ref(0)
 let compositionObserver:ResizeObserver|null=null
 const textMarks=ref<PhotoTextMark[]>([])
+const strokeMarks=ref<PhotoStroke[]>([])
+const draftStroke=ref<PhotoStroke|null>(null)
+const paintCanvas=ref<HTMLCanvasElement|null>(null)
+const activePaintTool=ref<StrokeTool|null>(null)
+const paintColor=ref('#1ed760')
+const paintWidth=ref(8)
+const paintHistory=ref<PhotoEditHistory>(initialPhotoHistory())
+const canUndoPhoto=computed(()=>canPhotoUndo(paintHistory.value))
+const canRedoPhoto=computed(()=>canPhotoRedo(paintHistory.value))
+let strokePointer:number|null=null
 const shapeMarks=ref<PhotoShapeMark[]>([])
 const selectedShapeId=ref<string|null>(null)
 const selectedShape=computed(()=>shapeMarks.value.find(
@@ -124,8 +144,11 @@ const croppedFileName=computed(()=>{
   if(!preview.value||!cropResult.value)return ''
   const base=cropFileName(preview.value.name,cropSelection.value,
     photoAdjustments.value)
-  const layers=[textMarks.value.length?'text':'',shapeMarks.value.length?'shape':'']
-    .filter(Boolean).join('-')
+  const layers=[
+    textMarks.value.length?'text':'',
+    shapeMarks.value.length?'shape':'',
+    strokeMarks.value.length?'draw':'',
+  ].filter(Boolean).join('-')
   return layers?base.replace(/\.jpg$/,'-'+layers+'.jpg'):base
 })
 function clearComposition():void{
@@ -140,15 +163,53 @@ function invalidateTextOutput():void{
   cropNotice.value=''
   cropError.value=''
 }
+function currentPhotoEdits():PhotoEditSnapshot{
+  return {text:textMarks.value,shapes:shapeMarks.value,strokes:strokeMarks.value}
+}
+function commitPhotoEdit():void{
+  paintHistory.value=recordPhotoEdit(paintHistory.value,currentPhotoEdits())
+}
+function travelPhotoEdit(delta:-1|1):void{
+  if(cropBusy.value||draftStroke.value)return
+  const next=travelPhotoHistory(paintHistory.value,delta)
+  if(!next)return
+  paintHistory.value=next.history
+  textMarks.value=[...next.snapshot.text]
+  shapeMarks.value=[...next.snapshot.shapes]
+  strokeMarks.value=[...next.snapshot.strokes]
+  if(!textMarks.value.some(mark=>mark.id===selectedTextId.value))
+    selectedTextId.value=null
+  if(!shapeMarks.value.some(mark=>mark.id===selectedShapeId.value))
+    selectedShapeId.value=null
+  invalidateTextOutput()
+}
+function resetPhotoAnnotations():void{
+  if(cropBusy.value||draftStroke.value)return
+  if(!textMarks.value.length&&!shapeMarks.value.length
+    &&!strokeMarks.value.length)return
+  textMarks.value=[]
+  shapeMarks.value=[]
+  strokeMarks.value=[]
+  selectedTextId.value=null
+  selectedShapeId.value=null
+  invalidateTextOutput()
+  commitPhotoEdit()
+}
 function replaceTextMarks(updated:PhotoTextMark[]):void{
   if(cropBusy.value)return
   textMarks.value=updated
   invalidateTextOutput()
+  if(!draggingMark)commitPhotoEdit()
 }
 function clearTextMarks():void{
   ++textRevision
   textMarks.value=[]
   shapeMarks.value=[]
+  strokeMarks.value=[]
+  draftStroke.value=null
+  strokePointer=null
+  activePaintTool.value=null
+  paintHistory.value=initialPhotoHistory()
   selectedTextId.value=null
   selectedShapeId.value=null
   draggingMark=null
@@ -159,6 +220,7 @@ function replaceShapeMarks(marks:PhotoShapeMark[]):void{
   if(cropBusy.value)return
   shapeMarks.value=marks
   invalidateTextOutput()
+  if(!draggingShape)commitPhotoEdit()
 }
 function addPhotoShape():void{
   if(!cropResult.value||cropBusy.value||shapeMarks.value.length>=MAX_SHAPE_MARKS)return
@@ -247,6 +309,7 @@ function endShapeDrag(event:PointerEvent):void{
   if(target.hasPointerCapture(event.pointerId))
     target.releasePointerCapture(event.pointerId)
   draggingShape=null
+  commitPhotoEdit()
 }
 function addPhotoText():void{
   if(!cropResult.value||cropBusy.value||textMarks.value.length>=MAX_TEXT_MARKS)return
@@ -326,6 +389,7 @@ function stopPhotoTextDrag(event:PointerEvent):void{
   if(element.hasPointerCapture(event.pointerId))
     element.releasePointerCapture(event.pointerId)
   draggingMark=null
+  commitPhotoEdit()
 }
 function clearCrop():void{
   clearComposition()
