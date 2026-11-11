@@ -5,7 +5,7 @@ import type {CatalogItem} from './catalog'
 
 export type ArchiveEntry={
   entryId:string;kind:'photo'|'media';assetId:string
-  revision:number;state:'archived'|'deleting'
+  revision:number;state:'archived'|'restored'|'deleting'
   archiveUntilMs:number|null;expiresAt:number
   mediaType:'photo'|'video'|'audio'|null;plainBytes:number|null
   physicalStatus:'not_started'|'pending_gc'|'verified_absent'
@@ -38,7 +38,7 @@ export async function listArchivePage(after:string|null=null):Promise<Page>{
     throw Error('browser.archive_invalid_response')
   for(const item of response.items){
     if(!['photo','media'].includes(item.kind)
-      ||!['archived','deleting'].includes(item.state)
+      ||!['archived','restored','deleting'].includes(item.state)
       ||!Number.isSafeInteger(item.revision)||item.revision<1
       ||!Number.isSafeInteger(item.expiresAt))
       throw Error('browser.archive_invalid_response')
