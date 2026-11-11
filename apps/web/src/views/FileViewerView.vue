@@ -55,6 +55,8 @@ const cropError=ref('')
 const cropNotice=ref('')
 const cropSavedId=ref<string|null>(null)
 const photoComposition=ref<HTMLElement|null>(null)
+const compositionWidth=ref(0)
+let compositionObserver:ResizeObserver|null=null
 const textMarks=ref<PhotoTextMark[]>([])
 const selectedTextId=ref<string|null>(null)
 const selectedText=computed(()=>textMarks.value.find(
@@ -208,6 +210,10 @@ function movePhotoTextDrag(event:PointerEvent):void{
   if(!mark||mark.x===x&&mark.y===y)return
   replaceTextMarks(textMarks.value.map(item=>
     item.id===drag.id?{...item,x,y}:item))
+}
+function photoTextFont(mark:PhotoTextMark):string{
+  const width=compositionWidth.value||cropResult.value?.width||200
+  return Math.max(1,Math.round(width*mark.size/100))+'px'
 }
 function stopPhotoTextDrag(event:PointerEvent):void{
   if(draggingMark?.pointerId!==event.pointerId)return
@@ -713,6 +719,17 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
+watch(photoComposition,element=>{
+  compositionObserver?.disconnect()
+  compositionObserver=null
+  compositionWidth.value=0
+  if(!element||typeof ResizeObserver==='undefined')return
+  compositionWidth.value=element.getBoundingClientRect().width
+  compositionObserver=new ResizeObserver(entries=>{
+    compositionWidth.value=entries[0]?.contentRect.width??0
+  })
+  compositionObserver.observe(element)
+})
 watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
   photoBrightness,photoContrast,photoSaturation],()=>{
   clearTextMarks()
@@ -739,6 +756,7 @@ watch(activeSession,(next,previous)=>{
 watch([()=>route.params.protocol,()=>route.params.id],()=>{void openFile()})
 onMounted(()=>window.addEventListener('keydown',onKeyDown))
 onUnmounted(()=>{
+  compositionObserver?.disconnect()
   window.removeEventListener('keydown',onKeyDown)
   clearBlob();clearIndex()
 })
@@ -860,7 +878,7 @@ onUnmounted(()=>{
                   :disabled="cropBusy" :style="{
                     left:mark.x+'%',top:mark.y+'%',
                     maxWidth:(100-mark.x)+'%',
-                    fontSize:mark.size+'cqw',color:mark.color,
+                    fontSize:photoTextFont(mark),color:mark.color,
                   }"
                   @click="selectPhotoText(mark.id)"
                   @pointerdown="startPhotoTextDrag($event,mark.id)"
