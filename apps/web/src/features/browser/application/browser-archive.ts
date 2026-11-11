@@ -11,7 +11,10 @@ export type ArchiveEntry={
   physicalStatus:'not_started'|'pending_gc'|'verified_absent'
     |'past_due_pending_gc'
 }
-type Page={items:ArchiveEntry[];nextCursor:string|null}
+type Page={
+  items:ArchiveEntry[];nextCursor:string|null
+  writeEnabled:boolean;autoCleanupEnabled:boolean
+}
 export type ArchiveAction='archive'|'restore'|'delete'
 export type ArchiveAck={
   entryId:string;kind:'photo'|'media';assetId:string
@@ -29,7 +32,9 @@ export async function listArchivePage(after:string|null=null):Promise<Page>{
   const response=await jsonApi<Page>(path)
   if(activeSession.value!==session)throw Error('identity.changed')
   if(!Array.isArray(response.items)||response.items.length>50
-    ||response.nextCursor!==null&&typeof response.nextCursor!=='string')
+    ||response.nextCursor!==null&&typeof response.nextCursor!=='string'
+    ||typeof response.writeEnabled!=='boolean'
+    ||typeof response.autoCleanupEnabled!=='boolean')
     throw Error('browser.archive_invalid_response')
   for(const item of response.items){
     if(!['photo','media'].includes(item.kind)
