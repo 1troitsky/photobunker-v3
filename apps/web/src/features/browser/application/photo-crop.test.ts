@@ -44,5 +44,11 @@ describe('Viewer non-destructive private JPEG crop and rotation',()=>{
       .toBe('день-1-crop-10-10-50-60-r0.jpg')
     expect(cropFileName('a'.repeat(160)+'.webp',area).length)
       .toBeLessThan(130)
+    expect(cropFileName('name.jpg',area,{
+      brightness:120,contrast:100,saturation:0,
+    })).toBe('name-crop-10-10-50-60-r90-fx-120-100-0.jpg')
+    expect(()=>cropFileName('name.jpg',area,{
+      brightness:Infinity,contrast:100,saturation:100,
+    })).toThrow('viewer.photo_adjustment_invalid')
   })
 })
