@@ -26,6 +26,7 @@ import type {
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import { preflightAssignmentMediaGrant } from '../features/assignments/application/media-submission-preflight'
 import { verifyMediaSubmissionReceiptPage } from '../features/assignments/application/verify-media-submission'
+import { appendOwnerMediaReceiptPage } from '../features/assignments/application/owner-media-receipt-pagination'
 import { parseRulesCsv, EMPTY_ADVANCED_RULES } from '../features/assignments/domain/advanced-rules'
 import type { AdvancedRules } from '../features/assignments/domain/advanced-rules'
 import {
@@ -67,6 +68,8 @@ const monthlyUsage=ref<AssignmentMonthlyUsage|null>(null)
 const photos=ref<StoredPhoto[]>([])
 const mediaFiles=ref<StoredMedia[]>([])
 const mediaSubmissions=ref<AssignmentMediaSubmission[]>([])
+const mediaNextCursor=ref<string|null>(null)
+const loadingMoreMedia=ref(false)
 const verifiedMediaReceipts=ref<Record<string,boolean>>({})
 const submissions=ref<Submission[]>([])
 const selectedId=ref('')
@@ -183,6 +186,7 @@ function cleanPreview():void{
 function resetSensitive():void {
   assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
   mediaFiles.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
+  mediaNextCursor.value=null
   monthlyUsage.value=null
   submissions.value=[];selectedId.value='';ownerCheck.value=null
   contributorCheck.value=null;showingOfflineSnapshot.value=false;cleanPreview()
@@ -424,6 +428,7 @@ function choose(assignmentId:string):void{
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
   submissions.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
+  mediaNextCursor.value=null
   cleanPreview()
   if(selected.value?.isOwner)void loadSubmissions()
 }
@@ -442,10 +447,34 @@ async function loadSubmissions():Promise<void>{
     const checks=await verifyMediaSubmissionReceiptPage(
       mediaResult.items,id,owner.ownerAccountId)
     if(selectedId.value===id&&activeSession.value===identity){
-      submissions.value=result;mediaSubmissions.value=mediaResult.items
+      const page=appendOwnerMediaReceiptPage([],mediaResult,null)
+      submissions.value=result;mediaSubmissions.value=page.items
+      mediaNextCursor.value=page.nextCursor
       verifiedMediaReceipts.value=checks
     }
   }catch(e){error.value=explain(e)}
+}
+/** Explicit bounded pagination; only server-visible submissions are displayed. */
+async function loadMoreMediaSubmissions():Promise<void>{
+  const id=selectedId.value
+  const owner=selected.value
+  const identity=activeSession.value
+  const after=mediaNextCursor.value
+  if(loadingMoreMedia.value||!after||!owner?.isOwner||!identity?.online)return
+  loadingMoreMedia.value=true
+  error.value=''
+  try{
+    const page=await listAssignmentMediaSubmissions(id,after)
+    const appended=appendOwnerMediaReceiptPage(mediaSubmissions.value,page,after)
+    const checks=await verifyMediaSubmissionReceiptPage(
+      page.items,id,owner.ownerAccountId)
+    if(selectedId.value!==id||activeSession.value!==identity
+      ||mediaNextCursor.value!==after)return
+    mediaSubmissions.value=appended.items
+    mediaNextCursor.value=appended.nextCursor
+    verifiedMediaReceipts.value={...verifiedMediaReceipts.value,...checks}
+  }catch(e){error.value=explain(e)}
+  finally{loadingMoreMedia.value=false}
 }
 async function changeState(action:'finish'|'resume'):Promise<void>{
   await operate(async()=>{
@@ -958,6 +987,10 @@ onUnmounted(cleanPreview)
             </div>
             <button type="button" :disabled="busy" @click="openMediaSubmission(entry.mediaGrantId)">Открыть медиа задания</button>
           </div>
+          <button v-if="mediaNextCursor" type="button"
+            :disabled="busy||loadingMoreMedia" @click="loadMoreMediaSubmissions">
+            {{ loadingMoreMedia?'Загрузка материалов…':'Загрузить ещё материалы' }}
+          </button>
         </template>
 
         <template v-else>
