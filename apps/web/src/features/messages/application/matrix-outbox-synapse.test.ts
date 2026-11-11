@@ -401,6 +401,12 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
       &&typeof raw.content?.ciphertext==='string'
       &&!JSON.stringify(raw).includes(text),
       'server_stored_plaintext')
+    const noToken=await fetch(host+
+      '/_matrix/client/v3/rooms/'+encodeURIComponent(roomId)+
+      '/event/'+encodeURIComponent(sentEvent),{
+        signal:AbortSignal.timeout(5000),
+      })
+    failUnless(noToken.status===401,'room_event_anonymous_access')
     await until('bob_decrypted',()=>{
       const event=matchingRecipientEvents(sentEvent)[0]
       return event?.getType()==='m.room.message'
