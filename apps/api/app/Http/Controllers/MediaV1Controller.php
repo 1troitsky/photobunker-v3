@@ -265,7 +265,13 @@ final class MediaV1Controller extends Controller
         $rows=DB::table('media_files_v1')
             ->where('account_id',$account->id)
             ->where('state','active')
-            ->where('expires_at','>',PhotoSync::nowMs());
+            ->where('expires_at','>',PhotoSync::nowMs())
+            ->whereNotExists(static function($q){
+                $q->selectRaw('1')->from('browser_archive_entries_v1 as archive')
+                    ->whereColumn('archive.asset_id','media_files_v1.id')
+                    ->where('archive.kind','media')
+                    ->whereIn('archive.state',['archived','deleting']);
+            });
         if($after!==null)$rows->where('id','>',$after);
         $page=$rows->orderBy('id')->limit(51)
             ->get(['id','media_type','expires_at','plain_bytes']);
