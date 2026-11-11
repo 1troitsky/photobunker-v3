@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
@@ -187,7 +187,9 @@ function cleanPreview():void{
   if(previewUrl.value){URL.revokeObjectURL(previewUrl.value);previewUrl.value=''}
   previewPrivate.value=null
 }
+let receiptProofEpoch=0
 function resetSensitive():void {
+  receiptProofEpoch++
   assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
   mediaFiles.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
   mediaNextCursor.value=null
@@ -427,6 +429,7 @@ function populateOwnerPolicyForm(chosen:VisibleAssignment|undefined):void{
   ownerFormTouched.value=false
 }
 function choose(assignmentId:string):void{
+  receiptProofEpoch++
   selectedId.value=assignmentId
   const chosen=assignments.value.find(a=>a.id===assignmentId)
   populateOwnerPolicyForm(chosen)
@@ -443,6 +446,7 @@ async function loadSubmissions():Promise<void>{
   const owner=selected.value
   const identity=activeSession.value
   if(!owner?.isOwner||!identity?.online)return
+  const epoch=++receiptProofEpoch
   try{
     const [result,mediaResult]=await Promise.all([
       listAssignmentSubmissionsPage(id),listAssignmentMediaSubmissions(id),
@@ -454,7 +458,8 @@ async function loadSubmissions():Promise<void>{
       verifyMediaSubmissionReceiptPage(mediaResult.items,id,owner.ownerAccountId),
       verifyPhotoSubmissionReceiptPage(result.items,id),
     ])
-    if(selectedId.value===id&&activeSession.value===identity){
+    if(selectedId.value===id&&activeSession.value===identity
+      &&receiptProofEpoch===epoch){
       const page=appendOwnerMediaReceiptPage([],mediaResult,null)
       const photoPage=appendOwnerMediaReceiptPage([],result,null)
       submissions.value=photoPage.items;photoNextCursor.value=photoPage.nextCursor
@@ -471,6 +476,7 @@ async function loadMorePhotoSubmissions():Promise<void>{
   const owner=selected.value
   const identity=activeSession.value
   const after=photoNextCursor.value
+  const epoch=receiptProofEpoch
   if(loadingMorePhotos.value||!after||!owner?.isOwner||!identity?.online)return
   loadingMorePhotos.value=true
   error.value=''
@@ -479,6 +485,7 @@ async function loadMorePhotoSubmissions():Promise<void>{
     const appended=appendOwnerMediaReceiptPage(submissions.value,page,after)
     const photoChecks=await verifyPhotoSubmissionReceiptPage(page.items,id)
     if(selectedId.value!==id||activeSession.value!==identity
+      ||receiptProofEpoch!==epoch
       ||photoNextCursor.value!==after)return
     submissions.value=appended.items
     photoNextCursor.value=appended.nextCursor
@@ -492,6 +499,7 @@ async function loadMoreMediaSubmissions():Promise<void>{
   const owner=selected.value
   const identity=activeSession.value
   const after=mediaNextCursor.value
+  const epoch=receiptProofEpoch
   if(loadingMoreMedia.value||!after||!owner?.isOwner||!identity?.online)return
   loadingMoreMedia.value=true
   error.value=''
@@ -501,6 +509,7 @@ async function loadMoreMediaSubmissions():Promise<void>{
     const checks=await verifyMediaSubmissionReceiptPage(
       page.items,id,owner.ownerAccountId)
     if(selectedId.value!==id||activeSession.value!==identity
+      ||receiptProofEpoch!==epoch
       ||mediaNextCursor.value!==after)return
     mediaSubmissions.value=appended.items
     mediaNextCursor.value=appended.nextCursor
