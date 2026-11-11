@@ -1026,6 +1026,54 @@ final class AssignmentV1Controller extends Controller
         ])->all()]);
     }
 
+    /**
+     * Recipient-only immutable owner-signed removal notices. A removed person
+     * may read the proof of exclusion, never assignment plaintext/policy,
+     * E2EE grants, another person's roster or the original private envelope.
+     * This endpoint is not an invitation, ACK, rejoin or source of read ACL.
+     */
+    public function removalNotices(Request $r)
+    {
+        [$actor]=$this->sync->actor($r);
+        $after=$r->query('after');
+        if($after!==null){
+            abort_unless(is_string($after),422);
+            P::uuid($after);
+        }
+        $q=DB::table('assignment_member_removals_v1 as rm')
+            ->join('assignment_invites_v1 as i','i.id','=','rm.invite_id')
+            ->join('identity_accounts as o','o.id','=','rm.owner_account_id')
+            ->where('rm.recipient_account_id',$actor->id)
+            ->where('i.recipient_account_id',$actor->id)
+            ->whereColumn('i.assignment_id','rm.assignment_id')
+            ->whereColumn('i.owner_account_id','rm.owner_account_id');
+        if($after!==null)$q->where('rm.invite_id','>',$after);
+        $rows=$q->orderBy('rm.invite_id')->limit(51)->get([
+            'rm.invite_id','rm.assignment_id','rm.owner_account_id',
+            'rm.recipient_account_id',
+            'rm.contract_json as removal_contract',
+            'rm.owner_signature as removal_signature',
+            'i.contract_json as invitation_contract',
+            'i.owner_signature as invitation_signature',
+            'o.account_spki as owner_account_spki',
+        ]);
+        $more=$rows->count()>50;
+        $page=$rows->take(50);
+        return $this->sync->json([
+            'items'=>$page->map(static fn($x)=>[
+                'inviteId'=>$x->invite_id,'assignmentId'=>$x->assignment_id,
+                'ownerAccountId'=>$x->owner_account_id,
+                'recipientAccountId'=>$x->recipient_account_id,
+                'ownerAccountSpki'=>$x->owner_account_spki,
+                'invitationContract'=>$x->invitation_contract,
+                'invitationSignature'=>$x->invitation_signature,
+                'removalContract'=>$x->removal_contract,
+                'removalSignature'=>$x->removal_signature,
+            ])->values()->all(),
+            'nextCursor'=>$more?$page->last()->invite_id:null,
+        ]);
+    }
+
     public function accept(Request $r,string $assignmentId,string $inviteId)
     {
         $this->sync->origin($r);

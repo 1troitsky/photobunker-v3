@@ -5,6 +5,7 @@ import { activeSession, reauthenticate } from '../features/identity/application/
 import {
   queueAssignmentCreation, listLocalAssignmentDrafts, listServerAssignmentUsage,
   listServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
+  listAssignmentRemovalNotices,
   listCachedAssignmentInvites,
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
@@ -30,6 +31,7 @@ import { verifyPhotoSubmissionReceiptPage } from '../features/assignments/applic
 import { appendOwnerMediaReceiptPage } from '../features/assignments/application/owner-media-receipt-pagination'
 import { parseRulesCsv, EMPTY_ADVANCED_RULES } from '../features/assignments/domain/advanced-rules'
 import type { AdvancedRules } from '../features/assignments/domain/advanced-rules'
+import type { CheckedAssignmentRemovalNotice } from '../features/assignments/application/verify-removal-notice'
 import {
   openOwnerAssignment, openRecipientAssignment,
 } from '../features/assignments/infrastructure/assignment-crypto'
@@ -64,6 +66,8 @@ type Submission=AssignmentPhotoSubmission
 
 const assignments=ref<VisibleAssignment[]>([])
 const invites=ref<ReceivedAssignmentInvite[]>([])
+const removalNotices=ref<CheckedAssignmentRemovalNotice[]>([])
+const removalNoticesError=ref('')
 const operations=ref<AssignmentOperation[]>([])
 const monthlyUsage=ref<AssignmentMonthlyUsage|null>(null)
 const photos=ref<StoredPhoto[]>([])
@@ -190,7 +194,8 @@ function cleanPreview():void{
 let receiptProofEpoch=0
 function resetSensitive():void {
   receiptProofEpoch++
-  assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
+  assignments.value=[];invites.value=[];removalNotices.value=[]
+  removalNoticesError.value='';operations.value=[];photos.value=[]
   mediaFiles.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
   mediaNextCursor.value=null
   monthlyUsage.value=null
@@ -285,6 +290,23 @@ async function hydrate():Promise<void>{
     }
   }
   if(activeSession.value!==identity)return
+  // Receipt history is always read separately from live membership; it
+  // cannot make a removed assignment visible again.
+  removalNotices.value=[]
+  removalNoticesError.value=''
+  if(!offline){
+    try{
+      const notices=await listAssignmentRemovalNotices()
+      if(activeSession.value!==identity)return
+      removalNotices.value=notices
+      const verifiedIds=new Set(notices.filter(x=>x.verified)
+        .map(x=>x.notice.inviteId))
+      received=received.filter(item=>!verifiedIds.has(item.inviteId))
+    }catch(e){
+      if(activeSession.value!==identity)return
+      removalNoticesError.value=explain(e)
+    }
+  }
   invites.value=received
   const rows=[...localRows]
   for(const item of snapshots){
@@ -649,7 +671,7 @@ async function invite():Promise<void>{
     notice.value='Подписанное приглашение сохранено в очереди: '+id.slice(0,8)
   })
 }
-async function inspectOwner(invite:ReceivedAssignmentInvite):Promise<void>{
+async function inspectOwner(invite:Pick<ReceivedAssignmentInvite,'ownerAccountId'>):Promise<void>{
   await operate(async()=>{
     const {directory,confirmed}=await inspectPeer(invite.ownerAccountId)
     contributorCheck.value={
@@ -665,7 +687,8 @@ async function approveOwner():Promise<void>{
       throw Error('Требуется независимая сверка отпечатка')
     await confirmPeer(contributorCheck.value.accountId,contributorCheck.value.fingerprint)
     contributorCheck.value={...contributorCheck.value,confirmed:true}
-    notice.value='Ключ отправителя подтверждён'
+    await refresh()
+    notice.value='Ключ отправителя подтверждён; подписанные уведомления перепроверены'
   })
 }
 async function accept(invite:ReceivedAssignmentInvite):Promise<void>{
@@ -1126,6 +1149,34 @@ onUnmounted(cleanPreview)
           <button type="button" :disabled="busy||contributorCheck?.accountId!==invitation.ownerAccountId||!contributorCheck.confirmed" @click="accept(invitation)">Принять задание</button>
         </div>
       </div>
+      <div v-if="removalNotices.length||removalNoticesError"
+        class="foundation-card" data-testid="assignment-removal-notices">
+        <h2>История участия</h2>
+        <p v-if="removalNoticesError" class="error-text" role="alert">
+          Не удалось получить подписанные уведомления: {{ removalNoticesError }}
+        </p>
+        <div v-for="row in removalNotices" :key="row.notice.inviteId"
+          class="assignment-invite" :data-testid="'assignment-removal-'+row.notice.inviteId">
+          <template v-if="row.verified">
+            <div>
+              <strong>Исключён владельцем</strong>
+              <p class="muted">Задание {{ row.notice.assignmentId.slice(0,8) }}
+                · Подпись владельца проверена на этом устройстве</p>
+            </div>
+          </template>
+          <template v-else>
+            <div>
+              <strong>Непроверенное уведомление об участии</strong>
+              <p class="muted">Подпись не подтверждена. Нельзя доверять статусу или считать это новым разрешением.</p>
+            </div>
+            <button type="button" :disabled="busy" @click="inspectOwner(row.notice)">
+              Сверить ключ владельца
+            </button>
+          </template>
+        </div>
+        <p class="muted">Исключение закрывает будущий доступ по разрешениям задания. Уже расшифрованные офлайн-копии нельзя дистанционно отозвать.</p>
+      </div>
+
       <div v-if="contributorCheck" class="foundation-card fingerprint-panel">
         <strong>Отпечаток владельца задания</strong>
         <code>{{ contributorCheck.fingerprint }}</code>

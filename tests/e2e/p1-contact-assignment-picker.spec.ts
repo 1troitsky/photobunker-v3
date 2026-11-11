@@ -114,5 +114,38 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
       return {visible:items.items?.some((x:{assignmentId:string})=>
         x.assignmentId===id),inbox:received.items?.length}
     },assignmentId),{timeout:20000}).toEqual({visible:false,inbox:0})
+
+    // Recipient must learn WHY the assignment vanished through the owner's
+    // independently verified signed revocation, never a plaintext title,
+    // a server-only removed flag or a resurrected invitation grant.
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    const notices=B.getByTestId('assignment-removal-notices')
+    await expect(notices.getByText('Исключён владельцем'))
+      .toBeVisible({timeout:25000})
+    await expect(notices).toContainText(assignmentId.slice(0,8))
+    await expect(notices).toContainText('Подпись владельца проверена')
+    const cryptographicRemoval=await B.evaluate(async()=>{
+      const m=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const verify=await import('/src/features/assignments/application/verify-removal-notice.ts')
+      const s=await import('/src/features/identity/application/session.ts')
+      const entries=await m.listAssignmentRemovalNotices()
+      const entry=entries[0]!
+      const original=entry.notice
+      let forged=false
+      try{
+        await verify.verifyAssignmentRemovalNotice({
+          ...original,removalSignature:original.invitationSignature,
+        },s.requireSession().accountId)
+        forged=true
+      }catch{ /* correctly denied forged signature */ }
+      return {
+        total:entries.length,verified:entry.verified,forged,
+        cachedInvites:(await m.listCachedAssignmentInvites()).length,
+      }
+    })
+    expect(cryptographicRemoval).toEqual({
+      total:1,verified:true,forged:false,cachedInvites:0,
+    })
   }finally{await ctxA.close();await ctxB.close()}
 })

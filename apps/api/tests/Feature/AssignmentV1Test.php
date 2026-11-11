@@ -181,6 +181,23 @@ final class AssignmentV1Test extends TestCase
         $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
         $this->getJson('/assignments/v1/invites/received')
             ->assertJsonPath('items',[]);
+        $notices='/assignments/v1/invites/removals';
+        $this->getJson($notices)->assertOk()
+            ->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.inviteId',$inviteId)
+            ->assertJsonPath('items.0.assignmentId',$this->assignmentId)
+            ->assertJsonPath('items.0.ownerAccountId',$this->people['owner']['account'])
+            ->assertJsonPath('items.0.recipientAccountId',$this->people['recipient']['account'])
+            ->assertJsonPath('items.0.ownerAccountSpki',$this->people['owner']['spki'])
+            ->assertJsonPath('items.0.removalContract',$proof['contract'])
+            ->assertJsonPath('items.0.removalSignature',$proof['signature'])
+            ->assertJsonPath('nextCursor',null);
+        $this->getJson($notices.'?after=invalid')->assertUnprocessable();
+        $this->as('outsider');
+        $this->getJson($notices)->assertOk()->assertJsonPath('items',[]);
+        $this->as('owner');
+        $this->getJson($notices)->assertOk()->assertJsonPath('items',[]);
+        $this->as('recipient');
         // An inconsistent mutable projection is NOT a new membership:
         // the immutable signed removal event permanently wins.
         DB::table('assignment_invites_v1')->where('id',$inviteId)
@@ -211,6 +228,10 @@ final class AssignmentV1Test extends TestCase
             ->assertOk()->assertJsonPath('state','finished');
         $this->postJson($url,$proof)->assertOk()
             ->assertJsonPath('unchanged',true);
+        $this->as('recipient');
+        $this->getJson($notices)->assertOk()
+            ->assertJsonPath('items.0.removalContract',$proof['contract']);
+        $this->as('owner');
         $fork=$this->signed('owner','pb3.assignment-member-remove.v1',
             [...$payload,'operationId'=>(string)Str::uuid()]);
         $this->postJson($url,$fork)->assertConflict();
