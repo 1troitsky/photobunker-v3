@@ -98,7 +98,7 @@ describe('archive signed durable outbox',()=>{
     await expect(getPendingArchiveAction()).rejects.toThrow()
     // A failed decrypt must not silently overwrite the stored bytes.
     expect(await storedRaw()).not.toContain(first.command)
-    expect(await savePendingArchiveAction(pending(s))).toBeDefined()
+    await expect(savePendingArchiveAction(pending(s))).rejects.toThrow()
     await expect(getPendingArchiveAction()).rejects.toThrow()
   })
   it('rejects wrong writer/intent before any queue mutation',async()=>{
