@@ -111,6 +111,27 @@ try{
     cb.getRoom(roomId)?.currentState.getStateEvents("m.room.encryption","")
       ?.getContent().algorithm==="m.megolm.v1.aes-sha2",60);
 
+  // P2-02E: exercise the exact LIVE room membership and state APIs that
+  // the PB3 encrypted outbox uses before deciding that a DM may be sent.
+  const joined=await ca.getJoinedRoomMembers(roomId);
+  assert.deepEqual(Object.keys(joined.joined??{}).sort(),
+    [alice.userId,bob.userId].sort(),
+    "Authoritative joined_members differs from trusted DM pair");
+  const state=await ca.roomState(roomId);
+  assert.ok(state.some(e=>e.type==="m.room.encryption"
+    &&e.state_key===""&&e.content.algorithm==="m.megolm.v1.aes-sha2"),
+    "Homeserver did not confirm encrypted room state");
+  const allowed=new Set([alice.userId,bob.userId]);
+  for(const e of state){
+    assert.ok(!(e.type==="m.room.member"
+      &&(e.content?.membership==="join"||e.content?.membership==="invite")
+      &&!allowed.has(e.state_key)),
+      "Unapproved Matrix invite or room member");
+    assert.ok(!(e.type==="m.room.join_rules"&&e.state_key===""
+      &&e.content?.join_rule!=="invite"),
+      "Matrix room unexpectedly permits public joins");
+  }
+
   // Unique non-sensitive synthetic sentinel: only its absence in the raw
   // homeserver event matters. Never print it to log.
   const body="PB3_CI_E2EE_SENTINEL_"+randomUUID().replace(/-/g,"");
