@@ -53,16 +53,14 @@ export async function preflightAssignmentMediaGrant(
       ?signedPolicyRequirements(policy)
       :signedMediaRequirements(policy,media.mediaType))
   validateAdvancedFields(fields,signedAdvancedRequirements(policy,media.mediaType))
-  // A modern imported P2 photo is a personal file. The existing P1 camera
-  // makes legacy photo_records and must not be mislabeled as P2 capture
-  // provenance. Separate signed P2 photo capture will come later.
-  if(media.mediaType==='photo'&&media.capture)
-    throw Error('assignment.p2_photo_capture_not_supported')
+  // A direct camera P2 JPEG can have a separately account-signed capture
+  // claim. This is NOT hardware proof of camera/GPS authenticity.
   if(media.capture){
     let proof:Record<string,unknown>
     try{proof=JSON.parse(media.capture.contract) as Record<string,unknown>}
     catch{throw Error('assignment.recording_bound_to_different_policy')}
     const effectiveContract=policy.policyAmendmentContract
+      ??(media.mediaType==='photo'?policy.policyContract:null)
     if(!effectiveContract)throw Error('assignment.policy_not_authenticated')
     const hash=hex(await digest(enc.encode(effectiveContract)))
     const mediaHash=hex(await digest(enc.encode(JSON.stringify(media.contract))))
