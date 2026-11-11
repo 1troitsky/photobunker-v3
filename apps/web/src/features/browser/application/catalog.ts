@@ -3,7 +3,7 @@ import type {StoredMedia,CloudMedia} from '../../media/application/media-outbox'
 
 export type CatalogType='photo'|'video'|'audio'
 export type CatalogFilter='all'|CatalogType
-export type CatalogSort='newest'|'oldest'|'expiry'
+export type CatalogSort='newest'|'oldest'|'expiry'|'size-largest'|'size-smallest'
 export type CatalogView='list'|'grid'
 
 export type CatalogItem={
@@ -83,6 +83,20 @@ export function filterCatalog(
       const byId=a.key.localeCompare(b.key)
       if(options.sort==='expiry')
         return a.expiresAt-b.expiresAt||byId
+      if(options.sort==='size-largest'||options.sort==='size-smallest'){
+        // Photo indexes do not expose reliable plaintext byte counts.
+        // Unknown/malformed values sort LAST in either direction. Never
+        // invent a zero-byte value or download plaintext for sorting.
+        const aa=a.bytes!==null&&Number.isSafeInteger(a.bytes)&&a.bytes>=0
+          ?a.bytes:null
+        const bb=b.bytes!==null&&Number.isSafeInteger(b.bytes)&&b.bytes>=0
+          ?b.bytes:null
+        if(aa===null&&bb!==null)return 1
+        if(aa!==null&&bb===null)return -1
+        if(aa!==null&&bb!==null&&aa!==bb)
+          return options.sort==='size-largest'?bb-aa:aa-bb
+        return byId
+      }
       // Cloud-only list endpoints expose neither name nor creation time.
       // Keep unknown timestamps AFTER known timestamps in both directions.
       const aa=a.createdAt,bb=b.createdAt
