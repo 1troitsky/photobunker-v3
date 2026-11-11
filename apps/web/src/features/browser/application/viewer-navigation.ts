@@ -32,7 +32,7 @@ export function adjacentFiles(
 export function safeDownloadName(value:string,fallback:string):string{
   const clean=value
     .replace(/[\\/<>:"|?*\u0000-\u001f\u007f]/g,'_')
-    .replace(/^\.+/,'').replace(/[. ]+$/,'')
+    .replace(/^[._ ]+/,'').replace(/[. ]+$/,'')
     .trim().slice(0,120)
   return clean||fallback
 }
