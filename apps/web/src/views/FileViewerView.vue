@@ -13,6 +13,8 @@ import {
 import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
 import {enqueueEncryptedMedia} from '../features/media/application/media-outbox'
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
+import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
+import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
 import {buildCatalog} from '../features/browser/application/catalog'
 import type {CatalogItem,CatalogType} from '../features/browser/application/catalog'
@@ -30,6 +32,17 @@ const route=useRoute()
 const router=useRouter()
 const stage=ref<HTMLElement|null>(null)
 const videoElement=ref<HTMLVideoElement|null>(null)
+const audioElement=ref<HTMLAudioElement|null>(null)
+const audioDuration=ref(0)
+const trimStart=ref(0)
+const trimEnd=ref(0)
+const audioClip=ref<WavClip|null>(null)
+const audioClipUrl=ref('')
+const audioClipBusy=ref(false)
+const audioClipError=ref('')
+const audioClipNotice=ref('')
+const audioClipSavedId=ref<string|null>(null)
+let audioClipEpoch=0
 const still=ref<VideoStill|null>(null)
 const stillUrl=ref('')
 const stillBusy=ref(false)
@@ -61,6 +74,28 @@ let catalogEpoch=0
 let fileEpoch=0
 let touchStart:{x:number;y:number}|null=null
 
+const audioClipFileName=computed(()=>{
+  if(!preview.value||!audioClip.value)return ''
+  return audioClipName(preview.value.name,
+    audioClip.value.startMs,audioClip.value.endMs)
+})
+function clearAudioClip():void{
+  ++audioClipEpoch
+  if(audioClipUrl.value)URL.revokeObjectURL(audioClipUrl.value)
+  audioClipUrl.value=''
+  audioClip.value=null
+  audioClipBusy.value=false
+  audioClipError.value=''
+  audioClipNotice.value=''
+  audioClipSavedId.value=null
+}
+function onAudioMetadata():void{
+  const duration=audioElement.value?.duration
+  if(!duration||!Number.isFinite(duration)||duration<=0)return
+  audioDuration.value=duration
+  trimStart.value=0
+  trimEnd.value=Math.min(duration,60)
+}
 const stillFileName=computed(()=>{
   if(!preview.value||!still.value)return ''
   return stillName(preview.value.name,still.value.timeMs)
@@ -77,6 +112,10 @@ function clearStill():void{
 }
 function clearBlob():void{
   clearStill()
+  clearAudioClip()
+  audioDuration.value=0
+  trimStart.value=0
+  trimEnd.value=0
   ++fileEpoch
   if(fileUrl.value)URL.revokeObjectURL(fileUrl.value)
   fileUrl.value=''
@@ -260,6 +299,73 @@ async function toggleFullscreen():Promise<void>{
     else notice.value='Полноэкранный режим не поддерживается браузером.'
   }catch{notice.value='Полноэкранный режим недоступен.'}
 }
+async function makeAudioFragment():Promise<void>{
+  const session=activeSession.value
+  const target=current.value
+  const source=fileBlob.value,origin=fileUrl.value
+  const currentEpoch=fileEpoch
+  if(!session||!target||!source||!origin||audioClipBusy.value
+    ||preview.value?.type!=='audio'||audioDuration.value<=0)return
+  clearAudioClip()
+  const epoch=audioClipEpoch
+  audioClipBusy.value=true
+  try{
+    if(audioElement.value?.currentSrc!==origin)
+      throw Error('viewer.audio_wrong_source')
+    const fragment=await makeWavClip(source,trimStart.value,trimEnd.value)
+    if(!sameSession(session,currentEpoch)||epoch!==audioClipEpoch
+      ||fileUrl.value!==origin||!current.value
+      ||viewerKey(current.value)!==viewerKey(target))return
+    audioClip.value=fragment
+    audioClipUrl.value=URL.createObjectURL(fragment.blob)
+    audioClipNotice.value='WAV-фрагмент подготовлен локально. Он ещё не сохранён.'
+  }catch(e){
+    if(sameSession(session,currentEpoch)&&epoch===audioClipEpoch)
+      audioClipError.value=explain(e)
+  }finally{
+    if(sameSession(session,currentEpoch)&&epoch===audioClipEpoch)
+      audioClipBusy.value=false
+  }
+}
+async function saveAudioFragment():Promise<void>{
+  const session=activeSession.value,fragment=audioClip.value
+  const name=audioClipFileName.value
+  const epoch=audioClipEpoch,currentEpoch=fileEpoch
+  if(!session||!fragment||!name||audioClipBusy.value
+    ||preview.value?.type!=='audio')return
+  audioClipBusy.value=true
+  audioClipError.value='';audioClipNotice.value=''
+  try{
+    // A new independently encrypted personal file, never an unauthorized
+    // version replacement and never inherited sharing/assignment/GPS.
+    const id=await enqueueEncryptedMedia(
+      new File([fragment.blob],name,{type:'audio/wav'}))
+    if(sameSession(session,currentEpoch)&&epoch===audioClipEpoch){
+      audioClipSavedId.value=id
+      audioClipNotice.value='WAV зашифрован в локальной очереди Browser. Статус облака проверяется отдельно.'
+      void refreshIndex()
+    }
+  }catch(e){
+    if(sameSession(session,currentEpoch)&&epoch===audioClipEpoch)
+      audioClipError.value=explain(e)
+  }finally{
+    if(sameSession(session,currentEpoch)&&epoch===audioClipEpoch)
+      audioClipBusy.value=false
+  }
+}
+function downloadAudioFragment():void{
+  if(!activeSession.value||!audioClip.value||!audioClipUrl.value
+    ||!audioClipFileName.value||audioClipBusy.value
+    ||preview.value?.type!=='audio')return
+  if(!window.confirm('Скачать WAV-фрагмент на устройство? Незашифрованная копия окажется вне защищённого Browser.'))return
+  const anchor=document.createElement('a')
+  anchor.href=audioClipUrl.value
+  anchor.download=audioClipFileName.value
+  anchor.rel='noopener'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+}
 async function createStill():Promise<void>{
   const session=activeSession.value
   const video=videoElement.value
@@ -341,6 +447,7 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
+watch([trimStart,trimEnd],()=>{clearAudioClip()})
 watch(activeSession,()=>{
   clearBlob();clearIndex()
   void refreshIndex()
@@ -397,11 +504,69 @@ onUnmounted(()=>{
           data-testid="file-viewer-video"/>
         <div v-else-if="fileUrl&&preview?.type==='audio'" class="file-viewer-audio">
           <span aria-hidden="true">♫</span>
-          <audio :key="fileUrl" :src="fileUrl" controls preload="metadata"
+          <audio :key="fileUrl" ref="audioElement" :src="fileUrl"
+            controls preload="metadata" @loadedmetadata="onAudioMetadata"
             data-testid="file-viewer-audio"/>
         </div>
         <p v-else class="muted">Файл не открыт.</p>
       </div>
+      <section v-if="preview?.type==='audio'&&fileUrl"
+        class="file-viewer-audio-editor" data-testid="file-viewer-audio-editor">
+        <div class="file-viewer-still-heading">
+          <div>
+            <h2>Обрезка аудио</h2>
+            <p class="muted">Выберите диапазон, затем создайте отдельный WAV.</p>
+          </div>
+        </div>
+        <template v-if="audioDuration>0">
+          <label>Начало · {{ trimStart.toFixed(1) }} с
+            <input v-model.number="trimStart" type="range" min="0"
+              :max="audioDuration" step="0.1"
+              data-testid="file-viewer-audio-start">
+          </label>
+          <label>Конец · {{ trimEnd.toFixed(1) }} с
+            <input v-model.number="trimEnd" type="range" min="0"
+              :max="audioDuration" step="0.1"
+              data-testid="file-viewer-audio-end">
+          </label>
+          <button type="button" data-testid="file-viewer-make-wav"
+            :disabled="busy||audioClipBusy||trimEnd-trimStart<0.05"
+            @click="makeAudioFragment">
+            {{ audioClipBusy?'Обработка…':'Создать WAV-фрагмент' }}
+          </button>
+        </template>
+        <p v-else class="muted">Длительность аудиозаписи пока не определена.</p>
+        <div v-if="audioClip&&audioClipUrl" class="file-viewer-still-preview">
+          <audio :src="audioClipUrl" controls
+            data-testid="file-viewer-wav-preview"/>
+          <p class="muted">{{ audioClipFileName }}
+            · {{ ((audioClip.endMs-audioClip.startMs)/1000).toFixed(1) }} с
+            · {{ audioClip.channels }} кан. · {{ audioClip.sampleRate }} Гц</p>
+          <div class="file-viewer-still-actions">
+            <button type="button" data-testid="file-viewer-save-wav"
+              :disabled="audioClipBusy||!!audioClipSavedId"
+              @click="saveAudioFragment">
+              {{ audioClipSavedId?'Сохранено в Browser':'Сохранить зашифрованно в Browser' }}
+            </button>
+            <button type="button" data-testid="file-viewer-download-wav"
+              :disabled="audioClipBusy" @click="downloadAudioFragment">
+              Скачать WAV на устройство
+            </button>
+            <RouterLink v-if="audioClipSavedId"
+              :to="{name:'browser-viewer',params:{protocol:'media',id:audioClipSavedId}}">
+              Открыть сохранённый WAV
+            </RouterLink>
+          </div>
+        </div>
+        <p class="muted">Оригинал не изменяется. Фрагмент — отдельный личный файл:
+          права доступа, GPS, задание и срок исходной записи не наследуются.
+          Редактирование ограничено файлами, доступными для локального
+          декодирования (до 32 МиБ входных данных).</p>
+        <p v-if="audioClipNotice" role="status" data-testid="file-viewer-wav-status">
+          {{ audioClipNotice }}</p>
+        <p v-if="audioClipError" role="alert" data-testid="file-viewer-wav-error">
+          {{ audioClipError }}</p>
+      </section>
       <section v-if="preview?.type==='video'&&fileUrl"
         class="file-viewer-still" data-testid="file-viewer-still">
         <div class="file-viewer-still-heading">
