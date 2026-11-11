@@ -69,6 +69,7 @@ let alice!:MatrixClient
 let bob!:MatrixClient
 let aliceUser='',bobUser='',roomId=''
 let session!:Session
+let resumedSessionRef:typeof activeSession|null=null
 let senderDevice='',peerDevice=''
 let sentEvent=''
 
@@ -256,6 +257,7 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
   },140000)
   afterAll(()=>{
     activeSession.value=null
+    if(resumedSessionRef)resumedSessionRef.value=null
     for(const client of clients){try{client.stopClient()}catch{}}
   })
   it('commits only ciphertext when offline; original Matrix txnId survives a simulated lost ACK and recipient decrypts exactly one event',async()=>{
@@ -275,7 +277,67 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
     const offline=await flushMatrixTextOutbox(alice)
     failUnless(offline.accepted===0&&offline.pending===1,
       'offline_send_not_denied')
-    activeSession.value=session
+
+    // Simulate a cold application MODULE reload, not merely a second
+    // Dexie connection. The new outbox module must open the EXISTING
+    // IndexedDB ciphertext and use the same original Matrix txnId.
+    // This does NOT claim a full Playwright navigation/iOS PWA reload.
+    const originalBinding=await local()
+    failUnless(originalBinding,'missing_binding_before_restart')
+    vi.resetModules()
+    const [
+      resumedIdentity,resumedOutbox,resumedApi,resumedContacts,
+      resumedBinding,resumedPeer,resumedTrust,resumedLease,
+    ]=await Promise.all([
+      import('../../identity/application/session'),
+      import('./matrix-text-outbox'),
+      import('../../identity/infrastructure/api'),
+      import('../../people/application/contact-book'),
+      import('./matrix-binding'),
+      import('./matrix-peer-identity'),
+      import('./matrix-verified-device'),
+      import('./matrix-rust-adapter'),
+    ])
+    const resumedSession=resumedIdentity.activeSession
+    resumedSessionRef=resumedSession
+    resumedSession.value={...session,online:false}
+    vi.mocked(resumedBinding.getLocalMatrixBindingForPending)
+      .mockResolvedValue(originalBinding)
+    vi.mocked(resumedBinding.getBoundMatrixCredentials)
+      .mockResolvedValue({contract:originalBinding,
+        accessToken:'fixture-secret-never-logged'})
+    vi.mocked(resumedApi.jsonApi).mockImplementation(async path=>{
+      if(path!=='/matrix/v1/me')
+        throw Error('pb3.matrix.outbox.unexpected_pb3_request')
+      return {
+        bound:true,homeserverUrl:host,matrixUserId:aliceUser,
+        deviceBinding:{contract:JSON.stringify(originalBinding)},
+      } as never
+    })
+    vi.mocked(resumedContacts.listConfirmedContacts)
+      .mockResolvedValue([{...contact}] as never)
+    vi.mocked(resumedPeer.getMatrixContactMapping)
+      .mockResolvedValue({
+        matrixUserId:bobUser,matrixDeviceId:peerDevice,
+        homeserverUrl:host,verification:'pb3-account-signed-only',
+      })
+    vi.mocked(resumedTrust.inspectVerifiedMatrixDevice)
+      .mockResolvedValue({
+        matrixUserId:bobUser,matrixDeviceId:peerDevice,
+        matrixEd25519:approvedEd,crossSigningChecked:true,
+        capability:'inspection-only-no-send',
+      })
+    vi.mocked(resumedLease.isLeasedMatrixClient)
+      .mockImplementation(candidate=>candidate===alice)
+    const resumed=await resumedOutbox.listMatrixTextOutbox()
+    failUnless(resumed.length===1
+      &&resumed[0]?.operationId===txn
+      &&resumed[0]?.state==='queued'
+      &&resumed[0]?.body===text,'outbox_restart_lost_ciphertext')
+    const resumedOffline=await resumedOutbox.flushMatrixTextOutbox(alice)
+    failUnless(resumedOffline.attempted===0
+      &&resumedOffline.pending===1,'restart_offline_send_not_denied')
+    resumedSession.value=session
 
     // Force real server acceptance BUT lose the SDK return value. The exact
     // same PB3 txnId must be reused on explicit retry, never a new UUID.
@@ -293,7 +355,7 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
       sentEvent=receipt.event_id
       throw Error('pb3.ci.synthetic_ack_loss')
     })
-    let first=await flushMatrixTextOutbox(alice)
+    let first=await resumedOutbox.flushMatrixTextOutbox(alice)
     failUnless(first.attempted===1&&first.accepted===0
       &&first.pending===1&&sentEvent,'lost_ack_not_preserved')
 
@@ -307,14 +369,14 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
       observed.push(transaction)
       return original(room,payload,transaction)
     })
-    const retried=await flushMatrixTextOutbox(alice)
+    const retried=await resumedOutbox.flushMatrixTextOutbox(alice)
     secondSpy.mockRestore()
     failUnless(retried.attempted===1&&retried.accepted===1
       &&retried.pending===0,'outbox_lost_ack_replay_failed')
     failUnless(observed.length===2
       &&observed[0]===txn&&observed[1]===txn,
       'transaction_id_changed')
-    const current=await listMatrixTextOutbox()
+    const current=await resumedOutbox.listMatrixTextOutbox()
     failUnless(current.length===1
       &&current[0]?.state==='server_accepted'
       &&current[0].eventId===sentEvent,
@@ -332,7 +394,7 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
     },90)
     failUnless(matchingRecipientEvents(sentEvent).length===1,
       'double_delivery_to_recipient')
-    const noMore=await flushMatrixTextOutbox(alice)
+    const noMore=await resumedOutbox.flushMatrixTextOutbox(alice)
     failUnless(noMore.attempted===0&&noMore.accepted===0,
       'accepted_message_replayed')
   },180000)
