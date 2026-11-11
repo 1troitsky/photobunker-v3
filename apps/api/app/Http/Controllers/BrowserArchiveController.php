@@ -43,7 +43,9 @@ final class BrowserArchiveController extends Controller
         if($after!==null)P::uuid($after);
         $query=DB::table('browser_archive_entries_v1')
             ->where('account_id',$account->id)
-            ->whereIn('state',['archived','deleting']);
+            // Include restored historical revisions for authenticated
+            // owner CAS. The UI displays them in the normal catalog only.
+            ->whereIn('state',['archived','restored','deleting']);
         if($after!==null)$query->where('id','>',$after);
         $rows=$query->orderBy('id')->limit(51)->get();
         $now=PhotoSync::nowMs();
