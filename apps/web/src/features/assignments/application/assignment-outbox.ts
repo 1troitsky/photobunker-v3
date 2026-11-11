@@ -1684,6 +1684,8 @@ export async function queueAssignmentSubmission(
 
 export type AssignmentPhotoSubmission={
   submissionId:string;photoId:string;photoGrantId:string;contributorAccountId:string
+  // Immutable account-signed consent only. Neither camera nor GPS provenance.
+  contract:string;signature:string;contractHash:string;policyRevision:number
 }
 export async function listAssignmentSubmissionsPage(
   assignmentId:string,after?:string,
