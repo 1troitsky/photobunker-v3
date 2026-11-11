@@ -414,9 +414,12 @@ final class PhotoGrantTest extends TestCase
             ->update(['state'=>'restored']);
         $this->getJson('/shares/v1/grants/'.$id)->assertOk();
 
+        // Use a real FK-backed assignment. Otherwise SQLite correctly
+        // rejects our synthetic invalid row before the read ACL can run.
+        $assignmentId=$this->acceptedAssignment();
         // A personal v1 share may not silently acquire assignment scope.
         DB::table('photo_access_grants')->where('id',$id)
-            ->update(['assignment_id'=>(string)Str::uuid()]);
+            ->update(['assignment_id'=>$assignmentId]);
         $this->getJson('/shares/v1/grants/'.$id)->assertGone();
         $this->getJson('/shares/v1/received')->assertJsonPath('items',[]);
     }
