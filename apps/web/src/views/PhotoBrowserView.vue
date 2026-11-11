@@ -105,6 +105,7 @@ const archivePendingError=ref('')
 const archiveInspection=ref<ArchivePendingInspection|null>(null)
 type ArchiveLocalPrefs=Awaited<ReturnType<typeof localArchivePreferences>>
 const archivePrefs=ref<ArchiveLocalPrefs|null>(null)
+let archivePrefsEpoch=0
 const archivePrefsBusy=ref(false)
 const archivePrefsNotice=ref('')
 const archivePrefsConflict=ref(false)
@@ -130,7 +131,7 @@ async function loadArchivePrefState():Promise<void>{
 }
 async function syncArchivePrefState():Promise<void>{
   if(archivePrefsBusy.value||!activeSession.value?.online)return
-  const identity=activeSession.value
+  const identity=activeSession.value,epoch=++archivePrefsEpoch
   archivePrefsBusy.value=true
   try{
     const result=await synchronizeArchivePreferences()
@@ -145,7 +146,7 @@ async function syncArchivePrefState():Promise<void>{
     if(identity===activeSession.value)
       archivePrefsNotice.value='Изменения сохранены локально, но не подтверждены сервером: '+reason(e)
   }finally{
-    if(identity===activeSession.value)archivePrefsBusy.value=false
+    if(epoch===archivePrefsEpoch)archivePrefsBusy.value=false
   }
 }
 async function setArchivePref(key:keyof ArchivePreferenceValues,value:boolean):Promise<void>{
@@ -758,7 +759,9 @@ function showReceived(blob:Blob):void{
 watch(activeSession,(next,previous)=>{
   ++generation
   ++folderSyncEpoch
+  ++archivePrefsEpoch
   folderSyncBusy.value=false
+  archivePrefsBusy.value=false
   // Same-device session reauthentication changes the Session reference, not
   // the user's workspace. Retain typed folder forms and breadcrumb location.
   // A real account/device change must clear all formerly decrypted UI state.
@@ -789,7 +792,6 @@ watch(activeSession,(next,previous)=>{
     archivePrefs.value=null
     archivePrefsNotice.value=''
     archivePrefsConflict.value=false
-    void loadArchivePrefState()
     void refreshArchivePending()
     void loadFolders()
     void loadMergeBackups()
@@ -798,6 +800,10 @@ watch(activeSession,(next,previous)=>{
     // same device to an online Session; retry without losing a typed form.
     void loadFolders()
   }
+  // Reauthentication creates a new Session object for the SAME device.
+  // Retry authoritative preference loading after the upgrade, without
+  // clearing the encrypted local draft or changing its signed revision.
+  if(next)void loadArchivePrefState()
   void refresh()
 })
 watch([selectedFolder,filter,search],()=>{selectedKeys.value=[]})
@@ -806,7 +812,8 @@ onMounted(()=>{
   void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
-  ++generation;++folderEpoch;++folderSyncEpoch
+  ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch
+  archivePrefsBusy.value=false
   mergePlan.value=null;mergeChoices.value={};mergeBackups.value=[]
   archivePending.value=null
   archiveInspection.value=null
