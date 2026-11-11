@@ -271,6 +271,13 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .file-viewer-shape-filled input{width:18px;height:18px;accent-color:var(--accent)}
 .file-viewer-photo-text-settings select{background:#191919;color:#eee;border:1px solid #555;
   padding:8px;border-radius:6px;max-width:100%}
+.file-viewer-photo-blackout-layer{position:absolute;z-index:4;
+  display:block;background:#000;border:1px solid #000;
+  box-sizing:border-box;padding:0;margin:0;min-height:0;min-width:0;
+  cursor:move;touch-action:none;user-select:none}
+.file-viewer-photo-blackout-layer.selected{outline:2px dashed #f0f0f0;
+  outline-offset:2px}
+.file-viewer-photo-blackout-layer:disabled{cursor:default;pointer-events:none}
 .file-viewer-photo-paint-layer{position:absolute;inset:0;width:100%;height:100%;
   z-index:2;pointer-events:none;display:block}
 .file-viewer-photo-paint-layer.drawing{pointer-events:auto;touch-action:none;cursor:crosshair}
