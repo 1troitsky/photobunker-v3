@@ -46,7 +46,8 @@ export function inspectMediaSubmissionReceipt(
     ||c.mediaContractHash!==entry.mediaContractHash
     ||c.kind!==entry.mediaType
     ||typeof c.policyRevision!=='number'
-    ||!Number.isSafeInteger(c.policyRevision)||c.policyRevision<1
+    ||!Number.isSafeInteger(c.policyRevision)
+    ||c.policyRevision<(version===3?1:2)||c.policyRevision>1001
     ||!hexHash(c.policyHash)
     ||entry.capturedInAssignment!==(version===2)
     ||(version===3?entry.mediaType!=='photo':entry.mediaType==='photo'))
@@ -71,7 +72,8 @@ export function inspectMediaSubmissionReceipt(
     ||typeof capture.finishedAt!=='number'
     ||!Number.isSafeInteger(capture.startedAt)
     ||!Number.isSafeInteger(capture.finishedAt)
-    ||capture.startedAt>capture.finishedAt)
+    ||capture.finishedAt<=capture.startedAt
+    ||capture.finishedAt-capture.startedAt>3*60000)
     throw Error('assignment.receipt_unverified')
   return {version,captureContract:c.captureContract,captureSignature:c.captureSignature}
 }
