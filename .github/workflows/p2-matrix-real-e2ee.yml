@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'apps/web/tests/integration/matrix-real-e2ee.mjs'
+      - 'apps/web/tests/integration/matrix-real-4s-recovery.mjs'
       - 'apps/web/src/features/messages/**'
       - 'apps/api/app/Http/Controllers/Matrix*'
       - 'apps/api/database/migrations/*matrix*'
@@ -93,6 +94,9 @@ jobs:
       - name: Real two-user encrypted room and recipient ciphertext decryption
         timeout-minutes: 9
         run: pnpm --filter @pb3/web exec node tests/integration/matrix-real-e2ee.mjs
+      - name: Real Matrix SSSS cross-signing backup and third-device recovery
+        timeout-minutes: 9
+        run: pnpm --filter @pb3/web exec node tests/integration/matrix-real-4s-recovery.mjs
       - name: Stop and erase disposable Matrix server
         if: always()
         shell: bash

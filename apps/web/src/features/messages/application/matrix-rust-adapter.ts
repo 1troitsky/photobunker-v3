@@ -7,6 +7,7 @@ import {digest,hex,unb64} from '../../identity/infrastructure/crypto'
 import {getBoundMatrixCredentials} from './matrix-binding'
 import type {MatrixBindingContract} from './matrix-binding'
 import {acquireMatrixCryptoLease} from './matrix-crypto-lease'
+import {getVerifiedPB3Matrix4SKey} from './matrix-ssss-bridge'
 import type {MatrixCryptoLease} from './matrix-crypto-lease'
 
 /**
@@ -122,6 +123,17 @@ async function initialize(epoch:number):Promise<void>{
       userId:contract.matrixUserId,
       deviceId:contract.matrixDeviceId,
       accessToken,
+      cryptoCallbacks:{
+        // The SDK may request only the *active* Matrix secret-storage key.
+        // The PB3 Recovery Key escrow is checked against live 4S key-id/MAC
+        // before RustCrypto receives any bytes. Never generate/reset keys
+        // or accept a separate Matrix recovery password on this path.
+        getSecretStorageKey:async(keys,name)=>{
+          if(!client)return null
+          unchanged(s,epoch)
+          return getVerifiedPB3Matrix4SKey(client,keys,name)
+        },
+      },
     })
     const who=await client.whoami()
     unchanged(s,epoch)
@@ -142,7 +154,15 @@ async function initialize(epoch:number):Promise<void>{
       })
     }finally{key.fill(0)}
     unchanged(s,epoch)
-    if(!client.getCrypto())throw Error('matrix.rust_crypto_missing')
+    const rustCrypto=client.getCrypto()
+    if(!rustCrypto)throw Error('matrix.rust_crypto_missing')
+    // The SDK normally defaults to sending to unverified devices. This PB3
+    // bridge must NEVER encrypt a room key to an unsigned new Matrix device.
+    // Only the SDK's supported Rust Crypto isolation mode is permitted:
+    // a PB3-signed contact card or local "verified" flag is not sufficient.
+    const {OnlySignedDevicesIsolationMode}=await import('matrix-js-sdk/lib/crypto-api')
+    unchanged(s,epoch)
+    rustCrypto.setDeviceIsolationMode(new OnlySignedDevicesIsolationMode())
     const created:Runtime={
       client,lease,unwatch:()=>{},
     }

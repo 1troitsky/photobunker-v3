@@ -81,6 +81,8 @@ async function getRawEvent(token,roomId,eventId){
   assert.equal(response.status,200,"Matrix event fetch failed");
   return response.json();
 }
+let success=false
+let stage='initializing 2 ephemeral clients'
 try{
   const [alice,bob]=await Promise.all([
     login(userA,passA),login(userB,passB),
@@ -90,6 +92,7 @@ try{
 
   // Enforce Megolm encryption when creating the room, before any message.
   // Explicit invite is ONLY to a synthetic CI account, not a PB3 Contact.
+  stage='encrypted room creation'
   const created=await ca.createRoom({
     name:"PB3 Disposable E2EE Fixture",
     visibility:"private",
@@ -112,6 +115,7 @@ try{
   // homeserver event matters. Never print it to log.
   const body="PB3_CI_E2EE_SENTINEL_"+randomUUID().replace(/-/g,"");
   const txnId="pb3-ci-"+randomUUID();
+  stage='encrypted send and ciphertext assertion'
   const sent=await ca.sendMessage(roomId,{msgtype:MsgType.Text,body},txnId);
   assert.ok(typeof sent.event_id==="string");
 
@@ -139,6 +143,7 @@ try{
   // Lost-ACK replay of the EXACT SAME ciphertext bytes + txnId as
   // the original SDK-authenticated send. A second event ID would mean
   // the server failed the required idempotent transaction contract.
+  stage='idempotent ciphertext Lost-ACK replay'
   const replayPath=`/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/send/m.room.encrypted/${encodeURIComponent(txnId)}`;
   const replay=await fetch(baseUrl+replayPath,{
     method:"PUT",
@@ -167,8 +172,14 @@ try{
   assert.equal(anonymous.status,401,
     "An unauthenticated user unexpectedly read a private room event");
   console.log("P2-02C PASS: two Matrix accounts, RustCrypto Megolm ciphertext/decrypt, exact-txn Lost ACK replay, anonymous event rejected");
+  success=true
+}catch(e){
+  console.error('P2-02C CI FAIL at '+stage+
+    ' ('+(e instanceof Error?e.name:'unknown')+')')
 }finally{
   for(const client of clients){
     try{client.stopClient()}catch{ /* disposable process exit */ }
   }
+  // Only a completely successful isolated test exits with code zero.
+  process.exit(success?0:1)
 }
