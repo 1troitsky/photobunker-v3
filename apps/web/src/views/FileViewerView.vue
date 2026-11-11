@@ -607,10 +607,11 @@ async function createCroppedPhoto():Promise<void>{
 }
 async function preparedCropWithText(
   source:Blob,marks:readonly PhotoTextMark[],
+  shapes:readonly PhotoShapeMark[],
 ):Promise<Blob>{
   validateTextMarks(marks)
-  if(marks.length===0)return source
-  return (await flattenPhotoText(source,marks)).blob
+  if(!marks.length&&!shapes.length)return source
+  return (await flattenPhotoAnnotations(source,marks,shapes)).blob
 }
 function setComposedCrop(blob:Blob):void{
   clearComposition()
@@ -623,18 +624,19 @@ async function saveCroppedPhoto():Promise<void>{
   const epoch=cropEpoch,currentEpoch=fileEpoch
   const version=textRevision
   const marks=textMarks.value.map(mark=>({...mark}))
+  const shapes=shapeMarks.value.map(shape=>({...shape}))
   if(!session||!result||!name||cropBusy.value||preview.value?.type!=='photo'
     ||cropSavedId.value)return
   cropBusy.value=true;cropError.value='';cropNotice.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks)
+    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
     const id=await enqueueEncryptedMedia(
       new File([flattened],name,{type:'image/jpeg'}))
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch
       &&version===textRevision){
-      if(marks.length)setComposedCrop(flattened)
+      if(marks.length||shapes.length)setComposedCrop(flattened)
       cropSavedId.value=id
       cropNotice.value='Новая JPEG-копия зашифрована в очереди Browser. Облачная синхронизация подтверждается отдельно.'
       void refreshIndex()
@@ -652,17 +654,19 @@ async function downloadCroppedPhoto():Promise<void>{
   const name=croppedFileName.value
   const epoch=cropEpoch,currentEpoch=fileEpoch,version=textRevision
   const marks=textMarks.value.map(mark=>({...mark}))
+  const shapes=shapeMarks.value.map(shape=>({...shape}))
   if(!session||!result||!cropUrl.value||!name||cropBusy.value
     ||preview.value?.type!=='photo')return
   if(!window.confirm('Скачать JPEG-копию на устройство? Файл будет вне защищённого Browser и может появиться в системной галерее.'))return
   cropBusy.value=true;cropError.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks)
+    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
-    if(marks.length&&!composedPhotoUrl.value)setComposedCrop(flattened)
+    if((marks.length||shapes.length)&&!composedPhotoUrl.value)
+      setComposedCrop(flattened)
     const anchor=document.createElement('a')
-    anchor.href=marks.length?composedPhotoUrl.value:cropUrl.value
+    anchor.href=marks.length||shapes.length?composedPhotoUrl.value:cropUrl.value
     anchor.download=name
     anchor.rel='noopener'
     document.body.appendChild(anchor)
