@@ -174,19 +174,11 @@ export async function queueFilePreviewDraft(
     safeContractHash:candidate.safeContractHash,
     fromRevision:from,toRevision:from+1,
     previousPolicyHash:previousHash,
-    publication:'disabled',fields:parseFilePreviewContract({
-      version:1,operationId:crypto.randomUUID(),
-      accountId:session.accountId,sourceMediaId,safeMediaId,
-      sourceContractHash:candidate.sourceContractHash,
-      safeContractHash:candidate.safeContractHash,
-      fromRevision:from,toRevision:from+1,previousPolicyHash,
-      publication:'disabled',fields,
-      actions:{view:false,copy:false,download:false,share:false},
-      expiresAt,
-    }).fields,
+    publication:'disabled',fields:{...fields},
     actions:{view:false,copy:false,download:false,share:false},
     expiresAt,
   }
+  parseFilePreviewContract(contract) // Fail closed before signing/persisting.
   const json=JSON.stringify(contract)
   const signature=await sign(await importSigner(session.pkg.accountPkcs8),
     DOMAIN+json)
