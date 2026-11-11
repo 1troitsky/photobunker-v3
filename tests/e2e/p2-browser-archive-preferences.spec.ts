@@ -98,10 +98,15 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     await expect(a.getByTestId('browser-pref-unconfirmed')).toBeVisible()
     await expect(a.getByTestId('browser-pref-status'))
       .toContainText('Ожидает подтверждения сервера.')
+    // Vite's dev server is deliberately not an offline Service Worker
+    // acceptance environment. Restore the network but fail preference
+    // requests across a reload to verify device-encrypted draft durability.
+    await aContext.setOffline(false)
+    await a.route('**/browser/v1/archive/preferences',route=>route.abort('failed'))
     await a.reload()
     await expect(a.getByTestId('browser-pref-use-archive')).toBeChecked()
     await expect(a.getByTestId('browser-pref-unconfirmed')).toBeVisible()
-    await aContext.setOffline(false)
+    await a.unroute('**/browser/v1/archive/preferences')
     await a.getByTestId('browser-pref-sync').click()
     await expect(a.getByTestId('browser-pref-unconfirmed'))
       .toHaveCount(0,{timeout:20000})
