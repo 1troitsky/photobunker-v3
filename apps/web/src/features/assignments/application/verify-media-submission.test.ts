@@ -13,11 +13,11 @@ vi.mock('../../identity/infrastructure/crypto',()=>({
 }))
 const uuid=(n:number)=>'00000000-0000-4000-8000-'+n.toString(16).padStart(12,'0')
 const assignmentId=uuid(1),ownerAccountId=uuid(2),contributorId=uuid(3)
-function fixture(version:1|2|3=3):AssignmentMediaSubmission{
-  const kind=version===3?'photo':'video'
+function fixture(version:1|2|3|4=3):AssignmentMediaSubmission{
+  const kind=version===3||version===4?'photo':'video'
   const mediaId=uuid(4),mediaGrantId=uuid(5),mediaContractHash='a'.repeat(64)
   const policyHash='b'.repeat(64)
-  const policyRevision=version===3?1:2
+  const policyRevision=version===3||version===4?1:2
   const capture={
     version:1,assignmentId,ownerAccountId,contributorAccountId:contributorId,
     policyRevision,policyHash,mediaId,mediaContractHash,
@@ -28,12 +28,13 @@ function fixture(version:1|2|3=3):AssignmentMediaSubmission{
     assignmentId,contributorAccountId:contributorId,
     mediaId,mediaGrantId,mediaContractHash,
     policyRevision,policyHash,kind,
-    ...(version===2?{captureContract:JSON.stringify(capture),captureSignature:'valid'}:{}),
+    ...(version===2||version===4
+      ?{captureContract:JSON.stringify(capture),captureSignature:'valid'}:{}),
   }
   return {
     submissionId:c.submissionId,mediaId,mediaGrantId,
     contributorAccountId:contributorId,mediaType:kind,
-    capturedInAssignment:version===2,
+    capturedInAssignment:version===2||version===4,
     mediaContractHash,contract:JSON.stringify(c),signature:'valid',
   }
 }
@@ -57,6 +58,35 @@ describe('P2 V-17 independently pinned owner receipt verification',()=>{
     contract.captureSignature='forged'
     await expect(verifyMediaSubmissionReceipt(
       {...e,contract:JSON.stringify(contract)},assignmentId,ownerAccountId,
+    )).rejects.toThrow('assignment.receipt_unverified')
+  })
+  it('v4 photo requires BOTH contributor signatures and the exact captured photo scope',async()=>{
+    const e=fixture(4)
+    const parsed=inspectMediaSubmissionReceipt(e,assignmentId,ownerAccountId)
+    expect(parsed.version).toBe(4)
+    expect(parsed.captureContract).toContain('"mediaType":"photo"')
+    await expect(verifyMediaSubmissionReceipt(e,assignmentId,ownerAccountId))
+      .resolves.toBeUndefined()
+    const contract=JSON.parse(e.contract) as Record<string,unknown>
+    const claim=JSON.parse(contract.captureContract as string) as Record<string,unknown>
+    for(const forged of [
+      {...contract,captureSignature:'forged'},
+      {...contract,captureContract:JSON.stringify({...claim,mediaType:'video'})},
+      {...contract,captureContract:JSON.stringify({...claim,assignmentId:uuid(100)})},
+      {...contract,captureContract:JSON.stringify({...claim,mediaId:uuid(101)})},
+      {...contract,captureContract:JSON.stringify({...claim,policyRevision:2})},
+      {...contract,captureContract:JSON.stringify({...claim,extraGPS:'not-authenticated'})},
+      {...contract,captureContract:JSON.stringify({...claim,finishedAt:claim.startedAt})},
+      {...contract,captureContract:JSON.stringify({...claim,
+        finishedAt:Number(claim.startedAt)+190000})},
+      {...contract,version:3},
+    ]){
+      await expect(verifyMediaSubmissionReceipt(
+        {...e,contract:JSON.stringify(forged)},assignmentId,ownerAccountId,
+      )).rejects.toThrow('assignment.receipt_unverified')
+    }
+    await expect(verifyMediaSubmissionReceipt(
+      {...e,signature:'forged'},assignmentId,ownerAccountId,
     )).rejects.toThrow('assignment.receipt_unverified')
   })
   it('rejects forged scope, uncanonical fields and mismatched signed claims',()=>{
