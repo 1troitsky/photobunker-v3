@@ -256,6 +256,22 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   gap:26px;width:100%;padding:18px;max-width:620px}
 .file-viewer-audio>span{font-size:68px;color:#a0caaa}
 .file-viewer-audio audio{display:block;width:100%}
+.file-viewer-still{display:grid;gap:12px;border:1px solid var(--outline);
+  border-radius:10px;padding:15px;background:var(--surface);margin:16px 0}
+.file-viewer-still-heading{display:flex;align-items:center;justify-content:space-between;
+  gap:14px;flex-wrap:wrap}
+.file-viewer-still-heading h2{font-size:16px;margin:0 0 5px}
+.file-viewer-still-heading p{margin:0;font-size:12px}
+.file-viewer-still-preview{display:grid;gap:9px;min-width:0}
+.file-viewer-still-preview img{display:block;width:auto;max-width:100%;
+  max-height:320px;object-fit:contain;border-radius:6px;background:#090909}
+.file-viewer-still-preview p{margin:0;font-size:11px;overflow-wrap:anywhere}
+.file-viewer-still-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.file-viewer-still-actions a{color:var(--accent);font-size:12px}
+@media(max-width:480px){
+  .file-viewer-still-heading button{width:100%}
+  .file-viewer-still-actions>*{flex:1 1 100%}
+}
 .file-viewer-information{margin:14px 0;padding:14px 0}
 .file-viewer-info-heading{display:flex;gap:14px;justify-content:space-between;align-items:flex-start}
 .file-viewer-info-heading>div{flex:1;min-width:0}

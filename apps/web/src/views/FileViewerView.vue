@@ -11,6 +11,9 @@ import {
   listLocalMedia,listCloudMedia,readLocalMedia,readCloudMedia,
 } from '../features/media/application/media-outbox'
 import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
+import {enqueueEncryptedMedia} from '../features/media/application/media-outbox'
+import {captureVideoStill,stillName} from '../features/browser/application/video-still'
+import type {VideoStill} from '../features/browser/application/video-still'
 import {buildCatalog} from '../features/browser/application/catalog'
 import type {CatalogItem,CatalogType} from '../features/browser/application/catalog'
 import {
@@ -26,6 +29,14 @@ type Preview={
 const route=useRoute()
 const router=useRouter()
 const stage=ref<HTMLElement|null>(null)
+const videoElement=ref<HTMLVideoElement|null>(null)
+const still=ref<VideoStill|null>(null)
+const stillUrl=ref('')
+const stillBusy=ref(false)
+const stillError=ref('')
+const stillNotice=ref('')
+const stillSavedId=ref<string|null>(null)
+let stillEpoch=0
 const current=computed(()=>parseViewerTarget(route.params.protocol,route.params.id))
 const photoLocal=ref<StoredPhoto[]>([])
 const photoCloud=ref<CloudPhoto[]>([])
@@ -50,7 +61,22 @@ let catalogEpoch=0
 let fileEpoch=0
 let touchStart:{x:number;y:number}|null=null
 
+const stillFileName=computed(()=>{
+  if(!preview.value||!still.value)return ''
+  return stillName(preview.value.name,still.value.timeMs)
+})
+function clearStill():void{
+  ++stillEpoch
+  if(stillUrl.value)URL.revokeObjectURL(stillUrl.value)
+  stillUrl.value=''
+  still.value=null
+  stillBusy.value=false
+  stillError.value=''
+  stillNotice.value=''
+  stillSavedId.value=null
+}
 function clearBlob():void{
+  clearStill()
   ++fileEpoch
   if(fileUrl.value)URL.revokeObjectURL(fileUrl.value)
   fileUrl.value=''
@@ -234,6 +260,76 @@ async function toggleFullscreen():Promise<void>{
     else notice.value='Полноэкранный режим не поддерживается браузером.'
   }catch{notice.value='Полноэкранный режим недоступен.'}
 }
+async function createStill():Promise<void>{
+  const session=activeSession.value
+  const video=videoElement.value
+  const target=current.value
+  const url=fileUrl.value
+  const currentEpoch=fileEpoch
+  if(!session||!video||!target||preview.value?.type!=='video'||!url
+    ||stillBusy.value)return
+  clearStill()
+  const epoch=stillEpoch
+  stillBusy.value=true
+  try{
+    // Never draw the frame from a different file or account, and never use
+    // a remote media URL. The video source is the verified local Blob URL.
+    if(video.currentSrc!==url)throw Error('viewer.frame_wrong_source')
+    const captured=await captureVideoStill(video)
+    if(!sameSession(session,currentEpoch)||epoch!==stillEpoch
+      ||fileUrl.value!==url||!current.value
+      ||viewerKey(current.value)!==viewerKey(target))return
+    still.value=captured
+    stillUrl.value=URL.createObjectURL(captured.blob)
+    stillNotice.value='JPEG создан локально. Он не сохранён на устройство или в облако.'
+  }catch(e){
+    if(sameSession(session,currentEpoch)&&epoch===stillEpoch)
+      stillError.value=explain(e)
+  }finally{
+    if(sameSession(session,currentEpoch)&&epoch===stillEpoch)
+      stillBusy.value=false
+  }
+}
+async function saveStillToBrowser():Promise<void>{
+  const session=activeSession.value
+  const asset=still.value
+  const name=stillFileName.value
+  const originalEpoch=fileEpoch,epoch=stillEpoch
+  if(!session||!asset||!name||stillBusy.value||preview.value?.type!=='video')
+    return
+  stillBusy.value=true
+  stillError.value='';stillNotice.value=''
+  try{
+    // A separate personal E2EE photo. Never inherit source file grants,
+    // assignment provenance, GPS or retention by implication.
+    const id=await enqueueEncryptedMedia(
+      new File([asset.blob],name,{type:'image/jpeg'}))
+    if(sameSession(session,originalEpoch)&&epoch===stillEpoch){
+      stillSavedId.value=id
+      stillNotice.value='Стоп-кадр зашифрован и сохранён в локальной очереди Browser. Подтверждение облачной синхронизации отдельно.'
+      // Makes newly encrypted media visible to the adjacent-file index.
+      void refreshIndex()
+    }
+  }catch(e){
+    if(sameSession(session,originalEpoch)&&epoch===stillEpoch)
+      stillError.value=explain(e)
+  }finally{
+    if(sameSession(session,originalEpoch)&&epoch===stillEpoch)
+      stillBusy.value=false
+  }
+}
+function downloadStill():void{
+  if(!activeSession.value||!still.value||!stillUrl.value||!stillFileName.value
+    ||stillBusy.value||preview.value?.type!=='video')return
+  if(!window.confirm('Скачать JPEG-стоп-кадр на устройство? Он окажется вне зашифрованного Browser и может попасть в системные файлы/галерею.'))return
+  const anchor=document.createElement('a')
+  anchor.href=stillUrl.value
+  anchor.download=stillFileName.value
+  anchor.rel='noopener'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+}
 function download():void{
   if(!fileBlob.value||!fileUrl.value||!preview.value||!activeSession.value)return
   if(!window.confirm('Скачать расшифрованный файл на устройство? Он станет доступен за пределами защищённого хранилища PB3.'))return
@@ -297,7 +393,7 @@ onUnmounted(()=>{
           :alt="preview?.name??'Фото'" draggable="false"
           data-testid="file-viewer-image">
         <video v-else-if="fileUrl&&preview?.type==='video'" :key="fileUrl"
-          :src="fileUrl" controls playsinline preload="metadata"
+          ref="videoElement" :src="fileUrl" controls playsinline preload="metadata"
           data-testid="file-viewer-video"/>
         <div v-else-if="fileUrl&&preview?.type==='audio'" class="file-viewer-audio">
           <span aria-hidden="true">♫</span>
@@ -306,6 +402,46 @@ onUnmounted(()=>{
         </div>
         <p v-else class="muted">Файл не открыт.</p>
       </div>
+      <section v-if="preview?.type==='video'&&fileUrl"
+        class="file-viewer-still" data-testid="file-viewer-still">
+        <div class="file-viewer-still-heading">
+          <div>
+            <h2>Стоп-кадр</h2>
+            <p class="muted">Выберите момент на видеоплеере и создайте JPEG-копию кадра.</p>
+          </div>
+          <button type="button" data-testid="file-viewer-create-still"
+            :disabled="busy||stillBusy" @click="createStill">
+            {{ stillBusy?'Обработка…':'Создать стоп-кадр' }}
+          </button>
+        </div>
+        <div v-if="still&&stillUrl" class="file-viewer-still-preview">
+          <img :src="stillUrl" :alt="stillFileName"
+            data-testid="file-viewer-still-image">
+          <p class="muted">{{ still.width }} × {{ still.height }} ·
+            {{ (still.timeMs/1000).toFixed(2) }} сек. · {{ stillFileName }}</p>
+          <div class="file-viewer-still-actions">
+            <button type="button" :disabled="stillBusy||!!stillSavedId"
+              data-testid="file-viewer-save-still"
+              @click="saveStillToBrowser">
+              {{ stillSavedId?'Сохранено в Browser':'Сохранить зашифрованно в Browser' }}
+            </button>
+            <button type="button" :disabled="stillBusy"
+              data-testid="file-viewer-download-still"
+              @click="downloadStill">Скачать JPEG на устройство</button>
+            <RouterLink v-if="stillSavedId"
+              :to="{name:'browser-viewer',params:{protocol:'media',id:stillSavedId}}">
+              Открыть сохранённый файл
+            </RouterLink>
+          </div>
+        </div>
+        <p class="muted">Стоп-кадр — отдельный личный файл: права доступа,
+          задание, GPS и срок исходного видео не наследуются.
+          Исходное видео не изменяется.</p>
+        <p v-if="stillNotice" role="status" data-testid="file-viewer-still-status">
+          {{ stillNotice }}</p>
+        <p v-if="stillError" role="alert" data-testid="file-viewer-still-error">
+          {{ stillError }}</p>
+      </section>
       <div v-if="preview" class="file-viewer-information" data-testid="file-viewer-info">
         <div class="file-viewer-info-heading">
           <div>
