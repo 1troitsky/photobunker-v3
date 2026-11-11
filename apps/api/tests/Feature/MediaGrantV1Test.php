@@ -985,6 +985,12 @@ final class MediaGrantV1Test extends TestCase
         $input=$this->editorialLinkInput($a,$source,$safe);
         $this->postJson($url,$input)->assertConflict();
         $this->readyEditorialPolicies($a,$source,$safe);
+        // Signed link cannot outlive either independent private preview
+        // ceiling: extending the assignment's general ceiling later must
+        // never extend an existing source-bound association.
+        $this->postJson($url,$this->editorialLinkInput(
+            $a,$source,$safe,now()->addHours(3)->getTimestampMs()))
+            ->assertUnprocessable();
         $base=json_decode($input['contract'],true);
         foreach([
             [...$base,'sourceMediaId'=>$safe['id']],
