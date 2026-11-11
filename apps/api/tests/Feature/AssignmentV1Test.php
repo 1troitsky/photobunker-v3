@@ -188,6 +188,11 @@ final class AssignmentV1Test extends TestCase
         $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
         $this->getJson('/assignments/v1/invites/received')
             ->assertJsonPath('items',[]);
+        foreach(['/policy-history','/schedule-history',
+            '/retention-history','/private-history'] as $suffix){
+            $this->getJson('/assignments/v1/'.$this->assignmentId.$suffix)
+                ->assertNotFound();
+        }
         $acceptRecord=DB::table('assignment_invites_v1')
             ->where('id',$inviteId)->first();
         $this->postJson('/assignments/v1/'.$this->assignmentId
