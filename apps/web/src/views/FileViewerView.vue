@@ -16,7 +16,6 @@ import type {CatalogItem,CatalogType} from '../features/browser/application/cata
 import {
   adjacentFiles,parseViewerTarget,safeDownloadName,viewerKey,
 } from '../features/browser/application/viewer-navigation'
-import type {ViewerTarget} from '../features/browser/application/viewer-navigation'
 
 type PrivateGPS={latitude:number;longitude:number;accuracyMeters:number}
 type Preview={
