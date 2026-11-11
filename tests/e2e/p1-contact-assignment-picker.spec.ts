@@ -222,8 +222,7 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
     await expect(offlineHistory).toContainText('Исключён владельцем')
     await expect(offlineHistory).toContainText(
       'Подпись исключения повторно проверена по ранее подтверждённому ключу')
-    await expect(B.locator('.assignment-card-name')).not.toContainText(
-      'CONTACT PICKER E2EE ASSIGNMENT')
+    await expect(B.locator('.assignment-card-name')).toHaveCount(0)
     await B.context().setOffline(false)
   }finally{await ctxA.close();await ctxB.close()}
 })
