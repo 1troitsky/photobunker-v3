@@ -61,6 +61,7 @@ const cropSelection=computed<CropSelection>(()=>({
   width:cropWidth.value,height:cropHeight.value,turns:cropTurns.value,
 }))
 const cropResult=ref<CroppedPhoto|null>(null)
+const showBefore=ref(false)
 const cropUrl=ref('')
 const cropBusy=ref(false)
 const cropError=ref('')
@@ -170,7 +171,7 @@ function commitPhotoEdit():void{
   paintHistory.value=recordPhotoEdit(paintHistory.value,currentPhotoEdits())
 }
 function travelPhotoEdit(delta:-1|1):void{
-  if(cropBusy.value||draftStroke.value)return
+  if(cropBusy.value||draftStroke.value||showBefore.value)return
   const next=travelPhotoHistory(paintHistory.value,delta)
   if(!next)return
   paintHistory.value=next.history
@@ -184,7 +185,7 @@ function travelPhotoEdit(delta:-1|1):void{
   invalidateTextOutput()
 }
 function resetPhotoAnnotations():void{
-  if(cropBusy.value||draftStroke.value)return
+  if(cropBusy.value||draftStroke.value||showBefore.value)return
   if(!textMarks.value.length&&!shapeMarks.value.length
     &&!strokeMarks.value.length)return
   textMarks.value=[]
@@ -392,7 +393,7 @@ function stopPhotoTextDrag(event:PointerEvent):void{
   commitPhotoEdit()
 }
 function choosePhotoTool(tool:StrokeTool):void{
-  if(cropBusy.value||!cropResult.value)return
+  if(cropBusy.value||!cropResult.value||showBefore.value)return
   if(composedPhotoUrl.value)invalidateTextOutput()
   activePaintTool.value=activePaintTool.value===tool?null:tool
 }
@@ -416,7 +417,7 @@ function strokePoint(event:PointerEvent,canvas:HTMLCanvasElement):StrokePoint|nu
 }
 function beginPaintStroke(event:PointerEvent):void{
   const canvas=paintCanvas.value,tool=activePaintTool.value
-  if(!canvas||!tool||!cropResult.value||cropBusy.value
+  if(!canvas||!tool||!cropResult.value||cropBusy.value||showBefore.value
     ||draftStroke.value||strokeMarks.value.length>=MAX_PHOTO_STROKES
     ||event.pointerType==='mouse'&&event.button!==0)return
   if(tool==='eraser'&&!strokeMarks.value.length)return
@@ -473,7 +474,12 @@ function renderPaintCanvas():void{
     ?[...strokeMarks.value,draftStroke.value]:strokeMarks.value
   if(strokes.length)drawPhotoStrokes(ctx,width,height,strokes)
 }
+function toggleBeforeAfter():void{
+  if(!cropResult.value||cropBusy.value||strokePointer!==null)return
+  showBefore.value=!showBefore.value
+}
 function clearCrop():void{
+  showBefore.value=false
   clearComposition()
   ++cropEpoch
   if(cropUrl.value)URL.revokeObjectURL(cropUrl.value)
@@ -790,8 +796,8 @@ async function saveCroppedPhoto():Promise<void>{
   const strokes=strokeMarks.value.map(stroke=>({...stroke,
     points:stroke.points.map(point=>({...point})),
   }))
-  if(!session||!result||!name||cropBusy.value||preview.value?.type!=='photo'
-    ||cropSavedId.value)return
+  if(!session||!result||!name||cropBusy.value||showBefore.value
+    ||preview.value?.type!=='photo'||cropSavedId.value)return
   cropBusy.value=true;cropError.value='';cropNotice.value=''
   try{
     const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes,strokes)
@@ -824,7 +830,7 @@ async function downloadCroppedPhoto():Promise<void>{
     points:stroke.points.map(point=>({...point})),
   }))
   if(!session||!result||!cropUrl.value||!name||cropBusy.value
-    ||preview.value?.type!=='photo')return
+    ||showBefore.value||preview.value?.type!=='photo')return
   if(!window.confirm('Скачать JPEG-копию на устройство? Файл будет вне защищённого Browser и может появиться в системной галерее.'))return
   cropBusy.value=true;cropError.value=''
   try{
@@ -1147,24 +1153,38 @@ onUnmounted(()=>{
         </button>
         <div v-if="cropResult&&cropUrl" class="file-viewer-still-preview">
           <div class="file-viewer-photo-history-bar">
+            <button type="button" data-testid="file-viewer-photo-compare"
+              :disabled="cropBusy" :aria-pressed="showBefore"
+              @click="toggleBeforeAfter">
+              {{ showBefore?'Показать после':'До / После' }}
+            </button>
             <button type="button" data-testid="file-viewer-photo-undo"
+              :disabled="showBefore||!canUndoPhoto||cropBusy"
+              @click="travelPhotoEdit(-1)">↶ Отменить</button>
+            <button type="button" data-testid="file-viewer-photo-redo"
               :disabled="!canUndoPhoto||cropBusy"
               @click="travelPhotoEdit(-1)">↶ Отменить</button>
             <button type="button" data-testid="file-viewer-photo-redo"
-              :disabled="!canRedoPhoto||cropBusy"
+              :disabled="showBefore||!canRedoPhoto||cropBusy"
               @click="travelPhotoEdit(1)">Повторить ↷</button>
             <button type="button" data-testid="file-viewer-photo-reset"
-              :disabled="cropBusy||!canUndoPhoto"
+              :disabled="showBefore||cropBusy||!canUndoPhoto"
               @click="resetPhotoAnnotations">Сбросить аннотации</button>
           </div>
           <p class="muted">Undo/Redo восстанавливает текст, фигуры и штрихи.
             Кадрирование и цветовые параметры пока не входят в историю.</p>
+          <p v-if="showBefore" class="muted"
+            data-testid="file-viewer-photo-before-notice">
+            Сейчас показан исходный файл. Переключитесь на обработанную
+            копию, чтобы продолжить редактирование, сохранить или скачать её.
+          </p>
           <div class="file-viewer-photo-composition-wrap">
             <div ref="photoComposition" class="file-viewer-photo-composition"
               data-testid="file-viewer-photo-composition">
-              <img :src="composedPhotoUrl||cropUrl" :alt="croppedFileName"
+              <img :src="showBefore?fileUrl:(composedPhotoUrl||cropUrl)"
+                :alt="showBefore?(preview?.name??'Исходное фото'):croppedFileName"
                 data-testid="file-viewer-crop-preview" draggable="false">
-              <template v-if="!composedPhotoUrl">
+              <template v-if="!showBefore&&!composedPhotoUrl">
                 <svg v-for="shape in shapeMarks" :key="shape.id"
                   class="file-viewer-photo-shape-layer"
                   :class="{selected:selectedShapeId===shape.id}"
@@ -1225,7 +1245,7 @@ onUnmounted(()=>{
           </div>
           <p class="muted">{{ cropResult.width }} × {{ cropResult.height }}
             · {{ croppedFileName }}</p>
-          <div class="file-viewer-photo-text-editor"
+          <div v-if="!showBefore" class="file-viewer-photo-text-editor"
             data-testid="file-viewer-photo-draw-editor">
             <div class="file-viewer-photo-text-head">
               <strong>Рисовать ({{ strokeMarks.length }}/{{ MAX_PHOTO_STROKES }})</strong>
@@ -1259,7 +1279,7 @@ onUnmounted(()=>{
               текст или фигуры. Рисунок хранится только в памяти
               до зашифрованного сохранения копии.</p>
           </div>
-          <div class="file-viewer-photo-text-editor"
+          <div v-if="!showBefore" class="file-viewer-photo-text-editor"
             data-testid="file-viewer-photo-text-editor">
             <div class="file-viewer-photo-text-head">
               <strong>Надписи ({{ textMarks.length }}/{{ MAX_TEXT_MARKS }})</strong>
@@ -1314,7 +1334,7 @@ onUnmounted(()=>{
               </label>
             </div>
           </div>
-          <div class="file-viewer-photo-text-editor"
+          <div v-if="!showBefore" class="file-viewer-photo-text-editor"
             data-testid="file-viewer-photo-shape-editor">
             <div class="file-viewer-photo-text-head">
               <strong>Фигуры ({{ shapeMarks.length }}/{{ MAX_SHAPE_MARKS }})</strong>
@@ -1398,7 +1418,7 @@ onUnmounted(()=>{
             class="muted">При сохранении или скачивании надписи, фигуры
             и штрихи превращаются в пиксели JPEG. Ни черновики, ни параметры
             рисунка не отправляются серверу открытым текстом.</p>
-          <div class="file-viewer-still-actions">
+          <div v-if="!showBefore" class="file-viewer-still-actions">
             <button type="button" :disabled="cropBusy||!!cropSavedId"
               data-testid="file-viewer-save-crop" @click="saveCroppedPhoto">
               {{ cropSavedId?'Сохранено в Browser':'Сохранить зашифрованно в Browser' }}
