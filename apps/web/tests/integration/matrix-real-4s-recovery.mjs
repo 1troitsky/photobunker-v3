@@ -97,6 +97,7 @@ function countBackupSessions(payload){
     (total,room)=>total+Object.keys(room?.sessions??{}).length,0)
 }
 let success=false
+let stage='initializing ephemeral clients'
 try{
   const [alice,bob]=await Promise.all([
     createDevice(aliceName,alicePassword),
@@ -106,6 +107,7 @@ try{
   await Promise.all([ready(a),ready(b)])
   const c=a.getCrypto()
   assert.ok(c)
+  stage='initial cross-signing bootstrapping'
   await c.bootstrapCrossSigning({
     authUploadDeviceSigningKeys:
       await accountPasswordAuth(aliceName,alicePassword),
@@ -118,6 +120,7 @@ try{
   const generated=await c.createRecoveryKeyFromPassphrase()
   assert.equal(generated.privateKey.length,32)
 
+  stage='4S setup and server backup creation'
   await c.bootstrapSecretStorage({
     createSecretStorageKey:async()=>generated,
     setupNewKeyBackup:true,
@@ -138,6 +141,7 @@ try{
 
   // A second account sends a genuine encrypted event to Alice, so Alice's
   // RustCrypto receives an inbound Megolm session eligible for backup.
+  stage='encrypted room and original inbound Megolm session'
   const created=await a.createRoom({
     visibility:'private',invite:[bob.userId],
     name:'PB3 Disposable Matrix Key Recovery',
@@ -164,6 +168,7 @@ try{
     return event?.getType()==='m.room.message'
       &&event.getContent().body===body
   },90)
+  stage='wait for encrypted backup upload'
   await until('server has encrypted Megolm key backup',async()=>{
     const backup=await api(alice.token,
       '/_matrix/client/v3/room_keys/keys?version='+encodeURIComponent(version))
@@ -182,6 +187,7 @@ try{
   // NEW device: no local Matrix crypto store and no original cross-signing
   // private keys. The only transferred material is the 32-byte SSSS seed;
   // the PB3 production transport must be AKEK sealed (P2-02D1).
+  stage='new third device and independent 4S key access'
   const second=await createDevice(aliceName,alicePassword,
     new Map([[keyId,generated.privateKey]]))
   const next=second.client
@@ -209,6 +215,7 @@ try{
       'Original Matrix cross-signing secret cannot be decrypted')
   }
 
+  stage='recover the original cross-signing root'
   await nc.bootstrapCrossSigning({
     authUploadDeviceSigningKeys:
       await accountPasswordAuth(aliceName,alicePassword),
@@ -217,6 +224,7 @@ try{
     'New device MUST NOT rotate existing cross-signing trust root')
   assert.equal(await nc.isCrossSigningReady(),true,
     'Recovered 4S did not restore cross-signing')
+  stage='recover backed-up historical Megolm sessions'
   await nc.loadSessionBackupPrivateKeyFromSecretStorage()
   const restored=await nc.restoreKeyBackup()
   assert.ok(restored.total>0,
@@ -226,6 +234,7 @@ try{
 
   // Actually decrypt the historical message that existed before the new
   // device was created. Count of imported keys alone is NOT sufficient.
+  stage='decrypt exact old event on fresh device without live gossip'
   const historic=await until('new device sees pre-existing encrypted event',()=>{
     return next.getRoom(roomId)?.getLiveTimeline().getEvents()
       .find(e=>e.getId()===sent.event_id)
@@ -249,10 +258,14 @@ try{
   console.log('P2-02D3 PASS: real Matrix 4S cross-signing root persisted, encrypted Megolm backup, recovered SAME root and decrypted the original historic event on NEW device without live gossip, forged 4S denied')
   generated.privateKey.fill(0)
   success=true
+}catch(e){
+  // No tokens, passwords, room IDs, secrets or message contents in logs.
+  console.error('P2-02D3 CI FAIL at '+stage+
+    ' ('+(e instanceof Error?e.name:'unknown')+')')
 }finally{
   for(const c of clients){
     try{c.stopClient()}catch{}
   }
   // SDK may retain timers after stopClient(). Exit only on proven PASS.
-  if(success)process.exit(0)
+  process.exit(success?0:1)
 }
