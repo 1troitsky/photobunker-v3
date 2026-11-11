@@ -22,6 +22,7 @@ import type {FolderWorkspace} from '../features/browser/domain/folders'
 import {
   loadFolderWorkspace,changeFolderWorkspace,
 } from '../features/browser/application/folder-workspace'
+import {synchronizeFolderWorkspace} from '../features/browser/application/folder-cloud-sync'
 
 const localPhotos=ref<StoredPhoto[]>([])
 const cloudPhotos=ref<CloudPhoto[]>([])
@@ -54,6 +55,8 @@ const folderReady=ref(false)
 const folderError=ref('')
 const folderNotice=ref('')
 const folderBusy=ref(false)
+const folderSyncBusy=ref(false)
+const folderSyncStatus=ref('')
 const selectedFolder=ref<string|null>(null)
 const createFolderOpen=ref(false)
 const newFolderName=ref('')
@@ -76,11 +79,42 @@ const visible=computed(()=>filterCatalog(items.value,{
 const pendingCount=computed(()=>items.value.filter(x=>x.local
   &&x.state!=='synced').length)
 
+async function syncFoldersCloud():Promise<void>{
+  if(folderSyncBusy.value||folderBusy.value||!folderReady.value||folderError.value
+    ||!activeSession.value?.online)return
+  const session=activeSession.value
+  folderSyncBusy.value=true
+  folderSyncStatus.value=''
+  try{
+    const result=await synchronizeFolderWorkspace()
+    if(session!==activeSession.value)return
+    if(result.state==='downloaded'){
+      const fresh=await loadFolderWorkspace()
+      if(session!==activeSession.value)return
+      folderWorkspace.value=fresh
+      if(selectedFolder.value&&!Object.hasOwn(fresh.folders,selectedFolder.value))
+        selectedFolder.value=null
+    }
+    folderSyncStatus.value=({
+      uploaded:'Облачный снимок папок подтверждён сервером.',
+      downloaded:'Зашифрованные папки получены и проверены на этом устройстве.',
+      'up-to-date':'Локальная структура соответствует подтверждённой облачной версии.',
+      empty:'Сохранять в облако пока нечего.',
+      conflict:'Конфликт версий: локальные изменения сохранены. Нельзя автоматически перезаписывать облако или локальные папки.',
+    } as const)[result.state]
+  }catch(e){
+    if(session===activeSession.value)
+      folderSyncStatus.value='Синхронизация не подтверждена: '+reason(e)
+  }finally{
+    if(session===activeSession.value)folderSyncBusy.value=false
+  }
+}
 async function loadFolders():Promise<void>{
   const session=activeSession.value,epoch=++folderEpoch
   folderWorkspace.value=emptyWorkspace()
   folderReady.value=false
   folderError.value=''
+  folderSyncStatus.value=''
   selectedFolder.value=null
   if(!session)return
   try{
@@ -102,7 +136,8 @@ async function changeFolders(change:Parameters<typeof changeFolderWorkspace>[0])
     const next=await changeFolderWorkspace(change)
     if(session!==activeSession.value||epoch!==folderEpoch)return false
     folderWorkspace.value=next
-    folderNotice.value='Локальная структура папок сохранена в зашифрованном виде.'
+    folderNotice.value='Локальные изменения сохранены. Для передачи на другое устройство синхронизируйте папки.'
+    folderSyncStatus.value='Есть новые локальные изменения.'
     return true
   }catch(e){
     if(session===activeSession.value&&epoch===folderEpoch)folderNotice.value=reason(e)
@@ -331,6 +366,7 @@ watch(activeSession,(next,previous)=>{
     selectedKeys.value=[]
     bulkDestination.value=''
     folderNotice.value=''
+    folderSyncStatus.value=''
     void loadFolders()
   }else if(next&&!folderReady.value){
     // A first load could have been fenced out while bootstrap upgraded the
@@ -373,8 +409,18 @@ onUnmounted(()=>{++generation;++folderEpoch;revokePreview()})
           <button type="button" :disabled="!folderReady||!!folderError||folderBusy"
             @click="createFolderOpen=!createFolderOpen">Новая папка</button>
         </div>
-        <p class="muted">Папки зашифрованы локально на этом устройстве.
-          Они не перемещают шифротекст в облаке и пока не синхронизируются между устройствами.</p>
+        <p class="muted">Названия и состав папок зашифрованы. Изменения сохраняются
+          сразу на устройстве, а общий снимок передаётся только после подтверждения сервера.
+          Перемещение по папкам не меняет шифротекст медиа и права доступа.</p>
+        <div class="browser-folder-cloud">
+          <button type="button" data-testid="browser-folder-sync"
+            :disabled="folderSyncBusy||folderBusy||!folderReady||!!folderError||!activeSession.online"
+            @click="syncFoldersCloud">
+            {{ folderSyncBusy?'Синхронизация…':'Синхронизировать папки' }}
+          </button>
+          <span v-if="folderSyncStatus" data-testid="browser-folder-sync-status"
+            role="status" class="muted">{{ folderSyncStatus }}</span>
+        </div>
         <form v-if="createFolderOpen" class="browser-folder-form" @submit.prevent="createFolder">
           <label>Название папки
             <input v-model="newFolderName" maxlength="80" autocomplete="off"
