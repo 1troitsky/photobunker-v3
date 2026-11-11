@@ -139,6 +139,11 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
       .toBeVisible({timeout:30000})
     await share.getByTestId('media-open-preview-draft').click()
     const futurePolicy=share.getByTestId('media-file-preview-settings')
+    await expect.poll(async()=>{
+      const problem=await share.locator('[role="alert"]').allTextContents()
+      if(problem.length)return 'error: '+problem.join(' | ')
+      return await futurePolicy.isVisible()?'visible':'waiting'
+    },{timeout:20000}).toBe('visible')
     await expect(futurePolicy).toBeVisible()
     await futurePolicy.getByTestId('media-preview-field-description').check()
     await futurePolicy.getByTestId('media-preview-field-tags').check()
