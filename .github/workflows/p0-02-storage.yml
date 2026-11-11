@@ -133,6 +133,8 @@ jobs:
       - name: P1 real-browser two-device E2EE photo journey
         shell: bash
         env:
+          # Disposable PostgreSQL/Garage ONLY. Real deployments default OFF.
+          PB3_ENABLE_BROWSER_ARCHIVE: 'true'
           APP_URL: http://127.0.0.1:5173
           SESSION_DRIVER: file
           SESSION_SECURE_COOKIE: 'false'
