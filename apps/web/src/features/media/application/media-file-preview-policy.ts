@@ -137,6 +137,15 @@ export async function loadFilePreviewDraft(
       })
       return {contract,state:'sent'}
     }
+    // A previously confirmed server revision vanished. Do not trust stale
+    // local 'sent' state or silently restart a fresh revision-1 branch.
+    if(row?.state==='sent'){
+      await db.policies.update(key,{
+        state:'conflict',error:'file_preview.remote_missing',
+      })
+      return {contract:null,state:'conflict'}
+    }
+    return {contract:null,state:'none'}
   }
   return row
     ?{contract:parseFilePreviewContract(JSON.parse(row.contract)),state:row.state}
