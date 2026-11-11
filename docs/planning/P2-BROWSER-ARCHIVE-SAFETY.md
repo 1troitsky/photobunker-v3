@@ -78,3 +78,45 @@ profile-controlled archive preference and per-account automatic cleanup, full
 bulk operations, verified cross-provider S3 deletion / replicas (future Storage
 Manager), signed retention changes, browser/native Safari device acceptance.
 `delete` in this slice does not claim GC has finished.
+
+
+## A-04: Owner archive preferences (Draft #91, operator-gated)
+
+`GET /browser/v1/archive/preferences` returns the authenticated
+account's authoritative revision, `useArchive` and
+`autoDeleteAfter7Days`. Both product preferences default **true** as
+required by `ts.md §10.2`. The same response separately exposes operator
+`writeEnabled` / `autoCleanupEnabled`, which remain **false** by default.
+User toggles can NEVER enable these operator flags or physical S3 GC.
+
+`POST /browser/v1/archive/preferences` requires a P-256 owner-account
+signature over the exact, canonical contract in domain
+`pb3.browser-archive-preferences.v1`, containing account/device ID,
+operation ID, expectedRevision and the **two booleans only**. DB is
+account-locked, CAS monotonic, with an immutable operation ledger and
+idempotent signed Lost ACK replay. Multiple devices may set preferences
+but never silently overwrite a newer signed revision.
+
+The Browser has a device-key AES-GCM encrypted Local-First preferences
+cache/draft/outbox in IndexedDB. Offline edits stay visible as
+**unconfirmed** and cannot authorize physical, archive or direct-delete
+operations until authenticated server receipt. Network or CAS failures
+preserve the original signed outbox; explicit action to accept remote
+state only applies to an unsigned local draft, not a potentially executed
+signed request.
+
+| Preference | Owner action | Independent safety constraint |
+| --- | --- | --- |
+| Use archive ON | Owner-confirmed standard delete requests archive | Backend must have archive write gate enabled; no assignment/recipient grants |
+| Use archive OFF | Owner-confirmed, account-signed **direct delete** allowed on standalone active/restored owned files | Backend write gate still required; P1 tombstone and physical GC separate; archived entries are NOT purged or hidden |
+| 7-day auto-delete ON | Signed archive action sets deadline to min(current asset TTL, seven days); reenable adds deadline capped by current asset TTL | Background sweeper remains operator OFF until independent acceptance |
+| 7-day auto-delete OFF | Current archived entries lose only OPTIONAL archive day-7 deadline, including newly archived items | Original asset TTL and assignment policies are never extended or disabled; P1 expiration independently continues |
+
+The archive tab remains accessible even with Use Archive OFF; merely
+changing a preference **never deletes existing ciphertext**. All irreversible
+deletes require a separate owner-signed and confirmed command. Backend
+source paths / DEKs / grants / cleanup-worker gates remain unchanged.
+
+Independent physical-device acceptance, real multi-location GC and
+cross-provider backup policies are still release blockers. A preference
+sync is **not** evidence that objects were deleted from S3.
