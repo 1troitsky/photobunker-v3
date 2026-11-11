@@ -2,7 +2,6 @@ import {activeSession,requireSession,logout} from './session'
 import type {Session} from './session'
 import {jsonApi} from '../infrastructure/api'
 import {importSigner,sign,uuid} from '../infrastructure/crypto'
-import {stopMatrixCrypto} from '../../messages/application/matrix-rust-adapter'
 import {clearLocalMatrixCredentials} from '../../messages/application/matrix-binding'
 
 const uuidRe=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
@@ -84,7 +83,12 @@ export async function revokePB3Device(targetDeviceId:string
     localMatrixShutdownComplete:false,
   }
   let stopped=true,cleared=true
-  try{await stopMatrixCrypto()}catch{stopped=false}
+  try{
+    // Do not load the 7.8 MB Matrix RustCrypto WASM on ordinary PB3
+    // settings/identity startup. Matrix stays an explicit lazy capability.
+    const {stopMatrixCrypto}=await import('../../messages/application/matrix-rust-adapter')
+    await stopMatrixCrypto()
+  }catch{stopped=false}
   try{await clearLocalMatrixCredentials()}catch{cleared=false}
   // Server-side self-revocation has already completed. Always lock PB3,
   // even if local Matrix cleanup fails; NEVER claim a remote Matrix wipe.
