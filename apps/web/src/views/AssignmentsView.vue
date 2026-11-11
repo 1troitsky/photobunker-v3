@@ -25,7 +25,7 @@ import type {
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import { preflightAssignmentMediaGrant } from '../features/assignments/application/media-submission-preflight'
-import { verifyMediaSubmissionReceipt } from '../features/assignments/application/verify-media-submission'
+import { verifyMediaSubmissionReceiptPage } from '../features/assignments/application/verify-media-submission'
 import { parseRulesCsv, EMPTY_ADVANCED_RULES } from '../features/assignments/domain/advanced-rules'
 import type { AdvancedRules } from '../features/assignments/domain/advanced-rules'
 import {
@@ -439,17 +439,11 @@ async function loadSubmissions():Promise<void>{
     // A server count or an unverified string is NOT a contributor signature.
     // Only the independently fingerprint-pinned contributor root can verify
     // the immutable consent receipt. An unpinned/changed key remains unverified.
-    const checks=await Promise.all(mediaResult.items.map(async entry=>{
-      try{
-        await verifyMediaSubmissionReceipt(entry,id,owner.ownerAccountId)
-        return [entry.submissionId,true] as const
-      }catch{
-        return [entry.submissionId,false] as const
-      }
-    }))
+    const checks=await verifyMediaSubmissionReceiptPage(
+      mediaResult.items,id,owner.ownerAccountId)
     if(selectedId.value===id&&activeSession.value===identity){
       submissions.value=result;mediaSubmissions.value=mediaResult.items
-      verifiedMediaReceipts.value=Object.fromEntries(checks)
+      verifiedMediaReceipts.value=checks
     }
   }catch(e){error.value=explain(e)}
 }
