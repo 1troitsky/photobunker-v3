@@ -237,7 +237,8 @@ const items=computed(()=>buildCatalog(
     ...cloudMedia.value,
     ...archiveEntries.value.filter(x=>x.kind==='media'&&x.mediaType!==null
       &&x.state!=='restored').map(x=>({
-      mediaId:x.assetId,mediaType:x.mediaType!,plainBytes:x.plainBytes??0,
+      mediaId:x.assetId,mediaType:x.mediaType!,// Nullable archive byte counts must not be displayed/sorted as zero.
+       plainBytes:x.plainBytes??Number.NaN,
       expiresAt:x.expiresAt,
     })),
   ],
