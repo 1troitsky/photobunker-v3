@@ -694,6 +694,15 @@ final class AssignmentV1Controller extends Controller
                 ->whereColumn('g.photo_id','s.photo_id')
                 ->whereColumn('g.owner_account_id','s.contributor_account_id')
                 ->whereColumn('g.recipient_account_id','a.owner_account_id')
+                ->whereExists(function($member){
+                    $member->selectRaw('1')
+                        ->from('assignment_invites_v1 as i')
+                        ->whereColumn('i.assignment_id','s.assignment_id')
+                        ->whereColumn('i.recipient_account_id','s.contributor_account_id')
+                        ->whereColumn('i.owner_account_id','a.owner_account_id')
+                        ->where('i.role','contributor')
+                        ->where('i.state','accepted');
+                })
                 ->where('p.state','active')->where('p.expires_at','>',$now)
                 ->where('g.state','active')->where('g.expires_at','>',$now)
                 ->selectRaw('COUNT(*)');
@@ -1100,6 +1109,14 @@ final class AssignmentV1Controller extends Controller
             ->whereColumn('g.photo_id','s.photo_id')
             ->whereColumn('g.owner_account_id','s.contributor_account_id')
             ->where('g.recipient_account_id',$assignment->owner_account_id)
+            ->whereExists(function($member)use($assignment){
+                $member->selectRaw('1')->from('assignment_invites_v1 as i')
+                    ->whereColumn('i.assignment_id','s.assignment_id')
+                    ->whereColumn('i.recipient_account_id','s.contributor_account_id')
+                    ->where('i.owner_account_id',$assignment->owner_account_id)
+                    ->where('i.role','contributor')
+                    ->where('i.state','accepted');
+            })
             ->where('p.state','active')->where('p.expires_at','>',PhotoSync::nowMs())
             ->where('g.state','active')->where('g.expires_at','>',PhotoSync::nowMs());
         if($after!==null)$query->where('s.id','>',$after);
