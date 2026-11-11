@@ -210,7 +210,7 @@ final class AssignmentContract
     public static function mediaSubmission(array $d,string $contributor,
         string $assignment):void
     {
-        $p2Photo=($d['version']??null)===3;
+        $p2Photo=in_array($d['version']??null,[3,4],true);
         abort_unless(($p2Photo&&$d['kind']==='photo')
             ||(in_array($d['version'],[1,2],true)
                 &&in_array($d['kind'],['video','audio'],true)),422);
@@ -238,9 +238,10 @@ final class AssignmentContract
         abort_unless(($d['version']??null)===1
             &&($d['contributorAccountId']??null)===$account
             &&($d['assignmentId']??null)===$assignment
-            &&in_array($d['mediaType']??null,['video','audio'],true)
+            &&in_array($d['mediaType']??null,['photo','video','audio'],true)
             &&is_int($d['policyRevision']??null)
-            &&$d['policyRevision']>=2&&$d['policyRevision']<=1001,422);
+            &&$d['policyRevision']>=($d['mediaType']==='photo'?1:2)
+            &&$d['policyRevision']<=1001,422);
         foreach(['assignmentId','ownerAccountId','contributorAccountId',
             'mediaId'] as $key)self::uuid($d,$key);
         foreach(['policyHash','mediaContractHash'] as $key)
