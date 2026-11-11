@@ -241,7 +241,11 @@ final class BrowserArchiveController extends Controller
                 $state='restored';$until=null;
             }else{
                 if($entry){
-                    abort_unless($entry->state==='archived',409);
+                    abort_unless($entry->state==='archived'
+                        ||(!$preferences['useArchive']
+                            &&$entry->state==='restored'
+                            &&$asset->state==='active'
+                            &&(int)$asset->expires_at>$now),409);
                 }else{
                     // Disabling the archive requires a separately signed,
                     // explicitly confirmed irreversible delete; never
