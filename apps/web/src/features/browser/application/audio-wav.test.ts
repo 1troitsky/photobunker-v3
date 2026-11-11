@@ -42,7 +42,7 @@ describe('Viewer on-device WAV trim safety',()=>{
   })
   it('rejects oversized decode, unsupported channels and invalid ranges',()=>{
     const normal=pcm([new Float32Array(16000)])
-    for(const [start,end] of [[-1,1],[0,0],[0,0.01],[0,3],[1.9,1.99],
+    for(const [start,end] of [[-1,1],[0,0],[0,0.01],[0,3],[1.99,2.1],
       [NaN,1],[0,Infinity]])
       expect(()=>encodePcm16Wav(normal,start,end))
         .toThrow('viewer.audio_range_invalid')
