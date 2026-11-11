@@ -14,6 +14,7 @@ import type {
 import type { MediaMetadata } from '../domain/media-crypto'
 import type { GPSFix } from '../../photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../../assignments/domain/advanced-rules'
+const emit=defineEmits<{(event:'catalog-change'):void}>()
 const local=ref<StoredMedia[]>([])
 const cloud=ref<CloudMedia[]>([])
 const cursor=ref<string|null>(null)
@@ -85,6 +86,7 @@ async function chooseFile(event:Event):Promise<void>{
     })
     await refresh()
     notice.value='Файл зашифрован и сохранён на устройстве. Синхронизация будет подтверждена отдельно.'
+    emit('catalog-change')
   }catch(e){error.value=explanation(e)}
   finally{busy.value=false}
 }
@@ -95,6 +97,7 @@ async function sync():Promise<void>{
     await synchronizeMedia()
     await refresh()
     notice.value='Очередь проверена. Только статус «synced» подтверждён сервером.'
+    emit('catalog-change')
   }catch(e){error.value=explanation(e)}
   finally{busy.value=false}
 }
