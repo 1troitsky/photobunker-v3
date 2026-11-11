@@ -315,15 +315,24 @@ function showReceived(blob:Blob):void{
   selectedType.value='photo'
   selectedName.value='Полученный снимок'
 }
-watch(activeSession,()=>{
+watch(activeSession,(next,previous)=>{
   ++generation
+  // Same-device session reauthentication changes the Session reference, not
+  // the user's workspace. Retain typed folder forms and breadcrumb location.
+  // A real account/device change must clear all formerly decrypted UI state.
   revokePreview()
   clearCatalog()
-  editingFolderId.value=null
-  createFolderOpen.value=false
-  selectedKeys.value=[]
-  bulkDestination.value=''
-  void loadFolders()
+  if(next?.accountId!==previous?.accountId
+    ||next?.deviceId!==previous?.deviceId){
+    editingFolderId.value=null
+    createFolderOpen.value=false
+    newFolderName.value=''
+    editFolderName.value=''
+    selectedKeys.value=[]
+    bulkDestination.value=''
+    folderNotice.value=''
+    void loadFolders()
+  }
   void refresh()
 })
 watch([selectedFolder,filter,search],()=>{selectedKeys.value=[]})
