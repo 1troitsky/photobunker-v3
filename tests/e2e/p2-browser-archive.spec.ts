@@ -108,6 +108,10 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
 
     page.once('dialog',dialog=>dialog.accept())
     await row.getByRole('button',{name:/Архивировать файл/}).click()
+    // The archive action is asynchronous and writes a signed server event.
+    // Do not race a second destructive action against its ACK and refresh.
+    await expect(page.getByTestId('browser-archive-status'))
+      .toContainText('Файл помещён в архив на сервере.',{timeout:30000})
     await page.getByTestId('browser-tab-archive').click()
     await expect(row).toHaveCount(1)
     page.once('dialog',dialog=>dialog.accept())

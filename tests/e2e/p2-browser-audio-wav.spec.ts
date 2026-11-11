@@ -11,6 +11,13 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
+    // Document navigation starts async Local-First identity bootstrap.
+    // Wait for the resumed DEVICE key before disconnecting; the login text
+    // on the previous /settings page does not guarantee a new page is ready.
+    await expect.poll(()=>page.evaluate(async()=>{
+      const m=await import('/src/features/identity/application/session.ts')
+      return !!m.activeSession.value?.accountId
+    }),{timeout:30000}).toBe(true)
     await context.setOffline(true)
 
     const source=await page.evaluate(async()=>{
