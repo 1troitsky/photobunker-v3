@@ -10,7 +10,7 @@ import type {AssignmentRemovalNotice} from './verify-removal-notice'
 import {
   listAssignmentRemovalNotices,listCachedAssignmentInvites,signedCaptureBinding,
   cachePrivateAssignment,readCachedPrivateAssignment,
-  listLocallyRevokedAssignmentIds,
+  listLocallyRevokedAssignmentIds,listCachedVerifiedAssignmentRemovals,
 } from './assignment-outbox'
 
 vi.mock('../../identity/infrastructure/api',()=>({jsonApi:vi.fn()}))
@@ -122,6 +122,17 @@ describe('V-27 owner-signed revocation fences local capture authority',()=>{
     expect(result[0]?.verified).toBe(true)
     expect(await listLocallyRevokedAssignmentIds())
       .toEqual(new Set([ctx.assignmentId]))
+    // An offline reload rechecks the stored owner signature ONLY against
+    // the saved independently confirmed owner key, never an API response.
+    vi.stubGlobal('navigator',{onLine:false})
+    vi.mocked(jsonApi).mockClear()
+    const history=await listCachedVerifiedAssignmentRemovals()
+    expect(history).toHaveLength(1)
+    expect(history[0]?.verified).toBe(true)
+    expect(history[0]?.proof.assignmentId).toBe(ctx.assignmentId)
+    expect(pinnedPeer).toHaveBeenCalledWith(
+      history[0]?.proof.ownerAccountId,false)
+    expect(jsonApi).not.toHaveBeenCalled()
     expect(await stored(ctx.recipientId,ctx.assignmentId,ctx.inviteId)).toEqual({
       invites:false,capturePolicies:false,privateSummaries:false,
       operations:true,revocations:true,
@@ -155,6 +166,42 @@ describe('V-27 owner-signed revocation fences local capture authority',()=>{
       .rejects.toThrow('assignment.member_removed')
     expect((await stored(ctx.recipientId,ctx.assignmentId,ctx.inviteId)).operations)
       .toBe(true)
+  })
+  it('offline removal history is unverified if previously pinned owner is unavailable',async()=>{
+    const ctx=await scenario(5)
+    await listAssignmentRemovalNotices()
+    vi.stubGlobal('navigator',{onLine:false})
+    vi.mocked(pinnedPeer).mockRejectedValueOnce(
+      Error('share.peer_not_confirmed'))
+    vi.mocked(jsonApi).mockClear()
+    const history=await listCachedVerifiedAssignmentRemovals()
+    expect(history).toHaveLength(1)
+    expect(history[0]?.verified).toBe(false)
+    expect(jsonApi).not.toHaveBeenCalled()
+    expect((await stored(ctx.recipientId,ctx.assignmentId,ctx.inviteId)).revocations)
+      .toBe(true)
+  })
+  it('a locally corrupted signed removal cannot be reported as previously verified',async()=>{
+    const ctx=await scenario(6)
+    await listAssignmentRemovalNotices()
+    const db=await localDb(),key=ctx.recipientId+'/'+ctx.assignmentId
+    await new Promise<void>((resolve,reject)=>{
+      const tx=db.transaction('revocations','readwrite')
+      const store=tx.objectStore('revocations')
+      const get=store.get(key)
+      get.onsuccess=()=>{
+        const row=get.result as Record<string,unknown>
+        store.put({...row,removalSignature:'not-a-real-owner-signature'})
+      }
+      tx.oncomplete=()=>resolve()
+      tx.onerror=()=>reject(tx.error)
+    })
+    db.close()
+    vi.stubGlobal('navigator',{onLine:false})
+    vi.mocked(jsonApi).mockClear()
+    const history=await listCachedVerifiedAssignmentRemovals()
+    expect(history[0]?.verified).toBe(false)
+    expect(jsonApi).not.toHaveBeenCalled()
   })
   it('a missing independently pinned owner cannot remove cached local rights',async()=>{
     const ctx=await scenario(2)
