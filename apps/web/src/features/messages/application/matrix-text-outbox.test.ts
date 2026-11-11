@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import {beforeEach,afterEach,describe,it,expect,vi} from 'vitest'
-import {MsgType,SyncState,type MatrixClient} from 'matrix-js-sdk'
+import {MsgType,SyncState,EventStatus,type MatrixClient} from 'matrix-js-sdk'
 import {activeSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
 import {freshPackage} from '../../identity/infrastructure/crypto'
@@ -44,11 +44,12 @@ let session:Session
 let client:MatrixClient
 let sent=vi.fn(),fetchEvent=vi.fn(),members=vi.fn()
 let synced=vi.fn(),cryptoMode=vi.fn(),encrypted=vi.fn(),currentRoom=vi.fn()
-let serverState=vi.fn()
+let serverState=vi.fn(),existingEcho=vi.fn(),resend=vi.fn()
 const target={peerAccountId:peerId,safetyFingerprint:safety}
 const id='MAT_DEV_ONE',eventId='$PB3-EVENT1'
 const getRoom=()=>({
   getMyMembership:()=> 'join',
+  getEventForTxnId:existingEcho,
   currentState:{getStateEvents:()=>({getContent:()=>({
     algorithm:'m.megolm.v1.aes-sha2',
   })})},
@@ -103,6 +104,8 @@ beforeEach(async()=>{
     capability:'inspection-only-no-send',
   })
   contacts.mockResolvedValue([{...target,alias:'Peer'}] as never)
+  existingEcho=vi.fn().mockReturnValue(undefined)
+  resend=vi.fn().mockResolvedValue({event_id:eventId})
   sent=vi.fn().mockResolvedValue({event_id:eventId})
   fetchEvent=vi.fn().mockResolvedValue({
     event_id:eventId,room_id:roomId,sender:mxOwn,
@@ -137,6 +140,7 @@ beforeEach(async()=>{
     getJoinedRoomMembers:members,
     roomState:serverState,
     sendMessage:sent,
+    resendEvent:resend,
     fetchRoomEvent:fetchEvent,
   } as unknown as MatrixClient
 })
@@ -183,6 +187,49 @@ describe('P2-02E durable Matrix text E2EE outbox',()=>{
       attempted:0,accepted:0,pending:0,
     })
     expect(sent).toHaveBeenCalledTimes(1)
+  })
+  it('reconciles SDK SENT local echo without duplicating SDK send for same txnId',async()=>{
+    const op=await enqueueMatrixText(target,roomId,plaintext,ed25519)
+    existingEcho.mockReturnValue({
+      getTxnId:()=>op,getRoomId:()=>roomId,getSender:()=>mxOwn,
+      getId:()=>eventId,status:EventStatus.SENT,
+    })
+    expect(await flushMatrixTextOutbox(client)).toEqual({
+      attempted:1,accepted:1,pending:0,
+    })
+    expect(existingEcho).toHaveBeenCalledWith(op)
+    expect(sent).not.toHaveBeenCalled()
+    expect(resend).not.toHaveBeenCalled()
+    expect(fetchEvent).toHaveBeenCalledWith(roomId,eventId)
+    expect((await listMatrixTextOutbox())[0]?.eventId).toBe(eventId)
+  })
+  it('resends a NOT_SENT SDK echo with the exact saved txnId through official resendEvent',async()=>{
+    const op=await enqueueMatrixText(target,roomId,plaintext,ed25519)
+    const echo={
+      getTxnId:()=>op,getRoomId:()=>roomId,getSender:()=>mxOwn,
+      getId:()=> '~'+roomId+':'+op,status:EventStatus.NOT_SENT,
+    }
+    existingEcho.mockReturnValue(echo)
+    expect((await flushMatrixTextOutbox(client)).accepted).toBe(1)
+    expect(resend).toHaveBeenCalledWith(echo,expect.any(Object))
+    expect(sent).not.toHaveBeenCalled()
+    expect((await listMatrixTextOutbox())[0]?.state).toBe('server_accepted')
+  })
+  it('refuses an in-flight or foreign SDK echo without creating a second message',async()=>{
+    const op=await enqueueMatrixText(target,roomId,plaintext,ed25519)
+    const echo={
+      getTxnId:()=>op,getRoomId:()=>roomId,getSender:()=>mxOwn,
+      getId:()=> '~'+roomId+':'+op,status:EventStatus.SENDING,
+    }
+    existingEcho.mockReturnValue(echo)
+    expect((await flushMatrixTextOutbox(client)).accepted).toBe(0)
+    expect((await listMatrixTextOutbox())[0]?.state).toBe('queued')
+    echo.status=EventStatus.SENT
+    existingEcho.mockReturnValue({...echo,getSender:()=>mxPeer,getId:()=>eventId})
+    expect((await flushMatrixTextOutbox(client)).accepted).toBe(0)
+    expect(sent).not.toHaveBeenCalled()
+    expect(resend).not.toHaveBeenCalled()
+    expect(fetchEvent).not.toHaveBeenCalled()
   })
   it('replays EXACT original txnId after network lost-ACK without losing local ciphertext',async()=>{
     const op=await enqueueMatrixText(target,roomId,plaintext,ed25519)
