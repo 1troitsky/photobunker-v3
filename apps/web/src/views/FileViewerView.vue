@@ -12,6 +12,7 @@ import {
 } from '../features/media/application/media-outbox'
 import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
 import {enqueueEncryptedMedia} from '../features/media/application/media-outbox'
+import {registerSafeDerivativeCandidate} from '../features/media/application/safe-derivatives'
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
 import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
@@ -69,6 +70,10 @@ const cropBusy=ref(false)
 const cropError=ref('')
 const cropNotice=ref('')
 const cropSavedId=ref<string|null>(null)
+const safeCandidateIntent=ref(false)
+const safeSourceEligible=computed(()=>current.value?.protocol==='media'
+  &&mediaLocal.value.some(row=>row.mediaId===current.value?.id
+    &&row.mediaType==='photo'&&row.state==='synced'))
 const photoComposition=ref<HTMLElement|null>(null)
 const compositionWidth=ref(0)
 let compositionObserver:ResizeObserver|null=null
@@ -295,6 +300,7 @@ function replaceTextMarks(updated:PhotoTextMark[]):void{
   if(!draggingMark)commitPhotoEdit()
 }
 function clearTextMarks():void{
+  safeCandidateIntent.value=false
   ++textRevision
   textMarks.value=[]
   shapeMarks.value=[]
@@ -895,6 +901,8 @@ async function saveCroppedPhoto():Promise<void>{
     points:stroke.points.map(point=>({...point})),
   }))
   const blackouts=photoBlackouts.value.map(item=>({...item}))
+  const markedCandidate=safeCandidateIntent.value&&blackouts.length>0
+  const sourceMediaId=current.value?.protocol==='media'?current.value.id:null
   if(!session||!result||!name||cropBusy.value||showBefore.value
     ||preview.value?.type!=='photo'||cropSavedId.value)return
   cropBusy.value=true;cropError.value='';cropNotice.value=''
@@ -911,6 +919,18 @@ async function saveCroppedPhoto():Promise<void>{
         setComposedCrop(flattened)
       cropSavedId.value=id
       cropNotice.value='Новая JPEG-копия зашифрована в очереди Browser. Облачная синхронизация подтверждается отдельно.'
+      if(markedCandidate&&sourceMediaId){
+        try{
+          await registerSafeDerivativeCandidate(sourceMediaId,id)
+          if(sameSession(session,currentEpoch)&&epoch===cropEpoch
+            &&version===textRevision)
+            cropNotice.value+=' Копия отмечена как кандидат Safe для адресной передачи после подтверждённой синхронизации.'
+        }catch{
+          if(sameSession(session,currentEpoch)&&epoch===cropEpoch
+            &&version===textRevision)
+            cropNotice.value+=' Связь Safe не зарегистрирована: источник должен быть доступен локально как MediaFile. Передача закрытой копии не разрешена.'
+        }
+      }
       void refreshIndex()
     }
   }catch(e){
@@ -1582,6 +1602,21 @@ onUnmounted(()=>{
             <p class="muted">Это не публикация Safe Media и не отзыв
               доступа к оригиналу. Безопасность публичной версии требует
               отдельной проверки прав доступа и метаданных.</p>
+          </div>
+          <div v-if="!showBefore&&photoBlackouts.length&&safeSourceEligible
+            &&!cropSavedId" class="file-viewer-photo-text-editor"
+            data-testid="file-viewer-safe-intent">
+            <label class="file-viewer-shape-filled">
+              <input v-model="safeCandidateIntent" type="checkbox"
+                :disabled="cropBusy" data-testid="file-viewer-mark-safe-candidate">
+              Отметить новую копию кандидатом для адресной Safe-передачи
+            </label>
+            <p class="muted">Отмечается только результат этого редактора.
+              После сохранения и подтверждения облачной синхронизации
+              передать адресату можно будет только отдельный зашифрованный
+              JPEG. Оригинал останется доступен по своим независимым правам.
+              Это не публичная карточка и не автоматическая проверка
+              того, что все чувствительные участки закрыты.</p>
           </div>
           <p v-if="textMarks.length||shapeMarks.length||strokeMarks.length
             ||photoBlackouts.length" class="muted">
