@@ -45,15 +45,31 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
     await expect(page.getByTestId('file-viewer-audio-editor')).toBeVisible()
     await context.setOffline(true)
 
-    const setRange=async(id:string,value:string)=>{
-      await page.getByTestId(id).evaluate((element:HTMLInputElement,next:string)=>{
-        element.value=next
-        element.dispatchEvent(new Event('input',{bubbles:true}))
-        element.dispatchEvent(new Event('change',{bubbles:true}))
-      },value)
-    }
-    await setRange('file-viewer-audio-start','0.2')
-    await setRange('file-viewer-audio-end','0.7')
+    // Real native keyboard input, rather than mutating a range element's
+    // DOM value without exercising Vue's v-model update.
+    const start=page.getByTestId('file-viewer-audio-start')
+    const end=page.getByTestId('file-viewer-audio-end')
+    await start.focus()
+    await start.press('ArrowRight')
+    await start.press('ArrowRight')
+    await end.focus()
+    for(let i=0;i<13;i++)await end.press('ArrowLeft')
+    await expect(page.getByTestId('file-viewer-audio-editor'))
+      .toContainText('Начало · 0.2 с')
+    await expect(page.getByTestId('file-viewer-audio-editor'))
+      .toContainText('Конец · 0.7 с')
+    // A same-device online-status session replacement must not wipe
+    // user-edited range bounds (previously an actual Local-First regression).
+    await page.evaluate(async()=>{
+      const m=await import('/src/features/identity/application/session.ts')
+      const previous=m.activeSession.value
+      if(!previous)throw Error('missing_identity')
+      m.activeSession.value={...previous,online:false}
+    })
+    await expect(page.getByTestId('file-viewer-audio-editor'))
+      .toContainText('Начало · 0.2 с')
+    await expect(page.getByTestId('file-viewer-audio-editor'))
+      .toContainText('Конец · 0.7 с')
     let downloadCount=0
     page.on('download',()=>{downloadCount++})
     await page.getByTestId('file-viewer-make-wav').click()
