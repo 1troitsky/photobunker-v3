@@ -23,6 +23,7 @@ import {
   loadFolderWorkspace,changeFolderWorkspace,
 } from '../features/browser/application/folder-workspace'
 import {synchronizeFolderWorkspace} from '../features/browser/application/folder-cloud-sync'
+import {getFolderLocalSync} from '../features/browser/application/folder-workspace'
 
 const localPhotos=ref<StoredPhoto[]>([])
 const cloudPhotos=ref<CloudPhoto[]>([])
@@ -50,6 +51,7 @@ const selectedExpiry=ref<number|null>(null)
 let generation=0
 let previewGeneration=0
 let folderEpoch=0
+let folderSyncEpoch=0
 const folderWorkspace=ref<FolderWorkspace>(emptyWorkspace())
 const folderReady=ref(false)
 const folderError=ref('')
@@ -82,7 +84,7 @@ const pendingCount=computed(()=>items.value.filter(x=>x.local
 async function syncFoldersCloud():Promise<void>{
   if(folderSyncBusy.value||folderBusy.value||!folderReady.value||folderError.value
     ||!activeSession.value?.online)return
-  const session=activeSession.value
+  const session=activeSession.value,epoch=++folderSyncEpoch
   folderSyncBusy.value=true
   folderSyncStatus.value=''
   try{
@@ -95,18 +97,24 @@ async function syncFoldersCloud():Promise<void>{
       if(selectedFolder.value&&!Object.hasOwn(fresh.folders,selectedFolder.value))
         selectedFolder.value=null
     }
-    folderSyncStatus.value=({
+    const state=({
       uploaded:'Облачный снимок папок подтверждён сервером.',
       downloaded:'Зашифрованные папки получены и проверены на этом устройстве.',
       'up-to-date':'Локальная структура соответствует подтверждённой облачной версии.',
       empty:'Сохранять в облако пока нечего.',
       conflict:'Конфликт версий: локальные изменения сохранены. Нельзя автоматически перезаписывать облако или локальные папки.',
     } as const)[result.state]
+    const local=await getFolderLocalSync()
+    if(session!==activeSession.value||epoch!==folderSyncEpoch)return
+    folderSyncStatus.value=local.localRevision!==local.marker.confirmedLocalRevision
+      &&result.state!=='conflict'
+      ? state+' Есть более новые локальные изменения, ещё не переданные в облако.'
+      : state
   }catch(e){
-    if(session===activeSession.value)
+    if(session===activeSession.value&&epoch===folderSyncEpoch)
       folderSyncStatus.value='Синхронизация не подтверждена: '+reason(e)
   }finally{
-    if(session===activeSession.value)folderSyncBusy.value=false
+    if(epoch===folderSyncEpoch)folderSyncBusy.value=false
   }
 }
 async function loadFolders():Promise<void>{
@@ -352,6 +360,8 @@ function showReceived(blob:Blob):void{
 }
 watch(activeSession,(next,previous)=>{
   ++generation
+  ++folderSyncEpoch
+  folderSyncBusy.value=false
   // Same-device session reauthentication changes the Session reference, not
   // the user's workspace. Retain typed folder forms and breadcrumb location.
   // A real account/device change must clear all formerly decrypted UI state.
@@ -377,7 +387,7 @@ watch(activeSession,(next,previous)=>{
 })
 watch([selectedFolder,filter,search],()=>{selectedKeys.value=[]})
 onMounted(()=>{void loadFolders();void refresh()})
-onUnmounted(()=>{++generation;++folderEpoch;revokePreview()})
+onUnmounted(()=>{++generation;++folderEpoch;++folderSyncEpoch;revokePreview()})
 </script>
 
 <template>
