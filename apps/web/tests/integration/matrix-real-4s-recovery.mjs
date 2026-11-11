@@ -130,7 +130,7 @@ try{
     'Cross-signing and backup secrets must be in server secret storage')
   const info=await until('trusted remote Matrix backup',async()=>{
     const check=await c.checkKeyBackupAndEnable()
-    return check?.info?.version?check.info:null
+    return check?.backupInfo?.version&&check.trustInfo.trusted?check.backupInfo:null
   },45)
   const version=info.version
   assert.equal(await c.getActiveSessionBackupVersion(),version)
