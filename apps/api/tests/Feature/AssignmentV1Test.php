@@ -1433,7 +1433,11 @@ final class AssignmentV1Test extends TestCase
         $this->getJson('/assignments/v1')
             ->assertJsonPath('items.0.confirmedPhotoCount',1);
         $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
-            ->assertJsonPath('items.0.photoId',$photo);
+            ->assertJsonPath('items.0.photoId',$photo)
+            ->assertJsonPath('items.0.contract',$input['contract'])
+            ->assertJsonPath('items.0.signature',$input['signature'])
+            ->assertJsonPath('items.0.contractHash',hash('sha256',$input['contract']))
+            ->assertJsonPath('items.0.policyRevision',1);
         $this->as('outsider');
         $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
             ->assertNotFound();
