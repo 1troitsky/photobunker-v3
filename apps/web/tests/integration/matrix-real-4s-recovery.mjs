@@ -96,6 +96,7 @@ function countBackupSessions(payload){
   return Object.values(payload.rooms??{}).reduce(
     (total,room)=>total+Object.keys(room?.sessions??{}).length,0)
 }
+let success=false
 try{
   const [alice,bob]=await Promise.all([
     createDevice(aliceName,alicePassword),
@@ -247,8 +248,11 @@ try{
 
   console.log('P2-02D3 PASS: real Matrix 4S cross-signing root persisted, encrypted Megolm backup, recovered SAME root and decrypted the original historic event on NEW device without live gossip, forged 4S denied')
   generated.privateKey.fill(0)
+  success=true
 }finally{
   for(const c of clients){
     try{c.stopClient()}catch{}
   }
+  // SDK may retain timers after stopClient(). Exit only on proven PASS.
+  if(success)process.exit(0)
 }
