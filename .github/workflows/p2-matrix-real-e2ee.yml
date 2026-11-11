@@ -97,6 +97,12 @@ jobs:
       - name: Real Matrix SSSS cross-signing backup and third-device recovery
         timeout-minutes: 9
         run: pnpm --filter @pb3/web exec node tests/integration/matrix-real-4s-recovery.mjs
+      - name: Actual PB3 AES-GCM outbox to real Synapse and independent decrypt
+        timeout-minutes: 8
+        # Vitest executes the ACTUAL message queue + Dexie + RustCrypto SDK.
+        # PB3 auth/trust/lease interfaces are controlled isolated fixtures;
+        # it is not a complete production UI/device provisioning check.
+        run: pnpm --filter @pb3/web exec vitest run src/features/messages/application/matrix-outbox-synapse.test.ts --testTimeout 180000 --hookTimeout 160000 --maxWorkers 1 --no-file-parallelism
       - name: Stop and erase disposable Matrix server
         if: always()
         shell: bash
