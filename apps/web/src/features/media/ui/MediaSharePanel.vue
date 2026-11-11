@@ -8,7 +8,7 @@ import {
   attachMediaGrantLifecycle,flushMediaGrants,
   listOutgoingMediaGrants,listReceivedMediaGrants,
   queueMediaRecipientGrant,queueMediaSafeRecipientGrant,
-  readReceivedMediaGrant,revokeMediaGrant,
+  readReceivedMediaGrant,revokeMediaGrant,parseMediaGrantContract,
 } from '../application/media-grants'
 import type {
   ReceivedMediaGrant,OutgoingMediaGrant,
@@ -95,6 +95,9 @@ function send(mediaId:string):void{
   void action(async()=>{
     const peer=recipientPeer.value
     if(!peer?.confirmed)throw Error('media_grant.peer_not_confirmed')
+    if(safeCandidates.value.some(row=>row.sourceMediaId===mediaId)
+      &&!window.confirm('Выбран ПОЛНЫЙ исходный файл, а не закрытая копия. Получатель сможет расшифровать его без масок. Для адресной Safe-передачи используйте специальную кнопку ниже. Всё равно передать оригинал?'))
+      return
     const grantId=await queueMediaRecipientGrant(mediaId,peer.id)
     outgoing.value=await listOutgoingMediaGrants()
     await flushMediaGrants()
@@ -115,6 +118,12 @@ function sendSafe(candidate:SafeDerivativeCandidate):void{
     outgoing.value=await listOutgoingMediaGrants()
     status.value='Адресный Safe-грант записан: '+grantId.slice(0,8)
   })
+}
+function grantScopeLabel(row:OutgoingMediaGrant):string{
+  try{
+    return parseMediaGrantContract(JSON.parse(row.contract)).scope==='safe_read'
+      ?'Только Safe-копия':'Полный файл (read)'
+  }catch{return 'Неизвестное разрешение'}
 }
 function checkOwner(id:string):void{
   void action(async()=>{
@@ -161,7 +170,7 @@ function refresh():void{
 }
 watch(activeSession,()=>{
   recipientPeer.value=null;ownerPeer.value=null
-  outgoing.value=[];incoming.value=[]
+  outgoing.value=[];incoming.value=[];safeCandidates.value=[]
   void hydrate()
 })
 onMounted(()=>{detach=attachMediaGrantLifecycle();void hydrate()})
@@ -196,6 +205,9 @@ onUnmounted(()=>detach())
     </div>
     <template v-if="recipientPeer?.confirmed">
       <h4>Локально подтверждённые файлы</h4>
+      <p class="muted">Кнопка «Передать медиа» выдаёт полный DEK выбранного
+        файла. Если это оригинал, получатель увидит его БЕЗ масок.
+        Для закрытой копии используйте отдельное действие Safe ниже.</p>
       <div v-for="media in localMedia.filter(x=>x.state==='synced')"
         :key="media.key" class="photo-row">
         <code>{{ media.mediaType }} · {{ media.mediaId.slice(0,8) }}</code>
@@ -227,6 +239,7 @@ onUnmounted(()=>detach())
     <div v-for="grant in outgoing" :key="grant.id" class="photo-row">
       <div>
         <code>{{ grant.id.slice(0,8) }} · {{ grant.state }}</code>
+        <small>{{ grantScopeLabel(grant) }}</small>
         <small>{{ grant.recipientAccountId.slice(0,8) }}</small>
       </div>
       <button v-if="grant.state==='sent'" type="button"
