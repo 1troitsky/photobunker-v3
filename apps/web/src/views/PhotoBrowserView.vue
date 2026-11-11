@@ -15,6 +15,13 @@ import {
 import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
 import {buildCatalog,filterCatalog} from '../features/browser/application/catalog'
 import type {CatalogFilter,CatalogSort,CatalogView,CatalogItem} from '../features/browser/application/catalog'
+import {
+  emptyWorkspace,folderChildren,folderPath,
+} from '../features/browser/domain/folders'
+import type {FolderWorkspace} from '../features/browser/domain/folders'
+import {
+  loadFolderWorkspace,changeFolderWorkspace,
+} from '../features/browser/application/folder-workspace'
 
 const localPhotos=ref<StoredPhoto[]>([])
 const cloudPhotos=ref<CloudPhoto[]>([])
@@ -41,16 +48,99 @@ const selectedCaptured=ref<number|null>(null)
 const selectedExpiry=ref<number|null>(null)
 let generation=0
 let previewGeneration=0
+let folderEpoch=0
+const folderWorkspace=ref<FolderWorkspace>(emptyWorkspace())
+const folderReady=ref(false)
+const folderError=ref('')
+const folderNotice=ref('')
+const folderBusy=ref(false)
+const selectedFolder=ref<string|null>(null)
+const createFolderOpen=ref(false)
+const newFolderName=ref('')
+const editingFolderId=ref<string|null>(null)
+const editFolderName=ref('')
+const folders=computed(()=>folderChildren(folderWorkspace.value,selectedFolder.value))
+const breadcrumb=computed(()=>folderPath(folderWorkspace.value,selectedFolder.value))
+const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
+  .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
 
 const items=computed(()=>buildCatalog(
   localPhotos.value,cloudPhotos.value,localMedia.value,cloudMedia.value,
 ))
 const visible=computed(()=>filterCatalog(items.value,{
   type:filter.value,query:search.value,sort:sort.value,
-}))
+}).filter(item=>!folderReady.value
+  ||(folderWorkspace.value.placements[item.key]??null)===selectedFolder.value))
 const pendingCount=computed(()=>items.value.filter(x=>x.local
   &&x.state!=='synced').length)
 
+async function loadFolders():Promise<void>{
+  const session=activeSession.value,epoch=++folderEpoch
+  folderWorkspace.value=emptyWorkspace()
+  folderReady.value=false
+  folderError.value=''
+  selectedFolder.value=null
+  if(!session)return
+  try{
+    const next=await loadFolderWorkspace()
+    if(session!==activeSession.value||epoch!==folderEpoch)return
+    folderWorkspace.value=next
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderEpoch)
+      folderError.value='Не удалось расшифровать локальные папки: '+reason(e)
+  }finally{
+    if(session===activeSession.value&&epoch===folderEpoch)folderReady.value=true
+  }
+}
+async function changeFolders(change:Parameters<typeof changeFolderWorkspace>[0]):Promise<boolean>{
+  if(!folderReady.value||folderError.value||folderBusy.value)return false
+  const session=activeSession.value,epoch=folderEpoch
+  folderBusy.value=true;folderNotice.value=''
+  try{
+    const next=await changeFolderWorkspace(change)
+    if(session!==activeSession.value||epoch!==folderEpoch)return false
+    folderWorkspace.value=next
+    folderNotice.value='Локальная структура папок сохранена в зашифрованном виде.'
+    return true
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderEpoch)folderNotice.value=reason(e)
+    return false
+  }finally{
+    if(session===activeSession.value&&epoch===folderEpoch)folderBusy.value=false
+  }
+}
+async function createFolder():Promise<void>{
+  const ok=await changeFolders({kind:'add',id:crypto.randomUUID(),
+    parentId:selectedFolder.value,name:newFolderName.value,at:Date.now()})
+  if(ok){newFolderName.value='';createFolderOpen.value=false}
+}
+function openRename(id:string,name:string):void{
+  editingFolderId.value=id;editFolderName.value=name
+}
+async function renameCurrentFolder():Promise<void>{
+  if(!editingFolderId.value)return
+  const ok=await changeFolders({kind:'rename',id:editingFolderId.value,
+    name:editFolderName.value})
+  if(ok)editingFolderId.value=null
+}
+async function changeFolderParent(id:string,event:Event):Promise<void>{
+  const value=(event.target as HTMLSelectElement).value
+  await changeFolders({kind:'move-folder',id,parentId:value||null})
+  // Vue rerenders the controlled value after success/failure.
+  ;(event.target as HTMLSelectElement).value=
+    folderWorkspace.value.folders[id]?.parentId??''
+}
+async function changeItemFolder(item:CatalogItem,event:Event):Promise<void>{
+  const value=(event.target as HTMLSelectElement).value
+  await changeFolders({kind:'move-file',key:item.key,folderId:value||null})
+  ;(event.target as HTMLSelectElement).value=
+    folderWorkspace.value.placements[item.key]??''
+}
+async function deleteEmptyFolder(id:string):Promise<void>{
+  if(!window.confirm('Удалить пустую пользовательскую папку? Файлы и облако затронуты не будут.'))return
+  const ok=await changeFolders({kind:'remove-empty',id})
+  if(ok&&selectedFolder.value===id)selectedFolder.value=null
+}
 function revokePreview():void{
   ++previewGeneration
   if(selectedUrl.value)URL.revokeObjectURL(selectedUrl.value)
@@ -203,10 +293,13 @@ watch(activeSession,()=>{
   ++generation
   revokePreview()
   clearCatalog()
+  editingFolderId.value=null
+  createFolderOpen.value=false
+  void loadFolders()
   void refresh()
 })
-onMounted(()=>{void refresh()})
-onUnmounted(()=>{++generation;revokePreview()})
+onMounted(()=>{void loadFolders();void refresh()})
+onUnmounted(()=>{++generation;++folderEpoch;revokePreview()})
 </script>
 
 <template>
@@ -223,6 +316,69 @@ onUnmounted(()=>{++generation;revokePreview()})
       <RouterLink to="/settings">Открыть доступ</RouterLink>
     </div>
     <template v-else>
+      <section class="browser-folders" data-testid="browser-folders">
+        <div class="browser-folder-head">
+          <div class="browser-breadcrumb" aria-label="Путь папки">
+            <button type="button" :aria-current="selectedFolder===null?'location':undefined"
+              @click="selectedFolder=null">Мои файлы</button>
+            <template v-for="part in breadcrumb" :key="part.id">
+              <span aria-hidden="true">/</span>
+              <button type="button"
+                :aria-current="selectedFolder===part.id?'location':undefined"
+                @click="selectedFolder=part.id">{{ part.name }}</button>
+            </template>
+          </div>
+          <button type="button" :disabled="!folderReady||!!folderError||folderBusy"
+            @click="createFolderOpen=!createFolderOpen">Новая папка</button>
+        </div>
+        <p class="muted">Папки зашифрованы локально на этом устройстве.
+          Они не перемещают шифротекст в облаке и пока не синхронизируются между устройствами.</p>
+        <form v-if="createFolderOpen" class="browser-folder-form" @submit.prevent="createFolder">
+          <label>Название папки
+            <input v-model="newFolderName" maxlength="80" autocomplete="off"
+              data-testid="browser-folder-name" required>
+          </label>
+          <button type="submit" :disabled="folderBusy">Создать</button>
+          <button type="button" @click="createFolderOpen=false">Отмена</button>
+        </form>
+        <div class="browser-folder-list">
+          <div v-for="folder in folders" :key="folder.id" class="browser-folder-item"
+            :data-testid="'browser-folder-'+folder.id">
+            <button type="button" class="browser-folder-open"
+              @click="selectedFolder=folder.id">
+              <span aria-hidden="true">▣</span> {{ folder.name }}
+            </button>
+            <button type="button" :disabled="folderBusy"
+              :aria-label="'Переименовать '+folder.name"
+              @click="openRename(folder.id,folder.name)">Переименовать</button>
+            <label class="browser-folder-parent">
+              <span>В</span>
+              <select :value="folder.parentId??''" :disabled="folderBusy"
+                :aria-label="'Переместить папку '+folder.name"
+                @change="changeFolderParent(folder.id,$event)">
+                <option value="">Корень</option>
+                <option v-for="candidate in allFolders.filter(x=>x.id!==folder.id)"
+                  :key="candidate.id" :value="candidate.id">{{ candidate.name }}</option>
+              </select>
+            </label>
+            <button type="button" :disabled="folderBusy"
+              :aria-label="'Удалить пустую папку '+folder.name"
+              @click="deleteEmptyFolder(folder.id)">Удалить</button>
+          </div>
+        </div>
+        <form v-if="editingFolderId" class="browser-folder-form"
+          @submit.prevent="renameCurrentFolder">
+          <label>Новое название
+            <input v-model="editFolderName" maxlength="80" required
+              data-testid="browser-rename-folder">
+          </label>
+          <button type="submit" :disabled="folderBusy">Сохранить</button>
+          <button type="button" @click="editingFolderId=null">Отмена</button>
+        </form>
+        <p v-if="!folderReady" role="status" class="muted">Загружаются зашифрованные папки…</p>
+        <p v-if="folderError" role="alert" class="error-text">{{ folderError }}</p>
+        <p v-if="folderNotice" role="status" class="muted">{{ folderNotice }}</p>
+      </section>
       <nav class="browser-filters" aria-label="Тип файла">
         <button v-for="tab in (['all','photo','video','audio'] as const)" :key="tab"
           type="button" :aria-pressed="filter===tab"
@@ -279,6 +435,16 @@ onUnmounted(()=>{++generation;revokePreview()})
             <small>Хранение до {{ new Date(item.expiresAt).toLocaleDateString('ru-RU') }}</small>
           </div>
           <div class="browser-item-actions">
+            <label v-if="folderReady&&!folderError" class="browser-file-move">
+              <span>Папка</span>
+              <select :value="folderWorkspace.placements[item.key]??''"
+                :disabled="folderBusy||busy" :aria-label="'Папка файла '+item.id"
+                @change="changeItemFolder(item,$event)">
+                <option value="">Мои файлы</option>
+                <option v-for="folder in allFolders" :key="folder.id"
+                  :value="folder.id">{{ folder.name }}</option>
+              </select>
+            </label>
             <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
               :aria-label="'Полный просмотр файла '+item.id">Просмотр</RouterLink>
             <button v-if="item.local" type="button" :disabled="previewBusy||busy"
@@ -290,7 +456,8 @@ onUnmounted(()=>{++generation;revokePreview()})
           </div>
         </div>
       </div>
-      <p v-if="!visible.length" class="muted">Нет файлов для выбранного фильтра.</p>
+      <p v-if="!visible.length&&folderReady" class="muted">Нет файлов для выбранного фильтра или папки.</p>
+      <p class="muted">Архив пока недоступен: для его безопасного удаления нужна подтверждённая серверная процедура tombstone/GC.</p>
       <button v-if="photoCursor||mediaCursor" type="button"
         :disabled="busy" @click="more">Загрузить ещё</button>
       <div class="action-row">
