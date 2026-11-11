@@ -25,6 +25,8 @@ import {
   MAX_TOTAL_STROKE_POINTS,
 } from '../features/browser/application/photo-strokes'
 import type {PhotoStroke,StrokeTool,StrokePoint} from '../features/browser/application/photo-strokes'
+import {MAX_PHOTO_BLACKOUTS} from '../features/browser/application/photo-blackouts'
+import type {PhotoBlackout} from '../features/browser/application/photo-blackouts'
 import {
   initialPhotoHistory,recordPhotoEdit,travelPhotoHistory,
   canPhotoUndo,canPhotoRedo,
@@ -71,6 +73,10 @@ const photoComposition=ref<HTMLElement|null>(null)
 const compositionWidth=ref(0)
 let compositionObserver:ResizeObserver|null=null
 const textMarks=ref<PhotoTextMark[]>([])
+const photoBlackouts=ref<PhotoBlackout[]>([])
+const selectedBlackoutId=ref<string|null>(null)
+const selectedBlackout=computed(()=>photoBlackouts.value.find(
+  item=>item.id===selectedBlackoutId.value)??null)
 const strokeMarks=ref<PhotoStroke[]>([])
 const draftStroke=ref<PhotoStroke|null>(null)
 const paintCanvas=ref<HTMLCanvasElement|null>(null)
@@ -86,6 +92,7 @@ const selectedShapeId=ref<string|null>(null)
 const selectedShape=computed(()=>shapeMarks.value.find(
   mark=>mark.id===selectedShapeId.value)??null)
 let draggingShape:DragMark|null=null
+let draggingBlackout:DragMark|null=null
 const selectedTextId=ref<string|null>(null)
 const selectedText=computed(()=>textMarks.value.find(
   item=>item.id===selectedTextId.value)??null)
@@ -149,6 +156,7 @@ const croppedFileName=computed(()=>{
     textMarks.value.length?'text':'',
     shapeMarks.value.length?'shape':'',
     strokeMarks.value.length?'draw':'',
+    photoBlackouts.value.length?'blackout':'',
   ].filter(Boolean).join('-')
   return layers?base.replace(/\.jpg$/,'-'+layers+'.jpg'):base
 })
@@ -165,7 +173,10 @@ function invalidateTextOutput():void{
   cropError.value=''
 }
 function currentPhotoEdits():PhotoEditSnapshot{
-  return {text:textMarks.value,shapes:shapeMarks.value,strokes:strokeMarks.value}
+  return {
+    text:textMarks.value,shapes:shapeMarks.value,strokes:strokeMarks.value,
+    blackouts:photoBlackouts.value,
+  }
 }
 function commitPhotoEdit():void{
   paintHistory.value=recordPhotoEdit(paintHistory.value,currentPhotoEdits())
@@ -178,6 +189,9 @@ function travelPhotoEdit(delta:-1|1):void{
   textMarks.value=[...next.snapshot.text]
   shapeMarks.value=[...next.snapshot.shapes]
   strokeMarks.value=[...next.snapshot.strokes]
+  photoBlackouts.value=[...next.snapshot.blackouts]
+  if(!photoBlackouts.value.some(mark=>mark.id===selectedBlackoutId.value))
+    selectedBlackoutId.value=null
   if(!textMarks.value.some(mark=>mark.id===selectedTextId.value))
     selectedTextId.value=null
   if(!shapeMarks.value.some(mark=>mark.id===selectedShapeId.value))
@@ -187,13 +201,91 @@ function travelPhotoEdit(delta:-1|1):void{
 function resetPhotoAnnotations():void{
   if(cropBusy.value||draftStroke.value||showBefore.value)return
   if(!textMarks.value.length&&!shapeMarks.value.length
-    &&!strokeMarks.value.length)return
+    &&!strokeMarks.value.length&&!photoBlackouts.value.length)return
   textMarks.value=[]
   shapeMarks.value=[]
   strokeMarks.value=[]
+  photoBlackouts.value=[]
+  selectedBlackoutId.value=null
   selectedTextId.value=null
   selectedShapeId.value=null
   invalidateTextOutput()
+  commitPhotoEdit()
+}
+function replaceBlackouts(marks:PhotoBlackout[]):void{
+  if(cropBusy.value||showBefore.value)return
+  photoBlackouts.value=marks
+  invalidateTextOutput()
+  if(!draggingBlackout)commitPhotoEdit()
+}
+function addPhotoBlackout():void{
+  if(!cropResult.value||cropBusy.value||showBefore.value
+    ||photoBlackouts.value.length>=MAX_PHOTO_BLACKOUTS)return
+  const item:PhotoBlackout={
+    id:crypto.randomUUID(),x:25,y:25,width:25,height:25,
+  }
+  replaceBlackouts([...photoBlackouts.value,item])
+  selectedBlackoutId.value=item.id
+}
+function selectPhotoBlackout(id:string):void{
+  if(cropBusy.value||showBefore.value)return
+  selectedBlackoutId.value=id
+  clearComposition()
+}
+function editPhotoBlackout(
+  key:'x'|'y'|'width'|'height',event:Event,
+):void{
+  const item=selectedBlackout.value
+  const value=Number((event.target as HTMLInputElement).value)
+  if(!item||cropBusy.value||showBefore.value||!Number.isSafeInteger(value))return
+  const max=key==='x'?100-item.width:key==='y'?100-item.height
+    :key==='width'?100-item.x:100-item.y
+  const min=key==='x'||key==='y'?0:5
+  if(max<min)return
+  replaceBlackouts(photoBlackouts.value.map(m=>m.id===item.id
+    ?{...m,[key]:Math.max(min,Math.min(max,value))}:m))
+}
+function deletePhotoBlackout(id:string):void{
+  if(cropBusy.value||showBefore.value)return
+  replaceBlackouts(photoBlackouts.value.filter(item=>item.id!==id))
+  if(selectedBlackoutId.value===id)selectedBlackoutId.value=null
+}
+function beginBlackoutDrag(event:PointerEvent,id:string):void{
+  const composition=photoComposition.value
+  const item=photoBlackouts.value.find(mark=>mark.id===id)
+  if(!composition||!item||cropBusy.value||showBefore.value
+    ||event.pointerType==='mouse'&&event.button!==0)return
+  const rect=composition.getBoundingClientRect()
+  if(rect.width<1||rect.height<1)return
+  selectedBlackoutId.value=id
+  clearComposition()
+  draggingBlackout={
+    id,pointerId:event.pointerId,startX:event.clientX,startY:event.clientY,
+    originalX:item.x,originalY:item.y,width:rect.width,height:rect.height,
+  }
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+function moveBlackoutDrag(event:PointerEvent):void{
+  const drag=draggingBlackout
+  if(!drag||drag.pointerId!==event.pointerId||cropBusy.value||showBefore.value)
+    return
+  const item=photoBlackouts.value.find(mark=>mark.id===drag.id)
+  if(!item)return
+  const x=Math.max(0,Math.min(100-item.width,Math.round(
+    drag.originalX+(event.clientX-drag.startX)/drag.width*100)))
+  const y=Math.max(0,Math.min(100-item.height,Math.round(
+    drag.originalY+(event.clientY-drag.startY)/drag.height*100)))
+  if(x===item.x&&y===item.y)return
+  replaceBlackouts(photoBlackouts.value.map(mark=>mark.id===drag.id
+    ?{...mark,x,y}:mark))
+}
+function endBlackoutDrag(event:PointerEvent):void{
+  if(draggingBlackout?.pointerId!==event.pointerId)return
+  const element=event.currentTarget as HTMLElement
+  if(element.hasPointerCapture(event.pointerId))
+    element.releasePointerCapture(event.pointerId)
+  draggingBlackout=null
   commitPhotoEdit()
 }
 function replaceTextMarks(updated:PhotoTextMark[]):void{
@@ -207,6 +299,9 @@ function clearTextMarks():void{
   textMarks.value=[]
   shapeMarks.value=[]
   strokeMarks.value=[]
+  photoBlackouts.value=[]
+  selectedBlackoutId.value=null
+  draggingBlackout=null
   draftStroke.value=null
   strokePointer=null
   activePaintTool.value=null
@@ -776,10 +871,13 @@ async function preparedCropWithText(
   source:Blob,marks:readonly PhotoTextMark[],
   shapes:readonly PhotoShapeMark[],
   strokes:readonly PhotoStroke[],
+  blackouts:readonly PhotoBlackout[],
 ):Promise<Blob>{
   validateTextMarks(marks)
-  if(!marks.length&&!shapes.length&&!strokes.length)return source
-  return (await flattenPhotoAnnotations(source,marks,shapes,strokes)).blob
+  if(!marks.length&&!shapes.length&&!strokes.length&&!blackouts.length)
+    return source
+  return (await flattenPhotoAnnotations(
+    source,marks,shapes,strokes,blackouts)).blob
 }
 function setComposedCrop(blob:Blob):void{
   clearComposition()
@@ -796,18 +894,21 @@ async function saveCroppedPhoto():Promise<void>{
   const strokes=strokeMarks.value.map(stroke=>({...stroke,
     points:stroke.points.map(point=>({...point})),
   }))
+  const blackouts=photoBlackouts.value.map(item=>({...item}))
   if(!session||!result||!name||cropBusy.value||showBefore.value
     ||preview.value?.type!=='photo'||cropSavedId.value)return
   cropBusy.value=true;cropError.value='';cropNotice.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes,strokes)
+    const flattened=composedPhotoBlob??await preparedCropWithText(
+      result.blob,marks,shapes,strokes,blackouts)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
     const id=await enqueueEncryptedMedia(
       new File([flattened],name,{type:'image/jpeg'}))
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch
       &&version===textRevision){
-      if(marks.length||shapes.length||strokes.length)setComposedCrop(flattened)
+      if(marks.length||shapes.length||strokes.length||blackouts.length)
+        setComposedCrop(flattened)
       cropSavedId.value=id
       cropNotice.value='Новая JPEG-копия зашифрована в очереди Browser. Облачная синхронизация подтверждается отдельно.'
       void refreshIndex()
@@ -829,18 +930,21 @@ async function downloadCroppedPhoto():Promise<void>{
   const strokes=strokeMarks.value.map(stroke=>({...stroke,
     points:stroke.points.map(point=>({...point})),
   }))
+  const blackouts=photoBlackouts.value.map(item=>({...item}))
   if(!session||!result||!cropUrl.value||!name||cropBusy.value
     ||showBefore.value||preview.value?.type!=='photo')return
   if(!window.confirm('Скачать JPEG-копию на устройство? Файл будет вне защищённого Browser и может появиться в системной галерее.'))return
   cropBusy.value=true;cropError.value=''
   try{
-    const flattened=composedPhotoBlob??await preparedCropWithText(result.blob,marks,shapes,strokes)
+    const flattened=composedPhotoBlob??await preparedCropWithText(
+      result.blob,marks,shapes,strokes,blackouts)
     if(!sameSession(session,currentEpoch)||epoch!==cropEpoch
       ||version!==textRevision)return
-    if((marks.length||shapes.length||strokes.length)&&!composedPhotoUrl.value)
+    if((marks.length||shapes.length||strokes.length||blackouts.length)
+      &&!composedPhotoUrl.value)
       setComposedCrop(flattened)
     const anchor=document.createElement('a')
-    anchor.href=marks.length||shapes.length||strokes.length
+    anchor.href=marks.length||shapes.length||strokes.length||blackouts.length
       ?composedPhotoUrl.value:cropUrl.value
     anchor.download=name
     anchor.rel='noopener'
@@ -1237,6 +1341,20 @@ onUnmounted(()=>{
                   @pointercancel="stopPhotoTextDrag">
                   {{ mark.text }}
                 </button>
+                <button v-for="mask in photoBlackouts" :key="mask.id"
+                  type="button" class="file-viewer-photo-blackout-layer"
+                  :class="{selected:selectedBlackoutId===mask.id}"
+                  :data-testid="'file-viewer-blackout-layer-'+mask.id"
+                  :disabled="cropBusy||!!activePaintTool"
+                  :style="{left:mask.x+'%',top:mask.y+'%',
+                    width:mask.width+'%',height:mask.height+'%'}"
+                  :aria-label="'Закрытая область '+mask.x+' '+mask.y"
+                  @click="selectPhotoBlackout(mask.id)"
+                  @pointerdown="beginBlackoutDrag($event,mask.id)"
+                  @pointermove="moveBlackoutDrag"
+                  @pointerup="endBlackoutDrag"
+                  @pointercancel="endBlackoutDrag">
+                </button>
               </template>
             </div>
           </div>
@@ -1411,10 +1529,66 @@ onUnmounted(()=>{
               </label>
             </div>
           </div>
-          <p v-if="textMarks.length||shapeMarks.length||strokeMarks.length"
-            class="muted">При сохранении или скачивании надписи, фигуры
-            и штрихи превращаются в пиксели JPEG. Ни черновики, ни параметры
-            рисунка не отправляются серверу открытым текстом.</p>
+          <div v-if="!showBefore" class="file-viewer-photo-text-editor"
+            data-testid="file-viewer-photo-blackout-editor">
+            <div class="file-viewer-photo-text-head">
+              <strong>Закрыть области ({{ photoBlackouts.length }}/{{ MAX_PHOTO_BLACKOUTS }})</strong>
+              <button type="button" data-testid="file-viewer-add-blackout"
+                :disabled="cropBusy||photoBlackouts.length>=MAX_PHOTO_BLACKOUTS"
+                @click="addPhotoBlackout">Закрыть область</button>
+            </div>
+            <p class="muted">Полностью непрозрачный чёрный прямоугольник.
+              Его пиксели записываются поверх готового изображения
+              в новой личной JPEG-копии. Исходный файл остаётся доступным
+              в рамках собственных разрешений.</p>
+            <div v-for="(mask,index) in photoBlackouts" :key="mask.id"
+              class="file-viewer-photo-text-row"
+              :class="{selected:selectedBlackoutId===mask.id}">
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-select-blackout-'+index"
+                @click="selectPhotoBlackout(mask.id)">
+                Область {{ index+1 }} · {{ mask.width }}×{{ mask.height }}%
+              </button>
+              <button type="button" :disabled="cropBusy"
+                :data-testid="'file-viewer-delete-blackout-'+index"
+                @click="deletePhotoBlackout(mask.id)">Удалить</button>
+            </div>
+            <div v-if="selectedBlackout" class="file-viewer-photo-text-settings">
+              <label>Слева (%)
+                <input type="number" min="0" :max="100-selectedBlackout.width"
+                  step="1" :value="selectedBlackout.x" :disabled="cropBusy"
+                  data-testid="file-viewer-blackout-x"
+                  @input="editPhotoBlackout('x',$event)">
+              </label>
+              <label>Сверху (%)
+                <input type="number" min="0" :max="100-selectedBlackout.height"
+                  step="1" :value="selectedBlackout.y" :disabled="cropBusy"
+                  data-testid="file-viewer-blackout-y"
+                  @input="editPhotoBlackout('y',$event)">
+              </label>
+              <label>Ширина (%)
+                <input type="number" min="5" :max="100-selectedBlackout.x"
+                  step="1" :value="selectedBlackout.width" :disabled="cropBusy"
+                  data-testid="file-viewer-blackout-width"
+                  @input="editPhotoBlackout('width',$event)">
+              </label>
+              <label>Высота (%)
+                <input type="number" min="5" :max="100-selectedBlackout.y"
+                  step="1" :value="selectedBlackout.height" :disabled="cropBusy"
+                  data-testid="file-viewer-blackout-height"
+                  @input="editPhotoBlackout('height',$event)">
+              </label>
+            </div>
+            <p class="muted">Это не публикация Safe Media и не отзыв
+              доступа к оригиналу. Безопасность публичной версии требует
+              отдельной проверки прав доступа и метаданных.</p>
+          </div>
+          <p v-if="textMarks.length||shapeMarks.length||strokeMarks.length
+            ||photoBlackouts.length" class="muted">
+            При сохранении или скачивании надписи, фигуры, штрихи и
+            закрытые области превращаются в пиксели нового JPEG.
+            Редактируемые черновики не отправляются серверу открытым текстом.
+          </p>
           <div v-if="!showBefore" class="file-viewer-still-actions">
             <button type="button" :disabled="cropBusy||!!cropSavedId"
               data-testid="file-viewer-save-crop" @click="saveCroppedPhoto">
