@@ -40,6 +40,11 @@ final class ArchiveLifecycle
                     $owner=DB::table('identity_accounts')
                         ->where('id',$entry->account_id)->lockForUpdate()->first();
                     if(!$owner)return false;
+                    // Archive preference controls only optional 7-day sweep;
+                    // original asset TTL remains an independent P1 policy.
+                    $preferences=\App\Http\Controllers\BrowserArchivePreferencesController::settings(
+                        $entry->account_id);
+                    if(!$preferences['autoDeleteAfter7Days'])return false;
                     $row=DB::table('browser_archive_entries_v1')
                         ->where('id',$entry->id)->lockForUpdate()->first();
                     if(!$row||$row->state!=='archived'
