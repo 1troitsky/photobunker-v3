@@ -255,14 +255,75 @@ final class IdentityController extends Controller
             ->get(['id','created_at','revoked_at'])->toArray()]);
     }
 
+    /**
+     * PB3 authorization revocation, NOT Matrix homeserver token revocation.
+     * Requires both the live account signing root and actor-device signature.
+     * Never accept a cookie-only destructive request. Historical Matrix
+     * bindings are preserved for incident review; actor() rejects revoked
+     * PB3 devices on any subsequent authenticated PB3 API request.
+     */
     public function revoke(Request $r,string $id): JsonResponse {
         $this->origin($r);
-        [$a,$actor]=$this->actor($r); P::uuid($id);
-        $count=DB::table('identity_devices')->where('id',$id)->where('account_id',$a->id)
-            ->whereNull('revoked_at')->update(['revoked_at'=>now(),'updated_at'=>now()]);
-        abort_unless($count===1,404);
-        if ($id===$actor->id) { $r->session()->invalidate(); $r->session()->regenerateToken(); }
-        return $this->json(['revoked'=>true]);
+        [$a,$actor]=$this->actor($r);
+        P::uuid($id);
+        $input=$this->data($r,['contract','accountSignature','deviceSignature']);
+        abort_unless(is_string($input['contract'])
+            &&strlen($input['contract'])<=1024
+            &&is_string($input['accountSignature'])
+            &&is_string($input['deviceSignature']),422);
+        try{$c=json_decode($input['contract'],true,8,JSON_THROW_ON_ERROR);}
+        catch(\Throwable){abort(422);}
+        abort_unless(is_array($c)&&!array_is_list($c),422);
+        P::exact($c,['version','operationId','accountId','actorDeviceId',
+            'targetDeviceId','accountRevision']);
+        abort_unless(($c['version']??null)===1
+            &&is_string($c['operationId'])
+            &&($c['accountId']??null)===$a->id
+            &&($c['actorDeviceId']??null)===$actor->id
+            &&($c['targetDeviceId']??null)===$id
+            &&is_int($c['accountRevision'])
+            &&$c['accountRevision']===(int)$a->revision
+            &&json_encode($c,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)
+                ===$input['contract'],422);
+        P::uuid($c['operationId']);
+        $signed="pb3.identity-device-revoke.v1\n".$input['contract'];
+        abort_unless(P::verify($a->account_spki,$signed,$input['accountSignature'])
+            &&P::verify($actor->signing_spki,$signed,$input['deviceSignature']),401);
+        $unchanged=DB::transaction(function()use($a,$actor,$id){
+            // Serialize with key rotation, device revoke and device binding.
+            $account=DB::table('identity_accounts')->where('id',$a->id)
+                ->lockForUpdate()->first();
+            abort_unless($account &&$account->status==='ready'
+                &&(int)$account->revision===(int)$a->revision
+                &&hash_equals((string)$account->account_spki,
+                    (string)$a->account_spki),401);
+            $author=DB::table('identity_devices')
+                ->where('id',$actor->id)->where('account_id',$a->id)
+                ->lockForUpdate()->first();
+            abort_unless($author &&!$author->revoked_at
+                &&hash_equals((string)$author->signing_spki,
+                    (string)$actor->signing_spki),401);
+            $target=DB::table('identity_devices')->where('id',$id)
+                ->where('account_id',$a->id)->lockForUpdate()->first();
+            abort_unless($target,404);
+            if($target->revoked_at)return true;
+            DB::table('identity_devices')->where('id',$id)
+                ->where('account_id',$a->id)
+                ->whereNull('revoked_at')
+                ->update(['revoked_at'=>now(),'updated_at'=>now()]);
+            return false;
+        },3);
+        if($id===$actor->id){
+            $r->session()->invalidate();
+            $r->session()->regenerateToken();
+        }
+        return $this->json([
+            'pb3Revoked'=>true,'unchanged'=>$unchanged,
+            // PB3 never holds the Matrix access token and cannot claim it
+            // has invalidated one on a separate homeserver.
+            'matrixRemoteRevoked'=>false,
+            'matrixRevocationStatus'=>'not_performed',
+        ]);
     }
 
     public function pairStart(Request $r): JsonResponse {

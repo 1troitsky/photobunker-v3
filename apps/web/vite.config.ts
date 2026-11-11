@@ -16,6 +16,11 @@ export default defineConfig(({ mode }) => {
         // Signed-release trust design must be approved before registration.
         injectRegister: false,
         registerType: 'prompt',
+        // Signed SW trust is NOT activated in P2. RustCrypto WASM exceeds
+        // Workbox's 2 MiB default precache limit; download it lazily via
+        // the SDK instead of silently raising the cache-size limit.
+        // A future signed-release system must separately verify this WASM.
+        workbox: { globIgnores: ['**/*.wasm'] },
         manifest: {
           id: '/',
           name,
