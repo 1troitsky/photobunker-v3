@@ -748,7 +748,7 @@ async function createCroppedPhoto():Promise<void>{
   const session=activeSession.value
   const img=photoElement.value,target=current.value
   const source=fileUrl.value,currentEpoch=fileEpoch
-  if(!session||!img||!target||!source||cropBusy.value
+  if(!session||!img||!target||!source||cropBusy.value||showBefore.value
     ||preview.value?.type!=='photo')return
   const selection={...cropSelection.value}
   const adjustments={...photoAdjustments.value}
@@ -1146,7 +1146,7 @@ onUnmounted(()=>{
               step="10" data-testid="file-viewer-photo-saturation">
           </label>
         </div>
-        <button type="button" :disabled="busy||cropBusy"
+        <button type="button" :disabled="busy||cropBusy||showBefore"
           data-testid="file-viewer-create-crop"
           @click="createCroppedPhoto">
           {{ cropBusy?'Обработка…':'Создать JPEG-копию' }}
