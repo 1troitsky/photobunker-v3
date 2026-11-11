@@ -804,7 +804,7 @@ final class MediaGrantV1Test extends TestCase
 
     private function editorialAssignmentCeiling(
         array $a,int $from=0,?string $previous=null,
-        ?array $fields=null):array
+        ?array $fields=null,?int $expires=null):array
     {
         $payload=[
             'version'=>1,'operationId'=>(string)Str::uuid(),
@@ -822,7 +822,7 @@ final class MediaGrantV1Test extends TestCase
             'actions'=>[
                 'view'=>false,'copy'=>false,'download'=>false,'share'=>false,
             ],
-            'expiresAt'=>now()->addHours(2)->getTimestampMs(),
+            'expiresAt'=>$expires??now()->addHours(2)->getTimestampMs(),
         ];
         $raw=json_encode($payload,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
         return ['contract'=>$raw,'signature'=>$this->signature(
@@ -880,6 +880,35 @@ final class MediaGrantV1Test extends TestCase
         $raw=json_encode($c,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
         return ['contract'=>$raw,'signature'=>$this->signature(
             'owner',"pb3.safe-assignment-editorial-detach.v1\n".$raw)];
+    }
+
+    public function test_assignment_preview_can_outlive_a_specific_safe_photo_without_overriding_photo_ttl():void
+    {
+        $a=$this->editorialOwnedAssignment();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        // Assignment-wide visibility ceiling is independent of which file
+        // is attached and may remain private after this JPEG expires.
+        $long=now()->addDays(30)->getTimestampMs();
+        $this->postJson('/assignments/v1/'.$a['id'].'/preview-ceiling',
+            $this->editorialAssignmentCeiling($a,0,null,null,$long))
+            ->assertCreated();
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->previewPolicyInput($source,$safe))->assertCreated();
+        $body=$this->editorialLinkInput($a,$source,$safe);
+        $base='/media-file-preview/v1/assignment-links';
+        $this->postJson($base,$body)->assertCreated()
+            ->assertJsonPath('linked',true)
+            ->assertJsonPath('effectivePublicFields.description',false);
+        // The independent assignment ceiling remains valid, but the
+        // *association* is bounded by both signed source & Safe JPEG TTLs.
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($base.'/'.$safe['id'])->assertGone();
+        $this->getJson('/assignments/v1/'.$a['id'].'/preview-ceiling')
+            ->assertOk()->assertJsonPath('published',false);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
     }
 
     public function test_owner_signed_editorial_link_verifies_both_private_ceilings_and_never_grants_access():void
