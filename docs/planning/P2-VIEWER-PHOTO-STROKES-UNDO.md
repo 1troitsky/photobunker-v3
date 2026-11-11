@@ -1,0 +1,20 @@
+# P2 Viewer — brush, pencil, non-destructive stroke eraser, Undo/Redo
+
+**Status:** scoped Draft implementation on verified P2 photo shapes #102; exact-head real Chromium/PG18/Garage CI and native devices still required.
+
+## Accepted UX
+Source `docs/_uiux/browser_photo_editor_3_2_fixed.html` and `ts.md` §12 (Photo Editor 3.2): «Рисовать» — Кисть, Карандаш, Ластик; «Цвет» и «Толщина»; «Отменить» / «Повторить»; «Отменить изменения»; JPEG flattened output. This is an increment of the actual authenticated File Viewer, not a standalone mock or a fake save.
+
+## Product behavior
+1. Open a verified decrypted photo; create a bounded cropped/rotated/tonally edited temporary JPEG as in #99–#100. No E2EE write yet.
+2. Choose brush, pencil or eraser. Use touch, stylus or mouse with Pointer Events and pointer capture to draw on a **separate temporary transparent raster layer** over the image. Lines are stored only as normalized integer points, so they scale consistently between the responsive preview and full-resolution JPEG.
+3. Brush: smooth round endpoints/joins. Pencil: square/tighter strokes. Both have explicit color and thickness (2–36, relative to 900px source width). **Eraser** uses destination-out **only on the temporary strokes layer**: it never deletes source JPEG pixels, shapes, texts or immutable original media. It is **not** a privacy redaction tool.
+4. **Undo / Redo** restores an ordered, capped in-memory history of **text edits/add/remove/moves, shape edits/add/remove/moves, and completed paint strokes**. One entire pointer stroke is one undo action; moving a label/shape commits one history action on pointer release, not per movement frame. Adding a new action after Undo clears the Redo branch. «Сбросить аннотации» can itself be undone. Crop/rotation/light parameter adjustments intentionally reset the annotation coordinate space and **do not yet belong to Undo history**; the UI says so.
+5. Select «Сохранить зашифрованно в Browser» to flatten text, shapes, and strokes in one JPEG encoder pass, after erasing marks from an isolated paint canvas. The personal derivative is then encrypted in the **existing** signed AES-GCM local outbox; it does not inherit the source owner's grants, assignment, GPS or expiry and cannot overwrite source bytes. A local save is not falsely presented as cloud ACK.
+6. Alternatively, «Скачать JPEG» requires the separate plaintext export confirmation and generates exactly the same pixels; no automatic OS gallery write. Before any explicit save/export, all strokes and history remain in volatile memory (not IndexedDB plaintext, URL parameters, analytics or server). New edits invalidate the old flattened preview. Logout/route/account/key changes clear strokes/history and revoke object URLs.
+
+## Bounds and acceptance
+- Max 80 strokes, 1,500 points per stroke, 12,000 points total, 50 history snapshots. Positions: 0–1000 normalized ints; width: 2–36; valid UUIDs and lowercase hex; unknown/malformed types fail closed. JPEG max 4096px per axis and 16MP. Preview itself renders at <=900px to avoid per-pointer multi-megapixel raster work.
+- **Unit:** valid/invalid sample points/colors/kinds/bounds, context save/restore, isolated eraser destination-out, branch truncation, deduplication, bounded snapshots, deep snapshot copies.
+- **Chromium+Postgres18+Garage:** generate genuine all-white JPEG; encrypt it while warm offline; create and draw green brush stroke, undo/redo, draw eraser and undo/redo, draw a red pencil stroke, verify **no MediaFile and no OS download before explicit save**. Then save independent encrypted JPEG, decrypt and verify actual green/red pixels and untouched white region where stroke was erased; original ciphertext metadata and byte length unchanged; separately confirm OS download and revoke preview URL on logout. No E2E skip/mock. Native Safari/iOS/Android remain NOT TESTED.
+- This milestone is **not** full safe/original redaction or end-to-end Photo Editor 3.2 completion. Privacy mask with scope enforcement, version replacement, full crop/color undo and physical devices remain separate gates. Physical deletion/GC remains off.
