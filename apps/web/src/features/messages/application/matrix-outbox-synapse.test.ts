@@ -285,19 +285,16 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
     const originalBinding=await local()
     failUnless(originalBinding,'missing_binding_before_restart')
     vi.resetModules()
-    const [
-      resumedIdentity,resumedOutbox,resumedApi,resumedContacts,
-      resumedBinding,resumedPeer,resumedTrust,resumedLease,
-    ]=await Promise.all([
-      import('../../identity/application/session'),
-      import('./matrix-text-outbox'),
-      import('../../identity/infrastructure/api'),
-      import('../../people/application/contact-book'),
-      import('./matrix-binding'),
-      import('./matrix-peer-identity'),
-      import('./matrix-verified-device'),
-      import('./matrix-rust-adapter'),
-    ])
+    // Configure the new module's explicit PB3 permission fixtures BEFORE
+    // importing the outbox. Parallel imports can capture a different Vitest
+    // mock instance and falsely deny its lease after resetModules().
+    const resumedIdentity=await import('../../identity/application/session')
+    const resumedApi=await import('../../identity/infrastructure/api')
+    const resumedContacts=await import('../../people/application/contact-book')
+    const resumedBinding=await import('./matrix-binding')
+    const resumedPeer=await import('./matrix-peer-identity')
+    const resumedTrust=await import('./matrix-verified-device')
+    const resumedLease=await import('./matrix-rust-adapter')
     const resumedSession=resumedIdentity.activeSession
     resumedSessionRef=resumedSession
     resumedSession.value={...session,online:false}
@@ -329,6 +326,9 @@ describe.runIf(enabled)('P2-02E2 real PB3 encrypted outbox → Synapse → RustC
       })
     vi.mocked(resumedLease.isLeasedMatrixClient)
       .mockImplementation(candidate=>candidate===alice)
+    failUnless(resumedLease.isLeasedMatrixClient(alice),
+      'restored_lease_fixture_unavailable')
+    const resumedOutbox=await import('./matrix-text-outbox')
     const resumed=await resumedOutbox.listMatrixTextOutbox()
     failUnless(resumed.length===1
       &&resumed[0]?.operationId===txn
