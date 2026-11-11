@@ -4,6 +4,7 @@ import {OnlySignedDevicesIsolationMode} from 'matrix-js-sdk/lib/crypto-api'
 import {activeSession,requireSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
 import {b64,unb64,digest,hex,random,uuid} from '../../identity/infrastructure/crypto'
+import {jsonApi} from '../../identity/infrastructure/api'
 import {listConfirmedContacts} from '../../people/application/contact-book'
 import type {ConfirmedContact} from '../../people/application/contact-book'
 import {
@@ -241,6 +242,18 @@ async function preflight(s:Session,x:PendingText,client:MatrixClient):Promise<vo
     ||binding.contract.matrixDeviceId!==client.getDeviceId()
     ||binding.contract.homeserverUrl!==client.baseUrl)
     throw Error('matrix.outbox_device_binding_changed')
+  // A sealed local Matrix credential can remain after PB3 revokes its
+  // device binding. Re-check the authenticated authoritative PB3 ledger
+  // before SDK sends any encrypted room key or message.
+  const remote=await jsonApi<{
+    bound:boolean;homeserverUrl:string;matrixUserId:string|null
+    deviceBinding?:{contract:string}|null
+  }>('/matrix/v1/me')
+  same(s)
+  if(!remote.bound||remote.homeserverUrl!==binding.contract.homeserverUrl
+    ||remote.matrixUserId!==binding.contract.matrixUserId
+    ||remote.deviceBinding?.contract!==JSON.stringify(binding.contract))
+    throw Error('matrix.outbox_server_binding_revoked')
   if(client.getSyncState()!==SyncState.Syncing
     &&client.getSyncState()!==SyncState.Prepared)
     throw Error('matrix.outbox_sync_not_ready')
