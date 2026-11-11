@@ -1036,7 +1036,7 @@ onUnmounted(cleanPreview)
           <label for="assignment-recipient-id">ID аккаунта исполнителя</label>
           <input id="assignment-recipient-id" v-model="recipientId" autocomplete="off" spellcheck="false" placeholder="UUID аккаунта">
           <button type="button" :disabled="busy||!recipientId" @click="inspectRecipient">Проверить ключ исполнителя</button>
-          <div v-if="ownerCheck" class="fingerprint-panel">
+          <div v-if="ownerCheck" id="assignment-contributor-key-verification" class="fingerprint-panel">
             <strong>Отпечаток исполнителя</strong>
             <code>{{ ownerCheck.fingerprint }}</code>
             <template v-if="!ownerCheck.confirmed">
@@ -1053,9 +1053,10 @@ onUnmounted(cleanPreview)
           <div v-for="entry in submissions" :key="entry.submissionId" class="photo-row">
             <div>
               <strong>{{ entry.photoId.slice(0,8) }}</strong>
-              <small>{{ verifiedPhotoReceipts[entry.submissionId]?'Подпись отправки проверена':'Подпись отправки не проверена — подтвердите ключ участника' }}</small>
+              <small>{{ verifiedPhotoReceipts[entry.submissionId]?'Подпись отправки проверена':'Подпись отправки не проверена' }}</small>
               <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
             </div>
+            <button v-if="!verifiedPhotoReceipts[entry.submissionId]" type="button" :disabled="busy" @click="inspectContributorReceipt(entry.contributorAccountId)">Сверить ключ автора</button>
             <button type="button" :disabled="busy" @click="openSubmission(entry.photoGrantId)">Просмотр</button>
           </div>
           <button v-if="photoNextCursor" type="button"
@@ -1066,9 +1067,10 @@ onUnmounted(cleanPreview)
             <div>
               <strong>{{ entry.mediaType==='video'?'Видео':entry.mediaType==='photo'?'Фото P2':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
               <small>{{ entry.capturedInAssignment?'Заявлена запись по заданию (не доказательство камеры)':'Личный файл · передан вручную' }}</small>
-              <small>{{ verifiedMediaReceipts[entry.submissionId]?'Подпись согласия исполнителя проверена':'Подпись согласия не проверена: подтвердите ключ участника' }}</small>
+              <small>{{ verifiedMediaReceipts[entry.submissionId]?'Подпись согласия исполнителя проверена':'Подпись согласия исполнителя не проверена' }}</small>
               <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
             </div>
+            <button v-if="!verifiedMediaReceipts[entry.submissionId]" type="button" :disabled="busy" @click="inspectContributorReceipt(entry.contributorAccountId)">Сверить ключ автора</button>
             <button type="button" :disabled="busy" @click="openMediaSubmission(entry.mediaGrantId)">Открыть медиа задания</button>
           </div>
           <button v-if="mediaNextCursor" type="button"
