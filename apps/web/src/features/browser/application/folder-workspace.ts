@@ -11,11 +11,23 @@ import type {FolderWorkspace} from '../domain/folders'
 type SealedWorkspace={
   key:string;version:1;revision:number;iv:string;ciphertext:string
 }
+export type FolderPendingUpload={
+  operationId:string;contract:string;signature:string
+  localRevision:number;fromRevision:number;toRevision:number
+}
+export type FolderSyncMarker={
+  key:string;baseRevision:number;confirmedLocalRevision:number
+  pending:FolderPendingUpload|null
+}
 class FolderDB extends Dexie{
   rows!:Table<SealedWorkspace,string>
+  sync!:Table<FolderSyncMarker,string>
   constructor(){
     super('pb3-browser-device-folders-v1')
     this.version(1).stores({rows:'&key'})
+    // Migration preserves ALL v1 device ciphertext; no plaintext or destructive
+    // schema replacement. The sync cursor stores only versions + ciphertext.
+    this.version(2).stores({rows:'&key',sync:'&key'})
   }
 }
 const db=new FolderDB()
@@ -123,4 +135,86 @@ export async function changeFolderWorkspace(change:Change):Promise<FolderWorkspa
   if(typeof navigator!=='undefined'&&navigator.locks?.request)
     return navigator.locks.request('pb3/browser/folders/'+scoped(s),()=>commit(s,change))
   return commit(s,change)
+}
+
+
+function defaultMarker(s:Session):FolderSyncMarker{
+  return {key:scoped(s),baseRevision:0,confirmedLocalRevision:0,pending:null}
+}
+export async function getFolderLocalSync():Promise<{
+  workspace:FolderWorkspace;localRevision:number;marker:FolderSyncMarker
+}>{
+  const s=requireSession()
+  const [row,marker]=await db.transaction('r',db.rows,db.sync,
+    ()=>Promise.all([db.rows.get(scoped(s)),db.sync.get(scoped(s))]))
+  const workspace=await unseal(s,row)
+  return {workspace,localRevision:row?.revision??0,
+    marker:marker??defaultMarker(s)}
+}
+/** Persist signed ciphertext BEFORE attempting network POST (Lost ACK safe). */
+export async function stageFolderUpload(
+  expectedLocal:number,expectedBase:number,pending:FolderPendingUpload,
+):Promise<boolean>{
+  const s=requireSession()
+  if(pending.localRevision!==expectedLocal
+    ||pending.fromRevision!==expectedBase
+    ||pending.toRevision!==expectedBase+1)
+    throw Error('browser.sync_invalid_pending')
+  return db.transaction('rw',db.rows,db.sync,async()=>{
+    same(s)
+    const row=await db.rows.get(scoped(s))
+    const marker=await db.sync.get(scoped(s))??defaultMarker(s)
+    if((row?.revision??0)!==expectedLocal
+      ||marker.baseRevision!==expectedBase||marker.pending!==null)return false
+    await db.sync.put({...marker,pending})
+    return true
+  })
+}
+/** Only the exact signed operation may acknowledge an outbox entry. */
+export async function acknowledgeFolderUpload(
+  operationId:string,toRevision:number,
+):Promise<void>{
+  const s=requireSession()
+  await db.transaction('rw',db.rows,db.sync,async()=>{
+    same(s)
+    const marker=await db.sync.get(scoped(s))??defaultMarker(s)
+    const pending=marker.pending
+    if(!pending||pending.operationId!==operationId
+      ||pending.toRevision!==toRevision
+      ||pending.fromRevision!==marker.baseRevision)
+      throw Error('browser.sync_ack_mismatch')
+    const row=await db.rows.get(scoped(s))
+    if((row?.revision??0)<pending.localRevision)
+      throw Error('browser.sync_invalid_local_revision')
+    await db.sync.put({
+      ...marker,baseRevision:toRevision,
+      confirmedLocalRevision:pending.localRevision,pending:null,
+    })
+  })
+}
+/**
+ * Only an unchanged CLEAN local row can be replaced by a newer server
+ * snapshot. CAS and encrypted atomic write block unacknowledged local loss.
+ */
+export async function installRemoteFolderWorkspace(
+  workspace:FolderWorkspace,expectedLocal:number,
+  expectedBase:number,remoteRevision:number,
+):Promise<boolean>{
+  const s=requireSession()
+  if(remoteRevision<=expectedBase||remoteRevision<1)
+    throw Error('browser.sync_invalid_revision')
+  const encrypted=await seal(s,workspace,expectedLocal+1)
+  return db.transaction('rw',db.rows,db.sync,async()=>{
+    same(s)
+    const row=await db.rows.get(scoped(s))
+    const marker=await db.sync.get(scoped(s))??defaultMarker(s)
+    if((row?.revision??0)!==expectedLocal
+      ||marker.baseRevision!==expectedBase
+      ||marker.confirmedLocalRevision!==expectedLocal
+      ||marker.pending!==null)return false
+    await db.rows.put(encrypted)
+    await db.sync.put({...marker,baseRevision:remoteRevision,
+      confirmedLocalRevision:expectedLocal+1,pending:null})
+    return true
+  })
 }
