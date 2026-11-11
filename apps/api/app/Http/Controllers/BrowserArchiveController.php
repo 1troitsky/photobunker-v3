@@ -79,6 +79,8 @@ final class BrowserArchiveController extends Controller
             'items'=>$page,
             'nextCursor'=>$rows->count()>50&&$page!==[]
                 ?end($page)['entryId']:null,
+            'writeEnabled'=>(bool)config('browser_archive.write_enabled',false),
+            'autoCleanupEnabled'=>(bool)config('browser_archive.auto_cleanup_enabled',false),
         ]);
     }
 
