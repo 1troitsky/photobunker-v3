@@ -23,7 +23,15 @@ import {
   loadFolderWorkspace,changeFolderWorkspace,
 } from '../features/browser/application/folder-workspace'
 import {synchronizeFolderWorkspace} from '../features/browser/application/folder-cloud-sync'
-import {getFolderLocalSync} from '../features/browser/application/folder-workspace'
+import {
+  getFolderLocalSync,listFolderConflictBackups,restoreFolderConflictBackup,
+} from '../features/browser/application/folder-workspace'
+import type {FolderConflictBackup} from '../features/browser/application/folder-workspace'
+import {
+  prepareFolderConflict,previewFolderConflict,applyFolderConflictPlan,
+} from '../features/browser/application/folder-conflict-resolution'
+import type {FolderConflictPlan} from '../features/browser/application/folder-conflict-resolution'
+import type {ConflictSide} from '../features/browser/domain/folder-merge'
 
 const localPhotos=ref<StoredPhoto[]>([])
 const cloudPhotos=ref<CloudPhoto[]>([])
@@ -59,6 +67,11 @@ const folderNotice=ref('')
 const folderBusy=ref(false)
 const folderSyncBusy=ref(false)
 const folderSyncStatus=ref('')
+const mergePlan=ref<FolderConflictPlan|null>(null)
+const mergeChoices=ref<Record<string,ConflictSide>>({})
+const mergePreview=computed(()=>mergePlan.value
+  ?previewFolderConflict(mergePlan.value,mergeChoices.value):null)
+const mergeBackups=ref<Omit<FolderConflictBackup,'row'>[]>([])
 const selectedFolder=ref<string|null>(null)
 const createFolderOpen=ref(false)
 const newFolderName=ref('')
@@ -81,12 +94,97 @@ const visible=computed(()=>filterCatalog(items.value,{
 const pendingCount=computed(()=>items.value.filter(x=>x.local
   &&x.state!=='synced').length)
 
+async function loadMergeBackups():Promise<void>{
+  const session=activeSession.value
+  if(!session)return
+  try{
+    const items=await listFolderConflictBackups()
+    if(session===activeSession.value)mergeBackups.value=items
+  }catch(e){
+    if(session===activeSession.value)
+      folderNotice.value='Не удалось проверить локальные копии: '+reason(e)
+  }
+}
+async function compareFolderConflict():Promise<void>{
+  if(folderBusy.value||folderSyncBusy.value||!folderReady.value
+    ||folderError.value||!activeSession.value?.online)return
+  const session=activeSession.value,epoch=++folderSyncEpoch
+  folderSyncBusy.value=true
+  mergePlan.value=null
+  mergeChoices.value={}
+  try{
+    const plan=await prepareFolderConflict()
+    if(session!==activeSession.value||epoch!==folderSyncEpoch)return
+    mergePlan.value=plan
+    folderSyncStatus.value='Сравнение выполнено локально: проверьте изменения перед объединением.'
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderSyncEpoch)
+      folderSyncStatus.value='Сравнение не выполнено: '+reason(e)
+  }finally{
+    if(epoch===folderSyncEpoch)folderSyncBusy.value=false
+  }
+}
+async function applyFolderMerge():Promise<void>{
+  const plan=mergePlan.value
+  if(!plan||!mergePreview.value?.workspace||folderBusy.value
+    ||folderSyncBusy.value||!activeSession.value?.online)return
+  const hasExplicitChoices=mergePreview.value.conflicts.length>0
+  if(hasExplicitChoices&&!window.confirm(
+    'Применить выбранные версии конфликтующих элементов? Исходная локальная структура сохранится в зашифрованной копии.'))return
+  const session=activeSession.value,epoch=++folderSyncEpoch
+  folderSyncBusy.value=true
+  try{
+    const result=await applyFolderConflictPlan(plan,{...mergeChoices.value})
+    if(session!==activeSession.value||epoch!==folderSyncEpoch)return
+    const current=await loadFolderWorkspace()
+    if(session!==activeSession.value||epoch!==folderSyncEpoch)return
+    folderWorkspace.value=current
+    if(selectedFolder.value&&!Object.hasOwn(current.folders,selectedFolder.value))
+      selectedFolder.value=null
+    mergePlan.value=null
+    mergeChoices.value={}
+    folderSyncStatus.value=result.state==='uploaded'
+      ?'Версии папок объединены и подтверждены сервером. Локальная копия сохранена.'
+      :'Объединение сохранено на устройстве. Облако изменилось повторно: выполните сравнение ещё раз.'
+    await loadMergeBackups()
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderSyncEpoch){
+      mergePlan.value=null
+      folderSyncStatus.value='Не удалось применить объединение: '+reason(e)
+    }
+  }finally{
+    if(epoch===folderSyncEpoch)folderSyncBusy.value=false
+  }
+}
+async function restoreFolderBackup(id:string):Promise<void>{
+  if(folderBusy.value||folderSyncBusy.value||!folderReady.value
+    ||!window.confirm('Восстановить старую локальную структуру папок? Текущее состояние будет сохранено в отдельной зашифрованной копии. Облако не изменится.'))return
+  const session=activeSession.value,epoch=++folderSyncEpoch
+  folderSyncBusy.value=true
+  try{
+    const workspace=await restoreFolderConflictBackup(id)
+    if(session!==activeSession.value||epoch!==folderSyncEpoch)return
+    folderWorkspace.value=workspace
+    mergePlan.value=null
+    mergeChoices.value={}
+    selectedFolder.value=null
+    folderSyncStatus.value='Локальная копия восстановлена. Для обновления облака нужна новая синхронизация.'
+    await loadMergeBackups()
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderSyncEpoch)
+      folderSyncStatus.value='Не удалось восстановить копию: '+reason(e)
+  }finally{
+    if(epoch===folderSyncEpoch)folderSyncBusy.value=false
+  }
+}
 async function syncFoldersCloud():Promise<void>{
   if(folderSyncBusy.value||folderBusy.value||!folderReady.value||folderError.value
     ||!activeSession.value?.online)return
   const session=activeSession.value,epoch=++folderSyncEpoch
   folderSyncBusy.value=true
   folderSyncStatus.value=''
+  mergePlan.value=null
+  mergeChoices.value={}
   try{
     const result=await synchronizeFolderWorkspace()
     if(session!==activeSession.value)return
@@ -123,6 +221,8 @@ async function loadFolders():Promise<void>{
   folderReady.value=false
   folderError.value=''
   folderSyncStatus.value=''
+  mergePlan.value=null
+  mergeChoices.value={}
   selectedFolder.value=null
   if(!session)return
   try{
@@ -140,6 +240,8 @@ async function changeFolders(change:Parameters<typeof changeFolderWorkspace>[0])
   if(!folderReady.value||folderError.value||folderBusy.value)return false
   const session=activeSession.value,epoch=folderEpoch
   folderBusy.value=true;folderNotice.value=''
+  mergePlan.value=null
+  mergeChoices.value={}
   try{
     const next=await changeFolderWorkspace(change)
     if(session!==activeSession.value||epoch!==folderEpoch)return false
@@ -377,7 +479,11 @@ watch(activeSession,(next,previous)=>{
     bulkDestination.value=''
     folderNotice.value=''
     folderSyncStatus.value=''
+    mergePlan.value=null
+    mergeChoices.value={}
+    mergeBackups.value=[]
     void loadFolders()
+    void loadMergeBackups()
   }else if(next&&!folderReady.value){
     // A first load could have been fenced out while bootstrap upgraded the
     // same device to an online Session; retry without losing a typed form.
@@ -386,8 +492,12 @@ watch(activeSession,(next,previous)=>{
   void refresh()
 })
 watch([selectedFolder,filter,search],()=>{selectedKeys.value=[]})
-onMounted(()=>{void loadFolders();void refresh()})
-onUnmounted(()=>{++generation;++folderEpoch;++folderSyncEpoch;revokePreview()})
+onMounted(()=>{void loadFolders();void loadMergeBackups();void refresh()})
+onUnmounted(()=>{
+  ++generation;++folderEpoch;++folderSyncEpoch
+  mergePlan.value=null;mergeChoices.value={};mergeBackups.value=[]
+  revokePreview()
+})
 </script>
 
 <template>
@@ -430,6 +540,61 @@ onUnmounted(()=>{++generation;++folderEpoch;++folderSyncEpoch;revokePreview()})
           </button>
           <span v-if="folderSyncStatus" data-testid="browser-folder-sync-status"
             role="status" class="muted">{{ folderSyncStatus }}</span>
+        </div>
+        <div v-if="folderSyncStatus.includes('Конфликт версий')&&!mergePlan"
+          class="browser-merge-entry">
+          <button type="button" data-testid="browser-merge-open"
+            :disabled="folderSyncBusy||folderBusy||!activeSession.online"
+            @click="compareFolderConflict">Сравнить изменения папок</button>
+        </div>
+        <section v-if="mergePlan" data-testid="browser-merge-review"
+          class="browser-merge-review">
+          <h3>Согласование папок</h3>
+          <p class="muted">Облачная версия {{ mergePlan.remoteRevision }},
+            исходная версия {{ mergePlan.baseRevision }}. Сравнение выполняется только
+            на этом устройстве. Сначала проверяются независимые правки,
+            затем выбираются версии спорных элементов.</p>
+          <p v-if="mergePreview&&mergePreview.conflicts.length===0">
+            Противоречивых изменений нет. Независимые изменения объединятся.</p>
+          <div v-for="conflict in mergePreview?.conflicts??[]" :key="conflict.key"
+            class="browser-merge-conflict" :data-testid="'browser-merge-'+conflict.key">
+            <strong>{{ conflict.kind==='folder'?'Папка':'Расположение файла' }}</strong>
+            <div class="browser-merge-choices">
+              <label><input type="radio" :name="conflict.key" value="local"
+                :checked="mergeChoices[conflict.key]==='local'"
+                @change="mergeChoices[conflict.key]='local'">
+                На устройстве: {{ conflict.local }}</label>
+              <label><input type="radio" :name="conflict.key" value="cloud"
+                :checked="mergeChoices[conflict.key]==='cloud'"
+                @change="mergeChoices[conflict.key]='cloud'">
+                В облаке: {{ conflict.cloud }}</label>
+            </div>
+          </div>
+          <p v-if="mergePreview?.structuralError" role="alert">
+            Объединение небезопасно: {{ mergePreview.structuralError }}.
+            Отмените сравнение и исправьте локальную структуру.</p>
+          <p class="muted">Перед объединением будет сохранена зашифрованная
+            резервная копия текущих локальных папок. Обновление облака
+            подтверждается отдельно сервером.</p>
+          <div class="browser-merge-actions">
+            <button type="button" data-testid="browser-merge-apply"
+              :disabled="!mergePreview?.workspace||folderSyncBusy||folderBusy"
+              @click="applyFolderMerge">Применить и синхронизировать</button>
+            <button type="button" @click="mergePlan=null;mergeChoices={}">
+              Отмена</button>
+          </div>
+        </section>
+        <div v-if="mergeBackups.length" class="browser-merge-backups"
+          data-testid="browser-merge-backups">
+          <strong>Зашифрованные локальные копии ({{ mergeBackups.length }})</strong>
+          <div v-for="backup in mergeBackups" :key="backup.id"
+            class="browser-merge-backup">
+            <span>Копия от {{ new Date(backup.createdAt).toLocaleString('ru-RU') }}
+              · версия {{ backup.fromBaseRevision }}</span>
+            <button type="button" :disabled="folderBusy||folderSyncBusy"
+              :data-testid="'browser-restore-'+backup.id"
+              @click="restoreFolderBackup(backup.id)">Восстановить локально</button>
+          </div>
         </div>
         <form v-if="createFolderOpen" class="browser-folder-form" @submit.prevent="createFolder">
           <label>Название папки
