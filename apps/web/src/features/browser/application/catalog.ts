@@ -93,3 +93,18 @@ export function filterCatalog(
       return byId
     })
 }
+
+/**
+ * Pure presentation scope over an already authenticated and loaded catalog.
+ * "All folders" never fetches additional server pages or broadens ACLs;
+ * it only disables the virtual folder placement filter for visible rows.
+ */
+export function scopeCatalogFolders(
+  rows:readonly CatalogItem[],
+  placements:Readonly<Record<string,string>>,
+  selectedFolder:string|null,
+  allLoadedFolders:boolean,
+):CatalogItem[]{
+  return allLoadedFolders?[...rows]
+    :rows.filter(row=>(placements[row.key]??null)===selectedFolder)
+}
