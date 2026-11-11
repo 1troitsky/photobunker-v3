@@ -101,6 +101,15 @@ final class PhotoGrantEffectiveAccess
                 ->where('id',$g->assignment_id)->first();
             abort_if(!$a
                 ||$a->owner_account_id!==$g->recipient_account_id,410);
+            // Unlike an independent personal v1 share, a Fieldwork-bound
+            // grant loses live read authority when contributor membership is
+            // no longer accepted. Keep historical signed grant/ACK intact.
+            abort_unless(DB::table('assignment_invites_v1')
+                ->where('assignment_id',$g->assignment_id)
+                ->where('owner_account_id',$g->recipient_account_id)
+                ->where('recipient_account_id',$g->owner_account_id)
+                ->where('role','contributor')
+                ->where('state','accepted')->exists(),410);
             AssignmentGrantScope::requireReadable($g->assignment_id);
         }
     }
