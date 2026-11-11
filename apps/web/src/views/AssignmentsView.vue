@@ -777,7 +777,9 @@ async function submitMedia(media:StoredMedia):Promise<void>{
         :media.mediaType==='audio'?'аудио':'фото P2 MediaFile')
       +', включая исходное имя и приватные метаданные? '
       +(media.mediaType==='photo'
-        ?'Это подтверждает вашу отправку личного импортированного файла, но НЕ факт съёмки камерой по заданию. ':'')
+        ?(media.capture
+          ?'Подпись подтверждает заявление приложения о съёмке, но НЕ аппаратную подлинность камеры, времени или GPS. '
+          :'Это подтверждает отправку импортированного файла, но НЕ факт съёмки по заданию. '):'')
       +'Отзыв не удалит уже скачанные копии.'
     ))return
     const grantId=await queueMediaRecipientGrant(media.mediaId,target.ownerAccountId,
@@ -1151,7 +1153,7 @@ onUnmounted(cleanPreview)
           <p v-if="!eligiblePhotos.length" class="muted">Для этого задания нет подходящих синхронизированных фотографий.</p>
           <template v-if="selected.allowedMedia.length">
             <h3>Файлы P2 · фото, видео и аудио из Browser</h3>
-            <p class="muted">Понадобится зашифрованный файл разрешённого типа. До E2EE-передачи проверяются подписанные требования задания к категории, описанию, GPS и тегам; фактические приватные значения серверу недоступны. Фото P2, импортированное через Browser, считается <strong>личным файлом, отправленным участником</strong> — не подтверждением съёмки по заданию.</p>
+            <p class="muted">Понадобится зашифрованный файл разрешённого типа. До E2EE-передачи проверяются подписанные требования задания к категории, описанию, GPS и тегам; фактические приватные значения серверу недоступны. Импортированное фото P2 считается личным файлом, отправленным участником; прямой JPEG из камеры получает отдельную подпись съёмки. Ни одна подпись не доказывает аппаратное происхождение или точность GPS.</p>
             <div v-for="file in eligibleMedia" :key="file.key" class="photo-row">
               <div><strong>{{ file.mediaType==='video'?'Видео':file.mediaType==='photo'?'Фото P2':'Аудио' }} · {{ file.mediaId.slice(0,8) }}</strong>
                 <small>{{ file.capture?'Снято по заданию · подписано':'Личный медиафайл · требуется согласие' }}</small>
@@ -1162,7 +1164,7 @@ onUnmounted(cleanPreview)
             </div>
             <p v-if="!eligibleMedia.length" class="muted">Нет синхронизированных файлов разрешённого типа.</p>
             <RouterLink to="/browser">Импортировать фото, видео или аудио</RouterLink>
-            <p><RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Записать видео/аудио по заданию</RouterLink></p>
+            <p><RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Снять фото P2 или записать видео/аудио по заданию</RouterLink></p>
           </template>
           <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Камера задания</RouterLink>
         </template>
