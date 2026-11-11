@@ -107,3 +107,68 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(2)
   }finally{await context.close()}
 })
+
+
+test('P2 Browser: corrupt encrypted folder snapshot fails closed without overwriting ciphertext',async({browser})=>{
+  test.setTimeout(90000)
+  const context=await browser.newContext()
+  const page=await context.newPage()
+  try{
+    await page.goto('/settings')
+    await page.getByRole('button',{name:'Создать ключ'}).click()
+    await page.getByLabel('Я сохранил ключ восстановления').check()
+    await page.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await page.goto('/browser')
+    await page.getByRole('button',{name:'Новая папка'}).click()
+    await page.getByTestId('browser-folder-name').fill('SECRET-LOCAL-FOLDER')
+    await page.getByRole('button',{name:'Создать',exact:true}).click()
+    await expect(page.locator('.browser-folder-item')).toHaveCount(1)
+
+    const corrupted=await page.evaluate(async()=>{
+      const request=indexedDB.open('pb3-browser-device-folders-v1')
+      const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+        request.onsuccess=()=>resolve(request.result)
+        request.onerror=()=>reject(request.error)
+      })
+      try{
+        const tx=db.transaction('rows','readwrite')
+        const store=tx.objectStore('rows')
+        const get=store.getAll()
+        const rows=await new Promise<Array<{key:string;ciphertext:string}>>((resolve,reject)=>{
+          get.onsuccess=()=>resolve(get.result)
+          get.onerror=()=>reject(get.error)
+        })
+        const row=rows[0]!
+        row.ciphertext=(row.ciphertext[0]==='A'?'B':'A')+row.ciphertext.slice(1)
+        store.put(row)
+        await new Promise<void>((resolve,reject)=>{
+          tx.oncomplete=()=>resolve()
+          tx.onabort=()=>reject(tx.error)
+          tx.onerror=()=>reject(tx.error)
+        })
+        return row.ciphertext
+      }finally{db.close()}
+    })
+    await page.reload()
+    await expect(page.getByText(/Не удалось расшифровать локальные папки/))
+      .toBeVisible()
+    await expect(page.getByRole('button',{name:'Новая папка'})).toBeDisabled()
+    const after=await page.evaluate(async()=>{
+      const request=indexedDB.open('pb3-browser-device-folders-v1')
+      const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+        request.onsuccess=()=>resolve(request.result)
+        request.onerror=()=>reject(request.error)
+      })
+      try{
+        const tx=db.transaction('rows','readonly')
+        const get=tx.objectStore('rows').getAll()
+        return await new Promise<string>((resolve,reject)=>{
+          get.onsuccess=()=>resolve(get.result[0].ciphertext)
+          get.onerror=()=>reject(get.error)
+        })
+      }finally{db.close()}
+    })
+    expect(after).toBe(corrupted)
+  }finally{await context.close()}
+})
