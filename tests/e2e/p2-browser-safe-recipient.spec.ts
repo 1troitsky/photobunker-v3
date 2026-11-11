@@ -230,8 +230,16 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
       .selectOption(assignmentId)
     owner.once('dialog',d=>d.accept())
     await editorial.getByTestId('media-editorial-bind').click()
-    await expect(editorial.getByTestId('media-editorial-linked'))
-      .toBeVisible({timeout:30000})
+    // Surface the real server/client failure, not an opaque "missing UI"
+    // timeout. The test still requires confirmed, signed cloud receipt.
+    await expect.poll(async()=>{
+      if(await editorial.getByTestId('media-editorial-linked').isVisible())
+        return 'confirmed'
+      const errors=await associatedPanel.locator('[role="alert"]')
+        .allTextContents()
+      if(errors.length)return 'error: '+errors.join(' | ')
+      return 'pending'
+    },{timeout:20000}).toBe('confirmed')
     const bound=await owner.evaluate(async safeId=>{
       const res=await fetch('/media-file-preview/v1/assignment-links/'+safeId)
       const data=await res.json()
