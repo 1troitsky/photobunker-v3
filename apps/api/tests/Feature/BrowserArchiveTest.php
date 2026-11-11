@@ -203,6 +203,41 @@ final class BrowserArchiveTest extends TestCase
         $this->assertDatabaseCount('browser_archive_events_v1',1);
     }
 
+    public function test_owner_cannot_archive_previously_shared_photo_or_media():void
+    {
+        $this->as('owner');
+        foreach(['photo','media'] as $kind){
+            $id=$this->asset('owner',$kind);
+            $data=[
+                'id'=>(string)Str::uuid(),
+                'owner_account_id'=>$this->actors['owner']['id'],
+                'recipient_account_id'=>$this->actors['outsider']['id'],
+                'recipient_key_digest'=>str_repeat('a',64),
+                'expires_at'=>PhotoSync::nowMs()+1000000,
+                // Even revoked historical grants can have FK references,
+                // and archiving must never bypass signed sharing history.
+                'state'=>'revoked',
+                'contract_hash'=>str_repeat('b',64),
+                'contract_json'=>'{}','account_signature'=>'',
+                'created_at'=>now(),'updated_at'=>now(),
+            ];
+            if($kind==='photo'){
+                $data['photo_id']=$id;
+                DB::table('photo_access_grants')->insert($data);
+            }else{
+                $data['media_id']=$id;
+                $data['media_contract_hash']=str_repeat('b',64);
+                DB::table('media_recipient_grants_v1')->insert($data);
+            }
+            $this->mutate('owner',$this->command('owner',$kind,$id,'archive',0))
+                ->assertConflict();
+        }
+        $this->assertDatabaseCount('browser_archive_entries_v1',0);
+        $this->assertDatabaseCount('browser_archive_events_v1',0);
+        $this->assertDatabaseCount('photo_tombstones',0);
+        $this->assertDatabaseCount('media_tombstones_v1',0);
+    }
+
     public function test_feature_gate_and_non_destructive_rollback():void
     {
         $this->as('owner');
