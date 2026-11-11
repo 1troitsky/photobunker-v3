@@ -23,7 +23,7 @@ Prior CI was **two separate proofs**: (1) the real `matrix-text-outbox.ts` imple
 - The intended browser experience is not exercised because the approved Messages UI still has Send disabled. Actual reload of the PWA module and installed iOS Safari are still separate. This test verifies the queue row is durable in IndexedDB across connection reuse but does not simulate terminating/reloading the entire application runtime.
 - Disposable Matrix CI intentionally uses HTTP **127.0.0.1** only on a loopback port for isolation; PB3 **production** Matrix origin validation remains HTTPS + configured host + PB3 server whoami check. No production credentials are used.
 - No media/attachment, independent PB3 account provisioning from the Recovery Key, reader-receipt, group membership, Panic credential revocation, secondary homeserver or physical device tests are claimed. No production Send switch is enabled.
-- The test is guarded by `MATRIX_CI_DISPOSABLE=1` and verifies exact localhost URL, server name and two non-identical synthetic passwords before opening a connection. Ordinary Vitest collects it but **skips it** when there is no disposable Synapse. The CI server is destroyed afterward.
+- The test is guarded by `MATRIX_CI_DISPOSABLE=1` and verifies exact localhost URL, server name and two non-identical synthetic passwords before opening a connection. Ordinary Vitest collects it but **skips it** when there is no disposable Synapse. The CI server is destroyed afterward. The test provisions an **independent** pair of synthetic Matrix users (not the identities used in the earlier E2EE/4S tests) so per-account login throttling remains active but does not bleed into this gate; bounded HTTP 429 retries remain as a backstop.
 
 ## Acceptance and next step
 
