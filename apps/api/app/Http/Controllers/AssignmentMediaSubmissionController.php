@@ -251,6 +251,25 @@ final class AssignmentMediaSubmissionController extends Controller
             ->whereColumn('g.media_id','s.media_id')
             ->whereColumn('g.owner_account_id','s.contributor_account_id')
             ->where('g.recipient_account_id',$actor->id)
+            ->where(function($scope){
+                // Modern P2 photo provenance is only valid while the
+                // contributor is still a currently accepted participant.
+                // Existing v1/v2 audio/video receipts keep their behavior.
+                $scope->where('s.media_type','!=','photo')
+                    ->orWhere(function($photo){
+                        $photo->whereColumn('g.assignment_id','s.assignment_id')
+                            ->whereExists(function($membership){
+                                $membership->selectRaw('1')
+                                    ->from('assignment_invites_v1 as i')
+                                    ->whereColumn('i.assignment_id',
+                                        's.assignment_id')
+                                    ->whereColumn('i.recipient_account_id',
+                                        's.contributor_account_id')
+                                    ->where('i.role','contributor')
+                                    ->where('i.state','accepted');
+                            });
+                    });
+            })
             ->where('m.state','active')->where('m.expires_at','>',$now)
             ->where('g.state','active')->where('g.expires_at','>',$now);
         if($after!==null)$q->where('s.id','>',$after);
