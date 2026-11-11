@@ -16,13 +16,14 @@ import type {MatrixBindingContract} from './matrix-binding'
 const enc=new TextEncoder()
 const dec=new TextDecoder('utf-8',{fatal:true})
 const domain='pb3.matrix-ssss-escrow.v1'
+const domainV2='pb3.matrix-ssss-escrow.v2'
 const signDomain=domain+'\n'
 const pendingDomain='pb3.matrix-ssss-escrow-pending.v1'
 const uuidRe=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
 const hexRe=/^[a-f0-9]{64}$/
 
-type EscrowContract={
-  version:1
+type EscrowBase={
+  version:1|2
   operationId:string
   accountId:string
   accountRevision:number
@@ -33,6 +34,10 @@ type EscrowContract={
   iv:string
   ciphertext:string
 }
+type EscrowContract=EscrowBase & (
+  {version:1;previousContractHash?:never}
+  |{version:2;previousContractHash:string}
+)
 type SignedEscrow={contract:string;signature:string}
 type PendingRow={scope:string;iv:string;ciphertext:string}
 class PendingDB extends Dexie{
@@ -67,43 +72,57 @@ async function localScope(s:Session):Promise<string>{
 function aad(value:string):Uint8Array<ArrayBuffer>{
   return enc.encode(value)
 }
-async function aes(s:Session,purpose:string,info:string,usage:KeyUsage):Promise<CryptoKey>{
+async function aes(s:Session,purpose:string,info:string,usage:KeyUsage,
+  version:1|2=1):Promise<CryptoKey>{
   const ake=unb64(s.pkg.akek,32)
   let source:CryptoKey
   try{source=await crypto.subtle.importKey('raw',ake,'HKDF',false,['deriveKey'])}
   finally{ake.fill(0)}
   return crypto.subtle.deriveKey({
-    name:'HKDF',hash:'SHA-256',salt:enc.encode(domain+'\n'+purpose),
+    name:'HKDF',hash:'SHA-256',
+    salt:enc.encode((version===2?domainV2:domain)+'\n'+purpose),
     info:enc.encode(info),
   },source,{name:'AES-GCM',length:256},false,[usage])
 }
 function context(c:Pick<EscrowContract,
-'accountId'|'accountRevision'|'homeserverUrl'|'matrixUserId'|'keyId'
+'version'|'accountId'|'accountRevision'|'homeserverUrl'|'matrixUserId'|'keyId'
 >):string{
-  return [domain,c.accountId,c.accountRevision,c.homeserverUrl,c.matrixUserId,c.keyId].join('\n')
+  return [c.version===2?domainV2:domain,c.accountId,c.accountRevision,
+    c.homeserverUrl,c.matrixUserId,c.keyId].join('\n')
 }
-function validate(c:unknown,s:Session):EscrowContract{
-  if(!c||typeof c!=='object'||Array.isArray(c))throw Error('matrix.recovery_invalid_contract')
+function validate(c:unknown,s:Session,older=false):EscrowContract{
+  if(!c||typeof c!=='object'||Array.isArray(c))
+    throw Error('matrix.recovery_invalid_contract')
   const v=c as Record<string,unknown>
-  if(Object.keys(v).sort().join('|')!==[
-      'accountId','accountRevision','ciphertext','homeserverUrl','iv','keyId',
-      'matrixUserId','operationId','purpose','version',
-    ].join('|')
-    ||v.version!==1||v.purpose!=='matrix-ssss-key'
-    ||v.accountId!==s.accountId||v.accountRevision!==s.pkg.revision
+  const fields=['accountId','accountRevision','ciphertext','homeserverUrl',
+    'iv','keyId','matrixUserId','operationId','purpose','version']
+  if(v.version===2)fields.push('previousContractHash')
+  if((v.version!==1&&v.version!==2)
+    ||Object.keys(v).sort().join('|')!==fields.sort().join('|')
+    ||v.purpose!=='matrix-ssss-key'
+    ||v.accountId!==s.accountId
     ||!Number.isSafeInteger(v.accountRevision)
+    ||(v.accountRevision as number)<1
+    ||(older
+      ?(v.accountRevision as number)>=s.pkg.revision
+      :v.accountRevision!==s.pkg.revision)
     ||typeof v.operationId!=='string'||!uuidRe.test(v.operationId)
     ||typeof v.homeserverUrl!=='string'||v.homeserverUrl.length>255
     ||typeof v.matrixUserId!=='string'||v.matrixUserId.length>255
     ||typeof v.keyId!=='string'||typeof v.iv!=='string'
-    ||typeof v.ciphertext!=='string')
+    ||typeof v.ciphertext!=='string'
+    ||(v.version===2
+      &&(typeof v.previousContractHash!=='string'
+        ||!hexRe.test(v.previousContractHash)
+        ||(v.accountRevision as number)<2)))
     throw Error('matrix.recovery_invalid_contract')
   unb64(v.keyId,16)
   unb64(v.iv,12)
   unb64(v.ciphertext,48)
   return v as EscrowContract
 }
-async function checkSigned(value:SignedEscrow,s:Session):Promise<EscrowContract>{
+async function checkSigned(value:SignedEscrow,s:Session,
+  older=false):Promise<EscrowContract>{
   if(!value||typeof value!=='object'||Array.isArray(value)
     ||Object.keys(value).sort().join('|')!=='contract|signature'
     ||typeof value.contract!=='string'||typeof value.signature!=='string')
@@ -111,10 +130,11 @@ async function checkSigned(value:SignedEscrow,s:Session):Promise<EscrowContract>
   let candidate:unknown
   try{candidate=JSON.parse(value.contract)}
   catch{throw Error('matrix.recovery_invalid_receipt')}
-  const c=validate(candidate,s)
+  const c=validate(candidate,s,older)
+  const signFor=c.version===2?domainV2+'\n':signDomain
   if(JSON.stringify(c)!==value.contract
     ||!await verify(await importSpki(s.pkg.accountSpki),
-      signDomain+value.contract,value.signature))
+      signFor+value.contract,value.signature))
     throw Error('matrix.recovery_untrusted_receipt')
   same(s)
   return c
