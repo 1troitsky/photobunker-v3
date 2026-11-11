@@ -7,6 +7,7 @@ import {digest,hex,unb64} from '../../identity/infrastructure/crypto'
 import {getBoundMatrixCredentials} from './matrix-binding'
 import type {MatrixBindingContract} from './matrix-binding'
 import {acquireMatrixCryptoLease} from './matrix-crypto-lease'
+import {getVerifiedPB3Matrix4SKey} from './matrix-ssss-bridge'
 import type {MatrixCryptoLease} from './matrix-crypto-lease'
 
 /**
@@ -122,6 +123,17 @@ async function initialize(epoch:number):Promise<void>{
       userId:contract.matrixUserId,
       deviceId:contract.matrixDeviceId,
       accessToken,
+      cryptoCallbacks:{
+        // The SDK may request only the *active* Matrix secret-storage key.
+        // The PB3 Recovery Key escrow is checked against live 4S key-id/MAC
+        // before RustCrypto receives any bytes. Never generate/reset keys
+        // or accept a separate Matrix recovery password on this path.
+        getSecretStorageKey:async(keys,name)=>{
+          if(!client)return null
+          unchanged(s,epoch)
+          return getVerifiedPB3Matrix4SKey(client,keys,name)
+        },
+      },
     })
     const who=await client.whoami()
     unchanged(s,epoch)
