@@ -154,13 +154,13 @@ test('P2 Browser: offline private metadata search and second-device cloud search
       await route.fulfill({response,contentType:'application/json',
         body:JSON.stringify({...data,items:[data.items[0],data.items[0]]})})
     })
-    await panel.getByRole('button',{name:'Обновить'}).click()
+    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(panel.getByRole('alert'))
       .toContainText('browser.invalid_cloud_catalog_page',{timeout:20000})
     expect(duplicateDelivered).toBeGreaterThan(0)
     await expect(verifiedCloud).toHaveCount(1)
     await b.unroute('**/media/v1')
-    await panel.getByRole('button',{name:'Обновить'}).click()
+    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(panel.getByRole('alert')).toHaveCount(0,{timeout:20000})
     await expect(verifiedCloud).toHaveCount(1)
 
@@ -186,9 +186,9 @@ test('P2 Browser: offline private metadata search and second-device cloud search
       await route.fulfill({response})
       servedNew()
     })
-    await panel.getByRole('button',{name:'Обновить'}).click()
+    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
     await oldPending
-    await panel.getByRole('button',{name:'Обновить'}).click()
+    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
     await newFinished
     unlockOld()
     await expect(verifiedCloud).toHaveCount(1,{timeout:20000})
