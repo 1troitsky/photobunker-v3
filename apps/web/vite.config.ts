@@ -1,16 +1,27 @@
 import vue from '@vitejs/plugin-vue'
 import { defineConfig, loadEnv } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { renderBrandHtml, resolveBrand } from './src/config/brand-build'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
-  const name = env.VITE_APP_NAME?.trim() || 'Example Application'
-  const shortName = env.VITE_APP_SHORT_NAME?.trim() || 'Example'
-  const accent = env.VITE_APP_THEME_COLOR?.trim() || '#1ed760'
+  const configuredBrand = resolveBrand({
+    VITE_APP_NAME: env.VITE_APP_NAME,
+    VITE_APP_SHORT_NAME: env.VITE_APP_SHORT_NAME,
+    VITE_APP_SLUG: env.VITE_APP_SLUG,
+    VITE_APP_MARK: env.VITE_APP_MARK,
+    VITE_APP_PUBLIC_URL: env.VITE_APP_PUBLIC_URL,
+    VITE_APP_THEME_COLOR: env.VITE_APP_THEME_COLOR,
+    VITE_APP_ICON_URL: env.VITE_APP_ICON_URL,
+  })
 
   return {
     plugins: [
       vue(),
+      {
+        name: 'pb3-brand-initial-html',
+        transformIndexHtml(html: string) { return renderBrandHtml(html, configuredBrand) },
+      },
       VitePWA({
         // P0 intentionally does not install/activate a Service Worker.
         // Signed-release trust design must be approved before registration.
@@ -18,16 +29,16 @@ export default defineConfig(({ mode }) => {
         registerType: 'prompt',
         manifest: {
           id: '/',
-          name,
-          short_name: shortName,
+          name: configuredBrand.name,
+          short_name: configuredBrand.shortName,
           description: 'A private media workspace.',
           display: 'standalone',
           start_url: '/assignments',
           scope: '/',
-          theme_color: accent,
+          theme_color: configuredBrand.themeColor,
           background_color: '#121212',
           icons: [
-            { src: '/icons/app.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+            { src: configuredBrand.iconUrl, sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
           ],
         },
       }),
