@@ -72,6 +72,24 @@ export function encodeFullResolutionJpeg(
   })
 }
 
+/** Verify actual JPEG dimensions before any encrypted enqueue or download. */
+export async function verifyFullResolutionJpeg(
+  blob:Blob,expectedWidth:number,expectedHeight:number,
+):Promise<void>{
+  let bitmap:ImageBitmap
+  try{
+    bitmap=await createImageBitmap(blob)
+  }catch{
+    throw Error('viewer.photo_export_encode_failed')
+  }
+  try{
+    if(bitmap.width!==expectedWidth||bitmap.height!==expectedHeight)
+      throw Error('viewer.photo_export_wrong_dimensions')
+  }finally{
+    bitmap.close()
+  }
+}
+
 export function describePhotoExportError(error:unknown):string{
   const code=error instanceof Error?error.message:'viewer.photo_export_failed'
   if(code==='viewer.photo_export_exceeds_safe_budget')
