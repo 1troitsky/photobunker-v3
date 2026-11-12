@@ -98,7 +98,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     const requests:string[]=[]
     b.on('request',request=>{
       const url=request.url()
-      if(url.includes('/media/v1/'))
+      if(url.includes('/media/v1')||url.includes('/photos/v1'))
         requests.push(url+(request.postData()??''))
     })
     await b.goto('/browser')
@@ -120,6 +120,17 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Проверено 1 из 1',{timeout:30000})
     await expect(remote).toHaveCount(1)
+    // V-33: opt-in extended search fetches authenticated opaque index
+    // pages, not the user's query; actual AES-GCM metadata check stays local.
+    await b.getByTestId('browser-private-search-expand').click()
+    await expect(b.getByTestId('browser-expanded-search-status'))
+      .toContainText('Индексы этих двух типов загружены полностью.',{timeout:30000})
+    await expect(b.getByTestId('browser-private-search-status'))
+      .toContainText('Проверено 1 из 1',{timeout:30000})
+    await expect(remote).toHaveCount(1)
+    expect(requests.join('\n')).not.toContain('секретная')
+    expect(requests.join('\n')).not.toContain(secret)
+    expect(requests.join('\n')).not.toContain('night')
     await b.getByTestId('browser-search').fill('NOT-A-PRIVATE-KEYWORD')
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Все загруженные файлы проверены',{timeout:30000})

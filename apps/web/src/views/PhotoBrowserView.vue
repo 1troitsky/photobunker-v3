@@ -15,8 +15,10 @@ import {
 import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
 import {buildCatalog,filterCatalog,scopeCatalogFolders}
   from '../features/browser/application/catalog'
-import {normalizePrivateSearch,searchPrivateMetadata}
+import {normalizePrivateSearch,searchPrivateMetadata,searchPrivateMetadataBatches}
   from '../features/browser/application/private-search'
+import {loadBoundedCatalogIndex}
+  from '../features/browser/application/bounded-catalog-expansion'
 import type {PrivateSearchResult}
   from '../features/browser/application/private-search'
 import type {CatalogFilter,CatalogSort,CatalogView,CatalogItem} from '../features/browser/application/catalog'
@@ -74,6 +76,11 @@ const privateSearchResult=ref<PrivateSearchResult|null>(null)
 const privateSearchBusy=ref(false)
 const privateSearchError=ref('')
 const privateSearchUnscanned=ref(0)
+const privateSearchExpanded=ref(false)
+const privateExpansionBusy=ref(false)
+const privateExpansionStatus=ref('')
+const privateSearchProgress=ref(0)
+let privateExpansionEpoch=0
 let privateSearchEpoch=0
 let privateSearchTimer:ReturnType<typeof setTimeout>|null=null
 const busy=ref(false)
@@ -291,17 +298,22 @@ function schedulePrivateSearch():void{
   privateSearchError.value=''
   privateSearchBusy.value=false
   privateSearchUnscanned.value=0
+  privateSearchProgress.value=0
   const query=normalizePrivateSearch(search.value)
   const identity=activeSession.value
   if(!identity||query.length<2||query.length>160)return
   const rows=searchScope.value
-  privateSearchUnscanned.value=Math.max(0,rows.length-200)
+  const scanLimit=privateSearchExpanded.value?1000:200
+  privateSearchUnscanned.value=Math.max(0,rows.length-scanLimit)
   privateSearchBusy.value=true
   privateSearchTimer=setTimeout(()=>{
     privateSearchTimer=null
-    void searchPrivateMetadata(query,rows.slice(0,200),
-      ()=>epoch===privateSearchEpoch&&activeSession.value===identity)
-      .then(result=>{
+    const valid=()=>epoch===privateSearchEpoch&&activeSession.value===identity
+    const task=privateSearchExpanded.value
+      ?searchPrivateMetadataBatches(query,rows.slice(0,1000),valid,
+        done=>{if(valid())privateSearchProgress.value=done})
+      :searchPrivateMetadata(query,rows.slice(0,200),valid)
+    void task.then(result=>{
         if(epoch===privateSearchEpoch&&activeSession.value===identity)
           privateSearchResult.value=result
       })
@@ -315,6 +327,71 @@ function schedulePrivateSearch():void{
       })
   },250)
 }
+/**
+ * Explicit, bounded wider search: download only authenticated, opaque
+ * photo/media index pages (max 500 per protocol) and never send the user
+ * query, metadata plaintext, tags or folder labels over HTTP.
+ *
+ * All validation happens BEFORE publishing any newly loaded rows. A changed
+ * query, account, route refresh or offline transition cancels the scan.
+ */
+async function expandPrivateSearch():Promise<void>{
+  const identity=activeSession.value
+  const query=normalizePrivateSearch(search.value)
+  if(!identity?.online||typeof navigator!=='undefined'&&navigator.onLine===false
+    ||privateExpansionBusy.value||busy.value||archiveTab.value!=='all'
+    ||query.length<2||query.length>160)return
+  const token=++privateExpansionEpoch
+  const catGeneration=generation
+  const valid=()=>token===privateExpansionEpoch
+    &&identity===activeSession.value&&generation===catGeneration
+    &&normalizePrivateSearch(search.value)===query
+    &&archiveTab.value==='all'
+    &&(typeof navigator==='undefined'||navigator.onLine!==false)
+  privateExpansionBusy.value=true
+  privateExpansionStatus.value=''
+  try{
+    const [photos,media]=await Promise.all([
+      loadBoundedCatalogIndex(listCloudPhotos,row=>row.photoId,valid),
+      loadBoundedCatalogIndex(listCloudMedia,row=>row.mediaId,valid),
+    ])
+    if(!valid())return
+    // Local-first state is never discarded. Do not replace a previously
+    // manually loaded larger index with a 500-row bounded first-page scan.
+    if(cloudPhotos.value.length<=photos.items.length){
+      cloudPhotos.value=photos.items
+      photoCursor.value=photos.nextCursor
+    }else{
+      const known=new Map(cloudPhotos.value.map(x=>[x.photoId,x] as const))
+      for(const item of photos.items)known.set(item.photoId,item)
+      cloudPhotos.value=[...known.values()]
+    }
+    if(cloudMedia.value.length<=media.items.length){
+      cloudMedia.value=media.items
+      mediaCursor.value=media.nextCursor
+    }else{
+      const known=new Map(cloudMedia.value.map(x=>[x.mediaId,x] as const))
+      for(const item of media.items)known.set(item.mediaId,item)
+      cloudMedia.value=[...known.values()]
+    }
+    searchFolderScope.value='all'
+    privateSearchExpanded.value=true
+    privateExpansionStatus.value='Получено '+photos.items.length+' фото и '
+      +media.items.length+' медиа из авторизованных индексов. '
+      +(photos.complete&&media.complete
+        ?'Индексы этих двух типов загружены полностью.'
+        :'Дальнейшие облачные страницы ещё существуют: поиск НЕ по всему аккаунту.')
+      +' Содержимое проверяется только на устройстве (до 1000 файлов).'
+  }catch(e){
+    if(valid()){
+      privateExpansionStatus.value='Расширенный поиск не запущен: '+reason(e)
+        +'. Неполные страницы не опубликованы; попробуйте позже.'
+    }
+  }finally{
+    if(token===privateExpansionEpoch)privateExpansionBusy.value=false
+  }
+}
+
 const pendingCount=computed(()=>items.value.filter(x=>!['archived','deleting'].includes(
   archivedByKey.value.get(x.key)?.state??'')&&x.local
   &&x.state!=='synced').length)
@@ -760,6 +837,10 @@ function revokePreview():void{
   selectedExpiry.value=null
 }
 function clearCatalog():void{
+  ++privateExpansionEpoch
+  privateExpansionBusy.value=false
+  privateSearchExpanded.value=false
+  privateExpansionStatus.value=''
   localPhotos.value=[];localMedia.value=[]
   cloudPhotos.value=[];cloudMedia.value=[]
   photoCursor.value=null;mediaCursor.value=null
@@ -959,17 +1040,28 @@ watch(activeSession,(next,previous)=>{
   void refresh()
 })
 watch([selectedFolder,filter,search,searchFolderScope,archiveTab],()=>{selectedKeys.value=[]})
-watch([search,searchScope,activeSession],schedulePrivateSearch)
+watch([search,searchScope,activeSession,privateSearchExpanded],schedulePrivateSearch)
+watch([search,archiveTab],()=>{
+  // Broader authenticated index fetches are explicit per typed query.
+  // Changing the question/tab must invalidate in-flight work immediately.
+  ++privateExpansionEpoch
+  privateExpansionBusy.value=false
+  privateSearchExpanded.value=false
+  privateExpansionStatus.value=''
+})
 onMounted(()=>{
   schedulePrivateSearch()
   void loadFolders();void loadMergeBackups();void loadArchivePrefState()
   void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
-  ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch;++privateSearchEpoch
+  ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch
+  ++privateSearchEpoch;++privateExpansionEpoch
   if(privateSearchTimer!==null)clearTimeout(privateSearchTimer)
   privateSearchTimer=null
   privateSearchResult.value=null
+  privateExpansionBusy.value=false
+  privateSearchExpanded.value=false
   search.value=''
   searchFolderScope.value='current'
   archivePrefsBusy.value=false
@@ -1223,6 +1315,16 @@ onUnmounted(()=>{
             <option value="all">Все папки (загруженные файлы)</option>
           </select>
         </label>
+        <button v-if="archiveTab==='all'&&normalizePrivateSearch(search).length>=2"
+          type="button" data-testid="browser-private-search-expand"
+          :disabled="busy||privateExpansionBusy||privateSearchExpanded
+            ||!activeSession.online||!photoCursor&&!mediaCursor
+              &&items.length===0"
+          @click="expandPrivateSearch">
+          {{ privateExpansionBusy?'Загружаем расширенную выборку…'
+            :privateSearchExpanded?'Расширенная проверка включена'
+            :'Проверить больше файлов (до 1000)' }}
+        </button>
         <label>
           <span class="browser-sr-only">Сортировка</span>
           <select v-model="sort" data-testid="browser-sort">
@@ -1248,15 +1350,27 @@ onUnmounted(()=>{
       <p class="muted">Поиск по ID мгновенный. Имена, описания, категории и теги
         ищутся только после расшифровки на этом устройстве. Поисковый запрос и
         незашифрованные метаданные не передаются серверу и не сохраняются в индексе.
-        Все папки — только загруженные записи, не весь облачный аккаунт.
+        Все папки — только загруженные записи. Расширенная проверка запускается
+        отдельно, ограничена 500 фото + 500 медиа из авторизованных индексов,
+        не обещает поиск по всему аккаунту и не сохраняет приватный индекс.
         При сортировке по размеру файлы с неизвестным размером идут последними.</p>
+      <p v-if="privateExpansionStatus||privateExpansionBusy" class="muted"
+        data-testid="browser-expanded-search-status" role="status">
+        {{ privateExpansionBusy
+          ?'Получаем только непрозрачные ID. Названия файлов и запрос серверу не передаются.'
+          :privateExpansionStatus }}
+      </p>
       <p v-if="search.trim()" data-testid="browser-private-search-status"
         role="status" class="muted">
         <template v-if="normalizePrivateSearch(search).length<2">
           Для поиска по приватным полям введите хотя бы 2 символа; поиск по ID уже доступен.
         </template>
         <template v-else-if="privateSearchBusy">
-          Идёт проверка зашифрованных метаданных загруженных файлов…
+          Идёт проверка зашифрованных метаданных на устройстве…
+          <span v-if="privateSearchExpanded">
+            Обработано {{ privateSearchProgress }}
+            из {{ Math.min(searchScope.length,1000) }} выбранных файлов.
+          </span>
         </template>
         <template v-else-if="privateSearchError">{{ privateSearchError }}</template>
         <template v-else-if="privateSearchResult?.query===normalizePrivateSearch(search)">
@@ -1265,7 +1379,8 @@ onUnmounted(()=>{
           <span v-if="privateSearchResult.failed||privateSearchResult.skipped||privateSearchUnscanned">
             Результат неполный: {{ privateSearchResult.failed }} ошибок,
             {{ privateSearchResult.skipped }} недоступны или истекли,
-            {{ privateSearchUnscanned }} за пределом проверки (200 за поиск).
+            {{ privateSearchUnscanned }} за пределом проверки
+            ({{ privateSearchExpanded?'1000':'200' }} за поиск).
           </span>
           <span v-else>Все загруженные файлы проверены.</span>
         </template>
