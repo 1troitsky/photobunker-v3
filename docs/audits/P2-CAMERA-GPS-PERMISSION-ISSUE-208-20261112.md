@@ -26,6 +26,12 @@
 - Revised on `cb191ed0`: first require `navigator.permissions.query({name:'geolocation'}).state==='denied'`, then deliberately test no old GPS status; **continue** to take a new real encrypted photo and decrypt its metadata to assert no stale `gps`. No production changes or relaxed privacy assertion; the browser alert label is no longer treated as the sole evidence.
 - **Current status: QA HOLD / exact-head Chrome rerun required.** Do not infer a product defect solely from the previous missing alert. A failure after verified permission revocation plus decrypted stale GPS would establish the real security bug.
 
+## Revocation permission fixture correction (second Chromium run)
+
+- On `6082e457`, [run 43205592632](https://github.com/1troitsky/photobunker-v3/actions/runs/43205592632) was again **63/64 PASS**. The negative test explicitly queried `navigator.permissions.query({name:'geolocation'}).state` after `context.grantPermissions(['camera'])`, and received **`granted`**, not the required `denied`. Browser permission was **not** actually revoked by that fixture update. This outcome is **not product-bug evidence**.
+- Updated `ab56e0e7`: perform `context.clearPermissions()` first, then `context.grantPermissions(['camera'])`, require the real browser permission state is **not `granted`**, and preserve negative UI + AES-GCM decrypted metadata assertions. Permission `prompt` is not considered approval and must not authorize reuse. Third exact-head full CI required.
+- If browser state transitions but decrypted photo still contains earlier location after an explicit failed re-request, mark Product **FAIL** and link a separate scoped Camera remediation. No Camera source modifications in #208 QA branch.
+
 ## Gates & limitations
 
 - Required: exact-head PHP8.4/8.5, strict TS/build/Vitest, security and UX lane guard, real PostgreSQL18+Garage and full Chromium incl 4 new scenarios. No skip, fake consent, timeout relaxation, CI allowlist changes or privacy bypass.
