@@ -9,6 +9,12 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
       )).toBe(true)
     }
   })
+  it('opens the exact start page control with RU/EN synonyms', () => {
+    for (const query of ['стартовая страница','launch page','начальный экран']) {
+      expect(searchSettings(query).find(row => row.id === 'start-page')?.to)
+        .toBe('/settings/appearance?field=launch')
+    }
+  })
   it('shows language as an unavailable real future setting, not a fake jump', () => {
     for (const term of ['язык', 'language', 'english']) {
       const entry = searchSettings(term).find(row => row.id === 'language')
@@ -19,13 +25,14 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
   it('only exposes existing PB3 routes and anchored fields', () => {
     expect(implementedSearchTargets).toEqual([
       '/settings/appearance?field=dock', '/contacts',
+      '/settings/appearance?field=launch',
     ])
     expect(searchSettings('')).toEqual(
       settingsSearchEntries.filter(entry => entry.to !== null),
     )
     expect(new Set(settingsSearchEntries.map(entry => entry.id)).size)
       .toBe(settingsSearchEntries.length)
-    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(2)
+    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(3)
   })
   it('never treats messages as a nested Contacts settings route', () => {
     expect(settingsSearchEntries.some(entry => entry.id === 'messages')).toBe(false)

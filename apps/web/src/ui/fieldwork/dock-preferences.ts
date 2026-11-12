@@ -40,7 +40,10 @@ export const defaultDock: readonly DockId[] = Object.freeze([
 
 // These are *local display preferences*, never identity, keys, metadata or
 // access rights. They may be set while offline and are scoped to this device.
+// V1 is read as a migration fallback. V2 stores the complete appearance draft
+// in one atomic localStorage item, so Dock and Start Page cannot half-save.
 export const dockStorageKey = 'pb3.appearance.dock.v1'
+export const appearanceStorageKey = 'pb3.appearance.v2'
 
 export type DockStorage = Pick<Storage, 'getItem' | 'setItem'>
 
@@ -63,9 +66,23 @@ export function validateDock(input: unknown): DockId[] | null {
 export function readDock(storage: DockStorage | null = deviceStorage()): DockId[] {
   if (!storage) return [...defaultDock]
   try {
-    const json = storage.getItem(dockStorageKey)
-    if (!json) return [...defaultDock]
-    return validateDock(JSON.parse(json)) ?? [...defaultDock]
+    // Full v2 bundle must be structurally valid. Invalid/unreadable v2 data
+    // falls through to the previous v1 Dock, without losing saved choices.
+    const v2 = storage.getItem(appearanceStorageKey)
+    if (v2) {
+      const parsed: unknown = JSON.parse(v2)
+      if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const value = parsed as Record<string,unknown>
+        const dock = validateDock(value.dock)
+        if (value.version === 2
+          && ['tasks','camera','browser'].includes(String(value.launch)) && dock) return dock
+      }
+    }
+  } catch { /* corrupt v2 is not fatal: try the legacy Dock key */ }
+  try {
+    const legacy = storage.getItem(dockStorageKey)
+    if (!legacy) return [...defaultDock]
+    return validateDock(JSON.parse(legacy)) ?? [...defaultDock]
   } catch {
     // Corrupt or blocked storage never breaks the application shell.
     return [...defaultDock]

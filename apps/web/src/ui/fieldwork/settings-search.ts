@@ -48,9 +48,9 @@ export const settingsSearchEntries: readonly SettingsSearchEntry[] = [
   },
   {
     id: 'start-page', label: 'Стартовая страница', group: 'Оформление',
-    description: 'Открывать камеру, задания или каталог — ещё не подключено',
+    description: 'При запуске открывать камеру, задания или Browser',
     keywords: ['старт', 'запуск', 'начальный экран', 'launch page', 'start page', 'home'],
-    to: null,
+    to: '/settings/appearance?field=launch',
   },
   {
     id: 'language', label: 'Язык', group: 'Оформление',
