@@ -233,7 +233,64 @@ export async function listMatrixTextOutbox():Promise<Array<{
     body:x.body,eventId:x.eventId,
   }))
 }
-async function preflight(s:Session,x:PendingText,client:MatrixClient):Promise<void>{
+/**
+ * M-04A: independently re-read the room state after the potentially long
+ * Contact/cross-signing checks, and again immediately before SDK encryption.
+ * This narrows the TOCTOU window but DOES NOT make Matrix membership atomic.
+ * Full adversarial server-side membership/key-sharing acceptance remains OPEN.
+ */
+async function verifyFreshPrivateRoom(
+  s:Session,x:PendingText,client:MatrixClient,expectedMatrixUserId:string,
+):Promise<void>{
+  const room=client.getRoom(x.roomId)
+  const crypto=client.getCrypto()
+  if(!room||room.getMyMembership()!=='join'||!crypto
+    ||!await crypto.isEncryptionEnabledInRoom(x.roomId)
+    ||room.currentState.getStateEvents('m.room.encryption','')
+      ?.getContent().algorithm!=='m.megolm.v1.aes-sha2')
+    throw Error('matrix.outbox_room_not_encrypted')
+  same(s)
+  const server=await client.getJoinedRoomMembers(x.roomId)
+  same(s)
+  const joined=Object.keys(server.joined??{})
+  const allowed=new Set([expectedMatrixUserId,x.matrixUserId])
+  if(allowed.size!==2||joined.length!==2
+    ||joined.some(id=>!allowed.has(id))
+    ||room.getJoinedMembers().some(m=>!allowed.has(m.userId))
+    ||room.getMembers().some(m=>
+      (m.membership==='join'||m.membership==='invite')
+      &&!allowed.has(m.userId)))
+    throw Error('matrix.outbox_room_membership_changed')
+  // joined_members does NOT include pending invites. Fetch authoritative
+  // room state as well, so an invited third user cannot silently join
+  // immediately after the joined-members check and receive a room key.
+  const state=await client.roomState(x.roomId)
+  same(s)
+  if(!Array.isArray(state)||state.length>5000)
+    throw Error('matrix.outbox_invalid_room_state')
+  let encryption=false
+  for(const ev of state){
+    if(ev.type==='m.room.encryption'&&ev.state_key===''){
+      if(ev.content?.algorithm!=='m.megolm.v1.aes-sha2')
+        throw Error('matrix.outbox_room_not_encrypted')
+      encryption=true
+    }
+    if(ev.type==='m.room.member'
+      &&(ev.content?.membership==='join'
+        ||ev.content?.membership==='invite')
+      &&(typeof ev.state_key!=='string'||!allowed.has(ev.state_key)))
+      throw Error('matrix.outbox_room_membership_changed')
+    if(ev.type==='m.room.join_rules'&&ev.state_key===''
+      &&ev.content?.join_rule!=='invite')
+      throw Error('matrix.outbox_room_access_policy_changed')
+    if(ev.type==='m.room.history_visibility'&&ev.state_key===''
+      &&ev.content?.history_visibility==='world_readable')
+      throw Error('matrix.outbox_room_access_policy_changed')
+  }
+  if(!encryption)throw Error('matrix.outbox_room_not_encrypted')
+}
+
+async function preflight(s:Session,x:PendingText,client:MatrixClient):Promise<string>{
   if(!isLeasedMatrixClient(client))
     throw Error('matrix.outbox_crypto_lease_required')
   const binding=await getBoundMatrixCredentials()
@@ -276,48 +333,12 @@ async function preflight(s:Session,x:PendingText,client:MatrixClient):Promise<vo
     ||proof.matrixUserId!==x.matrixUserId
     ||proof.matrixEd25519!==x.matrixEd25519)
     throw Error('matrix.outbox_unverified_recipient')
-  const server=await client.getJoinedRoomMembers(x.roomId)
-  same(s)
-  const joined=Object.keys(server.joined??{})
-  const allowed=new Set([binding.contract.matrixUserId,x.matrixUserId])
-  if(allowed.size!==2||joined.length!==2
-    ||joined.some(id=>!allowed.has(id))
-    ||room.getJoinedMembers().some(m=>!allowed.has(m.userId))
-    ||room.getMembers().some(m=>
-      (m.membership==='join'||m.membership==='invite')
-      &&!allowed.has(m.userId)))
-    throw Error('matrix.outbox_room_membership_changed')
-  // joined_members does NOT include pending invites. Fetch authoritative
-  // room state as well, so an invited third user cannot silently join
-  // immediately after the joined-members check and receive a room key.
-  const state=await client.roomState(x.roomId)
-  same(s)
-  if(!Array.isArray(state)||state.length>5000)
-    throw Error('matrix.outbox_invalid_room_state')
-  let encryption=false
-  for(const ev of state){
-    if(ev.type==='m.room.encryption'&&ev.state_key===''){
-      if(ev.content?.algorithm!=='m.megolm.v1.aes-sha2')
-        throw Error('matrix.outbox_room_not_encrypted')
-      encryption=true
-    }
-    if(ev.type==='m.room.member'
-      &&(ev.content?.membership==='join'
-        ||ev.content?.membership==='invite')
-      &&(typeof ev.state_key!=='string'||!allowed.has(ev.state_key)))
-      throw Error('matrix.outbox_room_membership_changed')
-    if(ev.type==='m.room.join_rules'&&ev.state_key===''
-      &&ev.content?.join_rule!=='invite')
-      throw Error('matrix.outbox_room_access_policy_changed')
-    if(ev.type==='m.room.history_visibility'&&ev.state_key===''
-      &&ev.content?.history_visibility==='world_readable')
-      throw Error('matrix.outbox_room_access_policy_changed')
-  }
-  if(!encryption)throw Error('matrix.outbox_room_not_encrypted')
+  await verifyFreshPrivateRoom(s,x,client,binding.contract.matrixUserId)
   // The SDK owns encryption and will refuse unsigned devices. Set mode
   // again on the exact SDK client to avoid an injected lax crypto setting.
   crypto.setDeviceIsolationMode(new OnlySignedDevicesIsolationMode())
   same(s)
+  return binding.contract.matrixUserId
 }
 /** Safe retry after an ACK loss reuses EXACTLY the original Matrix txnId;
  * the homeserver, not the client, guarantees idempotent event identity.
@@ -339,7 +360,7 @@ export async function flushMatrixTextOutbox(client:MatrixClient):Promise<{
       if(item.state==='server_accepted')continue
       attempted++
       try{
-        await preflight(s,item,client)
+        const expectedMatrixUserId=await preflight(s,item,client)
         same(s)
         if(!isLeasedMatrixClient(client))
           throw Error('matrix.outbox_crypto_lease_lost')
@@ -365,6 +386,11 @@ export async function flushMatrixTextOutbox(client:MatrixClient):Promise<{
               throw Error('matrix.outbox_local_echo_not_confirmed')
             remoteEventId=id
           }else if(echo.status===EventStatus.NOT_SENT){
+            await verifyFreshPrivateRoom(s,item,client,expectedMatrixUserId)
+            same(s)
+            if(client.getUserId()!==expectedMatrixUserId
+              ||!isLeasedMatrixClient(client))
+              throw Error('matrix.outbox_crypto_lease_lost')
             const result=await client.resendEvent(echo,room)
             if(!result?.event_id||!eventRe.test(result.event_id))
               throw Error('matrix.outbox_invalid_ack')
@@ -375,6 +401,13 @@ export async function flushMatrixTextOutbox(client:MatrixClient):Promise<{
             throw Error('matrix.outbox_local_echo_inflight')
           }
         }else{
+          // Last authoritative membership + invite-state read immediately
+          // before asking RustCrypto to encrypt; this is not an atomic gate.
+          await verifyFreshPrivateRoom(s,item,client,expectedMatrixUserId)
+          same(s)
+          if(client.getUserId()!==expectedMatrixUserId
+            ||!isLeasedMatrixClient(client))
+            throw Error('matrix.outbox_crypto_lease_lost')
           // The official Matrix SDK encrypts the text before network I/O.
           const result=await client.sendMessage(item.roomId,{
             msgtype:MsgType.Text,body:item.body,
