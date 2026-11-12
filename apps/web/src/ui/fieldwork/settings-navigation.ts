@@ -12,8 +12,8 @@ export interface SettingsGroup {
   entries: readonly SettingsEntry[]
 }
 
-// Only Contacts & Teams has an existing, authorized PB3 route on this base.
-// Other accepted HTML files are UX designs, not implemented PB3 pages.
+// Contacts has an existing authorized PB3 route; Appearance now has a real
+// locally persisted Dock editor. Other source HTML designs are not routes.
 export const settingsGroups: readonly SettingsGroup[] = [
   {
     id: 'people', title: 'Профиль и люди', entries: [
@@ -24,7 +24,7 @@ export const settingsGroups: readonly SettingsGroup[] = [
   },
   {
     id: 'application', title: 'Приложение', entries: [
-      {id:'appearance',label:'Оформление',description:'Тема, язык, Dock и внешний вид',to:null},
+      {id:'appearance',label:'Оформление',description:'Порядок и состав нижней панели',to:'/settings/appearance'},
       {id:'notifications',label:'Уведомления',description:'События и параметры уведомлений',to:null},
     ],
   },
