@@ -1,0 +1,10 @@
+{
+  "privateDatabaseBackupCreated": true,
+  "privateBackupMode": "0o600",
+  "privateBackupSha256": "0c6ea2fb331bde868a6e7ac27421816a0a9c1eb7421e2055e683bd8c5aff158a",
+  "auditComposeStopExitCode": 0,
+  "synapseFilesAndVolumesRetained": true,
+  "productModified": false,
+  "mainRuntimeNotModified": true,
+  "fixtureRuntimeExitCode": 0
+}

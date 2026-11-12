@@ -1,0 +1,10 @@
+{
+  "taskRenamedAfterRuntimeCompletion": true,
+  "oldPath": "docs/_local-tasks/11 - (не выполнен) P2 Matrix Re-acceptance.md",
+  "newPath": "docs/_local-tasks/11 - P2 Matrix Re-acceptance.md",
+  "contentSha256": "aa5c975e72e8520c491865c62183c7b93298cfcdd73cb21e88b246e38b06a938",
+  "contentsChanged": false,
+  "mainHeadBefore": "da7327b8c9c440dae3dc864b3245b9f9f4ad14eb",
+  "mainHeadAfter": "da7327b8c9c440dae3dc864b3245b9f9f4ad14eb",
+  "mainCommitOrPushPerformed": false
+}

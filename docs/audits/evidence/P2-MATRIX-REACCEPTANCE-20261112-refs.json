@@ -1,0 +1,38 @@
+[
+  {
+    "number": 78,
+    "base": "p2/02e2-real-synapse-outbox-gate",
+    "base_sha": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+    "head": "fix/p2-matrix-vite-api-proxy",
+    "head_sha": "f77d2f3d319b3cc4d83b2783307e7d7e7675ce62",
+    "draft": true,
+    "state": "open"
+  },
+  {
+    "number": 79,
+    "base": "fix/p2-matrix-vite-api-proxy",
+    "base_sha": "f77d2f3d319b3cc4d83b2783307e7d7e7675ce62",
+    "head": "fix/p2-matrix-escrow-versioned-rotation",
+    "head_sha": "95c1a3e7a9578d3c176f2cc4388705867680a259",
+    "draft": true,
+    "state": "open"
+  },
+  {
+    "number": 80,
+    "base": "fix/p2-matrix-escrow-versioned-rotation",
+    "base_sha": "95c1a3e7a9578d3c176f2cc4388705867680a259",
+    "head": "p2/03a-signed-pb3-device-revocation",
+    "head_sha": "97d73fffaab26af79df4bd4b5db48a698c2a5342",
+    "draft": true,
+    "state": "open"
+  },
+  {
+    "number": 81,
+    "base": "p2/03a-signed-pb3-device-revocation",
+    "base_sha": "97d73fffaab26af79df4bd4b5db48a698c2a5342",
+    "head": "p2/03b-own-matrix-token-logout",
+    "head_sha": "5f13992b94b90157a38d25b3fe27543e3e8642f1",
+    "draft": true,
+    "state": "open"
+  }
+]
