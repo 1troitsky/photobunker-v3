@@ -99,7 +99,7 @@ jobs:
           composer install --no-interaction --no-progress --prefer-dist
           php artisan migrate --force
           php artisan route:list
-      - name: P1 #279 two-process PostgreSQL quota last-slot races (isolated)
+      - name: "P1 #279 two-process PostgreSQL quota last-slot races (isolated)"
         working-directory: apps/api
         run: php tests/integration/p1-quota-postgres-race.php
       - name: Real S3 digest readback and SQL connectivity
