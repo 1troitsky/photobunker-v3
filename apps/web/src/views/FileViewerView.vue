@@ -1389,6 +1389,18 @@ onUnmounted(()=>{
           @click="navigate(adjacent.next)">›</button>
       </div>
       </div>
+      <div v-show="panel!==null" class="file-viewer-overlay"
+        data-testid="file-viewer-sheet-layer" @click.self="closePanel">
+        <section class="file-viewer-sheet" role="dialog" aria-modal="true"
+          :aria-label="panel==='editor'?'Редактирование файла':'Информация о файле'"
+          @keydown="onSheetKeydown">
+          <header class="file-viewer-sheet-heading">
+            <h2>{{ panel==='editor'?'Редактирование':'Информация' }}</h2>
+            <button ref="sheetClose" type="button" data-testid="viewer-panel-close"
+              @click="closePanel">Закрыть</button>
+          </header>
+          <div class="file-viewer-sheet-body">
+            <div v-show="panel==='editor'" class="file-viewer-editor-sections">
       <section v-if="preview?.type==='photo'&&fileUrl"
         class="file-viewer-photo-editor" data-testid="file-viewer-photo-editor">
         <h2>Кадрирование и поворот</h2>
@@ -1914,6 +1926,8 @@ onUnmounted(()=>{
         <p v-if="stillError" role="alert" data-testid="file-viewer-still-error">
           {{ stillError }}</p>
       </section>
+            </div>
+            <div v-show="panel==='info'">
       <div v-if="preview" class="file-viewer-information" data-testid="file-viewer-info">
         <div class="file-viewer-info-heading">
           <div>
@@ -1950,6 +1964,11 @@ onUnmounted(()=>{
         <p class="muted">Приватные данные расшифрованы на устройстве.
           Скачивание — только после явного подтверждения.</p>
       </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="file-viewer-feedback" aria-live="polite">
       <p v-if="indexIncomplete" class="muted"
         data-testid="file-viewer-index-incomplete">
         Проверено до 500 облачных записей соответствующего типа.
@@ -1961,6 +1980,7 @@ onUnmounted(()=>{
       <p v-if="indexBusy" class="muted">Обновляется список доступных файлов…</p>
       <p v-if="notice" role="status" class="muted">{{ notice }}</p>
       <p v-if="error" role="alert" class="error-text">{{ error }}</p>
+      </div>
     </template>
   </section>
 </template>
