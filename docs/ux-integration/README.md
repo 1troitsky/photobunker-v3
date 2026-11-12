@@ -1,5 +1,7 @@
 # UX integration map — PB3
 
+**Для владельца продукта: [Открыть простую визуальную карту экранов](VISUAL-MAP.md).** На ней нет технических номеров — только привычные разделы приложения и переходы.
+
 > **Status: DOCUMENTATION BASELINE / NOT UI ACCEPTANCE.** Snapshot: PB3 Draft #135 on top of Draft #134 @ `25fd55d9`, 2026-11-12. Only sources reachable in this stacked branch are treated as present. No app behavior is claimed PASS without E2E evidence.
 
 This directory maps the **original, unmodified PB2 PR #56 UX specifications now checked into PB3** to cross-screen journeys and current PB3 runtime. The source package remains in [../ux/](../ux/). The older [../_uiux/](../_uiux/) is preserved but is not the reference for new mappings.
