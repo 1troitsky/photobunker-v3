@@ -1870,22 +1870,38 @@ onUnmounted(()=>{
         <p class="muted">Создайте отдельную JPEG-копию, затем добавьте,
           переместите и отредактируйте надписи прямо на её предпросмотре.
           Маски приватности и изменение оригинала недоступны.</p>
+        <div class="file-viewer-photo-aspects"
+          data-testid="file-viewer-crop-aspects" aria-label="Пропорции кадра">
+          <span>Пропорции</span>
+          <button type="button" data-testid="file-viewer-aspect-original"
+            :disabled="cropBusy" :aria-pressed="cropAspectPreset==='original'"
+            @click="applyPhotoAspect('original')">Исходные</button>
+          <button type="button" data-testid="file-viewer-aspect-square"
+            :disabled="cropBusy" :aria-pressed="cropAspectPreset==='1:1'"
+            @click="applyPhotoAspect('1:1')">1:1</button>
+          <button type="button" data-testid="file-viewer-aspect-four-three"
+            :disabled="cropBusy" :aria-pressed="cropAspectPreset==='4:3'"
+            @click="applyPhotoAspect('4:3')">4:3</button>
+          <button type="button" data-testid="file-viewer-aspect-sixteen-nine"
+            :disabled="cropBusy" :aria-pressed="cropAspectPreset==='16:9'"
+            @click="applyPhotoAspect('16:9')">16:9</button>
+        </div>
         <div class="file-viewer-crop-controls">
           <label>Слева · {{ cropLeft }}%
             <input v-model.number="cropLeft" type="range" min="0" step="1"
-              :max="100-cropWidth" data-testid="file-viewer-crop-left">
+              :max="100-cropWidth" data-testid="file-viewer-crop-left" @input="markCropCustom">
           </label>
           <label>Сверху · {{ cropTop }}%
             <input v-model.number="cropTop" type="range" min="0" step="1"
-              :max="100-cropHeight" data-testid="file-viewer-crop-top">
+              :max="100-cropHeight" data-testid="file-viewer-crop-top" @input="markCropCustom">
           </label>
           <label>Ширина · {{ cropWidth }}%
             <input v-model.number="cropWidth" type="range" min="10" step="1"
-              :max="100-cropLeft" data-testid="file-viewer-crop-width">
+              :max="100-cropLeft" data-testid="file-viewer-crop-width" @input="markCropCustom">
           </label>
           <label>Высота · {{ cropHeight }}%
             <input v-model.number="cropHeight" type="range" min="10" step="1"
-              :max="100-cropTop" data-testid="file-viewer-crop-height">
+              :max="100-cropTop" data-testid="file-viewer-crop-height" @input="markCropCustom">
           </label>
           <label>Поворот
             <select :value="cropTurns" data-testid="file-viewer-crop-turn"
@@ -1896,6 +1912,13 @@ onUnmounted(()=>{
               <option value="3">270°</option>
             </select>
           </label>
+        </div>
+        <div class="file-viewer-photo-rotate-controls">
+          <button type="button" data-testid="file-viewer-rotate-left"
+            :disabled="cropBusy" @click="turnPhoto(-1)">−90°</button>
+          <span>Поворот: {{ cropTurns*90 }}°</span>
+          <button type="button" data-testid="file-viewer-rotate-right"
+            :disabled="cropBusy" @click="turnPhoto(1)">+90°</button>
         </div>
         <h3 class="file-viewer-adjustments-heading">Цвет и свет</h3>
         <div class="file-viewer-crop-controls">
