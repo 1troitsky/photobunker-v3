@@ -235,6 +235,11 @@ const folders=computed(()=>folderChildren(folderWorkspace.value,selectedFolder.v
 const breadcrumb=computed(()=>folderPath(folderWorkspace.value,selectedFolder.value))
 const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
   .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
+const importFolderOptions=computed(()=>allFolders.value.map(folder=>({
+  id:folder.id,
+  label:folderPath(folderWorkspace.value,folder.id)
+    .map(part=>part.name).join(' / '),
+})))
 
 const items=computed(()=>buildCatalog(
   localPhotos.value,[
@@ -812,6 +817,28 @@ function selectVisible():void{
     return
   }
   selectedKeys.value=visible.value.map(x=>x.key)
+}
+async function placeImportedMedia(data:{
+  mediaIds:string[];folderId:string|null
+}):Promise<void>{
+  const identity=activeSession.value
+  if(!identity)return
+  if(data.mediaIds.length<1||data.mediaIds.length>20
+    ||new Set(data.mediaIds).size!==data.mediaIds.length)return
+  if(data.folderId!==null){
+    const keys=data.mediaIds.map(id=>'media:'+id)
+    const moved=await changeFolders({kind:'move-files',
+      keys,folderId:data.folderId})
+    if(identity!==activeSession.value)return
+    if(!moved){
+      // Never roll back or destroy already AES-GCM-encrypted outbox files.
+      // Unplaced files remain at the root and can be moved manually.
+      const error=folderNotice.value
+      folderNotice.value='Файлы зашифрованы и сохранены, но папка назначения '
+        +'не подтверждена. Файлы доступны в корне. '+error
+    }
+  }
+  if(identity===activeSession.value)void refresh()
 }
 async function moveSelected():Promise<void>{
   const ids=selectedKeys.value.slice()
@@ -1560,7 +1587,11 @@ onUnmounted(()=>{
       <section class="browser-operations">
         <h2>Импорт и операции</h2>
         <p class="muted">Загрузка, выдача доступа и версии используют действующий защищённый pipeline.</p>
-        <MediaImportPanel @catalog-change="refresh"/>
+        <MediaImportPanel
+          :destination-folders="importFolderOptions"
+          :default-folder-id="selectedFolder"
+          @media-imported="placeImportedMedia"
+          @catalog-change="refresh"/>
         <SharePanel :local-photos="localPhotos" @open-photo="showReceived"/>
       </section>
     </template>
