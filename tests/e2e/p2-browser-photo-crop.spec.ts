@@ -72,6 +72,13 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
     await expect(editor).toContainText('Сверху · 10%')
     await expect(editor).toContainText('Яркость · 120%')
     await expect(editor).toContainText('Насыщенность · 0%')
+    // Photo Editor 3.2: crop/RGB share the SAME 50-entry history as
+    // annotations, even before the first actual raster is generated.
+    await page.getByTestId('file-viewer-photo-undo').click()
+    await expect(saturation).toHaveValue('100')
+    await page.getByTestId('file-viewer-photo-redo').click()
+    await expect(saturation).toHaveValue('0')
+    await expect(page.getByTestId('file-viewer-photo-redo')).toBeDisabled()
 
     let downloads=0;page.on('download',()=>{downloads++})
     await page.getByTestId('file-viewer-create-crop').click()
@@ -79,6 +86,23 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
     const dimensions=await page.getByTestId('file-viewer-crop-preview')
       .evaluate((img:HTMLImageElement)=>({w:img.naturalWidth,h:img.naturalHeight}))
     expect(dimensions).toEqual({w:60,h:100})
+    // Change a native color slider AFTER raster generation: invalidates
+    // stale JPEG. Undo/Redo restores actual values, while no stale Save
+    // can occur. Re-create output after returning to the prior RGB state.
+    await brightness.focus()
+    await brightness.press('ArrowRight')
+    await expect(brightness).toHaveValue('130')
+    await expect(page.getByTestId('file-viewer-crop-preview')).toHaveCount(0)
+    await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
+    await page.getByTestId('file-viewer-photo-undo').click()
+    await expect(brightness).toHaveValue('120')
+    await page.getByTestId('file-viewer-photo-redo').click()
+    await expect(brightness).toHaveValue('130')
+    await page.getByTestId('file-viewer-photo-undo').click()
+    await expect(brightness).toHaveValue('120')
+    await page.getByTestId('file-viewer-create-crop').click()
+    await expect(page.getByTestId('file-viewer-crop-preview')).toBeVisible()
+    await expect(page.getByTestId('file-viewer-photo-redo')).toBeEnabled()
     expect(downloads).toBe(0)
     expect(await page.evaluate(async()=>{
       const media=await import('/src/features/media/application/media-outbox.ts')
