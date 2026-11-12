@@ -60,7 +60,12 @@ test('P1 ACL matrix: A→B verified grant only, C denied, source namespace denie
 
     const b = await enroll(B)
     await B.goto('/browser')
+    // Browser hydration may temporarily display the local key while its
+    // authenticated server cookie has not yet been refreshed. Never
+    // treat that local-only state as proof for a signed key publication.
     await B.evaluate(async () => {
+      const identity = await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
       const keys = await import('/src/features/sharing/key-directory.ts')
       await keys.ensureOwnExchangeKey()
     })
