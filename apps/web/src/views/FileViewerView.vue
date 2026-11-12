@@ -500,14 +500,30 @@ function replaceShapeMarks(marks:PhotoShapeMark[]):void{
   invalidateTextOutput()
   if(!draggingShape)commitPhotoEdit()
 }
-function addPhotoShape():void{
-  if(!cropResult.value||cropBusy.value||shapeMarks.value.length>=MAX_SHAPE_MARKS)return
+const shapeTypes:readonly {kind:ShapeKind;label:string;glyph:string}[]=[
+  {kind:'arrow',label:'Стрелка',glyph:'↗'},
+  {kind:'circle',label:'Круг',glyph:'○'},
+  {kind:'square',label:'Квадрат',glyph:'□'},
+  {kind:'triangle',label:'Треугольник',glyph:'△'},
+  {kind:'star',label:'Звезда',glyph:'☆'},
+]
+function addPhotoShape(kind:ShapeKind='arrow'):void{
+  if(!cropResult.value||cropBusy.value||showBefore.value
+    ||shapeMarks.value.length>=MAX_SHAPE_MARKS)return
   const mark:PhotoShapeMark={
-    id:crypto.randomUUID(),kind:'arrow',x:20,y:25,width:35,height:25,
+    id:crypto.randomUUID(),kind,x:20,y:25,width:35,height:25,
     stroke:'#1ed760',strokeWidth:6,fill:'#60a5fa',filled:false,
   }
   replaceShapeMarks([...shapeMarks.value,mark])
   selectedShapeId.value=mark.id
+}
+function choosePhotoShapeKind(kind:ShapeKind):void{
+  if(cropBusy.value||showBefore.value||!cropResult.value)return
+  if(selectedShape.value){
+    editPhotoShape({kind})
+    return
+  }
+  addPhotoShape(kind)
 }
 function selectPhotoShape(id:string):void{
   if(cropBusy.value)return
@@ -582,10 +598,19 @@ function moveShapeDrag(event:PointerEvent):void{
     item.id===drag.id?{...item,x,y}:item))
 }
 function endShapeDrag(event:PointerEvent):void{
-  if(draggingShape?.pointerId!==event.pointerId)return
+  const drag=draggingShape
+  if(drag?.pointerId!==event.pointerId)return
   const target=event.currentTarget as Element
   if(target.hasPointerCapture(event.pointerId))
     target.releasePointerCapture(event.pointerId)
+  if(event.type==='pointercancel'){
+    // Browser interruption must NOT turn a partial gesture into a saved
+    // shape location or an Undo step. Restore before ending the drag.
+    replaceShapeMarks(shapeMarks.value.map(mark=>mark.id===drag.id
+      ?{...mark,x:drag.originalX,y:drag.originalY}:mark))
+    draggingShape=null
+    return
+  }
   draggingShape=null
   commitPhotoEdit()
 }
