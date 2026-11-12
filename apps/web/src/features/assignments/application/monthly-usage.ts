@@ -40,7 +40,11 @@ export function parseAssignmentMonthlyUsage(value:unknown):AssignmentMonthlyUsag
     ||!Number.isSafeInteger(data.used)
     ||(data.used as number)<0)return invalid()
 
+  // Under the approved five-plan catalog only Unlimited tiers may use the
+  // unbounded count sentinel. A forged Free/Go/Pro null must fail closed.
+  const unlimited=data.planId==='unlimited'||data.planId==='unlimited_plus'
   const bounded=data.limit!==null
+  if(unlimited===bounded)return invalid()
   if(bounded){
     if(!Number.isSafeInteger(data.limit)||(data.limit as number)<0
       ||!Number.isSafeInteger(data.remaining)
