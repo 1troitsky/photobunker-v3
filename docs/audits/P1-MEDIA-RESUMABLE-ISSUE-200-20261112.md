@@ -1,6 +1,7 @@
 # P1 #200 — encrypted resumable MediaFile: transient lease, lost HTTP ACK and large-file acceptance
 
-**Date:** 2026-11-12. **State:** Product Draft / exact-head CI PENDING.  
+**Date:** 2026-11-12. **State:** Product Draft / exact-head CI PENDING.
+**CI branch filter:** product branch is created from QA #271 exact SHA, but `p4/**` is not in Foundation/Storage PR target filters. Draft #272 targets verified ancestor `integration/pb3-264-wave2-storage-billing-brand` (PR #269) to execute the **real full four-workflow CI**. Its diff therefore includes two **unchanged inherited QA #271 files**; that is ancestry, not independent edits or authorization to merge #271 twice. Initial 2/2 Security+UX-only run is insufficient. After this documentation commit, newly triggered CI must cover Foundation and real PG18/Garage/Chromium as well.  
 **Issue:** [#200](https://github.com/1troitsky/photobunker-v3/issues/200); **base:** verified unified QA [#271](https://github.com/1troitsky/photobunker-v3/pull/271) HEAD `cbd9965dac1896bf4a62654503c281f2aa86ba34` (4/4 PASS, real Garage stop/restart + 77/77 Chromium), **NOT** `main`.  
 **Lane:** `MediaV1Controller.php`, `media-outbox.ts`, `MediaV1Test.php`, `media-outbox.test.ts`, NEW `tests/e2e/p1-media-resumable-large.spec.ts`, this audit. No StorageManager/StorageRetryLedger, Billing/quotas, signed cursor, product UX, Camera, ACL, Matrix or concurrent branches altered.
 
