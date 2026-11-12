@@ -5,6 +5,7 @@ namespace App\Media;
 
 use App\Photo\PhotoSync;
 use App\Storage\StorageManager;
+use App\Storage\TombstoneKeyScope;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -23,18 +24,29 @@ final class MediaLifecycle
         DB::transaction(function()use($mediaId){
             $m=DB::table('media_files_v1')
                 ->where('id',$mediaId)->lockForUpdate()->first();
-            if(!$m||$m->state==='deleting')return;
+            if(!$m)return;
             $keys=DB::table('media_chunk_locations_v1 as l')
                 ->join('media_chunks_v1 as c','c.id','=','l.chunk_id')
                 ->where('c.media_id',$mediaId)
                 ->orderBy('l.object_key')->pluck('l.object_key')->all();
-            DB::table('media_tombstones_v1')->insertOrIgnore([
-                'media_id'=>$mediaId,'account_id'=>$m->account_id,
-                'operation_id'=>$m->operation_id,
-                'object_keys'=>json_encode($keys,JSON_THROW_ON_ERROR),
-                'next_sweep_at'=>now()->addHour(),
-                'created_at'=>now(),
-            ]);
+            TombstoneKeyScope::check('media',$m->account_id,$mediaId,$keys);
+            $stone=DB::table('media_tombstones_v1')->where('media_id',$mediaId)
+                ->lockForUpdate()->first();
+            if($stone){
+                if($stone->account_id!==$m->account_id
+                    ||$stone->operation_id!==$m->operation_id)
+                    throw new \RuntimeException('storage.invalid_tombstone_scope');
+                TombstoneKeyScope::decode('media',$m->account_id,
+                    $mediaId,$stone->object_keys);
+            }else{
+                DB::table('media_tombstones_v1')->insert([
+                    'media_id'=>$mediaId,'account_id'=>$m->account_id,
+                    'operation_id'=>$m->operation_id,
+                    'object_keys'=>json_encode($keys,JSON_THROW_ON_ERROR),
+                    'next_sweep_at'=>now()->addHour(),'created_at'=>now(),
+                ]);
+            }
+            if($m->state==='deleting')return;
             DB::table('media_files_v1')->where('id',$mediaId)->update([
                 'state'=>'deleting','cleanup_next_at'=>now()->addMinutes(
                     (int)config('media_sync.cleanup_lease_minutes',15)),
@@ -49,9 +61,24 @@ final class MediaLifecycle
         if(!$m)return;
         abort_unless($m->state==='deleting'
             ||(int)$m->expires_at<=PhotoSync::nowMs(),409);
-        if($m->state!=='deleting')$this->mark($mediaId);
+        // A preexisting deleting record MUST still have an immutable
+        // tombstone before physical deletion of its S3 placements.
+        $this->mark($mediaId);
+        $stone=DB::table('media_tombstones_v1')
+            ->where('media_id',$mediaId)->first();
+        if(!$stone||$stone->account_id!==$m->account_id
+            ||$stone->operation_id!==$m->operation_id)
+            throw new \RuntimeException('storage.missing_tombstone');
+        $allowed=TombstoneKeyScope::decode('media',$m->account_id,
+            $mediaId,$stone->object_keys);
         $ids=DB::table('media_chunks_v1')->where('media_id',$mediaId)
             ->orderBy('id')->pluck('id')->all();
+        $placements=DB::table('media_chunk_locations_v1 as l')
+            ->join('media_chunks_v1 as c','c.id','=','l.chunk_id')
+            ->where('c.media_id',$mediaId)->pluck('l.object_key')->all();
+        TombstoneKeyScope::check('media',$m->account_id,$mediaId,$placements);
+        if(array_diff($placements,$allowed))
+            throw new \RuntimeException('storage.untracked_gc_placement');
         // Do not remove ANY placement pointer until EVERY S3 delete and
         // independent absence check have completed successfully.
         foreach($ids as $id)$this->storage->deleteMediaChunk($id);
@@ -133,13 +160,10 @@ final class MediaLifecycle
         $cleaned=0;
         foreach($rows as $row){
             try{
-                $keys=json_decode($row->object_keys,true,32,JSON_THROW_ON_ERROR);
-                if(!is_array($keys)||!array_is_list($keys))
-                    throw new \RuntimeException('media.invalid_tombstone');
-                foreach($keys as $key){
-                    if(!is_string($key))throw new \RuntimeException('media.invalid_key');
-                    $this->storage->sweepMediaLateWrite($key);
-                }
+                $keys=TombstoneKeyScope::decode('media',
+                    $row->account_id,$row->media_id,$row->object_keys);
+                // Reject a mixed-ownership list before touching any S3 key.
+                foreach($keys as $key)$this->storage->sweepMediaLateWrite($key);
                 DB::table('media_tombstones_v1')->where('media_id',$row->media_id)
                     ->update(['next_sweep_at'=>now()->addSeconds(
                         max(60,(int)config('media_sync.tombstone_sweep_seconds',3600))),
