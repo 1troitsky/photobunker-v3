@@ -65,9 +65,10 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     await expect(page.getByRole('button',{name:'Следующий файл'})).toBeDisabled()
     await expect(page.getByRole('button',{name:'Предыдущий файл'})).toBeEnabled()
 
-    // Direct Viewer->Browser return uses the last visited eligible file;
-    // neither the excluded video nor the outside-folder audio entered pager.
-    await page.getByRole('link',{name:/Browser/}).first().click()
+    // The second file replaced the first Viewer's history entry: native
+    // browser Back returns directly to the encrypted source folder.
+    // Neither the excluded video nor the outside-folder audio entered pager.
+    await page.goBack()
     await expect(page).toHaveURL(/\/browser$/)
     await expect(page.getByLabel('Путь папки'))
       .toContainText('Только выбранные',{timeout:20000})
