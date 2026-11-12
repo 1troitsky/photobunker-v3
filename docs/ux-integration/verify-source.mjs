@@ -68,10 +68,10 @@ const uiuxHtml = (await walk(visibleSourceRoot))
     !path.startsWith('docs/_uiux/logo/') && path.endsWith('.html'))
   .map(path => path.slice('docs/_uiux/'.length)).sort()
 const visualMap = await readFile(join(docDir, 'VISUAL-MAP.md'), 'utf8')
-const diagrams = [...visualMap.matchAll(/```mermaid\\s*\\n([\\s\\S]*?)\\n```/g)]
+const diagrams = [...visualMap.matchAll(/```mermaid\s*\n([\s\S]*?)\n```/g)]
 if (diagrams.length !== 1) errors.push('Visual map must contain one complete Mermaid diagram, got ' + diagrams.length)
 else {
-  const filenames = [...diagrams[0][1].matchAll(/\\b[A-Za-z0-9_]+\\.html\\b/g)].map(m => m[0])
+  const filenames = [...diagrams[0][1].matchAll(/\b[A-Za-z0-9_]+\.html\b/g)].map(m => m[0])
   const actualNames = new Set(filenames)
   for (const name of uiuxHtml) {
     const matches = filenames.filter(x => x === name).length
