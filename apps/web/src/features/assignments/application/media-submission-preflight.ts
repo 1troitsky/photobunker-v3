@@ -11,6 +11,7 @@ import {
   assertNoVerifiedAssignmentRemoval,
 } from './assignment-outbox'
 import type { AssignmentListing } from './assignment-outbox'
+import {findBoundedAssignmentPolicy} from './bounded-policy-lookup'
 
 const enc=new TextEncoder()
 /**
@@ -28,13 +29,11 @@ export async function preflightAssignmentMediaGrant(
   await assertNoVerifiedAssignmentRemoval(assignmentId)
   if(!session.online||!navigator.onLine)
     throw Error('assignment.media_grant_requires_connection')
-  let cursor:string|undefined
-  let policy:AssignmentListing|undefined
-  do{
-    const page=await listServerAssignments(cursor)
-    policy=page.items.find(x=>x.assignmentId===assignmentId)
-    cursor=page.nextCursor??undefined
-  }while(!policy&&cursor)
+  // Every fetched page is independently checked against the owner's
+  // pinned P-256 policy key; malformed/replayed/non-advancing cursors fail
+  // closed rather than spinning an unlimited network/decrypt loop.
+  const policy:AssignmentListing|undefined=await findBoundedAssignmentPolicy(
+    assignmentId,listServerAssignments)
   if(activeSession.value!==session)throw Error('identity.changed')
   if(!policy||policy.ownerAccountId!==expectedOwnerAccountId
     ||policy.ownerAccountId===session.accountId
