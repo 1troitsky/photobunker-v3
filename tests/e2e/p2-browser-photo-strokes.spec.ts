@@ -64,8 +64,15 @@ test('P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixe
     const thickness=await page.getByTestId('file-viewer-paint-width').boundingBox()
     if(!color||!thickness)throw Error('paint_controls_not_positioned')
     expect(Math.abs(color.y-thickness.y)).toBeLessThan(23)
-    expect(await settings.evaluate(el=>el.scrollWidth<=el.clientWidth+1))
-      .toBe(true)
+    const widths=await settings.evaluate(el=>({
+      scrollWidth:el.scrollWidth,clientWidth:el.clientWidth,
+      children:[...el.querySelectorAll('label')].map(label=>({
+        scrollWidth:label.scrollWidth,clientWidth:label.clientWidth,
+      })),
+    }))
+    expect(widths.scrollWidth).toBeLessThanOrEqual(widths.clientWidth+1)
+    for(const label of widths.children)
+      expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth+1)
     await page.getByTestId('file-viewer-tool-brush').click()
     await expect(page.getByTestId('file-viewer-tool-brush'))
       .toHaveAttribute('aria-pressed','true')
