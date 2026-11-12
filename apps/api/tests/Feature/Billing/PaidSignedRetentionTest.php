@@ -195,9 +195,11 @@ final class PaidSignedRetentionTest extends TestCase
                 ->assertNew($this->account,$this->expiry(1))['effectivePlanId']);
             $this->assertSame($days,app(RetentionAdmission::class)
                 ->assertNew($this->account,$this->expiry(1))['maxDays']);
-            $this->assertDatabaseCount('photo_records',1);
-            $this->assertDatabaseCount('media_files_v1',1);
-            // Reset rows/entitlement for next case via explicit new account.
+            $this->assertSame(1,DB::table('photo_records')
+                ->where('account_id',$this->account)->count());
+            $this->assertSame(1,DB::table('media_files_v1')
+                ->where('account_id',$this->account)->count());
+            // Keep older accounts/rows intact and switch current identity.
             if($plan!=='pro')$this->freshAccount();
         }
     }
@@ -275,6 +277,10 @@ final class PaidSignedRetentionTest extends TestCase
         $m=$this->media($this->expiry(25));
         $bad=$p;$badJson=json_decode($p['json'],true,32,JSON_THROW_ON_ERROR);
         $badJson['expiresAt']=$this->expiry(27);
+        foreach($badJson['assets'] as &$asset){
+            $asset['manifest']['expiresAt']=$badJson['expiresAt'];
+        }
+        unset($asset);
         $bad['body']['contract']=json_encode($badJson,
             JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
         $this->reserve('photo',$bad)->assertUnauthorized();
