@@ -48,7 +48,7 @@ describe('P2 V-32 account-signed media policy search is bounded and cursor-safe'
       await expect(findBoundedAssignmentPolicy(id(1),async()=>page))
         .rejects.toThrow('assignment.invalid_cursor_page')
     }
-    const replay=vi.fn(async(after?:string)=>({
+    const replay=vi.fn(async()=>({
       items:first,nextCursor:id(50),
     }))
     await expect(findBoundedAssignmentPolicy(id(60),replay))
