@@ -2133,6 +2133,7 @@ onUnmounted(()=>{
               </template>
               <div v-if="inlinePhotoText&&!showBefore"
                 class="file-viewer-photo-inline-input"
+                :class="{'align-end':inlinePhotoText.x>55}"
                 :style="{left:inlinePhotoText.x+'%',top:inlinePhotoText.y+'%'}"
                 data-testid="file-viewer-inline-text-editor">
                 <textarea ref="inlineTextInput"
