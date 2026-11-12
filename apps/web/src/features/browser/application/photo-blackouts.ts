@@ -1,3 +1,4 @@
+import {canExportPhotoCanvas} from './photo-export-budget'
 /** Opaque black rectangles for a separate personal JPEG derivative only. */
 export type PhotoBlackout=Readonly<{
   id:string;x:number;y:number;width:number;height:number
@@ -33,9 +34,7 @@ export function paintPhotoBlackouts(
   items:readonly PhotoBlackout[],
 ):void{
   validatePhotoBlackouts(items)
-  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)
-    ||width<1||height<1||width>4096||height>4096
-    ||width*height>16_777_216)
+  if(!canExportPhotoCanvas(width,height))
     throw Error('viewer.blackout_invalid_canvas')
   ctx.save()
   try{
