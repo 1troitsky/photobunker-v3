@@ -1,0 +1,594 @@
+{
+  "schema_version": 1,
+  "source_repository": "1troitsky/photobunker-new",
+  "source_commit": "daca24a4a38c62473859b2b54b4999d50400c491",
+  "import_pr": "https://github.com/1troitsky/photobunker-v3/pull/135",
+  "source_root": "docs/ux/",
+  "files": [
+    {
+      "path": "docs/ux/app-appearance/accepted-app-appearance-v1.2-standalone.html",
+      "git_blob_sha1": "b26b32291070a9517dce695c5ba7904094e7b693",
+      "size": 44140
+    },
+    {
+      "path": "docs/ux/app-appearance/accepted-app-appearance-v1.3-standalone.html",
+      "git_blob_sha1": "eafae920ce78f250c346b66e824e6013f74028d0",
+      "size": 58866
+    },
+    {
+      "path": "docs/ux/app-appearance/app.js",
+      "git_blob_sha1": "c0e3ca7284b49e36ee8884411b39e31919df498b",
+      "size": 33198
+    },
+    {
+      "path": "docs/ux/app-appearance/index.html",
+      "git_blob_sha1": "209b4804f4f2c2b804ff16141fd1b4b493f2cf84",
+      "size": 3078
+    },
+    {
+      "path": "docs/ux/app-appearance/README.md",
+      "git_blob_sha1": "c77788a3c85eef256e7ae224a01e1649b4b53b6a",
+      "size": 11448
+    },
+    {
+      "path": "docs/ux/app-appearance/style.css",
+      "git_blob_sha1": "74950115ad27b53cc5f5e76b4e962d6c83c63777",
+      "size": 22628
+    },
+    {
+      "path": "docs/ux/assignments/app.js",
+      "git_blob_sha1": "32a66fc96bc7cfc1d676fba5ffee2fc2b2b74805",
+      "size": 17004
+    },
+    {
+      "path": "docs/ux/assignments/editor/accepted-assignment-editor-v2.2.html",
+      "git_blob_sha1": "70491cb24c78e1eac99a0ccfe09dc46d4f311ee0",
+      "size": 56793
+    },
+    {
+      "path": "docs/ux/assignments/editor/app.js",
+      "git_blob_sha1": "c852e8c9c21a60c862ae4c645bb317203779fee3",
+      "size": 20544
+    },
+    {
+      "path": "docs/ux/assignments/editor/index.html",
+      "git_blob_sha1": "dda0d41fb840261baaba522e4ae5701be4e62203",
+      "size": 20967
+    },
+    {
+      "path": "docs/ux/assignments/editor/README.md",
+      "git_blob_sha1": "9474440ec7ca2b50fc7e750c5683303c7832b235",
+      "size": 13110
+    },
+    {
+      "path": "docs/ux/assignments/editor/style.css",
+      "git_blob_sha1": "f8ffcf49cd8562b54c908556c894af9b51d7789f",
+      "size": 15330
+    },
+    {
+      "path": "docs/ux/assignments/index.html",
+      "git_blob_sha1": "af721b8b547fe5050a644c6b93feefaec6453919",
+      "size": 5547
+    },
+    {
+      "path": "docs/ux/assignments/README.md",
+      "git_blob_sha1": "26184fcc42487fa74b1820b60d1a21db778cce6d",
+      "size": 10065
+    },
+    {
+      "path": "docs/ux/assignments/style.css",
+      "git_blob_sha1": "9b26e5ac335ccb2222a00699fe4497c06e94cc0a",
+      "size": 12770
+    },
+    {
+      "path": "docs/ux/assignments/v5/accepted-assignments-v5.0-standalone.html",
+      "git_blob_sha1": "8b62302aa3e48261fc141ae74916fe340daff708",
+      "size": 32075
+    },
+    {
+      "path": "docs/ux/assignments/v5/app.js",
+      "git_blob_sha1": "89c1abc6fdb4a9693f7ad834a865864f1571aae1",
+      "size": 15932
+    },
+    {
+      "path": "docs/ux/assignments/v5/index.html",
+      "git_blob_sha1": "bafecc158a057e5e851a9aea565263be4b4db804",
+      "size": 4322
+    },
+    {
+      "path": "docs/ux/assignments/v5/README.md",
+      "git_blob_sha1": "58af9ebd617aafd6986171090acb9091fef72a81",
+      "size": 11247
+    },
+    {
+      "path": "docs/ux/assignments/v5/style.css",
+      "git_blob_sha1": "805dceb37a410c8c034d9e7c57c14f48039f0bcb",
+      "size": 11847
+    },
+    {
+      "path": "docs/ux/authorization-error/accepted-authorization-error-v1.0-standalone.html",
+      "git_blob_sha1": "7cfd97f6907fca2fcba45c2b5210624914c267b2",
+      "size": 9791
+    },
+    {
+      "path": "docs/ux/authorization-error/app.js",
+      "git_blob_sha1": "20999ed7f2d38c9ec121fdafcc4baa2e6e32c82e",
+      "size": 2406
+    },
+    {
+      "path": "docs/ux/authorization-error/index.html",
+      "git_blob_sha1": "dade6180e988ec4a27350119436daf7cf2fb7fb5",
+      "size": 3085
+    },
+    {
+      "path": "docs/ux/authorization-error/README.md",
+      "git_blob_sha1": "aaa341447f5c241d39545b2171c7c7bfdb73bfda",
+      "size": 5983
+    },
+    {
+      "path": "docs/ux/authorization-error/style.css",
+      "git_blob_sha1": "134cd02165725dafeaebbdb162684cdfa0a646ba",
+      "size": 4321
+    },
+    {
+      "path": "docs/ux/browser/accepted-v3-standalone.html",
+      "git_blob_sha1": "cf563e8b265dccfb682aca50a9039cfeb081cd1f",
+      "size": 65128
+    },
+    {
+      "path": "docs/ux/browser/app.js",
+      "git_blob_sha1": "808ee5231b179cf40143c4bd0350889e4cded2d5",
+      "size": 40724
+    },
+    {
+      "path": "docs/ux/browser/editor/app.js",
+      "git_blob_sha1": "5353dd867e09e33a7bc9a7eb0e854805e8a0bd2d",
+      "size": 21304
+    },
+    {
+      "path": "docs/ux/browser/editor/index.html",
+      "git_blob_sha1": "8e7a6443f580ab324866eba73550eeb2865f7731",
+      "size": 15205
+    },
+    {
+      "path": "docs/ux/browser/editor/README.md",
+      "git_blob_sha1": "d5512ab36f57b0bbea468b6eeacc556dbd0190b3",
+      "size": 25574
+    },
+    {
+      "path": "docs/ux/browser/editor/style.css",
+      "git_blob_sha1": "73823e1c4075cde26ed7b16012f1dd2b8ba75650",
+      "size": 16299
+    },
+    {
+      "path": "docs/ux/browser/index.html",
+      "git_blob_sha1": "9570c4ad892fb9f2771d8ca75af3001839b5dfb7",
+      "size": 6620
+    },
+    {
+      "path": "docs/ux/browser/media-editor/accepted-media-editor-v1.1.html",
+      "git_blob_sha1": "c05028899449f15f6c2a18082d2451848e4ad869",
+      "size": 142079
+    },
+    {
+      "path": "docs/ux/browser/media-editor/app.js",
+      "git_blob_sha1": "06271eebaa43b2f4b064e223f5d7268d8d38d123",
+      "size": 34525
+    },
+    {
+      "path": "docs/ux/browser/media-editor/fixtures.js",
+      "git_blob_sha1": "7951901f07566b694a039b6d5de72c9e54a4f268",
+      "size": 70254
+    },
+    {
+      "path": "docs/ux/browser/media-editor/index.html",
+      "git_blob_sha1": "cefc11a2348996d30bf55f3693e2bf1d489a0895",
+      "size": 14705
+    },
+    {
+      "path": "docs/ux/browser/media-editor/README.md",
+      "git_blob_sha1": "ca3ba58aa9b43dc45249648ab9beaf07a3bf05ff",
+      "size": 11428
+    },
+    {
+      "path": "docs/ux/browser/media-editor/style.css",
+      "git_blob_sha1": "b44253e5d9190d9f160624d4fbca945007628d92",
+      "size": 22669
+    },
+    {
+      "path": "docs/ux/browser/README.md",
+      "git_blob_sha1": "938f34a4d4d9d549c50619ad994b013c6ea7014f",
+      "size": 14371
+    },
+    {
+      "path": "docs/ux/browser/SHARING-OPEN-QUESTIONS.md",
+      "git_blob_sha1": "8fb9f05575400982190a80680206c8830fb3b6d2",
+      "size": 9357
+    },
+    {
+      "path": "docs/ux/browser/style.css",
+      "git_blob_sha1": "1b46b290fcdb7b05e707b151dc7310d071babfb9",
+      "size": 17830
+    },
+    {
+      "path": "docs/ux/browser/viewer/accepted-file-viewer-v1-standalone.html",
+      "git_blob_sha1": "6f40a4cc5aeb5b5dd0bc430cdb10c07ef59b35d8",
+      "size": 120683
+    },
+    {
+      "path": "docs/ux/browser/viewer/app.js",
+      "git_blob_sha1": "91ffbb6f9efe02488011e057b9cb75e29d6ba43f",
+      "size": 96691
+    },
+    {
+      "path": "docs/ux/browser/viewer/index.html",
+      "git_blob_sha1": "84774a8d17d8e59cc00fd301c76236843b239598",
+      "size": 8197
+    },
+    {
+      "path": "docs/ux/browser/viewer/README.md",
+      "git_blob_sha1": "2d7f715d6c2016e2ae67f355cd25fd98b282e7e8",
+      "size": 15516
+    },
+    {
+      "path": "docs/ux/browser/viewer/style.css",
+      "git_blob_sha1": "de43b649ed9af7c362db332880f28c0c50c2abb1",
+      "size": 15843
+    },
+    {
+      "path": "docs/ux/camera/app.js",
+      "git_blob_sha1": "d78b6b4c3f0222ce8ee3cbcbab700b33b1ddcbf6",
+      "size": 42722
+    },
+    {
+      "path": "docs/ux/camera/index.html",
+      "git_blob_sha1": "bf96d7b5a801723c450c7406185029f7335bbace",
+      "size": 12054
+    },
+    {
+      "path": "docs/ux/camera/README.md",
+      "git_blob_sha1": "6c1ab6a2fafbca9d6f15668781cdb10f6de66b80",
+      "size": 19974
+    },
+    {
+      "path": "docs/ux/camera/style.css",
+      "git_blob_sha1": "e978ee5b870652faec459de762acf45aabe2c979",
+      "size": 15284
+    },
+    {
+      "path": "docs/ux/contacts-teams/accepted-contacts-teams-v1.1.html",
+      "git_blob_sha1": "02b370a9eaa97c07e35c87768cc751d07e1dd97c",
+      "size": 46319
+    },
+    {
+      "path": "docs/ux/contacts-teams/app.js",
+      "git_blob_sha1": "c94a5c2af224fe652eebcea08a58fa053695d307",
+      "size": 28836
+    },
+    {
+      "path": "docs/ux/contacts-teams/index.html",
+      "git_blob_sha1": "242c1d57859d5558e608833d07fa1f12e251b058",
+      "size": 1886
+    },
+    {
+      "path": "docs/ux/contacts-teams/README.md",
+      "git_blob_sha1": "b05991697695b44b2879fb1ba2d5df58e1cfb582",
+      "size": 12652
+    },
+    {
+      "path": "docs/ux/contacts-teams/style.css",
+      "git_blob_sha1": "13fca2731af337b5c65eb6ec9c588412abbcc9a5",
+      "size": 15645
+    },
+    {
+      "path": "docs/ux/data-storage/accepted-data-storage-v1.2-standalone.html",
+      "git_blob_sha1": "25183785c6a7754408b65b0ac76704bf94c7701a",
+      "size": 60725
+    },
+    {
+      "path": "docs/ux/data-storage/app.js",
+      "git_blob_sha1": "70bdf8d05d7d680a5d240af0dc96ab49b98256f8",
+      "size": 38553
+    },
+    {
+      "path": "docs/ux/data-storage/index.html",
+      "git_blob_sha1": "884c69e2398d8edf76eb3740b2587db7b0838cf3",
+      "size": 3008
+    },
+    {
+      "path": "docs/ux/data-storage/README.md",
+      "git_blob_sha1": "185c5e71bbd0ad46700d03b4fbe512025e10dc67",
+      "size": 6846
+    },
+    {
+      "path": "docs/ux/data-storage/style.css",
+      "git_blob_sha1": "3263bf551edae33d15dd521a27ab58f86d206698",
+      "size": 19202
+    },
+    {
+      "path": "docs/ux/help-legal/accepted-help-legal-v1.0-standalone.html",
+      "git_blob_sha1": "f71a680bb91d706cf1d9f640949d22a732187d62",
+      "size": 73708
+    },
+    {
+      "path": "docs/ux/help-legal/app.js",
+      "git_blob_sha1": "48765a94d6103bee1c2326b1f984d4417b64c5cc",
+      "size": 30763
+    },
+    {
+      "path": "docs/ux/help-legal/index.html",
+      "git_blob_sha1": "94b07886df73b0ba90645212b0fb7172ccea4968",
+      "size": 3073
+    },
+    {
+      "path": "docs/ux/help-legal/README.md",
+      "git_blob_sha1": "1b5fbedf3101b5313c9c61cb6e38d75791bb3cbf",
+      "size": 3653
+    },
+    {
+      "path": "docs/ux/help-legal/style.css",
+      "git_blob_sha1": "618f283a4516e05f2f221e9d612c2e3e73100b99",
+      "size": 39910
+    },
+    {
+      "path": "docs/ux/messages/accepted-messages-fieldwork-v1.1-standalone.html",
+      "git_blob_sha1": "7390a4d3a5606e82ac9990e4b3d56bea6d87d61e",
+      "size": 53433
+    },
+    {
+      "path": "docs/ux/messages/app.js",
+      "git_blob_sha1": "5b8c9162f1a4f70b77251eefd522ceee9774e728",
+      "size": 28575
+    },
+    {
+      "path": "docs/ux/messages/index.html",
+      "git_blob_sha1": "c705c5818492d22b4cdefc31c7a54eff3b1068a2",
+      "size": 5443
+    },
+    {
+      "path": "docs/ux/messages/README.md",
+      "git_blob_sha1": "f102a3faf42986a3e351bf38f216ef2cca947c91",
+      "size": 7755
+    },
+    {
+      "path": "docs/ux/messages/style.css",
+      "git_blob_sha1": "75deb25db561840fad9d52c2a5ba2ab0316e2937",
+      "size": 19453
+    },
+    {
+      "path": "docs/ux/notifications/accepted-notifications-v1.5-standalone.html",
+      "git_blob_sha1": "59151588ba06cd1f5b0ba75b077bdef1b228b35a",
+      "size": 57930
+    },
+    {
+      "path": "docs/ux/notifications/app.js",
+      "git_blob_sha1": "9e3bdd3a60c0499c0f6e76d91f50099cbd3c9ba1",
+      "size": 33682
+    },
+    {
+      "path": "docs/ux/notifications/index.html",
+      "git_blob_sha1": "23033a258e5ebc48dade9c33c6a4f88d8fa07eab",
+      "size": 3499
+    },
+    {
+      "path": "docs/ux/notifications/README.md",
+      "git_blob_sha1": "d7a74183865b9c4c45203ee5675a38ddda4e9117",
+      "size": 10968
+    },
+    {
+      "path": "docs/ux/notifications/style.css",
+      "git_blob_sha1": "91fb83600de06e186b4394576a513123bce5fd84",
+      "size": 20787
+    },
+    {
+      "path": "docs/ux/payments-tariffs/accepted-payments-tariffs-v1.1-standalone.html",
+      "git_blob_sha1": "a7ddad5f400ba206bc69bcaa6d7acf098daabe12",
+      "size": 89066
+    },
+    {
+      "path": "docs/ux/payments-tariffs/app.js",
+      "git_blob_sha1": "63403ff7057d77de07a36e6a99f2545c9239f924",
+      "size": 52207
+    },
+    {
+      "path": "docs/ux/payments-tariffs/checkout/accepted-web3-checkout-v1.0-standalone.html",
+      "git_blob_sha1": "6bb9b93bffd99e235a11d47570e88b8b118aee6b",
+      "size": 28970
+    },
+    {
+      "path": "docs/ux/payments-tariffs/checkout/app.js",
+      "git_blob_sha1": "b5ee305eeb9848be116517622e6952d0a74694f0",
+      "size": 11809
+    },
+    {
+      "path": "docs/ux/payments-tariffs/checkout/index.html",
+      "git_blob_sha1": "fa3bb082e15cab78fe84250f5b54f8c825d8e044",
+      "size": 4147
+    },
+    {
+      "path": "docs/ux/payments-tariffs/checkout/README.md",
+      "git_blob_sha1": "64c03bed4d7b9c6e802a12dbd5ba4bb076ad11ab",
+      "size": 7297
+    },
+    {
+      "path": "docs/ux/payments-tariffs/checkout/style.css",
+      "git_blob_sha1": "6cc78529da89464e6513bfd9abec6b7f7430856e",
+      "size": 13052
+    },
+    {
+      "path": "docs/ux/payments-tariffs/index.html",
+      "git_blob_sha1": "83e454308c5a943bdded95816c31e21abef7411f",
+      "size": 3034
+    },
+    {
+      "path": "docs/ux/payments-tariffs/README.md",
+      "git_blob_sha1": "b9011be89addfb1c9c2a6a1c9a468c73c5dfc6d1",
+      "size": 5297
+    },
+    {
+      "path": "docs/ux/payments-tariffs/style.css",
+      "git_blob_sha1": "d9bb3760f2ca42afa6f458e887a55992042548e1",
+      "size": 33863
+    },
+    {
+      "path": "docs/ux/pin-shell/accepted-pin-shell-v1.1-standalone.html",
+      "git_blob_sha1": "726112665c14030ccedf72ee0e495baa6c7e2cab",
+      "size": 11782
+    },
+    {
+      "path": "docs/ux/pin-shell/app.js",
+      "git_blob_sha1": "58a55a356d22717d8c6b209111355233f1861b16",
+      "size": 2841
+    },
+    {
+      "path": "docs/ux/pin-shell/index.html",
+      "git_blob_sha1": "5dd7ef249a18d7303f199775f065d5082bb2bba7",
+      "size": 3756
+    },
+    {
+      "path": "docs/ux/pin-shell/README.md",
+      "git_blob_sha1": "c5d5a26de6cf1a9716a753112c637a95fbea77c1",
+      "size": 5522
+    },
+    {
+      "path": "docs/ux/pin-shell/style.css",
+      "git_blob_sha1": "8148af26a22b57cfc4c0fc4873da7daf3d43d4c1",
+      "size": 5223
+    },
+    {
+      "path": "docs/ux/public-card/accepted-public-card-v1.1-standalone.html",
+      "git_blob_sha1": "043e86bb11397efd512d3ef5b1c3dd831c098089",
+      "size": 32972
+    },
+    {
+      "path": "docs/ux/public-card/app.js",
+      "git_blob_sha1": "460eec24fecf85e6ffa2edb2fe4f4ac46c4c30ba",
+      "size": 19248
+    },
+    {
+      "path": "docs/ux/public-card/index.html",
+      "git_blob_sha1": "94749fef08f1890a0dfa50089b7f7661223f67ef",
+      "size": 1812
+    },
+    {
+      "path": "docs/ux/public-card/README.md",
+      "git_blob_sha1": "6843e9086d74550b396847c5f92fcf4893903f21",
+      "size": 10553
+    },
+    {
+      "path": "docs/ux/public-card/style.css",
+      "git_blob_sha1": "392a598c74ae3f4010efb307e6dcba5e4f43d16f",
+      "size": 11950
+    },
+    {
+      "path": "docs/ux/README.md",
+      "git_blob_sha1": "f6ea98ad556e038f438bd0e9dde2841cd0a2fdad",
+      "size": 14340
+    },
+    {
+      "path": "docs/ux/security-privacy/accepted-security-privacy-v1.3-standalone.html",
+      "git_blob_sha1": "3a923b99f32ba1aa09818f93eba8b783785eab7d",
+      "size": 67835
+    },
+    {
+      "path": "docs/ux/security-privacy/app.js",
+      "git_blob_sha1": "574439294993f000bee4a6958db4bb396108ec88",
+      "size": 32909
+    },
+    {
+      "path": "docs/ux/security-privacy/index.html",
+      "git_blob_sha1": "a720689af7abaeb3b3432d7537a65a48a5319339",
+      "size": 2958
+    },
+    {
+      "path": "docs/ux/security-privacy/README.md",
+      "git_blob_sha1": "bf141b351d6ca1624783747cc2b137a9a1a6a317",
+      "size": 7376
+    },
+    {
+      "path": "docs/ux/security-privacy/style.css",
+      "git_blob_sha1": "478e380d3717c36766ec0335a77650ca87a46f74",
+      "size": 32006
+    },
+    {
+      "path": "docs/ux/settings-profile/app.js",
+      "git_blob_sha1": "d6b7e62d41cdea0d472e75945254305cbd672008",
+      "size": 33113
+    },
+    {
+      "path": "docs/ux/settings-profile/index.html",
+      "git_blob_sha1": "3c81992d536cde10f20d40ffbb3e843143129c88",
+      "size": 3040
+    },
+    {
+      "path": "docs/ux/settings-profile/README.md",
+      "git_blob_sha1": "7f9484ed23ef9f16e0e4e28269d84ba3f2f9fac4",
+      "size": 6516
+    },
+    {
+      "path": "docs/ux/settings-profile/settings-profile-v1.6-standalone.html",
+      "git_blob_sha1": "c7f11f1685455949627b5b326c0b9131fa19c3b3",
+      "size": 60573
+    },
+    {
+      "path": "docs/ux/settings-profile/style.css",
+      "git_blob_sha1": "c76437a5322223f6b2d72255eb44c96ec42b1f9d",
+      "size": 24458
+    },
+    {
+      "path": "docs/ux/UI-SHELL-CONTRACT.md",
+      "git_blob_sha1": "eea31778074e67563ba7eb4d0a2f02b95c741808",
+      "size": 26404
+    },
+    {
+      "path": "docs/ux/welcome/accepted-welcome-v1.4-standalone.html",
+      "git_blob_sha1": "b36c80d444b87e6e877c92bf09adfebcae244ee5",
+      "size": 46566
+    },
+    {
+      "path": "docs/ux/welcome/app.js",
+      "git_blob_sha1": "4d4113359fc6fe651378da0076ae1963119a5e74",
+      "size": 17695
+    },
+    {
+      "path": "docs/ux/welcome/index.html",
+      "git_blob_sha1": "59f0b9f725e5619143a8fe7791db9cee49b5264d",
+      "size": 1361
+    },
+    {
+      "path": "docs/ux/welcome/loader/accepted-welcome-loader-v1.6-standalone.html",
+      "git_blob_sha1": "dbff6e8c5cf2470a24cd75d424db4b92efa1c500",
+      "size": 48700
+    },
+    {
+      "path": "docs/ux/welcome/loader/app.js",
+      "git_blob_sha1": "635ec7f5b33b804044de968d067e176737803b37",
+      "size": 18490
+    },
+    {
+      "path": "docs/ux/welcome/loader/index.html",
+      "git_blob_sha1": "b716fe2138bbfb417e0fa8d1138ef658be56632d",
+      "size": 1744
+    },
+    {
+      "path": "docs/ux/welcome/loader/README.md",
+      "git_blob_sha1": "3c58a34caa8c99c55186ea1013a623f4185b36d6",
+      "size": 3949
+    },
+    {
+      "path": "docs/ux/welcome/loader/style.css",
+      "git_blob_sha1": "5892f005082fedb051263b27458bd0b5bf5efe8d",
+      "size": 28504
+    },
+    {
+      "path": "docs/ux/welcome/README.md",
+      "git_blob_sha1": "885a2188b6b3482a9e8f4d0b02f7754635fe0b65",
+      "size": 7013
+    },
+    {
+      "path": "docs/ux/welcome/style.css",
+      "git_blob_sha1": "814846b827ad0f105f476b875e534f34cb1c9fe8",
+      "size": 27548
+    }
+  ]
+}

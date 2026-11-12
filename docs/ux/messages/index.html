@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>PhotoBunker — Messages · Fieldwork 1.1</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="preview-bar"><span class="preview-label"><i class="led"></i>FIELDWORK / MESSAGES <small>· 1.1</small></span><div class="preview-controls"><button type="button" class="selected" data-device="phone" aria-pressed="true">Телефон</button><button type="button" data-device="desktop" aria-pressed="false">Desktop</button></div></div>
+<div class="preview-stage"><div class="device phone" id="device"><div class="app" id="app">
+<header class="app-header"><span class="brand-mark" aria-hidden="true">pb</span><button type="button" class="brand-state" data-action="app-status"><strong>PhotoBunker</strong><small><i class="state-led" id="state-led"></i><span id="app-status-text">В работе</span></small></button><div class="header-actions"><button type="button" data-action="app-search" aria-label="Поиск" title="Поиск"><span class="icon" data-icon="search"></span></button><button type="button" data-action="new-chat" aria-label="Новое сообщение" title="Новое сообщение"><span class="icon" data-icon="compose"></span></button></div></header>
+<main class="app-main"><div class="messenger" id="messenger" data-view="list">
+<aside class="inbox" aria-label="Список диалогов"><div class="inbox-head"><div class="inbox-title"><h1>Сообщения</h1><span class="count" id="unread-total" aria-label="Непрочитанные">3</span></div><nav class="inbox-tabs" aria-label="Фильтр диалогов"><button type="button" data-filter="all" class="selected">Все</button><button type="button" data-filter="unread">Непрочитанные</button><button type="button" data-filter="teams">Команды</button></nav><label class="search-wrap" id="inbox-search-wrap" hidden><span class="icon" data-icon="search"></span><span class="visually-hidden">Поиск диалога</span><input type="search" id="inbox-search" autocomplete="off" placeholder="Имя или сообщение"></label></div><div class="list-scroll" id="inbox-list"></div></aside>
+
+</div></main>
+<nav class="app-dock" aria-label="Основная навигация"><button type="button" data-nav="Задания"><span class="icon" data-icon="tasks"></span><small>Задания</small></button><button type="button" data-nav="Browser"><span class="icon" data-icon="folder"></span><small>Browser</small></button><button type="button" data-nav="Камера"><span class="icon" data-icon="camera"></span><small>Камера</small></button><button type="button" class="selected" data-nav="Контакты"><span class="icon" data-icon="users"></span><small>Контакты</small></button><button type="button" data-nav="Профиль"><span class="icon" data-icon="person"></span><small>Профиль</small></button></nav>
+<section class="thread" id="thread" role="dialog" aria-modal="true" aria-label="Переписка" aria-hidden="true" tabindex="-1"><div class="thread-top" id="thread-top"></div><div class="thread-search" id="thread-search-wrap" hidden><span class="icon" data-icon="search"></span><input id="thread-search" type="search" placeholder="Поиск в переписке" autocomplete="off"><button type="button" data-action="close-thread-search" aria-label="Закрыть поиск"><span class="icon" data-icon="close"></span></button></div><div class="pinned-message" id="pinned-banner" hidden></div><div class="messages-scroll" id="messages-scroll"></div><div class="composer" id="composer"><div class="edit-banner" id="compose-banner" hidden></div><div class="composer-main"><div class="composer-entry"><button type="button" class="icon-button" data-action="attach" aria-label="Вложение" title="Вложение"><span class="icon" data-icon="plus"></span></button><textarea id="message-input" rows="1" aria-label="Написать сообщение" placeholder="Сообщение" enterkeyhint="send"></textarea><button type="button" class="icon-button" data-action="emoji" aria-label="Эмодзи" title="Эмодзи"><span class="icon" data-icon="smile"></span></button></div><button type="button" class="composer-send voice" id="send-button" data-action="voice" aria-label="Голосовое сообщение" title="Голосовое сообщение"><span class="icon" data-icon="mic"></span></button></div><div class="composer-hint">Enter — отправить · Shift+Enter — новая строка</div></div></section>
+
+<div class="overlay" id="overlay" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1"><div class="sheet-header"><strong id="sheet-title"></strong><button type="button" class="sheet-close" data-action="close-sheet" aria-label="Закрыть"><span class="icon" data-icon="close"></span></button></div><div id="sheet-body"></div></div></div>
+</div></div></div>
+<p class="preview-note">Предпросмотр: переписка открывается поверх списка. Подключение к Matrix и реальная отправка будут добавлены позднее.</p>
+<script src="app.js"></script>
+</body>
+</html>
