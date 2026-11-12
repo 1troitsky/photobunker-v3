@@ -2033,7 +2033,9 @@ export async function signedMediaCaptureIntent(
   privateFields:MediaPrivateFields={},
 ):Promise<Omit<MediaCaptureIntent,'finishedAt'>>{
   const session=requireSession()
-  const row=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  const cacheKey=session.accountId+'/'+assignmentId
+  if(await db.revocations.get(cacheKey))throw Error('assignment.member_removed')
+  const row=await db.capturePolicies.get(cacheKey)
   if(!row)throw Error('assignment.policy_not_cached')
   await verifySignedAssignmentPolicy(row.listing,true)
   assertSame(session)
@@ -2057,6 +2059,10 @@ export async function signedMediaCaptureIntent(
   validateMediaPrivateRequirements(canonical,signedMediaRequirements(policy,mediaType))
   validateAdvancedFields(canonical,signedAdvancedRequirements(policy,mediaType))
   const policyHash=hex(await digest(new TextEncoder().encode(latest)))
+  // The independently verified owner removal may commit while P-256 policy
+  // checks or private metadata validation are still in flight. Never return
+  // a newly valid assignment capture binding after that point.
+  if(await db.revocations.get(cacheKey))throw Error('assignment.member_removed')
   assertSame(session)
   return {
     assignmentId,ownerAccountId:policy.ownerAccountId,
@@ -2069,7 +2075,9 @@ export async function queueAssignmentMediaSubmission(
   assignmentId:string,mediaId:string,mediaGrantId:string,
 ):Promise<string>{
   const session=requireSession()
-  const cache=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  const cacheKey=session.accountId+'/'+assignmentId
+  if(await db.revocations.get(cacheKey))throw Error('assignment.member_removed')
+  const cache=await db.capturePolicies.get(cacheKey)
   if(!cache)throw Error('assignment.policy_not_cached')
   const listing=cache.listing
   await verifySignedAssignmentPolicy(listing,true)
@@ -2143,7 +2151,17 @@ export async function queueAssignmentMediaSubmission(
       ...(captureContract&&captureSignature
         ?{captureContract,captureSignature}:{}),
     },mediaGrantId)
-  await persist(op)
+  // A signed revocation may commit while ciphertext/hash verification
+  // and account signing execute. Check and atomically persist the operation
+  // with the local denial record to prevent a stale new Fieldwork submission
+  // entering durable outbox *after* owner revocation.
+  await db.transaction('rw',db.operations,db.revocations,async()=>{
+    assertSame(session)
+    if(await db.revocations.get(cacheKey))
+      throw Error('assignment.member_removed')
+    await db.operations.put(op)
+  })
+  void flushAssignmentOutbox()
   return op.id
 }
 export type AssignmentMediaSubmission={
