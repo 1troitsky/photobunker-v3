@@ -211,12 +211,35 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     await owner.locator('#assignment-instructions')
       .fill('Original and safe copy remain encrypted; not public')
     await owner.getByRole('button',{name:'Создать зашифрованное задание'}).click()
-    await owner.getByRole('button',{name:'Синхронизировать'}).click()
-    await expect(owner.locator('.assignment-detail code').first())
-      .toBeVisible({timeout:30000})
-    const assignmentId=(await owner.locator('.assignment-detail code').first()
-      .textContent())?.trim()??''
+    // Creation is Local-First. Read the durable owner-assigned UUID BEFORE
+    // triggering sync; otherwise a refresh racing the local AES-GCM write
+    // can temporarily replace the card with an empty server snapshot.
+    await expect(owner.getByText(
+      'Задание зашифровано и принято локально. Синхронизация — в очереди.'
+    )).toBeVisible({timeout:30000})
+    const detail=owner.locator('.assignment-detail code').first()
+    await expect(detail).toBeVisible({timeout:30000})
+    const assignmentId=(await detail.textContent())?.trim()??''
     expect(assignmentId).toMatch(/^[0-9a-f-]{36}$/)
+    await expect(owner.getByRole('button',{name:'Синхронизировать'}))
+      .toBeEnabled({timeout:30000})
+    await owner.getByRole('button',{name:'Синхронизировать'}).click()
+    // A button click/optimistic card is not a signed server receipt.
+    // Require BOTH a sent operation and the actual authenticated listing.
+    await expect.poll(()=>owner.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const rows=await a.listAssignmentOperations()
+      const create=rows.find(row=>row.kind==='create'&&
+        JSON.parse(row.contract).assignmentId===id)
+      return create?.state??'missing'
+    },assignmentId),{timeout:30000}).toBe('sent')
+    await expect.poll(()=>owner.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const rows=await a.listAllServerAssignments()
+      return rows.some(row=>row.assignmentId===id)
+    },assignmentId),{timeout:30000}).toBe(true)
+    // The same originally selected card must survive background hydration.
+    await expect(detail).toHaveText(assignmentId,{timeout:30000})
     await owner.getByTestId('open-fieldwork-editor').click()
     await expect(owner.getByTestId('fieldwork-assignment-editor'))
       .toBeVisible()
