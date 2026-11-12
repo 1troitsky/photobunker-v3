@@ -19,6 +19,11 @@ import {
 import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
 import {enqueueEncryptedMedia} from '../features/media/application/media-outbox'
 import {registerSafeDerivativeCandidate} from '../features/media/application/safe-derivatives'
+import {
+  isPersonalMediaCopyChanged,mayCopyPersonalMediaSource,
+  validatePersonalMediaCopy,
+} from '../features/browser/application/personal-media-copy'
+import type {PersonalMediaCopyDraft} from '../features/browser/application/personal-media-copy'
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
 import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
@@ -219,6 +224,81 @@ const notice=ref('')
 const fileUrl=ref('')
 const fileBlob=ref<Blob|null>(null)
 const preview=ref<Preview|null>(null)
+const privateCopyDraft=ref<PersonalMediaCopyDraft>({
+  name:'',description:'',category:'',tags:[],
+})
+const privateCopyBusy=ref(false)
+const privateCopyError=ref('')
+const privateCopySavedId=ref<string|null>(null)
+const privateTagText=ref('')
+const privateTagEditIndex=ref<number|null>(null)
+const privateTagForm=ref(false)
+function personalDraftFromPreview(source:Preview):PersonalMediaCopyDraft{
+  return {name:source.name,description:source.description,
+    category:source.category,tags:[...source.tags]}
+}
+function resetPrivateCopyDraft():void{
+  privateCopyDraft.value=preview.value
+    ?personalDraftFromPreview(preview.value)
+    :{name:'',description:'',category:'',tags:[]}
+  privateCopyBusy.value=false
+  privateCopyError.value=''
+  privateCopySavedId.value=null
+  privateTagText.value=''
+  privateTagEditIndex.value=null
+  privateTagForm.value=false
+}
+const personalCopyEligible=computed(()=>{
+  const target=current.value,source=preview.value
+  if(!target||target.protocol!=='media'||!source||source.origin!=='local'
+    ||!activeSession.value||!fileBlob.value||!fileUrl.value)return false
+  return mediaLocal.value.some(row=>row.mediaId===target.id
+    &&mayCopyPersonalMediaSource(row))
+})
+const privateCopyChanged=computed(()=>!!preview.value
+  &&!privateCopySavedId.value
+  &&isPersonalMediaCopyChanged(
+    personalDraftFromPreview(preview.value),privateCopyDraft.value))
+const privateCopyValidation=computed(()=>{
+  if(!personalCopyEligible.value||!privateCopyChanged.value)return null
+  try{
+    return validatePersonalMediaCopy(
+      preview.value!.name,privateCopyDraft.value)
+  }catch{return null}
+})
+function openPrivateTagEditor(index:number|null):void{
+  privateTagEditIndex.value=index
+  privateTagText.value=index===null?'':(privateCopyDraft.value.tags[index]??'')
+  privateTagForm.value=true
+  privateCopyError.value=''
+}
+function closePrivateTagEditor():void{
+  privateTagText.value=''
+  privateTagForm.value=false
+  privateTagEditIndex.value=null
+}
+function commitPrivateTag():void{
+  if(!personalCopyEligible.value)return
+  const index=privateTagEditIndex.value
+  const next=[...privateCopyDraft.value.tags]
+  if(index!==null&&index>=0&&index<next.length)
+    next[index]=privateTagText.value.trim()
+  else next.push(privateTagText.value.trim())
+  try{
+    const valid=validatePersonalMediaCopy(preview.value!.name,{
+      ...privateCopyDraft.value,tags:next,
+    })
+    privateCopyDraft.value.tags=[...(valid.fields.tags??[])]
+    closePrivateTagEditor()
+  }catch{
+    privateCopyError.value='Тег должен быть непустым, уникальным, до 48 байт. Максимум 12 тегов.'
+  }
+}
+function removePrivateTag(index:number):void{
+  if(!personalCopyEligible.value)return
+  privateCopyDraft.value.tags=privateCopyDraft.value.tags.filter((_,i)=>i!==index)
+  closePrivateTagEditor()
+}
 const files=computed(()=>buildCatalog(
   photoLocal.value,photoCloud.value,mediaLocal.value,mediaCloud.value,
 ))
@@ -832,6 +912,7 @@ function clearBlob():void{
   fileUrl.value=''
   fileBlob.value=null
   preview.value=null
+  resetPrivateCopyDraft()
   busy.value=false
 }
 function clearIndex():void{
@@ -1032,6 +1113,7 @@ async function openFile():Promise<void>{
     fileBlob.value=blob
     fileUrl.value=URL.createObjectURL(blob)
     preview.value=data
+    resetPrivateCopyDraft()
   }catch(e){
     if(sameSession(session,epoch))error.value=explain(e)
   }finally{if(sameSession(session,epoch))busy.value=false}
@@ -1384,20 +1466,56 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
-// The dedicated editor is a screen, not a separate media backend. Save only
-// the already prepared, separately encrypted derivative; never claim an
-// upload ACK, mutate the original or silently persist edited metadata.
-const editorReady=computed(()=>{
-  if(!editorMode.value||!activeSession.value||!fileUrl.value||!preview.value
-    ||busy.value)return false
-  if(preview.value.type==='photo')
-    return !!cropResult.value&&!cropBusy.value&&!showBefore.value
-      &&!cropSavedId.value
-  if(preview.value.type==='audio')
-    return !!audioClip.value&&!audioClipBusy.value&&!audioClipSavedId.value
-  return !!still.value&&!stillBusy.value&&!stillSavedId.value
-})
-const editorUnsaved=computed(()=>{
+// This is not an in-place metadata revision. Copying private metadata is
+// an explicit new AES-GCM MediaFile, reauthenticated against a LOCAL personal
+// source at commit time. No assignment capture, GPS, ACL or TTL inheritance.
+async function savePersonalMetadataCopy():Promise<void>{
+  const session=activeSession.value,target=current.value,source=preview.value
+  const epoch=fileEpoch,checked=privateCopyValidation.value
+  if(!session||!target||target.protocol!=='media'||!source||!checked
+    ||!editorMode.value||!personalCopyEligible.value||privateCopyBusy.value)
+    return
+  if(!window.confirm(
+    'Создать отдельную личную зашифрованную копию с новыми данными? '
+    +'Оригинал, права задания, GPS и срок хранения не изменятся и не наследуются. '
+    +'Копия будет иметь собственный срок хранения и ключ шифрования.'
+  ))return
+  privateCopyBusy.value=true;privateCopyError.value=''
+  try{
+    const rows=await listLocalMedia()
+    if(!sameSession(session,epoch)||!editorMode.value||!current.value
+      ||current.value.id!==target.id)return
+    const eligible=rows.find(row=>row.mediaId===target.id
+      &&mayCopyPersonalMediaSource(row))
+    if(!eligible)throw Error('copy.source_not_personal')
+    // Re-read/decrypt the source with its original owner key. An arbitrary
+    // Viewer blob URL is not an authorization to clone other people's files.
+    const original=await readLocalMedia(target.id)
+    if(!sameSession(session,epoch)||!editorMode.value||!current.value
+      ||current.value.id!==target.id)return
+    if(original.metadata.fileName!==source.name
+      ||original.metadata.mime!==source.mime
+      ||original.blob.size!==eligible.plainBytes)
+      throw Error('copy.source_changed')
+    const id=await enqueueEncryptedMedia(
+      new File([original.blob],checked.name,{type:original.metadata.mime}),
+      undefined,checked.fields,
+    )
+    if(!sameSession(session,epoch)||!editorMode.value||!current.value
+      ||current.value.id!==target.id)return
+    privateCopySavedId.value=id
+    notice.value='Личная копия зашифрована в локальной очереди Browser. '
+      +'Исходный файл не изменён. Подтверждение облака отдельно.'
+    void refreshIndex()
+    await returnFromEditor()
+  }catch(e){
+    if(sameSession(session,epoch)&&editorMode.value)
+      privateCopyError.value=explain(e)
+  }finally{
+    if(sameSession(session,epoch))privateCopyBusy.value=false
+  }
+}
+const editorMediaUnsaved=computed(()=>{
   if(!editorMode.value||!preview.value)return false
   if(preview.value.type==='photo'){
     if(cropSavedId.value)return false
@@ -1418,6 +1536,26 @@ const editorUnsaved=computed(()=>{
     ||(videoDuration.value>0&&(videoTrimStart.value>0.001
       ||Math.abs(videoTrimEnd.value-videoDuration.value)>0.051))
 })
+// Never silently lose an edited metadata tab or save one half of a mixed
+// draft. Separate derivative save and metadata-copy save are intentional
+// independent operations, NOT one transactional in-place revision.
+const editorReady=computed(()=>{
+  if(!editorMode.value||!activeSession.value||!fileUrl.value||!preview.value
+    ||busy.value||privateCopyBusy.value||privateTagForm.value)return false
+  if(editorTab.value==='review')return false
+  if(editorTab.value==='info')
+    return !!privateCopyValidation.value&&!editorMediaUnsaved.value
+  if(privateCopyChanged.value)return false
+  if(preview.value.type==='photo')
+    return !!cropResult.value&&!cropBusy.value&&!showBefore.value
+      &&!cropSavedId.value
+  if(preview.value.type==='audio')
+    return !!audioClip.value&&!audioClipBusy.value&&!audioClipSavedId.value
+  return !!still.value&&!stillBusy.value&&!stillSavedId.value
+})
+const editorUnsaved=computed(()=>editorMode.value
+  &&(privateCopyChanged.value||editorMediaUnsaved.value
+    ||(privateTagForm.value&&privateTagText.value.trim().length>0)))
 function resetEditorDraft():void{
   clearTextMarks()
   clearCrop()
@@ -1429,6 +1567,7 @@ function resetEditorDraft():void{
   trimEnd.value=Math.min(audioDuration.value,60)
   clearStill()
   clearVideoTrim()
+  resetPrivateCopyDraft()
 }
 function editorViewerPath():string|null{
   const target=current.value
@@ -1448,6 +1587,7 @@ async function cancelEditor():Promise<void>{
 }
 async function saveEditor():Promise<void>{
   if(!editorReady.value||!editorMode.value||!preview.value||!current.value)return
+  if(editorTab.value==='info'){await savePersonalMetadataCopy();return}
   const before=viewerKey(current.value)
   const kind=preview.value.type
   if(kind==='photo')await saveCroppedPhoto()
@@ -1500,9 +1640,10 @@ watch([fileUrl,preview,activeSession,editorMode,editorReady],()=>{
       ?{download}:null)
   }
 },{immediate:true})
-watch(editorMode,()=>{
+watch(editorMode,opened=>{
   panel.value=null
   editorTab.value='media'
+  if(opened)resetPrivateCopyDraft()
 })
 watch(activeSession,(next,previous)=>{
   // A CSRF/session reauthentication may replace Session with a new object
@@ -1540,6 +1681,8 @@ watch([()=>route.params.protocol,()=>route.params.id],()=>{
 // Browser history Back, the shell dock and the explicit breadcrumb all
 // converge here. Never put a private search term or folder path into a URL.
 onBeforeRouteLeave((to)=>{
+  if(editorMode.value&&privateCopyBusy.value&&!privateCopySavedId.value)
+    return false
   if(editorMode.value&&editorUnsaved.value){
     if(!window.confirm('Отменить несохранённые изменения файла? Исходный файл останется без изменений.'))
       return false
@@ -2268,6 +2411,86 @@ onUnmounted(()=>{
       </section>
             </div>
             <div v-show="panel==='info'||(editorMode&&editorTab==='info')">
+      <section v-if="editorMode&&preview"
+        class="file-editor-private-copy" data-testid="file-editor-private-copy">
+        <h2>Информация · личная копия</h2>
+        <p class="muted">Изменения информации создают <strong>новый личный
+          зашифрованный файл</strong>. Подписанный оригинал и задание остаются
+          без изменений. GPS, разрешения на чтение и срок хранения не
+          копируются. Подтверждение облака отдельно.</p>
+        <template v-if="personalCopyEligible">
+          <label for="personal-copy-name">Название файла</label>
+          <input id="personal-copy-name" v-model="privateCopyDraft.name"
+            type="text" maxlength="160" autocomplete="off"
+            :disabled="privateCopyBusy" data-testid="private-copy-name"/>
+          <label for="personal-copy-description">Описание</label>
+          <textarea id="personal-copy-description"
+            v-model="privateCopyDraft.description" rows="3"
+            maxlength="4000" :disabled="privateCopyBusy"
+            data-testid="private-copy-description"/>
+          <label for="personal-copy-category">Категория</label>
+          <input id="personal-copy-category" v-model="privateCopyDraft.category"
+            maxlength="64" autocomplete="off" :disabled="privateCopyBusy"
+            data-testid="private-copy-category"/>
+          <span class="file-editor-private-tag-label">Теги</span>
+          <div class="file-editor-private-tags" data-testid="private-copy-tags">
+            <span v-for="(tag,index) in privateCopyDraft.tags" :key="tag"
+              class="file-editor-private-tag">
+              <button type="button" :disabled="privateCopyBusy"
+                :aria-label="'Изменить тег '+tag"
+                @click="openPrivateTagEditor(index)">{{ tag }}</button>
+              <button type="button" :disabled="privateCopyBusy"
+                :aria-label="'Удалить тег '+tag"
+                @click="removePrivateTag(index)">×</button>
+            </span>
+            <button type="button" :disabled="privateCopyBusy
+              ||privateCopyDraft.tags.length>=12" class="file-editor-add-tag"
+              data-testid="private-copy-add-tag"
+              @click="openPrivateTagEditor(null)">Добавить тег</button>
+          </div>
+          <div v-if="privateTagForm" class="file-editor-private-tag-form"
+            data-testid="private-copy-tag-editor">
+            <label for="personal-copy-tag-text">
+              {{ privateTagEditIndex===null?'Новый тег':'Изменить тег' }}
+            </label>
+            <input id="personal-copy-tag-text" v-model="privateTagText"
+              type="text" maxlength="48" autocomplete="off"
+              data-testid="private-copy-tag-text" @keydown.enter.prevent="commitPrivateTag"/>
+            <div>
+              <button type="button" @click="commitPrivateTag">Готово</button>
+              <button type="button" @click="closePrivateTagEditor">Отмена</button>
+            </div>
+          </div>
+          <p v-if="privateCopyChanged&&!privateCopyValidation"
+            class="error-text" data-testid="private-copy-invalid">
+            Проверьте название, описание, категорию и теги.
+            Расширение файла менять нельзя; до 12 уникальных тегов.
+          </p>
+          <p v-if="privateCopyChanged&&editorMediaUnsaved"
+            class="error-text" data-testid="private-copy-mixed-warning">
+            Есть также несохранённые правки медиа. Нельзя сохранить лишь
+            часть изменений: завершите или отмените одну операцию, затем другую.
+          </p>
+          <p v-if="privateTagForm" class="muted">
+            Сначала подтвердите или отмените изменение тега.
+          </p>
+          <p v-if="privateCopyChanged&&!editorMediaUnsaved
+              &&!!privateCopyValidation" class="muted"
+            data-testid="private-copy-save-hint">
+            Нажмите «Сохранить» в шапке для создания новой E2EE-копии.
+            Действие потребует подтверждения.
+          </p>
+        </template>
+        <p v-else class="muted" data-testid="private-copy-unavailable">
+          Изменение информации недоступно: требуется подтверждённый
+          локальный личный MediaFile. Для файлов заданий, облачных
+          источников и просроченных файлов нужна отдельная проверенная
+          серверная политика. Исходные сведения доступны ниже только для чтения.
+        </p>
+        <p v-if="privateCopyBusy" role="status">Шифруем отдельную копию…</p>
+        <p v-if="privateCopyError" class="error-text" role="alert"
+          data-testid="private-copy-error">{{ privateCopyError }}</p>
+      </section>
       <div v-if="preview" class="file-viewer-information" data-testid="file-viewer-info">
         <div class="file-viewer-info-heading">
           <div>

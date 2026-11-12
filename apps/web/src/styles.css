@@ -679,3 +679,39 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .file-editor-video-trim-controls{grid-template-columns:1fr}
   .file-editor-video-trim-actions button{flex:1 1 130px}
 }
+
+/* P2 V-47: private Info tab is a new encrypted PERSONAL copy only, never
+   an unsigned mutation of an assignment-bound/remote MediaFile. */
+.file-editor-private-copy{display:grid;gap:10px;padding:16px;
+  margin:12px auto 20px;max-width:900px;border-radius:10px;
+  border:1px solid var(--outline);background:var(--surface);
+  box-sizing:border-box;min-width:0}
+.file-editor-private-copy h2{font-size:16px;margin:0;font-weight:750}
+.file-editor-private-copy p{font-size:12px;line-height:1.55;margin:2px 0 7px}
+.file-editor-private-copy label,.file-editor-private-tag-label{
+  display:block;font-size:12px;font-weight:650;color:#e5e5e5}
+.file-editor-private-copy input,.file-editor-private-copy textarea{
+  box-sizing:border-box;width:100%;min-width:0;resize:vertical;
+  border:1px solid #555;border-radius:7px;background:#181818;
+  color:#eee;padding:10px 12px;font:13px/1.4 inherit;min-height:41px}
+.file-editor-private-copy input:focus-visible,
+.file-editor-private-copy textarea:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px}
+.file-editor-private-tags{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.file-editor-private-tag{display:inline-flex;align-items:center;
+  border:1px solid #37774c;background:#192e23;
+  border-radius:8px;max-width:100%;overflow:hidden}
+.file-editor-private-tag button{border:0;color:#b5f1cb;background:none;
+  min-height:34px;padding:4px 9px;font-size:11px;max-width:220px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-editor-private-tag button+button{font-size:18px;padding:1px 9px;
+  border-left:1px solid #356445}
+.file-editor-private-copy .file-editor-add-tag{min-height:34px;
+  padding:5px 11px}
+.file-editor-private-tag-form{display:grid;gap:9px;padding:10px 0}
+.file-editor-private-tag-form>div{display:flex;gap:8px}
+.file-editor-private-tag-form button{min-height:37px;padding:7px 12px}
+@media(max-width:480px){
+  .file-editor-private-copy{margin:8px 0;padding:12px}
+  .file-editor-private-tag button{max-width:175px}
+}
