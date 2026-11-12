@@ -359,14 +359,19 @@ final class BillingV1Test extends TestCase
         $this->login('alice');
         $a=$this->users['alice'];
         $id=(string)Str::uuid();
+        $operation=(string)Str::uuid();
         DB::table('assignment_records_v1')->insert([
             'id'=>$id,'owner_account_id'=>$a['account'],
-            'operation_id'=>(string)Str::uuid(),
+            'operation_id'=>$operation,
             'contract_hash'=>str_repeat('a',64),
             'contract_json'=>'{}','owner_signature'=>'internal-test',
             'private_envelope_json'=>'{}',
             'starts_at'=>now()->getTimestampMs(),
             'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        DB::table('assignment_creation_meter_v1')->insert([
+            'assignment_id'=>$id,'owner_account_id'=>$a['account'],
+            'operation_id'=>$operation,'created_at'=>now('UTC'),
         ]);
         DB::table('media_files_v1')->insert([
             'id'=>(string)Str::uuid(),'account_id'=>$a['account'],
@@ -385,6 +390,10 @@ final class BillingV1Test extends TestCase
             ->assertJsonPath('usage.recordedCipherBytes',256)
             ->assertJsonPath('usage.byteUnitPolicy','DECIMAL_GB_TB_V1')
             ->assertJsonPath('usage.enforcedByteCeiling',1000000000);
+        // Physical retention cleanup cannot refund a created assignment.
+        DB::table('assignment_records_v1')->where('id',$id)->delete();
+        $this->getJson('/billing/v1/me')
+            ->assertJsonPath('usage.assignmentsCreatedThisUtcMonth',1);
         $this->login('bob');
         $this->getJson('/billing/v1/me')->assertOk()
             ->assertJsonPath('usage.assignmentsCreatedThisUtcMonth',0)
