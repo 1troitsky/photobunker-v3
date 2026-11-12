@@ -135,6 +135,36 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Все загруженные файлы проверены',{timeout:30000})
     await expect(remote).toHaveCount(0)
+
+    // V-35: the embedded MediaImportPanel is a SEPARATE catalog reader.
+    // Return one REAL signed/ciphertext-authorized row twice to mimic a
+    // stale/malicious index. The local-first UI must retain the previous
+    // authentic cloud list and cursor, rather than accepting duplicated IDs.
+    const panel=b.locator('.media-import-p1')
+    const verifiedCloud=panel.getByRole('button',{name:'Проверить из облака'})
+    await expect(verifiedCloud).toHaveCount(1,{timeout:20000})
+    let duplicateDelivered=0
+    await b.route('**/media/v1',async route=>{
+      const response=await route.fetch()
+      const data=await response.json() as {
+        items:Array<Record<string,unknown>>;nextCursor:string|null
+      }
+      if(data.items.length!==1)throw Error('expected 1 authenticated media')
+      duplicateDelivered++
+      await route.fulfill({response,contentType:'application/json',
+        body:JSON.stringify({...data,items:[data.items[0],data.items[0]]})})
+    })
+    await panel.getByRole('button',{name:'Обновить'}).click()
+    await expect(panel.getByRole('alert'))
+      .toContainText('browser.invalid_cloud_catalog_page',{timeout:20000})
+    expect(duplicateDelivered).toBeGreaterThan(0)
+    await expect(verifiedCloud).toHaveCount(1)
+    await b.unroute('**/media/v1')
+    await panel.getByRole('button',{name:'Обновить'}).click()
+    await expect(panel.getByRole('alert')).toHaveCount(0,{timeout:20000})
+    await expect(verifiedCloud).toHaveCount(1)
+    expect(requests.join('\n')).not.toContain('секретная')
+    expect(requests.join('\n')).not.toContain(secret)
   }finally{
     await aContext.close();await bContext.close()
   }
