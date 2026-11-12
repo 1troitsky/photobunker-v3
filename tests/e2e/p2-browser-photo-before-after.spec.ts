@@ -34,6 +34,8 @@ test('P2 Viewer: before/after shows original without exporting or changing edite
     })
     await context.setOffline(false)
     await page.goto('/browser/file/media/'+source.id)
+    // Accepted File Viewer opens media in a fixed scene; editor is a sheet.
+    await page.getByTestId('viewer-action-edit').click()
     const originalImage=page.getByTestId('file-viewer-image')
     await expect.poll(()=>originalImage.evaluate(
       (el:HTMLImageElement)=>el.naturalWidth)).toBe(240)
