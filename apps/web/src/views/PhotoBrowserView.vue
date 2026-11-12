@@ -19,6 +19,8 @@ import {normalizePrivateSearch,searchPrivateMetadata,searchPrivateMetadataBatche
   from '../features/browser/application/private-search'
 import {loadBoundedCatalogIndex}
   from '../features/browser/application/bounded-catalog-expansion'
+import {appendAuthenticatedCatalogPage}
+  from '../features/browser/application/authenticated-catalog-page'
 import type {PrivateSearchResult}
   from '../features/browser/application/private-search'
 import type {CatalogFilter,CatalogSort,CatalogView,CatalogItem} from '../features/browser/application/catalog'
@@ -868,13 +870,22 @@ async function refresh():Promise<void>{
       listCloudPhotos(),listCloudMedia(),listArchivePage(),
     ])
     if(identity!==activeSession.value||token!==generation)return
+    let invalidIndex=false
     if(cloudP.status==='fulfilled'){
-      cloudPhotos.value=cloudP.value.items
-      photoCursor.value=cloudP.value.nextCursor
+      try{
+        const page=appendAuthenticatedCatalogPage(
+          [],cloudP.value,null,row=>row.photoId)
+        cloudPhotos.value=page.items
+        photoCursor.value=page.nextCursor
+      }catch{invalidIndex=true}
     }
     if(cloudM.status==='fulfilled'){
-      cloudMedia.value=cloudM.value.items
-      mediaCursor.value=cloudM.value.nextCursor
+      try{
+        const page=appendAuthenticatedCatalogPage(
+          [],cloudM.value,null,row=>row.mediaId)
+        cloudMedia.value=page.items
+        mediaCursor.value=page.nextCursor
+      }catch{invalidIndex=true}
     }
     if(archive.status==='fulfilled'){
       archiveEntries.value=archive.value.items
@@ -884,8 +895,8 @@ async function refresh():Promise<void>{
     }else{
       archiveNotice.value='Статус архива не проверен: '+reason(archive.reason)
     }
-    if(cloudP.status==='rejected'||cloudM.status==='rejected')
-      status.value='Не все облачные списки доступны. Локальные файлы сохранены.'
+    if(cloudP.status==='rejected'||cloudM.status==='rejected'||invalidIndex)
+      status.value='Не все облачные списки доступны или их курсоры повреждены. Локальные файлы сохранены; непроверенные страницы не добавлены.'
   }catch(e){
     if(identity===activeSession.value&&token===generation)error.value=reason(e)
   }finally{
@@ -903,16 +914,27 @@ async function more():Promise<void>{
     previousMedia?listCloudMedia(previousMedia):Promise.resolve(null),
   ])
   if(identity===activeSession.value&&token===generation){
+    let invalidIndex=false
     if(photos.status==='fulfilled'&&photos.value){
-      cloudPhotos.value=[...cloudPhotos.value,...photos.value.items]
-      photoCursor.value=photos.value.nextCursor
+      try{
+        const next=appendAuthenticatedCatalogPage(
+          cloudPhotos.value,photos.value,previousPhotos,
+          row=>row.photoId)
+        cloudPhotos.value=next.items
+        photoCursor.value=next.nextCursor
+      }catch{invalidIndex=true}
     }
     if(media.status==='fulfilled'&&media.value){
-      cloudMedia.value=[...cloudMedia.value,...media.value.items]
-      mediaCursor.value=media.value.nextCursor
+      try{
+        const next=appendAuthenticatedCatalogPage(
+          cloudMedia.value,media.value,previousMedia,
+          row=>row.mediaId)
+        cloudMedia.value=next.items
+        mediaCursor.value=next.nextCursor
+      }catch{invalidIndex=true}
     }
-    if(photos.status==='rejected'||media.status==='rejected')
-      error.value='Не удалось загрузить часть облачного каталога.'
+    if(photos.status==='rejected'||media.status==='rejected'||invalidIndex)
+      error.value='Не удалось проверить следующую страницу облачного каталога. Ранее загруженные файлы сохранены; курсор не изменён.'
     busy.value=false
   }
 }
