@@ -256,16 +256,66 @@ async function startCamera():Promise<void> {
   }
 }
 function clearGPS():void {
+  // Any new request, cancel, account/device/assignment/mode change or teardown
+  // invalidates both previous GPS consent and every pending callback.
   gpsAttempt++
   gps.value=null
   gpsLoading.value=false
   gpsError.value=''
 }
+
+/**
+ * A browser permission is a live capability, NOT a property of a historical
+ * GPS fix. Checking is passive: this never requests location or prompts.
+ * Unsupported/throwing Permissions API is unknown, never implicit granted.
+ */
+async function gpsPermission():Promise<PermissionState|'unknown'>{
+  try{
+    if(!navigator.permissions?.query)return 'unknown'
+    return (await navigator.permissions.query({name:'geolocation'})).state
+  }catch{return 'unknown'}
+}
+/** Consent check at shutter and again at the actual encryption boundary. */
+async function consentedGPS(fix:GPSFix|null):Promise<GPSFix|null>{
+  if(!fix)return null
+  const attempt=gpsAttempt
+  // Preserve the existing signed-policy stale-fix error; it can never be
+  // persisted because normalizeGPS rejects it before encryption.
+  if(Date.now()-fix.recordedAt>120000)return fix
+  const permission=await gpsPermission()
+  if(gpsAttempt!==attempt||gps.value!==fix||disposed)return null
+  if(permission!=='granted'){
+    clearGPS()
+    gpsError.value='camera.gps_permission_required'
+    return null
+  }
+  return fix
+}
+/** After owner policy signing, never persist an older GPS consent snapshot. */
+async function requireLiveGPS(fix:GPSFix|null):Promise<void>{
+  if(!fix)return
+  if(await consentedGPS(fix)!==fix)
+    throw Error('camera.gps_permission_revoked')
+}
+function gpsFailureReason(e:unknown):string{
+  // Browser geolocation errors use GeolocationPositionError, which is not
+  // necessarily an Error instance. Never echo untrusted error messages.
+  const code=e&&typeof e==='object'&&'code' in e
+    ?(e as {code:unknown}).code:null
+  if(code===1)return 'camera.gps_permission_denied'
+  if(code===2)return 'camera.gps_unavailable'
+  if(code===3)return 'camera.gps_timeout'
+  return e instanceof Error?e.message:'camera.gps_unavailable'
+}
 async function obtainGPS():Promise<void>{
+  // Retry must immediately erase the old location even if this attempt fails
+  // or the browser never invokes the geolocation error callback.
+  clearGPS()
   const current=activeSession.value
   if(!current){gpsError.value='Сначала создайте или восстановите аккаунт';return}
   if(!navigator.geolocation){gpsError.value='Геолокация недоступна';return}
   const generation=cameraGeneration,identity=cameraIdentity(current)
+  const assignment=selectedAssignment.value
   const attempt=++gpsAttempt
   gpsLoading.value=true;gpsError.value=''
   try{
@@ -275,14 +325,26 @@ async function obtainGPS():Promise<void>{
         enableHighAccuracy:true,maximumAge:0,timeout:12000,
       })
     })
-    if(attempt!==gpsAttempt||!ownsCamera(identity,generation))return
+    if(attempt!==gpsAttempt||!ownsCamera(identity,generation)
+      ||selectedAssignment.value!==assignment)return
+    const permission=await gpsPermission()
+    if(attempt!==gpsAttempt||!ownsCamera(identity,generation)
+      ||selectedAssignment.value!==assignment)return
+    // A previous fix cannot be reaccepted after permission revocation.
+    // A genuinely stale provider value may still be displayed; the existing
+    // metadata validator will reject it, preserving the stale-fix test gate.
+    if(permission!=='granted'&&Date.now()-point.timestamp<=120000)
+      throw Error('camera.gps_permission_required')
     gps.value={
       latitude:point.coords.latitude,longitude:point.coords.longitude,
       accuracyMeters:point.coords.accuracy,recordedAt:Math.round(point.timestamp),
     }
   }catch(e){
-    if(attempt===gpsAttempt&&ownsCamera(identity,generation))
-      gpsError.value=e instanceof Error?e.message:'camera.gps_unavailable'
+    if(attempt===gpsAttempt&&ownsCamera(identity,generation)
+      &&selectedAssignment.value===assignment){
+      gps.value=null
+      gpsError.value=gpsFailureReason(e)
+    }
   }finally{
     if(attempt===gpsAttempt)gpsLoading.value=false
   }
@@ -310,9 +372,11 @@ async function beginRecording():Promise<void>{
     // Snapshot values BEFORE recording. Both policy preflight and AES-GCM
     // metadata encryption use these values, never mutable form state.
     const privateFields={
-      category:category.value,description:description.value,gps:gps.value,
+      category:category.value,description:description.value,
+      gps:await consentedGPS(gps.value),
       tags:parseRulesCsv(privateTags.value,12,48),
     }
+    if(!ownsCamera(identity,generation))throw Error('camera.identity_changed')
     // Snapshot verified owner policy BEFORE acquiring any recording bytes.
     // MediaFile v1 stays opaque; an independent account-signed capture
     // sidecar will later bind its exact ciphertext manifest digest.
@@ -320,6 +384,7 @@ async function beginRecording():Promise<void>{
       ?await signedMediaCaptureIntent(
         selectedAssignment.value,mode,startedAt,privateFields)
       :undefined
+    await requireLiveGPS(privateFields.gps)
     if(!ownsCamera(identity,generation)||captureMode.value!==mode
       ||(intent&&selectedAssignment.value!==intent.assignmentId))
       throw Error('camera.identity_changed')
@@ -377,6 +442,10 @@ async function beginRecording():Promise<void>{
           // newly verified local removal while MediaRecorder was active.
           if(token.intent)
             await assertNoVerifiedAssignmentRemoval(token.intent.assignmentId)
+          // A permission revoked while recording never permits attaching its
+          // old coordinates. Drop this recording rather than reinterpret the
+          // already signed owner policy with a different metadata snapshot.
+          await requireLiveGPS(token.privateFields.gps)
           if(!ownsCamera(identity,generation))return
           const finishedAt=Date.now()
           if(finishedAt<=startedAt||finishedAt-startedAt>recordLimitMs+2000)
@@ -440,9 +509,11 @@ async function capture():Promise<void> {
     // Snapshot private fields at shutter click, before asynchronous JPEG
     // rendering. User edits during toBlob cannot silently change evidence.
     const privateFields={
-      category:category.value,description:description.value,gps:gps.value,
+      category:category.value,description:description.value,
+      gps:await consentedGPS(gps.value),
       tags:parseRulesCsv(privateTags.value,12,48),
     }
+    assertOwner()
     const ratio=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight))
     const canvas=document.createElement('canvas')
     canvas.width=Math.max(1,Math.round(v.videoWidth*ratio))
@@ -464,11 +535,16 @@ async function capture():Promise<void> {
     // An offline photo carries an independently verified, versioned and
     // device-signed snapshot of the assignment policy. Personal v1 stays available.
     const capturedAt=startedAt
+    // Recheck AFTER potentially asynchronous JPEG encoding, before the
+    // signed assignment binding freezes any private GPS field.
+    privateFields.gps=await consentedGPS(privateFields.gps)
+    assertOwner()
     // The policy binding and encrypted metadata use the SAME fields
     // frozen at shutter click, not values edited while Canvas ran.
     const binding=assignmentAtCapture
       ?await signedCaptureBinding(assignmentAtCapture,capturedAt,privateFields)
       :undefined
+    await requireLiveGPS(privateFields.gps)
     assertOwner()
     if(captureMode.value!=='photo'
       ||selectedAssignment.value!==assignmentAtCapture
@@ -519,8 +595,12 @@ watch(activeSession,session=>{
 onMounted(()=>{
   if(activeSession.value){void refreshPolicies();void nextTick().then(startCamera)}
 })
-watch(selectedAssignment,()=>{void loadPrivateInstructions()})
+watch(selectedAssignment,()=>{
+  clearGPS()
+  void loadPrivateInstructions()
+})
 watch(()=>route.query.assignmentId,()=>{
+  clearGPS()
   if(recording.value)discardRecording()
   void refreshPolicies()
 })

@@ -77,6 +77,11 @@ beforeEach(() => {
     const request = deferred<MediaStream>(); requests.push(request); return request.promise
   })
   Object.defineProperty(navigator, 'mediaDevices', {configurable: true, value: {getUserMedia}})
+  // The default test browser has an explicit, current GPS grant. Tests below
+  // independently transition this real permission boundary to denied/unknown.
+  Object.defineProperty(navigator, 'permissions', {
+    configurable:true,value:{query:vi.fn(async()=>({state:'granted'}))},
+  })
   play = vi.fn<() => Promise<void>>().mockResolvedValue(undefined)
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(play)
   Object.defineProperty(HTMLVideoElement.prototype, 'videoWidth', {configurable: true, get() {return this.srcObject ? 640 : 0}})
@@ -407,5 +412,166 @@ describe('camera session ownership and async permission lifecycle', () => {
     const options = [...host.querySelectorAll('option')].map(option => option.value)
     expect(options).not.toContain('old-assignment')
     expect(options).toContain('new-assignment')
+  })
+})
+
+
+describe('P2-SECURITY #260 GPS consent revocation and in-flight privacy',()=>{
+  const coords={latitude:38.487329,longitude:-122.893741,accuracy:4.5}
+
+  function permission(state:PermissionState|'unsupported'){
+    if(state==='unsupported'){
+      Object.defineProperty(navigator,'permissions',{configurable:true,value:undefined})
+    }else{
+      Object.defineProperty(navigator,'permissions',{
+        configurable:true,value:{query:vi.fn(async()=>({state}))},
+      })
+    }
+  }
+  function installGeo(get:(success:PositionCallback,error?:PositionErrorCallback)=>void){
+    Object.defineProperty(navigator,'geolocation',{
+      configurable:true,value:{getCurrentPosition:vi.fn(get)},
+    })
+  }
+  async function opened(){
+    const camera=media();requests[0]!.resolve(camera.stream);await settle()
+    return camera
+  }
+  it('invalidates the previous GPS fix immediately on a denied retry',async()=>{
+    let calls=0
+    installGeo((success,error)=>{
+      calls++
+      if(calls===1)success({coords,timestamp:Date.now()} as GeolocationPosition)
+      else error?.({code:1,message:'Permission denied'} as GeolocationPositionError)
+    })
+    await mount();await opened()
+    button('Получить GPS').click();await settle()
+    expect(host.textContent).toContain('GPS получен')
+    button('Получить GPS').click();await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+    expect(host.textContent).toContain('camera.gps_permission_denied')
+    button('Сделать снимок').click();await settle()
+    expect(mocks.capture).toHaveBeenCalledWith(expect.any(Blob),undefined,
+      expect.objectContaining({gps:null}))
+  })
+  it('drops a fresh fix after silent permission revocation before shutter',async()=>{
+    installGeo(success=>success({coords,timestamp:Date.now()} as GeolocationPosition))
+    await mount();await opened()
+    button('Получить GPS').click();await settle()
+    expect(host.textContent).toContain('GPS получен')
+    permission('denied') // no second GPS click — revoke between fix and shutter
+    button('Сделать снимок').click();await settle()
+    expect(mocks.capture).toHaveBeenCalledWith(expect.any(Blob),undefined,
+      expect.objectContaining({gps:null}))
+    expect(host.textContent).not.toContain('GPS получен')
+    expect(host.textContent).toContain('camera.gps_permission_required')
+  })
+  it('gates signed requiredGps policy when permission was revoked',async()=>{
+    installGeo(success=>success({coords,timestamp:Date.now()} as GeolocationPosition))
+    const policy={assignmentId:'assignment-required-gps',policyRevision:2}
+    mocks.policies.mockResolvedValue([policy])
+    mocks.route.query={assignmentId:policy.assignmentId}
+    mocks.binding.mockImplementation(async(_id:string,_when:number,fields:{gps:unknown})=>{
+      if(!fields.gps)throw Error('assignment.gps_required')
+      return {assignmentId:policy.assignmentId,policyRevision:2}
+    })
+    await mount();await opened()
+    button('Получить GPS').click();await settle()
+    expect(host.textContent).toContain('GPS получен')
+    permission('denied')
+    button('Сделать снимок').click();await settle()
+    expect(mocks.binding).toHaveBeenCalledWith(policy.assignmentId,
+      expect.any(Number),expect.objectContaining({gps:null}))
+    expect(host.textContent).toContain('assignment.gps_required')
+    expect(mocks.capture).not.toHaveBeenCalled()
+  })
+  it('rejects unsupported Permissions API rather than silently reusing location',async()=>{
+    installGeo(success=>success({coords,timestamp:Date.now()} as GeolocationPosition))
+    permission('unsupported')
+    await mount();await opened()
+    button('Получить GPS').click();await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+    expect(host.textContent).toContain('camera.gps_permission_required')
+    button('Сделать снимок').click();await settle()
+    expect(mocks.capture).toHaveBeenCalledWith(expect.any(Blob),undefined,
+      expect.objectContaining({gps:null}))
+  })
+  it('does not resurrect a pending GPS callback after changing the assignment',async()=>{
+    let resolveGeo!:PositionCallback
+    installGeo(success=>{resolveGeo=success})
+    const a={assignmentId:'assignment-a',policyRevision:1}
+    const b={assignmentId:'assignment-b',policyRevision:2}
+    mocks.policies.mockResolvedValue([a,b])
+    await mount();await opened()
+    button('Получить GPS').click();await settle()
+    const selection=host.querySelector<HTMLSelectElement>('#camera-assignment')!
+    selection.value=b.assignmentId
+    selection.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    resolveGeo({coords,timestamp:Date.now()} as GeolocationPosition)
+    await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+  })
+  it('does not attach GPS revoked during asynchronous JPEG encoding',async()=>{
+    installGeo(success=>success({coords,timestamp:Date.now()} as GeolocationPosition))
+    await mount();await opened()
+    button('Получить GPS').click();await settle()
+    expect(host.textContent).toContain('GPS получен')
+    let finish!:BlobCallback
+    vi.mocked(HTMLCanvasElement.prototype.toBlob)
+      .mockImplementation(callback=>{finish=callback})
+    button('Сделать снимок').click();await settle()
+    permission('denied')
+    finish(new Blob(['safe synthetic jpeg'],{type:'image/jpeg'}))
+    await settle()
+    expect(mocks.capture).toHaveBeenCalledWith(expect.any(Blob),undefined,
+      expect.objectContaining({gps:null}))
+    expect(host.textContent).not.toContain('GPS получен')
+  })
+})
+
+
+describe('P2-SECURITY #260 recording consent boundary',()=>{
+  it('discards an audio recording when geolocation is revoked after recording started',async()=>{
+    const point={latitude:38.487329,longitude:-122.893741,accuracy:4.5}
+    Object.defineProperty(navigator,'geolocation',{
+      configurable:true,value:{getCurrentPosition:(success:PositionCallback)=>
+        success({coords:point,timestamp:Date.now()} as GeolocationPosition)},
+    })
+    class Recorder{
+      static isTypeSupported(){return true}
+      state:'inactive'|'recording'='inactive'
+      ondataavailable:((event:{data:Blob})=>void)|null=null
+      onstop:(()=>void)|null=null
+      onerror:(()=>void)|null=null
+      start(){this.state='recording'}
+      stop(){this.state='inactive';this.onstop?.()}
+    }
+    const instances:Recorder[]=[]
+    class RecorderFactory extends Recorder{
+      constructor(_stream:MediaStream,_options:{mimeType:string}){
+        super();instances.push(this)
+      }
+    }
+    vi.stubGlobal('MediaRecorder',RecorderFactory)
+    await mount()
+    const photo=media();requests[0]!.resolve(photo.stream);await settle()
+    const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    mode.value='audio';mode.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const audio=media();requests[1]!.resolve(audio.stream);await settle()
+    button('Получить GPS').click();await settle()
+    expect(host.textContent).toContain('GPS получен')
+    button('Начать запись аудио').click();await settle()
+    expect(instances).toHaveLength(1)
+    expect(instances[0]!.state).toBe('recording')
+    instances[0]!.ondataavailable?.({data:new Blob([new Uint8Array(256)])})
+    Object.defineProperty(navigator,'permissions',{
+      configurable:true,value:{query:vi.fn(async()=>({state:'denied'}))},
+    })
+    button('Остановить запись').click();await settle()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(host.textContent).toContain('camera.gps_permission_revoked')
+    expect(audio.track.stop).toHaveBeenCalledTimes(1)
   })
 })
