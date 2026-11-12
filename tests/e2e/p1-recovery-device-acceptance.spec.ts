@@ -77,6 +77,9 @@ test('P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and of
       })
       await ac.setOffline(false)
 
+      // Load the real app origin before using an ESM /src/ module in page.evaluate:
+      // an about:blank profile cannot resolve Vite absolute module specifiers.
+      await B.goto('/settings')
       // B is a genuinely separate browser profile with no transferred
       // IndexedDB, session cookies, local device keys or media file.
       const before=await B.evaluate(async()=>{
@@ -89,7 +92,6 @@ test('P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and of
         if(request.url().includes('/identity/v2')||request.url().includes('/media/v1'))
           requests.push(request.url()+' '+(request.postData()??''))
       })
-      await B.goto('/settings')
       await B.locator('#recovery-key').fill(key)
       await B.getByRole('button',{name:'Восстановить',exact:true}).click()
       await expect(B.getByText('Подтверждённая сессия')).toBeVisible({timeout:30000})
