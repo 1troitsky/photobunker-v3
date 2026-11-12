@@ -13,10 +13,11 @@ use RuntimeException;
  * are inserted. The identity account row is the serialization mutex for both
  * protocols and every device belonging to that account.
  *
- * Product FILE counts follow the verified versioned entitlement snapshot.
- * PAID byte units are deliberately UNRESOLVED (GB vs GiB). Until approved,
- * preserve the exact existing Free/bootstrap technical ciphertext guard
- * for every plan; never treat snapshot byteCeiling=null as unlimited bytes.
+ * Product file/byte limits come from a verified immutable entitlement:
+ * DECIMAL_GB_TB_V1 (10^9/10^12 bytes). Legacy OPEN_GB_VS_GIB
+ * snapshots remain on the prior Free technical byte guard until replaced
+ * by an independently verified new entitlement event. Never reinterpret a
+ * null byteCeiling as unbounded physical storage.
  */
 final class QuotaAdmission
 {
@@ -26,7 +27,54 @@ final class QuotaAdmission
     ) {}
 
     /**
-     * @return array{planId:string,revision:int,filesUsed:int,fileLimit:?int,recordedCipherBytes:int,technicalByteGuard:int}
+     * The same resolved bound is used by admission and read-only billing UI.
+     * Both derive from the trusted account's current effective entitlement.
+     *
+     * @return array{enforcedByteCeiling:int,unitPolicy:string,source:string,technicalByteGuard:?int}
+     */
+    public static function storagePolicy(array $entitlement):array
+    {
+        $storage=$entitlement['effectiveLimits']['storage']??null;
+        $plan=$entitlement['effectivePlanId']??null;
+        if(!is_array($storage)||!is_string($plan)
+            ||!in_array($plan,['free','go','pro','unlimited','unlimited_plus'],true))
+            throw new RuntimeException('quota.invalid_entitlement');
+        $legacy=config('photo_sync.bootstrap_free_byte_cap');
+        if(!is_int($legacy)||$legacy<1)
+            throw new RuntimeException('quota.invalid_bootstrap_guard');
+
+        $policy=$storage['unitPolicy']??null;
+        $ceiling=$storage['byteCeiling']??null;
+        if($policy==='OPEN_GB_VS_GIB'&&$ceiling===null){
+            return [
+                'enforcedByteCeiling'=>$legacy,'unitPolicy'=>$policy,
+                'source'=>'legacy_technical_guard','technicalByteGuard'=>$legacy,
+            ];
+        }
+        if($policy!=='DECIMAL_GB_TB_V1'
+            ||!is_int($ceiling)||$ceiling<1
+            ||!is_int($storage['amount']??null)||$storage['amount']<1
+            ||!in_array($storage['unit']??null,['GB','TB'],true))
+            throw new RuntimeException('quota.invalid_byte_policy');
+
+        $factor=$storage['unit']==='GB'?1000000000:1000000000000;
+        if($storage['amount']>intdiv(PHP_INT_MAX,$factor)
+            ||$ceiling!==$storage['amount']*$factor)
+            throw new RuntimeException('quota.invalid_byte_policy');
+
+        // A stricter operator Free safety limit remains an independent bound
+        // only on Free; paid plans use their approved commercial ceiling.
+        $free=$plan==='free';
+        return [
+            'enforcedByteCeiling'=>$free?min($ceiling,$legacy):$ceiling,
+            'unitPolicy'=>$policy,
+            'source'=>$free?'plan_plus_free_technical_guard':'plan_entitlement',
+            'technicalByteGuard'=>$free?$legacy:null,
+        ];
+    }
+
+    /**
+     * @return array{planId:string,revision:int,filesUsed:int,fileLimit:?int,recordedCipherBytes:int,enforcedByteCeiling:int,byteUnitPolicy:string,quotaSource:string,technicalByteGuard:?int}
      */
     public function admit(string $accountId,int $requestedCipherBytes):array
     {
@@ -61,14 +109,7 @@ final class QuotaAdmission
             $countLimit=$countLimit===null
                 ?$freeGuard:min($countLimit,$freeGuard);
         }
-        $storage=$limits['storage'];
-        if(($storage['unitPolicy']??null)!=='OPEN_GB_VS_GIB'
-            ||!array_key_exists('byteCeiling',$storage)
-            ||$storage['byteCeiling']!==null) {
-            // Future owner-approved byte ceilings require a separately
-            // versioned policy and acceptance; no implicit unit conversion.
-            throw new RuntimeException('quota.unapproved_byte_policy');
-        }
+        $policy=self::storagePolicy($entitlement);
 
         // AccountUsage is read-only on the public billing endpoint. Only THIS
         // transaction (under identity row lock) gives its counts atomic
@@ -79,13 +120,11 @@ final class QuotaAdmission
         if($files<0||$bytes<0)throw new RuntimeException('quota.invalid_usage');
 
         if($countLimit!==null && $files >= $countLimit) abort(413,'quota.file_limit');
-        $guard=config('photo_sync.bootstrap_free_byte_cap');
-        if(!is_int($guard)||$guard<1)
-            throw new RuntimeException('quota.invalid_bootstrap_guard');
+        $ceiling=$policy['enforcedByteCeiling'];
         // Overflow-safe subtraction; pending/active ciphertext is reserved
-        // once at insert and not charged a second time during finalize/retry.
-        if($requestedCipherBytes>$guard||$bytes>$guard-$requestedCipherBytes)
-            abort(413,'quota.technical_storage_guard');
+        // exactly once. A signed lost-ACK replay never reserves another file.
+        if($requestedCipherBytes>$ceiling||$bytes>$ceiling-$requestedCipherBytes)
+            abort(413,'quota.storage_limit');
 
         return [
             'planId'=>(string)$entitlement['effectivePlanId'],
@@ -93,7 +132,10 @@ final class QuotaAdmission
             'filesUsed'=>$files,
             'fileLimit'=>$countLimit,
             'recordedCipherBytes'=>$bytes,
-            'technicalByteGuard'=>$guard,
+            'enforcedByteCeiling'=>$ceiling,
+            'byteUnitPolicy'=>$policy['unitPolicy'],
+            'quotaSource'=>$policy['source'],
+            'technicalByteGuard'=>$policy['technicalByteGuard'],
         ];
     }
 }
