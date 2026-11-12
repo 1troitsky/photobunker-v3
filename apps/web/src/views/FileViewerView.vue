@@ -2183,20 +2183,50 @@ onUnmounted(()=>{
             data-testid="file-viewer-photo-draw-editor">
             <div class="file-viewer-photo-text-head">
               <strong>Рисовать ({{ strokeMarks.length }}/{{ MAX_PHOTO_STROKES }})</strong>
-              <div class="file-viewer-photo-draw-tools">
-                <button type="button" data-testid="file-viewer-tool-brush"
-                  :class="{selected:activePaintTool==='brush'}"
-                  :disabled="cropBusy" @click="choosePhotoTool('brush')">Кисть</button>
-                <button type="button" data-testid="file-viewer-tool-pencil"
-                  :class="{selected:activePaintTool==='pencil'}"
-                  :disabled="cropBusy" @click="choosePhotoTool('pencil')">Карандаш</button>
-                <button type="button" data-testid="file-viewer-tool-eraser"
-                  :class="{selected:activePaintTool==='eraser'}"
-                  :disabled="cropBusy" @click="choosePhotoTool('eraser')">Ластик</button>
-              </div>
             </div>
-            <div class="file-viewer-photo-text-settings">
-              <label>Цвет кисти / карандаша
+            <div class="file-viewer-photo-draw-tools" role="group"
+              aria-label="Инструменты рисования"
+              data-testid="file-viewer-photo-draw-tools">
+              <button type="button" data-testid="file-viewer-tool-brush"
+                :class="{selected:activePaintTool==='brush'}"
+                :aria-pressed="activePaintTool==='brush'"
+                :disabled="cropBusy" @click="choosePhotoTool('brush')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round"
+                  stroke-linejoin="round" aria-hidden="true">
+                  <path d="M15 5 19 1l4 4-4 4"/>
+                  <path d="M15 5 6 14c-1.6 1.6-1 4.6-4 8 4-1 6.4-1.9 8-4l9-9"/>
+                </svg>
+                <span>Кисть</span>
+              </button>
+              <button type="button" data-testid="file-viewer-tool-pencil"
+                :class="{selected:activePaintTool==='pencil'}"
+                :aria-pressed="activePaintTool==='pencil'"
+                :disabled="cropBusy" @click="choosePhotoTool('pencil')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round"
+                  stroke-linejoin="round" aria-hidden="true">
+                  <path d="m15 5 4 4"/>
+                  <path d="M3 21 5 15 16 4a3 3 0 0 1 4 4L9 19l-6 2z"/>
+                </svg>
+                <span>Карандаш</span>
+              </button>
+              <button type="button" data-testid="file-viewer-tool-eraser"
+                :class="{selected:activePaintTool==='eraser'}"
+                :aria-pressed="activePaintTool==='eraser'"
+                :disabled="cropBusy" @click="choosePhotoTool('eraser')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.8" stroke-linecap="round"
+                  stroke-linejoin="round" aria-hidden="true">
+                  <path d="m14 3 8 8-9 9H7l-5-5L14 3z"/>
+                  <path d="m9 8 8 8M13 20h9"/>
+                </svg>
+                <span>Ластик</span>
+              </button>
+            </div>
+            <div class="file-viewer-photo-text-settings file-viewer-photo-paint-settings"
+              data-testid="file-viewer-photo-paint-settings">
+              <label>Цвет
                 <input type="color" :value="paintColor"
                   :disabled="cropBusy" data-testid="file-viewer-paint-color"
                   @input="setPaintColor">
