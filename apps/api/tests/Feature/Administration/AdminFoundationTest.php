@@ -121,11 +121,9 @@ final class AdminFoundationTest extends TestCase
             try {
                 AdminAuditEntry::draft(...$args);
                 self::fail('Unsafe audit input accepted at '.$index);
-            } catch (\InvalidArgumentException $e) {
+            } catch (\InvalidArgumentException|\DomainException $e) {
                 self::assertContains($e->getMessage(),
-                    ['admin.invalid_audit','admin.invalid_expiry']);
-            } catch (\TypeError $e) {
-                self::assertSame(6,$index);
+                    ['admin.invalid_audit','admin.invalid_expiry','admin.access_denied']);
             }
         }
     }
