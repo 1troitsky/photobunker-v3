@@ -58,3 +58,18 @@ describe('P1-10 offline media outbox security',()=>{
       .rejects.toThrow('media.not_available')
   })
 })
+
+
+describe('Issue #260 atomic consent cancellation',()=>{
+  it.each([2,3,4])('rejects at guard %i after real encryption, with no durable row',async cancelAt=>{
+    await identity()
+    let checks=0
+    const assertCurrent=()=>{
+      if(++checks===cancelAt)throw Error('camera.gps_consent_changed')
+    }
+    await expect(enqueueEncryptedMedia(new File([new Uint8Array(1024)],'private.jpg',{type:'image/jpeg'}),undefined,{},assertCurrent))
+      .rejects.toThrow('camera.gps_consent_changed')
+    expect(await listLocalMedia()).toHaveLength(0)
+    expect(checks).toBe(cancelAt)
+  })
+})

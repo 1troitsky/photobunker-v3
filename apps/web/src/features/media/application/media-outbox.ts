@@ -76,7 +76,10 @@ export async function verifyReceipt(contract:MediaContract,receipt:MediaReceipt)
  */
 export async function enqueueEncryptedMedia(
   file:File,capture?:MediaCaptureIntent,privateFields:MediaPrivateFields={},
+  // Volatile caller consent/context; throwing aborts the atomic new write.
+  assertCurrent:()=>void=()=>{},
 ):Promise<string>{
+  assertCurrent()
   const session=requireSession()
   const createdAt=Date.now()
   const expiresAt=createdAt+13*86400000
@@ -126,7 +129,12 @@ export async function enqueueEncryptedMedia(
     plainBytes:contract.plainBytes,
     state:'queued',contract,signature,capture:proof,chunks,
   }
-  await db.transaction('rw',db.files,async()=>{await db.files.put(stored)})
+  assertCurrent()
+  await db.transaction('rw',db.files,async()=>{
+    assertCurrent()
+    await db.files.put(stored)
+    assertCurrent()
+  })
   void flushMediaOutbox()
   return contract.mediaId
 }

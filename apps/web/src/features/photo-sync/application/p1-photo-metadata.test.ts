@@ -67,3 +67,18 @@ describe('P1-06 encrypted photo metadata assets',()=>{
     expect((await listLocalPhotos()).length).toBe(before)
   })
 })
+
+
+describe('Issue #260 atomic consent cancellation',()=>{
+  it.each([2,3,4])('rejects at guard %i after real encryption, with no durable row',async cancelAt=>{
+    await offlineIdentity()
+    let checks=0
+    const assertCurrent=()=>{
+      if(++checks===cancelAt)throw Error('camera.gps_consent_changed')
+    }
+    await expect(captureEncrypted(new Blob([new Uint8Array(1024)],{type:'image/jpeg'}),undefined,{},assertCurrent))
+      .rejects.toThrow('camera.gps_consent_changed')
+    expect(await listLocalPhotos()).toHaveLength(0)
+    expect(checks).toBe(cancelAt)
+  })
+})

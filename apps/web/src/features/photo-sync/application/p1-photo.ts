@@ -75,7 +75,10 @@ async function makeAsset(kind:'master'|'metadata',plaintext:Blob,
 
 export async function captureEncrypted(
   jpeg:Blob,capture?:SignedCaptureBinding,fields?:CaptureMetadataInput,
+  // Volatile caller consent/context; throwing aborts the atomic new write.
+  assertCurrent:()=>void=()=>{},
 ):Promise<StoredPhoto> {
+  assertCurrent()
   const session=requireSession()
   if (jpeg.type!=='image/jpeg'||jpeg.size<128||jpeg.size>10*1024*1024)
     throw new Error('capture.invalid_jpeg')
@@ -104,7 +107,12 @@ export async function captureEncrypted(
     ...(capture?{capture}:{}),assets:[main,detail],
   }
   // Durable, atomic ciphertext before any attempt to contact the server.
-  await db.transaction('rw',db.photos,async()=>{await db.photos.put(stored)})
+  assertCurrent()
+  await db.transaction('rw',db.photos,async()=>{
+    assertCurrent()
+    await db.photos.put(stored)
+    assertCurrent()
+  })
   void flushOutbox()
   return stored
 }
