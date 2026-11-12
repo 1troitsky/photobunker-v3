@@ -11,6 +11,12 @@ test('P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
+    await expect.poll(()=>page.evaluate(async()=>{
+      const m=await import('/src/features/identity/application/session.ts')
+      return !!m.activeSession.value?.accountId
+    }),{timeout:30000}).toBe(true)
+    // The local encrypted media outbox must be usable before network sync.
+    await context.setOffline(true)
     const id=await page.evaluate(async()=>{
       const canvas=document.createElement('canvas')
       canvas.width=160;canvas.height=100
@@ -23,6 +29,7 @@ test('P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save
       return await media.enqueueEncryptedMedia(new File([blob],
         'EDITOR-PRIVATE-ORIGINAL.jpg',{type:'image/jpeg'}))
     })
+    await context.setOffline(false)
     await page.goto('/browser')
     await expect(page.getByTestId('browser-row-media:'+id)).toBeVisible()
     await page.getByTestId('browser-row-media:'+id)
