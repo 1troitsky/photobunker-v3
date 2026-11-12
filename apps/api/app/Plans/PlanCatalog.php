@@ -42,7 +42,7 @@ final class PlanCatalog
             'catalogVersion'=>$plans['free']->version,
             'effectiveAt'=>$plans['free']->effectiveAt,
             'currency'=>'USD',
-            'unitPolicy'=>'OPEN_GB_VS_GIB',
+            'unitPolicy'=>config('plans.storage_unit_policy'),
             'plans'=>array_values(array_map(static fn(PlanDefinition $p)=>
                 [...$p->value,'definitionSha256'=>$p->sha256],$plans)),
         ];
