@@ -121,9 +121,11 @@ describe('P2 V-37 client-only HTTPS file import (no proxy / credential leak)',()
     const failingFetch=vi.fn(async()=>{
       throw Error('token=NEVER-PERSIST-ME')
     }) as unknown as typeof fetch
-    const error=await downloadHttpsMedia(source,new AbortController().signal,
-      ()=>true,undefined,failingFetch).catch(e=>e as Error)
-    expect(error.message).toBe('media.link_cors_or_network')
-    expect(error.message).not.toContain('NEVER-PERSIST-ME')
+    const errorMessage=await downloadHttpsMedia(
+      source,new AbortController().signal,()=>true,undefined,failingFetch,
+    ).then(()=> 'unexpected_success',(e:unknown)=>
+      e instanceof Error?e.message:'non_error_exception')
+    expect(errorMessage).toBe('media.link_cors_or_network')
+    expect(errorMessage).not.toContain('NEVER-PERSIST-ME')
   })
 })
