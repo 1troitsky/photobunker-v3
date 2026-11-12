@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
-import {RouterLink,useRoute,useRouter} from 'vue-router'
+import {onBeforeRouteLeave,RouterLink,useRoute,useRouter} from 'vue-router'
+import {
+  armBrowserReturn,discardBrowserReturnContext,
+} from '../features/browser/application/browser-return-context'
 import {activeSession} from '../features/identity/application/session'
 import {
   listLocalPhotos,listCloudPhotos,readLocalPhoto,readCloudPhoto,
@@ -1241,6 +1244,15 @@ watch([()=>route.params.protocol,()=>route.params.id],()=>{
   // Rebuild only when the new opaque ID is not in the loaded index.
   if(current.value&&!files.value.some(row=>row.key===viewerKey(current.value!)))
     void refreshIndex()
+})
+// Browser history Back, the shell dock and the explicit breadcrumb all
+// converge here. Never put a private search term or folder path into a URL.
+onBeforeRouteLeave((to)=>{
+  if(to.path==='/browser'){
+    const identity=activeSession.value
+    if(identity)armBrowserReturn(identity.accountId,identity.deviceId)
+    else discardBrowserReturnContext()
+  }else if(to.name!=='browser-viewer')discardBrowserReturnContext()
 })
 onMounted(()=>window.addEventListener('keydown',onKeyDown))
 onUnmounted(()=>{
