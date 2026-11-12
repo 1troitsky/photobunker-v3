@@ -2283,7 +2283,7 @@ onUnmounted(()=>{
               <strong>Фигуры ({{ shapeMarks.length }}/{{ MAX_SHAPE_MARKS }})</strong>
               <button type="button" data-testid="file-viewer-add-shape"
                 :disabled="cropBusy||shapeMarks.length>=MAX_SHAPE_MARKS"
-                @click="addPhotoShape">Добавить фигуру</button>
+                @click="addPhotoShape()">Добавить фигуру</button>
             </div>
             <p v-if="!shapeMarks.length" class="muted">Выберите одну из пяти
               фигур: она появится на фотографии. Положение и размер можно
