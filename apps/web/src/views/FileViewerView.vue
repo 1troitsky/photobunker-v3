@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
+import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
 import {onBeforeRouteLeave,RouterLink,useRoute,useRouter} from 'vue-router'
 import {
   armBrowserReturn,discardBrowserReturnContext,
@@ -59,6 +59,41 @@ type Preview={
 const route=useRoute()
 const router=useRouter()
 const stage=ref<HTMLElement|null>(null)
+const panel=ref<'info'|'editor'|null>(null)
+const sheetClose=ref<HTMLButtonElement|null>(null)
+let panelOpener:HTMLElement|null=null
+async function openPanel(kind:'info'|'editor'):Promise<void>{
+  if(!fileUrl.value||!preview.value)return
+  panelOpener=document.activeElement instanceof HTMLElement
+    ?document.activeElement:null
+  panel.value=kind
+  await nextTick()
+  sheetClose.value?.focus()
+}
+function closePanel():void{
+  panel.value=null
+  const previous=panelOpener
+  panelOpener=null
+  if(previous?.isConnected)void nextTick(()=>previous.focus())
+}
+function onSheetKeydown(event:KeyboardEvent):void{
+  if(event.key==='Escape'){
+    event.preventDefault();event.stopPropagation();closePanel();return
+  }
+  if(event.key!=='Tab')return
+  const sheet=sheetClose.value?.closest('[role="dialog"]')
+  if(!sheet)return
+  const candidates=Array.from(sheet.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+  )).filter(element=>element.getClientRects().length>0)
+  const first=candidates[0],last=candidates.at(-1)
+  if(!first||!last)return
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
+}
 const photoElement=ref<HTMLImageElement|null>(null)
 const cropLeft=ref(0),cropTop=ref(0),cropWidth=ref(100),cropHeight=ref(100)
 const cropTurns=ref<CropSelection['turns']>(0)
@@ -655,6 +690,8 @@ function clearStill():void{
   stillSavedId.value=null
 }
 function clearBlob():void{
+  panel.value=null
+  panelOpener=null
   clearTextMarks()
   clearCrop()
   cropLeft.value=0;cropTop.value=0
@@ -882,6 +919,10 @@ async function navigate(item:CatalogItem|{source:'photo'|'media';id:string}|null
 }
 function onKeyDown(event:KeyboardEvent):void{
   if(event.defaultPrevented||event.altKey)return
+  if(panel.value){
+    if(event.key==='Escape'){event.preventDefault();closePanel()}
+    return
+  }
   const editing=event.target instanceof HTMLElement&&!!event.target.closest(
     'input,textarea,select,video,audio,button,[contenteditable="true"]')
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'
