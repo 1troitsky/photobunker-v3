@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\IdentityController;
+use App\Http\Controllers\BillingV1Controller;
 use App\Http\Controllers\BrowserFolderSyncController;
 use App\Http\Controllers\BrowserArchiveController;
 use App\Http\Controllers\BrowserArchivePreferencesController;
@@ -29,6 +30,13 @@ Route::get('/api/healthz', static fn()=>response()->json(['status'=>'ok']));
 Route::get('/api/readyz', static function(){
  try { DB::select('SELECT 1'); return response()->json(['status'=>'ready']); }
  catch (Throwable) { return response()->json(['status'=>'unavailable'],503); }
+});
+
+// Public, versioned plan definitions and strictly owner-scoped entitlements.
+// Paid plan activation deliberately has NO browser route.
+Route::prefix('billing/v1')->middleware('throttle:40,1')->group(function(){
+    Route::get('/plans',[BillingV1Controller::class,'plans']);
+    Route::get('/me',[BillingV1Controller::class,'me']);
 });
 
 // Laravel 'web' middleware supplies encrypted sessions and CSRF.
