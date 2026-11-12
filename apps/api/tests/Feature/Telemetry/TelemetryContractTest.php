@@ -233,8 +233,7 @@ final class TelemetryContractTest extends TestCase
             'occurredAtMs' => $differentMonth,
         ]), self::A, $differentMonth));
         self::assertSame(1, $sink->mau('2027-01'));
-        self::assertSame(1, $sink->wau('2026-W53')); // same ISO week includes Jan 1, 2027
-        self::assertSame(2, $sink->wau('2026-W53')); // logically same set A/B, no new unique
+        self::assertSame(2, $sink->wau('2026-W53')); // Jan 1 shares the week: A/B remain two distinct users
     }
 
     public function test_only_activity_emits_actor_tokens_other_counters_remain_aggregate(): void
