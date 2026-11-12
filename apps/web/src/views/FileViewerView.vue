@@ -541,11 +541,6 @@ function deletePhotoShape(id:string):void{
   replaceShapeMarks(shapeMarks.value.filter(mark=>mark.id!==id))
   if(selectedShapeId.value===id)selectedShapeId.value=null
 }
-function setShapeKind(event:Event):void{
-  const kind=(event.target as HTMLSelectElement).value
-  if(['arrow','circle','square','triangle','star'].includes(kind))
-    editPhotoShape({kind:kind as ShapeKind})
-}
 function setShapeColor(field:'stroke'|'fill',event:Event):void{
   editPhotoShape({[field]:(event.target as HTMLInputElement).value})
 }
