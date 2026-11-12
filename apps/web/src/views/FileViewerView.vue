@@ -1553,6 +1553,13 @@ onUnmounted(()=>{
             </nav>
           </div>
           <div ref="editorBody" class="file-viewer-sheet-body">
+            <p v-if="editorMode&&busy" role="status" class="file-viewer-wait">
+              Открываем защищённый файл…
+            </p>
+            <p v-if="editorMode&&error" role="alert" class="error-text">{{ error }}</p>
+            <p v-if="editorMode&&!activeSession" role="alert" class="error-text">
+              Для редактирования требуется подтверждённая сессия.
+            </p>
             <div v-show="panel==='editor'||(editorMode&&editorTab==='media')"
               class="file-viewer-editor-sections">
               <div v-if="editorMode&&fileUrl&&preview" class="file-editor-source"
