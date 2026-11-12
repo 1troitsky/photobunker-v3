@@ -75,6 +75,16 @@ test('P2 V-41: File Viewer fixed mobile/desktop geometry, media switching and ac
       await expect(page.getByTestId('file-viewer-audio')).toBeVisible()
       const before=await geometry()
       assertGrid(before)
+      const chrome=page.getByTestId('viewer-shell-actions')
+      await expect(chrome.locator('button')).toHaveCount(4)
+      await expect(chrome.getByRole('button',{name:'Избранное'})).toBeDisabled()
+      await expect(chrome.getByRole('button',{name:'Копировать'})).toBeDisabled()
+      await expect(chrome.getByRole('button',{name:'Скачать'})).toBeEnabled()
+      await expect(chrome.getByRole('button',{name:'Удалить'})).toBeDisabled()
+      await expect(page.getByTestId('file-viewer').locator('.shell-header'))
+        .toHaveCount(0)
+      await expect(page.getByTestId('file-viewer-path').getByRole('button'))
+        .toHaveCount(0)
       await expect(page.getByRole('button',{name:'Публичная карточка'}))
         .toBeDisabled()
       await page.getByTestId('viewer-action-info').click()
@@ -98,5 +108,8 @@ test('P2 V-41: File Viewer fixed mobile/desktop geometry, media switching and ac
       expect(after).toEqual(before)
       assertGrid(after)
     }
+    // The Header action bridge must disappear outside the viewer route.
+    await page.goto('/settings')
+    await expect(page.getByTestId('viewer-shell-actions')).toHaveCount(0)
   }finally{await context.close()}
 })
