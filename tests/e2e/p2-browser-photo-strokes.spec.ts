@@ -141,6 +141,18 @@ test('P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixe
     if(!area)throw Error('pencil_canvas_bounds')
     await draw(x(40),y(170),x(280),y(170))
     await expect(page.getByTestId('file-viewer-photo-redo')).toBeDisabled()
+    // Reprocessing the source after color change must restore all retained
+    // Brush/Pencil/Eraser strokes, not just overlay DOM or an Undo counter.
+    await page.getByTestId('file-viewer-photo-brightness').focus()
+    await page.getByTestId('file-viewer-photo-brightness').press('ArrowRight')
+    await expect(canvas).toHaveCount(0)
+    await expect(page.getByTestId('file-viewer-crop-status'))
+      .toContainText('штрихи, закрытые области и история сохранены в памяти')
+    await page.getByTestId('file-viewer-create-crop').click()
+    await expect(canvas).toBeVisible({timeout:30000})
+    await expect.poll(countInk).toBeGreaterThan(100)
+    await expect(page.getByTestId('file-viewer-photo-undo')).toBeEnabled()
+    await expect(page.getByTestId('file-viewer-photo-redo')).toBeDisabled()
     expect(await page.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       return (await m.listLocalMedia()).length
@@ -188,7 +200,7 @@ test('P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixe
       mime:'image/jpeg',category:null,tags:[],gps:null,capture:null,
       leaked:false,
     })
-    expect(derived.filename).toBe('PRIVATE-SOURCE-BRUSH-crop-0-0-100-100-r0-draw.jpg')
+    expect(derived.filename).toBe('PRIVATE-SOURCE-BRUSH-crop-0-0-100-100-r0-fx-110-100-100-draw.jpg')
     expect(derived.colors.green).toBeGreaterThan(30)
     expect(derived.colors.red).toBeGreaterThan(20)
     expect(derived.colors.white).toBeGreaterThan(5000)

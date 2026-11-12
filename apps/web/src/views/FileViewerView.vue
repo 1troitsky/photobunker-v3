@@ -1757,8 +1757,16 @@ watch(photoComposition,element=>{
 })
 watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
   photoBrightness,photoContrast,photoSaturation],()=>{
-  clearTextMarks()
-  clearCrop()
+  // A new crop/adjustment invalidates the old JPEG RASTER, not the user's
+  // volatile overlay drafts. Clearing annotations here silently deleted
+  // text, shapes, strokes, blackout masks and all Undo history. Preserve
+  // those layers until the user explicitly resets them or leaves the file.
+  const hasAnnotations=textMarks.value.length>0||shapeMarks.value.length>0
+    ||strokeMarks.value.length>0||photoBlackouts.value.length>0
+    ||!!inlinePhotoText.value
+  clearCrop() // revokes stale blob URL and prevents save of old pixels
+  if(hasAnnotations)
+    cropNotice.value='Параметры кадра изменены. Надписи, фигуры, штрихи, закрытые области и история сохранены в памяти. Нажмите «Создать JPEG-копию», чтобы применить настройки перед сохранением.'
 })
 watch([trimStart,trimEnd],()=>{clearAudioClip()})
 watch([videoTrimStart,videoTrimEnd],()=>{

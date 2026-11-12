@@ -121,6 +121,24 @@ test('P2 V-50: five real shape tools stay on one mobile row, fill and stroke fla
     await page.mouse.up()
     await expect(page.getByTestId('file-viewer-shape-x')).toHaveValue(initialX)
 
+    // Crop rotation is independent of the figure's volatile edit history.
+    // After 90° actual raster rotation, the signed-source figure and its
+    // fill/stroke must still exist and flatten into the new image.
+    await page.getByTestId('file-viewer-rotate-right').click()
+    await expect(page.getByTestId('file-viewer-crop-preview')).toHaveCount(0)
+    await expect(page.getByTestId('file-viewer-crop-status'))
+      .toContainText('история сохранены в памяти')
+    await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
+    await page.getByTestId('file-viewer-create-crop').click()
+    await expect(page.getByTestId('file-viewer-crop-preview'))
+      .toBeVisible({timeout:30000})
+    await expect(overlay).toHaveCount(1)
+    await expect(page.getByTestId('file-viewer-shape-stroke')).toHaveValue('#ff0000')
+    await expect(page.getByTestId('file-viewer-shape-fill')).toHaveValue('#00ff00')
+    await expect(page.getByTestId('file-viewer-shape-filled')).toBeChecked()
+    await expect(page.getByTestId('file-viewer-shape-x')).toHaveValue(initialX)
+    await expect(page.getByTestId('file-viewer-photo-undo')).toBeEnabled()
+
     await expect(page.getByTestId('editor-shell-save')).toBeEnabled()
     await page.getByTestId('editor-shell-save').click()
     await expect(page).toHaveURL(
@@ -151,13 +169,14 @@ test('P2 V-50: five real shape tools stay on one mobile row, fill and stroke fla
         state:next.state,name:result.metadata.fileName,
         tags:result.metadata.tags??[],gps:result.metadata.gps??null,
         capture:next.capture??null,green,red,
+        width:canvas.width,height:canvas.height,
         leak:JSON.stringify(next).includes('#00ff00')
           ||JSON.stringify(next).includes('#ff0000'),
       }
     },original.id)
     expect(saved).toMatchObject({
       count:2,sourceBytes:original.bytes,kind:'photo',state:'queued',
-      tags:[],gps:null,capture:null,leak:false,
+      tags:[],gps:null,capture:null,leak:false,width:240,height:320,
     })
     expect(saved.name).toContain('-shape.jpg')
     expect(saved.green).toBeGreaterThan(80)

@@ -147,6 +147,25 @@ test('P2 V-49: tap a photo to type text inline, synchronize list/undo/redo, save
     // Make the actual raster annotation bright red so decrypting the
     // separate E2EE JPEG proves no CSS-only/DOM-only representation.
     await page.getByTestId('file-viewer-text-color').fill('#ff0000')
+    // Regression: changing an effect after finishing text must invalidate
+    // ONLY the stale JPEG raster, not wipe the caption, its color/size,
+    // selected item or the undo/redo history.
+    const brightness=page.getByTestId('file-viewer-photo-brightness')
+    await brightness.focus()
+    await brightness.press('ArrowRight')
+    await expect(page.getByTestId('file-viewer-crop-preview')).toHaveCount(0)
+    await expect(page.getByTestId('file-viewer-crop-status'))
+      .toContainText('история сохранены в памяти')
+    await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
+    await page.getByTestId('file-viewer-create-crop').click()
+    await expect(page.getByTestId('file-viewer-crop-preview'))
+      .toBeVisible({timeout:30000})
+    await expect(marks).toHaveCount(1)
+    await expect(page.getByTestId('file-viewer-select-text-0'))
+      .toContainText('ОБНОВЛЁННАЯ')
+    await expect(page.getByTestId('file-viewer-text-color')).toHaveValue('#ff0000')
+    await expect(page.getByTestId('file-viewer-text-size')).toHaveValue('10')
+    await expect(page.getByTestId('file-viewer-photo-undo')).toBeEnabled()
     await expect(page.getByTestId('editor-shell-save')).toBeEnabled()
     await context.setOffline(true)
     await page.getByTestId('editor-shell-save').click()
