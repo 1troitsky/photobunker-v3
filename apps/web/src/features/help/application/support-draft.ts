@@ -20,7 +20,7 @@ export function containsPossibleSecret(message: string): boolean {
   return /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i.test(message)
     || /(?:recovery[ -]?key|seed[ -]?phrase|private[ -]?key|ключ(?:[а-я]*) восстановления|секретн(?:ый|ого) ключ|пин|pin)[ \t]*[:=][ \t]*\S{4,}/i.test(message)
     || /\b(?:[A-Fa-f0-9]{64,}|[A-Za-z0-9+/_-]{64,}={0,2})\b/.test(message)
-    || /(?:^|\n)\s*(?:\d+\s+){11,23}\d+\s*(?:$|\n)/.test(message)
+    || /(?:^|\s)(?:\d{1,6}[ \t]+){11,23}\d{1,6}(?=\s|$)/.test(message)
 }
 export function prepareSupportDraft(
   topic: string, message: string, locale: 'ru' | 'en' = 'ru',
