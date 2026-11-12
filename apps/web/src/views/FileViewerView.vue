@@ -687,6 +687,7 @@ async function refreshIndex():Promise<void>{
   // Identity changes explicitly clear all rows in the session watcher.
   ++catalogEpoch
   const epoch=catalogEpoch
+  indexIncomplete.value=false
   if(!session){clearIndex();return}
   indexBusy.value=true
   try{
@@ -704,7 +705,8 @@ async function refreshIndex():Promise<void>{
     const targetKey=target?viewerKey(target):null
     const relevant=()=>session===activeSession.value
       &&epoch===catalogEpoch
-      &&(!targetKey||targetKey===viewerKey(current.value??target!))
+      &&(!targetKey||(current.value!==null
+        &&targetKey===viewerKey(current.value)))
     let badPage=p.status==='rejected'||m.status==='rejected'
     if(p.status==='fulfilled'){
       try{
