@@ -1,7 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { resolveStartRoute } from './ui/fieldwork/appearance-preferences'
 import AssignmentsView from './views/AssignmentsView.vue'
 import AssignmentEditorView from './views/AssignmentEditorView.vue'
 import AccountView from './views/AccountView.vue'
+import AppearanceView from './views/AppearanceView.vue'
+import SettingsSearchView from './views/SettingsSearchView.vue'
 import CaptureView from './views/CaptureView.vue'
 import PhotoBrowserView from './views/PhotoBrowserView.vue'
 import FileViewerView from './views/FileViewerView.vue'
@@ -10,7 +13,7 @@ import ContactsTeamsView from './views/ContactsTeamsView.vue'
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/assignments' },
+    { path: '/', redirect: () => resolveStartRoute() },
     { path: '/assignments', component: AssignmentsView, meta: { title: 'Задания' } },
     { path: '/assignments/:assignmentId/edit', component: AssignmentEditorView,
       meta: { title: 'Редактор задания' } },
@@ -25,6 +28,10 @@ export const router = createRouter({
     { path: '/camera', component: CaptureView, meta: { title: 'Камера' } },
     { path: '/contacts', component: ContactsTeamsView, meta: { title: 'Контакты и Команды' } },
     { path: '/settings', component: AccountView, meta: { title: 'Настройки' } },
+    { path: '/settings/appearance', component: AppearanceView,
+      meta: { title: 'Оформление' } },
+    { path: '/settings/search', component: SettingsSearchView,
+      meta: { title: 'Поиск по настройкам' } },
     { path: '/:pathMatch(.*)*', redirect: '/assignments' },
   ],
 })

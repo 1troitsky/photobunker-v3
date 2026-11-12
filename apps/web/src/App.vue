@@ -1,22 +1,43 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { displayedDock, dockDefinitions } from './ui/fieldwork/dock-preferences'
+import type { DockDefinition } from './ui/fieldwork/dock-preferences'
 import { brand } from './config/brand'
 import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
+import {isDockSectionActive,resolveDockRetap} from './ui/fieldwork/dock-retap'
 const route = useRoute()
+const router = useRouter()
 function isActive(to:string):boolean {
-  return route.path===to
-    ||to==='/assignments'&&route.path.startsWith('/assignments/')
-    ||to==='/browser'&&route.path.startsWith('/browser/')
+  return isDockSectionActive(route.path,to)
 }
-// Canonical default only. User-editable 3–6 Dock (with mandatory Settings)
-// belongs to accepted App Appearance 1.3 and will be wired in P2.
-const dock = [
-  { to: '/assignments', name: 'Задания', icon: 'tasks' },
-  { to: '/browser', name: 'Browser', icon: 'folder' },
-  { to: '/camera', name: 'Камера', icon: 'camera' },
-  { to: '/contacts', name: 'Контакты', icon: 'users' },
-  { to: '/settings', name: 'Настройки', icon: 'settings' },
-] as const
+
+/**
+ * Normal RouterLink navigation stays native (including ctrl/cmd-click).
+ * Active re-taps never use arbitrary browser Back: only a verified
+ * same-section logical parent is allowed; otherwise replace a safe route.
+ * Existing editor/assignment before-leave guards still run through router.
+ */
+function onDockClick(
+  event:MouseEvent,to:string,navigate:(event?:MouseEvent)=>Promise<unknown>,
+):void {
+  if(event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey
+    ||event.shiftKey||event.altKey){
+    // On modified clicks leave the anchor to the browser, don't pop history.
+    return
+  }
+  const action=resolveDockRetap(route.path,to,window.history.state?.back)
+  if(!action){void navigate(event);return}
+  event.preventDefault()
+  if(action.kind==='back'){router.back();return}
+  if(action.kind==='replace')void router.replace(action.path)
+  // 'none' at the section root intentionally does not push a duplicate.
+}
+// The Dock changes only through locally validated, user-confirmed Appearance
+// preferences. Hidden destinations (Notifications/Messages) can never render.
+const dock = computed(() => displayedDock.value
+  .map(id => dockDefinitions[id])
+  .filter((entry): entry is DockDefinition & {to:string} => entry.to !== null))
 </script>
 
 <template>
@@ -72,6 +93,26 @@ const dock = [
           :disabled="!viewerShellActions?.editor?.canSave"
           @click="viewerShellActions?.editor?.save()">Сохранить</button>
       </div>
+      <div class="shell-header-actions" v-else-if="route.path.startsWith('/settings')"
+        data-testid="settings-shell-header-actions">
+        <button v-if="route.path==='/settings/search'" type="button"
+          aria-label="Закрыть поиск" title="Вернуться в настройки"
+          @click="router.push('/settings')">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
+            stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+        <button v-else type="button"
+          aria-label="Поиск по настройкам" title="Поиск по настройкам"
+          @click="router.push('/settings/search')">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
+            stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="10.8" cy="10.8" r="7.2"/>
+            <path d="m16 16 5 5"/>
+          </svg>
+        </button>
+      </div>
       <div class="shell-header-actions" v-else-if="route.path==='/contacts'">
         <button type="button" disabled aria-label="Blacklist — пока недоступен"
           title="Требует настоящего серверного отзыва полномочий">Blacklist</button>
@@ -82,12 +123,13 @@ const dock = [
       <RouterView />
     </main>
 
-    <nav class="shell-dock" aria-label="Главная навигация">
-      <RouterLink
-        v-for="item in dock" :key="item.to" :to="item.to"
-        :class="{ active: isActive(item.to) }"
-        :aria-current="isActive(item.to) ? 'page' : undefined"
-      >
+    <nav class="shell-dock" aria-label="Главная навигация"
+      :style="{gridTemplateColumns:'repeat('+dock.length+',minmax(0,1fr))'}">
+      <RouterLink v-for="item in dock" :key="item.to" :to="item.to"
+        custom v-slot="{ href, navigate }">
+        <a :href="href" :class="{ active: isActive(item.to) }"
+          :aria-current="isActive(item.to) ? 'page' : undefined"
+          @click="onDockClick($event,item.to,navigate)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <template v-if="item.icon === 'tasks'"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></template>
@@ -97,6 +139,7 @@ const dock = [
           <template v-else><circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></template>
         </svg>
         <small>{{ item.name }}</small>
+        </a>
       </RouterLink>
     </nav>
   </div>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>PhotoBunker · Ошибка авторизации · Fieldwork 1.0</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="preview-bar"><span class="preview-label"><i></i>FIELDWORK / AUTH ERROR 1.0</span><div class="preview-tools"><select id="error-type" aria-label="Причина ошибки для предпросмотра"><option value="key">Ключ недействителен</option><option value="lost">Ключ утрачен</option><option value="deleted">Аккаунт удалён</option><option value="device">Устройство отключено</option><option value="emergency">Экстренное удаление</option><option value="local">Повреждены данные входа</option></select><div class="preview-modes" role="group" aria-label="Режим предпросмотра"><button type="button" data-device="phone" class="selected" aria-pressed="true">Телефон</button><button type="button" data-device="desktop" aria-pressed="false">Desktop</button></div></div></div>
+<div class="preview-stage"><div class="device phone" id="device">
+<main class="error-page" aria-labelledby="error-title"><div class="page-layout">
+<header class="brand"><div class="brand-logo" aria-hidden="true"><svg viewBox="0 0 72 72" fill="none"><rect x="9" y="17" width="54" height="39" rx="10" stroke="currentColor" stroke-width="3"/><path d="m19 17 5-7h24l5 7" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle cx="36" cy="37" r="13" stroke="#18d65c" stroke-width="3"/><path d="M36 26c6 3 9 8 10 13M27 42c5 3 11 4 16 1M32 27c-6 4-8 10-7 15" stroke="#a9f2b9" stroke-width="2.6" stroke-linecap="round"/></svg></div><div class="brand-name">PhotoBunker</div></header>
+<section class="error-message"><div class="error-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="M12 7v6M12 17h.01"/></svg></div><h1 id="error-title">Вход с этим ключом невозможен</h1><p id="error-description">Ключ аккаунта недействителен, повреждён или не подходит для входа. Проверьте, что используете правильный Recovery Key.</p></section>
+<a class="back-home" href="../welcome/index.html" id="welcome-link">На страницу приветствия <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+</div></main>
+</div></div>
+<div class="preview-note">Верхний выбор причины и переключатель размера относятся только к просмотру макета. В приложении отображается подтверждённая причина ошибки и единственная ссылка на Welcome.</div>
+<script src="app.js"></script>
+</body>
+</html>

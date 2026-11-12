@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>PhotoBunker · Ошибка авторизации · Fieldwork 1.0</title>
+<style>
+:root{color-scheme:dark;--bg:#121212;--text:#f2f2f2;--muted:#aaa;--green:#1ed760;--danger:#e4aaaa;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;min-width:320px;background:#101010;color:var(--text);font-family:inherit}
+button,select{font:inherit}button{cursor:pointer;color:inherit}button:focus-visible,select:focus-visible,a:focus-visible{outline:2px solid #a0e9b6;outline-offset:3px}
+.preview-bar{max-width:1050px;margin:16px auto 12px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.preview-label{display:flex;align-items:center;gap:8px;font:700 11px ui-monospace,monospace;letter-spacing:.045em}.preview-label i{width:7px;height:7px;border-radius:50%;background:var(--green)}
+.preview-tools{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.preview-modes{display:flex;gap:2px;background:#292929;border-radius:8px;padding:3px}.preview-modes button{border:0;background:transparent;color:#aaa;padding:8px 12px;border-radius:5px;font-size:11px;min-height:32px}.preview-modes button.selected{background:#555;color:#fff}
+.preview-tools select{background:#292929;border:1px solid #4b4b4b;color:#ddd;border-radius:8px;padding:7px 10px;font-size:11px;min-height:37px;max-width:min(100%,245px)}
+.preview-stage{display:flex;justify-content:center;padding:2px 12px}
+.device{width:100%;height:min(780px,calc(100dvh - 120px));min-height:570px;border:1px solid #444;background:#121212;overflow:hidden}.device.phone{max-width:402px;border-radius:23px}.device.desktop{max-width:1050px;border-radius:11px}
+.preview-note{max-width:1050px;margin:11px auto 25px;padding:0 12px;color:#929292;font-size:11px;line-height:1.5}
+.error-page{height:100%;width:100%;background:radial-gradient(ellipse 68% 37% at 50% 50%,#30202260 0%,transparent 76%),#121212;position:relative;isolation:isolate;overflow-y:auto;overscroll-behavior:contain}
+.page-layout{width:min(100%,480px);min-height:100%;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:clamp(35px,8%,62px) 26px clamp(44px,8%,66px)}
+.brand{display:flex;flex-direction:column;align-items:center;gap:7px;flex:none}
+.brand-logo{height:54px;width:54px;display:grid;place-items:center;border:1px solid #454e45;background:linear-gradient(140deg,#2b382b,#171e18);border-radius:16px;box-shadow:0 8px 24px #0003;color:#f3fff4}
+.brand-logo svg{width:37px;height:37px}.brand-name{font-size:20px;line-height:1.2;font-weight:780;letter-spacing:-.055em}
+.error-message{width:100%;display:flex;align-items:center;flex-direction:column;text-align:center;gap:0;margin:auto 0;min-height:245px;justify-content:center;padding:18px 0}
+.error-icon{width:66px;height:66px;display:grid;place-items:center;border-radius:19px;border:1px solid #684443;background:#342425;color:var(--danger);margin:0 0 25px;box-shadow:0 12px 44px #00000027}
+.error-icon svg{width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.error-message h1{font-size:clamp(21px,4.6vw,26px);font-weight:760;letter-spacing:-.043em;line-height:1.22;margin:0 0 13px;max-width:410px}
+.error-message p{font-size:13px;color:#b2b2b2;line-height:1.65;max-width:355px;margin:0;min-height:64px;text-wrap:pretty}
+.back-home{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:44px;text-decoration:none;color:#a9efbe;font-size:13px;font-weight:700;letter-spacing:-.015em;padding:10px 12px;border-radius:8px;flex:none;transition:color .15s,transform .15s}
+.back-home:hover{color:#e9fff0;transform:translateY(-1px)}.back-home svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+@media(max-width:390px){.page-layout{padding:32px 22px 39px}.error-icon{width:60px;height:60px;border-radius:17px;margin-bottom:22px}.error-icon svg{width:29px;height:29px}.error-message p{font-size:12px}.error-message h1{font-size:21px}}
+@media(max-height:650px){.page-layout{padding-top:24px;padding-bottom:24px}.brand-logo{width:49px;height:49px}.brand-name{font-size:19px}.error-message{min-height:200px}.error-icon{margin-bottom:17px}}
+@media(prefers-reduced-motion:reduce){.back-home{transition:none}.back-home:hover{transform:none}}
+</style>
+</head>
+<body>
+<div class="preview-bar"><span class="preview-label"><i></i>FIELDWORK / AUTH ERROR 1.0</span><div class="preview-tools"><select id="error-type" aria-label="Причина ошибки для предпросмотра"><option value="key">Ключ недействителен</option><option value="lost">Ключ утрачен</option><option value="deleted">Аккаунт удалён</option><option value="device">Устройство отключено</option><option value="emergency">Экстренное удаление</option><option value="local">Повреждены данные входа</option></select><div class="preview-modes" role="group" aria-label="Режим предпросмотра"><button type="button" data-device="phone" class="selected" aria-pressed="true">Телефон</button><button type="button" data-device="desktop" aria-pressed="false">Desktop</button></div></div></div>
+<div class="preview-stage"><div class="device phone" id="device">
+<main class="error-page" aria-labelledby="error-title"><div class="page-layout">
+<header class="brand"><div class="brand-logo" aria-hidden="true"><svg viewBox="0 0 72 72" fill="none"><rect x="9" y="17" width="54" height="39" rx="10" stroke="currentColor" stroke-width="3"/><path d="m19 17 5-7h24l5 7" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle cx="36" cy="37" r="13" stroke="#18d65c" stroke-width="3"/><path d="M36 26c6 3 9 8 10 13M27 42c5 3 11 4 16 1M32 27c-6 4-8 10-7 15" stroke="#a9f2b9" stroke-width="2.6" stroke-linecap="round"/></svg></div><div class="brand-name">PhotoBunker</div></header>
+<section class="error-message"><div class="error-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="M12 7v6M12 17h.01"/></svg></div><h1 id="error-title">Вход с этим ключом невозможен</h1><p id="error-description">Ключ аккаунта недействителен, повреждён или не подходит для входа. Проверьте, что используете правильный Recovery Key.</p></section>
+<a class="back-home" href="PhotoBunker_Welcome_Fieldwork_1_4.html" id="welcome-link">На страницу приветствия <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></a>
+</div></main>
+</div></div>
+<div class="preview-note">Верхний выбор причины и переключатель размера относятся только к просмотру макета. В приложении отображается подтверждённая причина ошибки и единственная ссылка на Welcome.</div>
+<script>
+(()=>{'use strict';
+const scenarios={
+  key:{title:'Вход с этим ключом невозможен',description:'Ключ аккаунта недействителен, повреждён или не подходит для входа. Проверьте, что используете правильный Recovery Key.'},
+  lost:{title:'Ключ аккаунта утрачен',description:'Ключ входа отсутствует на этом устройстве. Если у вас сохранилась копия Recovery Key, используйте её для восстановления доступа.'},
+  deleted:{title:'Аккаунт больше недоступен',description:'Аккаунт был удалён. Войти в него с прежним ключом больше нельзя.'},
+  device:{title:'Доступ с устройства закрыт',description:'Это устройство было отключено от аккаунта. Доступ с него прекращён.'},
+  emergency:{title:'Доступ к аккаунту прекращён',description:'Был использован PIN экстренного удаления. Доступ с этого устройства заблокирован; возможность восстановления зависит от состояния аккаунта и резервных копий.'},
+  local:{title:'Данные входа недоступны',description:'Не удалось прочитать данные авторизации на этом устройстве. Они могли быть удалены или повреждены. Попробуйте восстановить доступ с сохранённым ключом.'}
+};
+const select=document.getElementById('error-type');
+select.addEventListener('change',()=>{const reason=scenarios[select.value];if(!reason)return;document.getElementById('error-title').textContent=reason.title;document.getElementById('error-description').textContent=reason.description});
+document.querySelectorAll('[data-device]').forEach(button=>button.addEventListener('click',()=>{document.getElementById('device').className='device '+button.dataset.device;document.querySelectorAll('[data-device]').forEach(el=>{el.classList.toggle('selected',el===button);el.setAttribute('aria-pressed',String(el===button))})}));
+})();
+</script>
+</body>
+</html>

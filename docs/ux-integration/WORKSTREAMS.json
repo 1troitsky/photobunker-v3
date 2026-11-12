@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "updated": "2026-11-12",
+  "ux_sandbox_branch_prefix": "ux/",
+  "integration_branch_prefix": "integration/ux-",
+  "ux_sandbox_allowed_roots": [
+    "apps/web/src/ui/fieldwork/",
+    "docs/ux-integration/",
+    "tools/ux-review/",
+    "tests/ux-review/"
+  ],
+  "product_reserved_paths": [
+    "apps/web/src/App.vue",
+    "apps/web/src/styles.css",
+    "apps/web/src/router.ts",
+    "apps/web/src/views/",
+    "apps/web/src/features/",
+    "apps/api/",
+    "tests/e2e/"
+  ],
+  "original_immutable_roots": [
+    "docs/ux/",
+    "docs/_uiux/"
+  ],
+  "functional_prs": [
+    {
+      "number": 134,
+      "scope": "Viewer cursor/deep links"
+    },
+    {
+      "number": 136,
+      "scope": "Browser Viewer return context"
+    },
+    {
+      "number": 137,
+      "scope": "Viewer folder/file pager"
+    },
+    {
+      "number": 139,
+      "scope": "Fixed Viewer scene, info and edit sheets"
+    },
+    {
+      "number": 140,
+      "scope": "Viewer browser Back/history"
+    }
+  ],
+  "docs_prs": [
+    135,
+    138
+  ],
+  "documentation_anchor": "docs/ux-integration/PARALLEL-WORK-PROTOCOL.md"
+}
