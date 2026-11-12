@@ -77,6 +77,7 @@ async function refresh():Promise<void>{
         const checked=appendAuthenticatedCatalogPage(
           [],response,null,(item:CloudMedia)=>item.mediaId)
         cloud.value=checked.items;cursor.value=checked.nextCursor
+        error.value=''
       }catch(e){
         // Never replace earlier trusted entries/cursor with a failed or
         // malformed server page, even when the account stays unchanged.
