@@ -1318,15 +1318,7 @@ onUnmounted(()=>{
 
 <template>
   <section class="foundation-content file-viewer" data-testid="file-viewer">
-    <header class="file-viewer-header">
-      <RouterLink to="/browser" class="file-viewer-back">‹ Browser</RouterLink>
-      <div>
-        <h1>Просмотр файла</h1>
-        <p class="muted" v-if="current">{{ current.id.slice(0,8) }}</p>
-      </div>
-      <button type="button" :disabled="!fileUrl"
-        @click="toggleFullscreen">На весь экран</button>
-    </header>
+
     <div v-if="!activeSession" class="foundation-card">
       <p>Для просмотра зашифрованных файлов необходим вход.</p>
       <RouterLink to="/settings">Открыть доступ</RouterLink>
@@ -1335,18 +1327,14 @@ onUnmounted(()=>{
       Некорректный адрес файла.
     </div>
     <template v-else>
-      <div class="file-viewer-navigation">
-        <button type="button" aria-label="Предыдущий файл"
-          :disabled="!adjacent.previous||busy"
-          @click="navigate(adjacent.previous)">‹</button>
-        <span class="muted" data-testid="file-viewer-position">
-          {{ adjacent.position?adjacent.position+' / '+adjacent.total:
-            'Вне загруженного списка' }}
-        </span>
-        <button type="button" aria-label="Следующий файл"
-          :disabled="!adjacent.next||busy"
-          @click="navigate(adjacent.next)">›</button>
-      </div>
+      <div class="file-viewer-fixed" data-testid="file-viewer-fixed">
+        <nav class="file-viewer-path browser-breadcrumb"
+          data-testid="file-viewer-path" aria-label="Путь Browser">
+          <RouterLink to="/browser" class="file-viewer-back" aria-label="В Browser">‹</RouterLink>
+          <span class="file-viewer-path-name">Browser / {{ preview?.name??'Файл' }}</span>
+          <button type="button" data-testid="file-viewer-download"
+            :disabled="!fileUrl" @click="download">Скачать</button>
+        </nav>
       <div ref="stage" class="file-viewer-stage"
         data-testid="file-viewer-stage"
         @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
@@ -1364,6 +1352,42 @@ onUnmounted(()=>{
             data-testid="file-viewer-audio"/>
         </div>
         <p v-else class="muted">Файл не открыт.</p>
+        <button type="button" class="file-viewer-stage-fullscreen"
+          aria-label="На весь экран" :disabled="!fileUrl" @click="toggleFullscreen">⛶</button>
+      </div>
+      <section class="file-viewer-summary" data-testid="file-viewer-summary">
+        <div class="file-viewer-summary-name">{{ preview?.name??'Защищённый файл' }}</div>
+        <div class="file-viewer-summary-id">ID: {{ current.id.slice(0,8) }}</div>
+        <p class="file-viewer-summary-description">{{ preview?.description||'Описание не добавлено' }}</p>
+        <div class="file-viewer-summary-dates">
+          <span>Создан: {{ preview?.capturedAt
+            ?new Date(preview.capturedAt).toLocaleDateString('ru-RU'):'—' }}</span>
+          <span>Удаление: {{ preview?.expiresAt
+            ?new Date(preview.expiresAt).toLocaleDateString('ru-RU'):'—' }}</span>
+        </div>
+      </section>
+      <nav class="file-viewer-actions" aria-label="Действия с файлом"
+        data-testid="file-viewer-actions">
+        <button type="button" :disabled="!fileUrl" data-testid="viewer-action-info"
+          @click="openPanel('info')">Информация</button>
+        <button type="button" disabled
+          title="Публичный предпросмотр требует отдельной проверки Safe-версии и прав доступа">
+          Публичная карточка</button>
+        <button type="button" :disabled="!fileUrl" data-testid="viewer-action-edit"
+          @click="openPanel('editor')">Редактировать</button>
+      </nav>
+      <div class="file-viewer-navigation">
+        <button type="button" aria-label="Предыдущий файл"
+          :disabled="!adjacent.previous||busy"
+          @click="navigate(adjacent.previous)">‹</button>
+        <span class="muted" data-testid="file-viewer-position">
+          {{ adjacent.position?adjacent.position+' / '+adjacent.total:
+            'Вне загруженного списка' }}
+        </span>
+        <button type="button" aria-label="Следующий файл"
+          :disabled="!adjacent.next||busy"
+          @click="navigate(adjacent.next)">›</button>
+      </div>
       </div>
       <section v-if="preview?.type==='photo'&&fileUrl"
         class="file-viewer-photo-editor" data-testid="file-viewer-photo-editor">
