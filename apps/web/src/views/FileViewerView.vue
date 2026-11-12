@@ -1471,13 +1471,13 @@ onUnmounted(()=>{
         data-testid="file-viewer-stage"
         @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
         <div v-if="busy" role="status" class="file-viewer-wait">Открываем защищённый файл…</div>
-        <img v-else-if="fileUrl&&preview?.type==='photo'" ref="photoElement"
+        <img v-else-if="!editorMode&&fileUrl&&preview?.type==='photo'" ref="photoElement"
           :src="fileUrl" :alt="preview?.name??'Фото'" draggable="false"
           data-testid="file-viewer-image">
-        <video v-else-if="fileUrl&&preview?.type==='video'" :key="fileUrl"
+        <video v-else-if="!editorMode&&fileUrl&&preview?.type==='video'" :key="fileUrl"
           ref="videoElement" :src="fileUrl" controls playsinline preload="metadata"
           data-testid="file-viewer-video"/>
-        <div v-else-if="fileUrl&&preview?.type==='audio'" class="file-viewer-audio">
+        <div v-else-if="!editorMode&&fileUrl&&preview?.type==='audio'" class="file-viewer-audio">
           <span aria-hidden="true">♫</span>
           <audio :key="fileUrl" ref="audioElement" :src="fileUrl"
             controls preload="metadata" @loadedmetadata="onAudioMetadata"
@@ -1521,18 +1521,52 @@ onUnmounted(()=>{
           @click="navigate(adjacent.next)">›</button>
       </div>
       </div>
-      <div v-show="panel!==null" class="file-viewer-overlay"
+      <div v-show="panel!==null||editorMode" class="file-viewer-overlay"
         data-testid="file-viewer-sheet-layer" @click.self="closePanel">
-        <section class="file-viewer-sheet" role="dialog" aria-modal="true"
-          :aria-label="panel==='editor'?'Редактирование файла':'Информация о файле'"
+        <section class="file-viewer-sheet"
+          :role="editorMode?undefined:'dialog'"
+          :aria-modal="editorMode?undefined:'true'"
+          :aria-label="editorMode?undefined:panel==='editor'?'Редактирование файла':'Информация о файле'"
           @keydown="onSheetKeydown">
-          <header class="file-viewer-sheet-heading">
+          <header v-if="!editorMode" class="file-viewer-sheet-heading">
             <h2>{{ panel==='editor'?'Редактирование':'Информация' }}</h2>
             <button ref="sheetClose" type="button" data-testid="viewer-panel-close"
               @click="closePanel">Закрыть</button>
           </header>
-          <div class="file-viewer-sheet-body">
-            <div v-show="panel==='editor'" class="file-viewer-editor-sections">
+          <div v-else class="file-editor-route-heading">
+            <nav class="file-editor-route-path" aria-label="Путь редактора">
+              <button type="button" @click="cancelEditor" aria-label="Вернуться к файлу">‹</button>
+              <span>Browser › {{ preview?.name??'Файл' }}</span>
+            </nav>
+            <h1>{{ preview?.type==='photo'?'Редактировать фото':
+              preview?.type==='audio'?'Редактировать аудио':'Редактировать видео' }}</h1>
+            <nav class="file-editor-route-tabs" aria-label="Вкладки редактора"
+              data-testid="file-editor-tabs">
+              <button type="button" :aria-current="editorTab==='info'?'page':undefined"
+                @click="selectEditorTab('info')">Информация</button>
+              <button type="button" :aria-current="editorTab==='media'?'page':undefined"
+                @click="selectEditorTab('media')">
+                {{ preview?.type==='photo'?'Фото':preview?.type==='audio'?'Аудио':'Видео' }}
+              </button>
+              <button type="button" :aria-current="editorTab==='review'?'page':undefined"
+                @click="selectEditorTab('review')">Проверка</button>
+            </nav>
+          </div>
+          <div ref="editorBody" class="file-viewer-sheet-body">
+            <div v-show="panel==='editor'||(editorMode&&editorTab==='media')"
+              class="file-viewer-editor-sections">
+              <div v-if="editorMode&&fileUrl&&preview" class="file-editor-source"
+                data-testid="file-editor-source">
+                <img v-if="preview.type==='photo'" ref="photoElement"
+                  :src="fileUrl" :alt="preview.name" draggable="false"
+                  data-testid="file-viewer-image">
+                <video v-else-if="preview.type==='video'" :key="fileUrl"
+                  ref="videoElement" :src="fileUrl" controls playsinline preload="metadata"
+                  data-testid="file-viewer-video"/>
+                <audio v-else :key="fileUrl" ref="audioElement" :src="fileUrl"
+                  controls preload="metadata" @loadedmetadata="onAudioMetadata"
+                  data-testid="file-viewer-audio"/>
+              </div>
       <section v-if="preview?.type==='photo'&&fileUrl"
         class="file-viewer-photo-editor" data-testid="file-viewer-photo-editor">
         <h2>Кадрирование и поворот</h2>
@@ -2059,7 +2093,7 @@ onUnmounted(()=>{
           {{ stillError }}</p>
       </section>
             </div>
-            <div v-show="panel==='info'">
+            <div v-show="panel==='info'||(editorMode&&editorTab==='info')">
       <div v-if="preview" class="file-viewer-information" data-testid="file-viewer-info">
         <div class="file-viewer-info-heading">
           <div>
@@ -2097,6 +2131,18 @@ onUnmounted(()=>{
           Скачивание — только после явного подтверждения.</p>
       </div>
             </div>
+            <section v-if="editorMode" v-show="editorTab==='review'"
+              class="file-editor-review" data-testid="file-editor-review">
+              <h2>Проверка куратором</h2>
+              <p>Решения куратора требуют подтверждённых ролей, политики задания
+                и серверного аудита. Этот раздел пока доступен только для просмотра.</p>
+              <div class="file-editor-review-controls">
+                <button disabled type="button">Принять</button>
+                <button disabled type="button">Исправить</button>
+                <button disabled type="button">Переснять</button>
+                <button disabled type="button">Отклонить</button>
+              </div>
+            </section>
           </div>
         </section>
       </div>
