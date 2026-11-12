@@ -386,7 +386,7 @@ function travelPhotoEdit(delta:-1|1):void{
     photoSaturation.value=view.effects.saturation
     cropAspectPreset.value=view.aspect
     void nextTick(()=>{restoringPhotoHistory=false})
-    cropNotice.value='Кадр и цвет восстановлены из истории. Создайте JPEG-предпросмотр перед сохранением.'
+
   }
   textMarks.value=[...next.snapshot.text]
   shapeMarks.value=[...next.snapshot.shapes]
@@ -399,6 +399,8 @@ function travelPhotoEdit(delta:-1|1):void{
   if(!shapeMarks.value.some(mark=>mark.id===selectedShapeId.value))
     selectedShapeId.value=null
   invalidateTextOutput()
+  if(changeView)
+    cropNotice.value='Кадр и цвет восстановлены из истории. Создайте JPEG-предпросмотр перед сохранением.'
 }
 function resetPhotoAnnotations():void{
   if(cropBusy.value||draftStroke.value||showBefore.value)return
