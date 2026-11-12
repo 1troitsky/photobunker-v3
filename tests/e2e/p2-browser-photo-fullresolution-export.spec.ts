@@ -100,7 +100,7 @@ test('P2 V55: >4096px / >16.8MP encrypted JPEG preserves native pixels; low-memo
       if(!ctx)throw Error('missing_decrypted_jpeg_canvas')
       ctx.drawImage(bitmap,0,0)
       const mask=[...ctx.getImageData(2600,1700,1,1).data.slice(0,3)]
-      const unmasked=[...ctx.getImageData(50,50,1,1).data.slice(0,3)]
+      const unmasked=[...ctx.getImageData(1000,100,1,1).data.slice(0,3)]
       const dimensions={width:bitmap.width,height:bitmap.height}
       bitmap.close();canvas.width=0;canvas.height=0
       const hash=await crypto.subtle.digest('SHA-256',
