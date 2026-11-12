@@ -941,6 +941,12 @@ async function navigate(item:CatalogItem|{source:'photo'|'media';id:string}|null
 }
 function onKeyDown(event:KeyboardEvent):void{
   if(event.defaultPrevented||event.altKey)return
+  if(editorMode.value){
+    if(event.key==='Escape'){event.preventDefault();void cancelEditor();return}
+    // The editor uses arrow keys for range/brush movement, not pager history.
+    if(!((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'))
+      return
+  }
   if(panel.value){
     if(event.key==='Escape'){event.preventDefault();closePanel();return}
     // The editor remains a real editing surface: retain the existing
@@ -1369,10 +1375,22 @@ watch([trimStart,trimEnd],()=>{clearAudioClip()})
 // The shared Shell exposes only a callable action. All media content,
 // filenames and permissions remain inside FileViewerView. The callback
 // is cleared on lock, route change and unmount.
-watch([fileUrl,preview,activeSession],()=>{
-  setViewerShellActions(activeSession.value&&fileUrl.value&&preview.value
-    ?{download}:null)
+watch([fileUrl,preview,activeSession,editorMode,editorReady],()=>{
+  if(editorMode.value){
+    setViewerShellActions({download,editor:{
+      cancel:()=>{void cancelEditor()},
+      save:()=>{void saveEditor()},
+      canSave:editorReady.value,
+    }})
+  }else{
+    setViewerShellActions(activeSession.value&&fileUrl.value&&preview.value
+      ?{download}:null)
+  }
 },{immediate:true})
+watch(editorMode,()=>{
+  panel.value=null
+  editorTab.value='media'
+})
 watch(activeSession,(next,previous)=>{
   // A CSRF/session reauthentication may replace Session with a new object
   // containing the SAME key package and physical device. Never erase a
@@ -1409,11 +1427,17 @@ watch([()=>route.params.protocol,()=>route.params.id],()=>{
 // Browser history Back, the shell dock and the explicit breadcrumb all
 // converge here. Never put a private search term or folder path into a URL.
 onBeforeRouteLeave((to)=>{
+  if(editorMode.value&&editorUnsaved.value){
+    if(!window.confirm('Отменить несохранённые изменения файла? Исходный файл останется без изменений.'))
+      return false
+    resetEditorDraft()
+  }
   if(to.path==='/browser'){
     const identity=activeSession.value
     if(identity)armBrowserReturn(identity.accountId,identity.deviceId)
     else discardBrowserReturnContext()
-  }else if(to.name!=='browser-viewer')discardBrowserReturnContext()
+  }else if(to.name!=='browser-viewer'&&to.name!=='browser-editor')
+    discardBrowserReturnContext()
 })
 onMounted(()=>window.addEventListener('keydown',onKeyDown))
 onUnmounted(()=>{
@@ -1425,7 +1449,9 @@ onUnmounted(()=>{
 </script>
 
 <template>
-  <section class="foundation-content file-viewer" data-testid="file-viewer">
+  <section class="foundation-content file-viewer"
+    :class="{'file-viewer-editor-route':editorMode}"
+    data-testid="file-viewer">
 
     <div v-if="!activeSession" class="foundation-card">
       <p>Для просмотра зашифрованных файлов необходим вход.</p>
