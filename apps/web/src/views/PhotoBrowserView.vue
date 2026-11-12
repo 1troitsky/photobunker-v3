@@ -1051,6 +1051,7 @@ function preserveViewerOrigin(item:CatalogItem,event:MouseEvent):void{
     filter:filter.value,sort:sort.value,view:view.value,
     search:search.value,searchFolderScope:searchFolderScope.value,
     archiveTab:archiveTab.value,
+    fileKeys:visible.value.map(row=>row.key),
   })
 }
 function showReceived(blob:Blob):void{
