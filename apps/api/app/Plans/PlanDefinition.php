@@ -9,7 +9,9 @@ use RuntimeException;
  * Immutable *value* snapshot of the owner-approved plans.php revision.
  * The live catalog can change with a new catalog_version, but an already
  * committed account snapshot stores its original serialized definition.
- * No GB/GiB conversion or payment authority is invented here.
+ * Historic OPEN_GB_VS_GIB definitions remain byte-for-byte immutable.
+ * Owner-approved DECIMAL_GB_TB_V1 is introduced only in catalog 2026-11-12.
+ * No payment authority or retroactive entitlement upgrade is introduced.
  */
 final readonly class PlanDefinition
 {
@@ -26,14 +28,20 @@ final readonly class PlanDefinition
     {
         $version=$catalog['catalog_version']??null;
         $effective=$catalog['effective_at']??null;
+        $policy=$catalog['storage_unit_policy']??null;
         if (!is_string($version)||!preg_match('/^pb3-\d{4}-\d{2}-\d{2}$/D',$version)
             ||!is_string($effective)
             ||!preg_match('/^\d{4}-\d{2}-\d{2}T00:00:00Z$/D',$effective)
             ||($catalog['schema_version']??null)!==1
             ||($catalog['currency']??null)!=='USD'
-            ||($catalog['storage_unit_policy']??null)!=='OPEN_GB_VS_GIB') {
+            ||!in_array($policy,['OPEN_GB_VS_GIB','DECIMAL_GB_TB_V1'],true)) {
             throw new RuntimeException('billing.catalog_invalid_metadata');
         }
+        // Bind policy to catalog version. Do not let an old signed definition
+        // silently change byte units without a new immutable catalog version.
+        if(($policy==='DECIMAL_GB_TB_V1'&&$version<'pb3-2026-11-12')
+            ||($policy==='OPEN_GB_VS_GIB'&&$version>='pb3-2026-11-12'))
+            throw new RuntimeException('billing.catalog_policy_version_mismatch');
         if (substr($version,4)!==substr($effective,0,10)) {
             throw new RuntimeException('billing.catalog_effective_date_mismatch');
         }
@@ -62,6 +70,13 @@ final readonly class PlanDefinition
         if(!is_array($quota)||!is_int($quota['amount']??null)||$quota['amount']<1
             ||!in_array($quota['unit']??null,['GB','TB'],true)) {
             throw new RuntimeException('billing.catalog_invalid_storage_quota');
+        }
+        $byteCeiling=null;
+        if($policy==='DECIMAL_GB_TB_V1'){
+            $multiplier=$quota['unit']==='GB'?1000000000:1000000000000;
+            if($quota['amount']>intdiv(PHP_INT_MAX,$multiplier))
+                throw new RuntimeException('billing.catalog_storage_overflow');
+            $byteCeiling=$quota['amount']*$multiplier;
         }
         $periods=$plan['period_prices_cents'];
         if(!is_array($periods)||($periods[1]??null)!==$plan['monthly_price_cents']) {
@@ -108,7 +123,7 @@ final readonly class PlanDefinition
                 'maxMediaFiles'=>$plan['max_media_files'],
                 'storage'=>[
                     'amount'=>$quota['amount'],'unit'=>$quota['unit'],
-                    'byteCeiling'=>null,'unitPolicy'=>'OPEN_GB_VS_GIB',
+                    'byteCeiling'=>$byteCeiling,'unitPolicy'=>$policy,
                 ],
                 'retention'=>$retention,
                 'manualBackupUpdatesPerWeek'=>$plan['manual_backup_updates_per_week'],
