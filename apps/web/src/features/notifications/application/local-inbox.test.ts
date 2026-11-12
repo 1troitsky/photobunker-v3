@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { activeSession, type Session } from '../../identity/application/session'
-import { b64, random, freshPackage } from '../../identity/infrastructure/crypto'
+import { b64, random, freshPackage, digest, hex } from '../../identity/infrastructure/crypto'
 import {
   localUnreadCount, listLocalNotifications, markAllLocalNotificationsRead,
   markNotificationRead, previewNotification, recordLocalNotification,
@@ -25,7 +25,9 @@ function input(id=eventId):LocalNotificationInput{
 async function rows():Promise<RawRow[]>{
   const db=new Dexie('pb3-encrypted-notifications-v1')
   db.version(1).stores({rows:'&key,ownerScope'})
-  const result=await db.table('rows').toArray() as RawRow[]
+  const ownerScope=hex(await digest(new TextEncoder().encode(
+    'pb3.notification-index.v1\n'+ownerId)))
+  const result=await db.table('rows').where('ownerScope').equals(ownerScope).toArray() as RawRow[]
   db.close()
   return result
 }
