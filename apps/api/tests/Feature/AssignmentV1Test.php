@@ -1001,6 +1001,7 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('error','assignment.monthly_quota_exceeded')
             ->assertJsonPath('limit',3);
         $this->assertDatabaseCount('assignment_records_v1',3);
+        $this->assertDatabaseCount('assignment_creation_meter_v1',3);
 
         // Owner's draft or server-visible state cannot reset billing usage:
         // finished records are counted too; deleting is not an escape hatch.
@@ -1023,10 +1024,17 @@ final class AssignmentV1Test extends TestCase
         $this->createAssignment();
         $url='/assignments/v1/usage';
         $this->getJson($url)->assertJsonPath('used',1);
-        // A previous calendar month does not consume this month's Free
-        // quota. Records keep the actual original server-created date.
+        // A tampered/mutated live assignment timestamp cannot reset this
+        // month's quota: ONLY the append-only creation meter is authoritative.
         DB::table('assignment_records_v1')
             ->where('id',$this->assignmentId)
+            ->update(['created_at'=>now('UTC')->subMonth()->startOfMonth()]);
+        $this->getJson($url)->assertJsonPath('used',1)
+            ->assertJsonPath('remaining',2);
+        // Direct test-fixture backdating represents a genuinely old creation
+        // meter row. The current server UTC month must then exclude it.
+        DB::table('assignment_creation_meter_v1')
+            ->where('assignment_id',$this->assignmentId)
             ->update(['created_at'=>now('UTC')->subMonth()->startOfMonth()]);
         $this->getJson($url)->assertJsonPath('used',0)
             ->assertJsonPath('remaining',3);
@@ -1034,6 +1042,67 @@ final class AssignmentV1Test extends TestCase
         $this->createAssignment(2);
         $this->getJson($url)->assertJsonPath('used',1)
             ->assertJsonPath('remaining',2);
+    }
+
+    public function test_verified_go_allows_paid_creations_and_deleted_items_do_not_refund_month():void
+    {
+        $owner=$this->people['owner']['account'];
+        $ledger=app(\App\Billing\EntitlementLedger::class);
+        $ledger->current($owner);
+        $start=\Carbon\CarbonImmutable::now('UTC')
+            ->subMinutes(2)->startOfSecond();
+        $end=\Carbon\CarbonImmutable::now('UTC')
+            ->addDay()->startOfSecond();
+        $ledger->advanceTrusted($owner,'go',1,
+            hash('sha256','verified-go-assignments-test:'.$owner),
+            'settlement_verified',$start,$end);
+
+        $this->as('owner');
+        $this->getJson('/assignments/v1/usage')
+            ->assertOk()->assertJsonPath('planId','go')
+            ->assertJsonPath('limit',30)
+            ->assertJsonPath('remaining',30);
+        $created=[];
+        for($i=1;$i<=4;$i++){
+            $this->assignmentId=(string)Str::uuid();
+            $this->createAssignment($i);
+            $created[]=$this->assignmentId;
+        }
+        $this->getJson('/assignments/v1/usage')
+            ->assertJsonPath('planId','go')
+            ->assertJsonPath('used',4)->assertJsonPath('remaining',26);
+        $this->assertDatabaseCount('assignment_creation_meter_v1',4);
+
+        $first=DB::table('assignment_records_v1')->where('id',$created[0])
+            ->first(['contract_json','owner_signature']);
+        DB::table('assignment_records_v1')->where('id',$created[0])->delete();
+        $this->getJson('/assignments/v1/usage')
+            ->assertJsonPath('used',4)->assertJsonPath('remaining',26);
+        $this->assertDatabaseHas('assignment_creation_meter_v1',[
+            'assignment_id'=>$created[0],'owner_account_id'=>$owner,
+        ]);
+        // A physically removed signed contract must NEVER be recreated from
+        // the original operation even after deletion. Reject resurrection.
+        $this->postJson('/assignments/v1',[
+            'contract'=>$first->contract_json,
+            'signature'=>$first->owner_signature,
+        ])->assertGone();
+        $this->assertDatabaseCount('assignment_records_v1',3);
+
+        try{
+            // Paid grace reverts to Free admission (3/month), but existing
+            // signed records and the 4-entry meter remain intact.
+            \Carbon\CarbonImmutable::setTestNow($end->addDay());
+            $this->getJson('/assignments/v1/usage')
+                ->assertJsonPath('planId','free')
+                ->assertJsonPath('limit',3)
+                ->assertJsonPath('used',4)
+                ->assertJsonPath('remaining',0);
+        }finally{
+            \Carbon\CarbonImmutable::setTestNow();
+        }
+        $this->assertDatabaseCount('assignment_creation_meter_v1',4);
+        $this->assertDatabaseCount('assignment_records_v1',3);
     }
 
     public function test_policy_history_is_signed_append_only_and_visible_only_after_consent():void

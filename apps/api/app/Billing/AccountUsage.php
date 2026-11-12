@@ -18,7 +18,9 @@ final class AccountUsage
         $from=$at->startOfMonth();
         $to=$from->addMonth();
         $nowMs=((int)$at->format('U'))*1000;
-        $assignments=(int)DB::table('assignment_records_v1')
+        // Append-only metering is the source of truth even when a signed
+        // assignment was later physically deleted after retention/GC.
+        $assignments=(int)DB::table('assignment_creation_meter_v1')
             ->where('owner_account_id',$accountId)
             ->where('created_at','>=',$from)
             ->where('created_at','<',$to)->count();

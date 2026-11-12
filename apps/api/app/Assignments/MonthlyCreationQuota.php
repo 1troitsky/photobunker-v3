@@ -3,47 +3,53 @@ declare(strict_types=1);
 
 namespace App\Assignments;
 
-use Illuminate\Support\Carbon;
+use App\Billing\EntitlementLedger;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 /**
- * P1 Free bootstrap only: all enrolled accounts are on the Free entitlement
- * until verified billing/subscription lifecycle is implemented.
+ * One authoritative UTC calendar-month creation allowance per account.
  *
- * The server's UTC created_at (not a client-signed startsAt) is the authority
- * for calendar-month billing. Creation callers MUST lock identity_accounts
- * before checking this usage and inserting a new assignment in one transaction.
+ * The caller MUST lock identity_accounts before calling usage() and inserting
+ * the signed assignment + immutable creation meter in the same transaction.
+ * Do not trust a client plan, startsAt, or deletion status. Removed records
+ * still consume the month in the append-only meter.
  */
 final class MonthlyCreationQuota
 {
-    /** @return array{planId:string,catalogVersion:string,periodStart:string,
-     * periodEnd:string,limit:int,used:int,remaining:int} */
-    public function usage(string $accountId): array
+    public function __construct(private readonly EntitlementLedger $entitlements){}
+
+    /**
+     * @return array{planId:string,catalogVersion:string,periodStart:string,
+     * periodEnd:string,limit:?int,used:int,remaining:?int}
+     */
+    public function usage(string $accountId,?CarbonImmutable $asOf=null):array
     {
-        $limit=config('plans.plans.free.assignment_creations_per_month');
-        if (!is_int($limit) || $limit<0) {
-            throw new \RuntimeException('assignments.free_quota_unconfigured');
+        // For a create transaction use the exact SAME server UTC instant for
+        // admission and persisted created_at, including month-boundary races.
+        $now=($asOf??CarbonImmutable::now('UTC'))->utc();
+        $ent=$this->entitlements->current($accountId,$now);
+        $limit=$ent['effectiveLimits']['assignmentCreationsPerMonth']??null;
+        if(!array_key_exists('assignmentCreationsPerMonth',$ent['effectiveLimits'])
+            ||($limit!==null&&(!is_int($limit)||$limit<0))) {
+            throw new \RuntimeException('assignments.entitlement_quota_invalid');
         }
-        $version=config('plans.catalog_version');
-        if (!is_string($version) || $version==='') {
-            throw new \RuntimeException('assignments.plan_catalog_unconfigured');
-        }
-        $start=Carbon::now('UTC')->startOfMonth();
-        $end=$start->copy()->addMonth();
-        $used=DB::table('assignment_records_v1')
+        $start=$now->startOfMonth();
+        $end=$start->addMonth();
+        $used=DB::table('assignment_creation_meter_v1')
             ->where('owner_account_id',$accountId)
             ->where('created_at','>=',$start)
             ->where('created_at','<',$end)
             ->count();
 
         return [
-            'planId'=>'free',
-            'catalogVersion'=>$version,
+            'planId'=>(string)$ent['effectivePlanId'],
+            'catalogVersion'=>(string)$ent['catalogVersion'],
             'periodStart'=>$start->toIso8601String(),
             'periodEnd'=>$end->toIso8601String(),
             'limit'=>$limit,
             'used'=>$used,
-            'remaining'=>max(0,$limit-$used),
+            'remaining'=>$limit===null?null:max(0,$limit-$used),
         ];
     }
 }

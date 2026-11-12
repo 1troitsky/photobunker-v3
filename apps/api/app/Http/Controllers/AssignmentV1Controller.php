@@ -72,11 +72,18 @@ final class AssignmentV1Controller extends Controller
             }
             abort_if(DB::table('assignment_records_v1')
               ->where('operation_id',$c['operationId'])->exists(),409);
+            // Historical signed IDs and operations remain spent even if
+            // an old assignment row was physically deleted. Never revive
+            // a logically gone assignment or refund its monthly usage.
+            abort_if(DB::table('assignment_creation_meter_v1')
+              ->where('assignment_id',$c['assignmentId'])
+              ->orWhere('operation_id',$c['operationId'])->exists(),410);
             // A signed create replay above must still ACK after monthly quota
             // exhaustion. A genuinely NEW create is gated under the SAME
             // account row lock used by all concurrent create transactions.
             // The user's signed startsAt is never used to choose the month.
-            $usage=$this->quota->usage($actor->id);
+            $createdAt=\Carbon\CarbonImmutable::now('UTC');
+            $usage=$this->quota->usage($actor->id,$createdAt);
             if($usage['remaining']===0){
                 return $this->sync->json([
                     'error'=>'assignment.monthly_quota_exceeded',
@@ -91,7 +98,16 @@ final class AssignmentV1Controller extends Controller
                 'private_envelope_json'=>C::envelope($c['privateEnvelope']),
                 'state'=>'active','revision'=>1,'policy_revision'=>1,
                 'photo_goal'=>$c['photoGoal'],'starts_at'=>$c['startsAt'],
-                'ends_at'=>$c['endsAt'],'created_at'=>now(),'updated_at'=>now(),
+                'ends_at'=>$c['endsAt'],'created_at'=>$createdAt,
+                'updated_at'=>$createdAt,
+            ]);
+            // Append in the SAME account-locked transaction. It survives
+            // later assignment deletion and cannot be submitted by clients.
+            DB::table('assignment_creation_meter_v1')->insert([
+                'assignment_id'=>$c['assignmentId'],
+                'owner_account_id'=>$actor->id,
+                'operation_id'=>$c['operationId'],
+                'created_at'=>$createdAt,
             ]);
             return $this->sync->json(['assignmentId'=>$c['assignmentId'],
               'state'=>'active','revision'=>1,'unchanged'=>false],201);
