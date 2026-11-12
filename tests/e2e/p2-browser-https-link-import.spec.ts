@@ -124,15 +124,21 @@ test('P2 Browser: rejects private/HTTP address locally and never contacts the so
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
     await expect(page.getByTestId('browser-v3')).toBeVisible()
     const seen:string[]=[]
     page.on('request',request=>{
-      if(request.url().includes('127.0.0.1')||request.url().includes('host.local'))
+      const origin=new URL(request.url()).origin
+      // The Vite frontend itself is http://127.0.0.1:5173. Count ONLY
+      // forbidden HTTPS targets, never the normal local test app.
+      if(origin==='https://127.0.0.1'||origin==='https://host.local')
         seen.push(request.url())
     })
     await page.getByTestId('media-import-https-url')
       .fill('https://127.0.0.1/private.wav')
+    await expect(page.getByTestId('media-import-https-submit'))
+      .toBeEnabled({timeout:15000})
     await page.getByTestId('media-import-https-submit').click()
     await expect(page.locator('.media-import-p1').getByRole('alert'))
       .toContainText('media.link_private_host',{timeout:15000})
