@@ -1315,6 +1315,16 @@ onUnmounted(()=>{
             <option value="all">Все папки (загруженные файлы)</option>
           </select>
         </label>
+        <button v-if="archiveTab==='all'&&normalizePrivateSearch(search).length>=2"
+          type="button" data-testid="browser-private-search-expand"
+          :disabled="busy||privateExpansionBusy||privateSearchExpanded
+            ||!activeSession.online||!photoCursor&&!mediaCursor
+              &&items.length===0"
+          @click="expandPrivateSearch">
+          {{ privateExpansionBusy?'Загружаем расширенную выборку…'
+            :privateSearchExpanded?'Расширенная проверка включена'
+            :'Проверить больше файлов (до 1000)' }}
+        </button>
         <label>
           <span class="browser-sr-only">Сортировка</span>
           <select v-model="sort" data-testid="browser-sort">
@@ -1340,15 +1350,27 @@ onUnmounted(()=>{
       <p class="muted">Поиск по ID мгновенный. Имена, описания, категории и теги
         ищутся только после расшифровки на этом устройстве. Поисковый запрос и
         незашифрованные метаданные не передаются серверу и не сохраняются в индексе.
-        Все папки — только загруженные записи, не весь облачный аккаунт.
+        Все папки — только загруженные записи. Расширенная проверка запускается
+        отдельно, ограничена 500 фото + 500 медиа из авторизованных индексов,
+        не обещает поиск по всему аккаунту и не сохраняет приватный индекс.
         При сортировке по размеру файлы с неизвестным размером идут последними.</p>
+      <p v-if="privateExpansionStatus||privateExpansionBusy" class="muted"
+        data-testid="browser-expanded-search-status" role="status">
+        {{ privateExpansionBusy
+          ?'Получаем только непрозрачные ID. Названия файлов и запрос серверу не передаются.'
+          :privateExpansionStatus }}
+      </p>
       <p v-if="search.trim()" data-testid="browser-private-search-status"
         role="status" class="muted">
         <template v-if="normalizePrivateSearch(search).length<2">
           Для поиска по приватным полям введите хотя бы 2 символа; поиск по ID уже доступен.
         </template>
         <template v-else-if="privateSearchBusy">
-          Идёт проверка зашифрованных метаданных загруженных файлов…
+          Идёт проверка зашифрованных метаданных на устройстве…
+          <span v-if="privateSearchExpanded">
+            Обработано {{ privateSearchProgress }}
+            из {{ Math.min(searchScope.length,1000) }} выбранных файлов.
+          </span>
         </template>
         <template v-else-if="privateSearchError">{{ privateSearchError }}</template>
         <template v-else-if="privateSearchResult?.query===normalizePrivateSearch(search)">
@@ -1357,7 +1379,8 @@ onUnmounted(()=>{
           <span v-if="privateSearchResult.failed||privateSearchResult.skipped||privateSearchUnscanned">
             Результат неполный: {{ privateSearchResult.failed }} ошибок,
             {{ privateSearchResult.skipped }} недоступны или истекли,
-            {{ privateSearchUnscanned }} за пределом проверки (200 за поиск).
+            {{ privateSearchUnscanned }} за пределом проверки
+            ({{ privateSearchExpanded?'1000':'200' }} за поиск).
           </span>
           <span v-else>Все загруженные файлы проверены.</span>
         </template>
