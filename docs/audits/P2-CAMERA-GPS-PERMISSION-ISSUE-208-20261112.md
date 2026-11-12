@@ -20,6 +20,12 @@
 3. Negative fixture: stale position returned with a 181-second-old timestamp (Chromium's `setGeolocation` cannot set arbitrary timestamp). Existing real capture pipeline must reject `capture.invalid_or_stale_gps`, produce zero encrypted files.
 4. **Security regression / known code-level risk:** grant geo, receive fix, revoke geo while retaining camera, click GPS again (denied). The Camera must remove prior location status **and must not reuse earlier fix** in a new local encrypted photo. `CaptureView.vue` currently clears `gpsError`/sets `gpsLoading` in `obtainGPS()`, but on error sets only `gpsError` and does not explicitly reset `gps.value`. The test deliberately preserves both negative assertions; if fail, treat as real product vulnerability and **QA HOLD**. No production camera changes permitted by #208. Request separate authorized product correction, keep the failed evidence.
 
+## CI evidence so far
+
+- First exact-head `d78f314d`, [real PG18/Garage+Chromium run 43204580615](https://github.com/1troitsky/photobunker-v3/actions/runs/43204580615): **63/64 PASS**. The explicit real GPS, signed required-policy denial/recovery and 181s stale-fix tests all PASS. The revoked-permission scenario failed at a `getByRole('alert')` expectation after `context.grantPermissions(['camera'])`. That alone does **not** prove a stale GPS was persisted (error could be absent due to browser permission fixture semantics).
+- Revised on `cb191ed0`: first require `navigator.permissions.query({name:'geolocation'}).state==='denied'`, then deliberately test no old GPS status; **continue** to take a new real encrypted photo and decrypt its metadata to assert no stale `gps`. No production changes or relaxed privacy assertion; the browser alert label is no longer treated as the sole evidence.
+- **Current status: QA HOLD / exact-head Chrome rerun required.** Do not infer a product defect solely from the previous missing alert. A failure after verified permission revocation plus decrypted stale GPS would establish the real security bug.
+
 ## Gates & limitations
 
 - Required: exact-head PHP8.4/8.5, strict TS/build/Vitest, security and UX lane guard, real PostgreSQL18+Garage and full Chromium incl 4 new scenarios. No skip, fake consent, timeout relaxation, CI allowlist changes or privacy bypass.
