@@ -27,3 +27,7 @@ Both new migrations share numeric prefix `2026_11_12_000007` but use distinct fi
 ## Result
 
 Candidate source files: **22/22 identical blobs** verified. Exact combined CI not yet accepted at document creation. If integration fails, diagnose and patch only the verified integration branch after preserving first failure evidence, without modifying source PRs or weakening tests. Source issues remain in review, Draft PRs remain open, and `main` stays unchanged.
+
+## CI trigger / PR base configuration
+
+The integration PR targets `integration/pb3-264-pre-main-verified` rather than the intermediate `p4/branding-240-web-config` branch. This is deliberately required because the full Laravel/PG18/Garage workflows only trigger for pull requests whose target matches `integration/**` (or the listed P0–P2/main branches). The HEAD still inherits the exact verified brand branch; retargeting never rewrites or duplicates its parent. This report update generates a fresh exact-HEAD pull request run with the full four workflow gates. Previous UX/security-only run when the base was `p4/**` is not a sufficient acceptance test.
