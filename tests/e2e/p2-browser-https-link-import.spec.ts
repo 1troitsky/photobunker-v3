@@ -140,7 +140,21 @@ test('P2 Browser: rejects private/HTTP address locally and never contacts the so
     await expect(page.getByTestId('media-import-https-submit'))
       .toBeEnabled({timeout:15000})
     await page.getByTestId('media-import-https-submit').click()
-    await expect(page.locator('.media-import-p1').getByRole('alert'))
+    const panel=page.locator('.media-import-p1')
+    await expect(panel.getByRole('alert'))
+      .toContainText('media.link_private_host',{timeout:15000})
+    // A concurrent, genuine authenticated catalog refresh must NEVER
+    // clear a user-action rejection (the old refresh() did exactly that).
+    const catalogGet=page.waitForResponse(response=>
+      response.request().method()==='GET'
+      &&new URL(response.url()).pathname==='/media/v1'
+      &&response.status()===200,
+    )
+    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
+    const catalogResponse=await catalogGet
+    await catalogResponse.finished()
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>resolve(null))))
+    await expect(panel.getByRole('alert'))
       .toContainText('media.link_private_host',{timeout:15000})
     expect(seen).toEqual([])
     const local=await page.evaluate(async()=>{

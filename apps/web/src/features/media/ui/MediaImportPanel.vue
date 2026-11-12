@@ -71,6 +71,8 @@ async function obtainImportGps():Promise<void>{
 }
 const notice=ref('')
 const error=ref('')
+// Catalog refreshes must never clear an unrelated user-action rejection.
+const catalogError=ref('')
 let detach:()=>void=()=>{}
 function clearPreview():void{
   if(selectedUrl.value)URL.revokeObjectURL(selectedUrl.value)
@@ -83,7 +85,7 @@ async function refresh():Promise<void>{
   const token=++catalogEpoch
   const session=activeSession.value
   pagingBusy.value=false
-  if(!session){local.value=[];cloud.value=[];cursor.value=null;return}
+  if(!session){local.value=[];cloud.value=[];cursor.value=null;catalogError.value='';return}
   try{
     const own=await listLocalMedia()
     if(activeSession.value!==session||token!==catalogEpoch)return
@@ -95,17 +97,17 @@ async function refresh():Promise<void>{
         const checked=appendAuthenticatedCatalogPage(
           [],response,null,(item:CloudMedia)=>item.mediaId)
         cloud.value=checked.items;cursor.value=checked.nextCursor
-        error.value=''
+        catalogError.value=''
       }catch(e){
         // Never replace earlier trusted entries/cursor with a failed or
         // malformed server page, even when the account stays unchanged.
         if(activeSession.value===session&&token===catalogEpoch)
-          error.value=explanation(e)
+          catalogError.value=explanation(e)
       }
     }else{cloud.value=[];cursor.value=null}
   }catch(e){
     if(activeSession.value===session&&token===catalogEpoch)
-      error.value=explanation(e)
+      catalogError.value=explanation(e)
   }
 }
 async function importFiles(
@@ -232,7 +234,7 @@ async function more():Promise<void>{
   if(!after||!session?.online||busy.value||pagingBusy.value)return
   const token=++catalogEpoch
   pagingBusy.value=true
-  error.value=''
+  catalogError.value=''
   try{
     const response=await listCloudMedia(after)
     if(activeSession.value!==session||token!==catalogEpoch)return
@@ -243,7 +245,7 @@ async function more():Promise<void>{
     cloud.value=checked.items;cursor.value=checked.nextCursor
   }catch(e){
     if(activeSession.value===session&&token===catalogEpoch)
-      error.value=explanation(e)
+      catalogError.value=explanation(e)
   }finally{
     if(token===catalogEpoch)pagingBusy.value=false
   }
@@ -259,6 +261,7 @@ watch(activeSession,(next,previous)=>{
     ||next?.deviceId!==previous?.deviceId
   if(switched){
     remoteLink.value='';remoteDownloaded.value=0
+    error.value='';catalogError.value=''
     targetFolder.value=props.defaultFolderId??''
     gpsRequest++;gpsLoading.value=false
     privateGps.value=null;gpsError.value=''
@@ -391,7 +394,7 @@ onUnmounted(()=>{
       <button type="button" @click="clearPreview">Закрыть</button>
     </div>
     <p v-if="notice" role="status">{{ notice }}</p>
-    <p v-if="error" role="alert" class="error-text">{{ error }}</p>
+    <p v-if="error||catalogError" role="alert" class="error-text">{{ error||catalogError }}</p>
   </section>
 </template>
 
