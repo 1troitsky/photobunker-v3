@@ -9,7 +9,7 @@ export type FaqEntry = { id: string; group: string; question: string; answer: st
 export type HelpSection = { id: Exclude<HelpPage, 'home'>; title: string; description: string }
 
 const ruFaq: FaqEntry[] = [
-  {id:'purpose',group:'Начало работы',question:'Для чего нужен PhotoBunker?',answer:'Инструмент для заданий, команд, фото, видео и аудио с контролем доступа и сроков хранения. Это не обычный облачный диск.'},
+  {id:'purpose',group:'Начало работы',question:'Для чего нужно приложение?',answer:'Инструмент для заданий, команд, фото, видео и аудио с контролем доступа и сроков хранения. Это не обычный облачный диск.'},
   {id:'assignments',group:'Начало работы',question:'Как работают задания и команды?',answer:'В задании задаются инструкции, участники, требования к материалам и сроки. Право на просмотр каждого материала зависит от разрешений.'},
   {id:'offline',group:'Начало работы',question:'Можно ли работать без интернета?',answer:'Целевая модель Local-First: данные сначала защищённо сохраняются локально, затем синхронизируются. До подтверждения загрузки единственная копия может оставаться на устройстве.'},
   {id:'zero-knowledge',group:'Конфиденциальность',question:'Что означает Zero-Knowledge?',answer:'Это архитектурная цель: шифрование на устройстве до передачи на сервер. Заявление о полной безопасности требует независимой проверки реализации.'},
@@ -26,7 +26,7 @@ const ruFaq: FaqEntry[] = [
   {id:'s3',group:'Хранение и тарифы',question:'Можно ли подключить собственное S3?',answer:'Дополнительные хранилища рассматриваются отдельно; наличие этой функции не гарантируется существующим тарифом.'},
 ]
 const enFaq: FaqEntry[] = [
-  {id:'purpose',group:'Getting started',question:'What is PhotoBunker?',answer:'An assignment and team workflow for photos, videos, and audio with controlled access and retention, not a conventional cloud drive.'},
+  {id:'purpose',group:'Getting started',question:'What is this app?',answer:'An assignment and team workflow for photos, videos, and audio with controlled access and retention, not a conventional cloud drive.'},
   {id:'assignments',group:'Getting started',question:'How do assignments and teams work?',answer:'Assignments define instructions, participants, file requirements, and retention. Access to each item depends on permissions.'},
   {id:'offline',group:'Getting started',question:'Can I work offline?',answer:'The Local-First goal is to store encrypted local data first, then sync. Until acknowledged, the only copy may remain on your device.'},
   {id:'zero-knowledge',group:'Privacy',question:'What does Zero-Knowledge mean?',answer:'Client-side encryption before uploading is an architectural goal. Independent implementation audits are needed before making security guarantees.'},
