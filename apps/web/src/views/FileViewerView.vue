@@ -1482,6 +1482,9 @@ watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
   clearCrop()
 })
 watch([trimStart,trimEnd],()=>{clearAudioClip()})
+watch([videoTrimStart,videoTrimEnd],()=>{
+  if(videoPreviewActive.value)stopVideoPreview()
+})
 // The shared Shell exposes only a callable action. All media content,
 // filenames and permissions remain inside FileViewerView. The callback
 // is cleared on lock, route change and unmount.
@@ -1679,6 +1682,8 @@ onUnmounted(()=>{
                   data-testid="file-viewer-image">
                 <video v-else-if="preview.type==='video'" :key="fileUrl"
                   ref="videoElement" :src="fileUrl" controls playsinline preload="metadata"
+                  @loadedmetadata="onVideoMetadata" @durationchange="onVideoMetadata"
+                  @timeupdate="onVideoTimeUpdate"
                   data-testid="file-viewer-video"/>
                 <audio v-else :key="fileUrl" ref="audioElement" :src="fileUrl"
                   controls preload="metadata" @loadedmetadata="onAudioMetadata"
@@ -2168,6 +2173,58 @@ onUnmounted(()=>{
           {{ audioClipNotice }}</p>
         <p v-if="audioClipError" role="alert" data-testid="file-viewer-wav-error">
           {{ audioClipError }}</p>
+      </section>
+      <section v-if="editorMode&&preview?.type==='video'&&fileUrl"
+        class="file-editor-video-trim" data-testid="file-editor-video-trim">
+        <h2>Обрезка видео</h2>
+        <p class="muted">Выберите начало и конец, затем просмотрите диапазон.
+          Границы сохраняются только в черновике: новый MP4 не создаётся.</p>
+        <template v-if="videoDuration>0">
+          <div class="file-editor-video-trim-controls">
+            <label>Начало · {{ videoTrimStart.toFixed(1) }} с
+              <input v-model.number="videoTrimStart" type="range"
+                min="0" :max="videoDuration" step="0.05"
+                data-testid="file-editor-video-start">
+            </label>
+            <label>Конец · {{ videoTrimEnd.toFixed(1) }} с
+              <input v-model.number="videoTrimEnd" type="range"
+                min="0" :max="videoDuration" step="0.05"
+                data-testid="file-editor-video-end">
+            </label>
+          </div>
+          <p class="muted" data-testid="file-editor-video-selected">
+            Выбрано: {{ videoSelectedLength.toFixed(1) }} с из
+            {{ videoDuration.toFixed(1) }} с
+          </p>
+          <div class="file-editor-video-trim-actions">
+            <button type="button" data-testid="file-editor-video-preview"
+              :disabled="!videoRangeValid||videoPreviewActive"
+              @click="previewVideoSelection">Просмотреть фрагмент</button>
+            <button type="button" data-testid="file-editor-video-apply"
+              :disabled="!videoRangeValid"
+              @click="applyVideoSelection">Применить обрезку</button>
+            <button type="button" data-testid="file-editor-video-undo"
+              :disabled="videoHistoryIndex===0"
+              @click="travelVideoSelection(-1)">Undo</button>
+            <button type="button" data-testid="file-editor-video-redo"
+              :disabled="videoHistoryIndex>=videoTrimHistory.length-1"
+              @click="travelVideoSelection(1)">Redo</button>
+            <button type="button" data-testid="file-editor-video-reset"
+              @click="resetVideoSelection">Отменить изменения</button>
+          </div>
+          <p v-if="videoApplied" class="muted"
+            data-testid="file-editor-video-applied">
+            Применён локальный диапазон
+            {{ videoApplied.start.toFixed(1) }}–{{ videoApplied.end.toFixed(1) }} с.
+            Исходный файл не изменён.
+          </p>
+        </template>
+        <p v-else class="muted" data-testid="file-editor-video-no-duration">
+          Длительность исходного видео не определена браузером.
+          Обрезка недоступна до получения корректных медиаметаданных.
+        </p>
+        <p v-if="videoTrimNotice" role="status"
+          data-testid="file-editor-video-status">{{ videoTrimNotice }}</p>
       </section>
       <section v-if="preview?.type==='video'&&fileUrl"
         class="file-viewer-still" data-testid="file-viewer-still">
