@@ -100,6 +100,23 @@ test('P2 V-50: five real shape tools stay on one mobile row, fill and stroke fla
     await page.getByTestId('file-viewer-photo-redo').click()
     await expect(page.getByTestId('file-viewer-shape-height')).toHaveValue('50')
 
+    // A browser pointercancel (touch interruption/app switch) must restore
+    // the initial shape position, without recording a partial drag in Undo.
+    const shape=page.locator('.file-viewer-photo-shape-layer').first()
+    await shape.scrollIntoViewIfNeeded()
+    const bounds=await shape.boundingBox()
+    if(!bounds)throw Error('shape_overlay_absent')
+    const initialX=await page.getByTestId('file-viewer-shape-x').inputValue()
+    await page.mouse.move(bounds.x+bounds.width/2,bounds.y+bounds.height/2)
+    await page.mouse.down()
+    await page.mouse.move(bounds.x+bounds.width/2+25,
+      bounds.y+bounds.height/2+12,{steps:7})
+    await expect.poll(()=>page.getByTestId('file-viewer-shape-x').inputValue())
+      .not.toBe(initialX)
+    await shape.dispatchEvent('pointercancel',{pointerId:1,bubbles:true})
+    await page.mouse.up()
+    await expect(page.getByTestId('file-viewer-shape-x')).toHaveValue(initialX)
+
     await expect(page.getByTestId('editor-shell-save')).toBeEnabled()
     await page.getByTestId('editor-shell-save').click()
     await expect(page).toHaveURL(
