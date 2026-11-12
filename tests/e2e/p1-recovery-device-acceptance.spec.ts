@@ -173,17 +173,29 @@ test('P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and of
       await bc.setOffline(false)
       await B.reload()
       await expect(B.getByRole('button',{name:'Создать ключ'})).toBeVisible()
+      // Switch account in the *same* B profile AFTER an offline logout.
+      // The old trusted device may remain encrypted in IndexedDB, but it
+      // cannot silently grant the new account access to the old E2EE file.
+      const switched=await register(B)
+      expect(switched.accountId).not.toBe(a.accountId)
+      const switchedDenied=await B.evaluate(async id=>{
+        const m=await import('/src/features/media/application/media-outbox.ts')
+        try{await m.readCloudMediaMetadata(id);return false}
+        catch(e){return e instanceof Error&&e.message==='api.http_404'}
+      },mediaId)
+      expect(switchedDenied).toBe(true)
       // Trust status and ciphertext bytes are derived from real API and E2EE.
       console.log('PB3_QA_199_RECOVERY '+JSON.stringify({
         sameAccount:true,independentDevice:true,serverDevices:recovery.devices.length,
         mediaBytes:fromB.size,serverAck:true,offlineOwnerReadback:true,
         reloadTrusted:true,offlineLogoutFenced:true,recoveredDeviceCloudOnly:true,
-        foreignAccountMediaDenied:true,
+        foreignAccountMediaDenied:true,offlineAccountSwitchDenied:true,
       }))
       await test.info().attach('p1-recovery-verified-summary.json',{
         body:JSON.stringify({sameAccount:true,twoDevices:true,assetBytes:fromB.size,
           offlineOwnerReadback:true,reloadTrusted:true,offlineLogoutFenced:true,
-          recoveredDeviceCloudOnly:true,foreignAccountMediaDenied:true},null,2),contentType:'application/json',
+          recoveredDeviceCloudOnly:true,foreignAccountMediaDenied:true,
+          offlineAccountSwitchDenied:true},null,2),contentType:'application/json',
       })
     }finally{
       key=null
