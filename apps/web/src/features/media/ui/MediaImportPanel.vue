@@ -303,7 +303,7 @@ onUnmounted(()=>{
       @dragover.prevent @drop.prevent="dropFiles">
       <label for="media-import-destination">Папка назначения</label>
       <select id="media-import-destination" v-model="targetFolder"
-        data-testid="media-import-destination" :disabled="busy">
+        data-testid="media-import-destination" :disabled="busy||remoteBusy">
         <option value="">Мои файлы (корень)</option>
         <option v-for="folder in props.destinationFolders" :key="folder.id"
           :value="folder.id">{{ folder.label }}</option>
@@ -315,15 +315,44 @@ onUnmounted(()=>{
           Выбрать файлы
           <input data-testid="media-import-file" type="file" multiple
             accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,audio/mp4,audio/mpeg,audio/webm,audio/wav,audio/x-wav,audio/aac,audio/ogg"
-            :disabled="busy" @change="chooseFile">
+            :disabled="busy||remoteBusy" @change="chooseFile">
         </label>
-        <button type="button" :disabled="busy" @click="sync">Отправить медиа</button>
-        <button type="button" :disabled="busy" @click="refresh">Обновить</button>
+        <button type="button" :disabled="busy||remoteBusy" @click="sync">Отправить медиа</button>
+        <button type="button" :disabled="busy||remoteBusy" @click="refresh">Обновить</button>
       </div>
       <p class="muted">За один выбор: до 20 файлов, суммарно до 256 МиБ,
         максимум 128 МиБ на файл. Успешные файлы сохраняются отдельно,
         даже если следующий файл повреждён.</p>
     </div>
+    <form class="foundation-card" data-testid="media-import-https-form"
+      @submit.prevent="importHttpsLink">
+      <h3>Импорт по прямой HTTPS-ссылке</h3>
+      <label for="media-import-https-url">Прямая ссылка на фото, видео или аудиофайл</label>
+      <input id="media-import-https-url" v-model="remoteLink"
+        data-testid="media-import-https-url" type="url"
+        inputmode="url" autocomplete="off" spellcheck="false"
+        maxlength="4096" placeholder="https://files.example.org/audio.wav"
+        :disabled="busy||remoteBusy">
+      <p class="muted">Ссылка открывается только вашим браузером.
+        Внешний сайт видит ваш IP-адрес и факт запроса. Передача cookies,
+        Referer, переходы на другие адреса и загрузка через наш сервер запрещены.
+        Сайт должен разрешать CORS. До 32 МиБ за ссылку;
+        скачанный файл затем шифруется локально и сохраняется в выбранной папке.</p>
+      <div class="action-row">
+        <button type="submit" data-testid="media-import-https-submit"
+          :disabled="busy||remoteBusy||!remoteLink||!activeSession?.online">
+          Скачать и зашифровать
+        </button>
+        <button v-if="remoteStage==='downloading'" type="button"
+          data-testid="media-import-https-cancel"
+          @click="cancelHttpsImport">Отменить скачивание</button>
+      </div>
+      <p v-if="remoteBusy" role="status" data-testid="media-import-https-progress">
+        {{ remoteStage==='encrypting'?'Скачано. Шифрование на устройстве…'
+          :'Получено '+Math.round(remoteDownloaded/1024)+' КиБ из '
+            +Math.floor(MAX_HTTPS_IMPORT_BYTES/1024)+' КиБ доступного лимита.' }}
+      </p>
+    </form>
     <p class="muted">Предел одного файла на этом этапе: 128 МиБ. Офлайн-файлы остаются в зашифрованной очереди при сбое сети или исчерпании квоты Free.</p>
     <h3>Зашифровано на этом устройстве</h3>
     <p v-if="!local.length" class="muted">Нет импортированных файлов.</p>
