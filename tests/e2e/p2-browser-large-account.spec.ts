@@ -157,6 +157,8 @@ test('P2 Browser 10k+ metadata: AES-GCM fixtures, 201 cursor pages, bounded sear
     expect(result.noPlaintextIndex).toBe(true)
     expect(result.boundedRows).toBe(500)
     expect(result.aesGcmCipherBytes).toBeGreaterThan(result.total*32)
+    // Metrics are counts and elapsed time only: emit safe CI log evidence.
+    console.log('PB3_QA_194_SYNTHETIC_10K '+JSON.stringify(result))
     await test.info().attach('10k-synthetic-index-metrics.json',{
       body:JSON.stringify(result,null,2),contentType:'application/json'})
   }finally{await context.close()}
@@ -260,6 +262,10 @@ test('P2 Browser: 10k index cannot grant access; real E2EE deep link page 2 is s
     expect(fakeDenied).toBe(true)
     expect(requests.join('\n')).not.toContain(secretName)
     expect(requests.join('\n')).not.toContain('SYNTHETIC-PRIVATE')
+    console.log('PB3_QA_194_E2EE '+JSON.stringify({
+      indexPage1:50,indexPage2:1,authenticMedia:true,
+      decryptedBytes:plain.size,fakeIdDenied:true,requests:requests.length,
+    }))
     await test.info().attach('real-e2ee-two-page-evidence.json',{
       body:JSON.stringify({actualCiphertextAccount:true,realMediaIdVerified:true,
         serverReceiptVerified:true,viewerPosition:'51 / 51',
