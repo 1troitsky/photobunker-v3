@@ -160,6 +160,23 @@ final class QuotaAdmissionTest extends TestCase
         $this->expectStatus(422,fn()=>$this->quota()->admit($a,0));
     }
 
+    public function test_legacy_free_technical_file_cap_can_be_stricter_than_entitlement():void
+    {
+        $free=$this->account();
+        config()->set('photo_sync.bootstrap_free_file_cap',1);
+        $this->assertSame(1,$this->quota()->admit($free,256)['fileLimit']);
+        $this->photo($free);
+        $this->expectStatus(413,fn()=>$this->quota()->admit($free,256));
+        // Product file count from verified active Go is 250, not the Free
+        // technical 1-file bootstrap limit. Paid BYTE allowance is still
+        // blocked by the existing 1e9-byte technical guard.
+        $paid=$this->account();
+        $this->paid($paid,'go');
+        $this->photo($paid);
+        $this->assertSame(250,$this->quota()->admit($paid,256)['fileLimit']);
+        $this->assertSame(1,$this->quota()->admit($paid,256)['filesUsed']);
+    }
+
     public function test_active_paid_snapshots_use_all_five_file_count_limits_without_byte_invention():void
     {
         $expected=['free'=>50,'go'=>250,'pro'=>2000,
