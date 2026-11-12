@@ -57,10 +57,7 @@ describe('P2 V-37 client-only HTTPS file import (no proxy / credential leak)',()
     })
   })
   it('fails closed on HTML response, non-200, redirects and mismatched actual URL',async()=>{
-    const cases=[
-      content(2048,'text/html'),
-      Object.assign(content(),{status:206}),
-    ]
+    const html=content(2048,'text/html')
     const partial=new Response(new Uint8Array(1024).buffer,{status:206,
       headers:{'content-type':'audio/wav'}})
     Object.defineProperty(partial,'url',{value:source})
@@ -68,7 +65,7 @@ describe('P2 V-37 client-only HTTPS file import (no proxy / credential leak)',()
     Object.defineProperty(moved,'redirected',{value:true})
     const different=content()
     Object.defineProperty(different,'url',{value:'https://other.example.org/file'})
-    for(const response of [cases[0]!,partial,moved,different])
+    for(const response of [html,partial,moved,different])
       await expect(downloadHttpsMedia(source,new AbortController().signal,
         ()=>true,undefined,fetcher(response).fetch)).rejects.toThrow()
   })
