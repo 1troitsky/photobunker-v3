@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { displayedDock, dockDefinitions } from './ui/fieldwork/dock-preferences'
 import type { DockDefinition } from './ui/fieldwork/dock-preferences'
 import { brand } from './config/brand'
 import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
 const route = useRoute()
+const router = useRouter()
 function isActive(to:string):boolean {
   return route.path===to
     ||to==='/assignments'&&route.path.startsWith('/assignments/')
@@ -71,6 +72,26 @@ const dock = computed(() => displayedDock.value
           data-testid="editor-shell-save"
           :disabled="!viewerShellActions?.editor?.canSave"
           @click="viewerShellActions?.editor?.save()">Сохранить</button>
+      </div>
+      <div class="shell-header-actions" v-else-if="route.path.startsWith('/settings')"
+        data-testid="settings-shell-header-actions">
+        <button v-if="route.path==='/settings/search'" type="button"
+          aria-label="Закрыть поиск" title="Вернуться в настройки"
+          @click="router.push('/settings')">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
+            stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+        <button v-else type="button"
+          aria-label="Поиск по настройкам" title="Поиск по настройкам"
+          @click="router.push('/settings/search')">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
+            stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="10.8" cy="10.8" r="7.2"/>
+            <path d="m16 16 5 5"/>
+          </svg>
+        </button>
       </div>
       <div class="shell-header-actions" v-else-if="route.path==='/contacts'">
         <button type="button" disabled aria-label="Blacklist — пока недоступен"
