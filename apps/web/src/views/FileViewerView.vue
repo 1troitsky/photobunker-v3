@@ -173,6 +173,19 @@ type DragMark={
 let draggingMark:DragMark|null=null
 let cropEpoch=0
 const videoElement=ref<HTMLVideoElement|null>(null)
+type VideoTrimRange={start:number;end:number}
+const videoDuration=ref(0)
+const videoTrimStart=ref(0)
+const videoTrimEnd=ref(0)
+const videoApplied=ref<VideoTrimRange|null>(null)
+const videoTrimHistory=ref<VideoTrimRange[]>([])
+const videoHistoryIndex=ref(0)
+const videoPreviewActive=ref(false)
+const videoTrimNotice=ref('')
+const videoSelectedLength=computed(()=>Math.max(0,videoTrimEnd.value-videoTrimStart.value))
+const videoRangeValid=computed(()=>videoDuration.value>0
+  &&videoSelectedLength.value>=0.1
+  &&videoTrimStart.value>=0&&videoTrimEnd.value<=videoDuration.value+0.01)
 const audioElement=ref<HTMLAudioElement|null>(null)
 const audioDuration=ref(0)
 const trimStart=ref(0)
@@ -694,6 +707,98 @@ function onAudioMetadata():void{
   trimStart.value=0
   trimEnd.value=Math.min(duration,60)
 }
+// Video Editor 1.1: in-memory edit decision list only. This never creates
+// MP4 ciphertext, replaces the source asset or asserts a server ACK.
+function onVideoMetadata():void{
+  const video=videoElement.value
+  if(!video||preview.value?.type!=='video'||!fileUrl.value)return
+  let duration=video.duration
+  if(!Number.isFinite(duration)||duration<=0){
+    const range=video.seekable
+    duration=range.length?range.end(range.length-1):0
+  }
+  if(!Number.isFinite(duration)||duration<=0)return
+  if(!videoDuration.value){
+    videoDuration.value=duration
+    videoTrimStart.value=0
+    videoTrimEnd.value=duration
+    videoTrimHistory.value=[{start:0,end:duration}]
+    videoHistoryIndex.value=0
+  }else{
+    // Duration changes from the same source may occur after progressive
+    // decoding: preserve user-selected bounds instead of wiping the draft.
+    videoDuration.value=duration
+    videoTrimEnd.value=Math.min(videoTrimEnd.value,duration)
+  }
+}
+function stopVideoPreview():void{
+  videoPreviewActive.value=false
+  videoElement.value?.pause()
+}
+function onVideoTimeUpdate():void{
+  const video=videoElement.value
+  if(!videoPreviewActive.value||!video)return
+  if(video.currentTime+0.035>=videoTrimEnd.value){
+    stopVideoPreview()
+    videoTrimNotice.value='Предпросмотр фрагмента завершён. Оригинал не изменён.'
+  }
+}
+async function previewVideoSelection():Promise<void>{
+  const video=videoElement.value,origin=fileUrl.value
+  if(!video||!videoRangeValid.value||!origin||video.currentSrc!==origin
+    ||preview.value?.type!=='video')return
+  stopVideoPreview()
+  try{
+    video.currentTime=videoTrimStart.value
+    videoPreviewActive.value=true
+    await video.play()
+  }catch{
+    videoPreviewActive.value=false
+    videoTrimNotice.value='Воспроизведение выбранного диапазона недоступно в этом браузере.'
+  }
+}
+function applyVideoSelection():void{
+  if(!videoRangeValid.value||preview.value?.type!=='video')return
+  stopVideoPreview()
+  const range={start:videoTrimStart.value,end:videoTrimEnd.value}
+  const history=videoTrimHistory.value.slice(0,videoHistoryIndex.value+1)
+  history.push(range)
+  videoTrimHistory.value=history.slice(-50)
+  videoHistoryIndex.value=videoTrimHistory.value.length-1
+  videoApplied.value={...range}
+  videoTrimNotice.value='Границы применены только к локальному просмотру. MP4 не создан и оригинал не изменён.'
+}
+function travelVideoSelection(direction:-1|1):void{
+  const next=videoHistoryIndex.value+direction
+  if(next<0||next>=videoTrimHistory.value.length)return
+  stopVideoPreview()
+  videoHistoryIndex.value=next
+  const range=videoTrimHistory.value[next]!
+  videoTrimStart.value=range.start
+  videoTrimEnd.value=range.end
+  videoApplied.value=next===0?null:{...range}
+  videoTrimNotice.value='Границы восстановлены из локальной истории. MP4 не создан.'
+}
+function resetVideoSelection():void{
+  stopVideoPreview()
+  if(videoDuration.value>0){
+    videoTrimStart.value=0
+    videoTrimEnd.value=videoDuration.value
+    videoTrimHistory.value=[{start:0,end:videoDuration.value}]
+    videoHistoryIndex.value=0
+  }
+  videoApplied.value=null
+  videoTrimNotice.value='Выбрано исходное видео без обрезки. Оригинал не изменён.'
+}
+function clearVideoTrim():void{
+  stopVideoPreview()
+  videoDuration.value=0
+  videoTrimStart.value=0;videoTrimEnd.value=0
+  videoApplied.value=null
+  videoTrimHistory.value=[]
+  videoHistoryIndex.value=0
+  videoTrimNotice.value=''
+}
 const stillFileName=computed(()=>{
   if(!preview.value||!still.value)return ''
   return stillName(preview.value.name,still.value.timeMs)
@@ -717,6 +822,7 @@ function clearBlob():void{
   cropWidth.value=100;cropHeight.value=100;cropTurns.value=0
   photoBrightness.value=100;photoContrast.value=100;photoSaturation.value=100
   clearStill()
+  clearVideoTrim()
   clearAudioClip()
   audioDuration.value=0
   trimStart.value=0
@@ -1307,7 +1413,10 @@ const editorUnsaved=computed(()=>{
       !!audioClip.value||audioClipBusy.value||trimStart.value!==0
       ||(audioDuration.value>0
         &&Math.abs(trimEnd.value-Math.min(audioDuration.value,60))>0.051))
-  return !stillSavedId.value&&(!!still.value||stillBusy.value)
+  return (!stillSavedId.value&&(!!still.value||stillBusy.value))
+    ||!!videoApplied.value
+    ||(videoDuration.value>0&&(videoTrimStart.value>0.001
+      ||Math.abs(videoTrimEnd.value-videoDuration.value)>0.051))
 })
 function resetEditorDraft():void{
   clearTextMarks()
@@ -1319,6 +1428,7 @@ function resetEditorDraft():void{
   trimStart.value=0
   trimEnd.value=Math.min(audioDuration.value,60)
   clearStill()
+  clearVideoTrim()
 }
 function editorViewerPath():string|null{
   const target=current.value
