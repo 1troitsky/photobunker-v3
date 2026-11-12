@@ -1,3 +1,4 @@
+import {canExportPhotoCanvas} from './photo-export-budget'
 export type StrokeTool='brush'|'pencil'|'eraser'
 export type StrokePoint=Readonly<{x:number;y:number}>
 export type PhotoStroke=Readonly<{
@@ -49,9 +50,7 @@ export function drawPhotoStrokes(
   strokes:readonly PhotoStroke[],
 ):void{
   validatePhotoStrokes(strokes)
-  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)
-    ||width<1||height<1||width>4096||height>4096
-    ||width*height>16_777_216)
+  if(!canExportPhotoCanvas(width,height))
     throw Error('viewer.stroke_invalid_canvas')
   for(const stroke of strokes){
     const points=stroke.points
