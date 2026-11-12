@@ -245,6 +245,14 @@ final class StorageResilienceTest extends TestCase
         $f=$this->fixture('media','pending');
         $ledger=app(StorageRetryLedger::class);
         $ledger->remember('media',$f['asset']);
-        $this->assertSame(0,Artisan::call('pb3:storage-reconcile',['--batch'=>'0']));
+        $this->assertSame(1,Artisan::call('pb3:storage-reconcile',['--batch'=>'0']));
+        $this->assertSame(0,Artisan::call('pb3:storage-reconcile',['--batch'=>'1']));
+        $this->assertDatabaseHas('media_chunks_v1',['id'=>$f['asset'],'state'=>'pending']);
+        $this->assertDatabaseHas('storage_retry_tickets',[
+            'asset_id'=>$f['asset'],'disposition'=>'await_client',
+        ]);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$f['parent'],'state'=>'pending','receipt'=>null,
+        ]);
     }
 }
