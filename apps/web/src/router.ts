@@ -3,6 +3,7 @@ import AssignmentsView from './views/AssignmentsView.vue'
 import AssignmentEditorView from './views/AssignmentEditorView.vue'
 import AccountView from './views/AccountView.vue'
 import AppearanceView from './views/AppearanceView.vue'
+import SettingsSearchView from './views/SettingsSearchView.vue'
 import CaptureView from './views/CaptureView.vue'
 import PhotoBrowserView from './views/PhotoBrowserView.vue'
 import FileViewerView from './views/FileViewerView.vue'
@@ -28,6 +29,8 @@ export const router = createRouter({
     { path: '/settings', component: AccountView, meta: { title: 'Настройки' } },
     { path: '/settings/appearance', component: AppearanceView,
       meta: { title: 'Оформление' } },
+    { path: '/settings/search', component: SettingsSearchView,
+      meta: { title: 'Поиск по настройкам' } },
     { path: '/:pathMatch(.*)*', redirect: '/assignments' },
   ],
 })

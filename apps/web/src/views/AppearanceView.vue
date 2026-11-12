@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import {
   defaultDock, dockChoices, dockDefinitions,
   previewDock, restoreDock, savedDock, saveDock, validateDock,
@@ -8,6 +8,15 @@ import {
 import type { DockId } from '../ui/fieldwork/dock-preferences'
 
 const router = useRouter()
+const route = useRoute()
+const dockSection = ref<HTMLElement | null>(null)
+async function focusRequestedField(): Promise<void> {
+  if (route.query.field !== 'dock') return
+  await nextTick()
+  dockSection.value?.scrollIntoView({block:'start'})
+  dockSection.value?.focus({preventScroll:true})
+}
+watch(() => route.query.field, () => { void focusRequestedField() })
 const draft = ref<DockId[]>([...savedDock.value])
 const notice = ref('')
 const error = ref('')
@@ -76,7 +85,7 @@ function save(): void {
   notice.value='Сохранено на этом устройстве.'
   error.value=''
 }
-onMounted(() => { previewDock(draft.value) })
+onMounted(() => { previewDock(draft.value); void focusRequestedField() })
 onUnmounted(() => { restoreDock() })
 onBeforeRouteLeave(() => {
   if (!dirty.value) return true
@@ -92,7 +101,8 @@ onBeforeRouteLeave(() => {
     </header>
 
     <div class="appearance-body">
-      <section class="appearance-section" aria-labelledby="dock-title">
+      <section id="setting-field-dock" ref="dockSection" tabindex="-1"
+        class="appearance-section" aria-labelledby="dock-title" data-testid="appearance-dock-field">
         <div class="dock-heading">
           <div>
             <h2 id="dock-title">Настройка нижней панели</h2>
@@ -175,6 +185,9 @@ onBeforeRouteLeave(() => {
 .appearance-heading p{color:#a4ada6;font-size:12px;margin:6px 0 0}
 .appearance-body{margin-top:34px;display:grid;gap:22px}
 .appearance-section h2{font-size:15px;font-weight:720;margin:0 0 8px}
+#setting-field-dock{scroll-margin-top:16px}
+#setting-field-dock:focus{outline:none}
+#setting-field-dock:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .dock-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:11px}
 .dock-heading h2{margin:0 0 4px}.dock-heading p{font-size:12px;color:#9da9a0;margin:0;max-width:520px}
 .dock-count{flex-shrink:0;font-size:12px;padding:7px 10px;color:#e9f5ec;background:#304036;border-radius:8px;font-weight:730}
