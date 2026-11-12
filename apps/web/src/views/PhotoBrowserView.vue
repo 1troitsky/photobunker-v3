@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
+import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
 import {RouterLink} from 'vue-router'
+import {
+  captureBrowserReturnContext,takeBrowserReturn,
+} from '../features/browser/application/browser-return-context'
 import SharePanel from '../features/sharing/SharePanel.vue'
 import MediaImportPanel from '../features/media/ui/MediaImportPanel.vue'
 import {activeSession,reauthenticate} from '../features/identity/application/session'
@@ -115,6 +118,8 @@ const mergePreview=computed(()=>mergePlan.value
   ?previewFolderConflict(mergePlan.value,mergeChoices.value):null)
 const mergeBackups=ref<Omit<FolderConflictBackup,'row'>[]>([])
 const selectedFolder=ref<string|null>(null)
+let requestedFolderReturn:string|null|undefined
+let scrollReturnKey:string|null=null
 const createFolderOpen=ref(false)
 const newFolderName=ref('')
 const editingFolderId=ref<string|null>(null)
@@ -747,6 +752,14 @@ async function loadFolders():Promise<void>{
     const next=await loadFolderWorkspace()
     if(session!==activeSession.value||epoch!==folderEpoch)return
     folderWorkspace.value=next
+    // An imported return context is only a location hint. The encrypted
+    // workspace is authoritative: deleted/foreign folders resolve to root.
+    if(requestedFolderReturn!==undefined){
+      const requested=requestedFolderReturn
+      requestedFolderReturn=undefined
+      selectedFolder.value=requested!==null&&Object.hasOwn(next.folders,requested)
+        ?requested:null
+    }
   }catch(e){
     if(session===activeSession.value&&epoch===folderEpoch)
       folderError.value='Не удалось расшифровать локальные папки: '+reason(e)
@@ -1026,6 +1039,20 @@ async function openItem(item:CatalogItem,fromCloud=false):Promise<void>{
     if(identity===activeSession.value)previewBusy.value=false
   }
 }
+function preserveViewerOrigin(item:CatalogItem,event:MouseEvent):void{
+  // A new tab has no shared JS memory; never capture a stale return context
+  // for Cmd/Ctrl/Shift/Alt-click or auxiliary-button navigation.
+  if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return
+  const identity=activeSession.value
+  if(!identity)return
+  captureBrowserReturnContext({
+    accountId:identity.accountId,deviceId:identity.deviceId,
+    fileKey:item.key,folderId:selectedFolder.value,
+    filter:filter.value,sort:sort.value,view:view.value,
+    search:search.value,searchFolderScope:searchFolderScope.value,
+    archiveTab:archiveTab.value,
+  })
+}
 function showReceived(blob:Blob):void{
   revokePreview()
   selectedUrl.value=URL.createObjectURL(blob)
@@ -1045,6 +1072,8 @@ watch(activeSession,(next,previous)=>{
   clearCatalog()
   if(next?.accountId!==previous?.accountId
     ||next?.deviceId!==previous?.deviceId){
+    requestedFolderReturn=undefined
+    scrollReturnKey=null
     editingFolderId.value=null
     createFolderOpen.value=false
     newFolderName.value=''
@@ -1090,6 +1119,15 @@ watch(activeSession,(next,previous)=>{
 })
 watch([selectedFolder,filter,search,searchFolderScope,archiveTab],()=>{selectedKeys.value=[]})
 watch([search,searchScope,activeSession,privateSearchExpanded],schedulePrivateSearch)
+watch([visible,folderReady],async()=>{
+  const key=scrollReturnKey
+  if(!key||!folderReady.value||!visible.value.some(item=>item.key===key))return
+  await nextTick()
+  if(scrollReturnKey!==key)return
+  const item=document.querySelector<HTMLElement>(
+    `[data-testid="browser-row-${key}"]`)
+  if(item){item.scrollIntoView({block:'center'});scrollReturnKey=null}
+})
 watch([search,archiveTab],()=>{
   // Broader authenticated index fetches are explicit per typed query.
   // Changing the question/tab must invalidate in-flight work immediately.
@@ -1099,6 +1137,16 @@ watch([search,archiveTab],()=>{
   privateExpansionStatus.value=''
 })
 onMounted(()=>{
+  const identity=activeSession.value
+  const restored=identity?takeBrowserReturn(identity.accountId,identity.deviceId):null
+  if(restored){
+    filter.value=restored.filter;sort.value=restored.sort;view.value=restored.view
+    search.value=restored.search
+    searchFolderScope.value=restored.searchFolderScope
+    archiveTab.value=restored.archiveTab
+    requestedFolderReturn=restored.folderId
+    scrollReturnKey=restored.fileKey
+  }
   schedulePrivateSearch()
   void loadFolders();void loadMergeBackups();void loadArchivePrefState()
   void refreshArchivePending();void refresh()
@@ -1113,6 +1161,8 @@ onUnmounted(()=>{
   privateSearchExpanded.value=false
   search.value=''
   searchFolderScope.value='current'
+  scrollReturnKey=null
+  requestedFolderReturn=undefined
   archivePrefsBusy.value=false
   mergePlan.value=null;mergeChoices.value={};mergeBackups.value=[]
   archivePending.value=null
@@ -1539,7 +1589,8 @@ onUnmounted(()=>{
               Удаление ожидает подтверждения GC:
               {{ archivedByKey.get(item.key)?.physicalStatus }}</span>
             <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
-              :aria-label="'Полный просмотр файла '+item.id">Просмотр</RouterLink>
+              :aria-label="'Полный просмотр файла '+item.id"
+              @click="preserveViewerOrigin(item,$event)">Просмотр</RouterLink>
             <button v-if="item.local" type="button" :disabled="previewBusy||busy"
               :aria-label="item.source==='photo'?'Открыть':'Открыть файл '+item.id"
               @click="openItem(item)">Открыть</button>
