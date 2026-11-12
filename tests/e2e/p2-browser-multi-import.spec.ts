@@ -30,6 +30,15 @@ test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selecte
     const importPanel=page.locator('.media-import-p1')
     await expect(importPanel.getByText(/Зашифровано на устройстве 2 из 2 файлов/))
       .toBeVisible({timeout:30000})
+    // Folder placement is a distinct AES-GCM IndexedDB transaction after
+    // individual media enqueues. Never assume an emitted Vue event is awaited.
+    await expect.poll(()=>page.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      const folders=await import('/src/features/browser/application/folder-workspace.ts')
+      const rows=await media.listLocalMedia()
+      const workspace=await folders.loadFolderWorkspace()
+      return rows.filter(x=>!!workspace.placements['media:'+x.mediaId]).length
+    }),{timeout:20000}).toBe(2)
     const encrypted=await page.evaluate(async()=>{
       const media=await import('/src/features/media/application/media-outbox.ts')
       const folders=await import('/src/features/browser/application/folder-workspace.ts')
