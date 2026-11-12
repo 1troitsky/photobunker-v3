@@ -1,0 +1,42 @@
+name: PB3 UX lane scope guard
+
+on:
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - 'apps/api/**'
+      - 'docs/ux/**'
+      - 'docs/ux-integration/**'
+      - 'tools/ux-review/**'
+      - 'tests/**'
+      - '.github/workflows/ux-lane-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-lane:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test lane ownership rules
+        run: node --test docs/ux-integration/check-pr-lane.test.mjs
+      - name: Enforce UX sandbox or integration PR scope
+        env:
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -z "$GITHUB_HEAD_REF" ]; then
+            echo "No PR context (workflow_dispatch): skip branch diff enforcement"
+          else
+            node docs/ux-integration/check-pr-lane.mjs
+          fi
