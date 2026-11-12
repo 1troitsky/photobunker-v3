@@ -913,7 +913,10 @@ async function openFile():Promise<void>{
 }
 async function navigate(item:CatalogItem|{source:'photo'|'media';id:string}|null):Promise<void>{
   if(!item||busy.value)return
-  await router.push({
+  // Adjacent arrows, keyboard and swipe are one in-Viewer journey, not
+  // separate browser-history pages. Back must return to the origin Browser.
+  // File ACL/E2EE is rechecked on each target by the route watcher.
+  await router.replace({
     name:'browser-viewer',params:{protocol:item.source,id:item.id},
   })
 }
