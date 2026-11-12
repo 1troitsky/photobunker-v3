@@ -262,6 +262,31 @@ final class StorageResilienceTest extends TestCase
         $this->assertDatabaseHas('storage_provider_health',['provider'=>'app_s3','state'=>'closed']);
     }
 
+    public function test_late_inflight_or_expired_probe_cannot_reopen_circuit_wrongly():void
+    {
+        $health=app(StorageProviderHealth::class);
+        $oldEpoch=$health->before('app_s3');
+        $health->failed('app_s3',$oldEpoch);
+        $health->failed('app_s3',$oldEpoch);
+        $this->assertSame('open',$health->status()['state']);
+        // Late success started before the outage cannot falsely close it.
+        $health->succeeded('app_s3',$oldEpoch);
+        $this->assertSame('open',$health->status()['state']);
+        Carbon::setTestNow(now()->addSeconds(31));
+        $probeEpoch=$health->before('app_s3');
+        $this->assertGreaterThan($oldEpoch,$probeEpoch);
+        // Its lease expires; a new worker obtains a newer probe epoch.
+        Carbon::setTestNow(now()->addSeconds(16));
+        $newEpoch=$health->before('app_s3');
+        $this->assertGreaterThan($probeEpoch,$newEpoch);
+        $health->succeeded('app_s3',$probeEpoch);
+        $this->assertSame('probing',$health->status()['state']);
+        $health->failed('app_s3',$newEpoch);
+        $this->assertSame('open',$health->status()['state']);
+        $health->succeeded('app_s3',$probeEpoch);
+        $this->assertSame('open',$health->status()['state']);
+    }
+
     public function test_leased_tickets_survive_restart_and_never_bypass_tombstone():void
     {
         $f=$this->fixture('media','uploading');
