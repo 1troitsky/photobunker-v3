@@ -72,6 +72,19 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
     await expect(editor).toContainText('Сверху · 10%')
     await expect(editor).toContainText('Яркость · 120%')
     await expect(editor).toContainText('Насыщенность · 0%')
+    // V55 screen-sized real Canvas preview: correct rotation, crop and RGB
+    // BEFORE any JPEG blob/outbox exists. This is not a CSS filter.
+    const live=page.getByTestId('file-viewer-photo-live-preview')
+    await expect(live).toBeVisible()
+    await expect.poll(()=>live.evaluate((c:HTMLCanvasElement)=>
+      [c.width,c.height])).toEqual([60,100])
+    const grey=await live.evaluate((c:HTMLCanvasElement)=>{
+      const ctx=c.getContext('2d')
+      if(!ctx)throw Error('missing_live_canvas')
+      return [...ctx.getImageData(5,5,1,1).data.slice(0,3)]
+    })
+    expect(Math.max(...grey)-Math.min(...grey)).toBeLessThanOrEqual(1)
+    await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
     // Photo Editor 3.2: crop/RGB share the SAME 50-entry history as
     // annotations, even before the first actual raster is generated.
     await page.getByTestId('file-viewer-photo-undo').click()
@@ -93,6 +106,12 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
     await brightness.press('ArrowRight')
     await expect(brightness).toHaveValue('130')
     await expect(page.getByTestId('file-viewer-crop-preview')).toHaveCount(0)
+    await expect(live).toBeVisible()
+    await expect.poll(()=>live.evaluate((canvas:HTMLCanvasElement)=>{
+      const ctx=canvas.getContext('2d')
+      if(!ctx)throw Error('missing_live_canvas')
+      return ctx.getImageData(5,5,1,1).data[0]
+    })).not.toBe(grey[0])
     await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
     await page.getByTestId('file-viewer-photo-undo').click()
     await expect(brightness).toHaveValue('120')
