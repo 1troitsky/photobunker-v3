@@ -219,19 +219,18 @@ test('P1 #199: wrong Recovery Key, invalid signed login proof and other account 
           &&stillMe.deviceId===state.deviceId}
       })
       expect(proof).toEqual({denied:true,originalSessionStillValid:true})
-      const invalidTarget=await C.evaluate(async targetId=>{
+      const otherDevices=await C.evaluate(async()=>{
         const api=await import('/src/features/identity/infrastructure/api.ts')
-        let unauthorized=false
-        try{await api.jsonApi('/identity/v2/devices/'+targetId)}
-        catch(e){unauthorized=e instanceof Error&&e.message==='api.http_404'}
-        return unauthorized
-      },a.deviceId)
-      // There is no device-specific GET endpoint in this parent. The route
-      // is absent, so this is NOT an ACL proof; record separately below.
-      expect(invalidTarget).toBe(true)
+        const response=await api.jsonApi<{devices:Array<{id:string;revoked_at:string|null}>}>(
+          '/identity/v2/devices')
+        return response.devices.map(item=>item.id)
+      })
+      // Real account-scoped API, not an absent route or a mock permission.
+      expect(otherDevices).toEqual([outsider.deviceId])
+      expect(otherDevices).not.toContain(a.deviceId)
       console.log('PB3_QA_199_NEGATIVE '+JSON.stringify({
         badKeyDenied:true,forgedLoginDenied:true,outsiderDifferentAccount:true,
-        originalSessionPreserved:true,deviceSpecificGetRouteAbsent:true,
+        originalSessionPreserved:true,scopedDeviceList:true,
       }))
     }finally{
       key=null
