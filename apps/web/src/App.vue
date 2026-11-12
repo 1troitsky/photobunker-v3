@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { displayedDock, dockDefinitions } from './ui/fieldwork/dock-preferences'
+import type { DockDefinition } from './ui/fieldwork/dock-preferences'
 import { brand } from './config/brand'
 import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
 const route = useRoute()
@@ -7,16 +10,13 @@ function isActive(to:string):boolean {
   return route.path===to
     ||to==='/assignments'&&route.path.startsWith('/assignments/')
     ||to==='/browser'&&route.path.startsWith('/browser/')
+    ||to==='/settings'&&route.path.startsWith('/settings/')
 }
-// Canonical default only. User-editable 3–6 Dock (with mandatory Settings)
-// belongs to accepted App Appearance 1.3 and will be wired in P2.
-const dock = [
-  { to: '/assignments', name: 'Задания', icon: 'tasks' },
-  { to: '/browser', name: 'Browser', icon: 'folder' },
-  { to: '/camera', name: 'Камера', icon: 'camera' },
-  { to: '/contacts', name: 'Контакты', icon: 'users' },
-  { to: '/settings', name: 'Настройки', icon: 'settings' },
-] as const
+// The Dock changes only through locally validated, user-confirmed Appearance
+// preferences. Hidden destinations (Notifications/Messages) can never render.
+const dock = computed(() => displayedDock.value
+  .map(id => dockDefinitions[id])
+  .filter((entry): entry is DockDefinition & {to:string} => entry.to !== null))
 </script>
 
 <template>
@@ -82,7 +82,8 @@ const dock = [
       <RouterView />
     </main>
 
-    <nav class="shell-dock" aria-label="Главная навигация">
+    <nav class="shell-dock" aria-label="Главная навигация"
+      :style="{gridTemplateColumns:'repeat('+dock.length+',minmax(0,1fr))'}">
       <RouterLink
         v-for="item in dock" :key="item.to" :to="item.to"
         :class="{ active: isActive(item.to) }"

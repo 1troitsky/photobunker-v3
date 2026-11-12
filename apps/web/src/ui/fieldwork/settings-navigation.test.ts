@@ -13,14 +13,15 @@ describe('Fieldwork settings navigation against PB3 shipped routes', () => {
     ])
   })
 
-  it('routes only implemented settings features: Contacts & Teams', () => {
-    expect(availableSettingsRoutes).toEqual(['/contacts'])
+  it('routes only implemented settings features: Contacts and local Dock', () => {
+    expect(availableSettingsRoutes).toEqual(['/contacts','/settings/appearance'])
     const paths = settingsGroups.flatMap(group => group.entries)
     expect(new Set(paths.map(entry => entry.id)).size).toBe(paths.length)
     expect(paths.filter(entry => entry.to !== null)).toEqual([
       expect.objectContaining({ id: 'contacts-teams', to: '/contacts' }),
+      expect.objectContaining({ id: 'appearance', to: '/settings/appearance' }),
     ])
-    expect(paths.filter(entry => entry.to === null)).toHaveLength(8)
+    expect(paths.filter(entry => entry.to === null)).toHaveLength(7)
   })
 
   it('does not misrepresent Messages as a Contacts child or a shipped profile', () => {
