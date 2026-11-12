@@ -46,3 +46,19 @@ For Public Card key delivery/token formats, final media download rights and exte
 ## Reporting rule
 
 Maintain separate columns in future reviews: **UX-approved version**, **PB3 code exists**, **navigation integrated**, **security proven**, **visual approved on device**, **owner accepted**. A PR marked Draft or CI green is not a substitute for any other column.
+
+---
+
+## 2026-11-12: актуализация по объединённой ветке UX + PRODUCT
+
+> Таблица GAP-01–GAP-18 выше — исторический снимок от #135/#134, **не** текущее состояние. Этот блок является новым, проверяемым дополнением и не переписывает прежние решения.
+
+- **Продуктовая база:** Draft [#156](https://github.com/1troitsky/photobunker-v3/pull/156) @ `db22454cca1816a473871109f5dab3d8c9337507`; включает #147–#154, фото-редактор, криптографические операции и E2E.
+- **UX-реализация:** Draft [#155](https://github.com/1troitsky/photobunker-v3/pull/155) @ `d439f1b05879ad148ce03c1d5462993fc6e1fbd0` (связанный стек #146→#150→#152→#153→#155). **Реально в коде:** группы настроек, Contacts из настроек, настройка Dock, локальные предпочтения, стартовая страница, поиск по конкретным настройкам, безопасный повторный тап Dock. Нет окончательной карточки профиля, Matrix, языка, светлой темы или платежей.
+- **Неприкосновенный источник:** [#138](https://github.com/1troitsky/photobunker-v3/pull/138) @ `64f415f0ce92474ecc8a8c64ddb3e7482cab2168` — **117 исходных UX-файлов** из PB2 #56, проверяемые ссылки и визуальная карта **23 HTML из `docs/_uiux/`**.
+- **Исторический #139 vs #140:** исправления из актуального [#139](https://github.com/1troitsky/photobunker-v3/pull/139) @ `82c8b1e2568f89d8bfe5e68decba91956f49afa1` уже содержатся в актуальном продуктовом `FileViewerView.vue` (Ctrl/Cmd+Z внутри editor sheet) и в `p2-browser-safe-recipient.spec.ts` (явное открытие редактора). Последний #139 теперь включён в родителей интеграционного коммита; #140 и последующие PR присутствуют через #156. Редактор не заменён более старой копией.
+- **Интеграция:** ветка `integration/ux-product-v51-reconciled`. Сверены **31 изменение UX + 133 изменения UX-документации**: **0 конфликтующих или пересекающихся по содержимому путей** с продуктовым HEAD. `FileViewerView.vue` и `styles.css` побайтно сохранены из #156.
+- **Ручная проверка и CI:** после объединения нужны отдельные свежие TypeScript/PHP/Security, PG18/Garage/Chromium и UX source integrity/lane guard. Прохождение CI двух исходных веток **не равно** прохождению интеграционной ветки.
+- **Следующие реальные GAP:** GAP-05 (Profile 1.6 WIP), GAP-10 (billing), GAP-12 (Matrix), GAP-16 (physical/mobile visual audit) остаются открыты. Для GAP-08/09 уже существует рабочая частичная интеграция, но **визуальная приёмка на устройствах не проведена**.
+
+[Развёрнутый отчёт о проверках, происхождении файлов и запрете преждевременного merge](../audits/P2-PRODUCT-UX-V51-INTEGRATION-20261112.md).
