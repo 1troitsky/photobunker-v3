@@ -75,7 +75,7 @@ describe('P2 volatile photo editor Undo/Redo',()=>{
     expect(replay.snapshot.view?.effects.brightness).toBe(130)
     h=recordPhotoEdit(changed.history,{
       ...next,
-      view:{...next.view,crop:{...next.view.crop,turns:3}},
+      view:{...next.view,crop:{...next.view.crop,turns:3 as const}},
     })
     expect(canPhotoRedo(h)).toBe(false)
     expect(h.states.length).toBe(2)
