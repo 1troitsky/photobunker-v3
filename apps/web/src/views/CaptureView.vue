@@ -10,6 +10,7 @@ import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../features/assignments/domain/advanced-rules'
 import {
   listAllServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
+  assertNoVerifiedAssignmentRemoval,
   signedMediaCaptureIntent,signedAllowedAssignmentMedia,
   signedPolicyRequirements,signedMediaRequirements,signedAdvancedRequirements,
   readCachedPrivateAssignment,assignmentPrivateCacheScope,verifySignedAssignmentPolicy,
@@ -372,6 +373,11 @@ async function beginRecording():Promise<void>{
         try{
           if(bytes<128||bytes>MAX_MEDIA_BYTES)
             throw Error('media.invalid_size')
+          // A formerly valid signed recording claim must not outlive a
+          // newly verified local removal while MediaRecorder was active.
+          if(token.intent)
+            await assertNoVerifiedAssignmentRemoval(token.intent.assignmentId)
+          if(!ownsCamera(identity,generation))return
           const finishedAt=Date.now()
           if(finishedAt<=startedAt||finishedAt-startedAt>recordLimitMs+2000)
             throw Error('camera.recording_duration_invalid')
