@@ -126,6 +126,12 @@ test('P2 V-50: five real shape tools stay on one mobile row, fill and stroke fla
     // fill/stroke must still exist and flatten into the new image.
     await page.getByTestId('file-viewer-rotate-right').click()
     await expect(page.getByTestId('file-viewer-crop-preview')).toHaveCount(0)
+    // Unified history: rotation is undoable along with existing fill,
+    // stroke and geometry, without losing the edited figure itself.
+    await page.getByTestId('file-viewer-photo-undo').click()
+    await expect(page.getByTestId('file-viewer-crop-turn')).toHaveValue('0')
+    await page.getByTestId('file-viewer-photo-redo').click()
+    await expect(page.getByTestId('file-viewer-crop-turn')).toHaveValue('1')
     await expect(page.getByTestId('file-viewer-crop-status'))
       .toContainText('история сохранены в памяти')
     await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
