@@ -159,7 +159,8 @@ final class MediaV1Test extends TestCase
 
     public function test_fresh_chunk_upload_lease_is_retryable_and_stale_lease_resumes():void
     {
-        $f=$this->fixture('video',1048737);
+        // One data + one metadata chunk: finalize must prove BOTH, no skip.
+        $f=$this->fixture('video',2048);
         $c=$f['contract'];$id=$c['mediaId'];
         $this->postJson('/media/v1/reserve',[
             'contract'=>$f['json'],'signature'=>$f['signature'],
@@ -223,14 +224,18 @@ final class MediaV1Test extends TestCase
             'operationId'=>$c['operationId'],
         ])->assertOk()->json('receipt');
         $this->assertSame($part['sha256'],$receipt['chunks'][0]['sha256']);
-        $this->get('/media/v1/'.$id.'/chunks/'.$part['chunkId'])
+        // Streamed binary ciphertext must be checked as BYTES, never via
+        // HTML/text assertions that mis-handle streams or dump ciphertext.
+        $readback=$this->get('/media/v1/'.$id.'/chunks/'.$part['chunkId'])
             ->assertOk()->assertHeader('X-Cipher-SHA256',$part['sha256'])
-            ->assertSee($binary,false);
+            ->streamedContent();
+        $this->assertSame(strlen($binary),strlen($readback));
+        $this->assertSame($part['sha256'],hash('sha256',$readback));
     }
 
     public function test_out_of_order_media_chunks_and_lost_ack_replay_are_idempotent():void
     {
-        $f=$this->fixture('photo',1048737);
+        $f=$this->fixture('photo',2048);
         $c=$f['contract'];$id=$c['mediaId'];
         $this->postJson('/media/v1/reserve',[
             'contract'=>$f['json'],'signature'=>$f['signature'],
