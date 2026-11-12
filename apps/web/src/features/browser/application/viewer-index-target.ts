@@ -36,7 +36,7 @@ export async function findViewerTargetInBoundedIndex<T>(
     if(!stillCurrent())throw Error('viewer.index_cancelled')
     const response=await fetchNext(nextCursor)
     if(!stillCurrent())throw Error('viewer.index_cancelled')
-    const checked=appendAuthenticatedCatalogPage(
+    const checked:Page<T>=appendAuthenticatedCatalogPage(
       items,response,nextCursor,getId)
     items=checked.items;nextCursor=checked.nextCursor;pages++
     if(matches())break
