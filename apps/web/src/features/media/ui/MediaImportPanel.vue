@@ -123,11 +123,15 @@ async function importFiles(files:readonly File[]):Promise<void>{
     // placement must not roll back/delete successful encrypted originals.
     if(output.mediaIds.length){
       emit('media-imported',{mediaIds:output.mediaIds,folderId})
-      await refresh()
+      // Durable AES-GCM outbox is already committed. Never block a second
+      // selection on a secondary, potentially offline catalog refresh.
+      void refresh()
     }
     const saved=output.mediaIds.length
-    notice.value='Зашифровано на устройстве '+saved+' из '+files.length
-      +' файлов. Отправка в облако подтверждается отдельно.'
+    notice.value=saved===1&&files.length===1&&output.failed===0
+      ?'Файл зашифрован и сохранён на устройстве. Синхронизация будет подтверждена отдельно.'
+      :'Зашифровано на устройстве '+saved+' из '+files.length
+        +' файлов. Отправка в облако подтверждается отдельно.'
     if(output.failed)
       error.value='Не удалось импортировать '+output.failed
         +' файлов. Уже зашифрованные оригиналы и очередь сохранены.'
