@@ -23,9 +23,11 @@ final class MonthlyCreationQuota
      * @return array{planId:string,catalogVersion:string,periodStart:string,
      * periodEnd:string,limit:?int,used:int,remaining:?int}
      */
-    public function usage(string $accountId):array
+    public function usage(string $accountId,?CarbonImmutable $asOf=null):array
     {
-        $now=CarbonImmutable::now('UTC');
+        // For a create transaction use the exact SAME server UTC instant for
+        // admission and persisted created_at, including month-boundary races.
+        $now=($asOf??CarbonImmutable::now('UTC'))->utc();
         $ent=$this->entitlements->current($accountId,$now);
         $limit=$ent['effectiveLimits']['assignmentCreationsPerMonth']??null;
         if(!array_key_exists('assignmentCreationsPerMonth',$ent['effectiveLimits'])
