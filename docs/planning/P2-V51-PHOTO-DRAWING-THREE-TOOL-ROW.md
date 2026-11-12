@@ -60,7 +60,15 @@ Safari/Android pointer behavior is **NOT TESTED**.
   UX sandbox #138 or Settings #146/#150/#152/#153.
 - **Changed:** `apps/web/src/views/FileViewerView.vue`,
   `apps/web/src/styles.css`,
-  `tests/e2e/p2-browser-photo-strokes.spec.ts` and this doc.
+  `tests/e2e/p2-browser-photo-strokes.spec.ts`,
+  and the inherited QA-controlled
+  `tests/e2e/p2-browser-viewer-origin-scoped-pager.spec.ts`,
+  plus this document. The latter change is limited to waiting for
+  completed session bootstrap and treating ONLY the crypto layer's
+  expected `identity.account_changed` mid-decrypt as a transient
+  poll state; every final filename remains decrypted and compared
+  byte-for-byte against the exact expected names. Unexpected crypto
+  or ACL errors still fail the test.
 - **Excluded:** backend API, E2EE/domain/crypto, Shell/router,
   retention/ACL/Local-First storage, immutable `docs/ux/**`,
   UX-only `docs/ux-integration/**`,
@@ -72,3 +80,21 @@ Safari/Android pointer behavior is **NOT TESTED**.
   verified exact-head 3/3 and two 54/54 runs. All future integration
   must reconcile #139/#140 product ancestry and product/UX branches
   under a single reviewed combined head before any merge.
+
+## Exact-head browser fixes / evidence journal
+
+- First #156 test HEAD `6ee9301b...`: **53/54 Chromium**; real mobile
+  `photo-strokes` found the original generic first-label full span,
+  with color/range Y coordinates separated by 66px.
+- Second HEAD `1f6b2c84...`: **53/54 Chromium**; two fields on the same
+  line but native `input[type=range]` overflowed the container.
+- Third HEAD `a2d69cf2...`: **52/54 Chromium**; exact `scrollWidth`
+  exceeded `clientWidth+1` by one further pixel; a separate Browser
+  return test hit an expected `identity.account_changed` abort on
+  an in-flight E2EE metadata read during session bootstrap.
+- Current code removes browser-native range margins and waits for the
+  actual session proof before polling the unchanged AES-GCM filenames,
+  tolerating only the documented transient session-epoch exception,
+  without bypassing signatures/identity checks or weakening geometry
+  assertions. Current exact-head CI **PENDING**. No runtime Browser/
+  MediaFile crypto changes; any new failures will be reported by job.
