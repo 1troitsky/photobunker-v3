@@ -64,6 +64,9 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     })
 
     await owner.goto('/browser/file/media/'+original.id)
+    // The accepted Viewer keeps the Safe-derivative editor in a sheet.
+    // Open it explicitly; never bypass the full E2EE source→Safe flow.
+    await owner.getByTestId('viewer-action-edit').click()
     await expect.poll(()=>owner.getByTestId('file-viewer-image')
       .evaluate((img:HTMLImageElement)=>img.naturalWidth),
       {timeout:30000}).toBe(320)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
+import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
 import {onBeforeRouteLeave,RouterLink,useRoute,useRouter} from 'vue-router'
 import {
   armBrowserReturn,discardBrowserReturnContext,
@@ -59,6 +59,41 @@ type Preview={
 const route=useRoute()
 const router=useRouter()
 const stage=ref<HTMLElement|null>(null)
+const panel=ref<'info'|'editor'|null>(null)
+const sheetClose=ref<HTMLButtonElement|null>(null)
+let panelOpener:HTMLElement|null=null
+async function openPanel(kind:'info'|'editor'):Promise<void>{
+  if(!fileUrl.value||!preview.value)return
+  panelOpener=document.activeElement instanceof HTMLElement
+    ?document.activeElement:null
+  panel.value=kind
+  await nextTick()
+  sheetClose.value?.focus()
+}
+function closePanel():void{
+  panel.value=null
+  const previous=panelOpener
+  panelOpener=null
+  if(previous?.isConnected)void nextTick(()=>previous.focus())
+}
+function onSheetKeydown(event:KeyboardEvent):void{
+  if(event.key==='Escape'){
+    event.preventDefault();event.stopPropagation();closePanel();return
+  }
+  if(event.key!=='Tab')return
+  const sheet=sheetClose.value?.closest('[role="dialog"]')
+  if(!sheet)return
+  const candidates=Array.from(sheet.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+  )).filter(element=>element.getClientRects().length>0)
+  const first=candidates[0],last=candidates.at(-1)
+  if(!first||!last)return
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
+}
 const photoElement=ref<HTMLImageElement|null>(null)
 const cropLeft=ref(0),cropTop=ref(0),cropWidth=ref(100),cropHeight=ref(100)
 const cropTurns=ref<CropSelection['turns']>(0)
@@ -655,6 +690,8 @@ function clearStill():void{
   stillSavedId.value=null
 }
 function clearBlob():void{
+  panel.value=null
+  panelOpener=null
   clearTextMarks()
   clearCrop()
   cropLeft.value=0;cropTop.value=0
@@ -882,6 +919,14 @@ async function navigate(item:CatalogItem|{source:'photo'|'media';id:string}|null
 }
 function onKeyDown(event:KeyboardEvent):void{
   if(event.defaultPrevented||event.altKey)return
+  if(panel.value){
+    if(event.key==='Escape'){event.preventDefault();closePanel();return}
+    // The editor remains a real editing surface: retain the existing
+    // Ctrl/Cmd+Z history shortcut, but never navigate files behind a sheet.
+    if(panel.value!=='editor'
+      ||!((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'))
+      return
+  }
   const editing=event.target instanceof HTMLElement&&!!event.target.closest(
     'input,textarea,select,video,audio,button,[contenteditable="true"]')
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'
@@ -1277,15 +1322,7 @@ onUnmounted(()=>{
 
 <template>
   <section class="foundation-content file-viewer" data-testid="file-viewer">
-    <header class="file-viewer-header">
-      <RouterLink to="/browser" class="file-viewer-back">‹ Browser</RouterLink>
-      <div>
-        <h1>Просмотр файла</h1>
-        <p class="muted" v-if="current">{{ current.id.slice(0,8) }}</p>
-      </div>
-      <button type="button" :disabled="!fileUrl"
-        @click="toggleFullscreen">На весь экран</button>
-    </header>
+
     <div v-if="!activeSession" class="foundation-card">
       <p>Для просмотра зашифрованных файлов необходим вход.</p>
       <RouterLink to="/settings">Открыть доступ</RouterLink>
@@ -1294,18 +1331,14 @@ onUnmounted(()=>{
       Некорректный адрес файла.
     </div>
     <template v-else>
-      <div class="file-viewer-navigation">
-        <button type="button" aria-label="Предыдущий файл"
-          :disabled="!adjacent.previous||busy"
-          @click="navigate(adjacent.previous)">‹</button>
-        <span class="muted" data-testid="file-viewer-position">
-          {{ adjacent.position?adjacent.position+' / '+adjacent.total:
-            'Вне загруженного списка' }}
-        </span>
-        <button type="button" aria-label="Следующий файл"
-          :disabled="!adjacent.next||busy"
-          @click="navigate(adjacent.next)">›</button>
-      </div>
+      <div class="file-viewer-fixed" data-testid="file-viewer-fixed">
+        <nav class="file-viewer-path browser-breadcrumb"
+          data-testid="file-viewer-path" aria-label="Путь Browser">
+          <RouterLink to="/browser" class="file-viewer-back" aria-label="В Browser">‹</RouterLink>
+          <span class="file-viewer-path-name">Browser / {{ preview?.name??'Файл' }}</span>
+          <button type="button" data-testid="file-viewer-download"
+            :disabled="!fileUrl" @click="download">Скачать</button>
+        </nav>
       <div ref="stage" class="file-viewer-stage"
         data-testid="file-viewer-stage"
         @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
@@ -1323,7 +1356,55 @@ onUnmounted(()=>{
             data-testid="file-viewer-audio"/>
         </div>
         <p v-else class="muted">Файл не открыт.</p>
+        <button type="button" class="file-viewer-stage-fullscreen"
+          aria-label="На весь экран" :disabled="!fileUrl" @click="toggleFullscreen">⛶</button>
       </div>
+      <section class="file-viewer-summary" data-testid="file-viewer-summary">
+        <div class="file-viewer-summary-name">{{ preview?.name??'Защищённый файл' }}</div>
+        <div class="file-viewer-summary-id">ID: {{ current.id.slice(0,8) }}</div>
+        <p class="file-viewer-summary-description">{{ preview?.description||'Описание не добавлено' }}</p>
+        <div class="file-viewer-summary-dates">
+          <span>Создан: {{ preview?.capturedAt
+            ?new Date(preview.capturedAt).toLocaleDateString('ru-RU'):'—' }}</span>
+          <span>Удаление: {{ preview?.expiresAt
+            ?new Date(preview.expiresAt).toLocaleDateString('ru-RU'):'—' }}</span>
+        </div>
+      </section>
+      <nav class="file-viewer-actions" aria-label="Действия с файлом"
+        data-testid="file-viewer-actions">
+        <button type="button" :disabled="!fileUrl" data-testid="viewer-action-info"
+          @click="openPanel('info')">Информация</button>
+        <button type="button" disabled
+          title="Публичный предпросмотр требует отдельной проверки Safe-версии и прав доступа">
+          Публичная карточка</button>
+        <button type="button" :disabled="!fileUrl" data-testid="viewer-action-edit"
+          @click="openPanel('editor')">Редактировать</button>
+      </nav>
+      <div class="file-viewer-navigation">
+        <button type="button" aria-label="Предыдущий файл"
+          :disabled="!adjacent.previous||busy"
+          @click="navigate(adjacent.previous)">‹</button>
+        <span class="muted" data-testid="file-viewer-position">
+          {{ adjacent.position?adjacent.position+' / '+adjacent.total:
+            'Вне загруженного списка' }}
+        </span>
+        <button type="button" aria-label="Следующий файл"
+          :disabled="!adjacent.next||busy"
+          @click="navigate(adjacent.next)">›</button>
+      </div>
+      </div>
+      <div v-show="panel!==null" class="file-viewer-overlay"
+        data-testid="file-viewer-sheet-layer" @click.self="closePanel">
+        <section class="file-viewer-sheet" role="dialog" aria-modal="true"
+          :aria-label="panel==='editor'?'Редактирование файла':'Информация о файле'"
+          @keydown="onSheetKeydown">
+          <header class="file-viewer-sheet-heading">
+            <h2>{{ panel==='editor'?'Редактирование':'Информация' }}</h2>
+            <button ref="sheetClose" type="button" data-testid="viewer-panel-close"
+              @click="closePanel">Закрыть</button>
+          </header>
+          <div class="file-viewer-sheet-body">
+            <div v-show="panel==='editor'" class="file-viewer-editor-sections">
       <section v-if="preview?.type==='photo'&&fileUrl"
         class="file-viewer-photo-editor" data-testid="file-viewer-photo-editor">
         <h2>Кадрирование и поворот</h2>
@@ -1849,6 +1930,8 @@ onUnmounted(()=>{
         <p v-if="stillError" role="alert" data-testid="file-viewer-still-error">
           {{ stillError }}</p>
       </section>
+            </div>
+            <div v-show="panel==='info'">
       <div v-if="preview" class="file-viewer-information" data-testid="file-viewer-info">
         <div class="file-viewer-info-heading">
           <div>
@@ -1885,6 +1968,11 @@ onUnmounted(()=>{
         <p class="muted">Приватные данные расшифрованы на устройстве.
           Скачивание — только после явного подтверждения.</p>
       </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="file-viewer-feedback" aria-live="polite">
       <p v-if="indexIncomplete" class="muted"
         data-testid="file-viewer-index-incomplete">
         Проверено до 500 облачных записей соответствующего типа.
@@ -1896,6 +1984,7 @@ onUnmounted(()=>{
       <p v-if="indexBusy" class="muted">Обновляется список доступных файлов…</p>
       <p v-if="notice" role="status" class="muted">{{ notice }}</p>
       <p v-if="error" role="alert" class="error-text">{{ error }}</p>
+      </div>
     </template>
   </section>
 </template>

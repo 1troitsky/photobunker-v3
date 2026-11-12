@@ -33,6 +33,8 @@ test('P2 Viewer: shape stroke and fill flatten into separate E2EE JPEG without l
     })
     await context.setOffline(false)
     await page.goto('/browser/file/media/'+source.id)
+    // Accepted File Viewer opens media in a fixed scene; editor is a sheet.
+    await page.getByTestId('viewer-action-edit').click()
     await expect.poll(()=>page.getByTestId('file-viewer-image')
       .evaluate((img:HTMLImageElement)=>img.naturalWidth)).toBe(320)
     await context.setOffline(true)

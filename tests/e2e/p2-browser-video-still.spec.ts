@@ -59,6 +59,8 @@ test('P2 Viewer: decoded video frame → volatile JPEG → offline E2EE Browser 
     // then take and encrypt the frame on an offline, already loaded page.
     await context.setOffline(false)
     await page.goto('/browser/file/media/'+source.id)
+    // Accepted File Viewer opens media in a fixed scene; editor is a sheet.
+    await page.getByTestId('viewer-action-edit').click()
     const video=page.getByTestId('file-viewer-video')
     await expect(video).toBeVisible()
     await expect.poll(()=>video.evaluate((v:HTMLVideoElement)=>v.readyState),

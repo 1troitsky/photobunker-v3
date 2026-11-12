@@ -34,6 +34,8 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
     })
     await context.setOffline(false)
     await page.goto('/browser/file/media/'+original.id)
+    // Accepted File Viewer opens media in a fixed scene; editor is a sheet.
+    await page.getByTestId('viewer-action-edit').click()
     const picture=page.getByTestId('file-viewer-image')
     await expect(picture).toBeVisible()
     await expect.poll(()=>picture.evaluate(

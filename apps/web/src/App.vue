@@ -32,7 +32,7 @@ const dock = [
       </div>
     </header>
 
-    <main class="shell-main" id="main">
+    <main class="shell-main" :class="{'shell-main-viewer':route.name==='browser-viewer'}" id="main">
       <RouterView />
     </main>
 

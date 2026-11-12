@@ -39,6 +39,8 @@ test('P2 Viewer: opaque blackout overwrites JPEG pixels only in a new encrypted 
     })
     await context.setOffline(false)
     await page.goto('/browser/file/media/'+original.id)
+    // Accepted File Viewer opens media in a fixed scene; editor is a sheet.
+    await page.getByTestId('viewer-action-edit').click()
     await expect.poll(()=>page.getByTestId('file-viewer-image')
       .evaluate((img:HTMLImageElement)=>img.naturalWidth)).toBe(320)
     const sourceUrl=await page.getByTestId('file-viewer-image').getAttribute('src')
