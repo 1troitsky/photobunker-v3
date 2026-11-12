@@ -15,7 +15,7 @@ The approved P1 camera already captures a real JPEG from a browser `getUserMedia
 
 ## V4 server-authorized submission
 
-1. V3 remains **imported P2 photo** (no capture fields). V4 is the **P2 camera photo** with TWO contributor P-256 signatures: immutable submitted-consent `pb3.assignment-media-submit.v4\n`, and nested `pb3.assignment-media-capture.v1\n` signed claim. Legacy AV v1/v2 and P1 `photo_records` untouched.
+1. V3 remains **imported P2 photo** (no capture fields). V4 is the **P2 camera photo** with TWO contributor P-256 signatures: immutable submitted-consent `pb3.assignment-media-submit.v4\n`, and nested `pb3.assignment-media-capture.v1\n` signed claim. Legacy AV v1/v2 and P1 `photo_records` untouched. Sender uses an explicit, fail-closed signature-domain version map: a v4 contract must NOT accidentally sign under v1.
 2. Server verifies exact canonical fields/signatures, photo-only type, same immutable encrypted manifest hash, owner/contributor identity, photo-supporting signed root policy revision **1** or a later signed amendment revision, bounded photo time claim (max 3 minutes, +2 minutes skew), schedule at both claimed times, accepted contributor membership, and applicable signed policy chronology. Root photo policy has the signed assignment creation time as lower bound.
 3. Server **requires** a separately account-signed assignment-scoped v2 recipient E2EE photo-grant to the exact owner, exact ciphertext and live TTL; a personal media grant never substitutes for assignment consent. Live member removal, expiry and archive remain deny-by-default in the existing per-read grant layer.
 4. Owner list displays `capturedInAssignment=true` based on immutable signed capture. Owner independently pins contributor account key, verifies both P-256 signatures and exact canonical contract/capture binding **before** showing verified consent, then decrypts photo only through the separately authorized E2EE recipient grant.
@@ -25,7 +25,7 @@ The approved P1 camera already captures a real JPEG from a browser `getUserMedia
 ## Required QA
 
 - PHP: root photo-only policy, real signed v4 consent and nested photo claim, exact owner E2EE grant, 201/200 idempotency, owner `capturedInAssignment=true` and photo progress, revocation stops listing/count, forged signature/policy/media/type/time denial.
-- Vitest: independent pinned-account signature verification, v4 canonical scope and nested capture hash/ID/time integrity; AV v1/v2 and imported v3 compatibility.
+- Vitest: independent pinned-account signature verification, v4 canonical scope and nested capture hash/ID/time integrity; AV v1/v2 and imported v3 compatibility. Explicit v1/v2/v3/v4 sender domain mapping with no future/invalid version falling back to v1.
 - Chromium: real two enrolled accounts, authenticated owner photo advanced rules, accepted participant, browser camera fake device as actual Canvas frame, P2 opt-in JPEG AES-GCM metadata and signed capture, ciphertext-only chunks, sync, explicit owner consent, account-pinned dual-signature receipt verification, authorized owner decrypt/metadata and private GPS/category/tags.
 - Must pass exact-head Laravel PHP 8.4.27+/8.5.12+, strict TS/Vitest/build, PG18/Garage+Chromium, Security. Native Safari/iOS/Android, physical GPS/device authenticity and independent owner acceptance **NOT TESTED**.
 
