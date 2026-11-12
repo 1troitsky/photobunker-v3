@@ -5,6 +5,7 @@ import type {CatalogItem} from './catalog'
 import {filterCatalog} from './catalog'
 import {
   normalizePrivateSearch,privateMetadataMatches,searchPrivateMetadata,
+  searchPrivateMetadataBatches,
 } from './private-search'
 
 const mocks=vi.hoisted(()=>({
@@ -38,6 +39,50 @@ function photo(id:string,local=true,cloud=true):CatalogItem{
   return {...media(id,local,cloud),key:'photo:'+id,
     source:'photo',type:'photo'}
 }
+describe('P2 Browser V-33 opt-in 1000-row metadata-only search',()=>{
+  it('finds a confidential filename at row 201 without submitting a plaintext query',async()=>{
+    owner()
+    const rows=Array.from({length:205},(_,i)=>media(
+      '00000000-0000-4000-8000-'+(i+1).toString(16).padStart(12,'0'),
+      false,true))
+    mocks.cloudMedia.mockImplementation(async(id:string)=>({
+      fileName:id===rows[204]?.id?'FOUND-ONLY-AT-205.wav':'ordinary.wav',
+      description:'private evidence',tags:[],category:'audio',
+    }))
+    const progress:Array<[number,number]>=[]
+    const result=await searchPrivateMetadataBatches('FOUND-ONLY-AT-205',
+      rows,()=>true,(completed,total)=>progress.push([completed,total]))
+    expect(result.scanned).toBe(205)
+    expect(result.total).toBe(205)
+    expect([...result.matches]).toEqual([rows[204]?.key])
+    expect(progress).toEqual([[200,205],[205,205]])
+    expect(mocks.cloudMedia).toHaveBeenCalledTimes(205)
+    // The reader receives only opaque media IDs, never query, filename or GPS.
+    expect(JSON.stringify(mocks.cloudMedia.mock.calls))
+      .not.toContain('FOUND-ONLY-AT-205')
+  })
+  it('rejects duplicated rows, >1000 and cancels between batches',async()=>{
+    owner()
+    const row=media(crypto.randomUUID(),false,true)
+    await expect(searchPrivateMetadataBatches('private',[row,row]))
+      .rejects.toThrow('browser.search_duplicate_row')
+    await expect(searchPrivateMetadataBatches('private',
+      Array.from({length:1001},(_,i)=>media(
+        '00000000-0000-4000-8000-'+(i+1).toString(16).padStart(12,'0'),
+        false,true,
+      )))).rejects.toThrow('browser.expanded_search_limit')
+    let active=true
+    const rows=Array.from({length:205},()=>media(crypto.randomUUID(),false,true))
+    mocks.cloudMedia.mockResolvedValue({fileName:'private-note.wav'})
+    const seen:number[]=[]
+    await expect(searchPrivateMetadataBatches('private',rows,()=>active,
+      checked=>{seen.push(checked);active=false}))
+      .rejects.toThrow('browser.search_session_changed')
+    expect(seen).toEqual([200])
+    expect(mocks.cloudMedia).toHaveBeenCalledTimes(200)
+  })
+})
+
 describe('P2 Browser ephemeral, owner-only E2EE search',()=>{
   it('matches normalized Cyrillic filename, descriptions, categories and tags',()=>{
     expect(normalizePrivateSearch('  ＲＥＰＯＲＴ  ')).toBe('report')
