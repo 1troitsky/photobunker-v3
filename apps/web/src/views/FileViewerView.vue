@@ -27,6 +27,8 @@ import type {PersonalMediaCopyDraft} from '../features/browser/application/perso
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
 import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
+import {drawLivePhotoPreview}
+  from '../features/browser/application/photo-live-preview'
 import {choosePhotoAspect} from '../features/browser/application/photo-aspect-presets'
 import type {PhotoAspectPreset} from '../features/browser/application/photo-aspect-presets'
 import type {CropSelection,CroppedPhoto} from '../features/browser/application/photo-crop'
@@ -124,6 +126,10 @@ function onSheetKeydown(event:KeyboardEvent):void{
   }
 }
 const photoElement=ref<HTMLImageElement|null>(null)
+const livePreviewCanvas=ref<HTMLCanvasElement|null>(null)
+const livePreviewReady=ref(false)
+const livePreviewError=ref('')
+let livePreviewFrame:number|null=null
 const cropLeft=ref(0),cropTop=ref(0),cropWidth=ref(100),cropHeight=ref(100)
 const cropTurns=ref<CropSelection['turns']>(0)
 const cropAspectPreset=ref<PhotoAspectPreset|'custom'>('original')
@@ -870,6 +876,57 @@ function toggleBeforeAfter():void{
   if(!cropResult.value||cropBusy.value||strokePointer!==null)return
   showBefore.value=!showBefore.value
 }
+function clearLivePhotoPreview():void{
+  if(livePreviewFrame!==null)cancelAnimationFrame(livePreviewFrame)
+  livePreviewFrame=null
+  const canvas=livePreviewCanvas.value
+  if(canvas){canvas.width=0;canvas.height=0}
+  livePreviewReady.value=false;livePreviewError.value=''
+}
+function scheduleLivePhotoPreview():void{
+  if(livePreviewFrame!==null)cancelAnimationFrame(livePreviewFrame)
+  livePreviewFrame=null
+  const image=photoElement.value,canvas=livePreviewCanvas.value
+  if(!editorMode.value||editorTab.value!=='media'
+    ||preview.value?.type!=='photo'||!fileUrl.value||!activeSession.value
+    ||cropResult.value||!image||!canvas){
+    clearLivePhotoPreview()
+    return
+  }
+  if(!image.complete||!image.naturalWidth||image.currentSrc!==fileUrl.value){
+    // The user may have selected a new encrypted source: never display
+    // pixels from the previous frame while its new Blob URL is loading.
+    clearLivePhotoPreview()
+    return
+  }
+  const source=fileUrl.value,epoch=fileEpoch
+  const session=activeSession.value,target=current.value
+  livePreviewFrame=requestAnimationFrame(()=>{
+    livePreviewFrame=null
+    if(!session||activeSession.value!==session||fileEpoch!==epoch
+      ||fileUrl.value!==source||!current.value||!target
+      ||viewerKey(current.value)!==viewerKey(target)
+      ||!editorMode.value||editorTab.value!=='media'
+      ||cropResult.value||photoElement.value!==image
+      ||livePreviewCanvas.value!==canvas||image.currentSrc!==source){
+      clearLivePhotoPreview()
+      return
+    }
+    try{
+      drawLivePhotoPreview(
+        image,canvas,{...cropSelection.value},{...photoAdjustments.value},{
+          text:textMarks.value,shapes:shapeMarks.value,
+          strokes:strokeMarks.value,blackouts:photoBlackouts.value,
+        },
+      )
+      livePreviewReady.value=true;livePreviewError.value=''
+    }catch(e){
+      // No partial raster or stale preview can appear after a failed draw.
+      canvas.width=0;canvas.height=0;livePreviewReady.value=false
+      livePreviewError.value=explain(e)
+    }
+  })
+}
 function clearCrop():void{
   showBefore.value=false
   clearComposition()
@@ -1047,6 +1104,7 @@ function clearStill():void{
   stillSavedId.value=null
 }
 function clearBlob():void{
+  clearLivePhotoPreview()
   panel.value=null
   panelOpener=null
   clearTextMarks()
@@ -1768,6 +1826,12 @@ async function saveEditor():Promise<void>{
     await returnFromEditor()
   }
 }
+watch([
+  photoElement,livePreviewCanvas,fileUrl,editorMode,editorTab,cropResult,
+  cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
+  photoBrightness,photoContrast,photoSaturation,
+  textMarks,shapeMarks,strokeMarks,photoBlackouts,
+],scheduleLivePhotoPreview,{flush:'post'})
 watch([paintCanvas,strokeMarks,draftStroke,cropResult,compositionWidth],()=>{
   renderPaintCanvas()
 },{flush:'post'})
@@ -1999,6 +2063,7 @@ onUnmounted(()=>{
                 data-testid="file-editor-source">
                 <img v-if="preview.type==='photo'" ref="photoElement"
                   :src="fileUrl" :alt="preview.name" draggable="false"
+                  @load="scheduleLivePhotoPreview"
                   data-testid="file-viewer-image">
                 <video v-else-if="preview.type==='video'" :key="fileUrl"
                   ref="videoElement" :src="fileUrl" controls playsinline preload="metadata"
@@ -2012,9 +2077,9 @@ onUnmounted(()=>{
       <section v-if="preview?.type==='photo'&&fileUrl"
         class="file-viewer-photo-editor" data-testid="file-viewer-photo-editor">
         <h2>Кадрирование и поворот</h2>
-        <p class="muted">Создайте отдельную JPEG-копию, затем добавьте,
-          переместите и отредактируйте надписи прямо на её предпросмотре.
-          Маски приватности и изменение оригинала недоступны.</p>
+        <p class="muted">Кадр, поворот, цвет и уже созданные слои видны
+          сразу в локальном предпросмотре. JPEG-копия создаётся только
+          по кнопке; оригинал не изменяется.</p>
         <div class="file-viewer-photo-aspects"
           data-testid="file-viewer-crop-aspects" aria-label="Пропорции кадра">
           <span>Пропорции</span>
@@ -2079,6 +2144,18 @@ onUnmounted(()=>{
             <input v-model.number="photoSaturation" type="range" min="0" max="200"
               step="10" data-testid="file-viewer-photo-saturation">
           </label>
+        </div>
+        <div v-show="!cropResult&&!showBefore"
+          class="file-viewer-still-preview" data-testid="file-viewer-photo-live-region">
+          <p class="muted">Живой предпросмотр в памяти устройства.
+            Размер ограничен для скорости; сохранение JPEG и выдача доступа
+            не происходят автоматически.</p>
+          <canvas ref="livePreviewCanvas" v-show="livePreviewReady"
+            data-testid="file-viewer-photo-live-preview"
+            role="img" aria-label="Предпросмотр фото с текущими настройками и слоями"
+            style="display:block;width:auto;height:auto;max-width:100%;max-height:340px;margin:8px auto;background:#111"/>
+          <p v-if="livePreviewError" role="alert"
+            data-testid="file-viewer-photo-live-error">{{ livePreviewError }}</p>
         </div>
         <button type="button" :disabled="busy||cropBusy||showBefore"
           data-testid="file-viewer-create-crop"
