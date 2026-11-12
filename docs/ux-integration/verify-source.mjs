@@ -60,6 +60,28 @@ await checkNumbered('NAVIGATION-MAP.md', 'N', 48, /\| N-(\d{2}) \|/g)
 await checkNumbered('USER-JOURNEYS.md', 'J', 22, /\| J-(\d{2}) \|/g)
 await checkNumbered('INTEGRATION-CONTRACTS.md', 'C', 12, /^## C-(\d{2})/gm)
 await checkNumbered('GAPS-AND-DECISIONS.md', 'GAP', 18, /\| GAP-(\d{2}) \|/g)
+// The human-visible diagram must include ALL and ONLY root docs/_uiux HTML files.
+// "logo/" contains unapproved example branding and is intentionally excluded.
+const visibleSourceRoot = join(root, 'docs/_uiux')
+const uiuxHtml = (await walk(visibleSourceRoot))
+  .filter(path => path.startsWith('docs/_uiux/') &&
+    !path.startsWith('docs/_uiux/logo/') && path.endsWith('.html'))
+  .map(path => path.slice('docs/_uiux/'.length)).sort()
+const visualMap = await readFile(join(docDir, 'VISUAL-MAP.md'), 'utf8')
+const diagrams = [...visualMap.matchAll(/```mermaid\\s*\\n([\\s\\S]*?)\\n```/g)]
+if (diagrams.length !== 1) errors.push('Visual map must contain one complete Mermaid diagram, got ' + diagrams.length)
+else {
+  const filenames = [...diagrams[0][1].matchAll(/\\b[A-Za-z0-9_]+\\.html\\b/g)].map(m => m[0])
+  const actualNames = new Set(filenames)
+  for (const name of uiuxHtml) {
+    const matches = filenames.filter(x => x === name).length
+    if (matches !== 1) errors.push('Visual map needs exactly one node for ' + name + ', got ' + matches)
+  }
+  for (const name of actualNames) if (!uiuxHtml.includes(name)) errors.push('Invented filename in visual map: ' + name)
+  if (filenames.length !== uiuxHtml.length) errors.push('Visual map count mismatch: ' + filenames.length + ' vs ' + uiuxHtml.length)
+}
+console.log('PB3 docs/_uiux: ' + uiuxHtml.length + ' current and historical root HTML files in visual map; logo excluded.')
+
 console.log('PB2 source baseline: ' + manifest.files.length + ' files; doc links and map IDs checked.')
 if (errors.length) { for (const e of errors) console.error('FAIL: ' + e); process.exitCode = 1 }
 else console.log('PASS: exact PB2 source bytes, no extra files, links resolved, IDs present.')
