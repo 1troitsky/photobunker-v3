@@ -6,6 +6,15 @@ import type {MediaPrivateFields} from '../../media/domain/media-crypto'
  * existing Media Outbox; this is NOT an in-place signed-manifest revision.
  * Assignment/provenance, GPS, TTL and ACL are intentionally not inherited.
  */
+export function mayCopyPersonalMediaSource(
+  row:{capture?:unknown;expiresAt:number;state:'queued'|'retry'|'synced'|'conflict'}|undefined,
+  now=Date.now(),
+):boolean{
+  // A copied contribution would evade its signed assignment rules. A
+  // remotely fetched file has no authenticated local capture provenance.
+  return !!row&&row.capture===undefined&&row.expiresAt>now
+    &&row.state!=='conflict'
+}
 export type PersonalMediaCopyDraft={
   name:string
   description:string
