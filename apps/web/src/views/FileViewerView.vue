@@ -627,6 +627,14 @@ async function editInlinePhotoText(id:string):Promise<void>{
   inlineTextInput.value?.focus()
   inlineTextInput.value?.select()
 }
+function updateInlinePhotoText(event:Event):void{
+  const draft=inlinePhotoText.value
+  if(!draft)return
+  inlinePhotoText.value={
+    ...draft,text:(event.target as HTMLTextAreaElement).value,
+  }
+  inlineTextError.value=''
+}
 function cancelInlinePhotoText():void{
   inlinePhotoText.value=null
   inlineTextError.value=''
@@ -2048,7 +2056,9 @@ onUnmounted(()=>{
               data-testid="file-viewer-photo-composition">
               <img :src="showBefore?fileUrl:(composedPhotoUrl||cropUrl)"
                 :alt="showBefore?(preview?.name??'Исходное фото'):croppedFileName"
-                data-testid="file-viewer-crop-preview" draggable="false">
+                data-testid="file-viewer-crop-preview" draggable="false"
+                :class="{'file-viewer-photo-text-target':!activePaintTool&&!showBefore}"
+                @click="beginInlinePhotoTextAt">
               <template v-if="!showBefore&&!composedPhotoUrl">
                 <svg v-for="shape in shapeMarks" :key="shape.id"
                   class="file-viewer-photo-shape-layer"
@@ -2099,6 +2109,7 @@ onUnmounted(()=>{
                     fontSize:photoTextFont(mark),color:mark.color,
                   }"
                   @click="selectPhotoText(mark.id)"
+                  @dblclick.stop="editInlinePhotoText(mark.id)"
                   @pointerdown="startPhotoTextDrag($event,mark.id)"
                   @pointermove="movePhotoTextDrag"
                   @pointerup="stopPhotoTextDrag"
@@ -2120,6 +2131,29 @@ onUnmounted(()=>{
                   @pointercancel="endBlackoutDrag">
                 </button>
               </template>
+              <div v-if="inlinePhotoText&&!showBefore"
+                class="file-viewer-photo-inline-input"
+                :style="{left:inlinePhotoText.x+'%',top:inlinePhotoText.y+'%'}"
+                data-testid="file-viewer-inline-text-editor">
+                <textarea ref="inlineTextInput"
+                  :value="inlinePhotoText.text"
+                  maxlength="220" rows="2"
+                  aria-label="Текст надписи на фотографии"
+                  placeholder="Текст…"
+                  data-testid="file-viewer-inline-text-input"
+                  @input="updateInlinePhotoText"
+                  @keydown.enter.exact.stop.prevent="commitInlinePhotoText"
+                  @keydown.esc.stop.prevent="cancelInlinePhotoText"
+                  @blur="commitInlinePhotoText"/>
+                <div class="file-viewer-photo-inline-actions">
+                  <button type="button" data-testid="file-viewer-inline-text-done"
+                    @pointerdown.prevent
+                    @click="commitInlinePhotoText">Готово</button>
+                  <button type="button" data-testid="file-viewer-inline-text-cancel"
+                    @pointerdown.prevent
+                    @click="cancelInlinePhotoText">Отмена</button>
+                </div>
+              </div>
             </div>
           </div>
           <p class="muted">{{ cropResult.width }} × {{ cropResult.height }}
@@ -2166,9 +2200,15 @@ onUnmounted(()=>{
                 :disabled="cropBusy||textMarks.length>=MAX_TEXT_MARKS"
                 @click="addPhotoText">Добавить текст</button>
             </div>
-            <p v-if="!textMarks.length" class="muted">Добавьте надпись.
-              Перетаскивайте её по фотографии мышью или пальцем.
-              Координаты можно изменить вручную.</p>
+            <p v-if="!textMarks.length" class="muted">
+              Нажми на фотографию, чтобы добавить текст. Пустая надпись
+              не создаётся. Для отмены ввода нажмите Escape.
+            </p>
+            <p v-else class="muted">Нажмите на свободную область фотографии,
+              чтобы создать ещё одну надпись. Двойное нажатие по существующей
+              надписи открывает редактирование прямо на изображении.</p>
+            <p v-if="inlineTextError" role="alert" class="error-text"
+              data-testid="file-viewer-inline-text-error">{{ inlineTextError }}</p>
             <div v-for="(mark,index) in textMarks" :key="mark.id"
               class="file-viewer-photo-text-row"
               :class="{selected:selectedTextId===mark.id}">
@@ -2177,6 +2217,9 @@ onUnmounted(()=>{
                 @click="selectPhotoText(mark.id)">
                 {{ mark.text||'Пустая надпись' }}
               </button>
+              <button type="button" :disabled="cropBusy"
+                :aria-label="'Редактировать надпись '+(index+1)+' на фото'"
+                @click="editInlinePhotoText(mark.id)">На фото</button>
               <button type="button" :disabled="cropBusy"
                 :data-testid="'file-viewer-delete-text-'+index"
                 :aria-label="'Удалить надпись '+(index+1)"
