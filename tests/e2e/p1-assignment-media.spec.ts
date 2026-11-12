@@ -551,10 +551,30 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await expect(B.locator('#camera-assignment'))
       .toHaveValue(assignmentId,{timeout:20000})
     await B.getByTestId('camera-mode').selectOption('video')
+    // Changing audio -> video tears down the old MediaStream, asynchronously
+    // opens a NEW audio+video stream and starts the HTMLVideoElement.
+    // A temporarily enabled button alone is not evidence both live tracks
+    // belong to the newly chosen mode; require actual hardware state.
+    await expect.poll(()=>B.evaluate(()=>{
+      const preview=document.querySelector(
+        '.video-frame video') as HTMLVideoElement|null
+      const live=preview?.srcObject
+      if(!(live instanceof MediaStream)||!preview?.videoWidth)return false
+      return live.getVideoTracks().some(t=>t.readyState==='live')
+        &&live.getAudioTracks().some(t=>t.readyState==='live')
+    }),{timeout:30000}).toBe(true)
     await expect(B.getByTestId('camera-start-recording'))
       .toBeEnabled({timeout:20000})
     await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByTestId('camera-recording-status')).toBeVisible()
+    // If the signed-policy preflight rejects this recording, surface its
+    // exact real UI error instead of a blind missing status element.
+    await expect.poll(async()=>{
+      if(await B.getByTestId('camera-recording-status').isVisible())
+        return 'recording'
+      const alert=B.locator('.error-text[role="alert"]').first()
+      const msg=await alert.count()?await alert.textContent():null
+      return msg?'REJECTED: '+msg:'preflight_pending'
+    },{timeout:20000}).toBe('recording')
     await B.waitForTimeout(1800) // actual camera+microphone recording
     await B.getByTestId('camera-stop-recording').click()
     await expect(B.getByText(/Запись зашифрована и сохранена локально/))
