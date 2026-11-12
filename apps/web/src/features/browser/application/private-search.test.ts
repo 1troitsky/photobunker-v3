@@ -23,6 +23,7 @@ vi.mock('../../media/application/media-outbox',()=>({
 afterEach(()=>{
   activeSession.value=null
   Object.values(mocks).forEach(m=>m.mockReset())
+  vi.unstubAllGlobals()
 })
 function owner(online=true):Session{
   const s={accountId:crypto.randomUUID(),deviceId:crypto.randomUUID(),
@@ -41,6 +42,7 @@ function photo(id:string,local=true,cloud=true):CatalogItem{
 }
 describe('P2 Browser V-33 opt-in 1000-row metadata-only search',()=>{
   it('finds a confidential filename at row 201 without submitting a plaintext query',async()=>{
+    vi.stubGlobal('navigator',{onLine:true})
     owner()
     const rows=Array.from({length:205},(_,i)=>media(
       '00000000-0000-4000-8000-'+(i+1).toString(16).padStart(12,'0'),
@@ -62,6 +64,7 @@ describe('P2 Browser V-33 opt-in 1000-row metadata-only search',()=>{
       .not.toContain('FOUND-ONLY-AT-205')
   })
   it('rejects duplicated rows, >1000 and cancels between batches',async()=>{
+    vi.stubGlobal('navigator',{onLine:true})
     owner()
     const row=media(crypto.randomUUID(),false,true)
     await expect(searchPrivateMetadataBatches('private',[row,row]))
