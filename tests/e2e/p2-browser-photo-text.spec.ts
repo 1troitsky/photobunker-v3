@@ -35,6 +35,8 @@ test('P2 Viewer: editable movable photo text is flattened only into new E2EE JPE
     })
     await context.setOffline(false)
     await page.goto('/browser/file/media/'+original.id)
+    // Accepted File Viewer opens media in a fixed scene; editor is a sheet.
+    await page.getByTestId('viewer-action-edit').click()
     await expect.poll(()=>page.getByTestId('file-viewer-image')
       .evaluate((img:HTMLImageElement)=>img.naturalWidth)).toBe(320)
     await context.setOffline(true)
