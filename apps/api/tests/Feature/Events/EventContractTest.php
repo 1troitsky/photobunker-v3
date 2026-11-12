@@ -140,7 +140,7 @@ final class EventContractTest extends TestCase
             ['occurredAtMs' => '1800000000000'],
             ['occurredAtMs' => -1],
             ['occurredAtMs' => PHP_INT_MAX],
-            ['eventId' => strtoupper(self::EVENT)],
+            ['eventId' => strtoupper('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')],
             ['eventId' => 'not-a-uuid'],
             ['accountId' => 15],
             ['subjectId' => 'not-a-uuid'],
