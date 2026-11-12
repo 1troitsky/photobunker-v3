@@ -20,7 +20,8 @@ import type {StoredMedia,CloudMedia} from '../features/media/application/media-o
 import {enqueueEncryptedMedia} from '../features/media/application/media-outbox'
 import {registerSafeDerivativeCandidate} from '../features/media/application/safe-derivatives'
 import {
-  isPersonalMediaCopyChanged,validatePersonalMediaCopy,
+  isPersonalMediaCopyChanged,mayCopyPersonalMediaSource,
+  validatePersonalMediaCopy,
 } from '../features/browser/application/personal-media-copy'
 import type {PersonalMediaCopyDraft} from '../features/browser/application/personal-media-copy'
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
@@ -252,8 +253,7 @@ const personalCopyEligible=computed(()=>{
   if(!target||target.protocol!=='media'||!source||source.origin!=='local'
     ||!activeSession.value||!fileBlob.value||!fileUrl.value)return false
   return mediaLocal.value.some(row=>row.mediaId===target.id
-    &&!row.capture&&row.expiresAt>Date.now()
-    &&row.state!=='conflict')
+    &&mayCopyPersonalMediaSource(row))
 })
 const privateCopyChanged=computed(()=>!!preview.value
   &&!privateCopySavedId.value
@@ -1486,8 +1486,7 @@ async function savePersonalMetadataCopy():Promise<void>{
     if(!sameSession(session,epoch)||!editorMode.value||!current.value
       ||current.value.id!==target.id)return
     const eligible=rows.find(row=>row.mediaId===target.id
-      &&!row.capture&&row.expiresAt>Date.now()
-      &&row.state!=='conflict')
+      &&mayCopyPersonalMediaSource(row))
     if(!eligible)throw Error('copy.source_not_personal')
     // Re-read/decrypt the source with its original owner key. An arbitrary
     // Viewer blob URL is not an authorization to clone other people's files.
