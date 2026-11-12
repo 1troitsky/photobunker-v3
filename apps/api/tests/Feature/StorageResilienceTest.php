@@ -136,6 +136,55 @@ final class StorageResilienceTest extends TestCase
         $this->assertDatabaseCount('storage_retry_tickets',0);
     }
 
+    public function test_storage_exception_preserves_pending_then_recovers_once_after_restart():void
+    {
+        $f=$this->fixture('media','uploading');
+        // A service outage is not a missing-object proof; no false ACK.
+        $ledger=app(StorageRetryLedger::class);
+        $ledger->remember('media',$f['asset']);
+        $fault=new class implements StorageAdapter {
+            public function putStream(string $key,mixed $stream):bool{
+                throw new \RuntimeException('provider.down');
+            }
+            public function readStream(string $key):mixed{
+                throw new \RuntimeException('provider.down');
+            }
+            public function exists(string $key):bool{
+                throw new \RuntimeException('provider.down');
+            }
+            public function size(string $key):int{
+                throw new \RuntimeException('provider.down');
+            }
+            public function delete(string $key):bool{
+                throw new \RuntimeException('provider.down');
+            }
+        };
+        $result=$ledger->reconcile(new StorageManager($fault),10);
+        $this->assertSame(['verified'=>0,'await_client'=>0,'retry'=>1,'retired'=>0],$result);
+        $this->assertDatabaseHas('media_chunks_v1',['id'=>$f['asset'],'state'=>'uploading']);
+        $this->assertDatabaseHas('media_chunk_locations_v1',[
+            'chunk_id'=>$f['asset'],'state'=>'reserved',
+        ]);
+        $this->assertDatabaseHas('storage_retry_tickets',[
+            'asset_id'=>$f['asset'],'disposition'=>'retry',
+        ]);
+        $this->assertSame(0,array_sum((new StorageRetryLedger())
+            ->reconcile(app(StorageManager::class),10)));
+        // Service returns with the ciphertext that survived the outage:
+        // a fresh process verifies the same immutable bytes and cleans ticket.
+        Storage::disk('ciphertext')->put($f['key'],$f['bytes']);
+        Carbon::setTestNow(now()->addSeconds(31));
+        $result=(new StorageRetryLedger())->reconcile(app(StorageManager::class),10);
+        $this->assertSame(['verified'=>1,'await_client'=>0,'retry'=>0,'retired'=>0],$result);
+        $this->assertDatabaseHas('media_chunks_v1',['id'=>$f['asset'],'state'=>'verified']);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$f['parent'],'state'=>'pending','receipt'=>null,
+        ]);
+        $this->assertDatabaseCount('storage_retry_tickets',0);
+        $this->assertSame(['verified'=>0,'await_client'=>0,'retry'=>0,'retired'=>0],
+            (new StorageRetryLedger())->reconcile(app(StorageManager::class),10));
+    }
+
     public function test_missing_or_corrupt_s3_ciphertext_never_becomes_verified():void
     {
         $f=$this->fixture('photo','uploading');
