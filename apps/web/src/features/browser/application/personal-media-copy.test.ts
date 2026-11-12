@@ -1,6 +1,7 @@
 import {describe,expect,it} from 'vitest'
 import {
-  isPersonalMediaCopyChanged,validatePersonalMediaCopy,
+  isPersonalMediaCopyChanged,mayCopyPersonalMediaSource,
+  validatePersonalMediaCopy,
 } from './personal-media-copy'
 
 describe('P2 V-47 private metadata E2EE copy intent',()=>{
@@ -25,6 +26,17 @@ describe('P2 V-47 private metadata E2EE copy intent',()=>{
     expect(isPersonalMediaCopyChanged(original,{
       ...original,name:'PRIVATE-COPY.jpg',
     })).toBe(true)
+  })
+  it('does not clone assignment captures, expired files or unverified sources',()=>{
+    expect(mayCopyPersonalMediaSource(undefined)).toBe(false)
+    const unexpired=Date.now()+500000
+    const personal={state:'queued' as const,expiresAt:unexpired}
+    expect(mayCopyPersonalMediaSource(personal)).toBe(true)
+    expect(mayCopyPersonalMediaSource({...personal,state:'synced'})).toBe(true)
+    expect(mayCopyPersonalMediaSource({...personal,state:'conflict'})).toBe(false)
+    expect(mayCopyPersonalMediaSource({...personal,capture:{contract:'signed'}})).toBe(false)
+    expect(mayCopyPersonalMediaSource({...personal,expiresAt:Date.now()-1}))
+      .toBe(false)
   })
   it('rejects false filename disguises, controls and unsafe paths',()=>{
     for(const name of ['', '  ','../private.jpg','folder\\private.jpg',
