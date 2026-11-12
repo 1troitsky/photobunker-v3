@@ -11,9 +11,17 @@ if (!is_array($plans) || array_keys($plans) !== $ids) {
     fwrite(STDERR, "Invalid canonical plan IDs/order.\n");
     exit(1);
 }
-if (($catalog['currency'] ?? '') !== 'USD'
-    || ($catalog['storage_unit_policy'] ?? '') !== 'OPEN_GB_VS_GIB') {
-    fwrite(STDERR, "Invalid catalog currency or unresolved unit marker.\n");
+$policy=$catalog['storage_unit_policy']??null;
+$version=$catalog['catalog_version']??null;
+$effective=$catalog['effective_at']??null;
+// Exact owner-approved revision (12 Nov), with historical registry readable.
+// A policy/version mismatch or accidental return to unresolved current units
+// is a SECURITY failure, never a license to disable this canonical guard.
+$approved=$policy==='DECIMAL_GB_TB_V1'
+    &&$version==='pb3-2026-11-12'
+    &&$effective==='2026-11-12T00:00:00Z';
+if (($catalog['currency'] ?? '') !== 'USD'||!$approved) {
+    fwrite(STDERR, "Invalid canonical tariff unit policy/version.\n");
     exit(1);
 }
 
@@ -48,6 +56,32 @@ foreach ($expected as $id => [$price, $assignments, $files, $storage, $unit, $tt
     ];
     if (in_array(false, $checks, true)) {
         fwrite(STDERR, "Plan mismatch: {$id}\n");
+        exit(1);
+    }
+}
+// Exercise the same immutable PlanDefinition as Laravel without requiring
+// composer or a live DB: exact decimal encrypted byte ceilings, overflow,
+// schema and feature flags must survive the independent P0 security floor.
+require_once dirname(__DIR__).'/apps/api/app/Plans/PlanDefinition.php';
+$exactBytes=[
+    'free'=>1000000000,
+    'go'=>30000000000,
+    'pro'=>200000000000,
+    'unlimited'=>500000000000,
+    'unlimited_plus'=>1000000000000,
+];
+foreach($exactBytes as $id=>$expectedBytes){
+    try{
+        $definition=\App\Plans\PlanDefinition::fromConfig(
+            $id,$catalog,$plans[$id]);
+    }catch(\Throwable){
+        fwrite(STDERR,"Invalid immutable plan definition: {$id}\n");
+        exit(1);
+    }
+    $storage=$definition->value['limits']['storage'];
+    if($storage['byteCeiling']!==$expectedBytes
+        ||$storage['unitPolicy']!=='DECIMAL_GB_TB_V1'){
+        fwrite(STDERR,"Incorrect decimal ciphertext byte ceiling: {$id}\n");
         exit(1);
     }
 }

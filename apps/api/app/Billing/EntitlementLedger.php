@@ -118,7 +118,9 @@ final class EntitlementLedger
             'schema_version'=>1,'currency'=>'USD',
             'catalog_version'=>$row->catalog_version,
             'effective_at'=>$d['effectiveAt']??null,
-            'storage_unit_policy'=>'OPEN_GB_VS_GIB',
+            // Verify the exact policy committed to the immutable historical
+            // definition, not the newly deployed public price catalog.
+            'storage_unit_policy'=>$d['limits']['storage']['unitPolicy']??null,
         ],self::unmapForIntegrity($d));
         if($stored->json!==$json || $stored->sha256!==$hash) {
             throw new RuntimeException('billing.snapshot_integrity_failed');

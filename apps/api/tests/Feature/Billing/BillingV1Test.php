@@ -83,14 +83,14 @@ final class BillingV1Test extends TestCase
             $this->event($tag),'settlement_verified',$start,$end);
     }
 
-    public function test_public_catalog_has_exact_owner_prices_all_five_plans_and_no_invented_bytes():void
+    public function test_public_catalog_has_exact_owner_prices_and_approved_decimal_byte_ceilings():void
     {
         $response=$this->getJson('/billing/v1/plans')->assertOk()
             ->assertHeader('Cache-Control','no-store, private')
             ->assertJsonPath('schemaVersion',1)
-            ->assertJsonPath('catalogVersion','pb3-2026-11-09')
-            ->assertJsonPath('effectiveAt','2026-11-09T00:00:00Z')
-            ->assertJsonPath('unitPolicy','OPEN_GB_VS_GIB')
+            ->assertJsonPath('catalogVersion','pb3-2026-11-12')
+            ->assertJsonPath('effectiveAt','2026-11-12T00:00:00Z')
+            ->assertJsonPath('unitPolicy','DECIMAL_GB_TB_V1')
             ->assertJsonCount(5,'plans');
         $plans=$response->json('plans');
         $this->assertSame(['free','go','pro','unlimited','unlimited_plus'],
@@ -109,15 +109,21 @@ final class BillingV1Test extends TestCase
             array_map(static fn(array $p)=>$p['featureFlags']['byoS3'],$plans));
         $this->assertSame([false,false,false,false,true],
             array_map(static fn(array $p)=>$p['featureFlags']['ownMatrixHomeserver'],$plans));
-        foreach($plans as $p){
-            $this->assertNull($p['limits']['storage']['byteCeiling']);
-            $this->assertSame('OPEN_GB_VS_GIB',$p['limits']['storage']['unitPolicy']);
+        $approvedCeilings=[1000000000,30000000000,200000000000,
+            500000000000,1000000000000];
+        foreach($plans as $i=>$p){
+            $this->assertSame($approvedCeilings[$i],
+                $p['limits']['storage']['byteCeiling']);
+            $this->assertSame('DECIMAL_GB_TB_V1',
+                $p['limits']['storage']['unitPolicy']);
             $this->assertTrue($p['featureFlags']['matrixE2eeMessages']);
             $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/D',$p['definitionSha256']);
             $this->assertSame($p['monthlyPriceCents'],$p['periodPricesCents'][1]);
         }
-        $this->assertSame(['amount'=>1,'unit'=>'TB','byteCeiling'=>null,
-            'unitPolicy'=>'OPEN_GB_VS_GIB'],$plans[4]['limits']['storage']);
+        $this->assertSame([
+            'amount'=>1,'unit'=>'TB','byteCeiling'=>1000000000000,
+            'unitPolicy'=>'DECIMAL_GB_TB_V1',
+        ],$plans[4]['limits']['storage']);
         $this->assertDatabaseCount('billing_entitlement_heads_v1',0);
     }
 
@@ -149,7 +155,10 @@ final class BillingV1Test extends TestCase
             ->assertJsonPath('usage.measurement','read_only_non_atomic')->json();
         $this->assertNull($first['entitlement']['endsAt']);
         $this->assertNull($first['entitlement']['graceEndsAt']);
-        $this->assertNull($first['usage']['enforcedByteCeiling']);
+        $this->assertSame(1000000000,$first['usage']['enforcedByteCeiling']);
+        $this->assertSame('DECIMAL_GB_TB_V1',$first['usage']['byteUnitPolicy']);
+        $this->assertSame('plan_plus_free_technical_guard',
+            $first['usage']['quotaSource']);
         $this->getJson('/billing/v1/me')->assertOk()
             ->assertJsonPath('entitlement.snapshotSha256',
                 $first['entitlement']['snapshotSha256']);
@@ -278,14 +287,59 @@ final class BillingV1Test extends TestCase
         ]);
     }
 
+    public function test_paid_billing_usage_reports_real_decimal_limit_without_client_control():void
+    {
+        $this->login('alice');
+        $this->getJson('/billing/v1/me')->assertOk();
+        $this->activate('go','decimal-api');
+        $this->getJson('/billing/v1/me?enforcedByteCeiling=999999999999999')
+            ->assertOk()
+            ->assertJsonPath('entitlement.planId','go')
+            ->assertJsonPath('entitlement.effectivePlanId','go')
+            ->assertJsonPath('entitlement.effectiveLimits.storage.byteCeiling',
+                30000000000)
+            ->assertJsonPath('entitlement.effectiveLimits.storage.unitPolicy',
+                'DECIMAL_GB_TB_V1')
+            ->assertJsonPath('usage.enforcedByteCeiling',30000000000)
+            ->assertJsonPath('usage.byteUnitPolicy','DECIMAL_GB_TB_V1')
+            ->assertJsonPath('usage.quotaSource','plan_entitlement')
+            ->assertJsonPath('usage.measurement','read_only_non_atomic');
+        // Billing never creates a mutation endpoint from a client planId.
+        $this->postJson('/billing/v1/me',['planId'=>'unlimited_plus'])
+            ->assertStatus(405);
+        $this->assertDatabaseCount('billing_entitlement_snapshots_v1',2);
+    }
+
+    public function test_bad_decimal_policy_version_or_overflow_cannot_be_published():void
+    {
+        $config=config('plans');
+        config()->set('plans.catalog_version','pb3-2026-11-09');
+        config()->set('plans.effective_at','2026-11-09T00:00:00Z');
+        try{
+            $this->getJson('/billing/v1/plans')->assertStatus(500);
+        }finally{
+            config()->set('plans',$config);
+        }
+        config()->set('plans.plans.unlimited_plus.storage_quota.amount',
+            PHP_INT_MAX);
+        try{
+            $this->getJson('/billing/v1/plans')->assertStatus(500);
+        }finally{
+            config()->set('plans',$config);
+        }
+        $this->getJson('/billing/v1/plans')->assertOk()
+            ->assertJsonPath('plans.4.limits.storage.byteCeiling',
+                1000000000000);
+    }
+
     public function test_paid_snapshot_stays_immutable_across_later_public_price_revision():void
     {
         $this->login('alice');
         $this->getJson('/billing/v1/me')->assertOk();
         $this->activate('go','pricing-v1');
         $before=$this->getJson('/billing/v1/me')->assertOk()->json('entitlement');
-        config()->set('plans.catalog_version','pb3-2026-11-10');
-        config()->set('plans.effective_at','2026-11-10T00:00:00Z');
+        config()->set('plans.catalog_version','pb3-2026-11-13');
+        config()->set('plans.effective_at','2026-11-13T00:00:00Z');
         config()->set('plans.plans.go.monthly_price_cents',1900);
         config()->set('plans.plans.go.period_prices_cents',[
             1=>1900,6=>9999,12=>19999,
@@ -295,7 +349,7 @@ final class BillingV1Test extends TestCase
         $after=$this->getJson('/billing/v1/me')->assertOk()->json('entitlement');
         $this->assertSame('go',$after['planId']);
         $this->assertSame(1500,$after['definition']['monthlyPriceCents']);
-        $this->assertSame('pb3-2026-11-09',$after['catalogVersion']);
+        $this->assertSame('pb3-2026-11-12',$after['catalogVersion']);
         $this->assertSame($before['definitionSha256'],$after['definitionSha256']);
         $this->assertSame($before['snapshotSha256'],$after['snapshotSha256']);
     }
@@ -329,7 +383,8 @@ final class BillingV1Test extends TestCase
             ->assertJsonPath('usage.assignmentsCreatedThisUtcMonth',1)
             ->assertJsonPath('usage.activeLogicalMediaFiles',1)
             ->assertJsonPath('usage.recordedCipherBytes',256)
-            ->assertJsonPath('usage.byteUnitPolicy','OPEN_GB_VS_GIB');
+            ->assertJsonPath('usage.byteUnitPolicy','DECIMAL_GB_TB_V1')
+            ->assertJsonPath('usage.enforcedByteCeiling',1000000000);
         $this->login('bob');
         $this->getJson('/billing/v1/me')->assertOk()
             ->assertJsonPath('usage.assignmentsCreatedThisUtcMonth',0)

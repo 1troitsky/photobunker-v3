@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Billing\AccountUsage;
 use App\Billing\EntitlementLedger;
+use App\Billing\QuotaAdmission;
 use App\Photo\PhotoSync;
 use App\Plans\PlanCatalog;
 use Illuminate\Http\JsonResponse;
@@ -31,10 +32,19 @@ final class BillingV1Controller extends Controller
     public function me(Request $request):JsonResponse
     {
         [$account]=$this->identity->actor($request);
+        $id=(string)$account->id;
+        $entitlement=$this->entitlements->current($id);
+        $usage=$this->usage->measure($id);
+        // Measurement remains read-only; expose the *same* quota policy that
+        // both server-side signed reserve paths actually enforce.
+        $policy=QuotaAdmission::storagePolicy($entitlement);
+        $usage['enforcedByteCeiling']=$policy['enforcedByteCeiling'];
+        $usage['byteUnitPolicy']=$policy['unitPolicy'];
+        $usage['quotaSource']=$policy['source'];
         return $this->identity->json([
             'schemaVersion'=>1,
-            'entitlement'=>$this->entitlements->current((string)$account->id),
-            'usage'=>$this->usage->measure((string)$account->id),
+            'entitlement'=>$entitlement,
+            'usage'=>$usage,
         ]);
     }
 }
