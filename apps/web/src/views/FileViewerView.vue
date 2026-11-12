@@ -60,12 +60,27 @@ type Preview={
 }
 const route=useRoute()
 const router=useRouter()
+const editorMode=computed(()=>route.name==='browser-editor')
+const editorTab=ref<'info'|'media'|'review'>('media')
+const editorBody=ref<HTMLElement|null>(null)
+function selectEditorTab(tab:'info'|'media'|'review'):void{
+  editorTab.value=tab
+  nextTick(()=>{if(editorBody.value)editorBody.value.scrollTop=0})
+}
 const stage=ref<HTMLElement|null>(null)
 const panel=ref<'info'|'editor'|null>(null)
 const sheetClose=ref<HTMLButtonElement|null>(null)
 let panelOpener:HTMLElement|null=null
 async function openPanel(kind:'info'|'editor'):Promise<void>{
   if(!fileUrl.value||!preview.value)return
+  if(kind==='editor'){
+    if(!current.value)return
+    editorTab.value='media'
+    await router.push({name:'browser-editor',params:{
+      protocol:current.value.protocol,id:current.value.id,
+    }})
+    return
+  }
   panelOpener=document.activeElement instanceof HTMLElement
     ?document.activeElement:null
   panel.value=kind
@@ -73,12 +88,14 @@ async function openPanel(kind:'info'|'editor'):Promise<void>{
   sheetClose.value?.focus()
 }
 function closePanel():void{
+  if(editorMode.value){void cancelEditor();return}
   panel.value=null
   const previous=panelOpener
   panelOpener=null
   if(previous?.isConnected)void nextTick(()=>previous.focus())
 }
 function onSheetKeydown(event:KeyboardEvent):void{
+  if(editorMode.value)return
   if(event.key==='Escape'){
     event.preventDefault();event.stopPropagation();closePanel();return
   }
@@ -924,6 +941,12 @@ async function navigate(item:CatalogItem|{source:'photo'|'media';id:string}|null
 }
 function onKeyDown(event:KeyboardEvent):void{
   if(event.defaultPrevented||event.altKey)return
+  if(editorMode.value){
+    if(event.key==='Escape'){event.preventDefault();void cancelEditor();return}
+    // The editor uses arrow keys for range/brush movement, not pager history.
+    if(!((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'))
+      return
+  }
   if(panel.value){
     if(event.key==='Escape'){event.preventDefault();closePanel();return}
     // The editor remains a real editing surface: retain the existing
@@ -1255,6 +1278,80 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
+// The dedicated editor is a screen, not a separate media backend. Save only
+// the already prepared, separately encrypted derivative; never claim an
+// upload ACK, mutate the original or silently persist edited metadata.
+const editorReady=computed(()=>{
+  if(!editorMode.value||!activeSession.value||!fileUrl.value||!preview.value
+    ||busy.value)return false
+  if(preview.value.type==='photo')
+    return !!cropResult.value&&!cropBusy.value&&!showBefore.value
+      &&!cropSavedId.value
+  if(preview.value.type==='audio')
+    return !!audioClip.value&&!audioClipBusy.value&&!audioClipSavedId.value
+  return !!still.value&&!stillBusy.value&&!stillSavedId.value
+})
+const editorUnsaved=computed(()=>{
+  if(!editorMode.value||!preview.value)return false
+  if(preview.value.type==='photo'){
+    if(cropSavedId.value)return false
+    return !!cropResult.value||!!cropBusy.value||cropLeft.value!==0
+      ||cropTop.value!==0||cropWidth.value!==100||cropHeight.value!==100
+      ||cropTurns.value!==0||photoBrightness.value!==100
+      ||photoContrast.value!==100||photoSaturation.value!==100
+      ||textMarks.value.length>0||shapeMarks.value.length>0
+      ||strokeMarks.value.length>0||photoBlackouts.value.length>0
+  }
+  if(preview.value.type==='audio')
+    return !audioClipSavedId.value&&(
+      !!audioClip.value||audioClipBusy.value||trimStart.value!==0
+      ||(audioDuration.value>0
+        &&Math.abs(trimEnd.value-Math.min(audioDuration.value,60))>0.051))
+  return !stillSavedId.value&&(!!still.value||stillBusy.value)
+})
+function resetEditorDraft():void{
+  clearTextMarks()
+  clearCrop()
+  cropLeft.value=0;cropTop.value=0
+  cropWidth.value=100;cropHeight.value=100;cropTurns.value=0
+  photoBrightness.value=100;photoContrast.value=100;photoSaturation.value=100
+  clearAudioClip()
+  trimStart.value=0
+  trimEnd.value=Math.min(audioDuration.value,60)
+  clearStill()
+}
+function editorViewerPath():string|null{
+  const target=current.value
+  return target?'/browser/file/'+target.protocol+'/'+target.id:null
+}
+async function returnFromEditor():Promise<void>{
+  const path=editorViewerPath()
+  if(!path)return
+  // Editor is normally pushed from Viewer. Pop that one editor entry so
+  // the next native Back goes straight to Browser, not a duplicate Viewer.
+  if(window.history.state?.back===path)await router.back()
+  else await router.replace(path) // validated direct editor deep link/reload
+}
+async function cancelEditor():Promise<void>{
+  if(!editorMode.value)return
+  await returnFromEditor()
+}
+async function saveEditor():Promise<void>{
+  if(!editorReady.value||!editorMode.value||!preview.value||!current.value)return
+  const before=viewerKey(current.value)
+  const kind=preview.value.type
+  if(kind==='photo')await saveCroppedPhoto()
+  else if(kind==='audio')await saveAudioFragment()
+  else await saveStillToBrowser()
+  if(!activeSession.value||!editorMode.value||!current.value
+    ||viewerKey(current.value)!==before)return
+  const success=kind==='photo'?!!cropSavedId.value
+    :kind==='audio'?!!audioClipSavedId.value:!!stillSavedId.value
+  if(success){
+    notice.value='Производный файл зашифрован в локальной очереди Browser. Подтверждение облака отдельно.'
+    await returnFromEditor()
+  }
+}
 watch([paintCanvas,strokeMarks,draftStroke,cropResult,compositionWidth],()=>{
   renderPaintCanvas()
 },{flush:'post'})
@@ -1278,10 +1375,22 @@ watch([trimStart,trimEnd],()=>{clearAudioClip()})
 // The shared Shell exposes only a callable action. All media content,
 // filenames and permissions remain inside FileViewerView. The callback
 // is cleared on lock, route change and unmount.
-watch([fileUrl,preview,activeSession],()=>{
-  setViewerShellActions(activeSession.value&&fileUrl.value&&preview.value
-    ?{download}:null)
+watch([fileUrl,preview,activeSession,editorMode,editorReady],()=>{
+  if(editorMode.value){
+    setViewerShellActions({download,editor:{
+      cancel:()=>{void cancelEditor()},
+      save:()=>{void saveEditor()},
+      canSave:editorReady.value,
+    }})
+  }else{
+    setViewerShellActions(activeSession.value&&fileUrl.value&&preview.value
+      ?{download}:null)
+  }
 },{immediate:true})
+watch(editorMode,()=>{
+  panel.value=null
+  editorTab.value='media'
+})
 watch(activeSession,(next,previous)=>{
   // A CSRF/session reauthentication may replace Session with a new object
   // containing the SAME key package and physical device. Never erase a
@@ -1318,11 +1427,17 @@ watch([()=>route.params.protocol,()=>route.params.id],()=>{
 // Browser history Back, the shell dock and the explicit breadcrumb all
 // converge here. Never put a private search term or folder path into a URL.
 onBeforeRouteLeave((to)=>{
+  if(editorMode.value&&editorUnsaved.value){
+    if(!window.confirm('Отменить несохранённые изменения файла? Исходный файл останется без изменений.'))
+      return false
+    resetEditorDraft()
+  }
   if(to.path==='/browser'){
     const identity=activeSession.value
     if(identity)armBrowserReturn(identity.accountId,identity.deviceId)
     else discardBrowserReturnContext()
-  }else if(to.name!=='browser-viewer')discardBrowserReturnContext()
+  }else if(to.name!=='browser-viewer'&&to.name!=='browser-editor')
+    discardBrowserReturnContext()
 })
 onMounted(()=>window.addEventListener('keydown',onKeyDown))
 onUnmounted(()=>{
@@ -1334,7 +1449,9 @@ onUnmounted(()=>{
 </script>
 
 <template>
-  <section class="foundation-content file-viewer" data-testid="file-viewer">
+  <section class="foundation-content file-viewer"
+    :class="{'file-viewer-editor-route':editorMode}"
+    data-testid="file-viewer">
 
     <div v-if="!activeSession" class="foundation-card">
       <p>Для просмотра зашифрованных файлов необходим вход.</p>
@@ -1354,13 +1471,13 @@ onUnmounted(()=>{
         data-testid="file-viewer-stage"
         @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
         <div v-if="busy" role="status" class="file-viewer-wait">Открываем защищённый файл…</div>
-        <img v-else-if="fileUrl&&preview?.type==='photo'" ref="photoElement"
+        <img v-else-if="!editorMode&&fileUrl&&preview?.type==='photo'" ref="photoElement"
           :src="fileUrl" :alt="preview?.name??'Фото'" draggable="false"
           data-testid="file-viewer-image">
-        <video v-else-if="fileUrl&&preview?.type==='video'" :key="fileUrl"
+        <video v-else-if="!editorMode&&fileUrl&&preview?.type==='video'" :key="fileUrl"
           ref="videoElement" :src="fileUrl" controls playsinline preload="metadata"
           data-testid="file-viewer-video"/>
-        <div v-else-if="fileUrl&&preview?.type==='audio'" class="file-viewer-audio">
+        <div v-else-if="!editorMode&&fileUrl&&preview?.type==='audio'" class="file-viewer-audio">
           <span aria-hidden="true">♫</span>
           <audio :key="fileUrl" ref="audioElement" :src="fileUrl"
             controls preload="metadata" @loadedmetadata="onAudioMetadata"
@@ -1404,18 +1521,59 @@ onUnmounted(()=>{
           @click="navigate(adjacent.next)">›</button>
       </div>
       </div>
-      <div v-show="panel!==null" class="file-viewer-overlay"
+      <div v-show="panel!==null||editorMode" class="file-viewer-overlay"
         data-testid="file-viewer-sheet-layer" @click.self="closePanel">
-        <section class="file-viewer-sheet" role="dialog" aria-modal="true"
-          :aria-label="panel==='editor'?'Редактирование файла':'Информация о файле'"
+        <section class="file-viewer-sheet"
+          :role="editorMode?undefined:'dialog'"
+          :aria-modal="editorMode?undefined:'true'"
+          :aria-label="editorMode?undefined:panel==='editor'?'Редактирование файла':'Информация о файле'"
           @keydown="onSheetKeydown">
-          <header class="file-viewer-sheet-heading">
+          <header v-if="!editorMode" class="file-viewer-sheet-heading">
             <h2>{{ panel==='editor'?'Редактирование':'Информация' }}</h2>
             <button ref="sheetClose" type="button" data-testid="viewer-panel-close"
               @click="closePanel">Закрыть</button>
           </header>
-          <div class="file-viewer-sheet-body">
-            <div v-show="panel==='editor'" class="file-viewer-editor-sections">
+          <div v-else class="file-editor-route-heading">
+            <nav class="file-editor-route-path" aria-label="Путь редактора">
+              <button type="button" @click="cancelEditor" aria-label="Вернуться к файлу">‹</button>
+              <span>Browser › {{ preview?.name??'Файл' }}</span>
+            </nav>
+            <h1>{{ preview?.type==='photo'?'Редактировать фото':
+              preview?.type==='audio'?'Редактировать аудио':'Редактировать видео' }}</h1>
+            <nav class="file-editor-route-tabs" aria-label="Вкладки редактора"
+              data-testid="file-editor-tabs">
+              <button type="button" :aria-current="editorTab==='info'?'page':undefined"
+                @click="selectEditorTab('info')">Информация</button>
+              <button type="button" :aria-current="editorTab==='media'?'page':undefined"
+                @click="selectEditorTab('media')">
+                {{ preview?.type==='photo'?'Фото':preview?.type==='audio'?'Аудио':'Видео' }}
+              </button>
+              <button type="button" :aria-current="editorTab==='review'?'page':undefined"
+                @click="selectEditorTab('review')">Проверка</button>
+            </nav>
+          </div>
+          <div ref="editorBody" class="file-viewer-sheet-body">
+            <p v-if="editorMode&&busy" role="status" class="file-viewer-wait">
+              Открываем защищённый файл…
+            </p>
+            <p v-if="editorMode&&error" role="alert" class="error-text">{{ error }}</p>
+            <p v-if="editorMode&&!activeSession" role="alert" class="error-text">
+              Для редактирования требуется подтверждённая сессия.
+            </p>
+            <div v-show="panel==='editor'||(editorMode&&editorTab==='media')"
+              class="file-viewer-editor-sections">
+              <div v-if="editorMode&&fileUrl&&preview" class="file-editor-source"
+                data-testid="file-editor-source">
+                <img v-if="preview.type==='photo'" ref="photoElement"
+                  :src="fileUrl" :alt="preview.name" draggable="false"
+                  data-testid="file-viewer-image">
+                <video v-else-if="preview.type==='video'" :key="fileUrl"
+                  ref="videoElement" :src="fileUrl" controls playsinline preload="metadata"
+                  data-testid="file-viewer-video"/>
+                <audio v-else :key="fileUrl" ref="audioElement" :src="fileUrl"
+                  controls preload="metadata" @loadedmetadata="onAudioMetadata"
+                  data-testid="file-viewer-audio"/>
+              </div>
       <section v-if="preview?.type==='photo'&&fileUrl"
         class="file-viewer-photo-editor" data-testid="file-viewer-photo-editor">
         <h2>Кадрирование и поворот</h2>
@@ -1942,7 +2100,7 @@ onUnmounted(()=>{
           {{ stillError }}</p>
       </section>
             </div>
-            <div v-show="panel==='info'">
+            <div v-show="panel==='info'||(editorMode&&editorTab==='info')">
       <div v-if="preview" class="file-viewer-information" data-testid="file-viewer-info">
         <div class="file-viewer-info-heading">
           <div>
@@ -1980,6 +2138,18 @@ onUnmounted(()=>{
           Скачивание — только после явного подтверждения.</p>
       </div>
             </div>
+            <section v-if="editorMode" v-show="editorTab==='review'"
+              class="file-editor-review" data-testid="file-editor-review">
+              <h2>Проверка куратором</h2>
+              <p>Решения куратора требуют подтверждённых ролей, политики задания
+                и серверного аудита. Этот раздел пока доступен только для просмотра.</p>
+              <div class="file-editor-review-controls">
+                <button disabled type="button">Принять</button>
+                <button disabled type="button">Исправить</button>
+                <button disabled type="button">Переснять</button>
+                <button disabled type="button">Отклонить</button>
+              </div>
+            </section>
           </div>
         </section>
       </div>

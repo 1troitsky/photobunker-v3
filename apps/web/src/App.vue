@@ -62,13 +62,23 @@ const dock = [
           </svg>
         </button>
       </div>
+      <div class="shell-header-actions editor-header-actions"
+        v-else-if="route.name==='browser-editor'" data-testid="editor-shell-actions"
+        aria-label="Редактор файла">
+        <button type="button" data-testid="editor-shell-cancel"
+          @click="viewerShellActions?.editor?.cancel()">Отмена</button>
+        <button class="editor-shell-save" type="button"
+          data-testid="editor-shell-save"
+          :disabled="!viewerShellActions?.editor?.canSave"
+          @click="viewerShellActions?.editor?.save()">Сохранить</button>
+      </div>
       <div class="shell-header-actions" v-else-if="route.path==='/contacts'">
         <button type="button" disabled aria-label="Blacklist — пока недоступен"
           title="Требует настоящего серверного отзыва полномочий">Blacklist</button>
       </div>
     </header>
 
-    <main class="shell-main" :class="{'shell-main-viewer':route.name==='browser-viewer'}" id="main">
+    <main class="shell-main" :class="{'shell-main-viewer':route.name==='browser-viewer'||route.name==='browser-editor'}" id="main">
       <RouterView />
     </main>
 

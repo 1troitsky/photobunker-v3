@@ -17,6 +17,11 @@ export const router = createRouter({
     { path: '/browser', component: PhotoBrowserView, meta: { title: 'Browser' } },
     { path: '/browser/file/:protocol/:id', name: 'browser-viewer',
       component: FileViewerView, meta: { title: 'Просмотр файла' } },
+    // Reuse the same authorized, Local-First file lifecycle and E2EE
+    // processing pipeline. The Editor is a distinct user-facing route,
+    // not a second implementation of the JPEG/WAV/still engine.
+    { path: '/browser/file/:protocol/:id/edit', name: 'browser-editor',
+      component: FileViewerView, meta: { title: 'Редактирование файла' } },
     { path: '/camera', component: CaptureView, meta: { title: 'Камера' } },
     { path: '/contacts', component: ContactsTeamsView, meta: { title: 'Контакты и Команды' } },
     { path: '/settings', component: AccountView, meta: { title: 'Настройки' } },
