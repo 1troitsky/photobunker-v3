@@ -62,3 +62,7 @@ Maintain separate columns in future reviews: **UX-approved version**, **PB3 code
 - **Следующие реальные GAP:** GAP-05 (Profile 1.6 WIP), GAP-10 (billing), GAP-12 (Matrix), GAP-16 (physical/mobile visual audit) остаются открыты. Для GAP-08/09 уже существует рабочая частичная интеграция, но **визуальная приёмка на устройствах не проведена**.
 
 [Развёрнутый отчёт о проверках, происхождении файлов и запрете преждевременного merge](../audits/P2-PRODUCT-UX-V51-INTEGRATION-20261112.md).
+
+### V52 correction to integration snapshot
+
+The V51 snapshot above was extended with current PRODUCT **[#157](https://github.com/1troitsky/photobunker-v3/pull/157)** @ `b887a0ffc993ad21a23eee7cac0d24eb66488215`. Four V52 product paths were imported by exact blob SHA and had **zero** overlap with previous UX changes. The integration Draft **#158** now targets the V52 product branch; final combined E2E (including 54 original product cases plus five UX settings cases) is a separate gate. The original 117 PB2 UX files and 23-file map remain unchanged. See [the V51→V52 audit](../audits/P2-PRODUCT-UX-V51-INTEGRATION-20261112.md).

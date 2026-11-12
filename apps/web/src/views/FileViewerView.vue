@@ -2276,23 +2276,28 @@ onUnmounted(()=>{
                 :aria-label="'Удалить надпись '+(index+1)"
                 @click="deletePhotoText(mark.id)">Удалить</button>
             </div>
-            <div v-if="selectedText" class="file-viewer-photo-text-settings">
+            <div v-if="selectedText"
+              class="file-viewer-photo-text-settings file-viewer-photo-text-properties"
+              data-testid="file-viewer-text-properties">
               <label>Текст
                 <textarea :value="selectedText.text" maxlength="220" rows="2"
                   :disabled="cropBusy" data-testid="file-viewer-edit-text"
                   @input="setTextValue"/>
               </label>
-              <label>Цвет текста
-                <input type="color" :value="selectedText.color"
-                  :disabled="cropBusy" data-testid="file-viewer-text-color"
-                  @input="setTextColor">
-              </label>
-              <label>Размер · {{ selectedText.size }}% ширины кадра
-                <input type="range" min="2" max="12" step="1"
-                  :value="selectedText.size" :disabled="cropBusy"
-                  data-testid="file-viewer-text-size"
-                  @input="setTextSize">
-              </label>
+              <div class="file-viewer-photo-text-color-size"
+                data-testid="file-viewer-text-color-size">
+                <label>Цвет
+                  <input type="color" :value="selectedText.color"
+                    :disabled="cropBusy" data-testid="file-viewer-text-color"
+                    @input="setTextColor">
+                </label>
+                <label>Размер · {{ selectedText.size }}% ширины кадра
+                  <input type="range" min="2" max="12" step="1"
+                    :value="selectedText.size" :disabled="cropBusy"
+                    data-testid="file-viewer-text-size"
+                    @input="setTextSize">
+                </label>
+              </div>
               <label>Позиция по X (%)
                 <input type="number" min="0" max="85" step="1"
                   :value="selectedText.x" :disabled="cropBusy"

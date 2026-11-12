@@ -53,3 +53,15 @@ Evidence of the final integrated CI run should be appended to this report or PR 
 - No changes to the independent #139/#140/#146/#155/#138 branches.
 - New PRODUCT editor work should continue on latest product head; integrated UX work should rebase/merge from here only after checking current open PRs and overlap.
 - Matrix remains a separate scope; new source docs do not imply it is enabled.
+
+---
+
+## V52 integration update — PRODUCT PR #157, 2026-11-12
+
+Product [#157](https://github.com/1troitsky/photobunker-v3/pull/157) @ `b887a0ffc993ad21a23eee7cac0d24eb66488215` extends #156 with genuine Photo Editor text **Color + Size** toolbar and encrypted JPEG proof. Its own exact-head CI: **3/3 PASS**, **54/54 real Chromium E2E PASS** ([Actions 43169529825](https://github.com/1troitsky/photobunker-v3/actions/runs/43169529825)).
+
+**Checked product delta:** only `apps/web/src/styles.css`, `apps/web/src/views/FileViewerView.vue`, `tests/e2e/p2-browser-photo-inline-text.spec.ts` and `docs/planning/P2-V52-PHOTO-TEXT-COLOR-SIZE-MOBILE.md`. Before adding these four exact V52 Git blob SHAs, the integrated tree contained the identical blob SHAs of PRODUCT #156 for the three pre-existing paths; the fourth path did not exist. Thus no UX or accepted source changes collide with #157.
+
+Integration branch now adds a dedicated **two-parent merge** of the previous four-parent V51 integration commit chain and PR #157. The **resulting V52 tree includes the entire #157 product code exactly**, plus UX #155 and approved #138 source files. **Do not infer V52 CI PASS** from PR #157 (independent) or the earlier V51 integration run; full combined V52 CI on the final head is mandatory.
+
+For final review, PR #158 should target the V52 product branch `p2/photo-text-color-size-mobile-row`. Before any main merge recheck whether product has advanced again; the frozen V52 integration is a checked snapshot, not authority to auto-merge future PRs.
