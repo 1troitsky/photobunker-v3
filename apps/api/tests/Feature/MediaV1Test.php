@@ -157,6 +157,103 @@ final class MediaV1Test extends TestCase
         $this->assertDatabaseCount('media_files_v1',3);
     }
 
+    public function test_fresh_chunk_upload_lease_is_retryable_and_stale_lease_resumes():void
+    {
+        $f=$this->fixture('video',1048737);
+        $c=$f['contract'];$id=$c['mediaId'];
+        $this->postJson('/media/v1/reserve',[
+            'contract'=>$f['json'],'signature'=>$f['signature'],
+        ])->assertCreated();
+        $chunkId=$c['chunks'][0]['chunkId'];
+        DB::table('media_chunks_v1')->where('id',$chunkId)
+            ->update(['state'=>'uploading','updated_at'=>now()]);
+        // The encrypted IndexedDB outbox retries HTTP 503. The historical
+        // 409 permanently quarantined a recoverable upload lease.
+        $this->send($f,0)->assertStatus(503)->assertHeader('Retry-After','5');
+        $this->assertDatabaseHas('media_chunks_v1',[
+            'id'=>$chunkId,'state'=>'uploading',
+        ]);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$id,'state'=>'pending','receipt'=>null,
+        ]);
+        DB::table('media_chunks_v1')->where('id',$chunkId)
+            ->update(['updated_at'=>now()->subMinutes(3)]);
+        // A restart can safely reupload the same immutable ciphertext.
+        $this->send($f,0)->assertOk()->assertJsonPath('verified',true);
+        $this->send($f,0)->assertOk()->assertJsonPath('verified',true);
+        $this->send($f,1)->assertOk();
+        $receipt=$this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$c['operationId'],
+        ])->assertOk()->json('receipt');
+        $this->assertSame($id,$receipt['mediaId']);
+        $this->assertSame($receipt,$this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$c['operationId'],
+        ])->assertOk()->json('receipt'));
+    }
+
+    public function test_truncated_encrypted_chunk_does_not_ack_and_recovers_exact_bytes():void
+    {
+        $f=$this->fixture('audio',1048737);
+        $c=$f['contract'];$id=$c['mediaId'];
+        $this->postJson('/media/v1/reserve',[
+            'contract'=>$f['json'],'signature'=>$f['signature'],
+        ])->assertCreated();
+        $part=$c['chunks'][0];
+        $binary=$f['chunks'][$part['chunkId']];
+        $partial=substr($binary,0,strlen($binary)-9);
+        // Advertise full expected size but deliver incomplete ciphertext.
+        $this->call('PUT','/media/v1/'.$id.'/chunks/'.$part['chunkId'],
+            [],[],[],[
+                'HTTP_ORIGIN'=>'https://localhost',
+                'CONTENT_LENGTH'=>(string)$part['bytes'],
+                'CONTENT_TYPE'=>'application/octet-stream',
+            ],$partial)->assertStatus(503);
+        $this->assertDatabaseHas('media_chunks_v1',[
+            'id'=>$part['chunkId'],'state'=>'pending',
+        ]);
+        $this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$c['operationId'],
+        ])->assertConflict();
+        // Client retains the original AES-GCM chunk and retransmits it after
+        // S3 recovers; no new key, chunk UUID or server-forged ACK.
+        foreach(array_keys($c['chunks']) as $index)
+            $this->send($f,$index)->assertOk()
+                ->assertJsonPath('verified',true);
+        $receipt=$this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$c['operationId'],
+        ])->assertOk()->json('receipt');
+        $this->assertSame($part['sha256'],$receipt['chunks'][0]['sha256']);
+        $this->get('/media/v1/'.$id.'/chunks/'.$part['chunkId'])
+            ->assertOk()->assertHeader('X-Cipher-SHA256',$part['sha256'])
+            ->assertSee($binary,false);
+    }
+
+    public function test_out_of_order_media_chunks_and_lost_ack_replay_are_idempotent():void
+    {
+        $f=$this->fixture('photo',1048737);
+        $c=$f['contract'];$id=$c['mediaId'];
+        $this->postJson('/media/v1/reserve',[
+            'contract'=>$f['json'],'signature'=>$f['signature'],
+        ])->assertCreated();
+        // Independent signed chunk objects may arrive out of index order.
+        $this->send($f,1)->assertOk()->assertJsonPath('verified',true);
+        $this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$c['operationId'],
+        ])->assertConflict();
+        $this->send($f,1)->assertOk()->assertJsonPath('verified',true);
+        $this->send($f,0)->assertOk()->assertJsonPath('verified',true);
+        // Lost HTTP ACK after the full S3 PUT: retry the same signed PUT.
+        $this->send($f,0)->assertOk()->assertJsonPath('verified',true);
+        $r=$this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$c['operationId'],
+        ])->assertOk()->json('receipt');
+        $this->assertSame($r,$this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$c['operationId'],
+        ])->assertOk()->json('receipt'));
+        $this->assertDatabaseHas('media_files_v1',['id'=>$id,'state'=>'active']);
+        $this->assertDatabaseCount('media_chunk_locations_v1',2);
+    }
+
     public function test_bad_signatures_mismatched_chunks_or_storage_cannot_finalize():void
     {
         $f=$this->fixture('video',1049000);
