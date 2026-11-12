@@ -9,7 +9,7 @@ import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
 import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../features/assignments/domain/advanced-rules'
 import {
-  listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
+  listAllServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
   signedMediaCaptureIntent,signedAllowedAssignmentMedia,
   signedPolicyRequirements,signedMediaRequirements,signedAdvancedRequirements,
   readCachedPrivateAssignment,assignmentPrivateCacheScope,verifySignedAssignmentPolicy,
@@ -39,6 +39,9 @@ const visiblePrivateInstructions=computed(()=>{
 })
 let instructionGeneration=0
 const captureMode=ref<'photo'|'video'|'audio'>('photo')
+// Explicit migration path; legacy P1 photo remains the default until P2
+// camera/photo cross-account release is accepted by the product owner.
+const photoStorage=ref<'p1'|'p2'>('p1')
 const currentMediaInstruction=computed(()=>{
   const value=visiblePrivateInstructions.value
   if(!canCaptureType.value||value?.version!==2)return ''
@@ -126,7 +129,7 @@ async function refreshPolicies():Promise<void> {
   policyNotice.value=''
   try{
     if(session.online && navigator.onLine){
-      try{await listServerAssignments()}
+      try{await listAllServerAssignments()}
       catch{if(ownsCamera(identity,generation))policyNotice.value='Не удалось обновить политики. Используются ранее проверенные.'}
     }
     const found=await listVerifiedCapturePolicies()
@@ -422,8 +425,18 @@ async function capture():Promise<void> {
   const assertOwner=()=>{
     if(!cameraWanted||!ownsCamera(identity,generation))throw new Error('camera.identity_changed')
   }
+  const assignmentAtCapture=selectedAssignment.value
+  const storageAtCapture=photoStorage.value
+  const startedAt=Date.now()
   busy.value=true;error.value='';message.value=''
   try{
+    if(captureMode.value!=='photo')throw Error('camera.photo_mode_changed')
+    // Snapshot private fields at shutter click, before asynchronous JPEG
+    // rendering. User edits during toBlob cannot silently change evidence.
+    const privateFields={
+      category:category.value,description:description.value,gps:gps.value,
+      tags:parseRulesCsv(privateTags.value,12,48),
+    }
     const ratio=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight))
     const canvas=document.createElement('canvas')
     canvas.width=Math.max(1,Math.round(v.videoWidth*ratio))
@@ -444,20 +457,38 @@ async function capture():Promise<void> {
       throw new Error('assignment.policy_not_verified')
     // An offline photo carries an independently verified, versioned and
     // device-signed snapshot of the assignment policy. Personal v1 stays available.
-    const capturedAt=Date.now()
-    // Snapshot these fields once. Validation and the encrypted metadata
-    // must refer to the same input even if UI changes during async binding.
-    const privateFields={
-      category:category.value,description:description.value,gps:gps.value,
-      tags:parseRulesCsv(privateTags.value,12,48),
-    }
-    const binding=selectedAssignment.value
-      ?await signedCaptureBinding(selectedAssignment.value,capturedAt,privateFields)
+    const capturedAt=startedAt
+    // The policy binding and encrypted metadata use the SAME fields
+    // frozen at shutter click, not values edited while Canvas ran.
+    const binding=assignmentAtCapture
+      ?await signedCaptureBinding(assignmentAtCapture,capturedAt,privateFields)
       :undefined
     assertOwner()
-    const photo=await captureEncrypted(jpeg,binding,privateFields)
-    assertOwner()
-    message.value='Зашифровано и сохранено локально: '+photo.photoId.slice(0,8)
+    if(captureMode.value!=='photo'
+      ||selectedAssignment.value!==assignmentAtCapture
+      ||photoStorage.value!==storageAtCapture)
+      throw Error('camera.capture_context_changed')
+    if(storageAtCapture==='p2'){
+      const intent:MediaCaptureIntent|undefined=binding
+        ?{
+          assignmentId:binding.assignmentId,
+          ownerAccountId:binding.ownerAccountId,
+          contributorAccountId:activeSession.value!.accountId,
+          policyRevision:binding.policyRevision,policyHash:binding.policyHash,
+          mediaType:'photo',startedAt:capturedAt,
+          finishedAt:Math.max(Date.now(),capturedAt+1),
+        }:undefined
+      const file=new File([jpeg],
+        'capture-'+new Date(capturedAt).toISOString()+'.jpg',
+        {type:'image/jpeg',lastModified:capturedAt})
+      const mediaId=await enqueueEncryptedMedia(file,intent,privateFields)
+      assertOwner()
+      message.value='P2 JPEG зашифрован в Media Library: '+mediaId.slice(0,8)
+    }else{
+      const photo=await captureEncrypted(jpeg,binding,privateFields)
+      assertOwner()
+      message.value='Зашифровано и сохранено локально: '+photo.photoId.slice(0,8)
+    }
   }catch(e){if(ownsCamera(identity,generation))error.value=e instanceof Error?e.message:'camera.capture_failed'}
   finally{busy.value=false}
 }
@@ -518,6 +549,20 @@ onUnmounted(()=>{
           <option value="video">Видео</option>
           <option value="audio">Аудио</option>
         </select>
+        <div v-if="captureMode==='photo'">
+          <label for="camera-photo-storage">Сохранить фото в</label>
+          <select id="camera-photo-storage" v-model="photoStorage"
+            :disabled="busy||recording" data-testid="camera-photo-storage">
+            <option value="p1">P1 — зашифрованное фото (по умолчанию)</option>
+            <option value="p2">P2 — Media Library JPEG</option>
+          </select>
+          <p v-if="photoStorage==='p2'" class="muted">
+            Снимок сохраняется сразу в зашифрованный MediaFile без системной
+            галереи. Для задания версия правил и время съёмки подписываются
+            аккаунтом исполнителя. Это заявление клиента, не аппаратная
+            проверка камеры или достоверности GPS.
+          </p>
+        </div>
         <label for="camera-assignment">Задание для съёмки</label>
         <select id="camera-assignment" v-model="selectedAssignment" :disabled="busy||recording">
           <option value="">Личная запись (без задания)</option>

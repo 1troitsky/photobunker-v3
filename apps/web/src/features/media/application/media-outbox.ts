@@ -13,7 +13,7 @@ import type {
 export type MediaCaptureIntent={
   assignmentId:string;ownerAccountId:string;contributorAccountId:string
   policyRevision:number;policyHash:string
-  mediaType:'video'|'audio';startedAt:number;finishedAt:number
+  mediaType:'photo'|'video'|'audio';startedAt:number;finishedAt:number
 }
 export type SignedMediaCapture={
   contract:string;signature:string
@@ -92,9 +92,11 @@ export async function enqueueEncryptedMedia(
       ||capture.mediaType!==contract.mediaType
       ||capture.ownerAccountId===session.accountId
       ||!Number.isSafeInteger(capture.policyRevision)
-      ||capture.policyRevision<2||capture.policyRevision>1001
+      ||capture.policyRevision<(capture.mediaType==='photo'?1:2)
+      ||capture.policyRevision>1001
       ||!/^[a-f0-9]{64}$/.test(capture.policyHash)
       ||!Number.isSafeInteger(capture.startedAt)
+      ||capture.startedAt<1500000000000
       ||!Number.isSafeInteger(capture.finishedAt)
       ||capture.finishedAt<=capture.startedAt
       ||capture.finishedAt-capture.startedAt>3*60*1000

@@ -2034,6 +2034,113 @@ final class AssignmentV1Test extends TestCase
         ]);
     }
 
+    private function signedCapturedP2PhotoSubmit(
+        array $media,array $captureChanges=[]
+    ):array
+    {
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $hash=hash('sha256',$a->latest_policy_contract??$a->contract_json);
+        $now=now()->getTimestampMs();
+        $policyStart=(int)(strtotime((string)$a->created_at)*1000);
+        $start=max((int)$a->starts_at,$policyStart,$now-1000);
+        $finish=max($now,$start+10);
+        $claim=array_merge([
+            'version'=>1,'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'contributorAccountId'=>$this->people['recipient']['account'],
+            'policyRevision'=>(int)$a->policy_revision,
+            'policyHash'=>$hash,
+            'mediaId'=>$media['id'],'mediaContractHash'=>$media['hash'],
+            'mediaType'=>'photo','startedAt'=>$start,'finishedAt'=>$finish,
+        ],$captureChanges);
+        $capture=$this->signed('recipient',
+            'pb3.assignment-media-capture.v1',$claim);
+        return $this->signed('recipient','pb3.assignment-media-submit.v4',[
+            'version'=>4,'submissionId'=>(string)Str::uuid(),
+            'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'contributorAccountId'=>$this->people['recipient']['account'],
+            'mediaId'=>$media['id'],'mediaGrantId'=>$media['grantId'],
+            'mediaContractHash'=>$media['hash'],
+            'policyRevision'=>(int)$a->policy_revision,'policyHash'=>$hash,
+            'kind'=>'photo',
+            'captureContract'=>$capture['contract'],
+            'captureSignature'=>$capture['signature'],
+        ]);
+    }
+
+    public function test_p2_v4_client_signed_camera_jpeg_is_scoped_to_root_policy_and_owner_e2ee_grant():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $media=$this->signedP2PhotoGrantFixture();
+        $input=$this->signedCapturedP2PhotoSubmit($media);
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $this->as('recipient');
+        $this->postJson($url,$input)->assertCreated()
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$input)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->as('owner');
+        $this->getJson($url)->assertOk()->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.mediaId',$media['id'])
+            ->assertJsonPath('items.0.mediaType','photo')
+            ->assertJsonPath('items.0.capturedInAssignment',true)
+            ->assertJsonPath('items.0.contract',$input['contract'])
+            ->assertJsonPath('items.0.signature',$input['signature']);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',1);
+        $this->assertDatabaseHas('assignment_media_submissions_v1',[
+            'media_id'=>$media['id'],
+            'capture_contract_json'=>json_decode($input['contract'],true)['captureContract'],
+        ]);
+        // Read ACL remains independently tied to a live, scoped grant.
+        DB::table('media_recipient_grants_v1')->where('id',$media['grantId'])
+            ->update(['state'=>'revoked']);
+        $this->getJson($url)->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',0);
+        $this->as('recipient');
+        $this->postJson($url,$input)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$media['id'],'state'=>'active',
+        ]);
+    }
+
+    public function test_p2_v4_camera_photo_rejects_forged_policy_media_or_capture_claim():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $media=$this->signedP2PhotoGrantFixture();
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $this->as('recipient');
+        $ok=$this->signedCapturedP2PhotoSubmit($media);
+        $invalid=$ok;
+        $invalid['signature']=P::encode(random_bytes(64));
+        $this->postJson($url,$invalid)->assertUnauthorized();
+        foreach([
+            ['assignmentId',(string)Str::uuid()],
+            ['mediaId',(string)Str::uuid()],
+            ['mediaType','video'],
+            ['mediaContractHash',str_repeat('f',64)],
+            ['policyHash',str_repeat('f',64)],
+            ['policyRevision',2],
+            ['startedAt',now()->addHour()->getTimestampMs()],
+        ] as [$key,$value]){
+            $forged=$this->signedCapturedP2PhotoSubmit($media,[$key=>$value]);
+            $response=$this->postJson($url,$forged);
+            $this->assertContains($response->status(),[403,409,422]);
+        }
+        $payload=json_decode($ok['contract'],true);
+        $payload['captureSignature']=P::encode(random_bytes(64));
+        $signed=$this->signed('recipient',
+            'pb3.assignment-media-submit.v4',$payload);
+        $this->postJson($url,$signed)->assertUnauthorized();
+        $this->assertDatabaseCount('assignment_media_submissions_v1',0);
+    }
+
     public function test_p2_contributor_signed_photo_receipt_requires_scoped_grant_and_counts_live_photo():void
     {
         $this->createAssignment();

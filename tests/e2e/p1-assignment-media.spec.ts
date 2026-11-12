@@ -613,6 +613,117 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(videoVerified.bytes).toBeGreaterThan(128)
     expect(videoVerified.name).toMatch(/^recording-/)
 
+    // P2 V-30: real camera Canvas JPEG -> encrypted P2 MediaFile, never
+    // device gallery. Unlike Browser imported v3 photo, the account signs
+    // an additional policy/media-specific client capture assertion (v4).
+    await B.goto('/camera?assignmentId='+assignmentId)
+    await expect(B.locator('#camera-assignment'))
+      .toHaveValue(assignmentId,{timeout:20000})
+    await B.getByTestId('camera-photo-storage').selectOption('p2')
+    await B.locator('#camera-category').fill('Report')
+    await B.locator('#camera-description').fill('PRIVATE-P2-CAMERA-PHOTO')
+    await B.locator('#camera-tags').fill('photo-evidence')
+    await B.getByRole('button',{name:'Получить GPS'}).click()
+    await expect(B.getByText(/GPS получен/)).toBeVisible({timeout:12000})
+    await expect(B.getByRole('button',{name:'Сделать снимок'}))
+      .toBeEnabled({timeout:20000})
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText(/P2 JPEG зашифрован в Media Library/))
+      .toBeVisible({timeout:30000})
+    const cameraPhoto=await B.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      const local=(await media.listLocalMedia()).find(
+        x=>x.mediaType==='photo'&&!!x.capture)
+      if(!local?.capture)throw Error('photo.p2_camera_capture_missing')
+      const p=JSON.parse(local.capture.contract)
+      const decrypted=await media.readLocalMedia(local.mediaId)
+      const digest=await crypto.subtle.digest('SHA-256',
+        await decrypted.blob.arrayBuffer())
+      const plaintextSha256=Array.from(new Uint8Array(digest))
+        .map(b=>b.toString(16).padStart(2,'0')).join('')
+      return {
+        mediaId:local.mediaId,type:local.mediaType,
+        mime:decrypted.blob.type,bytes:decrypted.blob.size,plaintextSha256,
+        assignmentId:p.assignmentId,
+        mediaContractHash:p.mediaContractHash,mediaType:p.mediaType,
+        policyRevision:p.policyRevision,capturedAt:p.startedAt,
+        privateLeak:local.capture.contract.includes('PRIVATE-P2-CAMERA-PHOTO')
+          ||local.capture.contract.includes('41.647849'),
+        ciphertextOnly:local.chunks.every(c=>
+          c.blob.type==='application/octet-stream'),
+        metadata:decrypted.metadata,
+      }
+    })
+    expect(cameraPhoto.type).toBe('photo')
+    expect(cameraPhoto.mime).toBe('image/jpeg')
+    expect(cameraPhoto.bytes).toBeGreaterThan(128)
+    expect(cameraPhoto.assignmentId).toBe(assignmentId)
+    expect(cameraPhoto.mediaType).toBe('photo')
+    expect(cameraPhoto.policyRevision).toBe(4)
+    expect(cameraPhoto.privateLeak).toBe(false)
+    expect(cameraPhoto.ciphertextOnly).toBe(true)
+    expect(cameraPhoto.metadata.category).toBe('Report')
+    expect(cameraPhoto.metadata.description).toBe('PRIVATE-P2-CAMERA-PHOTO')
+    expect(cameraPhoto.metadata.tags).toEqual(['photo-evidence'])
+    expect(cameraPhoto.metadata.gps).toMatchObject({
+      latitude:41.647849,longitude:41.639411,
+    })
+    await B.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      await media.synchronizeMedia()
+    })
+    await expect.poll(()=>B.evaluate(async mediaId=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      return (await media.listLocalMedia())
+        .find(x=>x.mediaId===mediaId)?.state
+    },cameraPhoto.mediaId),{timeout:30000}).toBe('synced')
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
+    await B.getByRole('button',{name:'Проверить ключ владельца'}).click()
+    await expect(B.getByText('Владелец подтверждён')).toBeVisible()
+    const photoP2Row=B.locator('.assignment-detail .photo-row')
+      .filter({hasText:cameraPhoto.mediaId.slice(0,8)})
+      .filter({hasText:'Снято по заданию'})
+    await expect(photoP2Row).toBeVisible()
+    await photoP2Row.getByRole('button',{name:'Отправить медиа в задание'}).click()
+    await expect.poll(()=>B.evaluate(async()=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      return (await a.listAssignmentOperations())
+        .filter(x=>x.kind==='media-submit'&&x.state==='sent').length
+    }),{timeout:30000}).toBe(5)
+    await A.getByRole('button',{name:'Обновить',exact:true}).click()
+    const p2CameraReceipt=await A.evaluate(async({assignmentId,mediaId})=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const v=await import('/src/features/assignments/application/verify-media-submission.ts')
+      const page=await a.listAssignmentMediaSubmissions(assignmentId)
+      const item=page.items.find(x=>x.mediaId===mediaId)
+      if(!item)throw Error('photo.p2_camera_receipt_missing')
+      await v.verifyMediaSubmissionReceipt(item,assignmentId,
+        (await import('/src/features/identity/application/session.ts'))
+          .requireSession().accountId)
+      return {item,contract:JSON.parse(item.contract)}
+    },{assignmentId,mediaId:cameraPhoto.mediaId})
+    expect(p2CameraReceipt.item.capturedInAssignment).toBe(true)
+    expect(p2CameraReceipt.item.mediaType).toBe('photo')
+    expect(p2CameraReceipt.contract.version).toBe(4)
+    const photoReceived=await A.evaluate(async id=>{
+      const g=await import('/src/features/media/application/media-grants.ts')
+      const data=await g.readReceivedMediaGrant(id)
+      const digest=await crypto.subtle.digest('SHA-256',
+        await data.blob.arrayBuffer())
+      const plaintextSha256=Array.from(new Uint8Array(digest))
+        .map(b=>b.toString(16).padStart(2,'0')).join('')
+      return {type:data.blob.type,bytes:data.blob.size,
+        metadata:data.metadata,plaintextSha256}
+    },p2CameraReceipt.item.mediaGrantId)
+    expect(photoReceived.type).toBe('image/jpeg')
+    expect(photoReceived.plaintextSha256).toBe(cameraPhoto.plaintextSha256)
+    expect(photoReceived.bytes).toBeGreaterThan(128)
+    expect(photoReceived.metadata.description).toBe('PRIVATE-P2-CAMERA-PHOTO')
+    expect(photoReceived.metadata.gps).toMatchObject({
+      latitude:41.647849,longitude:41.639411,
+    })
+
     // P1-19: owner can edit E2EE private text AFTER the contributor accepted
     // the original invitation. The same old ECDH invitation decrypts the
     // new, independently signed AEAD envelope with the original shared DEK.
