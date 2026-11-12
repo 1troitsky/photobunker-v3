@@ -246,7 +246,9 @@ final class StorageContractTest extends TestCase
         self::assertFalse($manager->verifyAsset($f['asset'], strlen($f['bytes']), $digest));
         $adapter->objects[$f['key'].'-replica'] = $f['bytes'];
         self::assertTrue($manager->verifyAsset($f['asset'], strlen($f['bytes']), $digest));
-        $adapter->objects[$f['key'].'-replica'][0] = 'X';
+        $replicaKey = $f['key'].'-replica';
+        $adapter->objects[$replicaKey][0] =
+            chr(ord($adapter->objects[$replicaKey][0]) ^ 1);
         self::assertFalse($manager->verifyAsset($f['asset'], strlen($f['bytes']), $digest));
     }
 
@@ -282,11 +284,14 @@ final class StorageContractTest extends TestCase
         $adapter = new ContractAdapter();
         $manager = new StorageManager($adapter);
         DB::table('storage_locations')->where('asset_id', $f['asset'])->delete();
+        $missingPlacementStream = $this->stream($f['bytes']);
         try {
-            $manager->writeAsset($f['asset'], $this->stream($f['bytes']));
+            $manager->writeAsset($f['asset'], $missingPlacementStream);
             self::fail('Missing placement accepted');
         } catch (RuntimeException $e) {
             self::assertSame('storage.invalid_write_placement', $e->getMessage());
+        } finally {
+            fclose($missingPlacementStream);
         }
 
         DB::table('storage_locations')->insert([
