@@ -37,6 +37,10 @@ import type {PhotoTextMark} from '../features/browser/application/photo-text'
 import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
 import {buildCatalog} from '../features/browser/application/catalog'
+import {appendAuthenticatedCatalogPage}
+  from '../features/browser/application/authenticated-catalog-page'
+import {findViewerTargetInBoundedIndex}
+  from '../features/browser/application/viewer-index-target'
 import type {CatalogItem,CatalogType} from '../features/browser/application/catalog'
 import {
   adjacentFiles,parseViewerTarget,safeDownloadName,viewerKey,
@@ -137,6 +141,7 @@ const mediaCloud=ref<CloudMedia[]>([])
 const photoCursor=ref<string|null>(null)
 const mediaCursor=ref<string|null>(null)
 const indexBusy=ref(false)
+const indexIncomplete=ref(false)
 const busy=ref(false)
 const error=ref('')
 const notice=ref('')
@@ -659,6 +664,7 @@ function clearIndex():void{
   photoLocal.value=[];photoCloud.value=[]
   mediaLocal.value=[];mediaCloud.value=[]
   photoCursor.value=null;mediaCursor.value=null
+  indexIncomplete.value=false
 }
 function sameSession(session:typeof activeSession.value,epoch:number):boolean{
   const active=activeSession.value
@@ -677,9 +683,12 @@ function offline():boolean{
 /** Index metadata is opaque. No file plaintext, filename or GPS is indexed. */
 async function refreshIndex():Promise<void>{
   const session=activeSession.value
-  clearIndex()
+  // Preserve known-good local-first lists during a same-account refresh.
+  // Identity changes explicitly clear all rows in the session watcher.
+  ++catalogEpoch
   const epoch=catalogEpoch
-  if(!session)return
+  indexIncomplete.value=false
+  if(!session){clearIndex();return}
   indexBusy.value=true
   try{
     const [photos,media]=await Promise.all([listLocalPhotos(),listLocalMedia()])
@@ -688,16 +697,62 @@ async function refreshIndex():Promise<void>{
     if(!session.online||offline())return
     const [p,m]=await Promise.allSettled([listCloudPhotos(),listCloudMedia()])
     if(session!==activeSession.value||epoch!==catalogEpoch)return
+    // An ordinary server 50-row index is not trusted navigation authority:
+    // reject forged cursors just like Browser's existing List / Load more.
+    // Only the currently requested protocol may load additional opaque IDs,
+    // bounded to 10 pages (500 records), never decrypted search metadata.
+    const target=current.value
+    const targetKey=target?viewerKey(target):null
+    const relevant=()=>session===activeSession.value
+      &&epoch===catalogEpoch
+      &&(!targetKey||(current.value!==null
+        &&targetKey===viewerKey(current.value)))
+    let badPage=p.status==='rejected'||m.status==='rejected'
     if(p.status==='fulfilled'){
-      photoCloud.value=p.value.items
-      photoCursor.value=p.value.nextCursor
+      try{
+        const localTarget=target?.protocol==='photo'
+          &&photos.some(row=>row.photoId===target.id)
+        const checked=target?.protocol==='photo'&&!localTarget
+          ?await findViewerTargetInBoundedIndex(
+            p.value,target.id,after=>listCloudPhotos(after),
+            row=>row.photoId,relevant)
+          :appendAuthenticatedCatalogPage(
+            [],p.value,null,row=>row.photoId)
+        if(!relevant())return
+        photoCloud.value=checked.items
+        photoCursor.value=checked.nextCursor
+        if('found' in checked&&!checked.found
+          &&'complete' in checked&&checked.complete===false)
+          indexIncomplete.value=true
+      }catch(e){
+        if(!relevant())return
+        badPage=true
+      }
     }
     if(m.status==='fulfilled'){
-      mediaCloud.value=m.value.items
-      mediaCursor.value=m.value.nextCursor
+      try{
+        const localTarget=target?.protocol==='media'
+          &&media.some(row=>row.mediaId===target.id)
+        const checked=target?.protocol==='media'&&!localTarget
+          ?await findViewerTargetInBoundedIndex(
+            m.value,target.id,after=>listCloudMedia(after),
+            row=>row.mediaId,relevant)
+          :appendAuthenticatedCatalogPage(
+            [],m.value,null,row=>row.mediaId)
+        if(!relevant())return
+        mediaCloud.value=checked.items
+        mediaCursor.value=checked.nextCursor
+        if('found' in checked&&!checked.found
+          &&'complete' in checked&&checked.complete===false)
+          indexIncomplete.value=true
+      }catch(e){
+        if(!relevant())return
+        badPage=true
+      }
     }
-    if(p.status==='rejected'||m.status==='rejected')
-      notice.value='Часть облачного каталога недоступна. Локальные файлы остаются доступны.'
+    if(badPage)
+      notice.value='Часть облачного каталога недоступна или курсор неверен. '
+        +'Ранее проверенные файлы сохранены; повреждённые страницы не добавлены.'
   }catch(e){
     if(session===activeSession.value&&epoch===catalogEpoch)notice.value=explain(e)
   }finally{if(epoch===catalogEpoch)indexBusy.value=false}
@@ -714,16 +769,26 @@ async function loadMore():Promise<void>{
     mc?listCloudMedia(mc):Promise.resolve(null),
   ])
   if(session===activeSession.value&&epoch===catalogEpoch){
+    let badPage=p.status==='rejected'||m.status==='rejected'
     if(p.status==='fulfilled'&&p.value){
-      photoCloud.value=[...photoCloud.value,...p.value.items]
-      photoCursor.value=p.value.nextCursor
+      try{
+        const checked=appendAuthenticatedCatalogPage(
+          photoCloud.value,p.value,pc,row=>row.photoId)
+        photoCloud.value=checked.items
+        photoCursor.value=checked.nextCursor
+      }catch{badPage=true}
     }
     if(m.status==='fulfilled'&&m.value){
-      mediaCloud.value=[...mediaCloud.value,...m.value.items]
-      mediaCursor.value=m.value.nextCursor
+      try{
+        const checked=appendAuthenticatedCatalogPage(
+          mediaCloud.value,m.value,mc,row=>row.mediaId)
+        mediaCloud.value=checked.items
+        mediaCursor.value=checked.nextCursor
+      }catch{badPage=true}
     }
-    if(p.status==='rejected'||m.status==='rejected')
-      notice.value='Не все страницы каталога удалось загрузить.'
+    if(badPage)
+      notice.value='Неверная или недоступная страница облачного индекса. '
+        +'Ранее проверенные файлы и курсоры сохранены.'
     indexBusy.value=false
   }
 }
@@ -1158,13 +1223,25 @@ watch(activeSession,(next,previous)=>{
     &&next.pkg===previous.pkg
     &&next.device===previous.device){
     void refreshIndex()
+    // Bootstrap deliberately exposes cached, offline-only state before the
+    // signed device proof completes. A cloud-only deep link attempted during
+    // that window needs a retry after online proof, not a permanent offline
+    // error. Never restart an already opened preview/unsaved editor work.
+    if(!previous.online&&next.online&&!fileUrl.value)
+      void openFile()
     return
   }
   clearBlob();clearIndex()
   void refreshIndex()
   void openFile()
 },{immediate:true})
-watch([()=>route.params.protocol,()=>route.params.id],()=>{void openFile()})
+watch([()=>route.params.protocol,()=>route.params.id],()=>{
+  void openFile()
+  // A deep link from Browser may point beyond Viewer's initial 50 rows.
+  // Rebuild only when the new opaque ID is not in the loaded index.
+  if(current.value&&!files.value.some(row=>row.key===viewerKey(current.value!)))
+    void refreshIndex()
+})
 onMounted(()=>window.addEventListener('keydown',onKeyDown))
 onUnmounted(()=>{
   compositionObserver?.disconnect()
@@ -1783,7 +1860,13 @@ onUnmounted(()=>{
         <p class="muted">Приватные данные расшифрованы на устройстве.
           Скачивание — только после явного подтверждения.</p>
       </div>
+      <p v-if="indexIncomplete" class="muted"
+        data-testid="file-viewer-index-incomplete">
+        Проверено до 500 облачных записей соответствующего типа.
+        Каталог может содержать ещё файлы; список навигации неполный.
+      </p>
       <button v-if="photoCursor||mediaCursor" type="button"
+        data-testid="file-viewer-load-more"
         :disabled="indexBusy" @click="loadMore">Загрузить ещё файлы для навигации</button>
       <p v-if="indexBusy" class="muted">Обновляется список доступных файлов…</p>
       <p v-if="notice" role="status" class="muted">{{ notice }}</p>
