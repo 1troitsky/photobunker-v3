@@ -25,6 +25,22 @@ The **currently integrated runtime at #187 only has FIVE usable `DockDefinition.
 
 `SettingsSearchView` indexes RU/EN Dock synonyms ('панель', 'navigation', 'dock') and deep-links to `?field=dock` with real focus. The 'language' keyword is an intentionally **planned** result, not a working language picker; the test checks non-navigation rather than falsely approving language switching.
 
+## Actual CI evidence (not retrospective PASS)
+
+- Initial `9cebee24` showed **60/60**, but the new file was
+  excluded by Playwright `testMatch`. No #214 acceptance was claimed.
+- After renaming to `p2-settings-*`, [run 43201393471](https://github.com/1troitsky/photobunker-v3/actions/runs/43201393471)
+  executed **63 real Chromium tests: 62 PASS, 1 FAIL**. The two mobile
+  persistence/keyboard/drag tests passed. The sole failure in the RU/EN
+  search test compared a Cyrillic literal to the URL wire representation:
+  the browser correctly emitted percent-encoded `q=%D0...`. This was
+  a **QA assertion encoding bug**, not a wrong route.
+- Fixed on `463e3c09` by asserting `new URL(page.url()).searchParams.get('q')`
+  equals `панель`. Existing native query/route focus assertions and
+  actual page navigation remain mandatory. No UI/security change.
+- Required **new exact-head run: 63/63 Chromium PASS**, full foundation,
+  PHP8.4/8.5 and security. Until then **QA HOLD**.
+
 ## Automated real-browser scenarios
 
 1. Narrow 320px mobile Chromium, Key-Only registration; remove sections to **3**, test mandatory Settings, no more removals; save while **offline**, inspect actual atomic `pb3.appearance.v2` localStorage, go online and **reload**, verify persistence.
