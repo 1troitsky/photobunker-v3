@@ -403,11 +403,11 @@ export async function flushMatrixTextOutbox(client:MatrixClient):Promise<{
         }else{
           // Last authoritative membership + invite-state read immediately
           // before asking RustCrypto to encrypt; this is not an atomic gate.
-            await verifyFreshPrivateRoom(s,item,client,expectedMatrixUserId)
-            same(s)
-            if(client.getUserId()!==expectedMatrixUserId
-              ||!isLeasedMatrixClient(client))
-              throw Error('matrix.outbox_crypto_lease_lost')
+          await verifyFreshPrivateRoom(s,item,client,expectedMatrixUserId)
+          same(s)
+          if(client.getUserId()!==expectedMatrixUserId
+            ||!isLeasedMatrixClient(client))
+            throw Error('matrix.outbox_crypto_lease_lost')
           // The official Matrix SDK encrypts the text before network I/O.
           const result=await client.sendMessage(item.roomId,{
             msgtype:MsgType.Text,body:item.body,
