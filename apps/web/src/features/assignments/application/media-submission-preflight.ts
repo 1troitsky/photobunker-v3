@@ -8,6 +8,7 @@ import {
   signedMediaRequirements,signedPolicyRequirements,
   signedAdvancedRequirements,verifySignedAssignmentPolicy,
   schedulePermitsAt,assignmentFilesOpenAt,assignmentGrantExpiryCap,
+  assertNoVerifiedAssignmentRemoval,
 } from './assignment-outbox'
 import type { AssignmentListing } from './assignment-outbox'
 
@@ -22,6 +23,9 @@ export async function preflightAssignmentMediaGrant(
   assignmentId:string,mediaId:string,expectedOwnerAccountId:string,
 ):Promise<{mediaType:'photo'|'video'|'audio';personalMedia:boolean;grantExpiresAtCap:number|null}>{
   const session=requireSession()
+  // A verified local removal revokes stale cached authority even during an
+  // API outage; never mint a new E2EE share before consulting that tombstone.
+  await assertNoVerifiedAssignmentRemoval(assignmentId)
   if(!session.online||!navigator.onLine)
     throw Error('assignment.media_grant_requires_connection')
   let cursor:string|undefined
@@ -79,6 +83,9 @@ export async function preflightAssignmentMediaGrant(
       throw Error('assignment.recording_bound_to_different_policy')
   }
   if(activeSession.value!==session)throw Error('identity.changed')
+  // Recheck after online policy / private AES-GCM decrypt / P-256 signature
+  // verification: owner revocation may have landed during any await above.
+  await assertNoVerifiedAssignmentRemoval(assignmentId)
   return {mediaType:media.mediaType,personalMedia:!media.capture,
     grantExpiresAtCap:assignmentGrantExpiryCap(policy)}
 }

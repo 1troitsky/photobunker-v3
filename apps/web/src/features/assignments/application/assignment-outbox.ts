@@ -2019,11 +2019,20 @@ export async function listAssignmentSubmissions(
   return (await listAssignmentSubmissionsPage(assignmentId)).items
 }
 
-/** Media submission is not a legacy photo capture. The owner must
- * explicitly opt into video/audio via a signed policy v3 amendment.
- * A previously approved recipient DEK grant is a strict prerequisite, not
- * automatically created by assignment membership.
+/**
+ * A local removal tombstone is written ONLY after independently verifying
+ * an owner-signed member removal. This read grants no permissions, requires no
+ * network and never erases encrypted personal media or pre-existing outbox.
  */
+export async function assertNoVerifiedAssignmentRemoval(
+  assignmentId:string,
+):Promise<void>{
+  const session=requireSession()
+  if(await db.revocations.get(session.accountId+'/'+assignmentId))
+    throw Error('assignment.member_removed')
+  assertSame(session)
+}
+
 /** Authenticated warm-offline recording context for audio/video.
  * Snapshot is owner-signed and pinned. This is a CLIENT assertion of
  * recording time, not hardware/timestamp/GPS attestation.
@@ -2033,7 +2042,9 @@ export async function signedMediaCaptureIntent(
   privateFields:MediaPrivateFields={},
 ):Promise<Omit<MediaCaptureIntent,'finishedAt'>>{
   const session=requireSession()
-  const row=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  const cacheKey=session.accountId+'/'+assignmentId
+  if(await db.revocations.get(cacheKey))throw Error('assignment.member_removed')
+  const row=await db.capturePolicies.get(cacheKey)
   if(!row)throw Error('assignment.policy_not_cached')
   await verifySignedAssignmentPolicy(row.listing,true)
   assertSame(session)
@@ -2057,6 +2068,10 @@ export async function signedMediaCaptureIntent(
   validateMediaPrivateRequirements(canonical,signedMediaRequirements(policy,mediaType))
   validateAdvancedFields(canonical,signedAdvancedRequirements(policy,mediaType))
   const policyHash=hex(await digest(new TextEncoder().encode(latest)))
+  // The independently verified owner removal may commit while P-256 policy
+  // checks or private metadata validation are still in flight. Never return
+  // a newly valid assignment capture binding after that point.
+  if(await db.revocations.get(cacheKey))throw Error('assignment.member_removed')
   assertSame(session)
   return {
     assignmentId,ownerAccountId:policy.ownerAccountId,
@@ -2065,11 +2080,18 @@ export async function signedMediaCaptureIntent(
   }
 }
 
+/** Media submission is not legacy P1 photo capture. Owner must explicitly
+ * permit AV with signed policy v3+, while P2 photos require independently
+ * authorized scoped E2EE grants regardless of imported v3 / captured v4.
+ * Membership alone never exposes a contributor media DEK.
+ */
 export async function queueAssignmentMediaSubmission(
   assignmentId:string,mediaId:string,mediaGrantId:string,
 ):Promise<string>{
   const session=requireSession()
-  const cache=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  const cacheKey=session.accountId+'/'+assignmentId
+  if(await db.revocations.get(cacheKey))throw Error('assignment.member_removed')
+  const cache=await db.capturePolicies.get(cacheKey)
   if(!cache)throw Error('assignment.policy_not_cached')
   const listing=cache.listing
   await verifySignedAssignmentPolicy(listing,true)
@@ -2143,7 +2165,17 @@ export async function queueAssignmentMediaSubmission(
       ...(captureContract&&captureSignature
         ?{captureContract,captureSignature}:{}),
     },mediaGrantId)
-  await persist(op)
+  // A signed revocation may commit while ciphertext/hash verification
+  // and account signing execute. Check and atomically persist the operation
+  // with the local denial record to prevent a stale new Fieldwork submission
+  // entering durable outbox *after* owner revocation.
+  await db.transaction('rw',db.operations,db.revocations,async()=>{
+    assertSame(session)
+    if(await db.revocations.get(cacheKey))
+      throw Error('assignment.member_removed')
+    await db.operations.put(op)
+  })
+  void flushAssignmentOutbox()
   return op.id
 }
 export type AssignmentMediaSubmission={

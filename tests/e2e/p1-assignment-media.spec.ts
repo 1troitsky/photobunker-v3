@@ -1012,6 +1012,60 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       http:200,physicalDeleted:false,physicalStatus:'not_authorized',
     })
 
+    // V-31: a REAL independently signed owner removal becomes a durable
+    // contributor-local Fieldwork deny-list entry, not a fresh permission.
+    // The owner's separate client signs; the contributor's pinned owner key
+    // authenticates it before local AV/P2 media-grant outbox can be refused.
+    await A.goto('/assignments/'+assignmentId+'/edit')
+    await A.getByRole('tab',{name:'Участники'}).click()
+    const participant=A.getByTestId('editor-participant-'+contributorId)
+    await expect(participant).toContainText('Принято сервером',{timeout:20000})
+    A.once('dialog',dialog=>dialog.accept())
+    await participant.getByRole('button',{name:'Исключить'}).click()
+    await expect(A.getByText('Исключение подписано и принято сервером. Права задания отозваны.'))
+      .toBeVisible({timeout:20000})
+    const beforeRemoved=await B.evaluate(async()=>{
+      const m=await import('/src/features/media/application/media-outbox.ts')
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      return {media:(await m.listLocalMedia()).map(x=>x.mediaId).sort(),
+        operations:(await a.listAssignmentOperations()).map(x=>x.id).sort()}
+    })
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(B.getByText('Исключён владельцем',{exact:true}).first())
+      .toBeVisible({timeout:30000})
+    const removed=await B.evaluate(async({assignmentId,mediaId})=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const m=await import('/src/features/media/application/media-outbox.ts')
+      const grants=await import('/src/features/assignments/application/media-submission-preflight.ts')
+      const errors:Record<string,string>={}
+      const probes:[string,()=>Promise<unknown>][]=[
+        ['video',()=>a.signedMediaCaptureIntent(assignmentId,'video')],
+        ['audio',()=>a.signedMediaCaptureIntent(assignmentId,'audio')],
+        ['media',()=>a.queueAssignmentMediaSubmission(
+          assignmentId,mediaId,crypto.randomUUID())],
+        ['grant',()=>grants.preflightAssignmentMediaGrant(
+          assignmentId,mediaId,crypto.randomUUID())],
+      ]
+      for(const [kind,probe] of probes){
+        try{await probe();errors[kind]='unexpectedly_accepted'}
+        catch(e){errors[kind]=e instanceof Error?e.message:'unknown'}
+      }
+      return {
+        errors,
+        revoked:(await a.listLocallyRevokedAssignmentIds()).has(assignmentId),
+        media:(await m.listLocalMedia()).map(x=>x.mediaId).sort(),
+        operations:(await a.listAssignmentOperations()).map(x=>x.id).sort(),
+      }
+    },{assignmentId,mediaId:cameraPhoto.mediaId})
+    expect(removed.revoked).toBe(true)
+    expect(removed.errors).toEqual({
+      video:'assignment.member_removed',audio:'assignment.member_removed',
+      media:'assignment.member_removed',grant:'assignment.member_removed',
+    })
+    expect(removed.media).toEqual(beforeRemoved.media)
+    expect(removed.operations).toEqual(beforeRemoved.operations)
+
     expect(ownerId).not.toBe(contributorId)
   }finally{
     await ownerCtx.close();await contributorCtx.close()
