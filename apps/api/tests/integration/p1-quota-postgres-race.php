@@ -370,6 +370,10 @@ must($usage['used']===30&&$usage['remaining']===0
     'Go 29/30 monthly assignment slot double-spent');
 fwrite(STDOUT,"P1 PG GO 29/30 MONTHLY ASSIGNMENT RACE PASS: 1 accept, 1 HTTP 403\n");
 
-must(app(AccountUsage::class)->measure($other[0])===$otherBaseline,
-    'cross-account quota isolation changed the unrelated account');
+$otherAfter=app(AccountUsage::class)->measure($other[0]);
+foreach(['assignmentsCreatedThisUtcMonth','activeLogicalMediaFiles',
+    'recordedCipherBytes'] as $field){
+    must($otherAfter[$field]===$otherBaseline[$field],
+        'cross-account quota isolation changed the unrelated account '.$field);
+}
 fwrite(STDOUT,"P1 PG QUOTA RACE COMPLETE: 5 genuine two-process PostgreSQL interleavings, 5/5 fail-closed; unrelated account unchanged\n");
