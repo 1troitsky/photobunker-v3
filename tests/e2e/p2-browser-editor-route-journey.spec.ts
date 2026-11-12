@@ -20,8 +20,8 @@ test('P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save
       const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(
         x=>x?resolve(x):reject(Error('jpeg_failed')),'image/jpeg',.88))
       const media=await import('/src/features/media/application/media-outbox.ts')
-      return (await media.enqueueEncryptedMedia(new File([blob],
-        'EDITOR-PRIVATE-ORIGINAL.jpg',{type:'image/jpeg'}))).id
+      return await media.enqueueEncryptedMedia(new File([blob],
+        'EDITOR-PRIVATE-ORIGINAL.jpg',{type:'image/jpeg'}))
     })
     await page.goto('/browser')
     await expect(page.getByTestId('browser-row-media:'+id)).toBeVisible()
