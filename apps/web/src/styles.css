@@ -863,7 +863,7 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 }
 .file-viewer-photo-paint-settings input[type="range"]{
   display:block;box-sizing:border-box;width:100%;max-width:100%;
-  min-width:0;accent-color:var(--accent)
+  min-width:0;margin:0;padding:0;accent-color:var(--accent)
 }
 @media(max-width:430px){
   .file-viewer-photo-draw-tools{gap:5px}
