@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { brand } from '../../../config/brand'
 import { helpEditorial, searchFaq } from '../domain/help-content'
 import type { HelpLocale, HelpPage } from '../domain/help-content'
-import { prepareSupportDraft, SUPPORT_TOPICS } from '../application/support-draft'
+import { prepareSupportDraft, SUPPORT_TOPICS, SUPPORT_TOPICS_EN } from '../application/support-draft'
 
 /** Embeddable S21: no Shell, routing, storage, API or global event listeners. */
 const props = withDefaults(defineProps<{ locale?: HelpLocale }>(), { locale: 'ru' })
@@ -59,7 +59,7 @@ function onEscape(): void {
 function prepare(): void {
   prepared.value = ''
   copied.value = false
-  const result = prepareSupportDraft(topic.value, message.value)
+  const result = prepareSupportDraft(topic.value, message.value, props.locale)
   if (result.ok) {
     prepared.value = result.text
     supportError.value = ''
@@ -192,7 +192,7 @@ async function copyDraft(): Promise<void> {
         <form @submit.prevent="prepare">
           <label class="help-field" for="help-topic">{{ ru ? 'Тема' : 'Topic' }}</label>
           <select id="help-topic" v-model="topic" class="help-input" @change="prepared = ''">
-            <option v-for="option in SUPPORT_TOPICS" :key="option">{{ option }}</option>
+            <option v-for="(option, index) in SUPPORT_TOPICS" :key="option" :value="option">{{ ru ? option : SUPPORT_TOPICS_EN[index] }}</option>
           </select>
           <label class="help-field" for="help-message">{{ ru ? 'Описание' : 'Description' }}</label>
           <textarea id="help-message" v-model="message" class="help-input" rows="6" maxlength="2000"
