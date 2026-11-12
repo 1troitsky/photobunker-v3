@@ -267,32 +267,45 @@ async function flushPass():Promise<void>{
         '/media/v1/reserve','POST',{
           contract:JSON.stringify(row.contract),signature:row.signature,
         })
+      same(session)
       if(accepted.state==='active'){
         if(!accepted.receipt)throw Error('media.receipt_invalid')
         await verifyReceipt(row.contract,accepted.receipt)
+        same(session)
       }else if(accepted.state==='pending'){
         for(const part of row.chunks){
           same(session)
           await putCiphertext(
             apiPath(row.mediaId)+'/chunks/'+encodeURIComponent(part.chunkId),
             part.blob)
+          // A switched/revoked account must not proceed with the next signed
+          // chunk or finalize after an in-flight response resolves.
+          same(session)
         }
+        same(session)
         const finish=await jsonApi<{receipt:MediaReceipt}>(
           apiPath(row.mediaId)+'/finalize','POST',
           {operationId:row.operationId})
+        same(session)
         await verifyReceipt(row.contract,finish.receipt)
+        same(session)
       }else throw Error('media.reserve_invalid')
       same(session)
       await db.files.update(row.key,{state:'synced',lastError:undefined})
     }catch(error){
-      const reason=error instanceof Error?error.message:'media.network_error'
-      await db.files.update(row.key,{
-        state:/^api\.http_(403|409|410|413|422)$/.test(reason)
-          ?'conflict':'retry',
-        lastError:/^api\.http_\d+$/.test(reason)?reason:'media.retry_required',
-      })
+      await db.files.update(row.key,classifyMediaSyncFailure(error))
       if(!navigator.onLine)return
     }
+  }
+}
+/** Permanent signed/ACL failures never silently resume; transient S3/lease
+ * errors keep the original encrypted chunks in IndexedDB for safe replay. */
+export function classifyMediaSyncFailure(error:unknown):Pick<StoredMedia,'state'|'lastError'>{
+  const reason=error instanceof Error?error.message:'media.network_error'
+  return {
+    state:/^api\.http_(403|409|410|413|422)$/.test(reason)
+      ?'conflict':'retry',
+    lastError:/^api\.http_\d+$/.test(reason)?reason:'media.retry_required',
   }
 }
 export async function synchronizeMedia():Promise<void>{

@@ -5,6 +5,7 @@ import type {Session} from '../../identity/application/session'
 import {freshPackage,newSigning} from '../../identity/infrastructure/crypto'
 import {
   enqueueEncryptedMedia,listLocalMedia,readLocalMedia,readLocalMediaMetadata,
+  classifyMediaSyncFailure,
 } from './media-outbox'
 
 afterEach(()=>{activeSession.value=null})
@@ -71,5 +72,23 @@ describe('Issue #260 atomic consent cancellation',()=>{
       .rejects.toThrow('camera.gps_consent_changed')
     expect(await listLocalMedia()).toHaveLength(0)
     expect(checks).toBe(cancelAt)
+  })
+})
+
+describe('Issue #200 — resumable encrypted outbox error semantics',()=>{
+  it('keeps all ciphertext retryable during a live S3 upload lease or transport failure',()=>{
+    expect(classifyMediaSyncFailure(Error('api.http_503')))
+      .toEqual({state:'retry',lastError:'api.http_503'})
+    expect(classifyMediaSyncFailure(Error('api.http_502')))
+      .toEqual({state:'retry',lastError:'api.http_502'})
+    expect(classifyMediaSyncFailure(Error('api.http_429')))
+      .toEqual({state:'retry',lastError:'api.http_429'})
+    expect(classifyMediaSyncFailure(Error('media.network_lost')))
+      .toEqual({state:'retry',lastError:'media.retry_required'})
+  })
+  it('never converts a permanent revoked/expired/signed-contract rejection into success',()=>{
+    for(const status of [403,409,410,413,422])
+      expect(classifyMediaSyncFailure(Error('api.http_'+status)))
+        .toEqual({state:'conflict',lastError:'api.http_'+status})
   })
 })
