@@ -156,7 +156,15 @@ final class MediaV1Controller extends Controller
             if(in_array($c->state,['verified','active'],true))return false;
             if($c->state==='uploading'
                 &&\Carbon\CarbonImmutable::parse($c->updated_at)
-                    ->greaterThan(now()->subMinutes(2)))abort(409);
+                    ->greaterThan(now()->subMinutes(2))){
+                // Concurrent PUT or a lost ACK with a still-live upload
+                // lease is TRANSIENT. HTTP 409 permanently quarantines the
+                // encrypted IndexedDB outbox; HTTP 503 keeps ciphertext
+                // queued for the next safe retry, without a forged ACK.
+                abort(503,'media.chunk_upload_in_progress',[
+                    'Retry-After'=>'5','Cache-Control'=>'no-store',
+                ]);
+            }
             DB::table('media_chunks_v1')->where('id',$chunkId)
                 ->update(['state'=>'uploading','updated_at'=>now()]);
             return true;
