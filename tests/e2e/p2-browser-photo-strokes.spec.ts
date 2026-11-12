@@ -35,6 +35,8 @@ test('P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixe
     })
     await context.setOffline(false)
     await page.goto('/browser/file/media/'+original.id)
+    // Accepted File Viewer opens media in a fixed scene; editor is a sheet.
+    await page.getByTestId('viewer-action-edit').click()
     await expect.poll(()=>page.getByTestId('file-viewer-image')
       .evaluate((v:HTMLImageElement)=>v.naturalWidth),
       {timeout:30000}).toBe(320)
