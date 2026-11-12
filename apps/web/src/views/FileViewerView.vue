@@ -1272,6 +1272,80 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
+// The dedicated editor is a screen, not a separate media backend. Save only
+// the already prepared, separately encrypted derivative; never claim an
+// upload ACK, mutate the original or silently persist edited metadata.
+const editorReady=computed(()=>{
+  if(!editorMode.value||!activeSession.value||!fileUrl.value||!preview.value
+    ||busy.value)return false
+  if(preview.value.type==='photo')
+    return !!cropResult.value&&!cropBusy.value&&!showBefore.value
+      &&!cropSavedId.value
+  if(preview.value.type==='audio')
+    return !!audioClip.value&&!audioClipBusy.value&&!audioClipSavedId.value
+  return !!still.value&&!stillBusy.value&&!stillSavedId.value
+})
+const editorUnsaved=computed(()=>{
+  if(!editorMode.value||!preview.value)return false
+  if(preview.value.type==='photo'){
+    if(cropSavedId.value)return false
+    return !!cropResult.value||!!cropBusy.value||cropLeft.value!==0
+      ||cropTop.value!==0||cropWidth.value!==100||cropHeight.value!==100
+      ||cropTurns.value!==0||photoBrightness.value!==100
+      ||photoContrast.value!==100||photoSaturation.value!==100
+      ||textMarks.value.length>0||shapeMarks.value.length>0
+      ||strokeMarks.value.length>0||photoBlackouts.value.length>0
+  }
+  if(preview.value.type==='audio')
+    return !audioClipSavedId.value&&(
+      !!audioClip.value||audioClipBusy.value||trimStart.value!==0
+      ||(audioDuration.value>0
+        &&Math.abs(trimEnd.value-Math.min(audioDuration.value,60))>0.051))
+  return !stillSavedId.value&&(!!still.value||stillBusy.value)
+})
+function resetEditorDraft():void{
+  clearTextMarks()
+  clearCrop()
+  cropLeft.value=0;cropTop.value=0
+  cropWidth.value=100;cropHeight.value=100;cropTurns.value=0
+  photoBrightness.value=100;photoContrast.value=100;photoSaturation.value=100
+  clearAudioClip()
+  trimStart.value=0
+  trimEnd.value=Math.min(audioDuration.value,60)
+  clearStill()
+}
+function editorViewerPath():string|null{
+  const target=current.value
+  return target?'/browser/file/'+target.protocol+'/'+target.id:null
+}
+async function returnFromEditor():Promise<void>{
+  const path=editorViewerPath()
+  if(!path)return
+  // Editor is normally pushed from Viewer. Pop that one editor entry so
+  // the next native Back goes straight to Browser, not a duplicate Viewer.
+  if(window.history.state?.back===path)await router.back()
+  else await router.replace(path) // validated direct editor deep link/reload
+}
+async function cancelEditor():Promise<void>{
+  if(!editorMode.value)return
+  await returnFromEditor()
+}
+async function saveEditor():Promise<void>{
+  if(!editorReady.value||!editorMode.value||!preview.value||!current.value)return
+  const before=viewerKey(current.value)
+  const kind=preview.value.type
+  if(kind==='photo')await saveCroppedPhoto()
+  else if(kind==='audio')await saveAudioFragment()
+  else await saveStillToBrowser()
+  if(!activeSession.value||!editorMode.value||!current.value
+    ||viewerKey(current.value)!==before)return
+  const success=kind==='photo'?!!cropSavedId.value
+    :kind==='audio'?!!audioClipSavedId.value:!!stillSavedId.value
+  if(success){
+    notice.value='Производный файл зашифрован в локальной очереди Browser. Подтверждение облака отдельно.'
+    await returnFromEditor()
+  }
+}
 watch([paintCanvas,strokeMarks,draftStroke,cropResult,compositionWidth],()=>{
   renderPaintCanvas()
 },{flush:'post'})
