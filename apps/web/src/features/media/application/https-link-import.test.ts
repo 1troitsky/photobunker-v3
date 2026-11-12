@@ -13,7 +13,7 @@ const content=(bytes=2048,mime='audio/wav')=>{
   return response
 }
 const fetcher=(response:Response)=>{
-  const mock=vi.fn(async()=>response)
+  const mock=vi.fn(async(_input:RequestInfo|URL,_init?:RequestInit)=>response)
   return {mock,fetch:mock as unknown as typeof fetch}
 }
 
