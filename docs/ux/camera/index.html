@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#121212"><title>PhotoBunker — Camera · Fieldwork 1.2</title>
+<link rel="stylesheet" href="./style.css"></head>
+<body>
+<svg aria-hidden="true" style="width:0;height:0;position:absolute;overflow:hidden" xmlns="http://www.w3.org/2000/svg">
+<symbol id="i-grid" viewbox="0 0 24 24"><rect height="18" rx="2" width="18" x="3" y="3"></rect><path d="M9 3v18M15 3v18M3 9h18M3 15h18"></path></symbol>
+<symbol id="i-flip" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-1v2a3 3 0 0 1-3 3H3"/></symbol>
+<symbol id="i-settings" viewbox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15.1l1.2 1.4-2.1 2.1-1.5-1a8 8 0 0 1-2 .9l-.4 1.9h-3l-.5-1.9a8 8 0 0 1-2-.9l-1.6 1-2-2 1.1-1.5a8 8 0 0 1-.8-2L4 12.6v-3l1.9-.5a8 8 0 0 1 .8-2L5.6 5.6l2-2 1.6 1.1a8 8 0 0 1 2-.8l.5-1.9h3l.4 1.9a8 8 0 0 1 2 .8l1.5-1.1 2.1 2-1.2 1.5a8 8 0 0 1 .8 2l1.9.5v3l-1.9.5a8 8 0 0 1-.9 2z"></path></symbol>
+<symbol id="i-eye-off" viewbox="0 0 24 24"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7"></path><path d="M7.3 5.4A11.9 11.9 0 0 1 12 4.4c4.5 0 8 3 10 7.6a16.8 16.8 0 0 1-3 4.3M16.5 18a12 12 0 0 1-4.5 1.6C7.5 19.6 4 16.6 2 12a15.9 15.9 0 0 1 3-4.2"></path></symbol>
+<symbol id="i-camera" viewbox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v12H3z"></path><circle cx="12" cy="14" r="4"></circle></symbol>
+<symbol id="i-folder" viewbox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 3h8v13H3z"></path></symbol>
+<symbol id="i-list" viewbox="0 0 24 24"><rect height="18" rx="2" width="16" x="4" y="3"></rect><path d="M8 9h8M8 14h8"></path></symbol>
+<symbol id="i-users" viewbox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3 21v-2a6 6 0 0 1 12 0v2M17 6a3 3 0 0 1 0 6m1 5a5 5 0 0 1 3 4"></path></symbol>
+<symbol id="i-user" viewbox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21v-2a8 8 0 0 1 16 0v2"></path></symbol>
+<symbol id="i-filter" viewbox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"></path></symbol>
+<symbol id="i-map" viewbox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15"></path></symbol>
+<symbol id="i-check" viewbox="0 0 24 24"><path d="m4 12 5 5L20 6"></path></symbol>
+<symbol id="i-x" viewbox="0 0 24 24"><path d="M5 5l14 14M19 5 5 19"></path></symbol>
+<symbol id="i-chevron" viewbox="0 0 24 24"><path d="m9 5 7 7-7 7"></path></symbol>
+<symbol id="i-info" viewbox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v6M12 7h.01"></path></symbol>
+<symbol id="i-plus" viewbox="0 0 24 24"><path d="M12 4v16M4 12h16"></path></symbol>
+<symbol id="i-zoom" viewbox="0 0 24 24"><circle cx="10" cy="10" r="6"></circle><path d="m15 15 6 6"></path></symbol>
+<symbol id="i-share" viewbox="0 0 24 24"><path d="M12 16V3M7 8l5-5 5 5M4 14v7h16v-7"></path></symbol>
+<symbol id="i-wifi-off" viewbox="0 0 24 24"><path d="M3 3l18 18M2 8a17 17 0 0 1 7-3M14 5a17 17 0 0 1 8 3M5 12a11 11 0 0 1 8-2M17 12a11 11 0 0 1 2 1M8 16a5 5 0 0 1 4-1M12 21h.01"></path></symbol>
+
+<symbol id="i-flash" viewBox="0 0 24 24"><path d="M13 2 4 13h7l-1 9 10-12h-7z"/></symbol>
+<symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-3v10l-4-3"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24"><path d="M4 3h14l3 3v15H3V3zM7 3v7h10V3M7 21v-8h10v8"/></symbol>
+<symbol id="i-volume" viewBox="0 0 24 24"><path d="M3 9v6h4l5 4V5L7 9zM16 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12"/></symbol>
+<symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></symbol>
+</svg>
+<div class="preview-bar"><strong>FIELDWORK / CAMERA 1.2</strong><div class="device-switch"><button type="button" data-device="phone" class="active">Телефон</button><button type="button" data-device="desktop">Desktop</button></div></div>
+<div class="device phone" id="device"><div class="app" id="app">
+<header class="header"><span class="mark">pb</span><button type="button" class="brand" data-open="status" aria-label="Системный статус"><strong>PhotoBunker</strong><small><span class="led" id="brand-led"></span><span id="brand-status">В работе</span></small></button>
+<div class="header-actions">
+<button type="button" class="icon-btn" data-action="flip" aria-label="Перевернуть камеру" title="Перевернуть камеру"><svg class="ico"><use href="#i-flip"/></svg></button>
+<button type="button" class="icon-btn" data-action="torch" id="torch-button" aria-label="Фонарик" aria-pressed="false" title="Фонарик"><svg class="ico"><use href="#i-flash"/></svg></button>
+<button type="button" class="icon-btn" data-action="privacy" aria-label="Слепой режим" title="Слепой режим"><svg class="ico"><use href="#i-eye-off"/></svg></button>
+</div></header>
+<nav class="mode-tabs" aria-label="Режим съёмки"><button type="button" class="active" data-media="photo" aria-pressed="true">Фото</button><button type="button" data-media="video" aria-pressed="false">Видео</button><button type="button" data-media="audio" aria-pressed="false">Аудио</button></nav>
+<main class="camera-main">
+<section class="stage" aria-label="Предпросмотр камеры"><div class="finder" id="finder">
+<svg aria-label="Демонстрационное изображение фасада здания" class="demo-scene" id="demo-scene" preserveaspectratio="xMidYMid slice" role="img" viewbox="0 0 900 675" xmlns="http://www.w3.org/2000/svg">
+<defs><lineargradient id="sky" x2="0" y2="1"><stop stop-color="#7b999e"></stop><stop offset="1" stop-color="#b8c4bd"></stop></lineargradient><lineargradient id="wall" x2="1" y2=".2"><stop stop-color="#b5a68d"></stop><stop offset="1" stop-color="#d2c2a8"></stop></lineargradient><lineargradient id="street" x2="0" y2="1"><stop stop-color="#77857d"></stop><stop offset="1" stop-color="#5f716a"></stop></lineargradient></defs>
+<rect fill="url(#sky)" height="675" width="900"></rect><path d="M0 486 900 460V675H0" fill="#8f998e"></path><path d="M76 675V139L718 119v556" fill="url(#wall)"></path>
+<path d="m84 175 630-19" stroke="#e6d5b9" stroke-width="24"></path><path d="m85 318 627-14M85 451l627-14" stroke="#a79982" stroke-width="15"></path>
+<g fill="#405a59"><rect height="109" width="97" x="143" y="198"></rect><rect height="109" width="97" x="292" y="195"></rect><rect height="109" width="97" x="442" y="190"></rect><rect height="109" width="97" x="591" y="187"></rect><rect height="108" width="97" x="143" y="331"></rect><rect height="108" width="97" x="292" y="327"></rect><rect height="108" width="97" x="442" y="324"></rect><rect height="108" width="97" x="591" y="320"></rect></g>
+<g fill="#66736c" opacity=".45"><path d="M143 198h97v9h-97zM292 195h97v9h-97zM442 190h97v9h-97zM591 187h97v9h-97z"></path></g>
+<path d="M294 675V489q0-37 74-37t74 37v186" fill="#50625d"></path><path d="M0 570 900 524v151H0" fill="url(#street)"></path><path d="m0 594 900-45" stroke="#c6c7b3" stroke-width="7"></path><path d="M763 625V349" stroke="#415748" stroke-width="12"></path><circle cx="766" cy="345" fill="#5e7d66" r="84"></circle><circle cx="817" cy="425" fill="#587862" r="75"></circle><circle cx="736" cy="418" fill="#6f8b71" r="54"></circle><path d="M0 631 900 592" stroke="#b7b8a9" stroke-opacity=".38" stroke-width="3"></path>
+</svg>
+<video id="live-video" autoplay muted playsinline hidden aria-label="Живой предпросмотр камеры"></video>
+<div class="grid-overlay" id="grid" hidden aria-hidden="true"></div>
+<i class="finder-corner tl"></i><i class="finder-corner tr"></i><i class="finder-corner bl"></i><i class="finder-corner br"></i>
+<div class="record-badge" id="record-badge" hidden><span class="rec-dot"></span><span id="record-time">00:00</span></div>
+<div class="zoom-indicator" id="zoom-indicator" hidden>1.0×</div>
+
+<div class="snap-flash" id="snap-flash"></div>
+</div>
+<div class="audio-stage" id="audio-stage" hidden aria-label="Диктофон — запись без видео">
+  <span class="audio-emblem"><svg class="ico"><use href="#i-mic"/></svg></span>
+  <div class="audio-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <strong>Диктофон</strong><small>Только аудио, без видеозаписи</small>
+  <span class="audio-elapsed" id="audio-elapsed" hidden>00:00</span>
+</div><p class="toast" role="status" id="capture-feedback" hidden></p></section>
+<section class="bottom-controls" aria-label="Управление съёмкой">
+<div class="gps-line"><button type="button" class="gps-pill" id="gps-status" data-open="location"><span class="gps-dot"></span><span id="gps-text">GPS: ожидание</span></button></div>
+<div class="capture-row">
+<button type="button" class="context-action" data-open="assignment" aria-label="Задание и данные снимка"><svg class="ico"><use href="#i-list"/></svg><strong>Задание</strong></button>
+<div class="shutter-wrap"><button type="button" class="shutter" id="shutter" data-action="capture" aria-label="Снять"><span></span></button></div>
+<button type="button" class="context-action" data-open="settings" aria-label="Настройки камеры и пресеты"><svg class="ico"><use href="#i-settings"/></svg><strong>Настройки</strong></button>
+</div></section>
+</main>
+<nav class="dock" aria-label="Навигация PhotoBunker">
+<button type="button" data-nav="Задания"><svg class="ico"><use href="#i-list"/></svg>Задания</button>
+<button type="button" data-nav="Browser"><svg class="ico"><use href="#i-folder"/></svg>Browser</button>
+<button type="button" class="active" aria-current="page" data-nav="Камера"><svg class="ico"><use href="#i-camera"/></svg>Камера</button>
+<button type="button" data-nav="Контакты"><svg class="ico"><use href="#i-users"/></svg>Контакты</button>
+<button type="button" data-nav="Профиль"><svg class="ico"><use href="#i-user"/></svg>Профиль</button>
+</nav>
+<div class="sheet-layer" id="sheet-layer" hidden><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1"><div class="sheet-handle"></div><div class="sheet-heading"><strong id="sheet-title"></strong><button type="button" data-action="close-sheet" aria-label="Закрыть"><svg class="ico"><use href="#i-x"/></svg></button></div><div class="sheet-body" id="sheet-body"></div></section></div>
+<div class="privacy-cover" id="privacy-cover" hidden role="region" aria-label="Слепой режим"><span class="eye-icon"><svg class="ico"><use href="#i-eye-off"/></svg></span><h2>Слепой режим</h2><p>Что-бы другие не видели, что вы делаете 👻</p>
+<div class="blind-timer" id="blind-timer" hidden><span class="rec-dot" style="display:inline-block;vertical-align:middle;margin-right:8px"></span><span id="blind-record-time">00:00</span></div>
+<div class="blind-controls"><button type="button" class="blind-shutter" id="blind-shutter" data-action="capture" aria-label="Снять в слепом режиме"><span></span></button><p class="blind-note" id="blind-note">Если клавиши громкости недоступны — нажмите кнопку</p></div>
+<button type="button" class="blind-back" data-action="resume">Вернуться назад</button></div>
+</div></div>
+<script src="./app.js" defer></script>
+</body></html>

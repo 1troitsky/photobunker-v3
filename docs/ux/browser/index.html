@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Browser — каталог и загрузка файлов · версия 3</title>
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="preview-bar"><span class="preview-label"><i></i> BROWSER / КАТАЛОГ <small>· макет</small></span><div class="preview-modes"><button type="button" data-device="phone" class="selected" aria-pressed="true">Телефон</button><button type="button" data-device="desktop" aria-pressed="false">Desktop</button></div></div>
+<div class="preview-stage"><div class="device phone" id="device"><div class="app" id="app">
+<header class="app-header">
+ <span class="brand-mark" aria-hidden="true">pb</span>
+ <button type="button" class="brand-state" data-action="status" aria-label="Состояние приложения"><strong>PhotoBunker</strong><small><i class="state-led"></i><span id="status-label">В работе</span></small></button>
+ <div class="header-actions">
+  <button type="button" data-action="create" title="Новая папка" aria-label="Новая папка"><svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></svg></button>
+  <button type="button" data-action="upload" title="Загрузить файлы" aria-label="Загрузить файлы"><svg viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 16v4h16v-4"/></svg></button>
+  <button type="button" data-action="select" title="Выбрать элементы" aria-label="Выбрать элементы"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m8 12 3 3 5-6"/></svg></button>
+
+  <button type="button" data-action="search" title="Поиск" aria-label="Поиск"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg></button>
+  <button type="button" data-action="settings" title="Настройки" aria-label="Настройки"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="16" cy="17" r="2"/></svg></button>
+ </div>
+</header>
+<main class="app-main" id="browser-content"><div class="content-inner">
+ <div class="browser-heading"><div class="browser-heading-copy"><h1>Browser</h1><small id="browser-count"></small></div><div class="view-switch" aria-label="Режим просмотра">
+ <button type="button" data-view="grid" aria-label="Сетка" title="Сетка" class="selected" aria-pressed="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
+ <button type="button" class="selected" data-view="list" aria-label="Список" title="Список" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M9 6h12M9 12h12M9 18h12M3 6h2M3 12h2M3 18h2"/></svg></button>
+ <button type="button" data-view="tree" aria-label="Дерево" title="Дерево" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 4v16M4 8h5m-5 8h5M11 8h10M11 16h10"/></svg></button>
+ </div></div>
+ <nav class="browser-sections" role="tablist" aria-label="Разделы Browser"><button type="button" data-section="all" role="tab" aria-selected="false">Все</button><button type="button" data-section="personal" class="selected" role="tab" aria-selected="true">Мои фото</button><button type="button" data-section="assignments" role="tab" aria-selected="false">Задания</button><button type="button" data-section="archive" role="tab" aria-selected="false">Архив</button></nav>
+ <nav class="browser-path" aria-label="Текущая папка"><button type="button" class="path-back" data-action="back" aria-label="На уровень выше"><svg viewBox="0 0 24 24"><path d="m14 5-7 7 7 7M8 12h12"/></svg></button><div class="path-breadcrumbs"></div></nav>
+ <div class="browser-search" hidden><label class="search-line"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg><input type="search" id="browser-query" aria-label="Поиск файлов и папок" placeholder="Название или ID файла" autocomplete="off"></label><div class="search-controls">
+  <label class="search-scope-label">Искать в папке
+    <select id="search-folder" aria-label="Область поиска"></select>
+  </label>
+  <div class="type-filters" role="group" aria-label="Типы файлов">
+    <button type="button" data-type="all" class="selected" aria-pressed="true">Все файлы</button>
+    <button type="button" data-type="photo" aria-pressed="false">Фото</button>
+    <button type="button" data-type="video" aria-pressed="false">Видео</button>
+    <button type="button" data-type="audio" aria-pressed="false">Аудио</button>
+  </div>
+</div></div>
+ <div class="selection-bar" hidden></div><div id="browser-items" class="browser-items list" aria-live="polite"></div>
+</div></main>
+<nav class="app-dock" aria-label="Главная навигация">
+<button type="button" data-nav="Задания"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9h8M8 14h8"/></svg><small>Задания</small></button>
+<button type="button" class="selected" data-nav="Browser" aria-current="page"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 3h8v13H3z"/></svg><small>Browser</small></button>
+<button type="button" data-nav="Камера"><svg viewBox="0 0 24 24"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="14" r="4"/></svg><small>Камера</small></button>
+<button type="button" data-nav="Контакты"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M17 6a3 3 0 0 1 0 6m1 5a5 5 0 0 1 3 4"/></svg><small>Контакты</small></button>
+<button type="button" data-nav="Профиль"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg><small>Профиль</small></button></nav>
+<div class="dialog-overlay" id="dialog-overlay" hidden><div class="dialog-sheet" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1"><div class="dialog-heading"><strong id="dialog-title"></strong><button type="button" data-action="close" aria-label="Закрыть">✕</button></div><div class="dialog-content" id="dialog-content"></div></div></div>
+</div></div></div>
+<script src="./app.js" defer></script>
+</body></html>
