@@ -50,6 +50,17 @@ final class QuotaAdmission
         if($countLimit!==null&&(!is_int($countLimit)||$countLimit<0)) {
             throw new RuntimeException('quota.invalid_entitlement');
         }
+        // The Free bootstrap file cap is also an independent technical
+        // admission ceiling (the pre-existing tests may set it lower than
+        // the published Free=50). Preserve the stricter legacy behavior
+        // without accidentally capping confirmed Go/Pro file entitlements.
+        if($entitlement['effectivePlanId']==='free'){
+            $freeGuard=config('photo_sync.bootstrap_free_file_cap');
+            if(!is_int($freeGuard)||$freeGuard<0)
+                throw new RuntimeException('quota.invalid_bootstrap_guard');
+            $countLimit=$countLimit===null
+                ?$freeGuard:min($countLimit,$freeGuard);
+        }
         $storage=$limits['storage'];
         if(($storage['unitPolicy']??null)!=='OPEN_GB_VS_GIB'
             ||!array_key_exists('byteCeiling',$storage)
