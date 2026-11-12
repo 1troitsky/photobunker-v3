@@ -86,7 +86,7 @@ final class BillingV1Test extends TestCase
     public function test_public_catalog_has_exact_owner_prices_all_five_plans_and_no_invented_bytes():void
     {
         $response=$this->getJson('/billing/v1/plans')->assertOk()
-            ->assertHeader('Cache-Control','no-store')
+            ->assertHeader('Cache-Control','no-store, private')
             ->assertJsonPath('schemaVersion',1)
             ->assertJsonPath('catalogVersion','pb3-2026-11-09')
             ->assertJsonPath('effectiveAt','2026-11-09T00:00:00Z')
