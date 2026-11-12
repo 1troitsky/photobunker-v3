@@ -6,6 +6,8 @@ import {
   peekOriginPager,noteViewerPosition,
 } from '../features/browser/application/browser-return-context'
 import {activeSession} from '../features/identity/application/session'
+import {setViewerShellActions}
+  from '../features/browser/application/viewer-shell-actions'
 import {
   listLocalPhotos,listCloudPhotos,readLocalPhoto,readCloudPhoto,
   readLocalPhotoMetadata,readCloudPhotoMetadata,
@@ -1273,6 +1275,13 @@ watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
   clearCrop()
 })
 watch([trimStart,trimEnd],()=>{clearAudioClip()})
+// The shared Shell exposes only a callable action. All media content,
+// filenames and permissions remain inside FileViewerView. The callback
+// is cleared on lock, route change and unmount.
+watch([fileUrl,preview,activeSession],()=>{
+  setViewerShellActions(activeSession.value&&fileUrl.value&&preview.value
+    ?{download}:null)
+},{immediate:true})
 watch(activeSession,(next,previous)=>{
   // A CSRF/session reauthentication may replace Session with a new object
   // containing the SAME key package and physical device. Never erase a
@@ -1317,6 +1326,7 @@ onBeforeRouteLeave((to)=>{
 })
 onMounted(()=>window.addEventListener('keydown',onKeyDown))
 onUnmounted(()=>{
+  setViewerShellActions(null)
   compositionObserver?.disconnect()
   window.removeEventListener('keydown',onKeyDown)
   clearBlob();clearIndex()
@@ -1339,8 +1349,6 @@ onUnmounted(()=>{
           data-testid="file-viewer-path" aria-label="Путь Browser">
           <RouterLink to="/browser" class="file-viewer-back" aria-label="В Browser">‹</RouterLink>
           <span class="file-viewer-path-name">Browser / {{ preview?.name??'Файл' }}</span>
-          <button type="button" data-testid="file-viewer-download"
-            :disabled="!fileUrl" @click="download">Скачать</button>
         </nav>
       <div ref="stage" class="file-viewer-stage"
         data-testid="file-viewer-stage"
