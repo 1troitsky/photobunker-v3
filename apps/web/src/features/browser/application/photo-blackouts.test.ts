@@ -36,7 +36,7 @@ describe('P2 opaque blackout JPEG pixel replacement',()=>{
     )
     expect(ctx.save).toHaveBeenCalledOnce()
     expect(ctx.restore).toHaveBeenCalledOnce()
-    expect(()=>paintPhotoBlackouts(ctx,5000,100,[a]))
+    expect(()=>paintPhotoBlackouts(ctx,8193,100,[a]))
       .toThrow('viewer.blackout_invalid_canvas')
   })
 })

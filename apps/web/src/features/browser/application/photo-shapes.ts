@@ -1,3 +1,4 @@
+import {canExportPhotoCanvas} from './photo-export-budget'
 export type ShapeKind='arrow'|'circle'|'square'|'triangle'|'star'
 export type PhotoShapeMark=Readonly<{
   id:string;kind:ShapeKind;x:number;y:number;width:number;height:number
@@ -36,9 +37,7 @@ export function drawPhotoShapes(
   shapes:readonly PhotoShapeMark[],
 ):void{
   validateShapeMarks(shapes)
-  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)
-    ||width<1||height<1||width>4096||height>4096
-    ||width*height>16_777_216)
+  if(!canExportPhotoCanvas(width,height))
     throw Error('viewer.shape_invalid_canvas')
   for(const shape of shapes){
     const x=width*shape.x/100,y=height*shape.y/100

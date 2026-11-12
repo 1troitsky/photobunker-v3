@@ -27,6 +27,8 @@ import type {PersonalMediaCopyDraft} from '../features/browser/application/perso
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
 import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
+import {describePhotoExportError}
+  from '../features/browser/application/photo-export-budget'
 import {drawLivePhotoPreview}
   from '../features/browser/application/photo-live-preview'
 import {choosePhotoAspect} from '../features/browser/application/photo-aspect-presets'
@@ -1415,10 +1417,10 @@ async function createCroppedPhoto():Promise<void>{
       ||viewerKey(current.value)!==viewerKey(target))return
     cropResult.value=result
     cropUrl.value=URL.createObjectURL(result.blob)
-    cropNotice.value='JPEG подготовлен в памяти. Оригинал не изменён.'
+    cropNotice.value='Полноразмерный JPEG подготовлен в памяти. Оригинал не изменён.'
   }catch(e){
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch)
-      cropError.value=explain(e)
+      cropError.value=describePhotoExportError(e)
   }finally{
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch)
       cropBusy.value=false
@@ -1492,7 +1494,7 @@ async function saveCroppedPhoto():Promise<void>{
     }
   }catch(e){
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch)
-      cropError.value=explain(e)
+      cropError.value=describePhotoExportError(e)
   }finally{
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch)
       cropBusy.value=false
@@ -1530,7 +1532,7 @@ async function downloadCroppedPhoto():Promise<void>{
     anchor.remove()
   }catch(e){
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch
-      &&version===textRevision)cropError.value=explain(e)
+      &&version===textRevision)cropError.value=describePhotoExportError(e)
   }finally{
     if(sameSession(session,currentEpoch)&&epoch===cropEpoch)
       cropBusy.value=false

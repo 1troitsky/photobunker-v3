@@ -1,6 +1,10 @@
 import {MAX_MEDIA_BYTES} from '../../media/domain/media-crypto'
 import {safeDownloadName} from './viewer-navigation'
 import {
+  assertFullResolutionExport,deviceMemoryForPhotoExport,
+  encodeFullResolutionJpeg,verifyFullResolutionJpeg,
+} from './photo-export-budget'
+import {
   adjustPhotoPixels,validatePhotoAdjustments,DEFAULT_PHOTO_ADJUSTMENTS,
 } from './photo-effects'
 import type {PhotoAdjustments} from './photo-effects'
@@ -48,6 +52,23 @@ export function cropGeometry(
     outputHeight:rotated?drawnWidth:drawnHeight,
   }
 }
+/**
+ * Native JPEG geometry reuses the same crop bounds as the preview, but
+ * absolutely never inherits preview's 4096px / 16.8MP downsampling.
+ * Unsafe source dimensions fail closed with an actionable UI error.
+ */
+export function fullResolutionCropGeometry(
+  naturalWidth:number,naturalHeight:number,region:CropSelection,
+  memoryGiB?:number,
+):CropGeometry{
+  const bounded=cropGeometry(naturalWidth,naturalHeight,region)
+  const drawnWidth=bounded.sw,drawnHeight=bounded.sh
+  const rotated=region.turns%2===1
+  const outputWidth=rotated?drawnHeight:drawnWidth
+  const outputHeight=rotated?drawnWidth:drawnHeight
+  assertFullResolutionExport(outputWidth,outputHeight,memoryGiB)
+  return {...bounded,drawnWidth,drawnHeight,outputWidth,outputHeight}
+}
 export function cropFileName(
   source:string,region:CropSelection,
   effects:PhotoAdjustments=DEFAULT_PHOTO_ADJUSTMENTS,
@@ -71,13 +92,18 @@ export async function cropPhoto(
 ):Promise<CroppedPhoto>{
   if(!element.complete||!element.naturalWidth||!element.naturalHeight)
     throw Error('viewer.crop_source_not_ready')
-  const g=cropGeometry(element.naturalWidth,element.naturalHeight,region)
+  const g=fullResolutionCropGeometry(
+    element.naturalWidth,element.naturalHeight,region,
+    deviceMemoryForPhotoExport(),
+  )
   validatePhotoAdjustments(effects)
   const canvas=document.createElement('canvas')
-  canvas.width=g.outputWidth;canvas.height=g.outputHeight
-  const ctx=canvas.getContext('2d',{alpha:false})
-  if(!ctx)throw Error('viewer.crop_canvas_unsupported')
   try{
+    canvas.width=g.outputWidth;canvas.height=g.outputHeight
+    if(canvas.width!==g.outputWidth||canvas.height!==g.outputHeight)
+      throw Error('viewer.photo_export_encode_failed')
+    const ctx=canvas.getContext('2d',{alpha:false})
+    if(!ctx)throw Error('viewer.photo_export_encode_failed')
     ctx.translate(g.outputWidth/2,g.outputHeight/2)
     ctx.rotate(region.turns*Math.PI/2)
     ctx.drawImage(element,g.sx,g.sy,g.sw,g.sh,
@@ -85,19 +111,20 @@ export async function cropPhoto(
     if(effects.brightness!==100||effects.contrast!==100
       ||effects.saturation!==100){
       const pixels=ctx.getImageData(0,0,g.outputWidth,g.outputHeight)
-      adjustPhotoPixels(pixels.data,effects)
-      ctx.putImageData(pixels,0,0)
-      pixels.data.fill(0)
+      try{
+        adjustPhotoPixels(pixels.data,effects)
+        ctx.putImageData(pixels,0,0)
+      }finally{pixels.data.fill(0)}
     }
-    const blob=await new Promise<Blob>((resolve,reject)=>{
-      canvas.toBlob(result=>result?resolve(result):reject(
-        Error('viewer.crop_encode_failed')),'image/jpeg',0.9)
-    })
-    if(blob.type!=='image/jpeg'||blob.size<128||blob.size>MAX_MEDIA_BYTES)
-      throw Error('viewer.crop_invalid_jpeg')
+    const blob=await encodeFullResolutionJpeg(canvas,0.9)
+    if(blob.size<128||blob.size>MAX_MEDIA_BYTES)
+      throw Error('viewer.photo_export_encode_failed')
+    // Do not claim a full-res result based only on requested Canvas size.
+    await verifyFullResolutionJpeg(blob,g.outputWidth,g.outputHeight)
     return {blob,width:g.outputWidth,height:g.outputHeight}
   }finally{
-    ctx.clearRect(0,0,g.outputWidth,g.outputHeight)
+    const ctx=canvas.getContext('2d')
+    ctx?.clearRect(0,0,canvas.width,canvas.height)
     canvas.width=0;canvas.height=0
   }
 }
