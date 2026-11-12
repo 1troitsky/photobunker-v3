@@ -47,6 +47,9 @@ import {
 } from '../features/browser/application/photo-history'
 import type {PhotoEditHistory,PhotoEditSnapshot} from '../features/browser/application/photo-history'
 import type {PhotoTextMark} from '../features/browser/application/photo-text'
+import {
+  photoInlinePoint,prepareInlineText,
+} from '../features/browser/application/photo-inline-placement'
 import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
 import {buildCatalog} from '../features/browser/application/catalog'
@@ -169,6 +172,9 @@ const selectedShape=computed(()=>shapeMarks.value.find(
 let draggingShape:DragMark|null=null
 let draggingBlackout:DragMark|null=null
 const selectedTextId=ref<string|null>(null)
+const inlinePhotoText=ref<PhotoTextMark|null>(null)
+const inlineTextInput=ref<HTMLTextAreaElement|null>(null)
+const inlineTextError=ref('')
 const selectedText=computed(()=>textMarks.value.find(
   item=>item.id===selectedTextId.value)??null)
 const composedPhotoUrl=ref('')
@@ -481,6 +487,8 @@ function clearTextMarks():void{
   activePaintTool.value=null
   paintHistory.value=initialPhotoHistory()
   selectedTextId.value=null
+  inlinePhotoText.value=null
+  inlineTextError.value=''
   selectedShapeId.value=null
   draggingMark=null
   draggingShape=null
@@ -580,6 +588,68 @@ function endShapeDrag(event:PointerEvent):void{
     target.releasePointerCapture(event.pointerId)
   draggingShape=null
   commitPhotoEdit()
+}
+/** A tap on the actual visible image opens a VOLATILE text draft, not a mark.
+ * No list item or exportable annotation exists until explicit completion. */
+async function beginInlinePhotoTextAt(event:MouseEvent):Promise<void>{
+  if(!cropResult.value||cropBusy.value||showBefore.value||activePaintTool.value
+    ||textMarks.value.length>=MAX_TEXT_MARKS)return
+  if(inlinePhotoText.value){
+    commitInlinePhotoText()
+    if(inlinePhotoText.value)return
+  }
+  const target=event.currentTarget
+  if(!(target instanceof HTMLImageElement))return
+  try{
+    const {x,y}=photoInlinePoint(
+      event.clientX,event.clientY,target.getBoundingClientRect())
+    inlinePhotoText.value={
+      id:crypto.randomUUID(),text:'',x,y,size:6,color:'#ffffff',
+    }
+    inlineTextError.value=''
+    await nextTick()
+    inlineTextInput.value?.focus()
+  }catch(e){inlineTextError.value=explain(e)}
+}
+async function editInlinePhotoText(id:string):Promise<void>{
+  if(!cropResult.value||cropBusy.value||showBefore.value||activePaintTool.value)
+    return
+  const mark=textMarks.value.find(item=>item.id===id)
+  if(!mark)return
+  if(inlinePhotoText.value?.id!==id&&inlinePhotoText.value){
+    commitInlinePhotoText()
+    if(inlinePhotoText.value)return
+  }
+  selectedTextId.value=id
+  inlinePhotoText.value={...mark}
+  inlineTextError.value=''
+  await nextTick()
+  inlineTextInput.value?.focus()
+  inlineTextInput.value?.select()
+}
+function cancelInlinePhotoText():void{
+  inlinePhotoText.value=null
+  inlineTextError.value=''
+}
+function commitInlinePhotoText():void{
+  const draft=inlinePhotoText.value
+  if(!draft||cropBusy.value)return
+  try{
+    const mark=prepareInlineText(draft)
+    if(mark){
+      const existing=textMarks.value.some(item=>item.id===mark.id)
+      if(!existing&&textMarks.value.length>=MAX_TEXT_MARKS)
+        throw Error('viewer.text_invalid_count')
+      replaceTextMarks(existing
+        ?textMarks.value.map(item=>item.id===mark.id?mark:item)
+        :[...textMarks.value,mark])
+      selectedTextId.value=mark.id
+    }
+    // Blank input creates no mark. Blank replacement preserves the old mark.
+    cancelInlinePhotoText()
+  }catch(e){
+    inlineTextError.value=explain(e)
+  }
 }
 function addPhotoText():void{
   if(!cropResult.value||cropBusy.value||textMarks.value.length>=MAX_TEXT_MARKS)return
