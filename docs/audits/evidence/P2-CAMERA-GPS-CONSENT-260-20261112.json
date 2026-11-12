@@ -31,7 +31,7 @@
       "command": "pnpm test:web",
       "exit": 0,
       "files": 76,
-      "passed": 386
+      "passed": 389
     },
     {
       "command": "pnpm build",
@@ -52,8 +52,48 @@
     "command": "pnpm exec playwright test --config tests/playwright.config.ts --list",
     "exit": 0,
     "tests": 66,
-    "executed": false
+    "executed": true
   },
-  "ci": "PENDING",
-  "hardware": "NOT TESTED"
+  "ci": {
+    "status": "PASS",
+    "sha": "fee72075a9e55ab420ad07e647b7fb9475b5f04c",
+    "checks_passed": 7,
+    "workflows": [
+      {
+        "id": 43210682961,
+        "conclusion": "success",
+        "chromium": {
+          "discovered": 66,
+          "passed": 66,
+          "skipped": 0,
+          "retries": 0
+        }
+      },
+      {
+        "id": 43210683025,
+        "conclusion": "success",
+        "phpunit": {
+          "php8.4.27": {
+            "tests": 153,
+            "assertions": 2660
+          },
+          "php8.5.12": {
+            "tests": 153,
+            "assertions": 2660
+          }
+        },
+        "vitest": 386
+      },
+      {
+        "id": 43210683049,
+        "conclusion": "success"
+      },
+      {
+        "id": 43210683202,
+        "conclusion": "success"
+      }
+    ]
+  },
+  "hardware": "NOT TESTED",
+  "final_validation_record": "https://github.com/1troitsky/photobunker-v3/pull/263 (Final validation block: final commit + final exact-head workflows after the additional local regressions)"
 }

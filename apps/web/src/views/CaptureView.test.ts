@@ -617,4 +617,33 @@ describe('Issue #260 GPS consent and capture races',()=>{
     expect(host.textContent).not.toContain('P2 JPEG зашифрован')
   })
 
+  it.each(['photo','audio'] as const)('does not sign using a new account during pending %s permission read',async mode=>{
+    mocks.allowedMedia=['photo','audio']
+    mocks.route.query={assignmentId:'assignment-a'}
+    mocks.policies.mockResolvedValue([{assignmentId:'assignment-a',policyRevision:2}])
+    const session=await ready()
+    if(mode==='audio'){
+      select('#camera-mode','audio');await settle()
+      requests[1]!.resolve(media().stream);await settle()
+    }
+    await fix()
+    const query=deferred<PermissionStatus>()
+    vi.mocked(navigator.permissions.query).mockReturnValue(query.promise)
+    button(mode==='photo'?'Сделать снимок':'Начать запись аудио').click();await settle()
+    activeSession.value={...session,accountId:'account-b'}
+    query.resolve(status as PermissionStatus);await settle()
+    expect(mocks.binding).not.toHaveBeenCalled()
+    expect(mocks.mediaIntent).not.toHaveBeenCalled()
+    expect(mocks.capture).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('refuses a fresh native callback if permission changed silently before delivery',async()=>{
+    await ready();button('Получить GPS').click();await settle()
+    status.state='denied' // no onchange dispatched yet
+    callbacks[0]!.ok(point());await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+    expect(host.textContent).toContain('camera.gps_permission_required')
+  })
+
 })

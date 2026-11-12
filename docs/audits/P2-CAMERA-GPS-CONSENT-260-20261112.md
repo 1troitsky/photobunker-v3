@@ -8,11 +8,13 @@ Date: 2026-11-12. Product branch `fix/p2-camera-gps-consent`, based on verified 
 
 `CaptureView.vue` now invalidates the previous fix **before** every explicit request, clears it on failure, bounds native requests to 12 seconds and passive Permissions API reads to 1 second, and detaches/cancels its observer and request on cancellation, account/device/key changes, assignment/route/mode changes and teardown. Equivalent online-session hydration preserves ownership. The sole observer is a PermissionStatus listener, never a location watcher; camera mount, shutter and background events cannot trigger geolocation prompts.
 
-At shutter and after asynchronous JPEG rendering, coordinates are checked with existing `normalizeGPS` and a fresh non-prompting permission read. Denied/prompt/unsupported/rejected/timed-out permission reads cannot authorize attaching coordinates. Optional captures can proceed without GPS. Existing independently verified signed `requiredGps` policies reject absent GPS before enqueue. After signing, consent or context changes cancel the operation rather than reinterpret its evidence. Video/audio check at start and finalization; revoked GPS-bearing recordings are refused.
+Fresh native callbacks also check the still-current PermissionStatus, including silently changed permission before an onchange event. Ownership is rechecked after permission awaits **before** any assignment signing can touch a newly active account. At shutter and after asynchronous JPEG rendering, coordinates are checked with existing `normalizeGPS` and a fresh non-prompting permission read. Denied/prompt/unsupported/rejected/timed-out permission reads cannot authorize attaching coordinates. Optional captures can proceed without GPS. Existing independently verified signed `requiredGps` policies reject absent GPS before enqueue. After signing, consent or context changes cancel the operation rather than reinterpret its evidence. Video/audio check at start and finalization; revoked GPS-bearing recordings are refused.
 
 Both existing encryption entry points accept an optional volatile caller assertion, checked before crypto and before/inside the atomic IndexedDB transaction, including after `put`. A changed consent/context aborts the **new** write even if revocation arrives while encryption or the transaction is pending. Real AES-GCM + fake-indexeddb tests prove rollback at each boundary; already durable ciphertext is retained. No ciphertext contract, key hierarchy, policy signature, TTL, server code, migration, gallery-write behavior or network privacy invariant changes.
 
 ## Verification
+
+Final commit and exact-head acceptance are recorded in the **Final validation** block of [Product Draft #263](https://github.com/1troitsky/photobunker-v3/pull/263) and its [checks](https://github.com/1troitsky/photobunker-v3/pull/263/checks). The committed evidence below records the first complete CI run plus final local regressions; final CI must also cover the additional pre-signing ownership and silent late-callback guards.
 
 Machine-readable sanitized record: [evidence JSON](evidence/P2-CAMERA-GPS-CONSENT-260-20261112.json).
 
@@ -20,12 +22,12 @@ Machine-readable sanitized record: [evidence JSON](evidence/P2-CAMERA-GPS-CONSEN
 | --- | --- | --- |
 | Frozen dependencies | PASS | `pnpm install --frozen-lockfile`, exit 0 |
 | Strict TypeScript | PASS | `pnpm typecheck`, exit 0 |
-| Vitest | PASS | `pnpm test:web`, exit 0, **386/386** across 76 files |
+| Vitest | PASS | `pnpm test:web`, exit 0, **389/389** across 76 files; 153 PHPUnit tests / 2660 assertions on each of PHP8.4.27 and PHP8.5.12 in foundation CI |
 | Production build | PASS | `pnpm build`, exit 0 |
 | UX lane unit rules | PASS | `node --test docs/ux-integration/check-pr-lane.test.mjs`, exit 0, 5/5 |
 | Accepted UX source integrity | PASS | `node docs/ux-integration/verify-source.mjs`, exit 0, 117 baseline files |
 | Browser discovery | PASS (discovery only) | `pnpm exec playwright test --config tests/playwright.config.ts --list`, exit 0, **66** tests |
-| Full PHP8.4/8.5 + security + PG18/Garage + Chromium CI | PENDING | Required before reporting verified completion; no skips/retries or gate changes |
+| Full PHP8.4/8.5 + security + PG18/Garage + Chromium CI | PASS on `fee72075` | 7/7 checks; [real storage + **66/66 Chromium**, 0 retries/skips](https://github.com/1troitsky/photobunker-v3/actions/runs/43210682961); [foundation](https://github.com/1troitsky/photobunker-v3/actions/runs/43210683025); [security](https://github.com/1troitsky/photobunker-v3/actions/runs/43210683049); [UX lane](https://github.com/1troitsky/photobunker-v3/actions/runs/43210683202) |
 | Native iOS Safari / Android Chrome-PWA / actual GNSS | NOT TESTED | No physical-device execution or hardware provenance claimed |
 | UX aesthetics / performance | NOT VERIFIED | No visual change or performance claim; no invented baseline |
 
