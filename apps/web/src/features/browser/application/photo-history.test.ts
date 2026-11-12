@@ -45,6 +45,42 @@ describe('P2 volatile photo editor Undo/Redo',()=>{
     const undo=travelPhotoHistory(h,-1)!
     expect(undo.snapshot.strokes[0]?.points[0]?.x).toBe(148)
   })
+  it('records geometry, turn, RGB and annotation layers in one bounded undo stack',()=>{
+    let h=initialPhotoHistory()
+    const initial=h.states[0]?.view
+    expect(initial).toEqual({
+      crop:{left:0,top:0,width:100,height:100,turns:0},
+      effects:{brightness:100,contrast:100,saturation:100},
+      aspect:'original',
+    })
+    const next={
+      ...a,
+      view:{
+        crop:{left:12,top:4,width:80,height:90,turns:1 as const},
+        effects:{brightness:130,contrast:90,saturation:20},
+        aspect:'custom' as const,
+      },
+    }
+    h=recordPhotoEdit(h,next)
+    const changed=travelPhotoHistory(h,-1)!
+    expect(changed.snapshot.view?.crop.turns).toBe(0)
+    const replay=travelPhotoHistory(changed.history,1)!
+    expect(replay.snapshot.view).toEqual(next.view)
+    expect(replay.snapshot.strokes).toEqual(a.strokes)
+    // The committed snapshots are deep copies, not writable references
+    // to component input refs or mutable encrypted-media metadata.
+    next.view.crop.left=55
+    next.view.effects.brightness=200
+    expect(replay.snapshot.view?.crop.left).toBe(12)
+    expect(replay.snapshot.view?.effects.brightness).toBe(130)
+    h=recordPhotoEdit(changed.history,{
+      ...next,
+      view:{...next.view,crop:{...next.view.crop,turns:3}},
+    })
+    expect(canPhotoRedo(h)).toBe(false)
+    expect(h.states.length).toBe(2)
+    expect(h.states[1]?.view?.crop.turns).toBe(3)
+  })
   it('copies snapshots so later editor mutations cannot rewrite undo state',()=>{
     let h=initialPhotoHistory()
     h=recordPhotoEdit(h,a)
