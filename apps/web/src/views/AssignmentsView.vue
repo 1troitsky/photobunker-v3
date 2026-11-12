@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { assignmentMonthlyPlanLabel } from '../features/assignments/application/monthly-usage'
 import { RouterLink } from 'vue-router'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
@@ -878,13 +879,16 @@ onUnmounted(cleanPreview)
     <p class="subtitle">P1 · рабочий E2EE-сценарий · полный Fieldwork 5.0 / Editor 2.2 ещё не перенесён</p>
     <p v-if="activeSession&&monthlyUsage&&!showingOfflineSnapshot"
       class="muted" role="status" data-testid="assignment-monthly-usage">
-      Тариф Free · создано заданий за месяц:
-      <strong>{{ monthlyUsage.used }} / {{ monthlyUsage.limit }}</strong>.
-      <template v-if="monthlyUsage.remaining>0">
+      Тариф {{ assignmentMonthlyPlanLabel(monthlyUsage.planId) }} · создано заданий за месяц:
+      <strong>{{ monthlyUsage.used }} / {{ monthlyUsage.limit===null?'без ограничений':monthlyUsage.limit }}</strong>.
+      <template v-if="monthlyUsage.limit===null">
+        Количество заданий по тарифу не ограничено. Технические ограничения сохраняются.
+      </template>
+      <template v-else-if="monthlyUsage.remaining!==null&&monthlyUsage.remaining>0">
         Осталось {{ monthlyUsage.remaining }}.
       </template>
       <template v-else>
-        Месячная квота исчерпана. Сброс после {{ new Date(monthlyUsage.periodEnd).toLocaleDateString('ru-RU') }}.
+        Месячная квота исчерпана. Новый период с {{ new Date(monthlyUsage.periodEnd).toLocaleDateString('ru-RU') }}.
       </template>
     </p>
     <p v-else-if="activeSession&&!showingOfflineSnapshot" class="muted">
@@ -916,7 +920,7 @@ onUnmounted(cleanPreview)
         <textarea id="assignment-instructions" v-model="instructions" rows="4" maxlength="4000"/>
         <label for="assignment-goal">Нужно фотографий (необязательная цель)</label>
         <input id="assignment-goal" v-model="goal" type="number" min="1" max="9999" step="1" placeholder="Например, 30">
-        <p class="muted">Название и инструкции шифруются до сохранения. Цель нужна только для прогресса, не ограничивает число файлов. Офлайн-черновик сохраняется независимо от доступной квоты; сервер принимает создание только в пределах действующего лимита Free.</p>
+        <p class="muted">Название и инструкции шифруются до сохранения. Цель нужна только для прогресса, не ограничивает число файлов. Офлайн-черновик сохраняется независимо от квоты; сервер проверяет право создания по текущему тарифу при синхронизации.</p>
         <button type="submit" :disabled="busy">Создать зашифрованное задание</button>
       </form>
 
