@@ -20,6 +20,9 @@
 
 Детальный manifest из **16 исходных PR** / 55 source paths находится в [исходном pre-main отчёте](https://github.com/1troitsky/photobunker-v3/blob/b5783a731ec565b6abf1158dc86ed13de6ea5c71/docs/audits/PB3-PREMAIN-INTEGRATION-264-20261112.md). Аудитор отдельно проверил 56 changed-file paths PR #265, полный Git tree (**851 entries, не truncated**), workflow конфигурацию и прямые исходные Git blob SHA.
 
+**Дополнительная независимая машинная проверка всех источников:** для **каждого** из 16 указанных source PR отдельно получены GitHub PR changed-file paths и полный recursive Git tree точного source SHA; каждый путь сопоставлен с блобом в exact integrated tree #265. Результат: **55 source paths / 55 exact Git blob SHA match / 0 mismatches / 0 pairwise path overlaps**, ни одно дерево не truncated. Число source paths по PR: #263=10, #252=2, #253=2, #255=1, #256=1, #257=1, #259=4, #251=2, #250=4, #249=6, #247=5, #246=4, #245=5, #188=4, #186=2, #184=2. 56-й файл integration PR — только собственный предварительный отчёт #264, а не повторное применение кода. Это **доказательство побайтового переноса**, не утверждение что отдельные foundation-компоненты подключены к UI/API.
+
+
 ## 2. Ключевая security развилка: #263, НЕ #262
 
 **PASS — provenance, без двойной накладки.** В точном #265 **совпадают побайтово с #263** четыре критических продукта/теста:
