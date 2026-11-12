@@ -742,3 +742,31 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .file-viewer-photo-aspects button{flex:1 1 65px;min-width:0;padding:6px 3px}
   .file-viewer-photo-rotate-controls button{flex:1}
 }
+
+/* V-49: the typed draft is volatile and never an exportable JPEG annotation
+   until committed. Keep input above draw, shape, label and blackout layers. */
+.file-viewer-photo-composition>img.file-viewer-photo-text-target{cursor:text}
+.file-viewer-photo-inline-input{
+  position:absolute;z-index:8;display:grid;gap:5px;box-sizing:border-box;
+  width:min(220px,85%);min-width:0;max-height:90%;overflow:visible;
+  padding:5px;background:#181d1b;border:1px solid var(--accent);
+  border-radius:7px;box-shadow:0 6px 22px #000a;line-height:normal
+}
+.file-viewer-photo-inline-input.align-end{transform:translateX(-100%)}
+.file-viewer-photo-inline-input textarea{
+  width:100%;min-height:58px;max-height:112px;resize:vertical;
+  padding:7px 8px;box-sizing:border-box;border:1px solid #566e60;
+  border-radius:5px;background:#101510;color:#f5f5f5;
+  font:700 13px/1.3 Arial,sans-serif;overflow-wrap:anywhere
+}
+.file-viewer-photo-inline-actions{display:flex;gap:6px}
+.file-viewer-photo-inline-actions button{
+  flex:1;min-height:33px;font-size:11px;padding:5px 8px
+}
+.file-viewer-photo-inline-actions button:first-child{
+  border:1px solid var(--accent);color:var(--accent)
+}
+@media(max-width:430px){
+  .file-viewer-photo-inline-input{width:min(195px,92%)}
+  .file-viewer-photo-inline-input textarea{font-size:12px}
+}
