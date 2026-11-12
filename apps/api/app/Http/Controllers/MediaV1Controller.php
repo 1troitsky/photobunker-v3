@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 
 use App\Identity\Protocol as P;
 use App\Billing\QuotaAdmission;
+use App\Billing\RetentionAdmission;
 use App\Media\MediaContract as C;
 use App\Photo\PhotoSync;
 use App\Storage\StorageManager;
@@ -18,6 +19,7 @@ final class MediaV1Controller extends Controller
         private readonly PhotoSync $identity,
         private readonly StorageManager $storage,
         private readonly QuotaAdmission $quota,
+        private readonly RetentionAdmission $retention,
     ) {}
 
     private function record(string $id,string $account,bool $active=false):object
@@ -42,7 +44,8 @@ final class MediaV1Controller extends Controller
         $payload=P::exact($request->json()->all(),['contract','signature']);
         abort_unless(is_string($payload['contract'])&&is_string($payload['signature']),422);
         $c=C::verify($payload['contract'],$payload['signature'],
-            $device->signing_spki,$account->id);
+            $device->signing_spki,$account->id,
+            RetentionAdmission::MAX_SIGNED_DAYS_V1);
         $hash=hash('sha256',$payload['contract']);
 
         return DB::transaction(function()use($account,$device,$c,$payload,$hash){
@@ -71,6 +74,10 @@ final class MediaV1Controller extends Controller
             // are disjoint and clients use cryptographically random UUIDs.
             abort_if(DB::table('photo_records')
                 ->where('id',$c['mediaId'])->exists(),409);
+            // The authenticated account's current immutable signed plan,
+            // never an untrusted client plan, bounds only NEW deadlines.
+            // The replay path above preserves an already accepted expiry.
+            $this->retention->assertNew($account->id,$c['expiresAt']);
             // Shared account-serialized quota: no duplicate charge for lost
             // ACK replays, and no ad-hoc Free count for verified paid plans.
             // The existing 1e9-byte ciphertext guard remains in force until
