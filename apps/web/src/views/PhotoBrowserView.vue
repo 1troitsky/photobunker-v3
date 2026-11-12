@@ -327,6 +327,71 @@ function schedulePrivateSearch():void{
       })
   },250)
 }
+/**
+ * Explicit, bounded wider search: download only authenticated, opaque
+ * photo/media index pages (max 500 per protocol) and never send the user
+ * query, metadata plaintext, tags or folder labels over HTTP.
+ *
+ * All validation happens BEFORE publishing any newly loaded rows. A changed
+ * query, account, route refresh or offline transition cancels the scan.
+ */
+async function expandPrivateSearch():Promise<void>{
+  const identity=activeSession.value
+  const query=normalizePrivateSearch(search.value)
+  if(!identity?.online||typeof navigator!=='undefined'&&navigator.onLine===false
+    ||privateExpansionBusy.value||busy.value||archiveTab.value!=='all'
+    ||query.length<2||query.length>160)return
+  const token=++privateExpansionEpoch
+  const catGeneration=generation
+  const valid=()=>token===privateExpansionEpoch
+    &&identity===activeSession.value&&generation===catGeneration
+    &&normalizePrivateSearch(search.value)===query
+    &&archiveTab.value==='all'
+    &&(typeof navigator==='undefined'||navigator.onLine!==false)
+  privateExpansionBusy.value=true
+  privateExpansionStatus.value=''
+  try{
+    const [photos,media]=await Promise.all([
+      loadBoundedCatalogIndex(listCloudPhotos,row=>row.photoId,valid),
+      loadBoundedCatalogIndex(listCloudMedia,row=>row.mediaId,valid),
+    ])
+    if(!valid())return
+    // Local-first state is never discarded. Do not replace a previously
+    // manually loaded larger index with a 500-row bounded first-page scan.
+    if(cloudPhotos.value.length<=photos.items.length){
+      cloudPhotos.value=photos.items
+      photoCursor.value=photos.nextCursor
+    }else{
+      const known=new Map(cloudPhotos.value.map(x=>[x.photoId,x] as const))
+      for(const item of photos.items)known.set(item.photoId,item)
+      cloudPhotos.value=[...known.values()]
+    }
+    if(cloudMedia.value.length<=media.items.length){
+      cloudMedia.value=media.items
+      mediaCursor.value=media.nextCursor
+    }else{
+      const known=new Map(cloudMedia.value.map(x=>[x.mediaId,x] as const))
+      for(const item of media.items)known.set(item.mediaId,item)
+      cloudMedia.value=[...known.values()]
+    }
+    searchFolderScope.value='all'
+    privateSearchExpanded.value=true
+    privateExpansionStatus.value='Получено '+photos.items.length+' фото и '
+      +media.items.length+' медиа из авторизованных индексов. '
+      +(photos.complete&&media.complete
+        ?'Индексы этих двух типов загружены полностью.'
+        :'Дальнейшие облачные страницы ещё существуют: поиск НЕ по всему аккаунту.')
+      +' Содержимое проверяется только на устройстве (до 1000 файлов).'
+  }catch(e){
+    if(valid()){
+      privateExpansionStatus.value='Расширенный поиск не запущен: '+reason(e)
+        +'. Неполные страницы не опубликованы; попробуйте позже.'
+    }
+  }finally{
+    if(token===privateExpansionEpoch)privateExpansionBusy.value=false
+  }
+}
+
 const pendingCount=computed(()=>items.value.filter(x=>!['archived','deleting'].includes(
   archivedByKey.value.get(x.key)?.state??'')&&x.local
   &&x.state!=='synced').length)
