@@ -257,7 +257,7 @@ export async function markAllLocalNotificationsRead(at=Date.now()):Promise<numbe
   for(const event of events){
     sameIdentity(session)
     const result=await markNotificationRead(event.id,at)
-    if(result?.readAt!==null)changed++
+    if(result&&result.readAt!==null)changed++
   }
   sameIdentity(session)
   return changed
