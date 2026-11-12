@@ -91,6 +91,25 @@ test('P2 Viewer: opaque blackout overwrites JPEG pixels only in a new encrypted 
     await compare.click()
     await expect(region).toHaveCount(1)
 
+    // Changing brightness must NOT silently delete the SAFE blackout mask,
+    // its precise geometry, private source integrity or undo history.
+    const brightness=page.getByTestId('file-viewer-photo-brightness')
+    await brightness.focus()
+    await brightness.press('ArrowRight')
+    await expect(page.getByTestId('file-viewer-crop-preview')).toHaveCount(0)
+    await expect(page.getByTestId('file-viewer-crop-status'))
+      .toContainText('закрытые области и история сохранены в памяти')
+    await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
+    await page.getByTestId('file-viewer-create-crop').click()
+    await expect(page.getByTestId('file-viewer-crop-preview'))
+      .toBeVisible({timeout:30000})
+    await expect(region).toHaveCount(1)
+    await expect(page.getByTestId('file-viewer-blackout-x')).toHaveValue('25')
+    await expect(page.getByTestId('file-viewer-blackout-y')).toHaveValue('25')
+    await expect(page.getByTestId('file-viewer-blackout-width')).toHaveValue('50')
+    await expect(page.getByTestId('file-viewer-blackout-height')).toHaveValue('50')
+    await expect(page.getByTestId('file-viewer-photo-undo')).toBeEnabled()
+
     const filesBefore=await page.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       return (await m.listLocalMedia()).length
@@ -138,7 +157,7 @@ test('P2 Viewer: opaque blackout overwrites JPEG pixels only in a new encrypted 
       jpeg:[255,216,255],width:320,height:240,keyLeak:false,
     })
     expect(result.filename)
-      .toBe('PRIVATE-ORIGINAL-BLACKOUT-crop-0-0-100-100-r0-blackout.jpg')
+      .toBe('PRIVATE-ORIGINAL-BLACKOUT-crop-0-0-100-100-r0-fx-110-100-100-blackout.jpg')
     for(const channel of result.center)
       expect(channel).toBeLessThan(10)
     expect(result.exposed[0]).toBeGreaterThan(175)
