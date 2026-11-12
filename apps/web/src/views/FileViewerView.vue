@@ -912,6 +912,7 @@ function clearBlob():void{
   fileUrl.value=''
   fileBlob.value=null
   preview.value=null
+  resetPrivateCopyDraft()
   busy.value=false
 }
 function clearIndex():void{
@@ -1112,6 +1113,7 @@ async function openFile():Promise<void>{
     fileBlob.value=blob
     fileUrl.value=URL.createObjectURL(blob)
     preview.value=data
+    resetPrivateCopyDraft()
   }catch(e){
     if(sameSession(session,epoch))error.value=explain(e)
   }finally{if(sameSession(session,epoch))busy.value=false}
@@ -1509,6 +1511,7 @@ function resetEditorDraft():void{
   trimEnd.value=Math.min(audioDuration.value,60)
   clearStill()
   clearVideoTrim()
+  resetPrivateCopyDraft()
 }
 function editorViewerPath():string|null{
   const target=current.value
@@ -1580,9 +1583,10 @@ watch([fileUrl,preview,activeSession,editorMode,editorReady],()=>{
       ?{download}:null)
   }
 },{immediate:true})
-watch(editorMode,()=>{
+watch(editorMode,opened=>{
   panel.value=null
   editorTab.value='media'
+  if(opened)resetPrivateCopyDraft()
 })
 watch(activeSession,(next,previous)=>{
   // A CSRF/session reauthentication may replace Session with a new object
