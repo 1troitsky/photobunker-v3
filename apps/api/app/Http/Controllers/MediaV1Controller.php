@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Identity\Protocol as P;
+use App\Billing\QuotaAdmission;
 use App\Media\MediaContract as C;
 use App\Photo\PhotoSync;
 use App\Storage\StorageManager;
@@ -16,6 +17,7 @@ final class MediaV1Controller extends Controller
     public function __construct(
         private readonly PhotoSync $identity,
         private readonly StorageManager $storage,
+        private readonly QuotaAdmission $quota,
     ) {}
 
     private function record(string $id,string $account,bool $active=false):object
@@ -69,25 +71,11 @@ final class MediaV1Controller extends Controller
             // are disjoint and clients use cryptographically random UUIDs.
             abort_if(DB::table('photo_records')
                 ->where('id',$c['mediaId'])->exists(),409);
-            $photoCount=DB::table('photo_records')->where('account_id',$account->id)
-                ->where('state','!=','deleting')
-                ->where('expires_at','>',PhotoSync::nowMs())->count();
-            $mediaCount=DB::table('media_files_v1')->where('account_id',$account->id)
-                ->where('state','!=','deleting')
-                ->where('expires_at','>',PhotoSync::nowMs())->count();
-            abort_if($photoCount+$mediaCount
-                >=(int)config('photo_sync.bootstrap_free_file_cap',50),413);
-            $photoBytes=DB::table('photo_objects as o')
-                ->join('photo_records as p','p.id','=','o.photo_id')
-                ->where('p.account_id',$account->id)
-                ->where('p.state','!=','deleting')
-                ->where('p.expires_at','>',PhotoSync::nowMs())->sum('o.bytes');
-            $mediaBytes=DB::table('media_files_v1')->where('account_id',$account->id)
-                ->where('state','!=','deleting')
-                ->where('expires_at','>',PhotoSync::nowMs())
-                ->sum('cipher_bytes');
-            abort_if($photoBytes+$mediaBytes+$c['totalCipherBytes']
-                >(int)config('photo_sync.bootstrap_free_byte_cap',1000000000),413);
+            // Shared account-serialized quota: no duplicate charge for lost
+            // ACK replays, and no ad-hoc Free count for verified paid plans.
+            // The existing 1e9-byte ciphertext guard remains in force until
+            // explicit GB/GiB approval for versioned paid byte limits.
+            $this->quota->admit($account->id,(int)$c['totalCipherBytes']);
 
             DB::table('media_files_v1')->insert([
                 'id'=>$c['mediaId'],'account_id'=>$account->id,
