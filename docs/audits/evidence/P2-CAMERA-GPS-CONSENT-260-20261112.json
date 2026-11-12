@@ -1,0 +1,99 @@
+{
+  "issue": 260,
+  "date": "2026-11-12",
+  "base": {
+    "pr": 187,
+    "sha": "7a309508cc140897ae6dd75f8d473a89c7296be2",
+    "checks": "7/7 success"
+  },
+  "qa": {
+    "pr": 258,
+    "sha": "16ecbfa5720e93ebc0ebb2fd12ab4a5c0e3a5283",
+    "path": "tests/e2e/p2-browser-camera-gps-permission.spec.ts",
+    "sha256": "f41b06f7fc361d7f5e1140fdb2602fa2e664e3c4f93cfc1c13cac7af4a8d1cdb",
+    "unchanged": true
+  },
+  "overlap": {
+    "pr": 262,
+    "sha_observed": "01d10f9b4fa7cef51993e80d730e6e48e03928e7",
+    "relationship": "alternative implementation; do not integrate both"
+  },
+  "local": [
+    {
+      "command": "pnpm install --frozen-lockfile",
+      "exit": 0
+    },
+    {
+      "command": "pnpm typecheck",
+      "exit": 0
+    },
+    {
+      "command": "pnpm test:web",
+      "exit": 0,
+      "files": 76,
+      "passed": 389
+    },
+    {
+      "command": "pnpm build",
+      "exit": 0
+    },
+    {
+      "command": "node --test docs/ux-integration/check-pr-lane.test.mjs",
+      "exit": 0,
+      "passed": 5
+    },
+    {
+      "command": "node docs/ux-integration/verify-source.mjs",
+      "exit": 0,
+      "source_files": 117
+    }
+  ],
+  "chromium_discovery": {
+    "command": "pnpm exec playwright test --config tests/playwright.config.ts --list",
+    "exit": 0,
+    "tests": 66,
+    "executed": true
+  },
+  "ci": {
+    "status": "PASS",
+    "sha": "fee72075a9e55ab420ad07e647b7fb9475b5f04c",
+    "checks_passed": 7,
+    "workflows": [
+      {
+        "id": 43210682961,
+        "conclusion": "success",
+        "chromium": {
+          "discovered": 66,
+          "passed": 66,
+          "skipped": 0,
+          "retries": 0
+        }
+      },
+      {
+        "id": 43210683025,
+        "conclusion": "success",
+        "phpunit": {
+          "php8.4.27": {
+            "tests": 153,
+            "assertions": 2660
+          },
+          "php8.5.12": {
+            "tests": 153,
+            "assertions": 2660
+          }
+        },
+        "vitest": 386
+      },
+      {
+        "id": 43210683049,
+        "conclusion": "success"
+      },
+      {
+        "id": 43210683202,
+        "conclusion": "success"
+      }
+    ]
+  },
+  "hardware": "NOT TESTED",
+  "final_validation_record": "https://github.com/1troitsky/photobunker-v3/pull/263 (Final validation block: final commit + final exact-head workflows after the additional local regressions)"
+}
