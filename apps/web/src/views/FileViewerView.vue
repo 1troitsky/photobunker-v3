@@ -162,6 +162,7 @@ const activePaintTool=ref<StrokeTool|null>(null)
 const paintColor=ref('#1ed760')
 const paintWidth=ref(8)
 const paintHistory=ref<PhotoEditHistory>(initialPhotoHistory())
+let restoringPhotoHistory=false
 const canUndoPhoto=computed(()=>canPhotoUndo(paintHistory.value))
 const canRedoPhoto=computed(()=>canPhotoRedo(paintHistory.value))
 let strokePointer:number|null=null
@@ -355,6 +356,10 @@ function currentPhotoEdits():PhotoEditSnapshot{
   return {
     text:textMarks.value,shapes:shapeMarks.value,strokes:strokeMarks.value,
     blackouts:photoBlackouts.value,
+    view:{
+      crop:{...cropSelection.value},effects:{...photoAdjustments.value},
+      aspect:cropAspectPreset.value,
+    },
   }
 }
 function commitPhotoEdit():void{
@@ -365,6 +370,24 @@ function travelPhotoEdit(delta:-1|1):void{
   const next=travelPhotoHistory(paintHistory.value,delta)
   if(!next)return
   paintHistory.value=next.history
+  const view=next.snapshot.view
+  const previous=currentPhotoEdits().view
+  const changeView=!!view&&JSON.stringify(view)!==JSON.stringify(previous)
+  if(changeView&&view){
+    // The previous JPEG is bound to a DIFFERENT crop/effect snapshot.
+    // Revoke it before changing UI controls to prevent stale-save races.
+    clearCrop()
+    restoringPhotoHistory=true
+    cropLeft.value=view.crop.left;cropTop.value=view.crop.top
+    cropWidth.value=view.crop.width;cropHeight.value=view.crop.height
+    cropTurns.value=view.crop.turns
+    photoBrightness.value=view.effects.brightness
+    photoContrast.value=view.effects.contrast
+    photoSaturation.value=view.effects.saturation
+    cropAspectPreset.value=view.aspect
+    void nextTick(()=>{restoringPhotoHistory=false})
+    cropNotice.value='Кадр и цвет восстановлены из истории. Создайте JPEG-предпросмотр перед сохранением.'
+  }
   textMarks.value=[...next.snapshot.text]
   shapeMarks.value=[...next.snapshot.shapes]
   strokeMarks.value=[...next.snapshot.strokes]
@@ -1695,12 +1718,14 @@ const editorUnsaved=computed(()=>editorMode.value
     ||!!inlinePhotoText.value?.text.trim()
     ||(privateTagForm.value&&privateTagText.value.trim().length>0)))
 function resetEditorDraft():void{
+  restoringPhotoHistory=true
   clearTextMarks()
   clearCrop()
   cropLeft.value=0;cropTop.value=0
   cropWidth.value=100;cropHeight.value=100;cropTurns.value=0
   cropAspectPreset.value='original'
   photoBrightness.value=100;photoContrast.value=100;photoSaturation.value=100
+  void nextTick(()=>{restoringPhotoHistory=false})
   clearAudioClip()
   trimStart.value=0
   trimEnd.value=Math.min(audioDuration.value,60)
@@ -1755,8 +1780,10 @@ watch(photoComposition,element=>{
   })
   compositionObserver.observe(element)
 })
-watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
+watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns,cropAspectPreset,
   photoBrightness,photoContrast,photoSaturation],()=>{
+  if(restoringPhotoHistory||preview.value?.type!=='photo'||!editorMode.value)
+    return
   // A new crop/adjustment invalidates the old JPEG RASTER, not the user's
   // volatile overlay drafts. Clearing annotations here silently deleted
   // text, shapes, strokes, blackout masks and all Undo history. Preserve
@@ -1765,6 +1792,7 @@ watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
     ||strokeMarks.value.length>0||photoBlackouts.value.length>0
     ||!!inlinePhotoText.value
   clearCrop() // revokes stale blob URL and prevents save of old pixels
+  commitPhotoEdit() // ONE batched state for rotation+aspect, or slider input
   if(hasAnnotations)
     cropNotice.value='Параметры кадра изменены. Надписи, фигуры, штрихи, закрытые области и история сохранены в памяти. Нажмите «Создать JPEG-копию», чтобы применить настройки перед сохранением.'
 })
