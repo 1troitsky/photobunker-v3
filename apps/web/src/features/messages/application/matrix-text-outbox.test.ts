@@ -378,4 +378,74 @@ describe('P2-02E durable Matrix text E2EE outbox',()=>{
       .rejects.toThrow('matrix.outbox_corrupt_ciphertext')
     expect(sent).not.toHaveBeenCalled()
   })
+
+  it('M-04A rejects a third join after initial trust verification, before SDK send',async()=>{
+    await enqueueMatrixText(target,roomId,plaintext,ed25519)
+    const allowed={joined:{[mxOwn]:{},[mxPeer]:{}}}
+    members.mockResolvedValueOnce(allowed).mockResolvedValueOnce({
+      joined:{...allowed.joined,'@mallory:matrix.example.test':{}},
+    })
+    expect(await flushMatrixTextOutbox(client)).toEqual({
+      attempted:1,accepted:0,pending:1,
+    })
+    expect(members).toHaveBeenCalledTimes(2)
+    expect(sent).not.toHaveBeenCalled()
+    expect(resend).not.toHaveBeenCalled()
+    expect(await listMatrixTextOutbox()).toMatchObject([{
+      state:'queued',eventId:null,
+    }])
+  })
+  it('M-04A rejects an outsider invite that arrives between room-state reads',async()=>{
+    await enqueueMatrixText(target,roomId,plaintext,ed25519)
+    const safe=[
+      {type:'m.room.encryption',state_key:'',
+        content:{algorithm:'m.megolm.v1.aes-sha2'}},
+      {type:'m.room.join_rules',state_key:'',content:{join_rule:'invite'}},
+      {type:'m.room.member',state_key:mxOwn,content:{membership:'join'}},
+      {type:'m.room.member',state_key:mxPeer,content:{membership:'join'}},
+    ]
+    serverState.mockResolvedValueOnce(safe).mockResolvedValueOnce([
+      ...safe,
+      {type:'m.room.member',state_key:'@mallory:matrix.example.test',
+        content:{membership:'invite'}},
+    ])
+    expect((await flushMatrixTextOutbox(client)).accepted).toBe(0)
+    expect(serverState).toHaveBeenCalledTimes(2)
+    expect(sent).not.toHaveBeenCalled()
+  })
+  it('M-04A fails closed if fresh room-state check is offline',async()=>{
+    await enqueueMatrixText(target,roomId,plaintext,ed25519)
+    serverState.mockResolvedValueOnce([
+      {type:'m.room.encryption',state_key:'',
+        content:{algorithm:'m.megolm.v1.aes-sha2'}},
+      {type:'m.room.join_rules',state_key:'',content:{join_rule:'invite'}},
+      {type:'m.room.member',state_key:mxOwn,content:{membership:'join'}},
+      {type:'m.room.member',state_key:mxPeer,content:{membership:'join'}},
+    ]).mockRejectedValueOnce(Error('matrix.homeserver_unavailable'))
+    expect(await flushMatrixTextOutbox(client)).toMatchObject({
+      attempted:1,accepted:0,pending:1,
+    })
+    expect(sent).not.toHaveBeenCalled()
+    expect((await listMatrixTextOutbox())[0]?.state).toBe('queued')
+  })
+  it('M-04A revalidates a NOT_SENT SDK echo before resend with original txnId',async()=>{
+    const op=await enqueueMatrixText(target,roomId,plaintext,ed25519)
+    const echo={
+      getTxnId:()=>op,getRoomId:()=>roomId,getSender:()=>mxOwn,
+      getId:()=> '~'+roomId+':'+op,status:EventStatus.NOT_SENT,
+    }
+    existingEcho.mockReturnValue(echo)
+    members.mockResolvedValueOnce({
+      joined:{[mxOwn]:{},[mxPeer]:{}},
+    }).mockResolvedValueOnce({
+      joined:{[mxOwn]:{},[mxPeer]:{},'@mallory:matrix.example.test':{}},
+    })
+    expect((await flushMatrixTextOutbox(client)).accepted).toBe(0)
+    expect(resend).not.toHaveBeenCalled()
+    expect(sent).not.toHaveBeenCalled()
+    expect((await listMatrixTextOutbox())[0]).toMatchObject({
+      operationId:op,state:'queued',eventId:null,
+    })
+  })
+
 })
