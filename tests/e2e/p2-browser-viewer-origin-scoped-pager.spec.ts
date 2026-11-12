@@ -11,6 +11,14 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
+    // Wait for the actual identity bootstrap proof before decrypting any
+    // private metadata. Reauthentication can replace the Session object
+    // while keeping the same account and key; the crypto layer correctly
+    // rejects an in-flight decrypt across that identity epoch.
+    await page.evaluate(async()=>{
+      const session=await import('/src/features/identity/application/session.ts')
+      await session.reauthenticate()
+    })
     const picker=page.getByTestId('media-import-file')
     const items=[
       ['SCOPED-A.wav','audio/wav',0x51],
@@ -31,9 +39,19 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
         const m=await import('/src/features/media/application/media-outbox.ts')
         const rows=await m.listLocalMedia()
         const names=[]
-        for(const row of rows){
-          const metadata=await m.readLocalMediaMetadata(row.mediaId)
-          names.push(metadata.fileName)
+        try{
+          for(const row of rows){
+            const metadata=await m.readLocalMediaMetadata(row.mediaId)
+            names.push(metadata.fileName)
+          }
+        }catch(error){
+          // A concurrent online proof invalidates the PREVIOUS session
+          // instance mid-decrypt. It is not a corrupted E2EE payload.
+          // Retry ONLY that known transient; any signature/AEAD/ACL
+          // failure remains a real test error.
+          if(error instanceof Error&&error.message==='identity.account_changed')
+            return []
+          throw error
         }
         return names.sort()
       }),{timeout:30000}).toEqual(items.slice(0,expectedCount)
