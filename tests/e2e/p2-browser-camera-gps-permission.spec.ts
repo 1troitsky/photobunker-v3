@@ -202,12 +202,15 @@ test('P2 #208 revoking geolocation must invalidate old fix before another captur
     await expect(page.getByText(/GPS получен/)).toBeVisible()
     // Revoke geolocation while keeping camera. The old fix is recent,
     // so the 2-minute timestamp cutoff alone cannot protect consent.
+    // Chromium can retain a prior per-origin geolocation grant across
+    // grantPermissions() updates. Clear it FIRST, then allow camera only.
+    await context.clearPermissions()
     await context.grantPermissions(['camera'])
-    // Confirm that the browser itself has actually revoked geolocation;
-    // observing only an app message would not prove a permission change.
+    // This is a genuine browser permission transition (denied or prompt),
+    // not just a mocked API callback or app error string.
     await expect.poll(()=>page.evaluate(async()=>
       (await navigator.permissions.query({name:'geolocation'})).state,
-    )).toBe('denied')
+    )).not.toBe('granted')
     await page.getByRole('button',{name:'Получить GPS'}).click()
     // A refused repeat must not leave prior consent/location visible even
     // if the browser never dispatches a conventional error callback.
