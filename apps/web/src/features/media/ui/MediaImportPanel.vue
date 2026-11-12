@@ -14,9 +14,20 @@ import type {
 import type { MediaMetadata } from '../domain/media-crypto'
 import type { GPSFix } from '../../photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../../assignments/domain/advanced-rules'
+import { enqueueEncryptedImportBatch } from '../application/encrypted-import-batch'
+import type { MediaPrivateFields } from '../domain/media-crypto'
 import { appendAuthenticatedCatalogPage }
   from '../../browser/application/authenticated-catalog-page'
-const emit=defineEmits<{(event:'catalog-change'):void}>()
+type DestinationFolder={id:string;label:string}
+const props=withDefaults(defineProps<{
+  destinationFolders?:DestinationFolder[];defaultFolderId?:string|null
+}>(),{destinationFolders:()=>[],defaultFolderId:null})
+const emit=defineEmits<{
+  (event:'catalog-change'):void
+  (event:'media-imported',data:{mediaIds:string[];folderId:string|null}):void
+}>()
+const targetFolder=ref(props.defaultFolderId??'')
+watch(()=>props.defaultFolderId,folderId=>{targetFolder.value=folderId??''})
 const local=ref<StoredMedia[]>([])
 const cloud=ref<CloudMedia[]>([])
 const cursor=ref<string|null>(null)
@@ -90,22 +101,50 @@ async function refresh():Promise<void>{
       error.value=explanation(e)
   }
 }
-async function chooseFile(event:Event):Promise<void>{
-  const element=event.target as HTMLInputElement
-  const selected=element.files?.item(0)
-  element.value=''
-  if(!selected||busy.value)return
+async function importFiles(files:readonly File[]):Promise<void>{
+  if(files.length===0||busy.value)return
+  const identity=activeSession.value
+  const folderId=targetFolder.value||null
   busy.value=true;notice.value='';error.value=''
   try{
-    await enqueueEncryptedMedia(selected,undefined,{
+    if(folderId&&!props.destinationFolders.some(item=>item.id===folderId))
+      throw Error('browser.folder_missing')
+    // One snapshot for the entire selection: typed private values, GPS and
+    // destination cannot drift between independently encrypted files.
+    const metadata:MediaPrivateFields={
       category:privateCategory.value,description:privateDescription.value,
       gps:privateGps.value,tags:parseRulesCsv(privateTags.value,12,48),
-    })
-    await refresh()
-    notice.value='Файл зашифрован и сохранён на устройстве. Синхронизация будет подтверждена отдельно.'
-    emit('catalog-change')
-  }catch(e){error.value=explanation(e)}
-  finally{busy.value=false}
+    }
+    const output=await enqueueEncryptedImportBatch(files,
+      file=>enqueueEncryptedMedia(file,undefined,metadata),
+      ()=>identity!==null&&identity===activeSession.value)
+    if(identity!==activeSession.value)return
+    // The per-file AES-GCM operation is durable already. A failed folder
+    // placement must not roll back/delete successful encrypted originals.
+    if(output.mediaIds.length){
+      emit('media-imported',{mediaIds:output.mediaIds,folderId})
+      await refresh()
+    }
+    const saved=output.mediaIds.length
+    notice.value='Зашифровано на устройстве '+saved+' из '+files.length
+      +' файлов. Отправка в облако подтверждается отдельно.'
+    if(output.failed)
+      error.value='Не удалось импортировать '+output.failed
+        +' файлов. Уже зашифрованные оригиналы и очередь сохранены.'
+  }catch(e){
+    if(identity===activeSession.value)error.value=explanation(e)
+  }finally{busy.value=false}
+}
+async function chooseFile(event:Event):Promise<void>{
+  const element=event.target as HTMLInputElement
+  const files=Array.from(element.files??[])
+  element.value=''
+  await importFiles(files)
+}
+function dropFiles(event:DragEvent):void{
+  event.preventDefault()
+  if(busy.value)return
+  void importFiles(Array.from(event.dataTransfer?.files??[]))
 }
 async function sync():Promise<void>{
   if(busy.value)return
@@ -166,6 +205,7 @@ watch(activeSession,(next,previous)=>{
   const switched=next?.accountId!==previous?.accountId
     ||next?.deviceId!==previous?.deviceId
   if(switched){
+    targetFolder.value=props.defaultFolderId??''
     gpsRequest++;gpsLoading.value=false
     privateGps.value=null;gpsError.value=''
     privateCategory.value='';privateDescription.value='';privateTags.value=''
@@ -202,15 +242,30 @@ onUnmounted(()=>{++catalogEpoch;detach();clearPreview()})
       <p v-if="gpsError" role="alert" class="error-text">{{ gpsError }}</p>
       <p class="muted">Значения шифруются вместе с файлом. После импорта нельзя выдать ключ заданию, если его свежие подписанные требования к метаданным не выполнены.</p>
     </div>
-    <div class="action-row">
-      <label class="media-file-choice">
-        Выбрать файл
-        <input data-testid="media-import-file" type="file"
-          accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,audio/mp4,audio/mpeg,audio/webm,audio/wav,audio/x-wav,audio/aac,audio/ogg"
-          :disabled="busy" @change="chooseFile">
-      </label>
-      <button type="button" :disabled="busy" @click="sync">Отправить медиа</button>
-      <button type="button" :disabled="busy" @click="refresh">Обновить</button>
+    <div class="foundation-card media-batch-drop" data-testid="media-import-dropzone"
+      @dragover.prevent @drop.prevent="dropFiles">
+      <label for="media-import-destination">Папка назначения</label>
+      <select id="media-import-destination" v-model="targetFolder"
+        data-testid="media-import-destination" :disabled="busy">
+        <option value="">Мои файлы (корень)</option>
+        <option v-for="folder in props.destinationFolders" :key="folder.id"
+          :value="folder.id">{{ folder.label }}</option>
+      </select>
+      <p class="muted">Перетащите файлы сюда или выберите несколько с устройства.
+        Папка и её название шифруются отдельно от самих файлов.</p>
+      <div class="action-row">
+        <label class="media-file-choice">
+          Выбрать файлы
+          <input data-testid="media-import-file" type="file" multiple
+            accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,audio/mp4,audio/mpeg,audio/webm,audio/wav,audio/x-wav,audio/aac,audio/ogg"
+            :disabled="busy" @change="chooseFile">
+        </label>
+        <button type="button" :disabled="busy" @click="sync">Отправить медиа</button>
+        <button type="button" :disabled="busy" @click="refresh">Обновить</button>
+      </div>
+      <p class="muted">За один выбор: до 20 файлов, суммарно до 256 МиБ,
+        максимум 128 МиБ на файл. Успешные файлы сохраняются отдельно,
+        даже если следующий файл повреждён.</p>
     </div>
     <p class="muted">Предел одного файла на этом этапе: 128 МиБ. Офлайн-файлы остаются в зашифрованной очереди при сбое сети или исчерпании квоты Free.</p>
     <h3>Зашифровано на этом устройстве</h3>
