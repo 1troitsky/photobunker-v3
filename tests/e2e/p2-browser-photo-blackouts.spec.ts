@@ -97,6 +97,16 @@ test('P2 Viewer: opaque blackout overwrites JPEG pixels only in a new encrypted 
     await brightness.focus()
     await brightness.press('ArrowRight')
     await expect(page.getByTestId('file-viewer-crop-preview')).toHaveCount(0)
+    // Live V55 preview must ALSO composite previously placed safe blackouts
+    // LAST; their pixels stay fully opaque after changing RGB values.
+    const live=page.getByTestId('file-viewer-photo-live-preview')
+    await expect(live).toBeVisible()
+    await expect.poll(()=>live.evaluate((c:HTMLCanvasElement)=>{
+      const ctx=c.getContext('2d')
+      if(!ctx)throw Error('missing_blackout_live_canvas')
+      return [...ctx.getImageData(
+        Math.floor(c.width/2),Math.floor(c.height/2),1,1).data.slice(0,3)]
+    })).toEqual([0,0,0])
     await expect(page.getByTestId('file-viewer-crop-status'))
       .toContainText('закрытые области и история сохранены в памяти')
     await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
