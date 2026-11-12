@@ -32,6 +32,19 @@
 - Updated `ab56e0e7`: perform `context.clearPermissions()` first, then `context.grantPermissions(['camera'])`, require the real browser permission state is **not `granted`**, and preserve negative UI + AES-GCM decrypted metadata assertions. Permission `prompt` is not considered approval and must not authorize reuse. Third exact-head full CI required.
 - If browser state transitions but decrypted photo still contains earlier location after an explicit failed re-request, mark Product **FAIL** and link a separate scoped Camera remediation. No Camera source modifications in #208 QA branch.
 
+## Confirmed product FAIL — verified permission revoked, old GPS reused
+
+Final QA head `d8a31ca373e0ed256a5f79c0e68bb19d87eb2dbf` [run 43206754883](https://github.com/1troitsky/photobunker-v3/actions/runs/43206754883):
+
+- **64 real Chromium E2E executed; 63 PASS, 1 FAIL**, exactly the revoked-permission privacy regression at `p2-browser-camera-gps-permission.spec.ts:192`.
+- Browser permission was truly no longer granted: `context.clearPermissions()`, then explicit camera-only permission, followed by the passing `navigator.permissions.query({name:'geolocation'}).state !== 'granted'` browser assertion.
+- On explicit repeat request for GPS without permission, UI **retained** “GPS получен”: `expect.soft(...).toHaveCount(0)` **FAIL** (received 1).
+- After an offline real JPEG capture into the local AES-GCM store, readback through real `readLocalPhotoMetadata()` showed **the previous GPS fix still present**. Hard negative assertion `expect(data.gps).toBeUndefined()` **FAIL**. Coordinates in this CI are synthetic; real device permissions are NOT TESTED.
+- **Root cause:** `CaptureView.vue` `obtainGPS()` resets `gpsLoading` and `gpsError` but does not clear `gps.value` before or after failed reauthorization, and `capture()` snapshots `gps.value` as metadata. `normalizeGPS()` validates age/range but does **not** validate live permission state. The file is properly AES-GCM encrypted, yet consent revocation is bypassed by reusing a once-permitted location. This is a **real client privacy defect**, not a failed permission fixture or crypto failure.
+- Other three new scenarios **PASS**: explicit opt-in high-accuracy position and no plaintext GPS in HTTP/contract, signed GPS-required policy denies without fix and accepts consent offline, 181s stale provider fix rejected.
+- Same SHA: PHP8.4+8.5, TypeScript/build, **354/354 Vitest**, Security and UX lane guard **PASS**. Full quality gate therefore **HOLD**, not all green.
+- **Policy of QA-only #208:** Do not “fix” by weakening the negative assertion, mocking permission approval, increasing timeout or touching Camera. Create a separate product-owner issue; rerun this exact regression on its integration descendant. Keep #208 open and blocked until product fix, full 64/64 E2E, real-device acceptance.
+
 ## Gates & limitations
 
 - Required: exact-head PHP8.4/8.5, strict TS/build/Vitest, security and UX lane guard, real PostgreSQL18+Garage and full Chromium incl 4 new scenarios. No skip, fake consent, timeout relaxation, CI allowlist changes or privacy bypass.
