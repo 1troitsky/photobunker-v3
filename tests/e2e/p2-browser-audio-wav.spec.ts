@@ -45,6 +45,8 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
     // disconnect before the explicit local trim and encrypted save.
     await context.setOffline(false)
     await page.goto('/browser/file/media/'+source.id)
+    // Accepted File Viewer opens media in a fixed scene; editor is a sheet.
+    await page.getByTestId('viewer-action-edit').click()
     const audio=page.getByTestId('file-viewer-audio')
     await expect(audio).toBeVisible()
     await expect.poll(()=>audio.evaluate((el:HTMLAudioElement)=>el.duration),
