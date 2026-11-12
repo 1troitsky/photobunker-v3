@@ -2028,6 +2028,20 @@ export async function listAssignmentSubmissions(
  * Snapshot is owner-signed and pinned. This is a CLIENT assertion of
  * recording time, not hardware/timestamp/GPS attestation.
  */
+/**
+ * A local removal tombstone is written ONLY after independently verifying
+ * an owner-signed member removal. This read grants no permissions, requires no
+ * network and never erases encrypted personal media or pre-existing outbox.
+ */
+export async function assertNoVerifiedAssignmentRemoval(
+  assignmentId:string,
+):Promise<void>{
+  const session=requireSession()
+  if(await db.revocations.get(session.accountId+'/'+assignmentId))
+    throw Error('assignment.member_removed')
+  assertSame(session)
+}
+
 export async function signedMediaCaptureIntent(
   assignmentId:string,mediaType:'video'|'audio',startedAt=Date.now(),
   privateFields:MediaPrivateFields={},
