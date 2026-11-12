@@ -1223,6 +1223,12 @@ watch(activeSession,(next,previous)=>{
     &&next.pkg===previous.pkg
     &&next.device===previous.device){
     void refreshIndex()
+    // Bootstrap deliberately exposes cached, offline-only state before the
+    // signed device proof completes. A cloud-only deep link attempted during
+    // that window needs a retry after online proof, not a permanent offline
+    // error. Never restart an already opened preview/unsaved editor work.
+    if(!previous.online&&next.online&&!fileUrl.value)
+      void openFile()
     return
   }
   clearBlob();clearIndex()
