@@ -2083,25 +2083,29 @@ onUnmounted(()=>{
           @click="createCroppedPhoto">
           {{ cropBusy?'Обработка…':'Создать JPEG-копию' }}
         </button>
+        <div class="file-viewer-photo-history-bar"
+          data-testid="file-viewer-photo-history-bar">
+          <button type="button" data-testid="file-viewer-photo-compare"
+            :disabled="!cropResult||cropBusy" :aria-pressed="showBefore"
+            @click="toggleBeforeAfter">
+            {{ showBefore?'Показать после':'До / После' }}
+          </button>
+          <button type="button" data-testid="file-viewer-photo-undo"
+            :disabled="showBefore||!canUndoPhoto||cropBusy"
+            @click="travelPhotoEdit(-1)">↶ Отменить</button>
+          <button type="button" data-testid="file-viewer-photo-redo"
+            :disabled="showBefore||!canRedoPhoto||cropBusy"
+            @click="travelPhotoEdit(1)">Повторить ↷</button>
+          <button type="button" data-testid="file-viewer-photo-reset"
+            :disabled="showBefore||cropBusy||!canUndoPhoto||(
+              !textMarks.length&&!shapeMarks.length&&!strokeMarks.length
+              &&!photoBlackouts.length)"
+            @click="resetPhotoAnnotations">Сбросить аннотации</button>
+        </div>
+        <p class="muted">Undo/Redo: кадр, поворот, цвет, надписи, фигуры,
+          штрихи и закрытые области. После возврата к другой геометрии
+          пересоздайте JPEG, прежде чем сохранять производный файл.</p>
         <div v-if="cropResult&&cropUrl" class="file-viewer-still-preview">
-          <div class="file-viewer-photo-history-bar">
-            <button type="button" data-testid="file-viewer-photo-compare"
-              :disabled="cropBusy" :aria-pressed="showBefore"
-              @click="toggleBeforeAfter">
-              {{ showBefore?'Показать после':'До / После' }}
-            </button>
-            <button type="button" data-testid="file-viewer-photo-undo"
-              :disabled="showBefore||!canUndoPhoto||cropBusy"
-              @click="travelPhotoEdit(-1)">↶ Отменить</button>
-            <button type="button" data-testid="file-viewer-photo-redo"
-              :disabled="showBefore||!canRedoPhoto||cropBusy"
-              @click="travelPhotoEdit(1)">Повторить ↷</button>
-            <button type="button" data-testid="file-viewer-photo-reset"
-              :disabled="showBefore||cropBusy||!canUndoPhoto"
-              @click="resetPhotoAnnotations">Сбросить аннотации</button>
-          </div>
-          <p class="muted">Undo/Redo восстанавливает текст, фигуры и штрихи.
-            Кадрирование и цветовые параметры пока не входят в историю.</p>
           <p v-if="showBefore" class="muted"
             data-testid="file-viewer-photo-before-notice">
             Сейчас показан исходный файл. Переключитесь на обработанную
