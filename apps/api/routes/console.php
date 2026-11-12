@@ -27,3 +27,10 @@ if(filter_var(env('PB3_ENABLE_BROWSER_ARCHIVE',false),FILTER_VALIDATE_BOOL)
   Schedule::command('pb3:browser-archive-maintain')
     ->everyMinute()->withoutOverlapping();
 }
+
+// Non-destructive S3 ACK-loss reconciliation. Independent of TTL/GC,
+// Identity, Camera and Matrix. Operator can disable it explicitly.
+if(filter_var(env('PB3_STORAGE_RECONCILE_ENABLED',true),FILTER_VALIDATE_BOOL)){
+  Schedule::command('pb3:storage-reconcile')
+    ->everyMinute()->withoutOverlapping();
+}
