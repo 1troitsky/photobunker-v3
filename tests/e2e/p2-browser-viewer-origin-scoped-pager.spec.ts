@@ -12,15 +12,34 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
     const picker=page.getByTestId('media-import-file')
-    for(const [name,mime,fill] of [
+    const items=[
       ['SCOPED-A.wav','audio/wav',0x51],
       ['SCOPED-B.wav','audio/wav',0x52],
       ['SCOPED-VIDEO.webm','video/webm',0x53],
       ['OUTSIDE.wav','audio/wav',0x54],
-    ] as const){
+    ] as const
+    for(const [index,[name,mime,fill]] of items.entries()){
+      // setInputFiles can dispatch a change to a DISABLED input while the
+      // previous AES-GCM import is still busy. A real user cannot. Prove
+      // that the previous encrypted transaction completed before selecting.
+      await expect(picker).toBeEnabled({timeout:30000})
       await picker.setInputFiles({name,mimeType:mime,buffer:Buffer.alloc(8192,fill)})
+      const expectedCount=index+1
+      // The IndexedDB media outbox, not a transient DOM notification, is
+      // the Local-First commit authority. Check exact file identities too.
+      await expect.poll(()=>page.evaluate(async()=>{
+        const m=await import('/src/features/media/application/media-outbox.ts')
+        const rows=await m.listLocalMedia()
+        const names=[]
+        for(const row of rows){
+          const metadata=await m.readLocalMediaMetadata(row.mediaId)
+          names.push(metadata.fileName)
+        }
+        return names.sort()
+      }),{timeout:30000}).toEqual(items.slice(0,expectedCount)
+        .map(([file])=>file).sort())
       await expect(page.locator('[data-testid^="browser-row-media:"]'))
-        .toHaveCount(fill-0x50,{timeout:30000})
+        .toHaveCount(expectedCount,{timeout:30000})
     }
     const rows=await page.evaluate(async()=>{
       const module=await import('/src/features/media/application/media-outbox.ts')
