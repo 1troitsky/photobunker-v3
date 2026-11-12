@@ -770,3 +770,53 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .file-viewer-photo-inline-input{width:min(195px,92%)}
   .file-viewer-photo-inline-input textarea{font-size:12px}
 }
+
+/* P2 V-50: five approved shape tools on ONE row on phone and desktop.
+   The existing PhotoShapeMark drives the overlay AND encrypted JPEG raster. */
+.file-viewer-shape-choices{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
+  width:100%;min-width:0;gap:6px;margin:11px 0 14px
+}
+.file-viewer-shape-choice{
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;min-width:0;min-height:59px;
+  padding:5px 2px;border:1px solid #515151;border-radius:8px;
+  background:#252525;color:#ebebeb;cursor:pointer
+}
+.file-viewer-shape-choice[aria-pressed="true"]{
+  border-color:var(--accent);background:#1d3425;color:var(--accent)
+}
+.file-viewer-shape-choice:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+.file-viewer-shape-glyph{font-size:23px;line-height:24px;font-weight:700}
+.file-viewer-shape-label{font-size:10px;line-height:1.2;max-width:100%;
+  overflow-wrap:anywhere;text-align:center}
+.file-viewer-shape-setting-row{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:center;gap:10px;min-width:0;margin:9px 0 13px
+}
+.file-viewer-shape-setting-row>label{
+  display:grid;gap:6px;min-width:0;font-size:12px
+}
+.file-viewer-shape-setting-row input[type=color]{
+  width:47px;min-width:47px;height:37px;border-radius:5px
+}
+.file-viewer-shape-setting-row input[type=range]{
+  width:100%;min-width:0;accent-color:var(--accent)
+}
+.file-viewer-shape-setting-row .file-viewer-shape-filled{
+  display:flex!important;flex-direction:row;justify-content:flex-end;
+  align-items:center;min-height:37px;gap:11px;white-space:normal
+}
+.file-viewer-shape-geometry>label:first-child{grid-column:auto}
+@media(max-width:430px){
+  .file-viewer-shape-choices{gap:4px}
+  .file-viewer-shape-choice{min-height:60px;padding:4px 1px}
+  .file-viewer-shape-glyph{font-size:21px}
+  .file-viewer-shape-label{font-size:9px}
+  .file-viewer-shape-setting-row{gap:8px}
+}
+@media(prefers-reduced-motion:reduce){
+  .file-viewer-shape-choice{transition:none}
+}
