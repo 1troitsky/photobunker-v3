@@ -15,6 +15,8 @@ import type { MediaMetadata } from '../domain/media-crypto'
 import type { GPSFix } from '../../photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../../assignments/domain/advanced-rules'
 import { enqueueEncryptedImportBatch } from '../application/encrypted-import-batch'
+import { downloadHttpsMedia,MAX_HTTPS_IMPORT_BYTES }
+  from '../application/https-link-import'
 import type { MediaPrivateFields } from '../domain/media-crypto'
 import { appendAuthenticatedCatalogPage }
   from '../../browser/application/authenticated-catalog-page'
@@ -34,6 +36,11 @@ const cursor=ref<string|null>(null)
 const selectedUrl=ref('')
 const metadata=ref<MediaMetadata|null>(null)
 const busy=ref(false)
+const remoteLink=ref('')
+const remoteBusy=ref(false)
+const remoteStage=ref<'idle'|'downloading'|'encrypting'>('idle')
+const remoteDownloaded=ref(0)
+let remoteAbort:AbortController|null=null
 const pagingBusy=ref(false)
 let catalogEpoch=0
 const privateCategory=ref('')
@@ -101,10 +108,13 @@ async function refresh():Promise<void>{
       error.value=explanation(e)
   }
 }
-async function importFiles(files:readonly File[]):Promise<void>{
-  if(files.length===0||busy.value)return
+async function importFiles(
+  files:readonly File[],destinationOverride?:string|null,
+):Promise<boolean>{
+  if(files.length===0||busy.value)return false
   const identity=activeSession.value
-  const folderId=targetFolder.value||null
+  const folderId=destinationOverride===undefined
+    ?targetFolder.value||null:destinationOverride
   busy.value=true;notice.value='';error.value=''
   try{
     if(folderId&&!props.destinationFolders.some(item=>item.id===folderId))
@@ -118,7 +128,7 @@ async function importFiles(files:readonly File[]):Promise<void>{
     const output=await enqueueEncryptedImportBatch(files,
       file=>enqueueEncryptedMedia(file,undefined,metadata),
       ()=>identity!==null&&identity===activeSession.value)
-    if(identity!==activeSession.value)return
+    if(identity!==activeSession.value)return false
     // The per-file AES-GCM operation is durable already. A failed folder
     // placement must not roll back/delete successful encrypted originals.
     if(output.mediaIds.length){
@@ -135,9 +145,47 @@ async function importFiles(files:readonly File[]):Promise<void>{
     if(output.failed)
       error.value='Не удалось импортировать '+output.failed
         +' файлов. Уже зашифрованные оригиналы и очередь сохранены.'
+    return saved>0
   }catch(e){
     if(identity===activeSession.value)error.value=explanation(e)
+    return false
   }finally{busy.value=false}
+}
+/** A remote URL never enters the durable media operation, metadata or S3.
+ * Explicit user action only; the remote host may still observe user's IP.
+ */
+async function importHttpsLink():Promise<void>{
+  const identity=activeSession.value
+  if(!identity?.online||typeof navigator!=='undefined'&&navigator.onLine===false
+    ||remoteBusy.value||busy.value||!remoteLink.value)return
+  const abort=new AbortController()
+  const link=remoteLink.value,folderId=targetFolder.value||null
+  remoteAbort=abort;remoteBusy.value=true;remoteStage.value='downloading'
+  remoteDownloaded.value=0;notice.value='';error.value=''
+  try{
+    const file=await downloadHttpsMedia(
+      link,abort.signal,
+      ()=>identity===activeSession.value&&!abort.signal.aborted,
+      state=>{if(remoteAbort===abort)remoteDownloaded.value=state.downloadedBytes},
+    )
+    if(identity!==activeSession.value||abort.signal.aborted)return
+    remoteStage.value='encrypting'
+    // Folder and private metadata always go through the same existing
+    // AES-GCM, signed outbox and virtual-folder pipeline as device imports.
+    const saved=await importFiles([file],folderId)
+    if(saved&&identity===activeSession.value&&!abort.signal.aborted)
+      remoteLink.value=''
+  }catch(e){
+    if(identity===activeSession.value)
+      error.value=e instanceof Error?e.message:'media.link_unavailable'
+  }finally{
+    if(remoteAbort===abort){
+      remoteAbort=null;remoteBusy.value=false;remoteStage.value='idle'
+    }
+  }
+}
+function cancelHttpsImport():void{
+  if(remoteStage.value==='downloading')remoteAbort?.abort()
 }
 async function chooseFile(event:Event):Promise<void>{
   const element=event.target as HTMLInputElement
@@ -147,7 +195,7 @@ async function chooseFile(event:Event):Promise<void>{
 }
 function dropFiles(event:DragEvent):void{
   event.preventDefault()
-  if(busy.value)return
+  if(busy.value||remoteBusy.value)return
   void importFiles(Array.from(event.dataTransfer?.files??[]))
 }
 async function sync():Promise<void>{
@@ -201,6 +249,7 @@ async function more():Promise<void>{
   }
 }
 watch(activeSession,(next,previous)=>{
+  remoteAbort?.abort()
   ++catalogEpoch
   pagingBusy.value=false
   // Changing connectivity or refreshing auth replaces the Session object.
@@ -209,6 +258,7 @@ watch(activeSession,(next,previous)=>{
   const switched=next?.accountId!==previous?.accountId
     ||next?.deviceId!==previous?.deviceId
   if(switched){
+    remoteLink.value='';remoteDownloaded.value=0
     targetFolder.value=props.defaultFolderId??''
     gpsRequest++;gpsLoading.value=false
     privateGps.value=null;gpsError.value=''
@@ -219,7 +269,10 @@ watch(activeSession,(next,previous)=>{
   void refresh()
 })
 onMounted(()=>{detach=attachMediaOutboxLifecycle();void refresh()})
-onUnmounted(()=>{++catalogEpoch;detach();clearPreview()})
+onUnmounted(()=>{
+  remoteAbort?.abort();remoteLink.value=''
+  ++catalogEpoch;detach();clearPreview()
+})
 </script>
 
 <template>
