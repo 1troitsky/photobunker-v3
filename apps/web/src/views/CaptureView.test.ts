@@ -449,7 +449,7 @@ describe('P2-SECURITY #260 GPS consent revocation and in-flight privacy',()=>{
     expect(host.textContent).toContain('GPS получен')
     button('Получить GPS').click();await settle()
     expect(host.textContent).not.toContain('GPS получен')
-    expect(host.textContent).toContain('Permission denied')
+    expect(host.textContent).toContain('camera.gps_permission_denied')
     button('Сделать снимок').click();await settle()
     expect(mocks.capture).toHaveBeenCalledWith(expect.any(Blob),undefined,
       expect.objectContaining({gps:null}))
