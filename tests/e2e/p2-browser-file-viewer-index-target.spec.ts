@@ -105,7 +105,9 @@ test('P2 File Viewer: authenticated deep-link target on opaque index page 2, rej
     await expect(B.getByTestId('file-viewer-position'))
       .toHaveText('50 / 50',{timeout:35000})
     await B.getByTestId('file-viewer-load-more').click()
-    await expect(B.getByRole('status'))
+    // The canonical Shell has its own live status. Assert the *Viewer*
+    // warning only; selecting every status on the document is ambiguous.
+    await expect(B.locator('.file-viewer-feedback [role="status"]'))
       .toContainText('Ранее проверенные файлы и курсоры сохранены.',{timeout:30000})
     expect(badPageDelivered).toBeGreaterThan(0)
     await expect(B.getByTestId('file-viewer-position')).toHaveText('50 / 50')
