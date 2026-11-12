@@ -287,6 +287,51 @@ final class BillingV1Test extends TestCase
         ]);
     }
 
+    public function test_paid_billing_usage_reports_real_decimal_limit_without_client_control():void
+    {
+        $this->login('alice');
+        $this->getJson('/billing/v1/me')->assertOk();
+        $this->activate('go','decimal-api');
+        $this->getJson('/billing/v1/me?enforcedByteCeiling=999999999999999')
+            ->assertOk()
+            ->assertJsonPath('entitlement.planId','go')
+            ->assertJsonPath('entitlement.effectivePlanId','go')
+            ->assertJsonPath('entitlement.effectiveLimits.storage.byteCeiling',
+                30000000000)
+            ->assertJsonPath('entitlement.effectiveLimits.storage.unitPolicy',
+                'DECIMAL_GB_TB_V1')
+            ->assertJsonPath('usage.enforcedByteCeiling',30000000000)
+            ->assertJsonPath('usage.byteUnitPolicy','DECIMAL_GB_TB_V1')
+            ->assertJsonPath('usage.quotaSource','plan_entitlement')
+            ->assertJsonPath('usage.measurement','read_only_non_atomic');
+        // Billing never creates a mutation endpoint from a client planId.
+        $this->postJson('/billing/v1/me',['planId'=>'unlimited_plus'])
+            ->assertStatus(405);
+        $this->assertDatabaseCount('billing_entitlement_snapshots_v1',2);
+    }
+
+    public function test_bad_decimal_policy_version_or_overflow_cannot_be_published():void
+    {
+        $config=config('plans');
+        config()->set('plans.catalog_version','pb3-2026-11-09');
+        config()->set('plans.effective_at','2026-11-09T00:00:00Z');
+        try{
+            $this->getJson('/billing/v1/plans')->assertStatus(500);
+        }finally{
+            config()->set('plans',$config);
+        }
+        config()->set('plans.plans.unlimited_plus.storage_quota.amount',
+            PHP_INT_MAX);
+        try{
+            $this->getJson('/billing/v1/plans')->assertStatus(500);
+        }finally{
+            config()->set('plans',$config);
+        }
+        $this->getJson('/billing/v1/plans')->assertOk()
+            ->assertJsonPath('plans.4.limits.storage.byteCeiling',
+                1000000000000);
+    }
+
     public function test_paid_snapshot_stays_immutable_across_later_public_price_revision():void
     {
         $this->login('alice');
