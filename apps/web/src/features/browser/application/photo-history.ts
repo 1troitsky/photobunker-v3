@@ -2,12 +2,30 @@ import type {PhotoTextMark} from './photo-text'
 import type {PhotoShapeMark} from './photo-shapes'
 import type {PhotoStroke} from './photo-strokes'
 import type {PhotoBlackout} from './photo-blackouts'
+import type {CropSelection} from './photo-crop'
+import type {PhotoAdjustments} from './photo-effects'
+import type {PhotoAspectPreset} from './photo-aspect-presets'
 
+/** Crop/rotation/RGB are part of the SAME volatile edit history as layers.
+ * No source media, Blob URLs, key, or plaintext image bytes enter snapshots.
+ */
+export type PhotoViewEdit=Readonly<{
+  crop:CropSelection
+  effects:PhotoAdjustments
+  aspect:PhotoAspectPreset|'custom'
+}>
+export const DEFAULT_PHOTO_VIEW:PhotoViewEdit={
+  crop:{left:0,top:0,width:100,height:100,turns:0},
+  effects:{brightness:100,contrast:100,saturation:100},
+  aspect:'original',
+}
 export type PhotoEditSnapshot=Readonly<{
   text:readonly PhotoTextMark[]
   shapes:readonly PhotoShapeMark[]
   strokes:readonly PhotoStroke[]
   blackouts:readonly PhotoBlackout[]
+  /** Optional for legacy annotation-only test fixtures. Runtime always sets it. */
+  view?:PhotoViewEdit
 }>
 export type PhotoEditHistory=Readonly<{
   states:readonly PhotoEditSnapshot[]
@@ -15,7 +33,11 @@ export type PhotoEditHistory=Readonly<{
 }>
 export const MAX_PHOTO_HISTORY=50
 export function emptyPhotoSnapshot():PhotoEditSnapshot{
-  return {text:[],shapes:[],strokes:[],blackouts:[]}
+  return {text:[],shapes:[],strokes:[],blackouts:[],
+    view:{crop:{...DEFAULT_PHOTO_VIEW.crop},
+      effects:{...DEFAULT_PHOTO_VIEW.effects},
+      aspect:DEFAULT_PHOTO_VIEW.aspect},
+  }
 }
 function cloneSnapshot(s:PhotoEditSnapshot):PhotoEditSnapshot{
   return {
@@ -25,6 +47,10 @@ function cloneSnapshot(s:PhotoEditSnapshot):PhotoEditSnapshot{
       ...stroke,points:stroke.points.map(p=>({...p})),
     })),
     blackouts:s.blackouts.map(mask=>({...mask})),
+    ...(s.view?{view:{
+      crop:{...s.view.crop},effects:{...s.view.effects},
+      aspect:s.view.aspect,
+    }}:{}),
   }
 }
 export function initialPhotoHistory():PhotoEditHistory{
