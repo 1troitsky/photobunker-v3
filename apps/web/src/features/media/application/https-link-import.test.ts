@@ -9,7 +9,7 @@ const content=(bytes=2048,mime='audio/wav')=>{
   const response=new Response(data.buffer,{
     status:200,headers:{'content-type':mime,'content-length':String(bytes)},
   })
-  Object.defineProperty(response,'url',{value:source})
+  Object.defineProperty(response,'url',{value:source,configurable:true})
   return response
 }
 const fetcher=(response:Response)=>{
