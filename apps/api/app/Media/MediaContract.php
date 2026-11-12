@@ -5,6 +5,7 @@ namespace App\Media;
 
 use App\Identity\Protocol as P;
 use App\Photo\PhotoSync;
+use App\Billing\RetentionAdmission;
 
 /** Signed upload envelope. Only media type/lengths and ciphertext hashes
  * are observable; filename, MIME and user text are AEAD-encrypted metadata. */
@@ -15,8 +16,14 @@ final class MediaContract
     public const MAX_CHUNKS=128;
 
     public static function verify(string $json,string $signature,
-        string $deviceSpki,string $accountId):array
+        string $deviceSpki,string $accountId,
+        ?int $maxRetentionDays=null):array
     {
+        // Bounded structural/signature verification. The entitlement cap
+        // is checked later by the reserve transaction, not by the client.
+        $days=$maxRetentionDays??config('photo_sync.bootstrap_free_retention_days',14);
+        abort_unless(is_int($days)&&$days>=1
+            &&$days<=RetentionAdmission::MAX_SIGNED_DAYS_V1,422);
         abort_unless(strlen($json)>=80&&strlen($json)<=80000,422);
         try{$c=json_decode($json,true,64,JSON_THROW_ON_ERROR);}
         catch(\Throwable){abort(422);}
@@ -33,8 +40,7 @@ final class MediaContract
             &&$c['plainBytes']<=self::MAX_PLAIN_BYTES
             &&is_int($c['expiresAt'])
             &&$c['expiresAt']>PhotoSync::nowMs()
-            &&$c['expiresAt']<=PhotoSync::nowMs()
-                +(int)config('photo_sync.bootstrap_free_retention_days',14)*86400000,422);
+            &&$c['expiresAt']<=PhotoSync::nowMs()+$days*86400000,422);
         $w=$c['wrappedDEK'];
         abort_unless(is_array($w)&&!array_is_list($w),422);
         P::exact($w,['iv','ciphertext']);

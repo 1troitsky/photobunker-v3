@@ -6,6 +6,7 @@ use App\Identity\Protocol as P;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use App\Storage\StorageManager;
+use App\Billing\RetentionAdmission;
 
 final class PhotoSync
 {
@@ -32,7 +33,14 @@ final class PhotoSync
             ->header('X-Content-Type-Options','nosniff');
     }
     /** Enforce exact signed protocol and bounded manifests; server cannot decrypt JPEG/metadata. */
-    public function validate(string $json,string $signature,string $deviceSpki):array {
+    public function validate(string $json,string $signature,string $deviceSpki,
+        ?int $maxRetentionDays=null):array {
+        // Default remains the original Free-only wire validator. Only the
+        // authenticated reserve route may select the bounded paid envelope;
+        // the real plan cap is checked under the account lock before insert.
+        $days=$maxRetentionDays??config('photo_sync.bootstrap_free_retention_days',14);
+        abort_unless(is_int($days)&&$days>=1
+            &&$days<=RetentionAdmission::MAX_SIGNED_DAYS_V1,422);
         abort_unless(strlen($json)>40&&strlen($json)<=200000,422);
         try{$c=json_decode($json,true,64,JSON_THROW_ON_ERROR);}catch(\Throwable){abort(422);}
         abort_unless(is_array($c)&&!array_is_list($c),422);
@@ -59,7 +67,7 @@ final class PhotoSync
                 &&$capture['capturedAt']<=self::nowMs()+120000,422);
         }
         abort_unless(is_int($c['expiresAt'])&&
-            $c['expiresAt']>self::nowMs()&&$c['expiresAt']<=self::nowMs()+(int)config('photo_sync.bootstrap_free_retention_days',14)*86400000,422);
+            $c['expiresAt']>self::nowMs()&&$c['expiresAt']<=self::nowMs()+$days*86400000,422);
         P::uuid($c['photoId']);P::uuid($c['operationId']);
         abort_unless(is_array($c['assets'])&&count($c['assets'])>=2&&count($c['assets'])<=3,422);
         $ids=[];$kinds=[];$total=0;

@@ -3,18 +3,22 @@ declare(strict_types=1);
 namespace App\Photo;
 use App\Identity\Protocol as P;
 use App\Billing\QuotaAdmission;
+use App\Billing\RetentionAdmission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 final class Reservation
 {
-    public function __construct(private readonly PhotoSync $sync,private readonly QuotaAdmission $quota){}
+    public function __construct(private readonly PhotoSync $sync,
+        private readonly QuotaAdmission $quota,
+        private readonly RetentionAdmission $retention){}
     public function reserve(Request $request):array {
         $this->sync->origin($request);
         [$account,$device]=$this->sync->actor($request);
         $d=P::exact($request->json()->all(),['contract','signature']);
         abort_unless(is_string($d['contract'])&&is_string($d['signature']),422);
-        $contract=$this->sync->validate($d['contract'],$d['signature'],$device->signing_spki);
+        $contract=$this->sync->validate($d['contract'],$d['signature'],
+            $device->signing_spki,RetentionAdmission::MAX_SIGNED_DAYS_V1);
         // Personal photographs use v1; assignment-scoped photos use v2.
         abort_unless(in_array($contract['version'],[1,2],true),422);
         foreach($contract['assets'] as $a)abort_unless($a['manifest']['accountId']===$account->id,403);
@@ -39,6 +43,11 @@ final class Reservation
             if($contract['version']===2){
                 $this->requireCaptureAuthority($contract['capture'],$account->id);
             }
+            // The same immutable signed deadline was checked for every
+            // encrypted asset in PhotoSync::validate(). Recheck against the
+            // current verified entitlement under the account lock, only
+            // for NEW uploads. Lost-ACK replay above bypasses this cap.
+            $this->retention->assertNew($account->id,$contract['expiresAt']);
             $need=array_sum(array_column($contract['assets'],'bytes'));
             // Owner-row locked and versioned: both signed Photo and
             // MediaFile reservations consume the same atomic file/byte budget.
