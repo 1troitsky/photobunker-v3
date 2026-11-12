@@ -10,6 +10,9 @@ import {shallowRef} from 'vue'
  */
 export type ViewerShellActions={
   download:()=>void
+  // Editor actions are callbacks only. The Shell never receives photo/audio
+  // buffers or editor draft metadata, and never changes E2EE permissions.
+  editor?:{cancel:()=>void;save:()=>void;canSave:boolean}
 }
 export const viewerShellActions=shallowRef<ViewerShellActions|null>(null)
 
