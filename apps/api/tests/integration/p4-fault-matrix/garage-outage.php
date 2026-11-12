@@ -11,6 +11,9 @@ declare(strict_types=1);
  * Matrix/Synapse and Backup are not started here; never report those PASS.
  */
 use App\Photo\Lifecycle;
+use App\Storage\StorageManager;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -50,7 +53,8 @@ if (config('database.default') !== 'pgsql'
     throw new RuntimeException('p4.fault_matrix.unsafe_app_configuration');
 }
 foreach (['identity_accounts','identity_devices','photo_records',
-    'photo_objects','storage_locations','photo_tombstones'] as $table) {
+    'photo_objects','storage_locations','photo_tombstones',
+    'storage_retry_tickets','storage_provider_health'] as $table) {
     if (!DB::getSchemaBuilder()->hasTable($table)) {
         throw new RuntimeException('p4.fault_matrix.missing_schema');
     }
@@ -140,7 +144,60 @@ if ($mode === 'prepare') {
     $assert(hash_equals($sha, hash('sha256', (string) $disk->get($objectKey))),
         'fixture_ciphertext_corrupt');
 
+    // Independent #266 live worker fixture: real encrypted S3 bytes already
+    // accepted, durable retry ticket written *before* PUT, but the server
+    // never recorded the upload ACK (parent/asset remain pending/uploading).
+    // No user data, identity key material, or plaintext media is involved.
+    $ledgerPhoto = (string) Str::uuid();
+    $ledgerAsset = (string) Str::uuid();
+    $ledgerKey = 'cipher/v1/' . $account . '/' . $ledgerPhoto . '/' . $ledgerAsset;
+    $ledgerBytes = random_bytes(1027);
+    $ledgerSha = hash('sha256', $ledgerBytes);
+    DB::table('photo_records')->insert([
+        'id' => $ledgerPhoto, 'account_id' => $account, 'device_id' => $device,
+        'operation_id' => (string) Str::uuid(), 'state' => 'pending',
+        'expires_at' => now()->addDays(2)->getTimestampMs(),
+        'contract_hash' => str_repeat('c', 64), 'contract_json' => '{}',
+        'signature' => 'synthetic-ledger-only',
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('photo_objects')->insert([
+        'id' => $ledgerAsset, 'photo_id' => $ledgerPhoto,
+        'kind' => 'master', 'revision' => 1, 'bytes' => strlen($ledgerBytes),
+        'sha256' => $ledgerSha, 'manifest_json' => '{}',
+        'object_key' => $ledgerKey, 'state' => 'uploading',
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('storage_locations')->insert([
+        'id' => (string) Str::uuid(), 'asset_id' => $ledgerAsset,
+        'provider' => 'app_s3', 'object_key' => $ledgerKey,
+        'bytes' => strlen($ledgerBytes), 'sha256' => $ledgerSha,
+        'state' => 'reserved', 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $stream = fopen('php://temp', 'w+b');
+    $assert(is_resource($stream), 'ledger_fixture_stream_failed');
+    fwrite($stream, $ledgerBytes);
+    rewind($stream);
+    try {
+        $assert(app(StorageManager::class)->writeAsset($ledgerAsset, $stream),
+            'ledger_fixture_storage_manager_put_failed');
+    } finally {
+        fclose($stream);
+    }
+    $assert(DB::table('storage_retry_tickets')
+        ->where('kind', 'photo')->where('asset_id', $ledgerAsset)
+        ->where('disposition', 'pending')->exists(),
+        'ledger_missing_durable_pre_put_ticket');
+    $assert(DB::table('photo_objects')->where('id', $ledgerAsset)
+        ->where('state', 'uploading')->exists(),
+        'ledger_fabricated_pre_outage_ack');
+
     $payload = [
+        'ledger_photo' => $ledgerPhoto,
+        'ledger_asset' => $ledgerAsset,
+        'ledger_key' => $ledgerKey,
+        'ledger_sha256' => $ledgerSha,
+        'ledger_bytes' => strlen($ledgerBytes),
         'account' => $account,
         'photo' => $photo,
         'asset' => $asset,
