@@ -920,8 +920,12 @@ async function navigate(item:CatalogItem|{source:'photo'|'media';id:string}|null
 function onKeyDown(event:KeyboardEvent):void{
   if(event.defaultPrevented||event.altKey)return
   if(panel.value){
-    if(event.key==='Escape'){event.preventDefault();closePanel()}
-    return
+    if(event.key==='Escape'){event.preventDefault();closePanel();return}
+    // The editor remains a real editing surface: retain the existing
+    // Ctrl/Cmd+Z history shortcut, but never navigate files behind a sheet.
+    if(panel.value!=='editor'
+      ||!((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'))
+      return
   }
   const editing=event.target instanceof HTMLElement&&!!event.target.closest(
     'input,textarea,select,video,audio,button,[contenteditable="true"]')
