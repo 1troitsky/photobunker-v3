@@ -874,7 +874,7 @@ async function openFile():Promise<void>{
     if(sameSession(session,epoch))error.value=explain(e)
   }finally{if(sameSession(session,epoch))busy.value=false}
 }
-async function navigate(item:CatalogItem|null):Promise<void>{
+async function navigate(item:CatalogItem|{source:'photo'|'media';id:string}|null):Promise<void>{
   if(!item||busy.value)return
   await router.push({
     name:'browser-viewer',params:{protocol:item.source,id:item.id},
