@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { resolve as resolvePath } from 'node:path'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig, loadEnv } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
-import { renderBrandHtml, resolveBrand } from './src/config/brand-build'
+import { renderBrandHtml, resolveBrand } from './src/config/brand-build.js'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => {
   })
 
   // Manifest and favicon must refer to an actual bundled, same-origin asset.
-  const iconFile = fileURLToPath(new URL('./public' + configuredBrand.iconUrl, import.meta.url))
+  const iconFile = resolvePath(process.cwd(), 'public', configuredBrand.iconUrl.slice(1))
   if (!existsSync(iconFile)) throw new Error('Branded PWA icon does not exist: ' + configuredBrand.iconUrl)
 
   return {
