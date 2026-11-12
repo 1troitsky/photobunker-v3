@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createApp, markRaw, nextTick, type App } from 'vue'
+import { createApp, markRaw, nextTick, reactive, type App } from 'vue'
 import { activeSession, type Session } from '../features/identity/application/session'
 import CaptureView from './CaptureView.vue'
 
 const mocks = vi.hoisted(() => ({
   capture: vi.fn(), policies: vi.fn(), server: vi.fn(), binding: vi.fn(),
-  mediaEnqueue: vi.fn(),
+  mediaEnqueue: vi.fn(), mediaIntent: vi.fn(),
+  requiredGps:false,
   privateCache: vi.fn(), verifyPolicy: vi.fn(), privateScope: vi.fn(),
   allowedMedia: ['photo'] as string[],
   route: {query: {} as Record<string, string>},
@@ -18,20 +19,20 @@ vi.mock('vue-router', () => ({
 vi.mock('../features/photo-sync/application/p1-photo', () => ({captureEncrypted: mocks.capture}))
 vi.mock('../features/media/application/media-outbox', () => ({enqueueEncryptedMedia: mocks.mediaEnqueue}))
 vi.mock('../features/assignments/application/assignment-outbox', () => ({
-  listServerAssignments: mocks.server,
+  listServerAssignments: mocks.server, listAllServerAssignments: mocks.server,
   listVerifiedCapturePolicies: mocks.policies,
   signedCaptureBinding: mocks.binding,
   signedAllowedAssignmentMedia: () => mocks.allowedMedia,
   readCachedPrivateAssignment: mocks.privateCache,
   verifySignedAssignmentPolicy: mocks.verifyPolicy,
   assignmentPrivateCacheScope: mocks.privateScope,
-  signedMediaCaptureIntent: vi.fn(),
+  signedMediaCaptureIntent: mocks.mediaIntent,
   signedAdvancedRequirements: () => ({allowedCategories:[],requiredTags:[]}),
   signedPolicyRequirements: () => ({
-    requiredCategory:false,descriptionMinLength:0,requiredGps:false,
+    requiredCategory:false,descriptionMinLength:0,requiredGps:mocks.requiredGps,
   }),
   signedMediaRequirements: () => ({
-    requiredCategory:false,descriptionMinLength:0,requiredGps:false,
+    requiredCategory:false,descriptionMinLength:0,requiredGps:mocks.requiredGps,
   }),
 }))
 
@@ -83,7 +84,12 @@ beforeEach(() => {
   Object.defineProperty(HTMLVideoElement.prototype, 'videoHeight', {configurable: true, get() {return this.srcObject ? 480 : 0}})
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({drawImage: vi.fn()} as unknown as CanvasRenderingContext2D)
   vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback => callback(new Blob(['synthetic jpeg'], {type: 'image/jpeg'})))
-  mocks.route.query = {}
+  mocks.route.query = reactive({})
+  mocks.requiredGps=false
+  mocks.mediaIntent.mockResolvedValue(undefined)
+  Object.defineProperty(navigator,'permissions',{configurable:true,value:{
+    query:vi.fn(async()=>({state:'granted',onchange:null})),
+  }})
   mocks.policies.mockResolvedValue([])
   mocks.server.mockResolvedValue({items: []})
   mocks.binding.mockResolvedValue({assignmentId: 'assignment-a', policyRevision: 1})
@@ -100,6 +106,7 @@ afterEach(async () => {
   host?.remove(); activeSession.value = null
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 describe('private instructions and hardware lifecycle',()=>{
@@ -324,7 +331,7 @@ describe('camera session ownership and async permission lifecycle', () => {
         gps:expect.objectContaining({
           latitude:41.647849,longitude:41.639411,accuracyMeters:6,
         }),
-      })
+      },expect.any(Function))
   })
   it('discards a late GPS result after a genuine identity switch',async()=>{
     let deliver!:PositionCallback
@@ -408,4 +415,206 @@ describe('camera session ownership and async permission lifecycle', () => {
     expect(options).not.toContain('old-assignment')
     expect(options).toContain('new-assignment')
   })
+})
+
+
+describe('Issue #260 GPS consent and capture races',()=>{
+  let status:{state:PermissionState;onchange:(()=>void)|null}
+  let callbacks:{ok:PositionCallback;fail?:PositionErrorCallback|null}[]
+  const point=()=>({coords:{latitude:40.2,longitude:44.4,accuracy:7},timestamp:Date.now()} as GeolocationPosition)
+  async function ready(){
+    const session=await mount()
+    requests[0]!.resolve(media().stream);await settle()
+    return session
+  }
+  async function fix(){
+    button('Получить GPS').click();await settle()
+    callbacks.at(-1)!.ok(point());await settle()
+    expect(host.textContent).toContain('GPS получен')
+  }
+  function select(id:string,value:string){
+    const el=host.querySelector<HTMLSelectElement>(id)!
+    el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}))
+  }
+  beforeEach(()=>{
+    status={state:'granted',onchange:null};callbacks=[]
+    Object.defineProperty(navigator,'permissions',{configurable:true,value:{
+      query:vi.fn(async()=>status),
+    }})
+    Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
+      getCurrentPosition:vi.fn((ok:PositionCallback,fail?:PositionErrorCallback)=>callbacks.push({ok,fail})),
+    }})
+  })
+  it('clears previous fix immediately on repeat; denial never retains old consent, retry succeeds',async()=>{
+    await ready();await fix()
+    button('Получить GPS').click();await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+    callbacks[1]!.fail!({code:1,message:'denied'} as GeolocationPositionError)
+    await settle()
+    button('Сделать снимок').click();await settle()
+    expect(mocks.capture.mock.calls[0]![2].gps).toBeNull()
+    await fix()
+    button('Сделать снимок').click();await settle()
+    expect(mocks.capture.mock.calls[1]![2].gps).toMatchObject({latitude:40.2})
+  })
+  it.each(['denied','prompt'] as const)('removes fix on %s change without another GPS click',async state=>{
+    await ready();await fix()
+    status.state=state;status.onchange!();await settle()
+    expect(status.onchange).toBeNull()
+    expect(host.textContent).not.toContain('GPS получен')
+    button('Сделать снимок').click();await settle()
+    expect(mocks.capture.mock.calls[0]![2].gps).toBeNull()
+  })
+  it('checks consent at shutter even when the browser delays onchange',async()=>{
+    await ready();await fix()
+    status.state='denied'
+    button('Сделать снимок').click();await settle()
+    expect(mocks.capture.mock.calls[0]![2].gps).toBeNull()
+    expect(host.textContent).not.toContain('GPS получен')
+    expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1)
+  })
+  it.each(['absent','reject','pending'] as const)('fails closed with %s Permissions API at shutter',async kind=>{
+    await ready();await fix()
+    if(kind==='absent')Object.defineProperty(navigator,'permissions',{configurable:true,value:undefined})
+    else vi.mocked(navigator.permissions.query).mockImplementation(()=>kind==='reject'
+      ?Promise.reject(Error('unsupported')):new Promise(()=>{}))
+    if(kind==='pending')vi.useFakeTimers()
+    button('Сделать снимок').click();await settle()
+    if(kind==='pending'){await vi.advanceTimersByTimeAsync(1001);await settle()}
+    expect(mocks.capture.mock.calls[0]![2].gps).toBeNull()
+    vi.useRealTimers()
+  })
+  it('does not restore GPS from a late callback after permission withdrawal',async()=>{
+    await ready()
+    button('Получить GPS').click();await settle()
+    status.state='denied';status.onchange!();callbacks[0]!.ok(point());await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+  })
+  it.each(['account','device','key','cancel','unmount','assignment','route','mode'] as const)
+  ('invalidates pending request on %s, including late delivery',async kind=>{
+    mocks.policies.mockResolvedValue([{assignmentId:'assignment-a',policyRevision:1}])
+    const session=await ready()
+    button('Получить GPS').click();await settle()
+    const oldListener=status.onchange
+    if(kind==='account')activeSession.value={...session,accountId:'account-b'}
+    if(kind==='device')activeSession.value={...session,deviceId:'device-b'}
+    if(kind==='key')activeSession.value={...session,pkg:{...session.pkg,akek:'changed'}}
+    if(kind==='cancel')button('Убрать GPS').click()
+    if(kind==='unmount'){app!.unmount();app=undefined}
+    if(kind==='assignment')select('#camera-assignment','assignment-a')
+    if(kind==='route')mocks.route.query.assignmentId='assignment-a'
+    if(kind==='mode')select('#camera-mode','audio')
+    await settle()
+    callbacks[0]!.ok(point());oldListener?.();await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+    expect(status.onchange).toBeNull()
+    expect(mocks.capture).not.toHaveBeenCalled()
+  })
+  it('keeps a pending fix across equivalent online Session hydration',async()=>{
+    const session=await ready()
+    button('Получить GPS').click();await settle()
+    activeSession.value={...session,online:true,pkg:{...session.pkg},device:{...session.device}}
+    await settle();callbacks[0]!.ok(point());await settle()
+    expect(host.textContent).toContain('GPS получен')
+    expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1)
+  })
+  it('does not resurrect a cancelled attempt after a new successful request',async()=>{
+    await ready()
+    button('Получить GPS').click();await settle()
+    button('Убрать GPS').click();await settle()
+    await fix()
+    callbacks[0]!.ok({...point(),coords:{...point().coords,latitude:1}})
+    await settle();button('Сделать снимок').click();await settle()
+    expect(mocks.capture.mock.calls[0]![2].gps.latitude).toBe(40.2)
+  })
+  it('bounds a native request that never calls back and allows explicit retry',async()=>{
+    await ready();vi.useFakeTimers()
+    button('Получить GPS').click();await settle()
+    await vi.advanceTimersByTimeAsync(12001);await settle()
+    expect(button('Получить GPS').disabled).toBe(false)
+    expect(host.textContent).not.toContain('GPS получен')
+    await fix();vi.useRealTimers()
+  })
+  it('fails required signed policy after revocation and never calls encrypted outbox',async()=>{
+    mocks.requiredGps=true
+    mocks.route.query={assignmentId:'assignment-a'}
+    mocks.policies.mockResolvedValue([{assignmentId:'assignment-a',policyRevision:2}])
+    mocks.binding.mockImplementation(async(_id,_at,fields)=>{
+      if(!fields.gps)throw Error('assignment.gps_required')
+      return {assignmentId:'assignment-a',policyRevision:2}
+    })
+    await ready();await fix();status.state='denied'
+    button('Сделать снимок').click();await settle()
+    expect(host.textContent).toContain('assignment.gps_required')
+    expect(mocks.capture).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+  it('rechecks GPS after asynchronous Canvas encoding',async()=>{
+    let jpeg!:BlobCallback
+    vi.mocked(HTMLCanvasElement.prototype.toBlob).mockImplementation(cb=>{jpeg=cb})
+    await ready();await fix()
+    button('Сделать снимок').click();await settle()
+    status.state='denied'
+    jpeg(new Blob(['jpeg'],{type:'image/jpeg'}));await settle()
+    expect(mocks.capture.mock.calls[0]![2].gps).toBeNull()
+  })
+  it('cancels captured consent while signed binding is in flight',async()=>{
+    const pending=deferred<unknown>()
+    mocks.route.query={assignmentId:'assignment-a'}
+    mocks.policies.mockResolvedValue([{assignmentId:'assignment-a',policyRevision:2}])
+    mocks.binding.mockReturnValue(pending.promise)
+    await ready();await fix()
+    button('Сделать снимок').click();await settle()
+    status.state='denied';status.onchange!()
+    pending.resolve({assignmentId:'assignment-a',policyRevision:2});await settle()
+    expect(mocks.capture).not.toHaveBeenCalled()
+  })
+  it('passes a guard that rejects revocation during P1 encryption',async()=>{
+    await ready();await fix()
+    mocks.capture.mockImplementation(async(_jpeg,_binding,_fields,assertCurrent)=>{
+      status.state='denied';status.onchange!()
+      assertCurrent()
+      return {photoId:'must-not-be-saved'}
+    })
+    button('Сделать снимок').click();await settle()
+    expect(host.textContent).toContain('camera.gps_consent_changed')
+    expect(host.textContent).not.toContain('Зашифровано и сохранено')
+  })
+  it.each(['video','audio'] as const)('rejects revoked GPS at %s recording finalization',async mode=>{
+    let worker!:Recorder
+    class Recorder{
+      static isTypeSupported(){return true}
+      state='inactive'
+      ondataavailable:((event:{data:Blob})=>void)|null=null
+      onstop:(()=>void)|null=null
+      onerror:(()=>void)|null=null
+      constructor(){worker=this}
+      start(){this.state='recording'}
+      stop(){this.state='inactive';this.onstop?.()}
+    }
+    vi.stubGlobal('MediaRecorder',Recorder)
+    await ready();select('#camera-mode',mode);await settle()
+    requests[1]!.resolve(media().stream);await settle()
+    await fix();vi.useFakeTimers()
+    button('Начать запись '+(mode==='video'?'видео':'аудио')).click();await settle()
+    expect(worker.state).toBe('recording')
+    worker.ondataavailable!({data:new Blob([new Uint8Array(512)])})
+    await vi.advanceTimersByTimeAsync(100)
+    status.state='denied' // deliberately no event: finalize must query again
+    button('Остановить запись').click();await settle()
+    expect(host.textContent).toContain('camera.gps_consent_changed')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+  it('does not publish P2 JPEG when consent is withdrawn during encryption',async()=>{
+    await ready();select('#camera-photo-storage','p2');await settle();await fix()
+    mocks.mediaEnqueue.mockImplementation(async(_file,_intent,_fields,assertCurrent)=>{
+      status.state='denied';assertCurrent()
+      return 'must-not-be-saved'
+    })
+    button('Сделать снимок').click();await settle()
+    expect(host.textContent).toContain('camera.gps_consent_changed')
+    expect(host.textContent).not.toContain('P2 JPEG зашифрован')
+  })
+
 })
