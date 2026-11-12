@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Settings & Profile · Fieldwork 1.2 · PhotoBunker</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="preview-bar"><span class="preview-label"><i></i>FIELDWORK / SETTINGS & PROFILE 1.6 <small>· интерактивный экран</small></span><div class="preview-modes"><button type="button" class="selected" data-device="phone" aria-pressed="true">Телефон</button><button type="button" data-device="desktop" aria-pressed="false">Desktop</button></div></div>
+<div class="preview-stage"><div class="device phone" id="device"><div class="app" id="app">
+<header class="app-header"><span class="brand-mark">pb</span><button class="brand-state" type="button" data-action="status"><strong>PhotoBunker</strong><small><i class="state-led"></i>В работе</small></button><div class="header-actions"><button type="button" class="plan-pill" id="header-plan" data-action="current-plan" aria-label="Тариф: Unlimited (267 дней)" title="Тариф: Unlimited (267 дней)">Тариф: Unlimited (267 дней)</button><button type="button" data-action="toggle-search" id="header-search" aria-label="Поиск по настройкам" aria-expanded="false" title="Поиск по настройкам"></button></div></header>
+<div class="search-tray" id="search-tray" hidden><div class="search-input-wrap"><span id="search-icon"></span><input type="search" id="settings-query" placeholder="Поиск по настройкам" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Поиск по настройкам"><button type="button" class="clear-button" data-action="clear-search" aria-label="Очистить поиск" id="clear-search" hidden></button></div><button type="button" class="close-search" data-action="close-search">Отмена</button></div>
+<main class="app-main" id="main"><div class="content" id="content"></div></main><nav class="app-dock" aria-label="Главная навигация" id="dock"></nav>
+<div class="overlay" id="overlay" hidden><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"><div class="sheet-header"><strong id="sheet-title"></strong><button type="button" data-action="close-sheet" aria-label="Закрыть" id="sheet-close"></button></div><div class="sheet-body" id="sheet-body"></div></section></div>
+<div class="status-toast" id="toast" role="status" hidden></div>
+</div></div></div>
+<div class="preview-note">Автономный UX-прототип. Профиль и связи демонстрационные, изменения остаются только во вкладке. Реальные публичные ссылки, статусы присутствия и серверные действия не создаются.</div>
+<script src="app.js"></script>
+</body>
+</html>
