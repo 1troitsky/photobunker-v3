@@ -2290,9 +2290,53 @@ onUnmounted(()=>{
                 :disabled="cropBusy||shapeMarks.length>=MAX_SHAPE_MARKS"
                 @click="addPhotoShape">Добавить фигуру</button>
             </div>
-            <p v-if="!shapeMarks.length" class="muted">Можно добавить стрелку,
-              круг, квадрат, треугольник или звезду, настроить рамку и заливку,
-              переместить фигуру на изображении.</p>
+            <p v-if="!shapeMarks.length" class="muted">Выберите одну из пяти
+              фигур: она появится на фотографии. Положение и размер можно
+              изменить на изображении или в полях ниже.</p>
+            <div class="file-viewer-shape-choices" role="group"
+              aria-label="Фигуры" data-testid="file-viewer-shape-choices">
+              <button v-for="kind in shapeTypes" :key="kind.kind"
+                type="button" class="file-viewer-shape-choice"
+                :data-testid="'file-viewer-shape-type-'+kind.kind"
+                :aria-label="kind.label"
+                :title="kind.label"
+                :aria-pressed="selectedShape?.kind===kind.kind"
+                :disabled="cropBusy||showBefore||(
+                  !selectedShape&&shapeMarks.length>=MAX_SHAPE_MARKS)"
+                @click="choosePhotoShapeKind(kind.kind)">
+                <span aria-hidden="true" class="file-viewer-shape-glyph">{{kind.glyph}}</span>
+                <span class="file-viewer-shape-label">{{kind.label}}</span>
+              </button>
+            </div>
+            <template v-if="selectedShape">
+              <div class="file-viewer-shape-setting-row"
+                data-testid="file-viewer-shape-stroke-row">
+                <label>Цвет рамки
+                  <input type="color" :value="selectedShape.stroke"
+                    :disabled="cropBusy" data-testid="file-viewer-shape-stroke"
+                    @input="setShapeColor('stroke',$event)">
+                </label>
+                <label>Толщина рамки · {{ selectedShape.strokeWidth }}
+                  <input type="range" min="1" max="28" step="1"
+                    :value="selectedShape.strokeWidth" :disabled="cropBusy"
+                    data-testid="file-viewer-shape-stroke-width"
+                    @input="setShapeStrokeWidth">
+                </label>
+              </div>
+              <div class="file-viewer-shape-setting-row"
+                data-testid="file-viewer-shape-fill-row">
+                <label>Цвет заливки
+                  <input type="color" :value="selectedShape.fill"
+                    :disabled="cropBusy" data-testid="file-viewer-shape-fill"
+                    @input="setShapeColor('fill',$event)">
+                </label>
+                <label class="file-viewer-shape-filled">Залить фигуру
+                  <input type="checkbox" :checked="selectedShape.filled"
+                    :disabled="cropBusy" data-testid="file-viewer-shape-filled"
+                    @change="setShapeFilled">
+                </label>
+              </div>
+            </template>
             <div v-for="(shape,index) in shapeMarks" :key="shape.id"
               class="file-viewer-photo-text-row"
               :class="{selected:selectedShapeId===shape.id}">
@@ -2304,38 +2348,8 @@ onUnmounted(()=>{
                 :aria-label="'Удалить фигуру '+(index+1)"
                 @click="deletePhotoShape(shape.id)">Удалить</button>
             </div>
-            <div v-if="selectedShape" class="file-viewer-photo-text-settings">
-              <label>Фигура
-                <select :value="selectedShape.kind" :disabled="cropBusy"
-                  data-testid="file-viewer-shape-kind" @change="setShapeKind">
-                  <option value="arrow">Стрелка</option>
-                  <option value="circle">Круг</option>
-                  <option value="square">Квадрат</option>
-                  <option value="triangle">Треугольник</option>
-                  <option value="star">Звезда</option>
-                </select>
-              </label>
-              <label>Цвет рамки
-                <input type="color" :value="selectedShape.stroke"
-                  :disabled="cropBusy" data-testid="file-viewer-shape-stroke"
-                  @input="setShapeColor('stroke',$event)">
-              </label>
-              <label>Толщина рамки · {{ selectedShape.strokeWidth }}
-                <input type="range" min="1" max="28" step="1"
-                  :value="selectedShape.strokeWidth" :disabled="cropBusy"
-                  data-testid="file-viewer-shape-stroke-width"
-                  @input="setShapeStrokeWidth">
-              </label>
-              <label>Цвет заливки
-                <input type="color" :value="selectedShape.fill"
-                  :disabled="cropBusy" data-testid="file-viewer-shape-fill"
-                  @input="setShapeColor('fill',$event)">
-              </label>
-              <label class="file-viewer-shape-filled">Залить фигуру
-                <input type="checkbox" :checked="selectedShape.filled"
-                  :disabled="cropBusy" data-testid="file-viewer-shape-filled"
-                  @change="setShapeFilled">
-              </label>
+            <div v-if="selectedShape"
+              class="file-viewer-photo-text-settings file-viewer-shape-geometry">
               <label>Позиция X (%)
                 <input type="number" min="0" :max="100-selectedShape.width"
                   step="1" :value="selectedShape.x" :disabled="cropBusy"
