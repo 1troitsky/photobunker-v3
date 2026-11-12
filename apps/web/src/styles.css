@@ -715,3 +715,30 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .file-editor-private-copy{margin:8px 0;padding:12px}
   .file-editor-private-tag button{max-width:175px}
 }
+
+/* P2 V-48: selected aspect is applied to authenticated JPEG raster pixels
+   via cropGeometry, never a CSS-only image aspect transform. */
+.file-viewer-photo-aspects{
+  display:flex;flex-wrap:wrap;align-items:center;gap:7px;
+  margin:12px 0 14px
+}
+.file-viewer-photo-aspects>span{
+  flex:0 0 100%;font-size:12px;font-weight:700;color:#dfdfdf
+}
+.file-viewer-photo-aspects button{
+  min-width:67px;min-height:37px;border-radius:7px;padding:6px 10px;
+  border:1px solid #484848;background:#292929;color:#ddd;font-size:12px
+}
+.file-viewer-photo-aspects button[aria-pressed="true"]{
+  color:var(--accent);border-color:var(--accent);background:#203328
+}
+.file-viewer-photo-rotate-controls{display:flex;gap:9px;
+  align-items:center;justify-content:flex-start;margin:10px 0 15px}
+.file-viewer-photo-rotate-controls button{min-height:38px;padding:7px 14px}
+.file-viewer-photo-rotate-controls span{min-width:98px;text-align:center;
+  font-size:12px;color:#ccc;font-variant-numeric:tabular-nums}
+@media(max-width:420px){
+  .file-viewer-photo-aspects{gap:5px}
+  .file-viewer-photo-aspects button{flex:1 1 65px;min-width:0;padding:6px 3px}
+  .file-viewer-photo-rotate-controls button{flex:1}
+}
