@@ -65,3 +65,12 @@ Product [#157](https://github.com/1troitsky/photobunker-v3/pull/157) @ `b887a0ff
 Integration branch now adds a dedicated **two-parent merge** of the previous four-parent V51 integration commit chain and PR #157. The **resulting V52 tree includes the entire #157 product code exactly**, plus UX #155 and approved #138 source files. **Do not infer V52 CI PASS** from PR #157 (independent) or the earlier V51 integration run; full combined V52 CI on the final head is mandatory.
 
 For final review, PR #158 should target the V52 product branch `p2/photo-text-color-size-mobile-row`. Before any main merge recheck whether product has advanced again; the frozen V52 integration is a checked snapshot, not authority to auto-merge future PRs.
+
+
+### Combined V51 Chromium QA finding and precise test stabilization
+
+The **first combined V51** workflow [Actions 43169926565](https://github.com/1troitsky/photobunker-v3/actions/runs/43169926565) completed **59/60 Chromium PASS, one FAIL** in the unchanged `tests/e2e/p2-browser-file-viewer-index-target.spec.ts:109`. The failure is a Playwright **strict mode selector ambiguity**: `getByRole('status')` matched two status elements (Viewer loading indicator and the *expected* forged-page rejection warning). The warning `Ранее проверенные файлы и курсоры сохранены.` was present. PRODUCT Viewer code was not changed in this integration.
+
+A **narrow test-only stabilization** now locates the specific warning using `getByRole('status').filter({hasText: ...})`, preserving the exact rejection text assertion, `badPageDelivered > 0`, unchanged `50 / 50` cursor position and continuing E2EE audio preview. It does **not** skip, reduce timeouts, disable role checks, alter Viewer code, or change crypto/security behavior. This is the same root cause as the older #146/#155 intermittent page-index test failure; the present integration fixes only the broad selector.
+
+This change is scoped **inside the combined integration/QA branch** (NOT to product #154/#157 or to `main`). Final exact-head V52 full suite must pass after the change; previous attempts remain historical evidence.

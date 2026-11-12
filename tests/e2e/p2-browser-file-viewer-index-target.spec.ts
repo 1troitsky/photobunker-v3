@@ -105,8 +105,12 @@ test('P2 File Viewer: authenticated deep-link target on opaque index page 2, rej
     await expect(B.getByTestId('file-viewer-position'))
       .toHaveText('50 / 50',{timeout:35000})
     await B.getByTestId('file-viewer-load-more').click()
-    await expect(B.getByRole('status'))
-      .toContainText('Ранее проверенные файлы и курсоры сохранены.',{timeout:30000})
+    // Both loading and rejection are valid role="status" nodes. Match
+    // the *rejection warning*, not an arbitrary status element: the
+    // security assertion below still verifies the forged page was served.
+    await expect(B.getByRole('status').filter({
+      hasText:'Ранее проверенные файлы и курсоры сохранены.',
+    })).toContainText('Ранее проверенные файлы и курсоры сохранены.',{timeout:30000})
     expect(badPageDelivered).toBeGreaterThan(0)
     await expect(B.getByTestId('file-viewer-position')).toHaveText('50 / 50')
     await expect(B.getByTestId('file-viewer-audio')).toBeVisible()
