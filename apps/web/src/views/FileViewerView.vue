@@ -3,6 +3,7 @@ import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {onBeforeRouteLeave,RouterLink,useRoute,useRouter} from 'vue-router'
 import {
   armBrowserReturn,discardBrowserReturnContext,
+  peekOriginPager,noteViewerPosition,
 } from '../features/browser/application/browser-return-context'
 import {activeSession} from '../features/identity/application/session'
 import {
@@ -154,9 +155,18 @@ const preview=ref<Preview|null>(null)
 const files=computed(()=>buildCatalog(
   photoLocal.value,photoCloud.value,mediaLocal.value,mediaCloud.value,
 ))
-const adjacent=computed(()=>current.value
-  ?adjacentFiles(files.value,current.value)
-  :{previous:null,next:null,position:0,total:0})
+const adjacent=computed(()=>{
+  const identity=activeSession.value,target=current.value
+  if(!target)return {previous:null,next:null,position:0,total:0}
+  if(identity){
+    const scoped=peekOriginPager(
+      identity.accountId,identity.deviceId,viewerKey(target))
+    if(scoped)return scoped
+  }
+  // Direct deep links with no known Browser origin retain the verified
+  // bounded index navigation from V-38.
+  return adjacentFiles(files.value,target)
+})
 let catalogEpoch=0
 let fileEpoch=0
 let touchStart:{x:number;y:number}|null=null
@@ -1239,6 +1249,9 @@ watch(activeSession,(next,previous)=>{
   void openFile()
 },{immediate:true})
 watch([()=>route.params.protocol,()=>route.params.id],()=>{
+  const identity=activeSession.value,target=current.value
+  if(identity&&target)
+    noteViewerPosition(identity.accountId,identity.deviceId,viewerKey(target))
   void openFile()
   // A deep link from Browser may point beyond Viewer's initial 50 rows.
   // Rebuild only when the new opaque ID is not in the loaded index.
