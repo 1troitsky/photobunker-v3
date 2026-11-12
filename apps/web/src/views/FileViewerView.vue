@@ -27,6 +27,8 @@ import type {PersonalMediaCopyDraft} from '../features/browser/application/perso
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
 import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
+import {choosePhotoAspect} from '../features/browser/application/photo-aspect-presets'
+import type {PhotoAspectPreset} from '../features/browser/application/photo-aspect-presets'
 import type {CropSelection,CroppedPhoto} from '../features/browser/application/photo-crop'
 import type {PhotoAdjustments} from '../features/browser/application/photo-effects'
 import {flattenPhotoAnnotations,MAX_TEXT_MARKS,validateTextMarks} from '../features/browser/application/photo-text'
@@ -121,6 +123,7 @@ function onSheetKeydown(event:KeyboardEvent):void{
 const photoElement=ref<HTMLImageElement|null>(null)
 const cropLeft=ref(0),cropTop=ref(0),cropWidth=ref(100),cropHeight=ref(100)
 const cropTurns=ref<CropSelection['turns']>(0)
+const cropAspectPreset=ref<PhotoAspectPreset|'custom'>('original')
 const photoBrightness=ref(100),photoContrast=ref(100),photoSaturation=ref(100)
 const photoAdjustments=computed<PhotoAdjustments>(()=>({
   brightness:photoBrightness.value,contrast:photoContrast.value,
@@ -756,9 +759,36 @@ function clearCrop():void{
   cropNotice.value=''
   cropSavedId.value=null
 }
+function applyPhotoAspect(preset:PhotoAspectPreset):void{
+  const image=photoElement.value
+  if(!image||!image.complete||!image.naturalWidth||!image.naturalHeight
+    ||cropBusy.value||preview.value?.type!=='photo')return
+  try{
+    const next=choosePhotoAspect(
+      image.naturalWidth,image.naturalHeight,cropSelection.value,preset)
+    cropLeft.value=next.left;cropTop.value=next.top
+    cropWidth.value=next.width;cropHeight.value=next.height
+    cropAspectPreset.value=preset
+  }catch(e){
+    cropError.value=explain(e)
+  }
+}
+function markCropCustom():void{cropAspectPreset.value='custom'}
+function changePhotoRotation(next:CropSelection['turns']):void{
+  if(cropBusy.value||preview.value?.type!=='photo')return
+  cropTurns.value=next
+  if(cropAspectPreset.value!=='custom'
+    &&cropAspectPreset.value!=='original')
+    applyPhotoAspect(cropAspectPreset.value)
+}
+function turnPhoto(delta:-1|1):void{
+  const next=((cropTurns.value+delta+4)%4) as CropSelection['turns']
+  changePhotoRotation(next)
+}
 function setCropTurns(event:Event):void{
   const next=Number((event.target as HTMLSelectElement).value)
-  if(next===0||next===1||next===2||next===3)cropTurns.value=next
+  if(next===0||next===1||next===2||next===3)
+    changePhotoRotation(next)
 }
 const audioClipFileName=computed(()=>{
   if(!preview.value||!audioClip.value)return ''
@@ -900,6 +930,7 @@ function clearBlob():void{
   clearCrop()
   cropLeft.value=0;cropTop.value=0
   cropWidth.value=100;cropHeight.value=100;cropTurns.value=0
+  cropAspectPreset.value='original'
   photoBrightness.value=100;photoContrast.value=100;photoSaturation.value=100
   clearStill()
   clearVideoTrim()
@@ -1561,6 +1592,7 @@ function resetEditorDraft():void{
   clearCrop()
   cropLeft.value=0;cropTop.value=0
   cropWidth.value=100;cropHeight.value=100;cropTurns.value=0
+  cropAspectPreset.value='original'
   photoBrightness.value=100;photoContrast.value=100;photoSaturation.value=100
   clearAudioClip()
   trimStart.value=0
