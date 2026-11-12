@@ -19,6 +19,10 @@ import {
 import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
 import {enqueueEncryptedMedia} from '../features/media/application/media-outbox'
 import {registerSafeDerivativeCandidate} from '../features/media/application/safe-derivatives'
+import {
+  isPersonalMediaCopyChanged,validatePersonalMediaCopy,
+} from '../features/browser/application/personal-media-copy'
+import type {PersonalMediaCopyDraft} from '../features/browser/application/personal-media-copy'
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
 import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
@@ -219,6 +223,82 @@ const notice=ref('')
 const fileUrl=ref('')
 const fileBlob=ref<Blob|null>(null)
 const preview=ref<Preview|null>(null)
+const privateCopyDraft=ref<PersonalMediaCopyDraft>({
+  name:'',description:'',category:'',tags:[],
+})
+const privateCopyBusy=ref(false)
+const privateCopyError=ref('')
+const privateCopySavedId=ref<string|null>(null)
+const privateTagText=ref('')
+const privateTagEditIndex=ref<number|null>(null)
+const privateTagForm=ref(false)
+function personalDraftFromPreview(source:Preview):PersonalMediaCopyDraft{
+  return {name:source.name,description:source.description,
+    category:source.category,tags:[...source.tags]}
+}
+function resetPrivateCopyDraft():void{
+  privateCopyDraft.value=preview.value
+    ?personalDraftFromPreview(preview.value)
+    :{name:'',description:'',category:'',tags:[]}
+  privateCopyBusy.value=false
+  privateCopyError.value=''
+  privateCopySavedId.value=null
+  privateTagText.value=''
+  privateTagEditIndex.value=null
+  privateTagForm.value=false
+}
+const personalCopyEligible=computed(()=>{
+  const target=current.value,source=preview.value
+  if(!target||target.protocol!=='media'||!source||source.origin!=='local'
+    ||!activeSession.value||!fileBlob.value||!fileUrl.value)return false
+  return mediaLocal.value.some(row=>row.mediaId===target.id
+    &&!row.capture&&row.expiresAt>Date.now()
+    &&row.state!=='conflict')
+})
+const privateCopyChanged=computed(()=>!!preview.value
+  &&!privateCopySavedId.value
+  &&isPersonalMediaCopyChanged(
+    personalDraftFromPreview(preview.value),privateCopyDraft.value))
+const privateCopyValidation=computed(()=>{
+  if(!personalCopyEligible.value||!privateCopyChanged.value)return null
+  try{
+    return validatePersonalMediaCopy(
+      preview.value!.name,privateCopyDraft.value)
+  }catch{return null}
+})
+function openPrivateTagEditor(index:number|null):void{
+  privateTagEditIndex.value=index
+  privateTagText.value=index===null?'':(privateCopyDraft.value.tags[index]??'')
+  privateTagForm.value=true
+  privateCopyError.value=''
+}
+function closePrivateTagEditor():void{
+  privateTagText.value=''
+  privateTagForm.value=false
+  privateTagEditIndex.value=null
+}
+function commitPrivateTag():void{
+  if(!personalCopyEligible.value)return
+  const index=privateTagEditIndex.value
+  const next=[...privateCopyDraft.value.tags]
+  if(index!==null&&index>=0&&index<next.length)
+    next[index]=privateTagText.value.trim()
+  else next.push(privateTagText.value.trim())
+  try{
+    const valid=validatePersonalMediaCopy(preview.value!.name,{
+      ...privateCopyDraft.value,tags:next,
+    })
+    privateCopyDraft.value.tags=[...(valid.fields.tags??[])]
+    closePrivateTagEditor()
+  }catch{
+    privateCopyError.value='Тег должен быть непустым, уникальным, до 48 байт. Максимум 12 тегов.'
+  }
+}
+function removePrivateTag(index:number):void{
+  if(!personalCopyEligible.value)return
+  privateCopyDraft.value.tags=privateCopyDraft.value.tags.filter((_,i)=>i!==index)
+  closePrivateTagEditor()
+}
 const files=computed(()=>buildCatalog(
   photoLocal.value,photoCloud.value,mediaLocal.value,mediaCloud.value,
 ))
