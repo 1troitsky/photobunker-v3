@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest'
-import {cropGeometry,cropFileName} from './photo-crop'
+import {cropGeometry,fullResolutionCropGeometry,cropFileName} from './photo-crop'
 import type {CropSelection} from './photo-crop'
 
 const area:CropSelection={left:10,top:10,width:50,height:60,turns:1}
@@ -36,6 +36,39 @@ describe('Viewer non-destructive private JPEG crop and rotation',()=>{
       .toThrow('viewer.crop_invalid_region')
     for(const width of [0,-1,Infinity,100000])
       expect(()=>cropGeometry(width,100,area)).toThrow('viewer.crop_invalid_region')
+  })
+  it('preserves native >4096px and >16.8MP dimensions for real JPEG, unlike preview',()=>{
+    const region:CropSelection={
+      left:0,top:0,width:100,height:100,turns:0,
+    }
+    const preview=cropGeometry(5200,3400,region)
+    expect(preview.outputWidth).toBe(4096)
+    const final=fullResolutionCropGeometry(5200,3400,region,8)
+    expect(final).toMatchObject({
+      sx:0,sy:0,sw:5200,sh:3400,drawnWidth:5200,
+      drawnHeight:3400,outputWidth:5200,outputHeight:3400,
+    })
+    expect(final.outputWidth*final.outputHeight).toBeGreaterThan(16_777_216)
+    const rotated=fullResolutionCropGeometry(5200,3400,{...region,turns:1},8)
+    expect(rotated).toMatchObject({
+      drawnWidth:5200,drawnHeight:3400,
+      outputWidth:3400,outputHeight:5200,
+    })
+  })
+  it('fails closed instead of shrinking when native JPEG exceeds device budget',()=>{
+    const region:CropSelection={
+      left:0,top:0,width:100,height:100,turns:0,
+    }
+    for(const [w,h,memory] of [[5200,3400,2],[9000,2000,8],[6000,5000,8]]){
+      expect(()=>fullResolutionCropGeometry(w!,h!,region,memory!))
+        .toThrow('viewer.photo_export_exceeds_safe_budget')
+    }
+    // A large SOURCE may still produce a safe native crop.
+    const safe=fullResolutionCropGeometry(12000,5000,{
+      left:25,top:25,width:25,height:25,turns:0,
+    },8)
+    expect(safe.outputWidth).toBe(3000)
+    expect(safe.outputHeight).toBe(1250)
   })
   it('creates short private filenames with no OS path separators',()=>{
     expect(cropFileName('../PRIVATE\\photo.jpg',area))
