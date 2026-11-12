@@ -529,3 +529,49 @@ describe('P2-SECURITY #260 GPS consent revocation and in-flight privacy',()=>{
     expect(host.textContent).not.toContain('GPS получен')
   })
 })
+
+
+describe('P2-SECURITY #260 recording consent boundary',()=>{
+  it('discards an audio recording when geolocation is revoked after recording started',async()=>{
+    const point={latitude:38.487329,longitude:-122.893741,accuracy:4.5}
+    Object.defineProperty(navigator,'geolocation',{
+      configurable:true,value:{getCurrentPosition:(success:PositionCallback)=>
+        success({coords:point,timestamp:Date.now()} as GeolocationPosition)},
+    })
+    class Recorder{
+      static isTypeSupported(){return true}
+      state:'inactive'|'recording'='inactive'
+      ondataavailable:((event:{data:Blob})=>void)|null=null
+      onstop:(()=>void)|null=null
+      onerror:(()=>void)|null=null
+      start(){this.state='recording'}
+      stop(){this.state='inactive';this.onstop?.()}
+    }
+    const instances:Recorder[]=[]
+    class RecorderFactory extends Recorder{
+      constructor(_stream:MediaStream,_options:{mimeType:string}){
+        super();instances.push(this)
+      }
+    }
+    vi.stubGlobal('MediaRecorder',RecorderFactory)
+    await mount()
+    const photo=media();requests[0]!.resolve(photo.stream);await settle()
+    const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    mode.value='audio';mode.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const audio=media();requests[1]!.resolve(audio.stream);await settle()
+    button('Получить GPS').click();await settle()
+    expect(host.textContent).toContain('GPS получен')
+    button('Начать запись аудио').click();await settle()
+    expect(instances).toHaveLength(1)
+    expect(instances[0]!.state).toBe('recording')
+    instances[0]!.ondataavailable?.({data:new Blob([new Uint8Array(256)])})
+    Object.defineProperty(navigator,'permissions',{
+      configurable:true,value:{query:vi.fn(async()=>({state:'denied'}))},
+    })
+    button('Остановить запись').click();await settle()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(host.textContent).toContain('camera.gps_permission_revoked')
+    expect(audio.track.stop).toHaveBeenCalledTimes(1)
+  })
+})
