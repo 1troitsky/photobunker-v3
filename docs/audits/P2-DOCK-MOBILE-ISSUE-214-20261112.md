@@ -3,8 +3,19 @@
 **Date:** 2026-11-12  
 **Lane:** QA-only; change to App Shell, AppearanceView, router, stored identity, MediaFile, E2EE, ACL, TTL or approved UX source is **forbidden**.  
 **Base:** integrated and verified #187 @ `7a309508cc140897ae6dd75f8d473a89c7296be2`. Not stale main and not the newer product/other-agent branches.  
-**New test:** `tests/e2e/p2-dock-mobile-acceptance.spec.ts`.  
-**Status:** exact-head CI PENDING.
+**New test:** `tests/e2e/p2-settings-dock-mobile-acceptance.spec.ts`.  
+**Status:** exact-head CI PENDING (after correcting Playwright test discovery).
+
+**QA discovery correction:** initial PR head `9cebee24` showed 60/60
+Chromium E2E PASS, but this was the preexisting suite. The test was
+misnamed `p2-dock-mobile-acceptance.spec.ts` and **not discovered**
+by `tests/playwright.config.ts` `testMatch` (only
+`p1-*.spec.ts`, `p2-browser-*.spec.ts`,
+`p2-settings-*.spec.ts`). The untracked test was moved unchanged to
+`p2-settings-dock-mobile-acceptance.spec.ts`. No suite allowlist,
+shared CI configuration or runtime changes were made.
+**Require at least 63 tests (previous 60 + 3 new) on the new exact head**.
+Do NOT cite 60/60 as #214 acceptance.
 
 ## Source-derived acceptance and actual product constraints
 
