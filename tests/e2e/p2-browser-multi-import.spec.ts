@@ -88,7 +88,7 @@ test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selecte
         bubbles:true,cancelable:true,dataTransfer:transfer,
       }))
     })
-    await expect(importPanel.getByText(/Зашифровано на устройстве 1 из 1 файлов/))
+    await expect(importPanel.getByText(/Файл зашифрован и сохранён на устройстве/))
       .toBeVisible({timeout:30000})
     await expect(rows).toHaveCount(3,{timeout:20000})
     await context.setOffline(false)
