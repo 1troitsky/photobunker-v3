@@ -14,6 +14,8 @@ import type {
 import type { MediaMetadata } from '../domain/media-crypto'
 import type { GPSFix } from '../../photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../../assignments/domain/advanced-rules'
+import { appendAuthenticatedCatalogPage }
+  from '../../browser/application/authenticated-catalog-page'
 const emit=defineEmits<{(event:'catalog-change'):void}>()
 const local=ref<StoredMedia[]>([])
 const cloud=ref<CloudMedia[]>([])
@@ -21,6 +23,8 @@ const cursor=ref<string|null>(null)
 const selectedUrl=ref('')
 const metadata=ref<MediaMetadata|null>(null)
 const busy=ref(false)
+const pagingBusy=ref(false)
+let catalogEpoch=0
 const privateCategory=ref('')
 const privateDescription=ref('')
 const privateTags=ref('')
@@ -58,20 +62,32 @@ function explanation(e:unknown):string{
   return e instanceof Error?e.message:'media.unavailable'
 }
 async function refresh():Promise<void>{
+  const token=++catalogEpoch
   const session=activeSession.value
+  pagingBusy.value=false
   if(!session){local.value=[];cloud.value=[];cursor.value=null;return}
-  const own=await listLocalMedia()
-  if(activeSession.value!==session)return
-  local.value=own
-  if(session.online){
-    try{
-      const result=await listCloudMedia()
-      if(activeSession.value!==session)return
-      cloud.value=result.items;cursor.value=result.nextCursor
-    }catch(e){
-      if(activeSession.value===session)error.value=explanation(e)
-    }
-  }else{cloud.value=[];cursor.value=null}
+  try{
+    const own=await listLocalMedia()
+    if(activeSession.value!==session||token!==catalogEpoch)return
+    local.value=own
+    if(session.online&&(typeof navigator==='undefined'||navigator.onLine!==false)){
+      try{
+        const response=await listCloudMedia()
+        if(activeSession.value!==session||token!==catalogEpoch)return
+        const checked=appendAuthenticatedCatalogPage(
+          [],response,null,(item:CloudMedia)=>item.mediaId)
+        cloud.value=checked.items;cursor.value=checked.nextCursor
+      }catch(e){
+        // Never replace earlier trusted entries/cursor with a failed or
+        // malformed server page, even when the account stays unchanged.
+        if(activeSession.value===session&&token===catalogEpoch)
+          error.value=explanation(e)
+      }
+    }else{cloud.value=[];cursor.value=null}
+  }catch(e){
+    if(activeSession.value===session&&token===catalogEpoch)
+      error.value=explanation(e)
+  }
 }
 async function chooseFile(event:Event):Promise<void>{
   const element=event.target as HTMLInputElement
@@ -120,17 +136,29 @@ async function preview(id:string,source:'local'|'cloud'):Promise<void>{
   finally{busy.value=false}
 }
 async function more():Promise<void>{
-  if(!cursor.value||busy.value)return
-  const session=activeSession.value
-  busy.value=true
+  const after=cursor.value,session=activeSession.value
+  if(!after||!session?.online||busy.value||pagingBusy.value)return
+  const token=++catalogEpoch
+  pagingBusy.value=true
+  error.value=''
   try{
-    const page=await listCloudMedia(cursor.value)
-    if(activeSession.value!==session)return
-    cloud.value.push(...page.items);cursor.value=page.nextCursor
-  }catch(e){error.value=explanation(e)}
-  finally{busy.value=false}
+    const response=await listCloudMedia(after)
+    if(activeSession.value!==session||token!==catalogEpoch)return
+    // Validate against the same cursor captured BEFORE the request.
+    // A network response from a superseded refresh cannot append files.
+    const checked=appendAuthenticatedCatalogPage(
+      cloud.value,response,after,(item:CloudMedia)=>item.mediaId)
+    cloud.value=checked.items;cursor.value=checked.nextCursor
+  }catch(e){
+    if(activeSession.value===session&&token===catalogEpoch)
+      error.value=explanation(e)
+  }finally{
+    if(token===catalogEpoch)pagingBusy.value=false
+  }
 }
 watch(activeSession,(next,previous)=>{
+  ++catalogEpoch
+  pagingBusy.value=false
   // Changing connectivity or refreshing auth replaces the Session object.
   // Never erase a user's typed private import metadata on the SAME device:
   // this form is Local-First and may be completed fully offline.
@@ -146,7 +174,7 @@ watch(activeSession,(next,previous)=>{
   void refresh()
 })
 onMounted(()=>{detach=attachMediaOutboxLifecycle();void refresh()})
-onUnmounted(()=>{detach();clearPreview()})
+onUnmounted(()=>{++catalogEpoch;detach();clearPreview()})
 </script>
 
 <template>
@@ -204,7 +232,8 @@ onUnmounted(()=>{detach();clearPreview()})
       </div>
       <button type="button" :disabled="busy" @click="preview(row.mediaId,'cloud')">Проверить из облака</button>
     </div>
-    <button v-if="cursor" type="button" :disabled="busy" @click="more">Ещё файлы</button>
+    <button v-if="cursor" type="button" :disabled="busy||pagingBusy"
+      data-testid="media-import-more" @click="more">Ещё файлы</button>
     <MediaSharePanel :local-media="local" @open-media="previewReceived"/>
     <MediaVersionPanel :local-media="local"/>
     <div v-if="selectedUrl&&metadata" class="foundation-card" data-testid="media-decrypted-preview">
