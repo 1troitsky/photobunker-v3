@@ -47,6 +47,10 @@ test('P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save
       .getByRole('button',{name:'Принять'})).toBeDisabled()
     await page.getByTestId('file-editor-tabs').getByRole('button',
       {name:'Фото'}).click()
+    // Verify true Local-First queuing, not a race with Garage's fast ACK.
+    // The source was decrypted before going offline; no server call is
+    // needed to edit and enqueue a separate encrypted derivative.
+    await context.setOffline(true)
 
     // Compose actual JPEG pixels. Save is NOT available until a derivative
     // is prepared, and an unsaved original must never be silently discarded.
