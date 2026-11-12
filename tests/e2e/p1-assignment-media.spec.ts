@@ -637,9 +637,13 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       if(!local?.capture)throw Error('photo.p2_camera_capture_missing')
       const p=JSON.parse(local.capture.contract)
       const decrypted=await media.readLocalMedia(local.mediaId)
+      const digest=await crypto.subtle.digest('SHA-256',
+        await decrypted.blob.arrayBuffer())
+      const plaintextSha256=Array.from(new Uint8Array(digest))
+        .map(b=>b.toString(16).padStart(2,'0')).join('')
       return {
         mediaId:local.mediaId,type:local.mediaType,
-        mime:decrypted.blob.type,bytes:decrypted.blob.size,
+        mime:decrypted.blob.type,bytes:decrypted.blob.size,plaintextSha256,
         assignmentId:p.assignmentId,
         mediaContractHash:p.mediaContractHash,mediaType:p.mediaType,
         policyRevision:p.policyRevision,capturedAt:p.startedAt,
@@ -705,10 +709,15 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     const photoReceived=await A.evaluate(async id=>{
       const g=await import('/src/features/media/application/media-grants.ts')
       const data=await g.readReceivedMediaGrant(id)
+      const digest=await crypto.subtle.digest('SHA-256',
+        await data.blob.arrayBuffer())
+      const plaintextSha256=Array.from(new Uint8Array(digest))
+        .map(b=>b.toString(16).padStart(2,'0')).join('')
       return {type:data.blob.type,bytes:data.blob.size,
-        metadata:data.metadata}
+        metadata:data.metadata,plaintextSha256}
     },p2CameraReceipt.item.mediaGrantId)
     expect(photoReceived.type).toBe('image/jpeg')
+    expect(photoReceived.plaintextSha256).toBe(cameraPhoto.plaintextSha256)
     expect(photoReceived.bytes).toBeGreaterThan(128)
     expect(photoReceived.metadata.description).toBe('PRIVATE-P2-CAMERA-PHOTO')
     expect(photoReceived.metadata.gps).toMatchObject({
