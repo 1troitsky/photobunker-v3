@@ -54,7 +54,7 @@ describe('P2 private paint stroke safety',()=>{
     drawPhotoStrokes(ctx,320,240,[dot])
     expect(ctx.arc).toHaveBeenCalledOnce()
     expect(ctx.fill).toHaveBeenCalledOnce()
-    expect(()=>drawPhotoStrokes(ctx,6000,240,[stroke]))
+    expect(()=>drawPhotoStrokes(ctx,8193,240,[stroke]))
       .toThrow('viewer.stroke_invalid_canvas')
   })
 })
