@@ -721,7 +721,8 @@ async function refreshIndex():Promise<void>{
         if(!relevant())return
         photoCloud.value=checked.items
         photoCursor.value=checked.nextCursor
-        if('found' in checked&&!checked.found&&!checked.complete)
+        if('found' in checked&&!checked.found
+          &&'complete' in checked&&checked.complete===false)
           indexIncomplete.value=true
       }catch(e){
         if(!relevant())return
@@ -741,7 +742,8 @@ async function refreshIndex():Promise<void>{
         if(!relevant())return
         mediaCloud.value=checked.items
         mediaCursor.value=checked.nextCursor
-        if('found' in checked&&!checked.found&&!checked.complete)
+        if('found' in checked&&!checked.found
+          &&'complete' in checked&&checked.complete===false)
           indexIncomplete.value=true
       }catch(e){
         if(!relevant())return
