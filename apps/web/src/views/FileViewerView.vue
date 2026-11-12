@@ -1466,20 +1466,57 @@ function download():void{
   anchor.click()
   anchor.remove()
 }
-// The dedicated editor is a screen, not a separate media backend. Save only
-// the already prepared, separately encrypted derivative; never claim an
-// upload ACK, mutate the original or silently persist edited metadata.
-const editorReady=computed(()=>{
-  if(!editorMode.value||!activeSession.value||!fileUrl.value||!preview.value
-    ||busy.value)return false
-  if(preview.value.type==='photo')
-    return !!cropResult.value&&!cropBusy.value&&!showBefore.value
-      &&!cropSavedId.value
-  if(preview.value.type==='audio')
-    return !!audioClip.value&&!audioClipBusy.value&&!audioClipSavedId.value
-  return !!still.value&&!stillBusy.value&&!stillSavedId.value
-})
-const editorUnsaved=computed(()=>{
+// This is not an in-place metadata revision. Copying private metadata is
+// an explicit new AES-GCM MediaFile, reauthenticated against a LOCAL personal
+// source at commit time. No assignment capture, GPS, ACL or TTL inheritance.
+async function savePersonalMetadataCopy():Promise<void>{
+  const session=activeSession.value,target=current.value,source=preview.value
+  const epoch=fileEpoch,checked=privateCopyValidation.value
+  if(!session||!target||target.protocol!=='media'||!source||!checked
+    ||!editorMode.value||!personalCopyEligible.value||privateCopyBusy.value)
+    return
+  if(!window.confirm(
+    'Создать отдельную личную зашифрованную копию с новыми данными? '
+    +'Оригинал, права задания, GPS и срок хранения не изменятся и не наследуются. '
+    +'Копия будет иметь собственный срок хранения и ключ шифрования.'
+  ))return
+  privateCopyBusy.value=true;privateCopyError.value=''
+  try{
+    const rows=await listLocalMedia()
+    if(!sameSession(session,epoch)||!editorMode.value||!current.value
+      ||current.value.id!==target.id)return
+    const eligible=rows.find(row=>row.mediaId===target.id
+      &&!row.capture&&row.expiresAt>Date.now()
+      &&row.state!=='conflict')
+    if(!eligible)throw Error('copy.source_not_personal')
+    // Re-read/decrypt the source with its original owner key. An arbitrary
+    // Viewer blob URL is not an authorization to clone other people's files.
+    const original=await readLocalMedia(target.id)
+    if(!sameSession(session,epoch)||!editorMode.value||!current.value
+      ||current.value.id!==target.id)return
+    if(original.metadata.fileName!==source.name
+      ||original.metadata.mime!==source.mime
+      ||original.blob.size!==eligible.plainBytes)
+      throw Error('copy.source_changed')
+    const id=await enqueueEncryptedMedia(
+      new File([original.blob],checked.name,{type:original.metadata.mime}),
+      undefined,checked.fields,
+    )
+    if(!sameSession(session,epoch)||!editorMode.value||!current.value
+      ||current.value.id!==target.id)return
+    privateCopySavedId.value=id
+    notice.value='Личная копия зашифрована в локальной очереди Browser. '
+      +'Исходный файл не изменён. Подтверждение облака отдельно.'
+    void refreshIndex()
+    await returnFromEditor()
+  }catch(e){
+    if(sameSession(session,epoch)&&editorMode.value)
+      privateCopyError.value=explain(e)
+  }finally{
+    if(sameSession(session,epoch))privateCopyBusy.value=false
+  }
+}
+const editorMediaUnsaved=computed(()=>{
   if(!editorMode.value||!preview.value)return false
   if(preview.value.type==='photo'){
     if(cropSavedId.value)return false
@@ -1500,6 +1537,26 @@ const editorUnsaved=computed(()=>{
     ||(videoDuration.value>0&&(videoTrimStart.value>0.001
       ||Math.abs(videoTrimEnd.value-videoDuration.value)>0.051))
 })
+// Never silently lose an edited metadata tab or save one half of a mixed
+// draft. Separate derivative save and metadata-copy save are intentional
+// independent operations, NOT one transactional in-place revision.
+const editorReady=computed(()=>{
+  if(!editorMode.value||!activeSession.value||!fileUrl.value||!preview.value
+    ||busy.value||privateCopyBusy.value||privateTagForm.value)return false
+  if(editorTab.value==='review')return false
+  if(editorTab.value==='info')
+    return !!privateCopyValidation.value&&!editorMediaUnsaved.value
+  if(privateCopyChanged.value)return false
+  if(preview.value.type==='photo')
+    return !!cropResult.value&&!cropBusy.value&&!showBefore.value
+      &&!cropSavedId.value
+  if(preview.value.type==='audio')
+    return !!audioClip.value&&!audioClipBusy.value&&!audioClipSavedId.value
+  return !!still.value&&!stillBusy.value&&!stillSavedId.value
+})
+const editorUnsaved=computed(()=>editorMode.value
+  &&(privateCopyChanged.value||editorMediaUnsaved.value
+    ||(privateTagForm.value&&privateTagText.value.trim().length>0)))
 function resetEditorDraft():void{
   clearTextMarks()
   clearCrop()
@@ -1531,6 +1588,7 @@ async function cancelEditor():Promise<void>{
 }
 async function saveEditor():Promise<void>{
   if(!editorReady.value||!editorMode.value||!preview.value||!current.value)return
+  if(editorTab.value==='info'){await savePersonalMetadataCopy();return}
   const before=viewerKey(current.value)
   const kind=preview.value.type
   if(kind==='photo')await saveCroppedPhoto()
@@ -1624,6 +1682,8 @@ watch([()=>route.params.protocol,()=>route.params.id],()=>{
 // Browser history Back, the shell dock and the explicit breadcrumb all
 // converge here. Never put a private search term or folder path into a URL.
 onBeforeRouteLeave((to)=>{
+  if(editorMode.value&&privateCopyBusy.value&&!privateCopySavedId.value)
+    return false
   if(editorMode.value&&editorUnsaved.value){
     if(!window.confirm('Отменить несохранённые изменения файла? Исходный файл останется без изменений.'))
       return false
