@@ -447,3 +447,128 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .browser-archive-preferences .muted{font-size:12px;margin:0}
 .browser-archive-pref-actions{display:flex;gap:10px;flex-wrap:wrap}
 .browser-archive-pref-actions button{min-height:38px}
+
+/*
+ * P2 V-41: owner-accepted File Viewer 1.0 geometry (PB2 PR #56 §1).
+ * The existing App.vue is the ONLY 64px header / 82px dock. This scene
+ * owns exactly 45px path / flexible media / 114px summary / 57px actions /
+ * 48px pager inside the already bounded shell main. Editors are in a
+ * separate sheet and cannot push the scene or global dock around.
+ */
+.shell-main-viewer{overflow:hidden;min-height:0}
+.shell-main-viewer .file-viewer{
+  position:relative;height:100%;width:100%;min-height:0;max-width:none;
+  padding:0;margin:0;overflow:hidden;background:#101110
+}
+.file-viewer-fixed{
+  height:100%;width:100%;min-height:0;min-width:0;display:grid;overflow:hidden;
+  grid-template-rows:45px minmax(0,1fr) 114px 57px 48px
+}
+.file-viewer-fixed .file-viewer-path{
+  display:flex;flex-wrap:nowrap;align-items:center;min-height:0;min-width:0;
+  gap:8px;padding:0 13px;margin:0;border:0;background:transparent
+}
+.file-viewer-fixed .file-viewer-back{
+  flex:0 0 38px;height:38px;display:grid;place-items:center;color:#ddd;
+  text-decoration:none;font-size:24px
+}
+.file-viewer-path-name{flex:1;min-width:0;overflow:hidden;white-space:nowrap;
+  text-overflow:ellipsis;color:#ddd;font-size:12px}
+.file-viewer-fixed .file-viewer-path button{
+  flex:0 0 auto;min-height:34px;padding:4px 8px;border:0;background:none;
+  font-size:12px;color:var(--accent)
+}
+.file-viewer-fixed .file-viewer-stage{
+  width:100%;height:100%;min-height:0;min-width:0;border:0;border-radius:0;
+  padding:0;overflow:hidden;background:#090b0b;position:relative
+}
+.file-viewer-fixed .file-viewer-stage:fullscreen{
+  width:100vw;height:100dvh;min-height:0;background:#000
+}
+.file-viewer-stage-fullscreen{
+  position:absolute;right:12px;top:12px;z-index:3;
+  width:37px;height:37px;min-height:37px!important;padding:0!important;
+  background:#191919c9!important;border:1px solid #666!important
+}
+.file-viewer-summary{
+  box-sizing:border-box;min-width:0;min-height:0;height:114px;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;
+  grid-template-rows:23px 45px minmax(0,1fr);gap:0 8px;
+  padding:8px 14px 5px;overflow:hidden;background:#171717;
+  border-top:1px solid #2e2e2e;font-size:12px
+}
+.file-viewer-summary-name{min-width:0;font-size:15px;font-weight:760;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-viewer-summary-id{font:10px/22px ui-monospace,monospace;color:#aaa;white-space:nowrap}
+.file-viewer-summary-description{grid-column:1/-1;color:#bebebe;
+  line-height:18px;margin:3px 0 0;overflow:hidden;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.file-viewer-summary-dates{grid-column:1/-1;display:flex;gap:8px;
+  align-items:center;justify-content:space-between;overflow:hidden;
+  color:#c4c4c4;font-size:11px}
+.file-viewer-summary-dates span{white-space:nowrap;min-width:0;overflow:hidden;
+  text-overflow:ellipsis}
+.file-viewer-actions{
+  height:57px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;padding:5px 12px;background:#171717;min-width:0
+}
+.file-viewer-fixed .file-viewer-actions button{
+  min-width:0;min-height:0;height:47px;padding:0 3px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;border:0;border-radius:6px;
+  background:#292929;font-size:11px;font-weight:650
+}
+.file-viewer-fixed .file-viewer-actions button:disabled{
+  opacity:.55;cursor:not-allowed
+}
+.file-viewer-fixed .file-viewer-navigation{
+  box-sizing:border-box;height:48px;min-height:0;display:flex;align-items:center;
+  justify-content:center;gap:24px;padding:0;background:#171717
+}
+.file-viewer-fixed .file-viewer-navigation button{
+  min-height:40px;width:44px;height:40px;padding:0;border:0;
+  border-radius:0;background:transparent
+}
+.file-viewer-fixed .file-viewer-navigation span{
+  min-width:92px;font-variant-numeric:tabular-nums
+}
+.file-viewer-overlay{
+  position:absolute;z-index:30;inset:0;display:flex;align-items:flex-end;
+  justify-content:center;background:#000b;overflow:hidden
+}
+.file-viewer-sheet{
+  box-sizing:border-box;display:flex;flex-direction:column;
+  width:min(100%,960px);max-height:86%;min-height:145px;overflow:hidden;
+  background:#292929;color:#f4f4f4;border-radius:13px 13px 0 0;
+  border:1px solid #454545;border-bottom:0;box-shadow:0 -9px 40px #0009
+}
+.file-viewer-sheet-heading{
+  flex:0 0 54px;display:flex;align-items:center;justify-content:space-between;
+  gap:12px;padding:6px 16px;border-bottom:1px solid #454545
+}
+.file-viewer-sheet-heading h2{font-size:16px;line-height:1.3;margin:0}
+.file-viewer-sheet-heading button{min-height:36px;padding:6px 11px}
+.file-viewer-sheet-body{flex:1;min-height:0;overflow-y:auto;
+  overscroll-behavior:contain;padding:0 16px 22px}
+.file-viewer-editor-sections{display:grid;gap:0}
+.file-viewer-sheet .file-viewer-information{margin:0;max-width:100%}
+.file-viewer-feedback{
+  position:absolute;z-index:9;top:45px;left:8px;right:8px;max-height:42%;
+  overflow-y:auto;pointer-events:none;display:grid;gap:4px
+}
+.file-viewer-feedback>p,.file-viewer-feedback>button{
+  pointer-events:auto;justify-self:start;background:#222f;
+  border:1px solid #515151;border-radius:7px;padding:8px;margin:0;
+  font-size:11px;max-width:100%;overflow-wrap:anywhere
+}
+@media(max-width:480px){
+  .file-viewer-fixed .file-viewer-path{padding:0 8px;gap:4px}
+  .file-viewer-summary{padding-inline:11px}
+  .file-viewer-actions{padding-inline:8px}
+  .file-viewer-fixed .file-viewer-navigation{gap:10px}
+  .file-viewer-summary-name{font-size:14px}
+}
+@media(prefers-reduced-motion:no-preference){
+  .file-viewer-sheet{animation:viewer-sheet-enter .22s ease-out}
+  @keyframes viewer-sheet-enter{from{transform:translateY(20px);opacity:.72}
+    to{transform:translateY(0);opacity:1}}
+}
