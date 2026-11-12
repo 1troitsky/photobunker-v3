@@ -20,6 +20,7 @@ Additionally, `preflightAssignmentMediaGrant()` and `queueAssignmentMediaSubmiss
 ## Acceptance
 
 - Vitest fake IndexedDB v4: a locally verified removal denies new AV `signedMediaCaptureIntent`, new P2 photo/video/audio assignment submission and preflight E2EE share offline, before any stale policy/network attempt. Personal local assignment/outbox remains intact. Other accounts and assignments are not blocked. No mock owner signature promoted to authority.
+- Chromium A↔B integration: owner A signs and server ACKs real contributor-removal; recipient B, with independently confirmed owner key, verifies signed removal and commits tombstone; subsequent AV capture, P2 camera photo submission and grant preflight deny `assignment.member_removed`; full encrypted MediaFile list and pre-existing signed outbox operation IDs remain unchanged.
 - Exact-head PHP 8.4/8.5, Vue TypeScript/Vitest/build, Security workflow and real PostgreSQL 18/Garage/Chromium full suite must pass.
 - No physical Safari/iOS/Android acceptance, race across *independent* IndexedDB databases claimed to be atomic, or real hardware camera/GPS attestation. The final E2EE MediaFile encryption uses its own storage DB; server per-read access controls remain the definitive defense if removal happens after a media capture snapshot.
 
