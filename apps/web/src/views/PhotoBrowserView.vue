@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
+import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
 import {RouterLink} from 'vue-router'
 import SharePanel from '../features/sharing/SharePanel.vue'
 import MediaImportPanel from '../features/media/ui/MediaImportPanel.vue'
@@ -21,6 +21,9 @@ import {loadBoundedCatalogIndex}
   from '../features/browser/application/bounded-catalog-expansion'
 import {appendAuthenticatedCatalogPage}
   from '../features/browser/application/authenticated-catalog-page'
+import {
+  rememberBrowserViewerReturn,takeBrowserViewerReturn,
+} from '../features/browser/application/volatile-viewer-return'
 import type {PrivateSearchResult}
   from '../features/browser/application/private-search'
 import type {CatalogFilter,CatalogSort,CatalogView,CatalogItem} from '../features/browser/application/catalog'
@@ -115,6 +118,8 @@ const mergePreview=computed(()=>mergePlan.value
   ?previewFolderConflict(mergePlan.value,mergeChoices.value):null)
 const mergeBackups=ref<Omit<FolderConflictBackup,'row'>[]>([])
 const selectedFolder=ref<string|null>(null)
+let returnFocusKey:string|null=null
+let returnScrollTop:number|null=null
 const createFolderOpen=ref(false)
 const newFolderName=ref('')
 const editingFolderId=ref<string|null>(null)
@@ -733,8 +738,9 @@ async function syncFoldersCloud():Promise<void>{
     if(epoch===folderSyncEpoch)folderSyncBusy.value=false
   }
 }
-async function loadFolders():Promise<void>{
+async function loadFolders(preferredFolder?:string|null):Promise<void>{
   const session=activeSession.value,epoch=++folderEpoch
+  const restore=preferredFolder===undefined?selectedFolder.value:preferredFolder
   folderWorkspace.value=emptyWorkspace()
   folderReady.value=false
   folderError.value=''
@@ -747,6 +753,7 @@ async function loadFolders():Promise<void>{
     const next=await loadFolderWorkspace()
     if(session!==activeSession.value||epoch!==folderEpoch)return
     folderWorkspace.value=next
+    if(restore&&next.folders[restore])selectedFolder.value=restore
   }catch(e){
     if(session===activeSession.value&&epoch===folderEpoch)
       folderError.value='Не удалось расшифровать локальные папки: '+reason(e)
@@ -864,6 +871,19 @@ function revokePreview():void{
   selectedGps.value=null
   selectedCaptured.value=null
   selectedExpiry.value=null
+}
+function rememberViewerNavigation(item:CatalogItem,event:MouseEvent):void{
+  // A modified click opens a different tab: no private snapshot here.
+  if(event.button!==0||event.metaKey||event.ctrlKey
+    ||event.shiftKey||event.altKey)return
+  const main=document.querySelector<HTMLElement>('.shell-main')
+  rememberBrowserViewerReturn({
+    folderId:selectedFolder.value,filter:filter.value,sort:sort.value,
+    view:view.value,query:search.value,searchScope:searchFolderScope.value,
+    archiveTab:archiveTab.value,expandedSearch:privateSearchExpanded.value,
+    focusKey:item.key,
+    scrollTop:Math.round(Math.max(0,main?.scrollTop??0)),
+  })
 }
 function clearCatalog():void{
   ++privateExpansionEpoch
@@ -1099,9 +1119,38 @@ watch([search,archiveTab],()=>{
   privateExpansionStatus.value=''
 })
 onMounted(()=>{
+  const restored=takeBrowserViewerReturn()
+  if(restored){
+    filter.value=restored.filter;sort.value=restored.sort
+    view.value=restored.view;search.value=restored.query
+    searchFolderScope.value=restored.searchScope
+    archiveTab.value=restored.archiveTab
+    privateSearchExpanded.value=restored.expandedSearch
+    returnFocusKey=restored.focusKey
+    returnScrollTop=restored.scrollTop
+  }
   schedulePrivateSearch()
-  void loadFolders();void loadMergeBackups();void loadArchivePrefState()
+  void loadFolders(restored?.folderId??null)
+  void loadMergeBackups();void loadArchivePrefState()
   void refreshArchivePending();void refresh()
+})
+watch([visible,folderReady,busy,privateSearchBusy],async()=>{
+  if(!returnFocusKey||busy.value||privateSearchBusy.value
+    ||!folderReady.value)return
+  await nextTick()
+  if(!returnFocusKey)return
+  const targetTestId='browser-row-'+returnFocusKey
+  const row=Array.from(document.querySelectorAll<HTMLElement>(
+    '[data-testid^="browser-row-"]',
+  )).find(item=>item.getAttribute('data-testid')===targetTestId)
+  if(row){
+    row.scrollIntoView({block:'center',behavior:'auto'})
+    returnFocusKey=null;returnScrollTop=null
+  }else if(!photoCursor.value&&!mediaCursor.value){
+    const main=document.querySelector<HTMLElement>('.shell-main')
+    if(main&&returnScrollTop!==null)main.scrollTop=returnScrollTop
+    returnFocusKey=null;returnScrollTop=null
+  }
 })
 onUnmounted(()=>{
   ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch
@@ -1539,7 +1588,8 @@ onUnmounted(()=>{
               Удаление ожидает подтверждения GC:
               {{ archivedByKey.get(item.key)?.physicalStatus }}</span>
             <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
-              :aria-label="'Полный просмотр файла '+item.id">Просмотр</RouterLink>
+              :aria-label="'Полный просмотр файла '+item.id"
+              @click="rememberViewerNavigation(item,$event)">Просмотр</RouterLink>
             <button v-if="item.local" type="button" :disabled="previewBusy||busy"
               :aria-label="item.source==='photo'?'Открыть':'Открыть файл '+item.id"
               @click="openItem(item)">Открыть</button>
