@@ -20,7 +20,8 @@ export async function findBoundedAssignmentPolicy<T extends PolicyId>(
     const page=await fetchVerifiedPage(after??undefined)
     // Stateless per-page validation preserves early return and still
     // enforces strict cross-page monotonicity via the previous cursor.
-    const checked=appendBoundedUuidPage([],page,after,x=>x.assignmentId)
+    const checked:Page<T>=appendBoundedUuidPage<T>(
+      [],page,after,(item:T)=>item.assignmentId)
     const found=checked.items.find(x=>x.assignmentId===assignmentId)
     if(found)return found
     if(checked.nextCursor===null)return undefined
