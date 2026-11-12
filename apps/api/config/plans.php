@@ -11,6 +11,7 @@ return [
     'schema_version' => 1,
     'currency' => 'USD',
     'catalog_version' => 'pb3-2026-11-09',
+    'effective_at' => '2026-11-09T00:00:00Z',
     'storage_unit_policy' => 'OPEN_GB_VS_GIB',
     'plans' => [
         'free' => [
