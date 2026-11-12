@@ -90,9 +90,10 @@ describe('P2 V-37 client-only HTTPS file import (no proxy / credential leak)',()
         if(++read>40)controller.close()
       },
     })
-    const fake=({status:200,url:source,redirected:false,type:'cors',
-      headers:new Headers({'content-type':'audio/wav'}),body:stream}
-      as unknown as Response)
+    const fake=new Response(null,{status:200,
+      headers:{'content-type':'audio/wav'}})
+    Object.defineProperty(fake,'url',{value:source})
+    Object.defineProperty(fake,'body',{value:stream})
     await expect(downloadHttpsMedia(source,new AbortController().signal,
       ()=>true,undefined,fetcher(fake).fetch))
       .rejects.toThrow('media.link_size_limit')
