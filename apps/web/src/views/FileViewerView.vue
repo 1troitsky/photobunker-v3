@@ -47,6 +47,9 @@ import {
 } from '../features/browser/application/photo-history'
 import type {PhotoEditHistory,PhotoEditSnapshot} from '../features/browser/application/photo-history'
 import type {PhotoTextMark} from '../features/browser/application/photo-text'
+import {
+  photoInlinePoint,prepareInlineText,
+} from '../features/browser/application/photo-inline-placement'
 import type {WavClip} from '../features/browser/application/audio-wav'
 import type {VideoStill} from '../features/browser/application/video-still'
 import {buildCatalog} from '../features/browser/application/catalog'
@@ -169,6 +172,9 @@ const selectedShape=computed(()=>shapeMarks.value.find(
 let draggingShape:DragMark|null=null
 let draggingBlackout:DragMark|null=null
 const selectedTextId=ref<string|null>(null)
+const inlinePhotoText=ref<PhotoTextMark|null>(null)
+const inlineTextInput=ref<HTMLTextAreaElement|null>(null)
+const inlineTextError=ref('')
 const selectedText=computed(()=>textMarks.value.find(
   item=>item.id===selectedTextId.value)??null)
 const composedPhotoUrl=ref('')
@@ -481,6 +487,8 @@ function clearTextMarks():void{
   activePaintTool.value=null
   paintHistory.value=initialPhotoHistory()
   selectedTextId.value=null
+  inlinePhotoText.value=null
+  inlineTextError.value=''
   selectedShapeId.value=null
   draggingMark=null
   draggingShape=null
@@ -580,6 +588,76 @@ function endShapeDrag(event:PointerEvent):void{
     target.releasePointerCapture(event.pointerId)
   draggingShape=null
   commitPhotoEdit()
+}
+/** A tap on the actual visible image opens a VOLATILE text draft, not a mark.
+ * No list item or exportable annotation exists until explicit completion. */
+async function beginInlinePhotoTextAt(event:MouseEvent):Promise<void>{
+  if(!cropResult.value||cropBusy.value||showBefore.value||activePaintTool.value
+    ||textMarks.value.length>=MAX_TEXT_MARKS)return
+  if(inlinePhotoText.value){
+    commitInlinePhotoText()
+    if(inlinePhotoText.value)return
+  }
+  const target=event.currentTarget
+  if(!(target instanceof HTMLImageElement))return
+  try{
+    const {x,y}=photoInlinePoint(
+      event.clientX,event.clientY,target.getBoundingClientRect())
+    inlinePhotoText.value={
+      id:crypto.randomUUID(),text:'',x,y,size:6,color:'#ffffff',
+    }
+    inlineTextError.value=''
+    await nextTick()
+    inlineTextInput.value?.focus()
+  }catch(e){inlineTextError.value=explain(e)}
+}
+async function editInlinePhotoText(id:string):Promise<void>{
+  if(!cropResult.value||cropBusy.value||showBefore.value||activePaintTool.value)
+    return
+  const mark=textMarks.value.find(item=>item.id===id)
+  if(!mark)return
+  if(inlinePhotoText.value?.id!==id&&inlinePhotoText.value){
+    commitInlinePhotoText()
+    if(inlinePhotoText.value)return
+  }
+  selectedTextId.value=id
+  inlinePhotoText.value={...mark}
+  inlineTextError.value=''
+  await nextTick()
+  inlineTextInput.value?.focus()
+  inlineTextInput.value?.select()
+}
+function updateInlinePhotoText(event:Event):void{
+  const draft=inlinePhotoText.value
+  if(!draft)return
+  inlinePhotoText.value={
+    ...draft,text:(event.target as HTMLTextAreaElement).value,
+  }
+  inlineTextError.value=''
+}
+function cancelInlinePhotoText():void{
+  inlinePhotoText.value=null
+  inlineTextError.value=''
+}
+function commitInlinePhotoText():void{
+  const draft=inlinePhotoText.value
+  if(!draft||cropBusy.value)return
+  try{
+    const mark=prepareInlineText(draft)
+    if(mark){
+      const existing=textMarks.value.some(item=>item.id===mark.id)
+      if(!existing&&textMarks.value.length>=MAX_TEXT_MARKS)
+        throw Error('viewer.text_invalid_count')
+      replaceTextMarks(existing
+        ?textMarks.value.map(item=>item.id===mark.id?mark:item)
+        :[...textMarks.value,mark])
+      selectedTextId.value=mark.id
+    }
+    // Blank input creates no mark. Blank replacement preserves the old mark.
+    cancelInlinePhotoText()
+  }catch(e){
+    inlineTextError.value=explain(e)
+  }
 }
 function addPhotoText():void{
   if(!cropResult.value||cropBusy.value||textMarks.value.length>=MAX_TEXT_MARKS)return
@@ -1261,6 +1339,12 @@ function setComposedCrop(blob:Blob):void{
   composedPhotoUrl.value=URL.createObjectURL(blob)
 }
 async function saveCroppedPhoto():Promise<void>{
+  // A draft is deliberately not an exported mark yet. Require an explicit
+  // finish to avoid silently saving an image without typed private text.
+  if(inlinePhotoText.value){
+    inlineTextError.value='Завершите ввод надписи перед сохранением JPEG.'
+    return
+  }
   const session=activeSession.value,result=cropResult.value
   const name=croppedFileName.value
   const epoch=cropEpoch,currentEpoch=fileEpoch
@@ -1549,6 +1633,7 @@ async function savePersonalMetadataCopy():Promise<void>{
 const editorMediaUnsaved=computed(()=>{
   if(!editorMode.value||!preview.value)return false
   if(preview.value.type==='photo'){
+    if(inlinePhotoText.value?.text.trim())return true
     if(cropSavedId.value)return false
     return !!cropResult.value||!!cropBusy.value||cropLeft.value!==0
       ||cropTop.value!==0||cropWidth.value!==100||cropHeight.value!==100
@@ -1572,7 +1657,8 @@ const editorMediaUnsaved=computed(()=>{
 // independent operations, NOT one transactional in-place revision.
 const editorReady=computed(()=>{
   if(!editorMode.value||!activeSession.value||!fileUrl.value||!preview.value
-    ||busy.value||privateCopyBusy.value||privateTagForm.value)return false
+    ||busy.value||privateCopyBusy.value||privateTagForm.value
+    ||!!inlinePhotoText.value)return false
   if(editorTab.value==='review')return false
   if(editorTab.value==='info')
     return !!privateCopyValidation.value&&!editorMediaUnsaved.value
@@ -1586,6 +1672,7 @@ const editorReady=computed(()=>{
 })
 const editorUnsaved=computed(()=>editorMode.value
   &&(privateCopyChanged.value||editorMediaUnsaved.value
+    ||!!inlinePhotoText.value?.text.trim()
     ||(privateTagForm.value&&privateTagText.value.trim().length>0)))
 function resetEditorDraft():void{
   clearTextMarks()
@@ -1969,7 +2056,9 @@ onUnmounted(()=>{
               data-testid="file-viewer-photo-composition">
               <img :src="showBefore?fileUrl:(composedPhotoUrl||cropUrl)"
                 :alt="showBefore?(preview?.name??'Исходное фото'):croppedFileName"
-                data-testid="file-viewer-crop-preview" draggable="false">
+                data-testid="file-viewer-crop-preview" draggable="false"
+                :class="{'file-viewer-photo-text-target':!activePaintTool&&!showBefore}"
+                @click="beginInlinePhotoTextAt">
               <template v-if="!showBefore&&!composedPhotoUrl">
                 <svg v-for="shape in shapeMarks" :key="shape.id"
                   class="file-viewer-photo-shape-layer"
@@ -2020,6 +2109,7 @@ onUnmounted(()=>{
                     fontSize:photoTextFont(mark),color:mark.color,
                   }"
                   @click="selectPhotoText(mark.id)"
+                  @dblclick.stop="editInlinePhotoText(mark.id)"
                   @pointerdown="startPhotoTextDrag($event,mark.id)"
                   @pointermove="movePhotoTextDrag"
                   @pointerup="stopPhotoTextDrag"
@@ -2041,6 +2131,30 @@ onUnmounted(()=>{
                   @pointercancel="endBlackoutDrag">
                 </button>
               </template>
+              <div v-if="inlinePhotoText&&!showBefore"
+                class="file-viewer-photo-inline-input"
+                :class="{'align-end':inlinePhotoText.x>55}"
+                :style="{left:inlinePhotoText.x+'%',top:inlinePhotoText.y+'%'}"
+                data-testid="file-viewer-inline-text-editor">
+                <textarea ref="inlineTextInput"
+                  :value="inlinePhotoText.text"
+                  maxlength="220" rows="2"
+                  aria-label="Текст надписи на фотографии"
+                  placeholder="Текст…"
+                  data-testid="file-viewer-inline-text-input"
+                  @input="updateInlinePhotoText"
+                  @keydown.enter.exact.stop.prevent="commitInlinePhotoText"
+                  @keydown.esc.stop.prevent="cancelInlinePhotoText"
+                  @blur="commitInlinePhotoText"/>
+                <div class="file-viewer-photo-inline-actions">
+                  <button type="button" data-testid="file-viewer-inline-text-done"
+                    @pointerdown.prevent
+                    @click="commitInlinePhotoText">Готово</button>
+                  <button type="button" data-testid="file-viewer-inline-text-cancel"
+                    @pointerdown.prevent
+                    @click="cancelInlinePhotoText">Отмена</button>
+                </div>
+              </div>
             </div>
           </div>
           <p class="muted">{{ cropResult.width }} × {{ cropResult.height }}
@@ -2087,9 +2201,15 @@ onUnmounted(()=>{
                 :disabled="cropBusy||textMarks.length>=MAX_TEXT_MARKS"
                 @click="addPhotoText">Добавить текст</button>
             </div>
-            <p v-if="!textMarks.length" class="muted">Добавьте надпись.
-              Перетаскивайте её по фотографии мышью или пальцем.
-              Координаты можно изменить вручную.</p>
+            <p v-if="!textMarks.length" class="muted">
+              Нажми на фотографию, чтобы добавить текст. Пустая надпись
+              не создаётся. Для отмены ввода нажмите Escape.
+            </p>
+            <p v-else class="muted">Нажмите на свободную область фотографии,
+              чтобы создать ещё одну надпись. Двойное нажатие по существующей
+              надписи открывает редактирование прямо на изображении.</p>
+            <p v-if="inlineTextError" role="alert" class="error-text"
+              data-testid="file-viewer-inline-text-error">{{ inlineTextError }}</p>
             <div v-for="(mark,index) in textMarks" :key="mark.id"
               class="file-viewer-photo-text-row"
               :class="{selected:selectedTextId===mark.id}">
@@ -2098,6 +2218,9 @@ onUnmounted(()=>{
                 @click="selectPhotoText(mark.id)">
                 {{ mark.text||'Пустая надпись' }}
               </button>
+              <button type="button" :disabled="cropBusy"
+                :aria-label="'Редактировать надпись '+(index+1)+' на фото'"
+                @click="editInlinePhotoText(mark.id)">На фото</button>
               <button type="button" :disabled="cropBusy"
                 :data-testid="'file-viewer-delete-text-'+index"
                 :aria-label="'Удалить надпись '+(index+1)"
