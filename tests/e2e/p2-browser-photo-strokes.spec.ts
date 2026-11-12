@@ -2,7 +2,7 @@ import {expect,test} from '@playwright/test'
 
 test('P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixels',async({browser})=>{
   test.setTimeout(180000)
-  const context=await browser.newContext()
+  const context=await browser.newContext({viewport:{width:390,height:844}})
   const page=await context.newPage()
   try{
     await page.goto('/settings')
@@ -44,7 +44,31 @@ test('P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixe
     await page.getByTestId('file-viewer-create-crop').click()
     const canvas=page.getByTestId('file-viewer-photo-paint-canvas')
     await expect(canvas).toBeVisible({timeout:30000})
+    // Approved Photo Editor 3.2: three actual SVG icon tools in ONE mobile row,
+    // followed by Color + Thickness in another single horizontal row.
+    const toolKinds=['brush','pencil','eraser'] as const
+    const coords=[] as {x:number;y:number;width:number;height:number}[]
+    for(const kind of toolKinds){
+      const button=page.getByTestId('file-viewer-tool-'+kind)
+      await expect(button).toBeVisible()
+      await expect(button.locator('svg')).toHaveCount(1)
+      const box=await button.boundingBox()
+      if(!box)throw Error('tool_not_positioned_'+kind)
+      coords.push(box)
+    }
+    for(const box of coords)
+      expect(Math.abs(box.y-coords[0]!.y)).toBeLessThan(2)
+    const settings=page.getByTestId('file-viewer-photo-paint-settings')
+    await expect(settings).toBeVisible()
+    const color=await page.getByTestId('file-viewer-paint-color').boundingBox()
+    const thickness=await page.getByTestId('file-viewer-paint-width').boundingBox()
+    if(!color||!thickness)throw Error('paint_controls_not_positioned')
+    expect(Math.abs(color.y-thickness.y)).toBeLessThan(23)
+    expect(await settings.evaluate(el=>el.scrollWidth<=el.clientWidth+1))
+      .toBe(true)
     await page.getByTestId('file-viewer-tool-brush').click()
+    await expect(page.getByTestId('file-viewer-tool-brush'))
+      .toHaveAttribute('aria-pressed','true')
     await expect(page.getByTestId('file-viewer-tool-brush'))
       .toHaveClass(/selected/)
     await page.getByTestId('file-viewer-paint-color').fill('#00cc00')
@@ -64,13 +88,23 @@ test('P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixe
     }
     const x=(n:number)=>area!.x+area!.width*n/320
     const y=(n:number)=>area!.y+area!.height*n/240
-    await draw(x(40),y(100),x(280),y(100))
     const countInk=()=>canvas.evaluate((el:HTMLCanvasElement)=>{
       const data=el.getContext('2d')!.getImageData(0,0,el.width,el.height).data
       let total=0
       for(let i=3;i<data.length;i+=4)if(data[i]!>16)total++
       return total
     })
+    // Interrupt a real pointer drag as an app switch/touch cancellation.
+    // It must NOT leave an ink mark or commit an undo snapshot.
+    await page.mouse.move(x(40),y(60))
+    await page.mouse.down()
+    await page.mouse.move(x(180),y(60),{steps:9})
+    await expect.poll(countInk).toBeGreaterThan(30)
+    await canvas.dispatchEvent('pointercancel',{pointerId:1,bubbles:true})
+    await page.mouse.up()
+    await expect.poll(countInk).toBe(0)
+    await expect(page.getByTestId('file-viewer-photo-undo')).toBeDisabled()
+    await draw(x(40),y(100),x(280),y(100))
     const painted=await countInk()
     expect(painted).toBeGreaterThan(100)
     await expect(page.getByTestId('file-viewer-photo-undo')).toBeEnabled()
