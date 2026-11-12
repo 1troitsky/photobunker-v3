@@ -1331,6 +1331,12 @@ function setComposedCrop(blob:Blob):void{
   composedPhotoUrl.value=URL.createObjectURL(blob)
 }
 async function saveCroppedPhoto():Promise<void>{
+  // A draft is deliberately not an exported mark yet. Require an explicit
+  // finish to avoid silently saving an image without typed private text.
+  if(inlinePhotoText.value){
+    inlineTextError.value='Завершите ввод надписи перед сохранением JPEG.'
+    return
+  }
   const session=activeSession.value,result=cropResult.value
   const name=croppedFileName.value
   const epoch=cropEpoch,currentEpoch=fileEpoch
@@ -1619,6 +1625,7 @@ async function savePersonalMetadataCopy():Promise<void>{
 const editorMediaUnsaved=computed(()=>{
   if(!editorMode.value||!preview.value)return false
   if(preview.value.type==='photo'){
+    if(inlinePhotoText.value?.text.trim())return true
     if(cropSavedId.value)return false
     return !!cropResult.value||!!cropBusy.value||cropLeft.value!==0
       ||cropTop.value!==0||cropWidth.value!==100||cropHeight.value!==100
@@ -1642,7 +1649,8 @@ const editorMediaUnsaved=computed(()=>{
 // independent operations, NOT one transactional in-place revision.
 const editorReady=computed(()=>{
   if(!editorMode.value||!activeSession.value||!fileUrl.value||!preview.value
-    ||busy.value||privateCopyBusy.value||privateTagForm.value)return false
+    ||busy.value||privateCopyBusy.value||privateTagForm.value
+    ||!!inlinePhotoText.value)return false
   if(editorTab.value==='review')return false
   if(editorTab.value==='info')
     return !!privateCopyValidation.value&&!editorMediaUnsaved.value
@@ -1656,6 +1664,7 @@ const editorReady=computed(()=>{
 })
 const editorUnsaved=computed(()=>editorMode.value
   &&(privateCopyChanged.value||editorMediaUnsaved.value
+    ||!!inlinePhotoText.value?.text.trim()
     ||(privateTagForm.value&&privateTagText.value.trim().length>0)))
 function resetEditorDraft():void{
   clearTextMarks()
