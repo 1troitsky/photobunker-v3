@@ -51,6 +51,13 @@ test('P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder ->
     expect(externalHeaders).not.toHaveProperty('authorization')
     expect(externalHeaders).not.toHaveProperty('cookie')
     expect(externalHeaders).not.toHaveProperty('referer')
+    await expect.poll(()=>a.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      const folders=await import('/src/features/browser/application/folder-workspace.ts')
+      const rows=await media.listLocalMedia()
+      const workspace=await folders.loadFolderWorkspace()
+      return rows.filter(x=>!!workspace.placements['media:'+x.mediaId]).length
+    }),{timeout:20000}).toBe(1)
     const local=await a.evaluate(async()=>{
       const media=await import('/src/features/media/application/media-outbox.ts')
       const folders=await import('/src/features/browser/application/folder-workspace.ts')
