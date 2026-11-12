@@ -135,6 +135,70 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Все загруженные файлы проверены',{timeout:30000})
     await expect(remote).toHaveCount(0)
+
+    // V-35: the embedded MediaImportPanel is a SEPARATE catalog reader.
+    // Return one REAL signed/ciphertext-authorized row twice to mimic a
+    // stale/malicious index. The local-first UI must retain the previous
+    // authentic cloud list and cursor, rather than accepting duplicated IDs.
+    const panel=b.locator('.media-import-p1')
+    const verifiedCloud=panel.getByRole('button',{name:'Проверить из облака'})
+    await expect(verifiedCloud).toHaveCount(1,{timeout:20000})
+    let duplicateDelivered=0
+    await b.route('**/media/v1',async route=>{
+      const response=await route.fetch()
+      const data=await response.json() as {
+        items:Array<Record<string,unknown>>;nextCursor:string|null
+      }
+      if(data.items.length!==1)throw Error('expected 1 authenticated media')
+      duplicateDelivered++
+      await route.fulfill({response,contentType:'application/json',
+        body:JSON.stringify({...data,items:[data.items[0],data.items[0]]})})
+    })
+    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(panel.getByRole('alert'))
+      .toContainText('browser.invalid_cloud_catalog_page',{timeout:20000})
+    expect(duplicateDelivered).toBeGreaterThan(0)
+    await expect(verifiedCloud).toHaveCount(1)
+    await b.unroute('**/media/v1')
+    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(panel.getByRole('alert')).toHaveCount(0,{timeout:20000})
+    await expect(verifiedCloud).toHaveCount(1)
+
+    // A slow older authenticated response must NOT overwrite the newer
+    // successful refresh in the same mounted component.
+    let unlockOld!:()=>void
+    let sawOld!:()=>void
+    let servedNew!:()=>void
+    const oldPending=new Promise<void>(resolve=>{sawOld=resolve})
+    const oldGate=new Promise<void>(resolve=>{unlockOld=resolve})
+    const newFinished=new Promise<void>(resolve=>{servedNew=resolve})
+    let refreshCalls=0
+    await b.route('**/media/v1',async route=>{
+      refreshCalls++
+      if(refreshCalls===1){
+        sawOld()
+        await oldGate
+        await route.fulfill({status:200,contentType:'application/json',
+          body:JSON.stringify({items:[],nextCursor:null})})
+        return
+      }
+      const response=await route.fetch()
+      await route.fulfill({response})
+      servedNew()
+    })
+    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
+    await oldPending
+    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
+    await newFinished
+    unlockOld()
+    await expect(verifiedCloud).toHaveCount(1,{timeout:20000})
+    await b.waitForTimeout(200)
+    await expect(verifiedCloud).toHaveCount(1)
+    expect(refreshCalls).toBe(2)
+    await b.unroute('**/media/v1')
+
+    expect(requests.join('\n')).not.toContain('секретная')
+    expect(requests.join('\n')).not.toContain(secret)
   }finally{
     await aContext.close();await bContext.close()
   }
