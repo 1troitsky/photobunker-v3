@@ -1,6 +1,6 @@
 import {test,expect} from '@playwright/test'
 
-test('P2 Browser: offline multi-select AES-GCM import into selected folder persists across reload and cloud sync',async({browser})=>{
+test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selected folder persists after reload and cloud sync',async({browser})=>{
   test.setTimeout(180000)
   const context=await browser.newContext()
   const page=await context.newPage()
@@ -66,11 +66,27 @@ test('P2 Browser: offline multi-select AES-GCM import into selected folder persi
     await expect(rows).toHaveCount(0)
     await folder.click()
     await expect(rows).toHaveCount(2,{timeout:20000})
+    // Current folder becomes the NEXT import's default destination,
+    // with no need to manually browse the folder hierarchy again.
+    await expect(dest).toHaveValue(encrypted.folderId)
+    await page.evaluate(()=>{
+      const transfer=new DataTransfer()
+      transfer.items.add(new File([new Uint8Array(4096).fill(0x62)],
+        'BATCH-DROP.wav',{type:'audio/wav'}))
+      const target=document.querySelector('[data-testid="media-import-dropzone"]')
+      if(!target)throw Error('dropzone_missing')
+      target.dispatchEvent(new DragEvent('drop',{
+        bubbles:true,cancelable:true,dataTransfer:transfer,
+      }))
+    })
+    await expect(importPanel.getByText(/Зашифровано на устройстве 1 из 1 файлов/))
+      .toBeVisible({timeout:30000})
+    await expect(rows).toHaveCount(3,{timeout:20000})
     await context.setOffline(false)
     await page.reload()
     await expect(page.getByTestId('browser-v3')).toBeVisible()
     await page.getByRole('button',{name:'Project Evidence',exact:true}).click()
-    await expect(rows).toHaveCount(2)
+    await expect(rows).toHaveCount(3)
     // This is still our existing local-first encrypted outbox, not a
     // simulated server success. Require actual remote ACK for both assets.
     await page.evaluate(async()=>{
@@ -80,7 +96,7 @@ test('P2 Browser: offline multi-select AES-GCM import into selected folder persi
     await expect.poll(()=>page.evaluate(async()=>{
       const media=await import('/src/features/media/application/media-outbox.ts')
       return (await media.listLocalMedia()).filter(x=>x.state==='synced').length
-    }),{timeout:45000}).toBe(2)
+    }),{timeout:45000}).toBe(3)
   }finally{
     await context.close()
   }
