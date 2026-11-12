@@ -439,9 +439,12 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
       const identity=await import('/src/features/identity/application/session.ts')
       const current=identity.requireSession()
       identity.activeSession.value={...current,online:true}
-      // A synthetic Session replacement does NOT guarantee the server's
-      // asynchronous login proof/cookie rotation has finished.
+      // Local-first resume MAY legally return an offline session if the
+      // browser's cookie/proof was not authenticated. Before asserting a
+      // real protected 200, explicitly complete the existing signed device
+      // proof (no mocks, local-only online flag or API bypass).
       await identity.resumeExistingDevice()
+      await identity.reauthenticate()
     })
     await expect(A.locator('.assignment-detail code').first()).toBeVisible()
     // Explicitly assert the real API session, not merely client online=true.
