@@ -4,7 +4,9 @@
 
 This directory maps the **original, unmodified PB2 PR #56 UX specifications now checked into PB3** to cross-screen journeys and current PB3 runtime. The source package remains in [../ux/](../ux/). The older [../_uiux/](../_uiux/) is preserved but is not the reference for new mappings.
 
-## Read in this order
+## Cross-lane development rule
+
+**Before opening a new PB3 UX implementation PR**, read [PARALLEL-WORK-PROTOCOL.md](PARALLEL-WORK-PROTOCOL.md). Product #139/#140 already touch real File Viewer, AppShell and global styles. UX sandbox branches must not reimplement them or edit existing product files; CI guard enforces isolated file paths. This coordination document is an **operating contract**, not proof of approved new UX.\n\n## Read in this order
 
 1. [SCREEN-REGISTRY.md](SCREEN-REGISTRY.md) — 22 canonical UX areas, version, acceptance status, local PB3 source and runtime evidence. Do **not** infer an accepted screen from a similarly named legacy HTML.
 2. [NAVIGATION-MAP.md](NAVIGATION-MAP.md) — screen graph, numbered cross-screen edges, Back/overlay rules, explicit unimplemented and open edges.

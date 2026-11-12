@@ -33,7 +33,7 @@ for (const file of manifest.files) {
 const expectedDocs = [
   'README.md', 'SCREEN-REGISTRY.md', 'NAVIGATION-MAP.md',
   'INTEGRATION-CONTRACTS.md', 'USER-JOURNEYS.md', 'GAPS-AND-DECISIONS.md',
-  'VERIFY.md',
+  'VERIFY.md', 'PARALLEL-WORK-PROTOCOL.md',
 ]
 for (const name of expectedDocs) {
   const path = join(docDir, name)
