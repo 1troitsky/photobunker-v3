@@ -2412,6 +2412,86 @@ onUnmounted(()=>{
       </section>
             </div>
             <div v-show="panel==='info'||(editorMode&&editorTab==='info')">
+      <section v-if="editorMode&&preview"
+        class="file-editor-private-copy" data-testid="file-editor-private-copy">
+        <h2>Информация · личная копия</h2>
+        <p class="muted">Изменения информации создают <strong>новый личный
+          зашифрованный файл</strong>. Подписанный оригинал и задание остаются
+          без изменений. GPS, разрешения на чтение и срок хранения не
+          копируются. Подтверждение облака отдельно.</p>
+        <template v-if="personalCopyEligible">
+          <label for="personal-copy-name">Название файла</label>
+          <input id="personal-copy-name" v-model="privateCopyDraft.name"
+            type="text" maxlength="160" autocomplete="off"
+            :disabled="privateCopyBusy" data-testid="private-copy-name"/>
+          <label for="personal-copy-description">Описание</label>
+          <textarea id="personal-copy-description"
+            v-model="privateCopyDraft.description" rows="3"
+            maxlength="4000" :disabled="privateCopyBusy"
+            data-testid="private-copy-description"/>
+          <label for="personal-copy-category">Категория</label>
+          <input id="personal-copy-category" v-model="privateCopyDraft.category"
+            maxlength="64" autocomplete="off" :disabled="privateCopyBusy"
+            data-testid="private-copy-category"/>
+          <span class="file-editor-private-tag-label">Теги</span>
+          <div class="file-editor-private-tags" data-testid="private-copy-tags">
+            <span v-for="(tag,index) in privateCopyDraft.tags" :key="tag"
+              class="file-editor-private-tag">
+              <button type="button" :disabled="privateCopyBusy"
+                :aria-label="'Изменить тег '+tag"
+                @click="openPrivateTagEditor(index)">{{ tag }}</button>
+              <button type="button" :disabled="privateCopyBusy"
+                :aria-label="'Удалить тег '+tag"
+                @click="removePrivateTag(index)">×</button>
+            </span>
+            <button type="button" :disabled="privateCopyBusy
+              ||privateCopyDraft.tags.length>=12" class="file-editor-add-tag"
+              data-testid="private-copy-add-tag"
+              @click="openPrivateTagEditor(null)">Добавить тег</button>
+          </div>
+          <div v-if="privateTagForm" class="file-editor-private-tag-form"
+            data-testid="private-copy-tag-editor">
+            <label for="personal-copy-tag-text">
+              {{ privateTagEditIndex===null?'Новый тег':'Изменить тег' }}
+            </label>
+            <input id="personal-copy-tag-text" v-model="privateTagText"
+              type="text" maxlength="48" autocomplete="off"
+              data-testid="private-copy-tag-text" @keydown.enter.prevent="commitPrivateTag"/>
+            <div>
+              <button type="button" @click="commitPrivateTag">Готово</button>
+              <button type="button" @click="closePrivateTagEditor">Отмена</button>
+            </div>
+          </div>
+          <p v-if="privateCopyChanged&&!privateCopyValidation"
+            class="error-text" data-testid="private-copy-invalid">
+            Проверьте название, описание, категорию и теги.
+            Расширение файла менять нельзя; до 12 уникальных тегов.
+          </p>
+          <p v-if="privateCopyChanged&&editorMediaUnsaved"
+            class="error-text" data-testid="private-copy-mixed-warning">
+            Есть также несохранённые правки медиа. Нельзя сохранить лишь
+            часть изменений: завершите или отмените одну операцию, затем другую.
+          </p>
+          <p v-if="privateTagForm" class="muted">
+            Сначала подтвердите или отмените изменение тега.
+          </p>
+          <p v-if="privateCopyChanged&&!editorMediaUnsaved
+              &&!!privateCopyValidation" class="muted"
+            data-testid="private-copy-save-hint">
+            Нажмите «Сохранить» в шапке для создания новой E2EE-копии.
+            Действие потребует подтверждения.
+          </p>
+        </template>
+        <p v-else class="muted" data-testid="private-copy-unavailable">
+          Изменение информации недоступно: требуется подтверждённый
+          локальный личный MediaFile. Для файлов заданий, облачных
+          источников и просроченных файлов нужна отдельная проверенная
+          серверная политика. Исходные сведения доступны ниже только для чтения.
+        </p>
+        <p v-if="privateCopyBusy" role="status">Шифруем отдельную копию…</p>
+        <p v-if="privateCopyError" class="error-text" role="alert"
+          data-testid="private-copy-error">{{ privateCopyError }}</p>
+      </section>
       <div v-if="preview" class="file-viewer-information" data-testid="file-viewer-info">
         <div class="file-viewer-info-heading">
           <div>
