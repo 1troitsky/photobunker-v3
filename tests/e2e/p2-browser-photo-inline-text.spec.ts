@@ -109,9 +109,43 @@ test('P2 V-49: tap a photo to type text inline, synchronize list/undo/redo, save
     await page.getByTestId('file-viewer-photo-redo').click()
     await expect(marks).toHaveCount(1)
 
-    // Selected second label remains visible; make it bright red so E2EE
-    // raster pixel verification proves it was flattened, not DOM-only.
+    // Selected second label remains visible. Accepted Photo Editor 3.2
+    // keeps Color + Size SIDE BY SIDE at 390px, with no clipped native range.
     await page.getByTestId('file-viewer-select-text-0').click()
+    const controls=page.getByTestId('file-viewer-text-color-size')
+    const rows=await controls.locator('label').evaluateAll(labels=>
+      labels.map(label=>{
+        const rect=label.getBoundingClientRect()
+        return {x:rect.x,y:rect.y,width:rect.width}
+      }))
+    expect(rows).toHaveLength(2)
+    expect(Math.abs(rows[0]!.y-rows[1]!.y)).toBeLessThan(2)
+    expect(rows[1]!.x).toBeGreaterThan(rows[0]!.x+rows[0]!.width)
+    const overflow=await controls.evaluate(el=>({
+      outer:el.scrollWidth-el.clientWidth,
+      labels:[...el.querySelectorAll('label')].map(label=>
+        label.scrollWidth-label.clientWidth),
+    }))
+    expect(overflow.outer).toBeLessThanOrEqual(1)
+    for(const excess of overflow.labels)expect(excess).toBeLessThanOrEqual(1)
+    const fontSizeBefore=await marks.first().evaluate(el=>
+      Number.parseFloat(getComputedStyle(el).fontSize))
+    // Real HTML range interaction: each input records an undoable change.
+    const size=page.getByTestId('file-viewer-text-size')
+    await size.focus()
+    await size.press('Home')
+    for(let i=0;i<8;i++)await size.press('ArrowRight')
+    await expect(size).toHaveValue('10')
+    await expect.poll(()=>marks.first().evaluate(el=>
+      Number.parseFloat(getComputedStyle(el).fontSize)))
+      .toBeGreaterThan(fontSizeBefore)
+    await page.getByTestId('file-viewer-photo-undo').click()
+    await expect(size).toHaveValue('9')
+    await page.getByTestId('file-viewer-photo-redo').click()
+    await expect(size).toHaveValue('10')
+
+    // Make the actual raster annotation bright red so decrypting the
+    // separate E2EE JPEG proves no CSS-only/DOM-only representation.
     await page.getByTestId('file-viewer-text-color').fill('#ff0000')
     await expect(page.getByTestId('editor-shell-save')).toBeEnabled()
     await context.setOffline(true)
