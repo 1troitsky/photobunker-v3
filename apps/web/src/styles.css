@@ -637,7 +637,7 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 }
 .file-viewer-editor-route .file-viewer-editor-sections{max-width:960px;margin:0 auto}
 .file-editor-source{display:flex;align-items:center;justify-content:center;
-  min-height:135px;max-width:100%;background:#080a09;border-radius:9px;
+  width:100%;min-height:135px;max-width:100%;background:#080a09;border-radius:9px;
   padding:8px;margin:12px auto 16px;overflow:hidden}
 .file-editor-source img,.file-editor-source video{
   display:block;max-width:100%;max-height:min(44dvh,360px);
