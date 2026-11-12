@@ -123,6 +123,19 @@ test('P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and of
       expect(fromB).toEqual({
         name:filename,size:expectedLen,first:expectedByte,last:expectedByte,localCopies:0,
       })
+      // An entirely unrelated account cannot read B/A's private manifests.
+      const outsiderContext=await browser.newContext()
+      try{
+        const outsider=await outsiderContext.newPage()
+        const foreign=await register(outsider)
+        expect(foreign.accountId).not.toBe(a.accountId)
+        const rejected=await outsider.evaluate(async id=>{
+          const m=await import('/src/features/media/application/media-outbox.ts')
+          try{await m.readCloudMediaMetadata(id);return false}
+          catch(e){return e instanceof Error&&e.message==='api.http_404'}
+        },mediaId)
+        expect(rejected).toBe(true)
+      }finally{await outsiderContext.close()}
       const localStorageContents=await B.evaluate(()=>JSON.stringify(localStorage))
       expect(localStorageContents).not.toContain(key)
       expect(localStorageContents).not.toContain(filename)
@@ -163,11 +176,12 @@ test('P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and of
         sameAccount:true,independentDevice:true,serverDevices:recovery.devices.length,
         mediaBytes:fromB.size,serverAck:true,offlineOwnerReadback:true,
         reloadTrusted:true,offlineLogoutFenced:true,recoveredDeviceCloudOnly:true,
+        foreignAccountMediaDenied:true,
       }))
       await test.info().attach('p1-recovery-verified-summary.json',{
         body:JSON.stringify({sameAccount:true,twoDevices:true,assetBytes:fromB.size,
           offlineOwnerReadback:true,reloadTrusted:true,offlineLogoutFenced:true,
-          recoveredDeviceCloudOnly:true},null,2),contentType:'application/json',
+          recoveredDeviceCloudOnly:true,foreignAccountMediaDenied:true},null,2),contentType:'application/json',
       })
     }finally{
       key=null
