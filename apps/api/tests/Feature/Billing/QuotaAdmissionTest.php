@@ -157,7 +157,7 @@ final class QuotaAdmissionTest extends TestCase
         $allowed=$this->quota()->admit($a,999999750);
         $this->assertSame(250,$allowed['recordedCipherBytes']);
         $this->assertSame(1000000000,$allowed['technicalByteGuard']);
-        $this->expectStatus(413,fn()=>$this->quota()->admit($a,0));
+        $this->expectStatus(422,fn()=>$this->quota()->admit($a,0));
     }
 
     public function test_active_paid_snapshots_use_all_five_file_count_limits_without_byte_invention():void
@@ -184,6 +184,9 @@ final class QuotaAdmissionTest extends TestCase
         $id=$this->account();
         $this->paid($id,'go');
         for($i=0;$i<50;$i++)$this->photo($id);
+        // Paid-plan downgrade must not be mistaken for ordinary file expiry.
+        DB::table('photo_records')->where('account_id',$id)
+            ->update(['expires_at'=>now()->addDays(90)->getTimestampMs()]);
         $active=$this->quota()->admit($id,1);
         $this->assertSame('go',$active['planId']);
         $this->assertSame(250,$active['fileLimit']);
