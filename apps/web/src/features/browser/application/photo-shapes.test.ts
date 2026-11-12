@@ -43,7 +43,7 @@ describe('P2 photo editor approved shapes and privacy guards',()=>{
     expect(ctx.arc).toHaveBeenCalledTimes(1)
     expect(ctx.rect).toHaveBeenCalledTimes(1)
     expect(ctx.restore).toHaveBeenCalledTimes(2)
-    expect(()=>drawPhotoShapes(ctx,8192,1,[base]))
+    expect(()=>drawPhotoShapes(ctx,8193,1,[base]))
       .toThrow('viewer.shape_invalid_canvas')
   })
 })
