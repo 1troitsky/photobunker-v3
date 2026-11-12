@@ -69,7 +69,7 @@ describe('P2 V-37 client-only HTTPS file import (no proxy / credential leak)',()
       await expect(downloadHttpsMedia(source,new AbortController().signal,
         ()=>true,undefined,fetcher(response).fetch)).rejects.toThrow()
   })
-  it('rejects missing or invalid content-length, too-small content and oversized length',async()=>{
+  it('rejects invalid content-length, too-small content and oversized length',async()=>{
     for(const length of ['1','0','33554433','not-a-number']){
       const res=content()
       res.headers.set('content-length',length)
@@ -90,9 +90,9 @@ describe('P2 V-37 client-only HTTPS file import (no proxy / credential leak)',()
         if(++read>40)controller.close()
       },
     })
-    const fake={status:200,url:source,redirected:false,type:'cors',
+    const fake=({status:200,url:source,redirected:false,type:'cors',
       headers:new Headers({'content-type':'audio/wav'}),body:stream}
-      as unknown as Response
+      as unknown as Response)
     await expect(downloadHttpsMedia(source,new AbortController().signal,
       ()=>true,undefined,fetcher(fake).fetch))
       .rejects.toThrow('media.link_size_limit')
@@ -117,9 +117,11 @@ describe('P2 V-37 client-only HTTPS file import (no proxy / credential leak)',()
     expect(mock).not.toHaveBeenCalled()
   })
   it('rejects CORS/network failures without echoing sensitive URL parameters',async()=>{
+    const failingFetch=vi.fn(async()=>{
+      throw Error('token=NEVER-PERSIST-ME')
+    }) as unknown as typeof fetch
     const error=await downloadHttpsMedia(source,new AbortController().signal,
-      ()=>true,undefined,vi.fn(async()=>{throw Error('token=NEVER-PERSIST-ME')})
-        as unknown as typeof fetch).catch(e=>e as Error)
+      ()=>true,undefined,failingFetch).catch(e=>e as Error)
     expect(error.message).toBe('media.link_cors_or_network')
     expect(error.message).not.toContain('NEVER-PERSIST-ME')
   })
