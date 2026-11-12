@@ -1,0 +1,53 @@
+{
+  "product": "5f13992b94b90157a38d25b3fe27543e3e8642f1",
+  "versions": [
+    {
+      "command": [
+        "docker",
+        "compose",
+        "--env-file",
+        "RUN/.env",
+        "-f",
+        "RUN/compose.json",
+        "exec",
+        "-T",
+        "api",
+        "php",
+        "-r",
+        "echo PHP_VERSION,\"\\n\"; require \"vendor/autoload.php\"; echo Illuminate\\Foundation\\Application::VERSION,\"\\n\";"
+      ],
+      "exitCode": 0,
+      "output": "8.4.27\n13.39.0"
+    },
+    {
+      "command": [
+        "docker",
+        "compose",
+        "--env-file",
+        "RUN/.env",
+        "-f",
+        "RUN/compose.json",
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-U",
+        "pb3",
+        "-d",
+        "pb3_audit",
+        "-Atc",
+        "show server_version"
+      ],
+      "exitCode": 0,
+      "output": "18.6"
+    }
+  ],
+  "stockViteConfigSha256": "8302362d08a4008bd1f87774905264adf306d24eac4115621b457460c36da31e",
+  "apiSourceReadOnly": true,
+  "qaViteConfigInjected": false,
+  "operatorMatrixOrigin": "https://matrix.pb3-audit.test",
+  "browserCertificateTrust": "ephemeral Chrome SPKI pin for fixture only; no global trust changes",
+  "nodeAndApiTls": "explicit fixture CA; verification enabled",
+  "pb3RequestPacingMs": 1850,
+  "mainHeadBefore": "da7327b8c9c440dae3dc864b3245b9f9f4ad14eb"
+}

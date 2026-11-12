@@ -1,0 +1,110 @@
+{
+  "product": "5f13992b94b90157a38d25b3fe27543e3e8642f1",
+  "scope": "independent runtime; no full Messenger acceptance",
+  "results": [
+    {
+      "id": "VITE-ROUTING",
+      "status": "PASS",
+      "stockViteConfig": true,
+      "stockPorts": [
+        5173,
+        8000
+      ],
+      "qaMatrixProxyAdded": false,
+      "realSignedBindingViaMatrixRoute": true,
+      "tlsWhoamiReal": true
+    },
+    {
+      "id": "M-02-ROTATION-RECOVERY-LOST-ACK",
+      "status": "PASS",
+      "genuineSignedRotate": true,
+      "newBrowserRecoveryLogin": true,
+      "revision": 2,
+      "realOriginal4SMac": true,
+      "originalCrossSigningRootUnchanged": true,
+      "oldCiphertextUnchanged": true,
+      "appendOnlyRev2Rows": 1,
+      "parentHashVerified": true,
+      "firstPostAcceptedBeforeAckLost": 201,
+      "actualPageReloadBeforeReplay": true,
+      "identicalPostReplay": true,
+      "replayHttp": 200,
+      "noDuplicateRows": true,
+      "pendingDurableThenCleared": true
+    },
+    {
+      "id": "M-02-CHANGED-AKEK-ROOT",
+      "status": "PASS",
+      "changedAkekViaGenuineSignedRevision3": true,
+      "newBrowserRealLogin": true,
+      "changedAkekError": "matrix.recovery_unwrap_failed",
+      "foreignRealRootReceiptError": "matrix.recovery_untrusted_receipt",
+      "scopeOfRootNegative": "adversarial previous receipt re-signed by separate real PB3 account, not a supported root migration",
+      "noRev3Append": true,
+      "legacyAndRev2Unchanged": true,
+      "authOrSessionMocked": false
+    },
+    {
+      "id": "OTHER-DEVICE-REVOKE",
+      "status": "PASS",
+      "genuineSignedOtherDeviceRevoke": true,
+      "targetSameCookieIdentity": 401,
+      "targetSameCookiePb3Matrix": 401,
+      "independentMatrixTokenHttp": 200,
+      "uiExplicitlySaysMatrixRevokeNotPerformed": true
+    },
+    {
+      "id": "M-03B-SELF-REVOKE-MATRIX-LOGOUT",
+      "status": "PASS",
+      "productionUiConfirmed": true,
+      "genuineRootAndDeviceSignedPb3Revoke": true,
+      "timeline": [
+        {
+          "service": "PB3",
+          "operation": "signed-revoke",
+          "status": 200
+        },
+        {
+          "service": "Matrix",
+          "operation": "whoami",
+          "status": 200
+        },
+        {
+          "service": "Matrix",
+          "operation": "logout",
+          "status": 200
+        },
+        {
+          "service": "Matrix",
+          "operation": "whoami",
+          "status": 401
+        }
+      ],
+      "samePreviousMatrixTokenHttp": 401,
+      "localPb3Locked": true,
+      "pb3ApiHttp": 401,
+      "pb3MatrixApiHttp": 401,
+      "scope": "own device/token only; not Panic or other-device Matrix revocation"
+    },
+    {
+      "id": "M-03B-MATRIX-FAILURE-LOCAL-LOCK",
+      "status": "PASS",
+      "fault": "browser aborts only real Matrix logout transport after signed PB3 commit",
+      "logoutAborted": 1,
+      "pb3IdentityHttp": 401,
+      "pb3MatrixHttp": 401,
+      "locallyLocked": true,
+      "oldMatrixTokenHttp": 200,
+      "uiUnconfirmedNoFalseRemoteClaim": true,
+      "localCredentialRows": 0
+    },
+    {
+      "id": "EXCLUDED-GATES",
+      "status": "BLOCKED",
+      "m01FullMessaging": false,
+      "m04AclRaces": false,
+      "fullPanic": false,
+      "reason": "Explicitly outside this bounded re-acceptance; not owner accepted"
+    }
+  ]
+}

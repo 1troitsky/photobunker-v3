@@ -1,0 +1,11 @@
+{
+  "command": "python3 scripts/p2-matrix-reacceptance/check.py PRODUCT",
+  "exitCode": 0,
+  "output": "PASS exact untouched SHA81, six scoped assertions, excluded gates BLOCKED, QA-only files, syntax and sanitized evidence",
+  "actualFixtureSecretsAbsentFromPublishedFiles": true,
+  "runtimeCommand": "node scripts/p2-matrix-reacceptance/run.mjs PRODUCT RUN",
+  "runtimeExitCode": 0,
+  "runtimeAttempts": 1,
+  "fullCiRepeated": false,
+  "primaryMainUnchanged": true
+}

@@ -1,0 +1,17 @@
+{
+  "command": "docker compose exec -T api php -r read-only-ledger-digests",
+  "exitCode": 0,
+  "legacy": [
+    {
+      "revision": 1,
+      "hash": "6abc868954430bd027b7051bfbfd2ccd128a0de1b5ef39c7be2cb3aa678f0cc8"
+    }
+  ],
+  "appendOnly": [
+    {
+      "revision": 2,
+      "parentHash": "6abc868954430bd027b7051bfbfd2ccd128a0de1b5ef39c7be2cb3aa678f0cc8",
+      "hash": "2848dd435d67b24cbd39cbabb690c1f90bb73a48e91a6e7f1dd007a22560715a"
+    }
+  ]
+}
