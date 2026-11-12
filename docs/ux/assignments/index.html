@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>PhotoBunker — UX / Assignments / Fieldwork 4.2</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="preview-bar" aria-label="Настройки предпросмотра">
+    <span class="preview-label"><i></i> FIELDWORK 4.2 <small> / UI concept · demo data</small></span>
+    <div class="preview-modes">
+      <button type="button" class="selected" data-device="phone" aria-pressed="true">Телефон</button>
+      <button type="button" data-device="desktop" aria-pressed="false">Desktop</button>
+    </div>
+  </div>
+  <div class="preview-stage">
+    <div class="device phone" id="device">
+      <div class="app" id="app">
+        <header class="app-header">
+          <span class="brand-mark" aria-hidden="true">pb</span>
+          <button type="button" class="brand-state" data-action="status" aria-label="Состояние приложения">
+            <strong>PhotoBunker</strong>
+            <small><i class="state-led"></i><span id="state-label">В работе</span></small>
+          </button>
+          <div class="header-actions">
+            <button type="button" data-action="search" aria-label="Поиск" title="Поиск">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
+            </button>
+            <button type="button" data-action="settings" aria-label="Настройки" title="Настройки">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="16" cy="17" r="2"/></svg>
+            </button>
+            <button type="button" data-action="create" aria-label="Новое задание" title="Новое задание">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <main id="content" class="app-main" tabindex="-1">
+          <div class="content-inner">
+            <div class="page-heading">
+              <h1>Задания</h1>
+              <div class="task-counters" aria-label="Статистика заданий">
+                <div><strong id="total-count">4</strong><small>Всего</small></div>
+                <div><strong id="active-count">3</strong><small>Активных</small></div>
+                <div><strong id="done-count">1</strong><small>Готово</small></div>
+              </div>
+            </div>
+            <nav class="list-tabs" role="tablist" aria-label="Фильтр заданий">
+              <button type="button" role="tab" aria-selected="true" class="selected" data-tab="active">Активные</button>
+              <button type="button" role="tab" aria-selected="false" data-tab="archive">Архив</button>
+              <button type="button" role="tab" aria-selected="false" data-tab="all">Все</button>
+            </nav>
+            <label class="search-box" hidden>
+              <span class="visually-hidden">Поиск по заданиям</span>
+              <input id="task-search" type="search" placeholder="Поиск заданий" autocomplete="off">
+            </label>
+            <div id="task-list" class="task-list" aria-live="polite"></div>
+          </div>
+        </main>
+
+        <nav class="app-dock" aria-label="Главная навигация">
+          <button type="button" class="selected" data-nav="Задания" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9h8M8 14h8"/></svg><small>Задания</small>
+          </button>
+          <button type="button" data-nav="Browser"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 3h8v13H3z"/></svg><small>Browser</small></button>
+          <button type="button" data-nav="Камера"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="14" r="4"/></svg><small>Камера</small></button>
+          <button type="button" data-nav="Контакты"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M17 6a3 3 0 0 1 0 6m1 5a5 5 0 0 1 3 4"/></svg><small>Контакты</small></button>
+          <button type="button" data-nav="Профиль"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg><small>Профиль</small></button>
+        </nav>
+
+        <div id="dialog-overlay" class="dialog-overlay" hidden>
+          <div class="dialog-sheet" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1">
+            <div class="dialog-heading"><strong id="dialog-title"></strong><button type="button" data-action="close" aria-label="Закрыть">✕</button></div>
+            <div id="dialog-content" class="dialog-content"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="preview-note">UX-прототип. Все задания и состояния в этом предпросмотре демонстрационные. Production-код и реальные пользовательские данные не подключены.</p>
+</body>
+</html>
