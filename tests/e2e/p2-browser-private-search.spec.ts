@@ -163,6 +163,40 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await panel.getByRole('button',{name:'Обновить'}).click()
     await expect(panel.getByRole('alert')).toHaveCount(0,{timeout:20000})
     await expect(verifiedCloud).toHaveCount(1)
+
+    // A slow older authenticated response must NOT overwrite the newer
+    // successful refresh in the same mounted component.
+    let unlockOld!:()=>void
+    let sawOld!:()=>void
+    let servedNew!:()=>void
+    const oldPending=new Promise<void>(resolve=>{sawOld=resolve})
+    const oldGate=new Promise<void>(resolve=>{unlockOld=resolve})
+    const newFinished=new Promise<void>(resolve=>{servedNew=resolve})
+    let refreshCalls=0
+    await b.route('**/media/v1',async route=>{
+      refreshCalls++
+      if(refreshCalls===1){
+        sawOld()
+        await oldGate
+        await route.fulfill({status:200,contentType:'application/json',
+          body:JSON.stringify({items:[],nextCursor:null})})
+        return
+      }
+      const response=await route.fetch()
+      await route.fulfill({response})
+      servedNew()
+    })
+    await panel.getByRole('button',{name:'Обновить'}).click()
+    await oldPending
+    await panel.getByRole('button',{name:'Обновить'}).click()
+    await newFinished
+    unlockOld()
+    await expect(verifiedCloud).toHaveCount(1,{timeout:20000})
+    await b.waitForTimeout(200)
+    await expect(verifiedCloud).toHaveCount(1)
+    expect(refreshCalls).toBe(2)
+    await b.unroute('**/media/v1')
+
     expect(requests.join('\n')).not.toContain('секретная')
     expect(requests.join('\n')).not.toContain(secret)
   }finally{
