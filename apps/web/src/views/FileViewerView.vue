@@ -60,12 +60,27 @@ type Preview={
 }
 const route=useRoute()
 const router=useRouter()
+const editorMode=computed(()=>route.name==='browser-editor')
+const editorTab=ref<'info'|'media'|'review'>('media')
+const editorBody=ref<HTMLElement|null>(null)
+function selectEditorTab(tab:'info'|'media'|'review'):void{
+  editorTab.value=tab
+  nextTick(()=>{if(editorBody.value)editorBody.value.scrollTop=0})
+}
 const stage=ref<HTMLElement|null>(null)
 const panel=ref<'info'|'editor'|null>(null)
 const sheetClose=ref<HTMLButtonElement|null>(null)
 let panelOpener:HTMLElement|null=null
 async function openPanel(kind:'info'|'editor'):Promise<void>{
   if(!fileUrl.value||!preview.value)return
+  if(kind==='editor'){
+    if(!current.value)return
+    editorTab.value='media'
+    await router.push({name:'browser-editor',params:{
+      protocol:current.value.protocol,id:current.value.id,
+    }})
+    return
+  }
   panelOpener=document.activeElement instanceof HTMLElement
     ?document.activeElement:null
   panel.value=kind
@@ -73,12 +88,14 @@ async function openPanel(kind:'info'|'editor'):Promise<void>{
   sheetClose.value?.focus()
 }
 function closePanel():void{
+  if(editorMode.value){void cancelEditor();return}
   panel.value=null
   const previous=panelOpener
   panelOpener=null
   if(previous?.isConnected)void nextTick(()=>previous.focus())
 }
 function onSheetKeydown(event:KeyboardEvent):void{
+  if(editorMode.value)return
   if(event.key==='Escape'){
     event.preventDefault();event.stopPropagation();closePanel();return
   }
