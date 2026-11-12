@@ -4,15 +4,16 @@ declare(strict_types=1);
 
 // SINGLE canonical source for the five PB3 plan definitions.
 // Exact owner tariff values: ts.md §8. Prices are USD cents for 1/6/12 months.
-// storage_quota: owner specified GB/TB; GB-vs-GiB is explicitly OPEN in ts.md,
-// so do not infer a final enforced byte value until unit policy is approved.
+// Owner approved DECIMAL GB/TB on 2026-11-12: GB=10^9, TB=10^12 bytes.
+// New version only. Historic 2026-11-09 OPEN snapshot hashes are immutable;
+// the ledger verifies them under their ORIGINAL policy without retroactive edit.
 // Null for count quotas means unlimited PRODUCT allowance, not unlimited technical load.
 return [
     'schema_version' => 1,
     'currency' => 'USD',
-    'catalog_version' => 'pb3-2026-11-09',
-    'effective_at' => '2026-11-09T00:00:00Z',
-    'storage_unit_policy' => 'OPEN_GB_VS_GIB',
+    'catalog_version' => 'pb3-2026-11-12',
+    'effective_at' => '2026-11-12T00:00:00Z',
+    'storage_unit_policy' => 'DECIMAL_GB_TB_V1',
     'plans' => [
         'free' => [
             'monthly_price_cents' => 0,
