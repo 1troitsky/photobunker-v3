@@ -4,8 +4,9 @@ export default defineConfig({
   testDir: './e2e',
   // P1 and Browser P2 are required real-browser gates. Do not silently
   // exclude newly added Browser tests behind the P1-only allowlist.
-  // Other P2 integration tracks (e.g. Matrix) have separate fixtures.
-  testMatch: ['p1-*.spec.ts','p2-browser-*.spec.ts'],
+  // Settings integration has its own explicit P2 gate; unrelated tracks (e.g. Matrix)
+  // still have separate fixtures.
+  testMatch: ['p1-*.spec.ts','p2-browser-*.spec.ts','p2-settings-*.spec.ts'],
   workers: 1,
   retries: 0,
   timeout: 90_000,

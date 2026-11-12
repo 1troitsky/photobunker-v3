@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="dark"><title>Assignment Editor — Fieldwork / Media 2.2</title>
+<style>
+:root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;--bg:#121212;--header:#181818;--surface:#202020;--raised:#383838;--separator:#373737;--text:#f3f3f3;--muted:#a2a2a2;--green:#1ed760;--header-height:64px}
+*{box-sizing:border-box}html{background:#101010}body{margin:0;min-width:320px;color:var(--text);font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer;color:inherit}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #91efae;outline-offset:2px}svg{width:20px;height:20px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}[hidden]{display:none!important}
+.preview-bar{max-width:1050px;margin:16px auto 12px;padding:0 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.preview-label{display:flex;align-items:center;gap:8px;font:700 11px ui-monospace,monospace;letter-spacing:.04em}.preview-label i{width:7px;height:7px;border-radius:50%;background:var(--green)}.preview-label small{font:11px -apple-system,sans-serif;color:#999;letter-spacing:normal}.preview-modes{display:flex;gap:2px;background:#292929;padding:3px;border-radius:8px}.preview-modes button{background:transparent;border:0;border-radius:5px;color:#aaa;font-size:11px;padding:7px 13px}.preview-modes button.selected{background:#555;color:#fff}.preview-stage{display:flex;justify-content:center;padding:3px 12px}.device{width:100%;height:min(780px,calc(100dvh - 118px));min-height:580px;border:1px solid #464646;background:var(--bg);overflow:hidden}.device.phone{max-width:402px;border-radius:23px}.device.desktop{max-width:1050px;border-radius:11px}
+.app{position:relative;height:100%;width:100%;display:flex;flex-direction:column;overflow:hidden}.app-header{height:64px;flex:0 0 64px;display:flex;align-items:center;gap:10px;padding:0 14px;background:var(--header);border-bottom:1px solid #303030}.back-button{border:0;background:none;color:#d3d3d3;width:22px;height:40px;padding:0;text-align:left;font-size:30px;line-height:1}.brand-mark{height:37px;width:37px;flex:0 0 37px;display:grid;place-items:center;border-radius:9px;background:#363636;color:#eee;font-size:17px;font-weight:850;letter-spacing:-2px}.brand-state{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:3px;padding:0;border:0;background:transparent;text-align:left}.brand-state strong{font-size:14px;font-weight:780;letter-spacing:-.035em;white-space:nowrap;line-height:1.15}.brand-state small{display:inline-flex;align-items:center;gap:6px;font-size:10px;color:#aaa;white-space:nowrap}.state-led{width:6px;height:6px;border-radius:50%;background:var(--green)}.state-led.error{background:#dc7777}.header-actions{display:flex;align-items:center;margin-left:auto}.header-actions button{display:grid;place-items:center;height:40px;width:35px;border:0;background:transparent;border-radius:5px;color:var(--green);font-size:22px}.header-actions button:hover{background:#292929}
+.app-main{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#484848 transparent}.content-inner{width:100%;max-width:1050px;margin:0 auto;padding:23px 16px 32px}.editor-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:17px}.editor-heading h1{margin:0;font-size:26px;line-height:1.2;font-weight:800;letter-spacing:-.045em}#draft-state{font-size:10px;color:#aaa;white-space:nowrap;padding:5px 9px;border-radius:5px;background:#292929}.editor-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid #393939;margin-bottom:25px}.editor-tabs button{min-width:0;min-height:43px;padding:5px 1px;white-space:nowrap;background:none;border:0;border-bottom:2px solid transparent;color:#a0a0a0;font-size:11px;font-weight:650}.editor-tabs button.selected{color:#fff;border-bottom-color:var(--green)}.tab-pane{display:grid;gap:17px}.form-section{display:grid;gap:15px;background:var(--surface);border-radius:9px;padding:18px 16px;min-width:0}.form-section h2,.rule-group h2{font-size:15px;font-weight:730;letter-spacing:-.02em;line-height:1.2;margin:0 0 3px}.field{display:flex;min-width:0;flex-direction:column;gap:7px;color:#d4d4d4;font-size:12px;font-weight:620}.field input,.field textarea,.field select{width:100%;min-width:0;display:block;background:#2a2a2a;border:1px solid #464646;border-radius:6px;color:#f0f0f0;padding:11px 12px;font-size:14px;font-weight:400}.field input,.field select{min-height:44px}.field textarea{resize:vertical;min-height:90px;line-height:1.55}.field:focus-within{color:#fff}.hint{font-size:11px;line-height:1.55;color:#a3a3a3;margin:0}.optional{font-size:11px;font-weight:450;color:#aaa}.secondary{background:#333;color:#eee;border:1px solid #494949;border-radius:6px;font-size:12px;font-weight:680;min-height:42px;padding:10px 12px}.secondary.wide{width:100%}.secondary.small{min-height:35px;padding:7px 10px;font-size:11px}
+.rule-group{background:var(--surface);border-radius:9px;padding:16px 15px 5px;min-width:0}.rule-group h2{margin:0 0 9px}.rule-row{min-height:54px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid #363636;cursor:pointer}.rule-row>span{flex:1;min-width:0}.rule-row strong{display:block;font-size:12px;font-weight:650;line-height:1.4}.rule-row small{display:block;margin-top:3px;color:#a0a0a0;font-size:10.5px;font-weight:400;line-height:1.5}.switch{appearance:none;-webkit-appearance:none;position:relative;margin:0;height:23px;width:39px;flex:0 0 39px;background:#555;border:0;border-radius:24px;cursor:pointer;transition:background .15s}.switch:after{content:"";position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#eee;transition:transform .15s}.switch:checked{background:var(--green)}.switch:checked:after{background:#132116;transform:translateX(16px)}.field.nested{margin:7px 0 15px 10px}.rules-intro{margin:0;color:#a8a8a8;font-size:12px;line-height:1.6}.public-hint{border-top:1px solid #383838;padding:12px 0 10px;margin:0}
+/* Media controls are intentionally embedded into the existing form-section vocabulary. */
+.media-type{border:1px solid #3c3c3c;border-radius:8px;background:#242424;overflow:hidden}.media-type .rule-row{border-top:0;padding:12px 13px;min-height:63px}.media-type .type-heading{display:flex;align-items:center;gap:10px}.type-icon{width:36px;height:36px;border-radius:7px;background:#333d39;color:#b9dfc6;display:grid;place-items:center;flex:0 0 36px}.type-icon svg{width:20px;height:20px}.media-type[data-type="video"] .type-icon{background:#363c4b;color:#bdc8e6}.media-type[data-type="audio"] .type-icon{background:#40364b;color:#d9c4e7}.media-config{border-top:1px solid #393939;padding:13px 13px 15px;display:grid;gap:12px}.media-type.off .type-icon{background:#343434;color:#888}.media-type.off .media-config{display:none}.media-config .field textarea{min-height:75px}.counter-preview{border-radius:6px;padding:11px 12px;background:#2c342e;border:1px solid #385343;color:#cae8d1;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}.counter-preview strong{color:var(--green);font-weight:750;font-size:11px}.target-line{display:flex;flex-direction:column;align-items:stretch;gap:9px}.target-line > div{display:flex;gap:7px;flex-wrap:wrap;align-items:baseline;justify-content:space-between}.target-line .field{width:100%}.target-line .field input{width:100%;text-align:left;font-variant-numeric:tabular-nums;font-size:15px;min-height:45px;padding:11px 13px}.target-line .hint{margin:0}.effective-finish{border-radius:6px;border:1px solid #36513c;background:#25342b;color:#cde7d2;padding:10px 12px;margin:0;font-size:11px;line-height:1.5}.summary-counts{display:flex;flex-wrap:wrap;gap:7px}.summary-counts span{padding:6px 8px;border-radius:5px;background:#303930;color:#d6ead9;font-size:10px;font-weight:650}.section-heading{display:flex;justify-content:space-between;gap:10px;align-items:center}.section-heading h2{margin:0}.section-heading small{color:#a3a3a3;font-size:11px}
+.team-card{display:flex;gap:12px;align-items:center;min-width:0;padding:12px;border-radius:7px;border:1px solid #444}.team-avatar{width:38px;height:38px;flex:0 0 38px;display:grid;place-items:center;border-radius:7px;background:#334038;color:#b4d7ba;font-size:21px}.team-details{flex:1;min-width:0}.team-details strong,.team-details small{display:block}.team-details strong{font-size:13px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.team-details small{margin-top:3px;color:#999;font-size:11px}.people-list{display:grid}.person-row{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid #373737;min-width:0}.person-row:last-child{border-bottom:0}.person-avatar{display:grid;place-items:center;height:36px;width:36px;flex:0 0 36px;border-radius:50%;background:#3b3b3b;color:#ddd;font-weight:700}.person-row.owner .person-avatar{background:#355443;color:#c6efce}.person-data{flex:1;min-width:0}.person-data strong,.person-data small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.person-data strong{font-size:13px}.person-data small{color:#a5a5a5;font-size:11px;margin-top:3px}.person-row button{border:0;background:none;padding:3px 8px;color:#ccc;font-size:24px}.person-avatar{width:32px;height:32px;flex-basis:32px;font-size:12px}.person-row{gap:10px}.person-data strong{font-weight:660;font-size:13px}.search-results button.person-choice{display:flex;align-items:center;gap:11px;text-align:left;min-height:53px}.search-results .person-choice .person-avatar{background:#39433c;color:#dbecdf}.search-results .person-choice .person-data{display:block}.search-results .person-choice strong{display:block;font-size:13px}
+.editor-footer{height:80px;flex:0 0 80px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 16px 15px;background:#1b1b1b;border-top:1px solid #343434}.footer-caption{display:flex;min-width:0;flex-direction:column;gap:5px}.footer-caption small{font-size:11px;color:#b0b0b0;white-space:nowrap}.footer-caption button{padding:0;border:0;background:transparent;font-size:10px;color:#999;text-align:left}.primary-save{display:flex;gap:12px;align-items:center;justify-content:center;min-height:45px;padding:0 17px;color:#152018;background:var(--green);border:0;border-radius:7px;font-weight:750;white-space:nowrap}.primary-save span{font-size:17px}.validation-error{color:#f0b4b4;background:#3c2929;border-radius:6px;padding:12px;font-size:12px}.dialog-overlay{position:absolute;z-index:20;inset:0;display:flex;align-items:flex-end;background:#000b}.dialog-sheet{width:100%;max-height:86%;overflow-y:auto;padding:18px 17px 24px;background:#292929;border-radius:12px 12px 0 0}.dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px}.dialog-heading strong{font-size:16px}.dialog-heading button{padding:6px;border:0;background:transparent;color:#ddd}.dialog-content{display:grid;gap:9px}.dialog-content>button{padding:12px;text-align:left;border:0;border-radius:6px;background:#393939;color:#eee}.dialog-content>button.danger{color:#efaaaa}.dialog-content>button.submit{background:var(--green);color:#111;text-align:center;font-weight:750}.dialog-content label{display:grid;gap:6px;color:#bbb;font-size:12px}.dialog-content input,.dialog-content select,.dialog-content textarea{width:100%;padding:10px;background:#1c1c1c;color:#fff;border:1px solid #555;border-radius:6px;font-size:13px}.dialog-note{padding:13px;border-radius:7px;background:#383838;color:#ddd;line-height:1.6;font-size:12px}.dialog-note p{margin:6px 0 0}.dialog-content .submit{background:var(--green)}.preview-note{max-width:1050px;padding:0 12px;margin:10px auto 24px;font-size:12px;line-height:1.55;color:#999}
+.device.desktop .content-inner{padding:30px}.device.desktop .tab-pane{max-width:800px;margin:auto;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.device.desktop .tab-pane>.rules-intro{grid-column:1/-1}.device.desktop .dialog-sheet{max-width:480px;margin:auto}.device.desktop .form-section,.device.desktop .rule-group{min-width:0}@media(max-width:460px){.preview-bar{margin-top:8px}.preview-label small{display:none}.device{height:min(780px,82dvh);min-height:580px}.app-header{padding-inline:9px;gap:7px}.content-inner{padding:21px 12px 26px}.editor-tabs button{font-size:10.5px}.form-section{padding:15px 13px}.editor-footer{padding-inline:12px}.primary-save{padding-inline:12px;font-size:12px}}@media(prefers-reduced-motion:reduce){.switch,.switch:after{transition:none}}
+
+/* Assignment Editor Media 2.0 — extensions to the accepted Fieldwork layout. */
+.nested-block{display:grid;gap:9px;padding:2px 0 5px 10px;border-left:2px solid #3d4b42;margin-left:2px;padding-left:13px}
+.nested-block>.field{margin:7px 0 5px}.nested-block .rule-row{padding:7px 0}.rule-group>div[data-dep]{margin-left:10px;border-left:2px solid #363c38;padding-left:10px}
+.text-link{color:#9acda9;background:none;border:0;padding:8px 0;font-size:11px;text-align:left;text-decoration:underline;text-underline-offset:2px}
+.rule-group .field.nested{margin-top:9px}.media-type .target-line .field{min-width:0}.media-type .target-line input{width:100%}
+.inline-state{color:#b1b1b1;font-size:11px}.mini-pills{display:flex;gap:5px;flex-wrap:wrap}.mini-pills span{padding:4px 7px;background:#303a32;color:#d5e8d7;border-radius:5px;font-size:11px}
+.sheet-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#222;border-radius:6px;padding:3px}.sheet-tabs button{border:0;background:transparent;padding:10px;border-radius:4px;color:#aaa;text-align:center}.sheet-tabs button.selected{background:#454545;color:white}
+.dialog-content .search-results{display:grid;gap:7px}/* Contacts picker repeats the same avatar + @username/#ID row as Participants,
+   with a single rectangular clickable surface instead of the previous grid. */
+.dialog-content .search-results button.person-choice{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:11px;width:100%;min-height:55px;padding:10px 12px;text-align:left;background:#383838;border:1px solid #454545;border-radius:7px;color:#f3f3f3}
+.dialog-content .search-results button.person-choice:hover{background:#414141;border-color:#575757}
+.dialog-content .search-results button.person-choice:active{background:#354b3b}
+.dialog-content .search-results button.person-choice .person-avatar{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;border-radius:50%;background:#39433c;color:#dbecdf;font-size:12px;font-weight:700}
+.dialog-content .search-results button.person-choice .person-data{display:block;flex:1;min-width:0}
+.dialog-content .search-results button.person-choice .person-data strong{display:block;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:660;line-height:1.35}.dialog-content .search-results small{color:#aeb1ae;font-size:10px}.dialog-content .dialog-note{font-size:12px}
+@media(max-width:460px){.nested-block{margin-left:0;padding-left:10px}}
+</style></head><body>
+<div class="preview-bar"><span class="preview-label"><i></i>FIELDWORK / ASSIGNMENT EDITOR <small>· MEDIA 2.0</small></span><div class="preview-modes"><button class="selected" type="button" data-device="phone" aria-pressed="true">Телефон</button><button type="button" data-device="desktop" aria-pressed="false">Desktop</button></div></div>
+<div class="preview-stage"><div class="device phone" id="device"><div class="app" id="app">
+<header class="app-header"><button class="back-button" data-action="back" aria-label="Назад">‹</button><span class="brand-mark" aria-hidden="true">pb</span><button class="brand-state" data-action="status"><strong>PhotoBunker</strong><small><i class="state-led"></i><span id="status-label">В работе</span></small></button><div class="header-actions"><button data-action="info" aria-label="О редакторе" title="О редакторе">ⓘ</button></div></header>
+<main class="app-main" id="editor-content"><div class="content-inner">
+<div class="editor-heading"><h1>Новое задание</h1><span id="draft-state">Черновик</span></div>
+<nav class="editor-tabs" role="tablist" aria-label="Разделы задания"><button class="selected" type="button" role="tab" aria-selected="true" data-tab="basics">Основное</button><button type="button" role="tab" aria-selected="false" data-tab="camera">Файлы</button><button type="button" role="tab" aria-selected="false" data-tab="participants">Участники</button><button type="button" role="tab" aria-selected="false" data-tab="rules">Правила</button></nav>
+<section class="tab-pane" data-pane="basics">
+<div class="form-section"><h2>Общие данные</h2>
+<label class="field">Название задания<input name="name" maxlength="80" value="Фасады — Site A" required></label>
+<label class="field">Описание и инструкции<textarea name="instructions" maxlength="4000" rows="4">Снять фасад здания с разных ракурсов, записать видеообход и голосовой комментарий о состоянии объекта.</textarea></label>
+</div>
+<div class="form-section"><h2>Период выполнения</h2>
+<label class="field">Дата начала<input name="startsAt" type="datetime-local" required><small class="hint">Не раньше текущего времени</small></label>
+<label class="rule-row"><span><strong>Запретить добавление файлов до начала</strong><small>Съёмка и импорт начнутся только с даты начала</small></span><input class="switch" type="checkbox" role="switch" name="blockBefore"></label>
+<label class="rule-row"><span><strong>Установить дату окончания</strong><small>Без срока окончания по умолчанию</small></span><input class="switch" type="checkbox" role="switch" name="hasFinish" data-toggle="deadline"></label>
+<div class="nested-block" data-dep="deadline" hidden>
+<label class="field">Дата окончания<input type="datetime-local" name="finishesAt"><small class="hint">Не раньше завтрашнего дня и позже даты начала</small></label>
+<label class="rule-row"><span><strong>Запретить добавление файлов после окончания</strong><small>Относится и к съёмке, и к загрузке</small></span><input class="switch" type="checkbox" role="switch" name="blockAfter"></label>
+</div></div>
+<div class="form-section"><h2>Автоматическое удаление</h2><p class="effective-finish" id="effective-finish" aria-live="polite">Без срока окончания</p>
+<label class="rule-row"><span><strong>Автоматически удалять файлы</strong><small>По умолчанию — никогда. Хранение продолжается согласно тарифу и его продлению.</small></span><input class="switch" type="checkbox" role="switch" name="autoFiles" data-toggle="autoFiles"></label>
+<div class="nested-block" data-dep="autoFiles" hidden><label class="field">Удалить файлы после<input type="datetime-local" name="removeFilesAt"><small class="hint">При отсутствии отдельной даты окончания эта дата определяет срок завершения задания.</small></label></div>
+<label class="rule-row"><span><strong>Автоматически удалять задание</strong><small>По умолчанию — никогда</small></span><input class="switch" type="checkbox" role="switch" name="autoAssignment" data-toggle="autoAssignment"></label>
+<div class="nested-block" data-dep="autoAssignment" hidden><label class="field">Удалить задание после<input type="datetime-local" name="removeAssignmentAt"><small class="hint">Если окончание не задано, удаление задания определяет дату его завершения.</small></label>
+<label class="rule-row"><span><strong>Удалить также файлы задания</strong><small>При выключенном параметре файлы остаются в каталоге; личные копии других участников не затрагиваются</small></span><input class="switch" type="checkbox" role="switch" name="removeFilesWithAssignment"></label>
+</div></div>
+</section>
+<section class="tab-pane" data-pane="camera" hidden>
+<div class="form-section"><h2>Камера</h2><label class="field">Пресет камеры<select name="presetId"><option value="standard">Standard</option><option value="field" selected>Fieldwork · Высокое качество</option><option value="fast">Быстрая съёмка</option></select></label><button class="secondary wide" type="button" data-action="preset">Открыть настройки камеры</button><p class="hint">Пресет задаёт параметры съёмки. Разрешённые типы файлов выбираются ниже.</p></div>
+<div class="form-section" id="media-section"><h2>Разрешённые типы файлов</h2><p class="hint">Включите допустимые форматы. Количество необязательно: оно влияет только на прогресс, но не ограничивает объём задания.</p>
+<div class="media-type" data-type="photo"><label class="rule-row"><span class="type-heading"><span class="type-icon"><svg viewBox="0 0 24 24"><path d="M3 7h4l2-3h6l2 3h4v13H3z"/><circle cx="12" cy="13" r="3.2"/></svg></span><span><strong>Фото</strong><small>Фотографии и изображения</small></span></span><input class="switch media-enable" type="checkbox" name="allowPhoto" aria-label="Разрешить фото" checked></label><div class="media-config"><div class="target-line"><div><strong style="font-size:12px">Нужно фотографий</strong><p class="hint">Только для прогресса</p></div><label class="field"><span class="visually-hidden" style="position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden">Количество фото</span><input type="number" name="photoCount" min="1" max="9999" placeholder="Без цели"></label></div><label class="field">Инструкции для фото <span class="optional">(необязательно)</span><textarea name="photoShots" rows="4">Главный фасад
+Левый ракурс
+Правый ракурс
+Входная группа</textarea></label><p class="hint" data-shots="photo">4 пункта в плане</p></div></div>
+<div class="media-type" data-type="video"><label class="rule-row"><span class="type-heading"><span class="type-icon"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-3v10l-4-3"/></svg></span><span><strong>Видео</strong><small>Видеозаписи объекта</small></span></span><input class="switch media-enable" type="checkbox" name="allowVideo" aria-label="Разрешить видео" checked></label><div class="media-config"><div class="target-line"><div><strong style="font-size:12px">Нужно видео</strong><p class="hint">Только для прогресса</p></div><label class="field"><span class="visually-hidden" style="position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden">Количество видео</span><input type="number" name="videoCount" min="1" max="999" placeholder="Без цели"></label></div><label class="field">Инструкции для видео <span class="optional">(необязательно)</span><textarea name="videoShots" rows="3">Обход здания снаружи
+Панорама главного входа</textarea></label><p class="hint" data-shots="video">2 пункта в плане</p></div></div>
+<div class="media-type" data-type="audio"><label class="rule-row"><span class="type-heading"><span class="type-icon"><svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v12M9 9l11-2"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="15" r="3"/></svg></span><span><strong>Аудио</strong><small>Голос и звуковые записи</small></span></span><input class="switch media-enable" type="checkbox" name="allowAudio" aria-label="Разрешить аудио" checked></label><div class="media-config"><div class="target-line"><div><strong style="font-size:12px">Нужно аудио</strong><p class="hint">Только для прогресса</p></div><label class="field"><span class="visually-hidden" style="position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden">Количество аудио</span><input type="number" name="audioCount" min="1" max="999" placeholder="Без цели"></label></div><label class="field">Инструкции для аудио <span class="optional">(необязательно)</span><textarea name="audioShots" rows="3">Устный комментарий об объекте</textarea></label><p class="hint" data-shots="audio">1 пункт в плане</p></div></div>
+</div>
+<div class="form-section"><div class="section-heading"><h2>Сводка задания</h2><small id="total-count">3 типа</small></div><div class="summary-counts" id="media-summary"></div><p class="hint">При пустой цели отображается только фактическое количество материалов. Инструкции не создают количественный лимит.</p></div>
+</section>
+<section class="tab-pane" data-pane="participants" hidden><div class="form-section"><h2>Команда</h2><div class="team-card"><span class="team-avatar">▤</span><span class="team-details"><strong id="team-name">Site A Crew</strong><small>Выбрана команда</small></span><button class="secondary small" data-action="team">Выбрать</button></div><p class="hint"><button type="button" class="text-link" data-action="team-settings">Перейти к настройкам команд</button></p></div><div class="form-section"><div class="section-heading"><h2>Участники</h2><small id="people-count">3 человека</small></div><div class="people-list" id="people-list"></div><button class="secondary wide" data-action="add-person">＋ Добавить участника</button><p class="hint">Роль и доступ к материалам задаются отдельно. Предпросмотр не расширяет права участника автоматически.</p></div></section>
+<section class="tab-pane" data-pane="rules" hidden>
+<p class="rules-intro">Правила применяются к разрешённым типам файлов и участникам задания.</p>
+<div class="rule-group"><h2>Нумерация и импорт</h2><label class="rule-row"><span><strong>ID задания — часть имени файла</strong><small>Например NAME0001; общая нумерация материалов</small></span><input class="switch" type="checkbox" role="switch" name="useAssignmentPhotoId" checked></label><label class="rule-row"><span><strong>Разрешить загрузку файлов из других источников</strong><small>С устройства, из других приложений и по ссылке</small></span><input class="switch" type="checkbox" role="switch" name="allowExternalUpload" checked></label></div>
+<div class="rule-group"><h2>Public Card</h2><label class="rule-row"><span><strong>Разрешить Public Card</strong><small>Какие поля можно показывать в карточке по ссылке</small></span><input class="switch" type="checkbox" role="switch" name="publicEnabled" data-toggle="public" checked></label><div data-dep="public"><label class="rule-row"><span><strong>Автор / команда</strong></span><input class="switch" type="checkbox" role="switch" name="publicContributor"></label><label class="rule-row"><span><strong>Дата добавления</strong></span><input class="switch" type="checkbox" role="switch" name="publicCapturedAt"></label><label class="rule-row"><span><strong>Дата изменения</strong></span><input class="switch" type="checkbox" role="switch" name="publicEditedAt"></label><label class="rule-row"><span><strong>GPS координаты</strong></span><input class="switch" type="checkbox" role="switch" name="publicLocation" checked></label><label class="rule-row"><span><strong>Описание</strong></span><input class="switch" type="checkbox" role="switch" name="publicDescription" checked></label><label class="rule-row"><span><strong>Теги</strong></span><input class="switch" type="checkbox" role="switch" name="publicTags"></label><label class="rule-row"><span><strong>Метаданные</strong></span><input class="switch" type="checkbox" role="switch" name="publicMetadata"></label></div><p class="hint public-hint">Настройки ограничивают поля карточки, но не создают публичную ссылку и не расширяют права доступа.</p></div>
+<div class="rule-group"><h2>Категории</h2><label class="rule-row"><span><strong>Категория обязательна</strong><small>Без категории файл считается незаполненным</small></span><input class="switch" type="checkbox" role="switch" name="categoryRequired"></label><label class="rule-row"><span><strong>Ограничить список категорий</strong><small>Разрешить только категории из списка</small></span><input class="switch" type="checkbox" role="switch" name="particularCategory" data-toggle="categories"></label><label class="field nested" data-dep="categories" hidden>Разрешённые категории<textarea name="categories" rows="3" placeholder="По одной категории в строке">Фасад
+Детали
+Входная группа</textarea></label></div>
+<div class="rule-group"><h2>Теги</h2><label class="rule-row"><span><strong>Теги обязательны</strong><small>У файла должен быть хотя бы один тег</small></span><input class="switch" type="checkbox" role="switch" name="tagRequired"></label><label class="rule-row"><span><strong>Ограничить список тегов</strong><small>Разрешить только теги из списка</small></span><input class="switch" type="checkbox" role="switch" name="particularTags" data-toggle="tags"></label><label class="field nested" data-dep="tags" hidden>Разрешённые теги<textarea name="allowedTags" rows="3" placeholder="По одному тегу в строке">архитектура
+фасад
+документация</textarea></label></div>
+<div class="rule-group"><h2>Описание и координаты</h2><label class="rule-row"><span><strong>Описание обязательно</strong><small>Требуется при добавлении файла</small></span><input class="switch" type="checkbox" role="switch" name="descriptionRequired" data-toggle="description"></label><label class="field nested" data-dep="description" hidden>Минимальная длина описания<input name="minLength" type="number" min="1" max="2000" value="10"></label><label class="rule-row"><span><strong>GPS координаты обязательны</strong><small>Если доступ к GPS или политика задания это позволяет</small></span><input class="switch" type="checkbox" role="switch" name="gpsRequired"></label></div>
+<div class="rule-group"><h2>Редактирование и удаление</h2><label class="rule-row"><span><strong>Разрешить изменение файлов</strong><small>Для фото, видео и аудио</small></span><input class="switch" type="checkbox" role="switch" name="changesAllowed" data-toggle="changes" checked></label><div data-dep="changes"><label class="rule-row"><span><strong>Сохранять оригинал</strong><small>Если формат и тариф позволяют</small></span><input class="switch" type="checkbox" role="switch" name="keepOriginal" checked></label></div><label class="rule-row"><span><strong>Разрешить удаление оригинального файла</strong><small>Не ограничивает удаление своей личной копии</small></span><input class="switch" type="checkbox" role="switch" name="deletionAllowed" checked></label></div>
+<div class="rule-group"><h2>Просмотр</h2><label class="rule-row"><span><strong>Разрешить просмотр файлов</strong><small>В рамках предоставленных прав</small></span><input class="switch" type="checkbox" role="switch" name="galleryAllowed" data-toggle="gallery" checked></label><div data-dep="gallery"><label class="rule-row"><span><strong>Только предпросмотр (80×80)</strong><small>Фото и видео — миниатюры; аудио — имя и метаданные без прослушивания</small></span><input class="switch" type="checkbox" role="switch" name="thumbnailsOnly"></label></div></div>
+<div class="rule-group"><h2>Передача файлов</h2><label class="rule-row"><span><strong>Разрешить делиться файлами</strong><small>В пределах разрешённых прав</small></span><input class="switch" type="checkbox" role="switch" name="sharingAllowed" data-toggle="sharing" checked></label><div data-dep="sharing"><label class="rule-row"><span><strong>Только между участниками</strong><small>Кому можно передавать материалы</small></span><input class="switch" type="checkbox" role="switch" name="participantsOnly"></label><label class="rule-row"><span><strong>Только кураторы могут делиться</strong><small>Кто имеет право инициировать передачу</small></span><input class="switch" type="checkbox" role="switch" name="curatorsOnly"></label></div></div>
+</section><p class="validation-error" id="form-error" role="alert" hidden></p>
+</div></main>
+<footer class="editor-footer"><div class="footer-caption"><small id="draft-caption">Черновик</small><button type="button" data-action="reset">Сбросить пример</button></div><button class="primary-save" type="button" data-action="save">Создать задание <span>✓</span></button></footer>
+<div class="dialog-overlay" id="dialog-overlay" hidden><div class="dialog-sheet" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1"><div class="dialog-heading"><strong id="dialog-title"></strong><button type="button" data-action="close" aria-label="Закрыть">✕</button></div><div class="dialog-content" id="dialog-content"></div></div></div>
+</div></div></div>
+<p class="preview-note" hidden>Отдельный интерактивный шаблон настройки задания: фото, видео и аудио. Используется для согласования UI перед внедрением.</p>
+<script>
+(() => {
+  'use strict';
+  const app = document.getElementById('app');
+  if (!app || app.dataset.ready) return;
+  app.dataset.ready = '1';
+  const $ = s => app.querySelector(s);
+  const $$ = s => [...app.querySelectorAll(s)];
+  const field = name => $(`[name="${name}"]`);
+  const overlay = $('#dialog-overlay');
+  const content = $('#dialog-content');
+  const scroll = $('#editor-content');
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const labels = {photo:'Фото',video:'Видео',audio:'Аудио'};
+  const allows = {photo:'allowPhoto',video:'allowVideo',audio:'allowAudio'};
+  const counts = {photo:'photoCount',video:'videoCount',audio:'audioCount'};
+  const instructions = {photo:'photoShots',video:'videoShots',audio:'audioShots'};
+  const roleNames = {curator:'Куратор',contributor:'Исполнитель',viewer:'Наблюдатель'};
+  const scopes = {default:'По правилам задания',none:'Нет доступа',thumbnails:'Только предпросмотр',all:'Полный доступ'};
+  const teams = {
+    'Site A Crew':[{id:1,name:'Анна',slug:'@anna',userId:'U1001',role:'curator',scope:'all'},{id:2,name:'Марк',slug:'@mark',userId:'U1002',role:'contributor',scope:'default'}],
+    'Репортаж':[{id:3,name:'Ольга',slug:'@olga',userId:'U1003',role:'curator',scope:'default'},{id:4,name:'Давид',slug:'',userId:'U1004',role:'contributor',scope:'thumbnails'}],
+    '':[]
+  };
+  const directory = [
+    {key:'anna',name:'Анна',slug:'@anna',id:'U1001'},
+    {key:'mark',name:'Марк',slug:'@mark',id:'U1002'},
+    {key:'olga',name:'Ольга',slug:'@olga',id:'U1003'},
+    {key:'david',name:'Давид',slug:'',id:'U1004'},
+    {key:'nikita',name:'Никита',slug:'',id:'U1005'},
+    {key:'irina',name:'Ирина',slug:'@irina',id:'U1006'}
+  ];
+  let people = teams['Site A Crew'].map(p => ({...p}));
+  let team = 'Site A Crew', nextId=10, activePerson=null, openedTab='basics', addTab='contacts';
+  let statusLog = [{kind:'success',title:'В работе',message:'Настройки открыты'}];
+  const asLocal = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  const daysAfter = (d,days=1) => new Date(d.getTime()+days*86400000);
+  const tomorrowMin = asLocal(daysAfter(new Date()));
+  const start = field('startsAt');
+  const initialNow = asLocal(new Date());
+  start.min=initialNow;
+  start.value=initialNow;
+  field('finishesAt').value=tomorrowMin;
+  field('finishesAt').min=tomorrowMin;
+  field('removeFilesAt').value=tomorrowMin;
+  field('removeAssignmentAt').value=tomorrowMin;
+  const initial = {};
+  for(const f of $$('input[name],select[name],textarea[name]')) initial[f.name] = f.type==='checkbox'?f.checked:f.value;
+  const plural = (n,one,few,many) => {
+    const v=Math.abs(n)%100;
+    return v>=11 && v<=14?many:Math.abs(n)%10===1?one:[2,3,4].includes(Math.abs(n)%10)?few:many;
+  };
+  function status(kind,title,message){
+    statusLog.unshift({kind,title,message}); statusLog=statusLog.slice(0,15);
+    $('#status-label').textContent=kind==='error'?'Ошибка':'В работе';
+    $('.state-led').classList.toggle('error',kind==='error');
+  }
+  function showSheet(title,body){
+    $('#dialog-title').textContent=title;
+    content.innerHTML=body;
+    overlay.hidden=false;
+    overlay.querySelector('.dialog-sheet').focus();
+  }
+  function closeSheet(){ overlay.hidden=true;activePerson=null; }
+  function note(title,body){ showSheet(title,`<div class="dialog-note">${body}</div><button class="submit" data-sheet="close">Готово</button>`); }
+  function setTab(name){
+    if(!['basics','camera','participants','rules'].includes(name)) return;
+    openedTab=name;
+    $$('[data-pane]').forEach(x=>{x.hidden=x.dataset.pane!==name});
+    $$('[data-tab]').forEach(x=>{
+      const on=x.dataset.tab===name;
+      x.classList.toggle('selected',on);
+      x.setAttribute('aria-selected',String(on));
+    });
+    scroll.scrollTop=0;
+    $('#form-error').hidden=true;
+  }
+  function dirty(){
+    $('#draft-state').textContent='Изменён';
+    $('#draft-caption').textContent='Несохранённые изменения';
+  }
+  function getEffectiveFinish(){
+    if(field('hasFinish').checked) return {date:field('finishesAt').value, reason:'Установленная дата окончания'};
+    const options=[];
+    if(field('autoFiles').checked && field('removeFilesAt').value)
+      options.push({date:field('removeFilesAt').value,reason:'Дата удаления файлов'});
+    if(field('autoAssignment').checked && field('removeAssignmentAt').value)
+      options.push({date:field('removeAssignmentAt').value,reason:'Дата удаления задания'});
+    options.sort((a,b)=>a.date.localeCompare(b.date));
+    return options[0] || null;
+  }
+  function refreshDates(){
+    const startValue=field('startsAt').value || initialNow;
+    const finishMin=[tomorrowMin,asLocal(new Date(new Date(startValue).getTime()+60000))].sort().at(-1);
+    const finish=field('finishesAt');
+    finish.min=finishMin;
+    if(!finish.value||finish.value<finishMin)finish.value=finishMin;
+    const removeMin=field('hasFinish').checked?finish.value:finishMin;
+    for(const name of ['removeFilesAt','removeAssignmentAt']){
+      const el=field(name);el.min=removeMin;
+      if(!el.value||el.value<removeMin)el.value=removeMin;
+    }
+    const computed=getEffectiveFinish();
+    $('#effective-finish').textContent=computed
+      ? 'Задание завершится: '+computed.date.replace('T',' ')+' · '+computed.reason
+      : 'Без срока окончания';
+  }
+  function refreshDeps(){
+    for(const control of $$('[data-toggle]')){
+      $$(`[data-dep="${control.dataset.toggle}"]`).forEach(node=>{node.hidden=!control.checked});
+    }
+  }
+  function refreshMedia(){
+    let active=0,hasTarget=false;
+    const items=[];
+    for(const type of ['photo','video','audio']){
+      const enabled=field(allows[type]).checked;
+      const card=$(`[data-type="${type}"]`);
+      card.classList.toggle('off',!enabled);
+      if(enabled){
+        active++;
+        const target=field(counts[type]).value.trim();
+        if(target)hasTarget=true;
+        items.push(`<span>${labels[type]}: ${target?esc(target):'без цели'}</span>`);
+      }
+      const value=field(instructions[type]).value.trim();
+      $(`[data-shots="${type}"]`).textContent=value?'Инструкции указаны':'Без дополнительных инструкций';
+    }
+    $('#media-summary').innerHTML=items.join('');
+    $('#total-count').textContent=active+' '+plural(active,'тип','типа','типов')+(hasTarget?' · цели для прогресса':' · без количественных целей');
+  }
+  const displayId=p=>p.slug || '#'+(p.userId || p.id);
+  const avatarText=p=>p.name?.slice(0,1).toUpperCase() || (p.slug?.replace('@','').slice(0,1).toUpperCase()) || '#';
+  function renderPeople(){
+    const all=[{id:'owner',name:'Вы',slug:'@you',userId:'U1000',role:'Владелец',scope:'Полный доступ'},...people];
+    $('#people-count').textContent=all.length+' '+plural(all.length,'человек','человека','человек');
+    $('#team-name').textContent=team || 'Без команды';
+    $('#people-list').innerHTML=all.map(p=>`<div class="person-row ${p.id==='owner'?'owner':''}">
+      <div class="person-avatar" aria-hidden="true">${esc(avatarText(p))}</div>
+      <div class="person-data"><strong>${esc(displayId(p))}</strong></div>
+      ${p.id==='owner'?'<span style="color:var(--green)" title="Владелец">✓</span>':`<button type="button" data-action="person" data-person="${p.id}" aria-label="Настроить участника ${esc(displayId(p))}">•••</button>`}
+    </div>`).join('');
+  }
+  function reset(){
+    for(const f of $$('input[name],select[name],textarea[name]')){
+      if(f.type==='checkbox') f.checked=initial[f.name];
+      else f.value=initial[f.name];
+    }
+    team='Site A Crew'; people=teams[team].map(p=>({...p}));
+    refreshDates();refreshDeps();refreshMedia();renderPeople();setTab('basics');
+    $('#draft-state').textContent='Черновик';$('#draft-caption').textContent='Черновик';
+    status('success','В работе','Настройки сброшены');
+  }
+  function validate(){
+    if(!field('name').value.trim()) return ['Введите название задания','basics','name'];
+    if(!start.value||start.value<start.min) return ['Дата начала не может быть раньше текущего времени','basics','startsAt'];
+    const hasFinish=field('hasFinish').checked;
+    if(hasFinish && (!field('finishesAt').value||field('finishesAt').value<field('finishesAt').min))
+      return ['Проверьте дату окончания','basics','finishesAt'];
+    for(const [toggle,name,label] of [['autoFiles','removeFilesAt','удаления файлов'],['autoAssignment','removeAssignmentAt','удаления задания']]){
+      if(field(toggle).checked && (!field(name).value||field(name).value<field(name).min))
+        return [`Проверьте дату ${label}`,'basics',name];
+    }
+    const effective=getEffectiveFinish();
+    if(effective && effective.date < asLocal(new Date(new Date(start.value).getTime()+60000)))
+      return ['Задание не может завершиться до начала','basics',field('hasFinish').checked?'finishesAt':field('autoFiles').checked?'removeFilesAt':'removeAssignmentAt'];
+    const enabled=['photo','video','audio'].filter(t=>field(allows[t]).checked);
+    if(enabled.length===0)return ['Разрешите хотя бы один тип файла','camera','allowPhoto'];
+    for(const type of enabled){
+      const el=field(counts[type]);
+      const raw=el.value.trim();
+      const limit=type==='photo'?9999:999;
+      if(raw && (!/^\d+$/.test(raw)||+raw<1||+raw>limit))
+        return [`Количество ${labels[type].toLowerCase()} должно быть от 1 до ${limit}`,'camera',counts[type]];
+    }
+    if(field('particularCategory').checked && !field('categories').value.trim())
+      return ['Укажите разрешённые категории','rules','categories'];
+    if(field('particularTags').checked && !field('allowedTags').value.trim())
+      return ['Укажите разрешённые теги','rules','allowedTags'];
+    if(field('descriptionRequired').checked && (+field('minLength').value<1||+field('minLength').value>2000))
+      return ['Минимальная длина описания — от 1 до 2000','rules','minLength'];
+    return null;
+  }
+  function showValidationFailure(failure){
+    setTab(failure[1]);
+    $('#form-error').hidden=false;
+    $('#form-error').textContent=failure[0];
+    field(failure[2])?.focus();
+    status('error','Проверка',failure[0]);
+  }
+  function save(){
+    const failure=validate();
+    if(failure) return showValidationFailure(failure);
+    const media=['photo','video','audio'].filter(t=>field(allows[t]).checked)
+      .map(t=>`<div style="padding:6px 0;border-bottom:1px solid #4b4b4b">${labels[t]} · ${field(counts[t]).value.trim()||'без цели'}</div>`).join('');
+    const autoFiles=field('autoFiles').checked ? esc(field('removeFilesAt').value.replace('T',' ')):'Никогда';
+    const autoTask=field('autoAssignment').checked ? esc(field('removeAssignmentAt').value.replace('T',' ')):'Никогда';
+    showSheet('Параметры задания',`<div class="dialog-note"><strong>${esc(field('name').value.trim())}</strong>
+      <p>Разрешённые форматы:</p>${media}<p>Удаление файлов: ${autoFiles}<br>Удаление задания: ${autoTask}</p>
+      <p>Загрузка из внешних источников: ${field('allowExternalUpload').checked?'разрешена':'запрещена'}</p></div>
+      <button class="submit" data-sheet="close">Закрыть</button>`);
+    $('#draft-state').textContent='Проверено';
+    $('#draft-caption').textContent='Настройки проверены';
+    status('success','Проверка','Параметры прошли проверку формы');
+  }
+  function presetSheet(){
+    showSheet('Настройки камеры',`<div class="dialog-note">Параметры выбранного пресета</div>
+    <label>Название пресета<input id="preset-name" value="${esc(field('presetId').selectedOptions[0].textContent)}" maxlength="60"></label>
+    <label>Качество фото<select id="preset-photo"><option>Максимальное</option><option selected>Высокое</option><option>Среднее</option></select></label>
+    <label>Качество видео<select id="preset-video"><option>480p</option><option>720p</option><option selected>1080p</option></select></label>
+    <label>Качество аудио<select id="preset-audio"><option>64 кбит/с</option><option selected>128 кбит/с</option><option>256 кбит/с</option></select></label>
+    <button class="submit" data-sheet="save-preset">Сохранить пресет</button>
+    <button data-sheet="add-preset">Добавить пресет</button>`);
+  }
+  function teamSheet(){
+    showSheet('Выбрать команду',Object.keys(teams).map(name=>`<button data-sheet="choose-team" data-team="${esc(name)}">${esc(name||'Без команды')}</button>`).join('')+
+    '');
+  }
+  function teamSettings(){
+    showSheet('Настройки команды',`<div class="dialog-note"><strong>${esc(team||'Без команды')}</strong><p>Настройки команды доступны отдельно от задания.</p></div>
+    <button data-sheet="choose-team">Без команды</button><button class="submit" data-sheet="close">Готово</button>`);
+  }
+  function personSheet(id){
+    const p=people.find(x=>x.id===id);if(!p)return;
+    activePerson=id;
+    showSheet(displayId(p),`<label>Роль<select id="person-role">${Object.entries(roleNames).map(([v,t])=>`<option value="${v}" ${p.role===v?'selected':''}>${t}</option>`).join('')}</select></label>
+    <label>Доступ к файлам<select id="person-scope">${Object.entries(scopes).map(([v,t])=>`<option value="${v}" ${p.scope===v?'selected':''}>${t}</option>`).join('')}</select></label>
+    <button class="submit" data-sheet="save-person">Сохранить</button><button class="danger" data-sheet="remove-person">Удалить участника</button>`);
+  }
+  function addPersonSheet(tab='contacts'){
+    addTab=tab;
+    showSheet('Добавить участника',`<div class="sheet-tabs"><button data-sheet="contacts-tab" class="${tab==='contacts'?'selected':''}">Контакты</button>
+      <button data-sheet="search-tab" class="${tab==='search'?'selected':''}">Поиск</button></div>
+      <label>${tab==='contacts'?'Контакты':'UserID или @UserSlug'}<input id="people-query" placeholder="${tab==='contacts'?'Имя контакта':'@username или U1003'}" autocomplete="off"></label>
+      <div class="search-results" id="people-results"></div>`);
+    renderMatches('');
+  }
+  function renderMatches(query){
+    const place=content.querySelector('#people-results');if(!place)return;
+    const q=query.toLocaleLowerCase().trim();
+    let items=directory.filter(p=>!people.some(x=>x.name===p.name));
+    if(addTab==='contacts') items=items.filter(p=>['Ольга','Давид','Никита'].includes(p.name));
+    if(q) items=items.filter(p=>[p.name,p.slug,p.id].some(x=>x.toLocaleLowerCase().includes(q)));
+    place.innerHTML=items.length?items.map(p=>`<button class="person-choice" data-sheet="pick-person" data-person-key="${p.key}"><span class="person-avatar" aria-hidden="true">${esc(avatarText(p))}</span><span class="person-data"><strong>${esc(displayId({slug:p.slug,userId:p.id}))}</strong></span></button>`).join('')
+      : '<div class="dialog-note">Ничего не найдено</div>';
+  }
+  app.addEventListener('click',event=>{
+    const btn=event.target.closest('button');if(!btn)return;
+    if(btn.dataset.tab){setTab(btn.dataset.tab);return;}
+    const action=btn.dataset.action;
+    if(action==='status'){showSheet('Состояние',statusLog.map(x=>`<div class="dialog-note"><strong>${esc(x.title)}</strong><p>${esc(x.message)}</p></div>`).join(''));return;}
+    if(action==='info'){note('Редактор задания','Настройте сроки, разрешённые типы файлов, участников и правила.');return;}
+    if(action==='back'){note('Возврат к заданиям','Вернуться к списку заданий?');return;}
+    if(action==='save'){save();return;}
+    if(action==='reset'){reset();return;}
+    if(action==='preset'){presetSheet();return;}
+    if(action==='team'){teamSheet();return;}
+    if(action==='team-settings'){teamSettings();return;}
+    if(action==='person'){personSheet(+btn.dataset.person);return;}
+    if(action==='add-person'){addPersonSheet();return;}
+    if(action==='close'){closeSheet();return;}
+  });
+  app.addEventListener('change',event=>{
+    const el=event.target;
+    if(el.matches('.media-enable')&&!['photo','video','audio'].some(t=>field(allows[t]).checked)){
+      el.checked=true;
+      note('Типы файлов','Нужно разрешить хотя бы один тип файлов.');
+      return;
+    }
+    if(el.matches('input,textarea,select')){
+      if(['startsAt','finishesAt','hasFinish','autoFiles','autoAssignment'].includes(el.name))refreshDates();
+      refreshDeps();refreshMedia();dirty();
+    }
+  });
+  app.addEventListener('input',event=>{
+    if(event.target.matches('input,textarea,select')){
+      if(['startsAt','finishesAt','removeFilesAt','removeAssignmentAt'].includes(event.target.name)) refreshDates();
+      refreshMedia();dirty();
+    }
+  });
+  content.addEventListener('input',event=>{
+    if(event.target.id==='people-query')renderMatches(event.target.value);
+  });
+  content.addEventListener('click',event=>{
+    const btn=event.target.closest('button[data-sheet]');if(!btn)return;
+    const a=btn.dataset.sheet;
+    if(a==='close'){closeSheet();return;}
+    if(a==='contacts-tab'){addPersonSheet('contacts');return;}
+    if(a==='search-tab'){addPersonSheet('search');return;}
+    if(a==='add-preset'||a==='save-preset'){
+      const name=content.querySelector('#preset-name')?.value.trim();if(!name)return;
+      const select=field('presetId');
+      if(a==='add-preset'){
+        const opt=document.createElement('option');opt.value='custom-'+Date.now();opt.textContent=name;select.append(opt);select.value=opt.value;
+      }else select.selectedOptions[0].textContent=name;
+      closeSheet();dirty();return;
+    }
+    if(a==='team-settings'){teamSettings();return;}
+    if(a==='choose-team'){
+      team=btn.dataset.team||'';
+      people=(teams[team]||[]).map(p=>({...p}));
+      renderPeople();closeSheet();dirty();return;
+    }
+    if(a==='pick-person'){
+      const person=directory.find(p=>p.key===btn.dataset.personKey);
+      if(person&&!people.some(x=>x.name===person.name)){
+        people.push({id:nextId++,name:person.name,slug:person.slug,userId:person.id,role:'contributor',scope:'default'});
+        renderPeople();dirty();
+      }
+      closeSheet();return;
+    }
+    if(a==='save-person'){
+      const p=people.find(x=>x.id===activePerson);
+      if(p){p.role=content.querySelector('#person-role').value;p.scope=content.querySelector('#person-scope').value;}
+      renderPeople();closeSheet();dirty();return;
+    }
+    if(a==='remove-person'){
+      people=people.filter(x=>x.id!==activePerson);
+      renderPeople();closeSheet();dirty();return;
+    }
+  });
+  overlay.addEventListener('click',e=>{if(e.target===overlay)closeSheet();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!overlay.hidden)closeSheet();});
+  document.querySelectorAll('[data-device]').forEach(btn=>btn.addEventListener('click',()=>{
+    document.getElementById('device').className='device '+btn.dataset.device;
+    document.querySelectorAll('[data-device]').forEach(x=>{
+      x.classList.toggle('selected',x===btn);
+      x.setAttribute('aria-pressed',String(x===btn));
+    });
+  }));
+  refreshDates();refreshDeps();refreshMedia();renderPeople();setTab('basics');
+})();
+
+</script></body></html>
