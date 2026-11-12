@@ -1,114 +1,130 @@
-# Визуальная карта PhotoBunker 3
+# Карта связей ВСЕХ HTML-файлов PhotoBunker 3
 
-**Под каждым экраном указан точный файл из `docs/_uiux/`.** Ниже схем есть [кликабельный список всех файлов](#открыть-html-файлы). Файлы являются исходными UX-шаблонами, а не доказательством готовности функциональности PB3.
+**Источник:** только `docs/_uiux/`. На схеме представлены **все 23 HTML-файла из корня этой папки**, включая старую версию Data & Storage 1.0. Папка `logo/` исключена. **Каждый прямоугольник с именем `.html` — конкретный файл**, не вновь придуманный экран.
 
-## Главные разделы приложения
+**Это карта структуры UX и ожидаемых переходов, а не утверждение, что эти переходы уже реализованы в PB3.** Там, где HTML хранит несколько состояний одной страницы, новый файл не придумываем. Проверены [настоящие файлы](../_uiux/) и их [описания](../ux/README.md).
 
-```mermaid
-flowchart TB
-  welcome["Приветствие / восстановление<br/>Welcome_Fieldwork_1_4.html"] --> loader["Загрузка при входе<br/>Welcome_Loader_1_6.html"]
-  loader --> pin["PIN, если включён<br/>PIN_Shell_1_1.html"]
-  pin --> app["PhotoBunker<br/>Общая оболочка приложения"]
-  loader --> app
-  loader -.-> error["Ошибка доступа<br/>Authorization_Error_1_0.html"]
-  error --> welcome
-
-  app --> tasks["Задания<br/>Assignments_Fieldwork_5_0.html"]
-  app --> browser["Каталог файлов<br/>browser_catalogue_v3.html"]
-  app --> camera["Камера<br/>camera_fieldwork_1_2.html"]
-  app --> contacts["Контакты и команды<br/>Settings_contacts_teams_fieldwork_1_1.html"]
-  app --> settings["Профиль и настройки<br/>Settings_profile_fieldwork_1_6.html"]
-
-  settings --> appearance["Оформление приложения<br/>Settings_App_Appearance_Dock_Fieldwork_1_3.html"]
-  settings --> security["Безопасность и приватность<br/>Settings_Security_Privacy_1_3.html"]
-  settings --> storage["Данные и хранилище<br/>Settings_Data_Storage_1_2.html"]
-  settings --> notifications["Уведомления<br/>Settings_Notifications_1_5.html"]
-  settings --> billing["Тарифы и оплата<br/>Settings_payments_tariffs_fieldwork_1_1.html"]
-  settings --> help["Помощь, FAQ и документы<br/>Settings_help_faq_about_legal_fieldwork_1_0.html"]
-
-  billing --> checkout["Оформление платежа<br/>Web3_Checkout_1_0.html"]
-  contacts -.-> messages["Сообщения (Beta)<br/>PhotoBunker_Messages_Fieldwork_1_1.html"]
-
-  classDef main fill:#203e2b,stroke:#4eac70,color:#ffffff,stroke-width:2px
-  class app main
-```
-
-**Главная оболочка PhotoBunker не имеет отдельного HTML в `_uiux`**: она собирается из общих Header, Dock и содержимого экранов. Актуальный макет «Данные и хранилище» — **1.2**, не сохранённый рядом старый 1.0.
-
-## От задания до готового файла
+## Полная визуальная схема — все 23 файла
 
 ```mermaid
 flowchart TB
-  tasks["Задания<br/>Assignments_Fieldwork_5_0.html"] --> taskedit["Создать / изменить задание<br/>assignment_editor_media_2_2.html"]
-  tasks --> camera["Камера<br/>camera_fieldwork_1_2.html"]
-  tasks --> browser["Каталог файлов<br/>browser_catalogue_v3.html"]
-  camera --> browser
-  browser --> viewer["Просмотр фото, видео и аудио<br/>browser_file_viewer_fieldwork_1_0.html"]
-  viewer --> photoeditor["Редактор фото<br/>browser_photo_editor_3_2_fixed.html"]
-  viewer --> mediaeditor["Редактор видео и аудио<br/>browser_video_audio_editor_fieldwork_1_1.html"]
-  photoeditor --> viewer
-  mediaeditor --> viewer
-  viewer --> browser
-  viewer -.-> preview["Предпросмотр публичной карточки<br/>Отдельного HTML в _uiux нет"]
-  preview -.-> public["Публичная карточка по ссылке<br/>Public_Card_1_1.html"]
+  subgraph auth["ВХОД И ДОСТУП · без шапки и Dock приложения"]
+    direction LR
+    welcome["Приветствие и восстановление<br/>Welcome_Fieldwork_1_4.html"]
+    loader["Состояние загрузки Welcome<br/>Welcome_Loader_1_6.html"]
+    pin["Ввод обычного / экстренного PIN<br/>PIN_Shell_1_1.html"]
+    autherror["Ошибка авторизации<br/>Authorization_Error_1_0.html"]
+  end
 
-  classDef pending fill:#41352a,stroke:#b08b4c,color:#ffffff
-  class preview,public pending
+  shell(["PhotoBunker · общие Header и Dock<br/>Отдельного HTML-файла в _uiux нет"])
+
+  subgraph media["РАБОТА С ЗАДАНИЯМИ И МЕДИА"]
+    direction TB
+    assignments["Задания<br/>Assignments_Fieldwork_5_0.html"]
+    assignmenteditor["Создание / редактирование задания<br/>assignment_editor_media_2_2.html"]
+    camera["Камера<br/>camera_fieldwork_1_2.html"]
+    browser["Каталог файлов<br/>browser_catalogue_v3.html"]
+    viewer["Просмотр фото / видео / аудио<br/>browser_file_viewer_fieldwork_1_0.html"]
+    photoeditor["Редактор фотографий<br/>browser_photo_editor_3_2_fixed.html"]
+    aveditor["Редактор видео и аудио<br/>browser_video_audio_editor_fieldwork_1_1.html"]
+  end
+
+  subgraph settings["НАСТРОЙКИ · одна категория, а не самостоятельная соцсеть"]
+    direction TB
+    profile["Главная настроек + профиль<br/>Settings_profile_fieldwork_1_6.html"]
+    contacts["Контакты и команды<br/>Settings_contacts_teams_fieldwork_1_1.html"]
+    appearance["Оформление и настройка Dock<br/>Settings_App_Appearance_Dock_Fieldwork_1_3.html"]
+    security["Безопасность и приватность<br/>Settings_Security_Privacy_1_3.html"]
+    storage["Данные и хранилище · текущая 1.2<br/>Settings_Data_Storage_1_2.html"]
+    storageold["Данные и хранилище · архив 1.0<br/>Settings_Data_Storage_1_0.html"]
+    notifications["Уведомления и их настройки<br/>Settings_Notifications_1_5.html"]
+    billing["Платежи и тарифы<br/>Settings_payments_tariffs_fieldwork_1_1.html"]
+    checkout["Оформление платежа<br/>Web3_Checkout_1_0.html"]
+    help["О приложении / FAQ / помощь / документы<br/>Settings_help_faq_about_legal_fieldwork_1_0.html"]
+  end
+
+  subgraph separate["ОТДЕЛЬНЫЙ РАЗДЕЛ · не внутри контактов"]
+    messages["Сообщения · список + полноэкранный диалог, Beta<br/>PhotoBunker_Messages_Fieldwork_1_1.html"]
+  end
+
+  subgraph outside["ВНЕ АВТОРИЗОВАННОГО ПРИЛОЖЕНИЯ"]
+    publiccard["Публичная карточка по ссылке<br/>Public_Card_1_1.html"]
+  end
+
+  welcome -->|"вход / восстановление"| loader
+  loader -->|"если установлен PIN"| pin
+  loader -->|"PIN не нужен"| shell
+  pin -->|"успешная разблокировка"| shell
+  loader -.->|"подтверждённая ошибка"| autherror
+  autherror -->|"вернуться к приветствию"| welcome
+
+  shell -->|"Dock"| assignments
+  shell -->|"Dock"| browser
+  shell -->|"Dock"| camera
+  shell -->|"Профиль / Настройки"| profile
+
+  assignments -->|"создать / изменить"| assignmenteditor
+  assignments -->|"снимать по заданию"| camera
+  assignments -->|"материалы задания"| browser
+  camera -->|"сохранённые материалы"| browser
+  browser -->|"открыть файл"| viewer
+  viewer -->|"редактировать фото"| photoeditor
+  viewer -->|"редактировать видео / аудио"| aveditor
+  photoeditor -->|"сохранить / отменить"| viewer
+  aveditor -->|"сохранить / отменить"| viewer
+  viewer -->|"назад к папке"| browser
+
+  profile -->|"профиль и люди"| contacts
+  profile -->|"приложение"| appearance
+  profile -->|"безопасность"| security
+  profile -->|"данные"| storage
+  profile -->|"уведомления"| notifications
+  profile -->|"подписка"| billing
+  profile -->|"информация"| help
+  billing -->|"оплатить / продлить"| checkout
+  storageold -.->|"СТАРАЯ ВЕРСИЯ — НЕ ПЕРЕХОД"| storage
+
+  shell -.->|"дополнительный ярлык Dock для настроек"| contacts
+  shell -.->|"если добавлены в Dock · Beta"| messages
+  appearance -.->|"изменяет состав Dock"| shell
+
+  viewer -.->|"только явная безопасная публикация"| publiccard
+
+  classDef entry fill:#203b2d,stroke:#38a46a,color:#f5fff7,stroke-width:2px
+  classDef setting fill:#273449,stroke:#7398c8,color:#f3f7ff
+  classDef mediafile fill:#25372e,stroke:#6c9f80,color:#f4fff5
+  classDef provisional fill:#433624,stroke:#c6a15d,color:#fff5df
+  classDef archived fill:#343434,stroke:#888888,color:#dddddd,stroke-dasharray:5 4
+  classDef external fill:#40372e,stroke:#aa8863,color:#fff8f0
+  class shell entry
+  class assignments,assignmenteditor,camera,browser,viewer,photoeditor,aveditor mediafile
+  class profile,contacts,appearance,security,storage,notifications,billing,checkout,help setting
+  class messages provisional
+  class storageold archived
+  class publiccard external
 ```
 
-**Предпросмотр** — это состояние внутри приложения, для которого нет отдельного HTML-файла в `_uiux`. **Публичная карточка** имеет собственный HTML, но настоящая публикация требует отдельного подтверждения прав, безопасного файла, срока ссылки и отзыва доступа.
+## На что обратить внимание при проверке схемы
 
-## Контакты, профиль и сообщения
+**1. «Контакты и команды» относятся к настройкам.** Их родитель на схеме — `Settings_profile_fieldwork_1_6.html`, блок «Профиль и люди». В нынешнем утверждённом дизайне есть также **ярлык «Контакты» в Dock по умолчанию**. Это дополнительный способ попасть в тот же раздел, а не отдельный продукт и не «переход из Контактов в Сообщения».
 
-```mermaid
-flowchart TB
-  contacts["Контакты и команды<br/>Settings_contacts_teams_fieldwork_1_1.html"] --> profile["Профиль пользователя<br/>Settings_profile_fieldwork_1_6.html"]
-  contacts --> team["Карточка команды<br/>Внутри Settings_contacts_teams_fieldwork_1_1.html"]
-  profile -.-> inbox["Список переписок<br/>PhotoBunker_Messages_Fieldwork_1_1.html"]
-  team -.-> inbox
-  inbox --> dialog["Открытый диалог поверх приложения<br/>Внутри PhotoBunker_Messages_Fieldwork_1_1.html"]
-  dialog --> inbox
+**2. «Сообщения» — самостоятельный раздел**, который можно добавить в Dock через настройки оформления. В файле Messages 1.1 содержатся и список переписок, и полноэкранный диалог поверх приложения — **это не два отдельных HTML**. Кнопка «Написать» в демо карточки контакта не означает готовую навигацию в работающий мессенджер. **Стрелки из «Контактов и команд» в «Сообщения» на карте нет.**
 
-  classDef pending fill:#41352a,stroke:#b08b4c,color:#ffffff
-  class profile,inbox,dialog pending
-```
+**3. «Профиль» и «Настройки» в текущем `Settings_profile_fieldwork_1_6.html` — один HTML**, а не два файла. Профиль 1.6 пока промежуточный WIP, окончательно не утверждён.
 
-Профиль — **промежуточный, не окончательно утверждённый** дизайн. Messages — утверждённый **Beta-шаблон**. Диалог перекрывает приложение на телефоне и компьютере, но является состоянием **того же HTML**, а не отдельным файлом.
+**4. «Данные и хранилище 1.0» — архив.** Файл сохранён, поэтому присутствует на карте, но действующий эталон — `Settings_Data_Storage_1_2.html`. Пунктир между ними **не** является навигацией пользователя.
 
-## Открыть HTML-файлы
+**5. «Public Card» — самостоятельная внешняя страница**, а не ещё один пункт настроек или меню Viewer. Из Viewer она достижима только после отдельного подтверждённого безопасного опубликования. Прототип не доказывает, что публикация работает в PB3.
 
-Нажми на название файла ниже, чтобы открыть его в GitHub. Для **интерактивного просмотра** открой эти файлы через локальный HTTP-сервер из корня PB3: `python3 -m http.server 8080`, затем `http://localhost:8080/docs/_uiux/<имя файла>`.
+**6. Welcome Loader — состояние экрана приветствия**, PIN и Authorization Error отображаются без авторизованного Header/Dock.
 
-| Экран | Файл из `docs/_uiux/` |
-|---|---|
-| Приветствие | [Welcome_Fieldwork_1_4.html](../_uiux/Welcome_Fieldwork_1_4.html) |
-| Загрузка при входе | [Welcome_Loader_1_6.html](../_uiux/Welcome_Loader_1_6.html) |
-| PIN | [PIN_Shell_1_1.html](../_uiux/PIN_Shell_1_1.html) |
-| Ошибка доступа | [Authorization_Error_1_0.html](../_uiux/Authorization_Error_1_0.html) |
-| Задания | [Assignments_Fieldwork_5_0.html](../_uiux/Assignments_Fieldwork_5_0.html) |
-| Редактор задания | [assignment_editor_media_2_2.html](../_uiux/assignment_editor_media_2_2.html) |
-| Каталог файлов | [browser_catalogue_v3.html](../_uiux/browser_catalogue_v3.html) |
-| Просмотр файла | [browser_file_viewer_fieldwork_1_0.html](../_uiux/browser_file_viewer_fieldwork_1_0.html) |
-| Редактирование фото | [browser_photo_editor_3_2_fixed.html](../_uiux/browser_photo_editor_3_2_fixed.html) |
-| Редактирование видео / аудио | [browser_video_audio_editor_fieldwork_1_1.html](../_uiux/browser_video_audio_editor_fieldwork_1_1.html) |
-| Камера | [camera_fieldwork_1_2.html](../_uiux/camera_fieldwork_1_2.html) |
-| Контакты, команды и карточка команды | [Settings_contacts_teams_fieldwork_1_1.html](../_uiux/Settings_contacts_teams_fieldwork_1_1.html) |
-| Профиль и настройки (WIP) | [Settings_profile_fieldwork_1_6.html](../_uiux/Settings_profile_fieldwork_1_6.html) |
-| Оформление и Dock | [Settings_App_Appearance_Dock_Fieldwork_1_3.html](../_uiux/Settings_App_Appearance_Dock_Fieldwork_1_3.html) |
-| Безопасность | [Settings_Security_Privacy_1_3.html](../_uiux/Settings_Security_Privacy_1_3.html) |
-| Данные и хранилище | [Settings_Data_Storage_1_2.html](../_uiux/Settings_Data_Storage_1_2.html) |
-| Уведомления | [Settings_Notifications_1_5.html](../_uiux/Settings_Notifications_1_5.html) |
-| Тарифы | [Settings_payments_tariffs_fieldwork_1_1.html](../_uiux/Settings_payments_tariffs_fieldwork_1_1.html) |
-| Оформление платежа | [Web3_Checkout_1_0.html](../_uiux/Web3_Checkout_1_0.html) |
-| Помощь и документы | [Settings_help_faq_about_legal_fieldwork_1_0.html](../_uiux/Settings_help_faq_about_legal_fieldwork_1_0.html) |
-| Сообщения (Beta) | [PhotoBunker_Messages_Fieldwork_1_1.html](../_uiux/PhotoBunker_Messages_Fieldwork_1_1.html) |
-| Публичная карточка | [Public_Card_1_1.html](../_uiux/Public_Card_1_1.html) |
+### Легенда
 
-### Как читать стрелки
+- **Обычная стрелка** — структура разделов или предусмотренное действие/возврат.
+- **Пунктир** — опциональный пункт Dock, условная интеграция, внешний сценарий либо версия в архиве; подпись у стрелки уточняет смысл.
+- **Синие прямоугольники** — настройки; **зелёные** — работа с заданиями/медиа; **жёлтый** — Beta; **серый пунктирный** — старая версия.
+- **Общая оболочка** — пояснение, **не файл** в `_uiux`.
 
-- **Сплошная:** переход предусмотрен согласованным интерфейсом.
-- **Пунктирная:** Beta, будущая функция или отдельное решение об интеграции/доступе.
+**Принцип проверки:** каждый из 23 HTML-файлов `docs/_uiux/` (кроме `logo/`) назван на этой диаграмме **ровно один раз**. Если появится новый файл или будет пропущен существующий, проверка CI должна обнаружить расхождение.
 
-Схема **не обещает**, что все маршруты уже работают в PB3. Файлы `docs/_uiux/` остаются неизменными и доступны только для чтения; при новых версиях не перезаписываем старые эталоны.
-
-Подробная техническая карта, если понадобится агентам: [NAVIGATION-MAP.md](NAVIGATION-MAP.md).
+[Открыть исходную папку `docs/_uiux/`](../_uiux/) · [Утверждённые UX-спецификации](../ux/README.md) · [Технические контракты для агентов](NAVIGATION-MAP.md)
