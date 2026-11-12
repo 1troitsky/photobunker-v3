@@ -37,10 +37,12 @@ test('UX Appearance 1.3: Dock draft, cancel, save, device reload and protected S
     expect(order.join('|')).toMatch(/Задания.*Browser.*Настройки.*Камера/s)
     await page.getByRole('button',{name:'Сохранить',exact:true}).click()
     await expect(page.getByText('Сохранено на этом устройстве.')).toBeVisible()
-    const saved=await page.evaluate(()=>localStorage.getItem('pb3.appearance.dock.v1'))
-    expect(JSON.parse(saved||'null')).toEqual([
-      'assignments','browser','settings','camera',
-    ])
+    const saved=await page.evaluate(()=>localStorage.getItem('pb3.appearance.v2'))
+    expect(JSON.parse(saved||'null')).toEqual({
+      version:2,
+      dock:['assignments','browser','settings','camera'],
+      launch:'tasks',
+    })
     await page.reload()
     await expect(dock.getByRole('link')).toHaveCount(4)
     await expect(page.getByTestId('dock-count')).toHaveText('4 / 6')

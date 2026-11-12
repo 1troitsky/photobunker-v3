@@ -3,25 +3,36 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import {
   defaultDock, dockChoices, dockDefinitions,
-  previewDock, restoreDock, savedDock, saveDock, validateDock,
+  previewDock, restoreDock, savedDock, validateDock,
 } from '../ui/fieldwork/dock-preferences'
 import type { DockId } from '../ui/fieldwork/dock-preferences'
+import {
+  launchChoices, savedLaunch, saveAppearance,
+} from '../ui/fieldwork/appearance-preferences'
+import type { LaunchPage } from '../ui/fieldwork/appearance-preferences'
 
 const router = useRouter()
 const route = useRoute()
 const dockSection = ref<HTMLElement | null>(null)
+const launchSection = ref<HTMLElement | null>(null)
 async function focusRequestedField(): Promise<void> {
-  if (route.query.field !== 'dock') return
+  const target = route.query.field === 'dock' ? dockSection
+    : route.query.field === 'launch' ? launchSection : null
+  if (!target) return
   await nextTick()
-  dockSection.value?.scrollIntoView({block:'start'})
-  dockSection.value?.focus({preventScroll:true})
+  target.value?.scrollIntoView({block:'start'})
+  target.value?.focus({preventScroll:true})
 }
 watch(() => route.query.field, () => { void focusRequestedField() })
 const draft = ref<DockId[]>([...savedDock.value])
+const draftLaunch = ref<LaunchPage>(savedLaunch.value)
 const notice = ref('')
 const error = ref('')
 const dragging = ref<DockId | null>(null)
-const dirty = computed(() => JSON.stringify(draft.value) !== JSON.stringify(savedDock.value))
+const dirty = computed(() =>
+  JSON.stringify(draft.value) !== JSON.stringify(savedDock.value)
+  || draftLaunch.value !== savedLaunch.value,
+)
 const otherChoices = computed(() => dockChoices.filter(item => !draft.value.includes(item.id)))
 const chosen = computed(() => draft.value.map(id => dockDefinitions[id]))
 
@@ -73,23 +84,28 @@ function onDrop(event: DragEvent, target: DockId): void {
 }
 function cancel(): void {
   draft.value=[...savedDock.value]
+  draftLaunch.value=savedLaunch.value
   restoreDock()
   void router.push('/settings')
 }
 function save(): void {
   if (!dirty.value) return
-  if (!saveDock(draft.value)) {
+  if (!saveAppearance(draft.value,draftLaunch.value)) {
     error.value='Не удалось сохранить оформление на этом устройстве. Настройки не изменены.'
     return
   }
   notice.value='Сохранено на этом устройстве.'
   error.value=''
 }
+function updateLaunch(): void {
+  notice.value=''
+  error.value=''
+}
 onMounted(() => { previewDock(draft.value); void focusRequestedField() })
 onUnmounted(() => { restoreDock() })
 onBeforeRouteLeave(() => {
   if (!dirty.value) return true
-  return window.confirm('Настройки Dock не сохранены. Выйти без сохранения?')
+  return window.confirm('Изменения оформления не сохранены. Выйти без сохранения?')
 })
 </script>
 
@@ -101,6 +117,26 @@ onBeforeRouteLeave(() => {
     </header>
 
     <div class="appearance-body">
+      <section id="setting-field-launch" ref="launchSection" tabindex="-1"
+        class="appearance-section" aria-labelledby="launch-title" data-testid="appearance-launch-field">
+        <h2 id="launch-title">Стартовая страница</h2>
+        <div class="appearance-panel">
+          <p class="launch-hint">Какой раздел открывать при запуске PhotoBunker. Прямые ссылки на файлы и задания сохраняются.</p>
+          <div class="launch-options" role="radiogroup" aria-label="Стартовая страница">
+            <label v-for="option in launchChoices" :key="option.id" class="launch-option"
+              :class="{chosen:draftLaunch===option.id}">
+              <input v-model="draftLaunch" type="radio" name="launch-page"
+                :value="option.id" :data-testid="'launch-page-'+option.id"
+                @change="updateLaunch">
+              <span class="launch-option-content">
+                <strong>{{ option.label }}</strong>
+                <small>{{ option.description }}</small>
+              </span>
+            </label>
+          </div>
+        </div>
+      </section>
+
       <section id="setting-field-dock" ref="dockSection" tabindex="-1"
         class="appearance-section" aria-labelledby="dock-title" data-testid="appearance-dock-field">
         <div class="dock-heading">
@@ -164,7 +200,7 @@ onBeforeRouteLeave(() => {
       <section class="appearance-section" aria-labelledby="other-appearance-title">
         <h2 id="other-appearance-title">Остальные параметры</h2>
         <div class="appearance-panel pending-appearance">
-          <p>Тема, основной цвет, размер текста, стартовая страница и язык будут подключены отдельно, с полноценным сохранением и проверкой локализации.</p>
+          <p>Тема, основной цвет, размер текста и язык будут подключены отдельно, с полноценным сохранением и проверкой локализации.</p>
         </div>
       </section>
     </div>
@@ -175,7 +211,7 @@ onBeforeRouteLeave(() => {
     </div>
     <p v-if="notice" role="status" class="save-notice">{{ notice }}</p>
     <p v-if="error" role="alert" class="save-error">{{ error }}</p>
-    <p class="storage-notice">Порядок панели сохраняется локально на этом устройстве. Синхронизация между устройствами пока не подключена.</p>
+    <p class="storage-notice">Порядок панели и стартовая страница сохраняются одним действием локально на этом устройстве. Синхронизация между устройствами пока не подключена.</p>
   </section>
 </template>
 
@@ -185,9 +221,19 @@ onBeforeRouteLeave(() => {
 .appearance-heading p{color:#a4ada6;font-size:12px;margin:6px 0 0}
 .appearance-body{margin-top:34px;display:grid;gap:22px}
 .appearance-section h2{font-size:15px;font-weight:720;margin:0 0 8px}
-#setting-field-dock{scroll-margin-top:16px}
-#setting-field-dock:focus{outline:none}
-#setting-field-dock:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+#setting-field-dock,#setting-field-launch{scroll-margin-top:16px}
+#setting-field-dock:focus,#setting-field-launch:focus{outline:none}
+#setting-field-dock:focus-visible,#setting-field-launch:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.launch-hint{font-size:12px;line-height:1.55;color:#aeb5ae;margin:0 0 12px}
+.launch-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.launch-option{display:flex;align-items:center;gap:9px;padding:13px 11px;
+  border:1px solid #404940;border-radius:8px;cursor:pointer;background:#282b28;min-height:72px}
+.launch-option.chosen{border-color:#1ed760;background:#293a2d}
+.launch-option input{width:17px;height:17px;flex:0 0 17px;accent-color:#1ed760}
+.launch-option-content{display:flex;flex:1;flex-direction:column;gap:3px;min-width:0}
+.launch-option-content strong{font-size:13px}
+.launch-option-content small{font-size:11px;color:#aab4ab;line-height:1.4}
+@media(max-width:600px){.launch-options{grid-template-columns:1fr}}
 .dock-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:11px}
 .dock-heading h2{margin:0 0 4px}.dock-heading p{font-size:12px;color:#9da9a0;margin:0;max-width:520px}
 .dock-count{flex-shrink:0;font-size:12px;padding:7px 10px;color:#e9f5ec;background:#304036;border-radius:8px;font-weight:730}

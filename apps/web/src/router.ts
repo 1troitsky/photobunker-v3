@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { resolveStartRoute } from './ui/fieldwork/appearance-preferences'
 import AssignmentsView from './views/AssignmentsView.vue'
 import AssignmentEditorView from './views/AssignmentEditorView.vue'
 import AccountView from './views/AccountView.vue'
@@ -12,7 +13,7 @@ import ContactsTeamsView from './views/ContactsTeamsView.vue'
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/assignments' },
+    { path: '/', redirect: () => resolveStartRoute() },
     { path: '/assignments', component: AssignmentsView, meta: { title: 'Задания' } },
     { path: '/assignments/:assignmentId/edit', component: AssignmentEditorView,
       meta: { title: 'Редактор задания' } },
