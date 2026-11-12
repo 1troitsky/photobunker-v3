@@ -15,7 +15,7 @@ function mount(locale: 'ru' | 'en' = 'ru'): HTMLElement {
 }
 async function clickText(container: HTMLElement, text: string): Promise<void> {
   const button = [...container.querySelectorAll('button')]
-    .find(node => node.textContent?.includes(text))
+    .find(node => node.textContent?.includes(text) || node.getAttribute('aria-label')?.includes(text))
   expect(button, `Missing button: ${text}`).toBeDefined()
   button!.click()
   await nextTick()
