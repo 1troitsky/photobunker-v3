@@ -133,7 +133,7 @@ test('P2 V-50: five real shape tools stay on one mobile row, fill and stroke fla
     await page.getByTestId('file-viewer-photo-redo').click()
     await expect(page.getByTestId('file-viewer-crop-turn')).toHaveValue('1')
     await expect(page.getByTestId('file-viewer-crop-status'))
-      .toContainText('история сохранены в памяти')
+      .toContainText('Кадр и цвет восстановлены из истории')
     await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
     await page.getByTestId('file-viewer-create-crop').click()
     await expect(page.getByTestId('file-viewer-crop-preview'))
