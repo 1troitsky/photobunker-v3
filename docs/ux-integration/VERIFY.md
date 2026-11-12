@@ -16,3 +16,7 @@ The manifest was built from immutable PB2 source commit `daca24a4a38c62473859b2b
 To review a specific pair of screens, open both accepted HTML files from [Screen Registry](SCREEN-REGISTRY.md), read their README specifications, and follow edge IDs in [Navigation Map](NAVIGATION-MAP.md). If a source was overwritten, the verification script fails even when the modified HTML still renders.
 
 The original PB2 Markdown retains historical links to paths outside imported `docs/ux/`; such links are intentionally excluded from link validation. Never silently rewrite them within the immutable 117-file baseline.
+
+## Automatic CI check
+
+[GitHub Actions: UX source integrity and integration map](../../.github/workflows/ux-source-integrity.yml) runs the same offline Node verification whenever this map, the original UX source or its workflow changes. The first run for Draft PR #138 completed **PASS** (workflow run `43144457644`, job `130938894959`) on commit `9788edd5e802654795b7e462dc36943cf16265e1`. This is a file integrity / link / ID check, **not** a visual browser or security E2E pass.
