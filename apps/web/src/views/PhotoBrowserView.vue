@@ -15,8 +15,10 @@ import {
 import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
 import {buildCatalog,filterCatalog,scopeCatalogFolders}
   from '../features/browser/application/catalog'
-import {normalizePrivateSearch,searchPrivateMetadata}
+import {normalizePrivateSearch,searchPrivateMetadata,searchPrivateMetadataBatches}
   from '../features/browser/application/private-search'
+import {loadBoundedCatalogIndex}
+  from '../features/browser/application/bounded-catalog-expansion'
 import type {PrivateSearchResult}
   from '../features/browser/application/private-search'
 import type {CatalogFilter,CatalogSort,CatalogView,CatalogItem} from '../features/browser/application/catalog'
@@ -74,6 +76,11 @@ const privateSearchResult=ref<PrivateSearchResult|null>(null)
 const privateSearchBusy=ref(false)
 const privateSearchError=ref('')
 const privateSearchUnscanned=ref(0)
+const privateSearchExpanded=ref(false)
+const privateExpansionBusy=ref(false)
+const privateExpansionStatus=ref('')
+const privateSearchProgress=ref(0)
+let privateExpansionEpoch=0
 let privateSearchEpoch=0
 let privateSearchTimer:ReturnType<typeof setTimeout>|null=null
 const busy=ref(false)
@@ -291,17 +298,22 @@ function schedulePrivateSearch():void{
   privateSearchError.value=''
   privateSearchBusy.value=false
   privateSearchUnscanned.value=0
+  privateSearchProgress.value=0
   const query=normalizePrivateSearch(search.value)
   const identity=activeSession.value
   if(!identity||query.length<2||query.length>160)return
   const rows=searchScope.value
-  privateSearchUnscanned.value=Math.max(0,rows.length-200)
+  const scanLimit=privateSearchExpanded.value?1000:200
+  privateSearchUnscanned.value=Math.max(0,rows.length-scanLimit)
   privateSearchBusy.value=true
   privateSearchTimer=setTimeout(()=>{
     privateSearchTimer=null
-    void searchPrivateMetadata(query,rows.slice(0,200),
-      ()=>epoch===privateSearchEpoch&&activeSession.value===identity)
-      .then(result=>{
+    const valid=()=>epoch===privateSearchEpoch&&activeSession.value===identity
+    const task=privateSearchExpanded.value
+      ?searchPrivateMetadataBatches(query,rows.slice(0,1000),valid,
+        done=>{if(valid())privateSearchProgress.value=done})
+      :searchPrivateMetadata(query,rows.slice(0,200),valid)
+    void task.then(result=>{
         if(epoch===privateSearchEpoch&&activeSession.value===identity)
           privateSearchResult.value=result
       })
@@ -760,6 +772,10 @@ function revokePreview():void{
   selectedExpiry.value=null
 }
 function clearCatalog():void{
+  ++privateExpansionEpoch
+  privateExpansionBusy.value=false
+  privateSearchExpanded.value=false
+  privateExpansionStatus.value=''
   localPhotos.value=[];localMedia.value=[]
   cloudPhotos.value=[];cloudMedia.value=[]
   photoCursor.value=null;mediaCursor.value=null
@@ -959,17 +975,28 @@ watch(activeSession,(next,previous)=>{
   void refresh()
 })
 watch([selectedFolder,filter,search,searchFolderScope,archiveTab],()=>{selectedKeys.value=[]})
-watch([search,searchScope,activeSession],schedulePrivateSearch)
+watch([search,searchScope,activeSession,privateSearchExpanded],schedulePrivateSearch)
+watch([search,archiveTab],()=>{
+  // Broader authenticated index fetches are explicit per typed query.
+  // Changing the question/tab must invalidate in-flight work immediately.
+  ++privateExpansionEpoch
+  privateExpansionBusy.value=false
+  privateSearchExpanded.value=false
+  privateExpansionStatus.value=''
+})
 onMounted(()=>{
   schedulePrivateSearch()
   void loadFolders();void loadMergeBackups();void loadArchivePrefState()
   void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
-  ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch;++privateSearchEpoch
+  ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch
+  ++privateSearchEpoch;++privateExpansionEpoch
   if(privateSearchTimer!==null)clearTimeout(privateSearchTimer)
   privateSearchTimer=null
   privateSearchResult.value=null
+  privateExpansionBusy.value=false
+  privateSearchExpanded.value=false
   search.value=''
   searchFolderScope.value='current'
   archivePrefsBusy.value=false
