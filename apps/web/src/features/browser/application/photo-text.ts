@@ -1,4 +1,9 @@
+import {canExportPhotoCanvas} from './photo-export-budget'
 import {MAX_MEDIA_BYTES} from '../../media/domain/media-crypto'
+import {
+  assertFullResolutionExport,deviceMemoryForPhotoExport,
+  encodeFullResolutionJpeg,verifyFullResolutionJpeg,
+} from './photo-export-budget'
 import {drawPhotoShapes,validateShapeMarks} from './photo-shapes'
 import type {PhotoShapeMark} from './photo-shapes'
 import {drawPhotoStrokes,validatePhotoStrokes} from './photo-strokes'
@@ -63,9 +68,7 @@ export function drawPhotoText(
   marks:readonly PhotoTextMark[],
 ):void{
   validateTextMarks(marks)
-  if(!Number.isSafeInteger(width)||!Number.isSafeInteger(height)
-    ||width<1||height<1||width>4096||height>4096
-    ||width*height>16_777_216)
+  if(!canExportPhotoCanvas(width,height))
     throw Error('viewer.text_invalid_canvas')
   for(const mark of marks){
     const fontPx=Math.max(1,Math.round(width*mark.size/100))
@@ -120,10 +123,8 @@ export async function flattenPhotoAnnotations(
   const bitmap=await createImageBitmap(source)
   const canvas=document.createElement('canvas')
   try{
-    if(bitmap.width<1||bitmap.height<1
-      ||bitmap.width>4096||bitmap.height>4096
-      ||bitmap.width*bitmap.height>16_777_216)
-      throw Error('viewer.text_invalid_canvas')
+    assertFullResolutionExport(
+      bitmap.width,bitmap.height,deviceMemoryForPhotoExport())
     canvas.width=bitmap.width;canvas.height=bitmap.height
     const ctx=canvas.getContext('2d',{alpha:false})
     if(!ctx)throw Error('viewer.text_canvas_unsupported')
@@ -147,12 +148,10 @@ export async function flattenPhotoAnnotations(
     // Blackouts are composited last: the masked image pixels are replaced
     // even when previously painted shapes/text/brush cross the same region.
     paintPhotoBlackouts(ctx,bitmap.width,bitmap.height,blackouts)
-    const blob=await new Promise<Blob>((resolve,reject)=>{
-      canvas.toBlob(result=>result?resolve(result):reject(
-        Error('viewer.text_encode_failed')),'image/jpeg',0.91)
-    })
-    if(blob.type!=='image/jpeg'||blob.size<128||blob.size>MAX_MEDIA_BYTES)
-      throw Error('viewer.text_invalid_jpeg')
+    const blob=await encodeFullResolutionJpeg(canvas,0.91)
+    if(blob.size<128||blob.size>MAX_MEDIA_BYTES)
+      throw Error('viewer.photo_export_encode_failed')
+    await verifyFullResolutionJpeg(blob,bitmap.width,bitmap.height)
     return {blob,width:bitmap.width,height:bitmap.height}
   }finally{
     bitmap.close()
