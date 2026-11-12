@@ -9,7 +9,7 @@ if (!(($id>=80427 && $id<80500)||($id>=80512 && $id<80600))) {
 }
 return Application::configure(basePath:dirname(__DIR__))
  ->withRouting(web:__DIR__.'/../routes/web.php',commands:__DIR__.'/../routes/console.php')
- ->withCommands([\App\Console\Commands\PhotoMaintain::class,\App\Console\Commands\MediaMaintain::class])
+ ->withCommands([\App\Console\Commands\PhotoMaintain::class,\App\Console\Commands\MediaMaintain::class,\App\Console\Commands\StorageReconcile::class])
  ->withMiddleware(function(Middleware $middleware):void {
      // Configure trusted reverse proxies explicitly per deployment.
  })

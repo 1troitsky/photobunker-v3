@@ -731,8 +731,35 @@ async function accept(invite:ReceivedAssignmentInvite):Promise<void>{
     notice.value='Согласие подписано. Если нет сети, оно ожидает отправки.'
   })
 }
+/**
+ * A rapid P1 submission click can land while router bootstrap is still
+ * proving this SAME device: /challenges -> /proof rotates the session cookie
+ * and activeSession object. Preflight must continue to fail closed on ANY
+ * actual account/device/key revision change. Wait for the existing proof
+ * before taking a signed policy snapshot, never bypass those checks.
+ *
+ * Offline Local-First submissions continue through the existing signed
+ * cached-policy gate; no login request is manufactured while offline.
+ */
+async function awaitStableSubmissionSession():Promise<void>{
+  const origin=activeSession.value
+  if(!origin)throw Error('identity.account_locked')
+  if(!navigator.onLine)return
+  const verified=await reauthenticate()
+  if(activeSession.value!==verified
+    ||verified.accountId!==origin.accountId
+    ||verified.deviceId!==origin.deviceId
+    ||verified.pkg.accountSpki!==origin.pkg.accountSpki
+    ||verified.pkg.revision!==origin.pkg.revision)
+    throw Error('identity.changed')
+  // Pending bootstrap may have invalidated an in-flight hydrated card.
+  // Re-evaluate the real owner-signed listing before any E2EE DEK grant.
+  await refresh()
+  if(activeSession.value!==verified)throw Error('identity.changed')
+}
 async function submit(photo:StoredPhoto):Promise<void>{
   await operate(async()=>{
+    await awaitStableSubmissionSession()
     const target=selected.value
     if(!target||target.isOwner||photo.state!=='synced')
       throw Error('Нужен синхронизированный снимок и принятое задание')
@@ -758,6 +785,7 @@ async function submit(photo:StoredPhoto):Promise<void>{
 }
 async function submitMedia(media:StoredMedia):Promise<void>{
   await operate(async()=>{
+    await awaitStableSubmissionSession()
     const target=selected.value
     if(!target||target.isOwner||media.state!=='synced'
       ||!['photo','video','audio'].includes(media.mediaType))
