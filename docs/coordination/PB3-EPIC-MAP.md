@@ -1,10 +1,10 @@
-# PB3 — epic map (coverage index, not implementation inventory)
+# PB3 — карта функциональных направлений Kanban
 
-**Kanban protocol:** [PB3-KANBAN.md](PB3-KANBAN.md) · GitHub Issues: [all EPICs](https://github.com/1troitsky/photobunker-v3/issues?q=is%3Aissue+is%3Aopen+in%3Atitle+EPIC).
+**Правила Kanban:** [PB3-KANBAN.md](PB3-KANBAN.md) · GitHub Issues: [все эпики](https://github.com/1troitsky/photobunker-v3/issues?q=is%3Aissue+is%3Aopen+in%3Atitle+%D0%AD%D0%9F%D0%98%D0%9A).
 
-The 16 Epic Issues are a durable *index* of all 28 major sections of `ts.md`; they are intentionally **not** estimates or acceptance claims. Section §25's 25 system journeys, `docs/ux-integration/USER-JOURNEYS.md` J-01–J-22 and gates P1–P4 are cross-cutting; coverage is many-to-many, not a lossless 1:1 transcription.
+16 эпиков — указатель требований всех 28 основных разделов `ts.md`, а не оценка готовности или приёмка. 25 системных сценариев §25, карта J-01–J-22 в `docs/ux-integration/USER-JOURNEYS.md` и этапы P1–P4 пересекают несколько направлений одновременно.
 
-| Epic | Issue | Normative source | Phase | UX source / Screen IDs | Cross-screen acceptance |
+| Направление | Issue | Спецификация | Этап | Источник UX / экран | Сквозные сценарии |
 |---|---|---|---|---|---|
 | EP-01 · Identity, E2EE, Recovery | [#163](https://github.com/1troitsky/photobunker-v3/issues/163) | §5; §4.6 | P1/P3 | S01–S04 · Welcome/PIN | J-01/J-02 |
 | EP-02 · PIN, Panic, Devices, DMS | [#164](https://github.com/1troitsky/photobunker-v3/issues/164) | §6; §5.3 | P1/P3 | S03–S04/S15 · Security & Privacy | J-19 |
@@ -23,7 +23,7 @@ The 16 Epic Issues are a durable *index* of all 28 major sections of `ts.md`; th
 | EP-15 · Infrastructure, API, Branding, Signed PWA | [#177](https://github.com/1troitsky/photobunker-v3/issues/177) | §0–4, §21, §24 | P0/P1/P3/P4 | Shell/shared; non-UX engineering | TS §25 items 18,23,24 |
 | EP-16 · Integration / QA / Acceptance | [#178](https://github.com/1troitsky/photobunker-v3/issues/178) | §25–28 | Cross-phase | All mapped journeys | J-01–J-22 · TS §25 1–25 |
 
-## Source precedence / mapping
+## Источники и их приоритет
 
 1. `ts.md` — normative product scope, system boundaries, security, P1–P4 gates. It is **not** a current progress tracker.
 2. `docs/ux/` — canonical accepted source versions from PB2 PR #56, imported as 117 exact files in PB3 Draft #135 and combined #158, not yet in the present `main` tree. Historical versions and Profile WIP/Messages Beta retain original status.
@@ -32,17 +32,17 @@ The 16 Epic Issues are a durable *index* of all 28 major sections of `ts.md`; th
 5. `AGENTS.md` — required delivery/security discipline. Existing Draft PRs and exact commits are runtime evidence, not UX-approval sources.
 6. `TS_PROGRESS_TABLE.md` — old approximation (2026-11-11). Do not convert rough percentages to GitHub Project Status. Recompute only after local combined-main reconciliation.
 
-## Epic rules
+## Правила работы с эпиками
 
-- All Epic Issues start **Backlog / RECONCILE**. No epic is marked Done merely because earlier Issues or Draft PRs are green.
-- A new Task must link one *primary* Epic; it may cite others as dependencies. Define acceptance as behavior through actual persisted/encrypted data when relevant.
-- For published/phone data and complex PIN/Matrix/S3 flows, `Blocked` is valid until contract and gate are understood; avoid speculative protocol inventions.
-- After integration, associate all historical PRs with Epics; do not automatically close historical issues or perform bulk merges.
+- Все эпики начинаются с состояния **Backlog / требуется сверка**. Зелёный Draft PR не означает завершение всего эпика.
+- Новая задача ссылается на один основной эпик и при необходимости на смежные. Приёмка определяется реальным поведением и сохранением данных, а не наличием макета.
+- Для публикации, PIN, Matrix и S3 допускается «заблокировано», пока не подтверждены контракты. Не придумывать протоколы.
+- После интеграции связать прежние PR с эпиками. Не закрывать старые Issues и не сливать ветки автоматически.
 
-## Example: first safely-scoped candidates
+## Примеры первых независимых задач
 
 - [Notifications](https://github.com/1troitsky/photobunker-v3/issues/172): isolate feature state/rendering, leave Shell/router untouched until reviewed.
 - [Administration](https://github.com/1troitsky/photobunker-v3/issues/176): isolate backend namespace and tests, no access to decrypted data.
 - [Help/Legal](https://github.com/1troitsky/photobunker-v3/issues/174): integrate only accepted UI elements, do not claim final legal copy.
 
-Do **not** mark these `Ready` until the task-specific review of latest PR HEADs, changed files and dependency rules is complete.
+Не отмечать эти задачи как готовые к старту без свежей проверки базового SHA, изменяемых файлов и зависимостей.
