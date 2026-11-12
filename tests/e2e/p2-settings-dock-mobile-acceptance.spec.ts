@@ -184,7 +184,11 @@ test('P2 #214 mobile RU/EN Dock search focus, retap one-level and hidden-section
     // A retap of active Settings returns to actual Search, not arbitrary
     // history nor directly to root; query and focus must survive.
     await settings.click()
-    await expect(page).toHaveURL(/\/settings\/search\?q=панель$/)
+    await expect(page).toHaveURL(/\/settings\/search\?q=/)
+    // Browsers correctly percent-encode Cyrillic in the raw URL.
+    // Assert the decoded query parameter rather than its wire spelling.
+    await expect.poll(()=>new URL(page.url()).searchParams.get('q'))
+      .toBe('панель')
     await expect(input).toHaveValue('панель')
     await expect(input).toBeFocused()
     await input.fill('navigation')
