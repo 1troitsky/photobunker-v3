@@ -105,6 +105,10 @@ jobs:
       - name: P1-02 real Garage TTL deletion + repeated late-write sweep (synthetic only)
         working-directory: apps/api
         run: php tests/integration/lifecycle-garage-smoke.php
+      - name: P4 fault matrix - actual disposable Garage outage and recovery
+        working-directory: apps/api
+        shell: bash
+        run: bash ../../tests/integration/p4-fault-matrix/run-garage-outage.sh
       - name: Verify real health and readiness HTTP
         working-directory: apps/api
         shell: bash
