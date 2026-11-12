@@ -55,6 +55,9 @@ describe('P1 #277: authoritative five-plan UTC Assignment allowance',()=>{
       {...base,planId:null},
       {...base,planId:'Go'},
       {...base,limit:null,remaining:0},
+      {...base,limit:null,remaining:null}, // Free cannot claim Unlimited.
+      {...base,planId:'go',limit:null,remaining:null},
+      {...base,planId:'unlimited',limit:5,remaining:4},
       {...base,limit:30,remaining:null},
       {...base,limit:undefined},
       {...base,limit:-1},
