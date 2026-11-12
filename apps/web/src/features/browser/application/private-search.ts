@@ -100,3 +100,40 @@ export async function searchPrivateMetadata(
   live()
   return {query:needle,matches,scanned,failed,skipped,total:rows.length}
 }
+
+/**
+ * Volatile, opt-in private search across at most 1,000 authenticated rows,
+ * still decrypting ONLY metadata ciphertext and never building a plaintext
+ * persistent index. The original per-batch 200-record safety bound remains.
+ *
+ * A changed session/query cancels at every batch boundary and inside the
+ * existing three-worker AEAD scanner. All results are published together
+ * only after every selected batch passes.
+ */
+export async function searchPrivateMetadataBatches(
+  query:string,rows:readonly CatalogItem[],
+  stillRelevant:()=>boolean=()=>true,
+  onProgress?:(scanned:number,total:number)=>void,
+):Promise<PrivateSearchResult>{
+  const session=requireSession()
+  const needle=normalizePrivateSearch(query)
+  if(needle.length<2||needle.length>160)
+    throw Error('browser.search_query_limit')
+  if(rows.length>1000)throw Error('browser.expanded_search_limit')
+  if(new Set(rows.map(item=>item.key)).size!==rows.length)
+    throw Error('browser.search_duplicate_row')
+  let scanned=0,failed=0,skipped=0
+  const matches=new Set<string>()
+  for(let offset=0;offset<rows.length;offset+=200){
+    if(!stillRelevant()||activeSession.value!==session)
+      throw Error('browser.search_session_changed')
+    const page=await searchPrivateMetadata(needle,
+      rows.slice(offset,offset+200),stillRelevant)
+    for(const key of page.matches)matches.add(key)
+    scanned+=page.scanned;failed+=page.failed;skipped+=page.skipped
+    if(!stillRelevant()||activeSession.value!==session)
+      throw Error('browser.search_session_changed')
+    onProgress?.(Math.min(rows.length,offset+200),rows.length)
+  }
+  return {query:needle,matches,scanned,failed,skipped,total:rows.length}
+}
