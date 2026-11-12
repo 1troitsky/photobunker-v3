@@ -572,3 +572,24 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   @keyframes viewer-sheet-enter{from{transform:translateY(20px);opacity:.72}
     to{transform:translateY(0);opacity:1}}
 }
+
+/* P2 V-43: one contextual Header owned by App.vue, never a Viewer clone. */
+.viewer-header-actions{display:flex;align-items:center;gap:3px;
+  margin-left:auto;flex:0 0 auto}
+.viewer-header-actions button{
+  display:grid;place-items:center;width:34px;height:36px;min-width:0;
+  padding:0;border:0;border-radius:7px;background:transparent;color:#d7d7d7
+}
+.viewer-header-actions svg{width:20px;height:20px;stroke-linecap:round;
+  stroke-linejoin:round;flex:0 0 auto}
+.viewer-header-actions button:disabled{color:#777;opacity:.65}
+.viewer-header-actions button:not(:disabled):hover{background:#303a32;
+  color:var(--accent)}
+.viewer-header-actions button:focus-visible{outline:2px solid var(--accent);
+  outline-offset:2px}
+@media(max-width:420px){
+  .shell-header:has(.viewer-header-actions){padding-inline:8px;gap:5px}
+  .viewer-header-actions{gap:0}
+  .viewer-header-actions button{width:31px;height:36px}
+  .viewer-header-actions svg{width:19px;height:19px}
+}

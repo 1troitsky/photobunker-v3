@@ -70,6 +70,8 @@ test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navig
     })
     await expect(page.getByText('Для просмотра зашифрованных файлов необходим вход.'))
       .toBeVisible()
+    await expect(page.getByTestId('viewer-shell-actions')
+      .getByRole('button',{name:'Скачать'})).toBeDisabled()
     await expect(page.getByTestId('file-viewer-audio')).toHaveCount(0)
     await expect(page.getByTestId('file-viewer-info')).toHaveCount(0)
   }finally{await context.close()}

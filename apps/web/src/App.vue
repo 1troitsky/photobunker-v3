@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import { brand } from './config/brand'
+import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
 const route = useRoute()
 function isActive(to:string):boolean {
   return route.path===to
@@ -26,7 +27,42 @@ const dock = [
         <strong>{{ brand.name }}</strong>
         <small><span class="status-dot" aria-hidden="true"></span>Подготовка</small>
       </div>
-      <div class="shell-header-actions" v-if="route.path==='/contacts'">
+      <div class="shell-header-actions viewer-header-actions"
+        v-if="route.name==='browser-viewer'" data-testid="viewer-shell-actions"
+        aria-label="Действия с файлом">
+        <button type="button" disabled aria-label="Избранное"
+          title="Синхронизированная E2EE-коллекция Избранное ещё не реализована">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true">
+            <path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 7-6.2-3.3-6.2 3.3 1.2-7-5-4.9 6.9-1z"/>
+          </svg>
+        </button>
+        <button type="button" disabled aria-label="Копировать"
+          title="Безопасное копирование во внешний буфер обмена ещё не проверено">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true">
+            <rect x="8" y="8" width="12" height="12" rx="2"/>
+            <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>
+          </svg>
+        </button>
+        <button type="button" aria-label="Скачать"
+          :disabled="!viewerShellActions"
+          title="Скачать исходный расшифрованный файл после подтверждения"
+          @click="viewerShellActions?.download()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true">
+            <path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>
+          </svg>
+        </button>
+        <button type="button" disabled aria-label="Удалить"
+          title="Удаление требует принятой серверной политики архива, TTL и прав">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true">
+            <path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 10v8M14 10v8"/>
+          </svg>
+        </button>
+      </div>
+      <div class="shell-header-actions" v-else-if="route.path==='/contacts'">
         <button type="button" disabled aria-label="Blacklist — пока недоступен"
           title="Требует настоящего серверного отзыва полномочий">Blacklist</button>
       </div>
