@@ -2019,15 +2019,6 @@ export async function listAssignmentSubmissions(
   return (await listAssignmentSubmissionsPage(assignmentId)).items
 }
 
-/** Media submission is not a legacy photo capture. The owner must
- * explicitly opt into video/audio via a signed policy v3 amendment.
- * A previously approved recipient DEK grant is a strict prerequisite, not
- * automatically created by assignment membership.
- */
-/** Authenticated warm-offline recording context for audio/video.
- * Snapshot is owner-signed and pinned. This is a CLIENT assertion of
- * recording time, not hardware/timestamp/GPS attestation.
- */
 /**
  * A local removal tombstone is written ONLY after independently verifying
  * an owner-signed member removal. This read grants no permissions, requires no
@@ -2042,6 +2033,10 @@ export async function assertNoVerifiedAssignmentRemoval(
   assertSame(session)
 }
 
+/** Authenticated warm-offline recording context for audio/video.
+ * Snapshot is owner-signed and pinned. This is a CLIENT assertion of
+ * recording time, not hardware/timestamp/GPS attestation.
+ */
 export async function signedMediaCaptureIntent(
   assignmentId:string,mediaType:'video'|'audio',startedAt=Date.now(),
   privateFields:MediaPrivateFields={},
@@ -2085,6 +2080,11 @@ export async function signedMediaCaptureIntent(
   }
 }
 
+/** Media submission is not legacy P1 photo capture. Owner must explicitly
+ * permit AV with signed policy v3+, while P2 photos require independently
+ * authorized scoped E2EE grants regardless of imported v3 / captured v4.
+ * Membership alone never exposes a contributor media DEK.
+ */
 export async function queueAssignmentMediaSubmission(
   assignmentId:string,mediaId:string,mediaGrantId:string,
 ):Promise<string>{
