@@ -1053,7 +1053,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       }
       return {
         errors,
-        revoked:(await a.listLocallyRevokedAssignmentIds()).includes(assignmentId),
+        revoked:(await a.listLocallyRevokedAssignmentIds()).has(assignmentId),
         media:(await m.listLocalMedia()).map(x=>x.mediaId).sort(),
         operations:(await a.listAssignmentOperations()).map(x=>x.id).sort(),
       }
