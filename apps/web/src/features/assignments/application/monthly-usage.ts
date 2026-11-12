@@ -62,5 +62,13 @@ export function parseAssignmentMonthlyUsage(value:unknown):AssignmentMonthlyUsag
     ||end!==Date.UTC(first.getUTCFullYear(),first.getUTCMonth()+1,1))
     return invalid()
 
-  return data as AssignmentMonthlyUsage
+  return {
+    planId:data.planId as AssignmentPlanId,
+    catalogVersion:data.catalogVersion as string,
+    periodStart:data.periodStart as string,
+    periodEnd:data.periodEnd as string,
+    limit:data.limit as number|null,
+    used:data.used as number,
+    remaining:data.remaining as number|null,
+  }
 }
