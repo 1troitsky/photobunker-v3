@@ -216,8 +216,9 @@ if ($mode === 'prepare') {
 $raw = file_get_contents($fixtureFile);
 $payload = is_string($raw) ? json_decode($raw, true, 8, JSON_THROW_ON_ERROR) : null;
 $assert(is_array($payload) && array_keys($payload) ===
-    ['account','photo','asset','key','sha256','bytes'], 'invalid_fixture_state');
-foreach (['account','photo','asset'] as $field) {
+    ['ledger_photo','ledger_asset','ledger_key','ledger_sha256','ledger_bytes',
+     'account','photo','asset','key','sha256','bytes'], 'invalid_fixture_state');
+foreach (['account','photo','asset','ledger_photo','ledger_asset'] as $field) {
     $assert(is_string($payload[$field])
         && preg_match('/\A[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\z/D',
             $payload[$field]) === 1, 'invalid_fixture_identifier');
@@ -227,6 +228,12 @@ $assert($payload['key'] === 'cipher/v1/' . $payload['account'] . '/'
 $assert(is_string($payload['sha256'])
     && preg_match('/\A[a-f0-9]{64}\z/D', $payload['sha256']) === 1
     && is_int($payload['bytes']) && $payload['bytes'] === 2093, 'invalid_fixture_integrity');
+$assert($payload['ledger_key'] === 'cipher/v1/' . $payload['account'] . '/'
+    . $payload['ledger_photo'] . '/' . $payload['ledger_asset'], 'invalid_ledger_key');
+$assert(is_string($payload['ledger_sha256'])
+    && preg_match('/\A[a-f0-9]{64}\z/D', $payload['ledger_sha256']) === 1
+    && is_int($payload['ledger_bytes']) && $payload['ledger_bytes'] === 1027,
+    'invalid_ledger_integrity');
 
 $asset = $payload['asset'];
 $photo = $payload['photo'];
@@ -247,6 +254,21 @@ if ($mode === 's3-down') {
         ->where('state', 'uploading')->exists(), 'lease_reset_on_s3_outage');
     $assert(DB::table('storage_locations')->where('asset_id', $asset)
         ->where('state', 'reserved')->exists(), 'placement_lost_on_s3_outage');
+    // Exercise the *new* durable worker in this second fresh PHP process
+    // while Garage is actually stopped. The worker may only defer this ticket,
+    // never fabricate ciphertext verification, an ACK, or a parent receipt.
+    $assert(Artisan::call('pb3:storage-reconcile', ['--batch' => '5']) === 0,
+        'ledger_worker_failed_to_run_during_outage');
+    $assert(DB::table('storage_retry_tickets')->where('kind', 'photo')
+        ->where('asset_id', $payload['ledger_asset'])
+        ->where('disposition', 'retry')->exists(), 'ledger_outage_false_ack');
+    $assert(DB::table('photo_objects')->where('id', $payload['ledger_asset'])
+        ->where('state', 'uploading')->exists(), 'ledger_outage_promoted_unverified_bytes');
+    $assert(DB::table('storage_locations')->where('asset_id', $payload['ledger_asset'])
+        ->where('state', 'reserved')->exists(), 'ledger_outage_promoted_pointer');
+    $assert(DB::table('photo_records')->where('id', $payload['ledger_photo'])
+        ->where('state', 'pending')->exists(), 'ledger_outage_fabricated_receipt');
+    fwrite(STDOUT, "P4 Garage NEW-WORKER S3-DOWN PASS: real retry ticket deferred, no false ACK\n");
     fwrite(STDOUT, "P4 Garage fault matrix S3-DOWN PASS: live PostgreSQL, zero false ACK, durable pending/lease/location\n");
     exit(0);
 }
@@ -257,6 +279,46 @@ $copy = $disk->get($key);
 $assert(is_string($copy) && strlen($copy) === $payload['bytes']
     && hash_equals($payload['sha256'], hash('sha256', $copy)),
     'restarted_garage_lost_ciphertext');
+
+// A third fresh PHP process after the actual Garage restart must recover
+// the *new* StorageRetryLedger ticket, using immutable surviving S3 bytes.
+// Exercise the production scheduled Artisan command, not a mocked adapter.
+$ledgerCopy = $disk->get($payload['ledger_key']);
+$assert(is_string($ledgerCopy)
+    && strlen($ledgerCopy) === $payload['ledger_bytes']
+    && hash_equals($payload['ledger_sha256'], hash('sha256', $ledgerCopy)),
+    'ledger_ciphertext_lost_after_actual_garage_restart');
+$retry = DB::table('storage_retry_tickets')->where('kind', 'photo')
+    ->where('asset_id', $payload['ledger_asset'])->first();
+$assert($retry !== null && $retry->disposition === 'retry'
+    && Carbon::parse($retry->next_attempt_at)->greaterThan(now()),
+    'ledger_retry_backoff_not_durable');
+$assert(Artisan::call('pb3:storage-reconcile', ['--batch' => '5']) === 0,
+    'ledger_immediate_retry_command_failed');
+$assert(DB::table('storage_retry_tickets')->where('kind', 'photo')
+    ->where('asset_id', $payload['ledger_asset'])->exists(),
+    'ledger_backoff_bypassed');
+Carbon::setTestNow(now()->addSeconds(91)); // deterministic elapsed backoff/circuit cooldown
+try {
+    $assert(Artisan::call('pb3:storage-reconcile', ['--batch' => '5']) === 0,
+        'ledger_recovered_worker_command_failed');
+    $assert(!DB::table('storage_retry_tickets')->where('kind', 'photo')
+        ->where('asset_id', $payload['ledger_asset'])->exists(),
+        'ledger_verified_ticket_not_retired');
+    $assert(DB::table('photo_objects')->where('id', $payload['ledger_asset'])
+        ->where('state', 'verified')->exists(), 'ledger_worker_asset_not_verified');
+    $assert(DB::table('storage_locations')->where('asset_id', $payload['ledger_asset'])
+        ->where('state', 'verified')->exists(), 'ledger_worker_pointer_not_verified');
+    $assert(DB::table('photo_records')->where('id', $payload['ledger_photo'])
+        ->where('state', 'pending')->exists(), 'ledger_worker_fabricated_parent_receipt');
+    $assert(Artisan::call('pb3:storage-reconcile', ['--batch' => '5']) === 0,
+        'ledger_replayed_worker_command_failed');
+    $assert(!DB::table('storage_retry_tickets')->where('asset_id', $payload['ledger_asset'])->exists(),
+        'ledger_duplicate_ticket_created');
+} finally {
+    Carbon::setTestNow();
+}
+fwrite(STDOUT, "P4 Garage NEW-WORKER RECOVERY PASS: actual restart, SHA-256, retry, receipt safety, idempotence\n");
 
 $reconcile = $lifecycle->reconcileStalledUploads(1);
 $assert($reconcile === ['verified' => 1, 'reset' => 0, 'deferred' => 0, 'errors' => 0],
