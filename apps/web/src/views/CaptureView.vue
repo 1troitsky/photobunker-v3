@@ -297,6 +297,16 @@ async function requireLiveGPS(fix:GPSFix|null):Promise<void>{
   if(await consentedGPS(fix)!==fix)
     throw Error('camera.gps_permission_revoked')
 }
+function gpsFailureReason(e:unknown):string{
+  // Browser geolocation errors use GeolocationPositionError, which is not
+  // necessarily an Error instance. Never echo untrusted error messages.
+  const code=e&&typeof e==='object'&&'code' in e
+    ?(e as {code:unknown}).code:null
+  if(code===1)return 'camera.gps_permission_denied'
+  if(code===2)return 'camera.gps_unavailable'
+  if(code===3)return 'camera.gps_timeout'
+  return e instanceof Error?e.message:'camera.gps_unavailable'
+}
 async function obtainGPS():Promise<void>{
   // Retry must immediately erase the old location even if this attempt fails
   // or the browser never invokes the geolocation error callback.
@@ -333,7 +343,7 @@ async function obtainGPS():Promise<void>{
     if(attempt===gpsAttempt&&ownsCamera(identity,generation)
       &&selectedAssignment.value===assignment){
       gps.value=null
-      gpsError.value=e instanceof Error?e.message:'camera.gps_unavailable'
+      gpsError.value=gpsFailureReason(e)
     }
   }finally{
     if(attempt===gpsAttempt)gpsLoading.value=false
