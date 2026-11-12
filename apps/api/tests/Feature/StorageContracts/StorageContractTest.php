@@ -5,6 +5,7 @@ namespace Tests\Feature\StorageContracts;
 
 use App\Storage\AppS3Adapter;
 use App\Storage\StorageManager;
+use Illuminate\Support\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -337,12 +338,39 @@ final class StorageContractTest extends TestCase
             self::assertSame('storage.delete_unconfirmed', $e->getMessage());
         }
 
+        // Both failed physical delete confirmations must now OPEN the durable
+        // S3 circuit. No third adapter call is permitted during cooldown:
+        // the old contract's immediate success assumption predated #202.
+        $this->assertDatabaseHas('storage_provider_health', [
+            'provider' => 'app_s3', 'state' => 'open', 'failures' => 2,
+        ]);
+        $callsDuringCooldown = $adapter->deleteCalls;
         $adapter->reportDeletedObjectStillPresent = false;
-        $manager->deleteAsset($f['asset']);
-        $after = $adapter->deleteCalls;
-        $manager->deleteAsset($f['asset']); // object already missing
-        self::assertSame($after, $adapter->deleteCalls);
+        try {
+            $manager->deleteAsset($f['asset']);
+            self::fail('Open circuit silently contacted S3 or acknowledged deletion');
+        } catch (RuntimeException $e) {
+            self::assertSame('storage.circuit_open', $e->getMessage());
+        }
+        self::assertSame($callsDuringCooldown, $adapter->deleteCalls);
         $this->assertDatabaseHas('storage_locations', ['asset_id' => $f['asset']]);
+
+        // Once the real cooldown has elapsed, a single half-open probe may
+        // confirm deletion. The original no-false-ACK and idempotency
+        // assertions below remain intact, without disabling the breaker.
+        Carbon::setTestNow(now()->addSeconds(31));
+        try {
+            $manager->deleteAsset($f['asset']);
+            $after = $adapter->deleteCalls;
+            $manager->deleteAsset($f['asset']); // object already missing
+            self::assertSame($after, $adapter->deleteCalls);
+            $this->assertDatabaseHas('storage_locations', ['asset_id' => $f['asset']]);
+            $this->assertDatabaseHas('storage_provider_health', [
+                'provider' => 'app_s3', 'state' => 'closed', 'failures' => 0,
+            ]);
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_media_chunk_verification_and_delete_are_safe_for_missing_and_corrupt_data(): void
