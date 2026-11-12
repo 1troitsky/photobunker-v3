@@ -16,6 +16,7 @@ return new class extends Migration {
             $t->string('provider',48)->primary();
             $t->string('state',16)->default('closed');
             $t->unsignedInteger('failures')->default(0);
+            $t->unsignedBigInteger('epoch')->default(0);
             $t->timestampTz('open_until')->nullable();
             $t->timestampTz('probe_lease_until')->nullable();
             $t->timestampTz('last_success_at')->nullable();
