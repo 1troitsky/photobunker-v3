@@ -399,6 +399,22 @@ final class MediaV1Test extends TestCase
             'media_id'=>$id,'account_id'=>$this->account,'published_at'=>null,
         ]);
         $this->assertDatabaseCount('media_expiry_notification_outbox_v1',1);
+        // Simulated poisoned ledger revision: publication must fail/retry,
+        // yet physical S3 cleanup is NEVER coupled to notification delivery.
+        DB::table('notification_event_streams_v1')->insert([
+            'account_id'=>$this->account,
+            'subject_type'=>'media_retention','subject_id'=>$id,
+            'contiguous_revision'=>1,
+        ]);
+        $this->assertSame(['published'=>0,'errors'=>1],
+            $lifecycle->publishExpiredNotices(10));
+        $this->assertDatabaseHas('media_expiry_notification_outbox_v1',[
+            'media_id'=>$id,'published_at'=>null,
+        ]);
+        DB::table('notification_event_streams_v1')
+            ->where('account_id',$this->account)
+            ->where('subject_type','media_retention')
+            ->where('subject_id',$id)->delete();
         $this->assertDatabaseHas('media_files_v1',['id'=>$id,'state'=>'deleting']);
         $keys=DB::table('media_chunk_locations_v1')
             ->orderBy('object_key')->pluck('object_key')->all();
