@@ -46,6 +46,11 @@ beforeEach(()=>{
   root=document.createElement('div')
   document.body.append(root)
   app=createApp(App)
+  // Production mounts with .use(router), which supplies both global views.
+  // Stub them explicitly to ensure the test checks our conditional mount,
+  // not missing-component warnings from a router-less jsdom harness.
+  app.component('RouterView',{template:'<div data-testid="router-view"/>'})
+  app.component('RouterLink',{template:'<a><slot /></a>'})
   app.mount(root)
 })
 afterEach(()=>{
@@ -60,6 +65,16 @@ describe('P3 #220 protected Identity application shell boundary',()=>{
     expect(root.querySelector('.shell-dock')).toBeNull()
     expect(root.querySelector('.shell-main')).toBeNull()
     expect(root.textContent).toContain('PhotoBunker')
+  })
+
+  it('preserves the normal Header, Dock and RouterView when no PIN is configured',async()=>{
+    identityBootstrapReady.value=true
+    await settle()
+    expect(root.querySelector('.pin-screen')).toBeNull()
+    expect(root.querySelector('.shell-header')).not.toBeNull()
+    expect(root.querySelector('.shell-dock')).not.toBeNull()
+    expect(root.querySelector('.shell-main')).not.toBeNull()
+    expect(root.querySelector('[data-testid="router-view"]')).not.toBeNull()
   })
 
   it('renders a separate fullscreen keypad only AFTER sealed device discovery',async()=>{
