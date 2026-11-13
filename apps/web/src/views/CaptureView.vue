@@ -6,6 +6,7 @@ import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
 import { enqueueEncryptedMedia } from '../features/media/application/media-outbox'
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
 import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
+import { captureRecordingPolicy } from '../features/media/domain/capture-recording-policy'
 import { normalizeGPS, type GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../features/assignments/domain/advanced-rules'
 import {
@@ -84,7 +85,6 @@ async function loadPrivateInstructions():Promise<void>{
   }
 }
 const recording=ref(false)
-const recordLimitMs=175000
 const recorder=shallowRef<MediaRecorder|null>(null)
 const recordingStartedAt=ref<number|null>(null)
 let recordingTimer:ReturnType<typeof setTimeout>|null=null
@@ -413,7 +413,11 @@ async function beginRecording():Promise<void>{
     const mime=mediaMime(mode)
     const streamRef=stream.value
     if(!streamRef)throw Error('camera.stream_unavailable')
-    const worker=new MediaRecorder(streamRef,{mimeType:mime})
+    const recordingPolicy=captureRecordingPolicy(mode)
+    // The requested bitrate is advisory; enforce MAX_MEDIA_BYTES below.
+    const worker=new MediaRecorder(streamRef,{
+      mimeType:mime,...recordingPolicy.recorderOptions,
+    })
     const token={identity,generation,mode,intent,startedAt,mime,
       privateFields,saveOnStop:false}
     activeRecording=token
@@ -467,7 +471,7 @@ async function beginRecording():Promise<void>{
             await assertNoVerifiedAssignmentRemoval(token.intent.assignmentId)
           if(!ownsCamera(identity,generation))return
           const finishedAt=Date.now()
-          if(finishedAt<=startedAt||finishedAt-startedAt>recordLimitMs+2000)
+          if(finishedAt<=startedAt||finishedAt-startedAt>recordingPolicy.maxDurationMs+2000)
             throw Error('camera.recording_duration_invalid')
           const suffix=mime.includes('webm')?'webm'
             :mime.includes('ogg')?'ogg':'mp4'
@@ -501,7 +505,7 @@ async function beginRecording():Promise<void>{
         token.saveOnStop=true
         worker.stop()
       }
-    },recordLimitMs)
+    },recordingPolicy.maxDurationMs)
   }catch(e){
     discardRecording()
     if(ownsCamera(identity,generation))
