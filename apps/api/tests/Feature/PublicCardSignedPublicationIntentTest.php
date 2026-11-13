@@ -222,13 +222,17 @@ final class PublicCardSignedPublicationIntentTest extends TestCase
             " \n".$json,
             substr($json, 0, -1).',"version":1}',
         ] as $noncanonical) {
-            $this->expectException(InvalidArgumentException::class);
-            SignedPublicationIntent::verify(
-                $noncanonical,
-                self::sign($key, $noncanonical),
-                $trusted,
-                self::NOW
-            );
+            try {
+                SignedPublicationIntent::verify(
+                    $noncanonical,
+                    self::sign($key, $noncanonical),
+                    $trusted,
+                    self::NOW
+                );
+                self::fail('Noncanonical signed JSON was accepted');
+            } catch (InvalidArgumentException $expected) {
+                self::assertNotSame('', $expected->getMessage());
+            }
         }
     }
 }
