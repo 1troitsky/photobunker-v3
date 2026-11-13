@@ -83,6 +83,11 @@ test('P2 #198 A→B encrypted notification, lost ACK, offline local read and ten
     await expect.poll(async()=>((await notices(a))[0]?.readAt))
       .toBe(marked)
     const restored=await a.evaluate(async()=>{
+      // Device bootstrap deliberately opens encrypted local state offline
+      // until proof completes. Never bypass this security gate in production.
+      const session=await import('/src/features/identity/application/session.ts')
+      await session.reauthenticate()
+      if(!session.activeSession.value?.online)throw Error('identity.proof_not_confirmed')
       const sync=await import('/src/features/notifications/application/server-event-sync.ts')
       return sync.syncServerNotifications()
     })
