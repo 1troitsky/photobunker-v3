@@ -862,9 +862,19 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
   })
 
   it('refuses camera capture when another tab owns native recording lock',async()=>{
+    vi.stubGlobal('MediaRecorder',BoundedRecorder)
     mocks.leaseAcquire.mockRejectedValueOnce(Error('camera.recording_writer_busy'))
-    const opened=await openMode('audio')
+    await mount()
+    requests[0]!.resolve(media().stream);await settle()
+    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const opened=media()
+    requests[1]!.resolve(opened.stream);await settle()
+    button('Начать запись аудио').click()
+    await settle()
     expect(host.textContent).toContain('camera.recording_writer_busy')
+    expect(host.querySelector('[data-testid="camera-recording-status"]')).toBeNull()
     expect(mocks.draftCreate).not.toHaveBeenCalled()
     expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
     expect(opened.track.stop).not.toHaveBeenCalled()
