@@ -24,15 +24,18 @@ describe('#198 trusted event replay → encrypted IndexedDB',()=>{
     const item={id:EVENT,kind:'security',targetId:null,occurredAt:1800000000000}
     mockApi.jsonApi
       .mockResolvedValueOnce({schemaVersion:1,items:[item],nextCursor:'1',hasMore:true})
+      .mockResolvedValueOnce({schemaVersion:1,acknowledgedCursor:'1',advanced:true})
       .mockResolvedValueOnce({schemaVersion:1,items:[],nextCursor:'2',hasMore:false})
+      .mockResolvedValueOnce({schemaVersion:1,acknowledgedCursor:'2',advanced:true})
     expect(await syncServerNotifications()).toEqual({saved:1,pages:2})
     expect(mockApi.jsonApi.mock.calls.map(c=>c[0]))
-      .toEqual(['/notifications/v1/events?after=0','/notifications/v1/events?after=1'])
+      .toEqual(['/notifications/v1/events?after=0','/notifications/v1/ack',
+        '/notifications/v1/events?after=1','/notifications/v1/ack'])
     expect((await listLocalNotifications())[0]).toMatchObject(item)
     await markNotificationRead(EVENT,1800000000001)
-    mockApi.jsonApi.mockResolvedValueOnce({
-      schemaVersion:1,items:[item],nextCursor:'1',hasMore:false,
-    })
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[item],nextCursor:'1',hasMore:false})
+      .mockResolvedValueOnce({schemaVersion:1,acknowledgedCursor:'2',advanced:false})
     await syncServerNotifications() // replay from 0, encrypted dedupe
     expect((await listLocalNotifications())[0]?.readAt).toBe(1800000000001)
     expect((await listLocalNotifications())).toHaveLength(1)
@@ -47,6 +50,30 @@ describe('#198 trusted event replay → encrypted IndexedDB',()=>{
     await expect(syncServerNotifications()).rejects.toThrow('notifications.invalid_event')
     expect(mockApi.jsonApi).toHaveBeenCalledTimes(1)
     expect(await listLocalNotifications()).toEqual([])
+  })
+  it('sends no server ACK before encrypted persistence and retries after lost ACK',async()=>{
+    const item={id:EVENT,kind:'security',targetId:null,occurredAt:1800000000000}
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[item],nextCursor:'1',hasMore:false})
+      .mockRejectedValueOnce(new Error('api.http_503'))
+    await expect(syncServerNotifications()).rejects.toThrow('api.http_503')
+    expect(mockApi.jsonApi.mock.calls.map(c=>c[0])).toEqual([
+      '/notifications/v1/events?after=0','/notifications/v1/ack',
+    ])
+    expect((await listLocalNotifications())).toHaveLength(1)
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[item],nextCursor:'1',hasMore:false})
+      .mockResolvedValueOnce({schemaVersion:1,acknowledgedCursor:'1',advanced:true})
+    await expect(syncServerNotifications()).resolves.toEqual({saved:1,pages:1})
+    expect((await listLocalNotifications())).toHaveLength(1)
+    const calls=mockApi.jsonApi.mock.calls
+    expect(calls.at(-1)).toEqual(['/notifications/v1/ack','POST',{cursor:'1'}])
+  })
+  it('rejects forged or regressed ACK response',async()=>{
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[],nextCursor:'2',hasMore:false})
+      .mockResolvedValueOnce({schemaVersion:1,acknowledgedCursor:'1',advanced:true})
+    await expect(syncServerNotifications()).rejects.toThrow('notifications.invalid_ack')
   })
   it('refuses cursor rollback, missing keys and frozen pagination',async()=>{
     for(const bad of [
