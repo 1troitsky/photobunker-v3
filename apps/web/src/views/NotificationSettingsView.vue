@@ -30,6 +30,9 @@ function owner():string{
 async function initialize():Promise<void>{
   const token=++version,scope=owner()
   error.value='';status.value='';loading.value=true
+  // An old account's pending write must not keep the next account's form
+  // locked. The old write's finally is fenced by its captured token.
+  saving.value=false
   draft.value={...defaultNotificationPreferences}
   saved.value={...defaultNotificationPreferences}
   if(!scope){loading.value=false;return}
@@ -77,7 +80,9 @@ async function save():Promise<void>{
   }catch{
     if(version===token&&owner()===scope)
       error.value='Не удалось сохранить настройки. Изменения не применены.'
-  }finally{saving.value=false}
+  }finally{
+    if(version===token&&owner()===scope)saving.value=false
+  }
 }
 function cancel():void{
   draft.value={...saved.value}
