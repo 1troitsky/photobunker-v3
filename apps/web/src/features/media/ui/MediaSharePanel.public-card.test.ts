@@ -126,6 +126,7 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
     const reviewer=host.querySelector<HTMLElement>(
       '[data-testid="public-card-real-panel-reviewer-stub"]'
     )
+    if(!reviewer)throw Error('public_card.panel_dom:'+host.innerHTML.slice(-3000))
     expect(reviewer).not.toBeNull()
     expect(reviewer!.textContent).toContain(privateReview.prepared.sha256)
     expect(reviewer!.textContent).toContain(privateReview.binding.submissionId)
