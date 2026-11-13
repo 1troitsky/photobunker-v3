@@ -38,10 +38,14 @@ final class MediaMaintain extends Command
         }
         $reconcile=$lifecycle->reconcileStalledChunks($batch);
         $sweep=$lifecycle->sweepTombstones($batch);
+        // Non-destructive, retryable event outbox drain. It never gates
+        // StorageManager cleanup, even on event DB/transport outage.
+        $notice=$lifecycle->publishExpiredNotices($batch);
         $this->line(sprintf(
-            'Media TTL queued=%d, chunk reconciliation verified=%d reset=%d deferred=%d errors=%d, tombstones=%d',
+            'Media TTL queued=%d, chunk reconciliation verified=%d reset=%d deferred=%d errors=%d, tombstones=%d, retention notices published=%d errors=%d',
             $ids->count(),$reconcile['verified'],$reconcile['reset'],
-            $reconcile['deferred'],$reconcile['errors'],$sweep));
+            $reconcile['deferred'],$reconcile['errors'],$sweep,
+            $notice['published'],$notice['errors']));
         return self::SUCCESS;
     }
 }
