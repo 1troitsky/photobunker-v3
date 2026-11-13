@@ -98,6 +98,11 @@ let recordingParts:Blob[]=[]
 let recordedSize=0
 let activeRecording:{saveOnStop:boolean;startedMono:number
   stoppedMono:number|null;finishedAt:number|null}|null=null
+let releaseRecordingTrackListeners:(()=>void)|null=null
+function detachRecordingTrackListeners():void {
+  releaseRecordingTrackListeners?.()
+  releaseRecordingTrackListeners=null
+}
 const canCaptureType=computed(()=>{
   const required=route.query.assignmentId
   if(typeof required==='string'&&required
@@ -191,6 +196,7 @@ function ownsCamera(identity:CameraIdentity,generation:number):boolean {
     &&sameIdentity(identity,cameraIdentity(activeSession.value))
 }
 function discardRecording():void {
+  detachRecordingTrackListeners()
   const old=recorder.value
   recorder.value=null
   activeRecording=null
@@ -227,15 +233,17 @@ async function startCamera():Promise<void> {
   if(!navigator.mediaDevices?.getUserMedia){error.value='Браузер не поддерживает камеру';return}
   starting.value=true
   const identity=cameraIdentity(activeSession.value),generation=cameraGeneration
+  const mode=captureMode.value
   let opened:MediaStream|null=null
   try{
-    const mode=captureMode.value
     opened=await navigator.mediaDevices.getUserMedia({
       audio:mode!=='photo',
       video:mode!=='audio'
         ?{facingMode:{ideal:'environment'},width:{ideal:1280}}:false,
     })
     await nextTick()
+    if(!opened.getTracks().length||opened.getTracks().some(track=>track.readyState!=='live'))
+      throw Error('camera.stream_ended')
     if(!cameraWanted||!ownsCamera(identity,generation)||!video.value){
       stopTracks(opened)
       return
@@ -255,7 +263,12 @@ async function startCamera():Promise<void> {
     if(stream.value===opened)releaseStream()
     if(ownsCamera(identity,generation)){
       cameraWanted=false // Denial/play errors require an explicit retry.
-      error.value=e instanceof Error?e.message:'camera.unavailable'
+      const errorName=e instanceof Error?e.name:''
+      if(mode==='audio'&&['NotAllowedError','PermissionDeniedError','SecurityError'].includes(errorName))
+        error.value='camera.microphone_permission_denied'
+      else if(mode==='audio'&&['NotFoundError','DevicesNotFoundError'].includes(errorName))
+        error.value='camera.microphone_unavailable'
+      else error.value=e instanceof Error?e.message:'camera.unavailable'
     }
   }finally{
     starting.value=false
@@ -420,6 +433,9 @@ async function beginRecording():Promise<void>{
     const mime=mediaMime(mode)
     const streamRef=stream.value
     if(!streamRef)throw Error('camera.stream_unavailable')
+    const tracks=streamRef.getTracks()
+    if(!tracks.length||tracks.some(track=>track.readyState!=='live'))
+      throw Error('camera.stream_ended')
     const worker=new MediaRecorder(streamRef,recordingOptions(
       mode,mime,audioTargetBitrate.value))
     const token={identity,generation,mode,intent,startedAt,mime,
@@ -429,6 +445,27 @@ async function beginRecording():Promise<void>{
     recordingParts=[]
     recordedSize=0
     recorder.value=worker
+    // Hardware revoke/interruption can end a track without a MediaRecorder.stop
+    // event. Fail closed immediately, never grant upload permission by timeout.
+    const onTrackEnded=()=>{
+      if(activeRecording!==token)return
+      error.value='camera.recording_interrupted'
+      closeCamera()
+    }
+    const listened:MediaStreamTrack[]=[]
+    for(const track of tracks){
+      if(typeof track.addEventListener==='function'){
+        track.addEventListener('ended',onTrackEnded)
+        listened.push(track)
+      }
+    }
+    releaseRecordingTrackListeners=()=>{
+      for(const track of listened)track.removeEventListener('ended',onTrackEnded)
+    }
+    if(tracks.some(track=>track.readyState!=='live')){
+      onTrackEnded()
+      return
+    }
     recording.value=true
     recordingStartedAt.value=startedAt
     worker.ondataavailable=event=>{
@@ -446,9 +483,12 @@ async function beginRecording():Promise<void>{
       // Automatic browser/permission interruption is never permission to
       // persist a partial recording. Only user Stop or the bounded timer
       // may turn this ephemeral MediaRecorder buffer into a new MediaFile.
-      if(!token.saveOnStop||token.stoppedMono===null||token.finishedAt===null){
+      if(!token.saveOnStop||token.stoppedMono===null||token.finishedAt===null
+        ||tracks.some(track=>track.readyState!=='live')){
+        error.value='camera.recording_interrupted'
         closeCamera();return
       }
+      detachRecordingTrackListeners()
       if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
       const parts=recordingParts
       recordingParts=[]
