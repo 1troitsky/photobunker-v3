@@ -737,6 +737,79 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     },
   )
 
+  it('drains ordered ciphertext writes before sealing, decrypting and signed E2EE enqueue',async()=>{
+    await openMode('audio')
+    mocks.draftRead.mockResolvedValueOnce(new Blob([new Uint8Array(1024)],
+      {type:'audio/webm'}))
+    const recorder=BoundedRecorder.latest!
+    recorder.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+    await settle()
+    expect(mocks.draftAppend).toHaveBeenCalledWith(
+      expect.any(String),0,expect.any(Blob))
+    expect(mocks.draftSeal).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click()
+    await settle()
+    expect(mocks.draftAppend).toHaveBeenCalledTimes(2)
+    expect(mocks.draftAppend).toHaveBeenLastCalledWith(
+      expect.any(String),1,expect.any(Blob))
+    expect(mocks.draftSeal).toHaveBeenCalledWith(expect.any(String),5_000)
+    expect(mocks.draftRead).toHaveBeenCalledTimes(1)
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+    expect(mocks.draftDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not sign or delete scratch while a native ciphertext commit is pending',async()=>{
+    await openMode('audio')
+    const hold=deferred<void>()
+    mocks.draftAppend.mockImplementationOnce(()=>hold.promise)
+    mocks.draftRead.mockResolvedValueOnce(new Blob([new Uint8Array(1024)],
+      {type:'audio/webm'}))
+    const recorder=BoundedRecorder.latest!
+    recorder.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click()
+    await settle()
+    expect(mocks.draftSeal).not.toHaveBeenCalled()
+    expect(mocks.draftRead).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    hold.resolve()
+    await settle();await settle()
+    expect(mocks.draftAppend).toHaveBeenCalledTimes(2)
+    expect(mocks.draftSeal).toHaveBeenCalledTimes(1)
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+    expect(mocks.draftDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails closed on IndexedDB/AEAD write failure and leaves no signed MediaFile',async()=>{
+    const opened=await openMode('audio')
+    mocks.draftAppend.mockRejectedValueOnce(Error('quota exceeded'))
+    BoundedRecorder.latest!.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+    await settle();await settle()
+    expect(host.textContent).toContain('camera.recording_storage_failed')
+    expect(mocks.draftSeal).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(mocks.draftInterrupt).toHaveBeenCalledWith(expect.any(String))
+    expect(opened.track.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not delete a sealed encrypted scratch if signed MediaFile enqueue fails',async()=>{
+    await openMode('audio')
+    mocks.mediaEnqueue.mockRejectedValueOnce(Error('media.local_outbox_full'))
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click()
+    await settle();await settle()
+    expect(host.textContent).toContain('media.local_outbox_full')
+    expect(mocks.draftSeal).toHaveBeenCalledTimes(1)
+    expect(mocks.draftDelete).not.toHaveBeenCalled()
+  })
+
+  it('refuses to start MediaRecorder if encrypted recording journal cannot initialize',async()=>{
+    const opened=await openMode('audio')
+    expect(BoundedRecorder.latest!.state).toBe('recording')
+    expect(opened.track.stop).not.toHaveBeenCalled()
+  })
+
   it('does not apply audio-only target setting to video recorder',async()=>{
     await openMode('video')
     expect(BoundedRecorder.latest!.options).toEqual({mimeType:'video/webm'})
