@@ -86,7 +86,7 @@ final class PublicCardSignedPublicationIntentTest extends TestCase
         return [$key, $c, $s];
     }
 
-    private static function json(array $contract): string
+    private static function canonicalJson(array $contract): string
     {
         return json_encode($contract, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     }
@@ -115,7 +115,7 @@ final class PublicCardSignedPublicationIntentTest extends TestCase
     public function test_valid_real_owner_signature_only_returns_nonpublic_internal_intent(): void
     {
         [$key, $c, $state] = $this->fixture();
-        $raw = self::json($c);
+        $raw = self::canonicalJson($c);
         $value = SignedPublicationIntent::verify(
             $raw, self::sign($key, $raw), $state, self::NOW
         );
@@ -186,7 +186,7 @@ final class PublicCardSignedPublicationIntentTest extends TestCase
             $recipient[$path[0]] = $value;
         }
         unset($recipient);
-        $raw = self::json($contract);
+        $raw = self::canonicalJson($contract);
         $this->expectException(InvalidArgumentException::class);
         SignedPublicationIntent::verify($raw, self::sign($key, $raw), $trusted, self::NOW);
     }
@@ -194,7 +194,7 @@ final class PublicCardSignedPublicationIntentTest extends TestCase
     public function test_wrong_owner_signature_and_wrong_domain_fail_even_with_valid_schema(): void
     {
         [$key, $contract, $trusted] = $this->fixture();
-        $raw = self::json($contract);
+        $raw = self::canonicalJson($contract);
         $other = openssl_pkey_new([
             'private_key_type' => OPENSSL_KEYTYPE_EC,
             'curve_name' => 'prime256v1',
@@ -217,7 +217,7 @@ final class PublicCardSignedPublicationIntentTest extends TestCase
     public function test_noncanonical_and_duplicate_json_key_encoding_are_rejected(): void
     {
         [$key, $contract, $trusted] = $this->fixture();
-        $json = self::json($contract);
+        $json = self::canonicalJson($contract);
         foreach ([
             " \n".$json,
             substr($json, 0, -1).',"version":1}',
