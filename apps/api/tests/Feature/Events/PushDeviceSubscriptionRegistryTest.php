@@ -172,6 +172,15 @@ final class PushDeviceSubscriptionRegistryTest extends TestCase
         self::assertTrue($this->registry->eligible($this->alice,$this->deviceA));
     }
 
+    public function test_subscription_is_not_exposed_via_unapproved_browser_api(): void
+    {
+        $this->postJson('/notifications/v1/push-subscriptions',
+            $this->subscription())->assertNotFound();
+        $this->getJson('/notifications/v1/push-subscriptions')
+            ->assertNotFound();
+        $this->assertDatabaseCount('notification_push_subscriptions_v1',0);
+    }
+
     public function test_malformed_subscription_and_ssrf_endpoints_never_write(): void
     {
         $base=$this->subscription();
