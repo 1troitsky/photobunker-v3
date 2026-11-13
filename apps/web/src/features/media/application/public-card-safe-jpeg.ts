@@ -112,6 +112,48 @@ export function inspectFlattenedSafeJpeg(bytes:Uint8Array):SafeJpegInspection{
   invalid()
 }
 
+/**
+ * Chromium's sRGB Canvas encoder inserts an APP2 ICC_PROFILE payload.
+ * A fresh profile is color-management metadata, not EXIF, but keeping it
+ * breaks a *metadata-free* JPEG contract. Remove ONLY this exact single ICC
+ * header from the fresh Canvas output; still reject every other APPn, COM,
+ * malformed JFIF and every byte after EOI in the strict marker verifier.
+ *
+ * All returned bytes are re-validated and independently JPEG-decoded.
+ */
+export function stripCanvasIccProfile(bytes:Uint8Array):Uint8Array{
+  if(bytes[0]!==0xff||bytes[1]!==0xd8)
+    throw Error('public_card.unsafe_jpeg')
+  let offset=2
+  // Preserve optional APP0 for later strict JFIF verification.
+  if(bytes[offset]===0xff&&bytes[offset+1]===0xe0){
+    if(offset+4>bytes.length)throw Error('public_card.unsafe_jpeg')
+    const length=(bytes[offset+2]!<<8)|bytes[offset+3]!
+    if(length<2||offset+2+length>bytes.length)
+      throw Error('public_card.unsafe_jpeg')
+    offset+=2+length
+  }
+  if(bytes[offset]!==0xff||bytes[offset+1]!==0xe2)return bytes
+  if(offset+18>bytes.length)throw Error('public_card.unsafe_jpeg')
+  const length=(bytes[offset+2]!<<8)|bytes[offset+3]!
+  const end=offset+2+length
+  if(length<16||end>bytes.length)
+    throw Error('public_card.unsafe_jpeg')
+  const header=[0x49,0x43,0x43,0x5f,0x50,0x52,
+    0x4f,0x46,0x49,0x4c,0x45,0x00]
+  for(let i=0;i<header.length;i++){
+    if(bytes[offset+4+i]!==header[i])
+      throw Error('public_card.unsafe_jpeg')
+  }
+  // Single sRGB ICC block only. Multipart/other profiles fail closed.
+  if(bytes[offset+16]!==1||bytes[offset+17]!==1)
+    throw Error('public_card.unsafe_jpeg')
+  const stripped=new Uint8Array(bytes.byteLength-(end-offset))
+  stripped.set(bytes.subarray(0,offset))
+  stripped.set(bytes.subarray(end),offset)
+  return stripped
+}
+
 function toHex(bytes:Uint8Array):string{
   return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('')
 }
@@ -167,18 +209,21 @@ export async function prepareSafePublicJpeg(source:Blob):Promise<PreparedSafePub
     })
     if(blob.size>PUBLIC_JPEG_MAX_OUTPUT_BYTES)
       throw Error('public_card.unsafe_dimensions')
-    const bytes=new Uint8Array(await blob.arrayBuffer())
+    const bytes=stripCanvasIccProfile(
+      new Uint8Array(await blob.arrayBuffer())
+    )
     const inspected=inspectFlattenedSafeJpeg(bytes)
     if(inspected.width!==decoded.width||inspected.height!==decoded.height)
       throw Error('public_card.jpeg_dimension_changed')
-    verified=await createImageBitmap(blob)
+    const finalBlob=new Blob([new Uint8Array(bytes)],{type:'image/jpeg'})
+    verified=await createImageBitmap(finalBlob)
     if(verified.width!==decoded.width||verified.height!==decoded.height)
       throw Error('public_card.jpeg_decode_mismatch')
     const hash=new Uint8Array(await crypto.subtle.digest(
       'SHA-256',new Uint8Array(bytes)
     ))
     return {
-      blob,width:inspected.width,height:inspected.height,
+      blob:finalBlob,width:inspected.width,height:inspected.height,
       sha256:toHex(hash),published:false,humanReviewRequired:true,
     }
   }catch(e){
