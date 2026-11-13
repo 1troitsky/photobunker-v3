@@ -1,0 +1,30 @@
+name: UX source integrity and integration map
+
+on:
+  pull_request:
+    paths:
+      - 'docs/ux/**'
+      - 'docs/ux-integration/**'
+      - '.github/workflows/ux-source-integrity.yml'
+  push:
+    paths:
+      - 'docs/ux/**'
+      - 'docs/ux-integration/**'
+      - '.github/workflows/ux-source-integrity.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-ux-sources-and-links:
+    name: PB2-56 exact source, PB3 map links and IDs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify source Git hashes, map links and IDs
+        run: node docs/ux-integration/verify-source.mjs

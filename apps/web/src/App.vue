@@ -1,16 +1,43 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { displayedDock, dockDefinitions } from './ui/fieldwork/dock-preferences'
+import type { DockDefinition } from './ui/fieldwork/dock-preferences'
 import { brand } from './config/brand'
+import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
+import {isDockSectionActive,resolveDockRetap} from './ui/fieldwork/dock-retap'
 const route = useRoute()
-// Canonical default only. User-editable 3–6 Dock (with mandatory Settings)
-// belongs to accepted App Appearance 1.3 and will be wired in P2.
-const dock = [
-  { to: '/assignments', name: 'Задания', icon: 'tasks' },
-  { to: '/browser', name: 'Browser', icon: 'folder' },
-  { to: '/camera', name: 'Камера', icon: 'camera' },
-  { to: '/contacts', name: 'Контакты', icon: 'users' },
-  { to: '/settings', name: 'Настройки', icon: 'settings' },
-] as const
+const router = useRouter()
+function isActive(to:string):boolean {
+  return isDockSectionActive(route.path,to)
+}
+
+/**
+ * Normal RouterLink navigation stays native (including ctrl/cmd-click).
+ * Active re-taps never use arbitrary browser Back: only a verified
+ * same-section logical parent is allowed; otherwise replace a safe route.
+ * Existing editor/assignment before-leave guards still run through router.
+ */
+function onDockClick(
+  event:MouseEvent,to:string,navigate:(event?:MouseEvent)=>Promise<unknown>,
+):void {
+  if(event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey
+    ||event.shiftKey||event.altKey){
+    // On modified clicks leave the anchor to the browser, don't pop history.
+    return
+  }
+  const action=resolveDockRetap(route.path,to,window.history.state?.back)
+  if(!action){void navigate(event);return}
+  event.preventDefault()
+  if(action.kind==='back'){router.back();return}
+  if(action.kind==='replace')void router.replace(action.path)
+  // 'none' at the section root intentionally does not push a duplicate.
+}
+// The Dock changes only through locally validated, user-confirmed Appearance
+// preferences. Hidden destinations (Notifications/Messages) can never render.
+const dock = computed(() => displayedDock.value
+  .map(id => dockDefinitions[id])
+  .filter((entry): entry is DockDefinition & {to:string} => entry.to !== null))
 </script>
 
 <template>
@@ -21,22 +48,88 @@ const dock = [
         <strong>{{ brand.name }}</strong>
         <small><span class="status-dot" aria-hidden="true"></span>Подготовка</small>
       </div>
-      <div class="shell-header-actions" v-if="route.path==='/contacts'">
+      <div class="shell-header-actions viewer-header-actions"
+        v-if="route.name==='browser-viewer'" data-testid="viewer-shell-actions"
+        aria-label="Действия с файлом">
+        <button type="button" disabled aria-label="Избранное"
+          title="Синхронизированная E2EE-коллекция Избранное ещё не реализована">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true">
+            <path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 7-6.2-3.3-6.2 3.3 1.2-7-5-4.9 6.9-1z"/>
+          </svg>
+        </button>
+        <button type="button" disabled aria-label="Копировать"
+          title="Безопасное копирование во внешний буфер обмена ещё не проверено">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true">
+            <rect x="8" y="8" width="12" height="12" rx="2"/>
+            <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>
+          </svg>
+        </button>
+        <button type="button" aria-label="Скачать"
+          :disabled="!viewerShellActions"
+          title="Скачать исходный расшифрованный файл после подтверждения"
+          @click="viewerShellActions?.download()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true">
+            <path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>
+          </svg>
+        </button>
+        <button type="button" disabled aria-label="Удалить"
+          title="Удаление требует принятой серверной политики архива, TTL и прав">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true">
+            <path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 10v8M14 10v8"/>
+          </svg>
+        </button>
+      </div>
+      <div class="shell-header-actions editor-header-actions"
+        v-else-if="route.name==='browser-editor'" data-testid="editor-shell-actions"
+        aria-label="Редактор файла">
+        <button type="button" data-testid="editor-shell-cancel"
+          @click="viewerShellActions?.editor?.cancel()">Отмена</button>
+        <button class="editor-shell-save" type="button"
+          data-testid="editor-shell-save"
+          :disabled="!viewerShellActions?.editor?.canSave"
+          @click="viewerShellActions?.editor?.save()">Сохранить</button>
+      </div>
+      <div class="shell-header-actions" v-else-if="route.path.startsWith('/settings')"
+        data-testid="settings-shell-header-actions">
+        <button v-if="route.path==='/settings/search'" type="button"
+          aria-label="Закрыть поиск" title="Вернуться в настройки"
+          @click="router.push('/settings')">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
+            stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+        <button v-else type="button"
+          aria-label="Поиск по настройкам" title="Поиск по настройкам"
+          @click="router.push('/settings/search')">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none"
+            stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="10.8" cy="10.8" r="7.2"/>
+            <path d="m16 16 5 5"/>
+          </svg>
+        </button>
+      </div>
+      <div class="shell-header-actions" v-else-if="route.path==='/contacts'">
         <button type="button" disabled aria-label="Blacklist — пока недоступен"
           title="Требует настоящего серверного отзыва полномочий">Blacklist</button>
       </div>
     </header>
 
-    <main class="shell-main" id="main">
+    <main class="shell-main" :class="{'shell-main-viewer':route.name==='browser-viewer'||route.name==='browser-editor'}" id="main">
       <RouterView />
     </main>
 
-    <nav class="shell-dock" aria-label="Главная навигация">
-      <RouterLink
-        v-for="item in dock" :key="item.to" :to="item.to"
-        :class="{ active: (route.path === item.to || (item.to === '/assignments' && route.path.startsWith('/assignments/'))) }"
-        :aria-current="(route.path === item.to || (item.to === '/assignments' && route.path.startsWith('/assignments/'))) ? 'page' : undefined"
-      >
+    <nav class="shell-dock" aria-label="Главная навигация"
+      :style="{gridTemplateColumns:'repeat('+dock.length+',minmax(0,1fr))'}">
+      <RouterLink v-for="item in dock" :key="item.to" :to="item.to"
+        custom v-slot="{ href, navigate }">
+        <a :href="href" :class="{ active: isActive(item.to) }"
+          :aria-current="isActive(item.to) ? 'page' : undefined"
+          @click="onDockClick($event,item.to,navigate)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <template v-if="item.icon === 'tasks'"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></template>
@@ -46,6 +139,7 @@ const dock = [
           <template v-else><circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></template>
         </svg>
         <small>{{ item.name }}</small>
+        </a>
       </RouterLink>
     </nav>
   </div>

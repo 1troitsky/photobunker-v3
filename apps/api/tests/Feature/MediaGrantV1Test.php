@@ -190,6 +190,917 @@ final class MediaGrantV1Test extends TestCase
         ];
     }
 
+    /**
+     * Two distinct signed-photo fixtures. The test-only ciphertext is never
+     * decrypted in PHP: it only establishes the chunk authorization boundary.
+     * The real DEK exchange is exercised independently in Chromium.
+     */
+    private function newSafePhotoAsset(?int $expiresAt=null):array
+    {
+        $owner=$this->people['owner'];
+        $mediaId=(string)Str::uuid();
+        $expires=$expiresAt??now()->addDay()->getTimestampMs();
+        $chunks=[];$pendingChunks=[];$firstChunk='';
+        foreach(['data','metadata'] as $kind){
+            $chunkId=(string)Str::uuid();
+            if($firstChunk==='')$firstChunk=$chunkId;
+            $cipher=random_bytes($kind==='data'?280:91);
+            $chunk=[
+                'chunkId'=>$chunkId,'index'=>count($chunks),
+                'kind'=>$kind,'plainBytes'=>strlen($cipher)-16,
+                'bytes'=>strlen($cipher),'sha256'=>hash('sha256',$cipher),
+                'iv'=>P::encode(random_bytes(12)),
+            ];
+            $chunks[]=$chunk;
+            $key='cipher/media/v1/'.$owner['id'].'/'.$mediaId.'/'.$chunkId;
+            Storage::disk('ciphertext')->put($key,$cipher);
+            $pendingChunks[]=['chunk'=>$chunk,'key'=>$key,'kind'=>$kind];
+
+        }
+        $contract=json_encode([
+            'version'=>1,'accountId'=>$owner['id'],'mediaId'=>$mediaId,
+            'operationId'=>(string)Str::uuid(),'mediaType'=>'photo',
+            'expiresAt'=>$expires,'chunkBytes'=>1048576,
+            'plainBytes'=>$chunks[0]['plainBytes'],
+            'wrappedDEK'=>[
+                'iv'=>P::encode(random_bytes(12)),
+                'ciphertext'=>P::encode(random_bytes(48)),
+            ],'chunks'=>$chunks,
+        ],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $hash=hash('sha256',$contract);
+        DB::table('media_files_v1')->insert([
+            'id'=>$mediaId,'account_id'=>$owner['id'],
+            'device_id'=>$owner['device'],
+            'operation_id'=>(string)Str::uuid(),
+            'media_type'=>'photo','state'=>'active',
+            'expires_at'=>$expires,'plain_bytes'=>$chunks[0]['plainBytes'],
+            'cipher_bytes'=>array_sum(array_column($chunks,'bytes')),
+            'contract_hash'=>$hash,'contract_json'=>$contract,
+            'signature'=>'device-fixture',
+            'receipt'=>json_encode(['mediaId'=>$mediaId]),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        foreach($pendingChunks as $item){
+            $chunk=$item['chunk'];$key=$item['key'];$chunkId=$chunk['chunkId'];$kind=$item['kind'];
+            DB::table('media_chunks_v1')->insert([
+                'id'=>$chunkId,'media_id'=>$mediaId,
+                'chunk_index'=>$chunk['index'],'kind'=>$kind,
+                'plain_bytes'=>$chunk['plainBytes'],
+                'bytes'=>$chunk['bytes'],'sha256'=>$chunk['sha256'],
+                'iv'=>$chunk['iv'],'state'=>'active',
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            DB::table('media_chunk_locations_v1')->insert([
+                'id'=>(string)Str::uuid(),'chunk_id'=>$chunkId,
+                'provider'=>'app_s3','object_key'=>$key,
+                'sha256'=>$chunk['sha256'],'bytes'=>$chunk['bytes'],
+                'state'=>'active','created_at'=>now(),'updated_at'=>now(),
+            ]);
+        }
+        return ['id'=>$mediaId,'hash'=>$hash,
+            'chunkId'=>$firstChunk,'expiresAt'=>$expires];
+    }
+
+    private function safeGrantInput(string $recipientDigest,array $source,
+        array $derivative,?int $expiry=null):array
+    {
+        $grant=[
+            'version'=>3,'grantId'=>(string)Str::uuid(),
+            'mediaId'=>$derivative['id'],
+            'ownerAccountId'=>$this->people['owner']['id'],
+            'recipientAccountId'=>$this->people['recipient']['id'],
+            'sourceMediaId'=>$source['id'],
+            'sourceContractHash'=>$source['hash'],
+            'recipientKeyDigest'=>$recipientDigest,
+            'mediaContractHash'=>$derivative['hash'],
+            'scope'=>'safe_read',
+            'expiresAt'=>$expiry??now()->addHour()->getTimestampMs(),
+            'envelope'=>[
+                'ephemeralSpki'=>$this->people['owner']['spki'],
+                'salt'=>P::encode(random_bytes(16)),
+                'iv'=>P::encode(random_bytes(12)),
+                'ciphertext'=>P::encode(random_bytes(48)),
+            ],
+        ];
+        return $this->signedSafeGrant($grant);
+    }
+
+    private function signedSafeGrant(array $grant):array
+    {
+        $contract=json_encode(
+            $grant,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return [
+            'contract'=>$contract,
+            'signature'=>$this->signature(
+                'owner',"pb3.media-grant.v3\n".$contract),
+        ];
+    }
+
+    public function test_safe_v3_migration_refuses_to_drop_live_source_binding():void
+    {
+        $digest=$this->publishRecipientKey();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $body=$this->safeGrantInput($digest,$source,$safe);
+        $this->postJson('/media-shares/v1/grants',$body)->assertCreated();
+        $migration=require database_path(
+            'migrations/2026_11_11_000004_add_media_safe_derivative_scope_v3.php'
+        );
+        try{
+            $migration->down();
+            $this->fail('Must not remove source binding of a signed safe grant.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.safe_grants.rollback_forbidden',
+                $e->getMessage());
+        }
+        $this->assertTrue(Schema::hasColumn(
+            'media_recipient_grants_v1','source_media_id'));
+        $this->assertTrue(Schema::hasColumn(
+            'media_recipient_grants_v1','source_contract_hash'));
+        $this->assertDatabaseHas('media_recipient_grants_v1',[
+            'source_media_id'=>$source['id'],
+            'media_id'=>$safe['id'],
+        ]);
+    }
+
+    public function test_safe_v3_only_decryptable_derivative_chunks_and_source_lifecycle_is_enforced():void
+    {
+        $digest=$this->publishRecipientKey();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $body=$this->safeGrantInput($digest,$source,$safe);
+        $grantId=json_decode($body['contract'],true)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$body)
+            ->assertCreated()->assertJsonPath('state','active');
+        $this->postJson('/media-shares/v1/grants',$body)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('media_recipient_grants_v1',[
+            'id'=>$grantId,'media_id'=>$safe['id'],
+            'source_media_id'=>$source['id'],
+            'source_contract_hash'=>$source['hash'],
+            'media_contract_hash'=>$safe['hash'],
+        ]);
+        $this->asRole('recipient');
+        $this->getJson('/media-shares/v1/received')
+            ->assertOk()->assertJsonPath('items.0.scope','safe_read');
+        $this->getJson('/media-shares/v1/grants/'.$grantId)
+            ->assertOk()->assertJsonPath('mediaId',$safe['id'])
+            ->assertJsonPath('contract',$body['contract']);
+        $this->get('/media-shares/v1/grants/'.$grantId.'/chunks/'.
+            $safe['chunkId'])->assertOk();
+        // The grantId MUST NOT expose the source ciphertext: its DEK is
+        // different and the server cannot route source chunks by grant.
+        $this->get('/media-shares/v1/grants/'.$grantId.'/chunks/'.
+            $source['chunkId'])->assertNotFound();
+        $this->getJson('/media/v1/'.$source['id'].'/manifests')
+            ->assertNotFound();
+        // Dynamic TTL and owner state bound to BOTH signed media contracts.
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson('/media-shares/v1/grants/'.$grantId)->assertGone();
+        $this->get('/media-shares/v1/grants/'.$grantId.'/chunks/'.
+            $safe['chunkId'])->assertGone();
+        $this->getJson('/media-shares/v1/received')
+            ->assertJsonPath('items',[]);
+        // No automatic deletion or change of the original on revoke/expiry.
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$source['id'],'state'=>'active',
+        ]);
+    }
+
+    public function test_safe_v3_rejects_source_confusion_bad_scope_expiry_and_untrusted_account():void
+    {
+        $digest=$this->publishRecipientKey();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $base=json_decode($this->safeGrantInput($digest,$source,$safe)['contract'],true);
+        foreach([
+            [...$base,'mediaId'=>$source['id']],
+            [...$base,'sourceMediaId'=>$safe['id']],
+            [...$base,'sourceContractHash'=>str_repeat('e',64)],
+            [...$base,'scope'=>'read'],
+            [...$base,'scope'=>'original'],
+            [...$base,'version'=>2],
+            [...$base,'rawDEK'=>'do-not-exfiltrate'],
+            [...$base,'expiresAt'=>$source['expiresAt']+1],
+            [...$base,'sourceMediaId'=>$this->mediaId], // video, not photo
+        ] as $grant){
+            $grant['grantId']=(string)Str::uuid();
+            $response=$this->postJson('/media-shares/v1/grants',
+                $this->signedSafeGrant($grant));
+            $this->assertContains($response->getStatusCode(),[404,409,410,422]);
+        }
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        // An unrelated account cannot relabel someone else's original.
+        DB::table('media_files_v1')->where('id',$source['id'])->update([
+            'account_id'=>$this->people['unrelated']['id'],
+            'device_id'=>$this->people['unrelated']['device'],
+        ]);
+        $this->postJson('/media-shares/v1/grants',
+            $this->safeGrantInput($digest,$source,$safe))->assertNotFound();
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
+    /** A revoked key, source archive, owner status or changed state applies
+     * to the SAME grant in the list, manifest and data chunk routes. */
+    public function test_safe_effective_acl_intersection_rejects_live_state_and_key_drift():void
+    {
+        $digest=$this->publishRecipientKey();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $input=$this->safeGrantInput($digest,$source,$safe);
+        $id=json_decode($input['contract'],true)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$input)->assertCreated();
+
+        $assertDenied=function()use($id,$safe):void{
+            $this->asRole('recipient');
+            $this->getJson('/media-shares/v1/received')
+                ->assertOk()->assertJsonPath('items',[]);
+            $this->getJson('/media-shares/v1/grants/'.$id)->assertGone();
+            $this->get('/media-shares/v1/grants/'.$id.'/chunks/'.
+                $safe['chunkId'])->assertGone();
+        };
+        $assertAllowed=function()use($id,$safe):void{
+            $this->asRole('recipient');
+            $this->getJson('/media-shares/v1/received')
+                ->assertOk()->assertJsonPath('items.0.scope','safe_read');
+            $this->getJson('/media-shares/v1/grants/'.$id)->assertOk();
+            $this->get('/media-shares/v1/grants/'.$id.'/chunks/'.
+                $safe['chunkId'])->assertOk();
+        };
+        $assertAllowed();
+
+        $ownerId=$this->people['owner']['id'];
+        $recipientId=$this->people['recipient']['id'];
+        $directory=DB::table('account_exchange_keys')
+            ->where('account_id',$recipientId)->first();
+        // Recipient exchange key generation changed: old grant no longer
+        // authorizes a new key; no silent fallback to server directory.
+        DB::table('account_exchange_keys')->where('account_id',$recipientId)
+            ->update(['descriptor_hash'=>str_repeat('b',64)]);
+        $assertDenied();
+        DB::table('account_exchange_keys')->where('account_id',$recipientId)
+            ->update(['descriptor_hash'=>$directory->descriptor_hash]);
+        $assertAllowed();
+
+        DB::table('identity_accounts')->where('id',$ownerId)
+            ->update(['status'=>'retired']);
+        $assertDenied();
+        DB::table('identity_accounts')->where('id',$ownerId)
+            ->update(['status'=>'ready']);
+        $assertAllowed();
+
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['media_type'=>'video']);
+        $assertDenied();
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['media_type'=>'photo']);
+        $assertAllowed();
+
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['contract_hash'=>str_repeat('d',64)]);
+        $assertDenied();
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['contract_hash'=>$source['hash']]);
+        $assertAllowed();
+
+        $archive=(string)Str::uuid();
+        DB::table('browser_archive_entries_v1')->insert([
+            'id'=>$archive,'account_id'=>$ownerId,
+            'kind'=>'media','asset_id'=>$safe['id'],'revision'=>1,
+            'state'=>'archived','media_type'=>'photo',
+            'asset_expires_at_ms'=>$safe['expiresAt'],
+            'archive_until_ms'=>now()->addDay()->getTimestampMs(),
+            'plain_bytes'=>300,'last_operation_id'=>(string)Str::uuid(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $assertDenied();
+        DB::table('browser_archive_entries_v1')->where('id',$archive)
+            ->update(['state'=>'restored']);
+        $assertAllowed();
+        DB::table('browser_archive_entries_v1')->where('id',$archive)
+            ->update(['asset_id'=>$source['id'],'state'=>'deleting']);
+        $assertDenied();
+        DB::table('browser_archive_entries_v1')->where('id',$archive)
+            ->update(['state'=>'restored']);
+        $assertAllowed();
+
+        // Persisted DB row mutation alone cannot relabel original/derived
+        // scope after the owner has signed the canonical grant JSON.
+        DB::table('media_recipient_grants_v1')->where('id',$id)
+            ->update(['source_media_id'=>$safe['id']]);
+        $assertDenied();
+        DB::table('media_recipient_grants_v1')->where('id',$id)
+            ->update(['source_media_id'=>$source['id']]);
+        $assertAllowed();
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$source['id'],'state'=>'active',
+        ]);
+    }
+
+    public function test_assignment_scoped_media_acl_drops_after_contributor_membership_revoked():void
+    {
+        $digest=$this->publishRecipientKey();
+        $assignmentId=$this->acceptedAssignment();
+        $this->asRole('owner');
+        $scoped=$this->scopedMediaGrant($this->grantInput($digest),$assignmentId);
+        $id=json_decode($scoped['contract'],true)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$scoped)->assertCreated();
+        $personal=$this->grantInput($digest);
+        $personalId=json_decode($personal['contract'],true)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$personal)->assertCreated();
+        $this->asRole('recipient');
+        $this->getJson('/media-shares/v1/grants/'.$id)->assertOk();
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$assignmentId)
+            ->where('recipient_account_id',$this->people['owner']['id'])
+            ->update(['state'=>'revoked']);
+        $this->getJson('/media-shares/v1/grants/'.$id)->assertGone();
+        $chunkId=array_key_first($this->chunks);
+        $this->get('/media-shares/v1/grants/'.$id.'/chunks/'.$chunkId)
+            ->assertGone();
+        $this->getJson('/media-shares/v1/received')
+            ->assertOk()->assertJsonPath('items.0.grantId',$personalId)
+            ->assertJsonCount(1,'items');
+        $this->getJson('/media-shares/v1/grants/'.$personalId)->assertOk();
+        $this->get('/media-shares/v1/grants/'.$personalId.'/chunks/'.$chunkId)
+            ->assertOk();
+        // A Fieldwork owner reassignment cannot silently expand a scoped
+        // grant to another team/assignment owner.
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$assignmentId)
+            ->update(['state'=>'accepted']);
+        DB::table('assignment_records_v1')
+            ->where('id',$assignmentId)
+            ->update(['owner_account_id'=>$this->people['unrelated']['id']]);
+        $this->getJson('/media-shares/v1/grants/'.$id)->assertGone();
+        $this->getJson('/media-shares/v1/received')
+            ->assertOk()->assertJsonCount(1,'items');
+    }
+
+    public function test_bad_stored_grant_signature_never_appears_in_received_listing():void
+    {
+        $digest=$this->publishRecipientKey();
+        $this->asRole('owner');
+        $g=$this->grantInput($digest);
+        $id=json_decode($g['contract'],true)['grantId'];
+        $this->postJson('/media-shares/v1/grants',$g)->assertCreated();
+        $this->asRole('recipient');
+        $this->getJson('/media-shares/v1/received')
+            ->assertOk()->assertJsonPath('items.0.grantId',$id);
+        DB::table('media_recipient_grants_v1')->where('id',$id)
+            ->update(['account_signature'=>P::encode(random_bytes(64))]);
+        $this->getJson('/media-shares/v1/received')
+            ->assertOk()->assertJsonPath('items',[]);
+        $this->getJson('/media-shares/v1/grants/'.$id)->assertGone();
+    }
+
+    private function previewPolicyInput(array $source,array $safe,
+        int $fromRevision=0,?string $previousHash=null,
+        ?array $fields=null,?array $actions=null):array
+    {
+        $contract=[
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'accountId'=>$this->people['owner']['id'],
+            'sourceMediaId'=>$source['id'],'safeMediaId'=>$safe['id'],
+            'sourceContractHash'=>$source['hash'],
+            'safeContractHash'=>$safe['hash'],
+            'fromRevision'=>$fromRevision,
+            'toRevision'=>$fromRevision+1,
+            'previousPolicyHash'=>$previousHash??str_repeat('0',64),
+            'publication'=>'disabled',
+            'fields'=>$fields??[
+                'description'=>true,'capturedAt'=>false,
+                'updatedAt'=>false,'tags'=>false,
+                'authorTeam'=>false,'gps'=>false,'metadata'=>false,
+            ],
+            'actions'=>$actions??[
+                'view'=>false,'copy'=>false,
+                'download'=>false,'share'=>false,
+            ],
+            'expiresAt'=>now()->addHours(2)->getTimestampMs(),
+        ];
+        return $this->signPreviewPolicy($contract);
+    }
+
+    private function signPreviewPolicy(array $contract):array
+    {
+        $json=json_encode($contract,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return ['contract'=>$json,'signature'=>$this->signature(
+            'owner',"pb3.media-file-preview-policy.v1\n".$json)];
+    }
+
+    public function test_file_preview_policy_is_signed_owner_only_and_never_publishes():void
+    {
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $p1=$this->previewPolicyInput($source,$safe);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertNotFound();
+        $this->postJson('/media-file-preview/v1/policies',$p1)
+            ->assertCreated()->assertJsonPath('revision',1)
+            ->assertJsonPath('unchanged',false)
+            ->assertJsonPath('published',false);
+        $this->postJson('/media-file-preview/v1/policies',$p1)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $get=$this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertOk()->assertJsonPath('published',false)
+            ->assertJsonPath('contract',$p1['contract'])
+            ->assertJsonMissingPath('token')
+            ->assertJsonMissingPath('envelope')
+            ->assertJsonMissingPath('publicUrl');
+        $previous=$get->json('policyHash');
+        $this->assertSame(hash('sha256',$p1['contract']),$previous);
+        $p2=$this->previewPolicyInput($source,$safe,1,$previous,[
+            'description'=>false,'capturedAt'=>true,
+            'updatedAt'=>false,'tags'=>true,'authorTeam'=>false,
+            'gps'=>false,'metadata'=>false,
+        ]);
+        $this->postJson('/media-file-preview/v1/policies',$p2)
+            ->assertCreated()->assertJsonPath('revision',2)
+            ->assertJsonPath('published',false);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertOk()->assertJsonPath('revision',2)
+            ->assertJsonPath('contract',$p2['contract']);
+        $this->assertDatabaseCount('media_file_preview_policy_events_v1',2);
+        $this->assertDatabaseHas('media_file_preview_policies_v1',[
+            'account_id'=>$this->people['owner']['id'],
+            'source_media_id'=>$source['id'],
+            'safe_media_id'=>$safe['id'],'revision'=>2,
+            'source_contract_hash'=>$source['hash'],
+            'safe_contract_hash'=>$safe['hash'],
+        ]);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        $this->asRole('recipient');
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertNotFound();
+        $this->postJson('/media-file-preview/v1/policies',$p1)
+            ->assertForbidden();
+        // Nothing in the policy route grants a recipient a ciphertext chunk.
+        $this->getJson('/media/v1/'.$safe['id'].'/manifests')
+            ->assertNotFound();
+    }
+
+    public function test_file_preview_rejects_public_actions_replay_forgery_and_revision_fork():void
+    {
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $p=$this->previewPolicyInput($source,$safe);
+        $data=json_decode($p['contract'],true,16,JSON_THROW_ON_ERROR);
+        foreach([
+            [...$data,'publication'=>'public'],
+            [...$data,'publication'=>'published'],
+            [...$data,'actions'=>[...$data['actions'],'download'=>true]],
+            [...$data,'actions'=>[...$data['actions'],'view'=>true]],
+            [...$data,'actions'=>[...$data['actions'],'share'=>true]],
+            [...$data,'actions'=>[...$data['actions'],'copy'=>true]],
+            [...$data,'fields'=>[...$data['fields'],'gps'=>'true']],
+            [...$data,'fields'=>[...$data['fields'],'extra'=>true]],
+            [...$data,'actions'=>[...$data['actions'],'original'=>true]],
+            [...$data,'sourceMediaId'=>$safe['id']],
+            [...$data,'sourceContractHash'=>str_repeat('f',64)],
+            [...$data,'safeContractHash'=>str_repeat('f',64)],
+            [...$data,'expiresAt'=>$source['expiresAt']+1],
+            [...$data,'extra'=>'untrusted'],
+        ] as $mutated){
+            $mutated['operationId']=(string)Str::uuid();
+            $response=$this->postJson('/media-file-preview/v1/policies',
+                $this->signPreviewPolicy($mutated));
+            $this->assertContains($response->getStatusCode(),[404,409,410,422]);
+        }
+        $this->assertDatabaseCount('media_file_preview_policy_events_v1',0);
+        $forged=$p;
+        $forged['signature']=P::encode(random_bytes(64));
+        $this->postJson('/media-file-preview/v1/policies',$forged)
+            ->assertUnauthorized();
+        $this->postJson('/media-file-preview/v1/policies',$p)
+            ->assertCreated();
+        // Lost-ACK mismatch cannot rewrite the signed operation ID.
+        $reused=json_decode($p['contract'],true);
+        $reused['fields']['gps']=true;
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->signPreviewPolicy($reused))->assertConflict();
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->previewPolicyInput($source,$safe))
+            ->assertConflict(); // cannot create another revision 1
+        $this->assertDatabaseCount('media_file_preview_policy_events_v1',1);
+    }
+
+    public function test_file_preview_checks_two_asset_ttls_archive_tamper_and_rollback():void
+    {
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->previewPolicyInput($source,$safe))->assertCreated();
+
+        $migration=require database_path(
+            'migrations/2026_11_11_000005_create_media_file_preview_policies_v1.php');
+        try{
+            $migration->down();
+            $this->fail('Cannot discard existing signed file policies.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.file_preview.rollback_forbidden',
+                $e->getMessage());
+        }
+        $this->assertTrue(Schema::hasTable('media_file_preview_policy_events_v1'));
+
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['contract_hash'=>str_repeat('e',64)]);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertConflict();
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['contract_hash'=>$safe['hash']]);
+
+        // Archived derivatives must not remain available even to the owner
+        // through a stored preview policy. Restoring just the archive flag
+        // does not emit or publish any new grant.
+        $archiveId=(string)Str::uuid();
+        DB::table('browser_archive_entries_v1')->insert([
+            'id'=>$archiveId,
+            'account_id'=>$this->people['owner']['id'],
+            'kind'=>'media','asset_id'=>$safe['id'],
+            'revision'=>1,'state'=>'archived',
+            'asset_expires_at_ms'=>$safe['expiresAt'],
+            'archive_until_ms'=>now()->addDay()->getTimestampMs(),
+            'media_type'=>'photo','plain_bytes'=>300,
+            'last_operation_id'=>(string)Str::uuid(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertGone();
+        DB::table('browser_archive_entries_v1')->where('id',$archiveId)
+            ->update(['state'=>'restored']);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertOk()->assertJsonPath('published',false);
+
+        $event=DB::table('media_file_preview_policy_events_v1')->first();
+        DB::table('media_file_preview_policy_events_v1')
+            ->where('operation_id',$event->operation_id)
+            ->update(['contract_hash'=>str_repeat('f',64)]);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertConflict();
+        DB::table('media_file_preview_policy_events_v1')
+            ->where('operation_id',$event->operation_id)
+            ->update(['contract_hash'=>$event->contract_hash]);
+
+        // The current-row TTL is materialized, never independently
+        // authoritative over the owner-signed expiry.
+        $policy=DB::table('media_file_preview_policies_v1')
+            ->where('safe_media_id',$safe['id'])->first();
+        DB::table('media_file_preview_policies_v1')
+            ->where('safe_media_id',$safe['id'])
+            ->update(['expires_at_ms'=>$policy->expires_at_ms+1000]);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertConflict();
+        DB::table('media_file_preview_policies_v1')
+            ->where('safe_media_id',$safe['id'])
+            ->update(['expires_at_ms'=>$policy->expires_at_ms]);
+
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson('/media-file-preview/v1/policies/'.$safe['id'])
+            ->assertGone();
+        // Signed policy can never erase either independent media file.
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$source['id'],'state'=>'active',
+        ]);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
+    private function editorialOwnedAssignment():array
+    {
+        $id=(string)Str::uuid();
+        $payload=[
+            'version'=>1,'assignmentId'=>$id,
+            'operationId'=>(string)Str::uuid(),
+            'ownerAccountId'=>$this->people['owner']['id'],
+            'revision'=>1,'policyRevision'=>1,'state'=>'active',
+            'startsAt'=>now()->getTimestampMs(),'endsAt'=>null,
+            'photoGoal'=>1,'allowedMedia'=>['photo'],
+            'privateEnvelope'=>[
+                'version'=>1,'iv'=>P::encode(random_bytes(12)),
+                'ciphertext'=>P::encode(random_bytes(64)),
+                'wrappedKey'=>[
+                    'iv'=>P::encode(random_bytes(12)),
+                    'ciphertext'=>P::encode(random_bytes(48)),
+                ],
+            ],
+        ];
+        $raw=json_encode($payload,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $this->asRole('owner');
+        $this->postJson('/assignments/v1',[
+            'contract'=>$raw,'signature'=>$this->signature(
+                'owner',"pb3.assignment.v1\n".$raw),
+        ])->assertCreated();
+        return ['id'=>$id,'hash'=>hash('sha256',$raw)];
+    }
+
+    private function editorialAssignmentCeiling(
+        array $a,int $from=0,?string $previous=null,
+        ?array $fields=null,?int $expires=null):array
+    {
+        $payload=[
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$a['id'],
+            'ownerAccountId'=>$this->people['owner']['id'],
+            'rootPolicyHash'=>$a['hash'],
+            'fromRevision'=>$from,'toRevision'=>$from+1,
+            'previousPolicyHash'=>$previous??str_repeat('0',64),
+            'publication'=>'disabled',
+            'fields'=>$fields??[
+                'description'=>true,'capturedAt'=>false,
+                'updatedAt'=>false,'tags'=>false,'authorTeam'=>false,
+                'gps'=>true,'metadata'=>false,
+            ],
+            'actions'=>[
+                'view'=>false,'copy'=>false,'download'=>false,'share'=>false,
+            ],
+            'expiresAt'=>$expires??now()->addHours(2)->getTimestampMs(),
+        ];
+        $raw=json_encode($payload,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return ['contract'=>$raw,'signature'=>$this->signature(
+            'owner',"pb3.assignment-preview-ceiling.v1\n".$raw)];
+    }
+
+    private function readyEditorialPolicies(
+        array $a,array $source,array $safe):void
+    {
+        $this->asRole('owner');
+        $this->postJson('/assignments/v1/'.$a['id'].'/preview-ceiling',
+            $this->editorialAssignmentCeiling($a))->assertCreated();
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->previewPolicyInput($source,$safe,0,null,[
+                'description'=>true,'capturedAt'=>true,
+                'updatedAt'=>false,'tags'=>false,'authorTeam'=>false,
+                'gps'=>false,'metadata'=>false,
+            ]))->assertCreated();
+    }
+
+    private function editorialLinkInput(
+        array $a,array $source,array $safe,?int $expires=null):array
+    {
+        $link=[
+            'version'=>1,'linkId'=>(string)Str::uuid(),
+            'operationId'=>(string)Str::uuid(),
+            'ownerAccountId'=>$this->people['owner']['id'],
+            'assignmentId'=>$a['id'],
+            'sourceMediaId'=>$source['id'],'safeMediaId'=>$safe['id'],
+            'sourceContractHash'=>$source['hash'],
+            'safeContractHash'=>$safe['hash'],
+            'assignmentRootHash'=>$a['hash'],
+            'expiresAt'=>$expires??now()->addHour()->getTimestampMs(),
+        ];
+        return $this->signEditorialLink($link);
+    }
+
+    private function signEditorialLink(array $link):array
+    {
+        $raw=json_encode($link,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return ['contract'=>$raw,'signature'=>$this->signature(
+            'owner',"pb3.safe-assignment-editorial-link.v1\n".$raw)];
+    }
+
+    private function editorialDetachInput(array $link):array
+    {
+        $c=[
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'linkId'=>$link['linkId'],
+            'ownerAccountId'=>$this->people['owner']['id'],
+            'safeMediaId'=>$link['safeMediaId'],
+            'linkContractHash'=>$link['contractHash'],
+            'action'=>'detach',
+        ];
+        $raw=json_encode($c,JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        return ['contract'=>$raw,'signature'=>$this->signature(
+            'owner',"pb3.safe-assignment-editorial-detach.v1\n".$raw)];
+    }
+
+    public function test_assignment_preview_can_outlive_a_specific_safe_photo_without_overriding_photo_ttl():void
+    {
+        $a=$this->editorialOwnedAssignment();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->asRole('owner');
+        // Assignment-wide visibility ceiling is independent of which file
+        // is attached and may remain private after this JPEG expires.
+        $long=now()->addDays(30)->getTimestampMs();
+        $this->postJson('/assignments/v1/'.$a['id'].'/preview-ceiling',
+            $this->editorialAssignmentCeiling($a,0,null,null,$long))
+            ->assertCreated();
+        $this->postJson('/media-file-preview/v1/policies',
+            $this->previewPolicyInput($source,$safe))->assertCreated();
+        $body=$this->editorialLinkInput($a,$source,$safe);
+        $base='/media-file-preview/v1/assignment-links';
+        $this->postJson($base,$body)->assertCreated()
+            ->assertJsonPath('linked',true)
+            ->assertJsonPath('effectivePublicFields.description',false);
+        // The independent assignment ceiling remains valid, but the
+        // *association* is bounded by both signed source & Safe JPEG TTLs.
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($base.'/'.$safe['id'])->assertGone();
+        $this->getJson('/assignments/v1/'.$a['id'].'/preview-ceiling')
+            ->assertOk()->assertJsonPath('published',false);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
+    public function test_owner_signed_editorial_link_verifies_both_private_ceilings_and_never_grants_access():void
+    {
+        $a=$this->editorialOwnedAssignment();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->readyEditorialPolicies($a,$source,$safe);
+        $url='/media-file-preview/v1/assignment-links';
+        $input=$this->editorialLinkInput($a,$source,$safe);
+        $this->postJson($url,$input)->assertCreated()
+            ->assertJsonPath('linked',true)
+            ->assertJsonPath('published',false)
+            ->assertJsonPath('candidateFields.description',true)
+            ->assertJsonPath('candidateFields.gps',false)
+            ->assertJsonPath('candidateFields.capturedAt',false)
+            ->assertJsonPath('effectivePublicFields.description',false)
+            ->assertJsonPath('effectivePublicFields.gps',false)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$input)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $view=$this->getJson($url.'/'.$safe['id'])
+            ->assertOk()->assertJsonPath('published',false)
+            ->assertJsonMissingPath('publicUrl')
+            ->assertJsonMissingPath('envelope')
+            ->assertJsonMissingPath('plaintext');
+        $this->assertSame($input['contract'],$view->json('contract'));
+        $this->assertSame($input['signature'],$view->json('signature'));
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        $this->assertDatabaseCount('safe_assignment_editorial_links_v1',1);
+        $this->asRole('recipient');
+        $this->getJson($url.'/'.$safe['id'])->assertNotFound();
+        // This ciphertext-binding contract is signed by the owner, not
+        // the requesting recipient. Signature check precedes file lookup.
+        $this->postJson($url,$input)->assertUnauthorized();
+        $this->getJson('/media/v1/'.$safe['id'].'/manifests')
+            ->assertNotFound();
+        $this->asRole('owner');
+        $link=json_decode($input['contract'],true);
+        $link['contractHash']=hash('sha256',$input['contract']);
+        $detach=$this->editorialDetachInput($link);
+        $this->postJson($url.'/'.$safe['id'].'/detach',$detach)
+            ->assertOk()->assertJsonPath('linked',false)
+            ->assertJsonPath('published',false)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url.'/'.$safe['id'].'/detach',$detach)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        $this->postJson($url,$input)->assertConflict();
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$source['id'],'state'=>'active',
+        ]);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$safe['id'],'state'=>'active',
+        ]);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        $migration=require database_path(
+            'migrations/2026_11_11_000007_create_safe_assignment_editorial_links_v1.php');
+        try{
+            $migration->down();
+            $this->fail('Cannot erase signed detached editorial history.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.safe_assignment_link.rollback_forbidden',
+                $e->getMessage());
+        }
+    }
+
+    public function test_editorial_link_rejects_missing_policies_forgery_wrong_ownership_and_rebinding():void
+    {
+        $a=$this->editorialOwnedAssignment();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $url='/media-file-preview/v1/assignment-links';
+        $input=$this->editorialLinkInput($a,$source,$safe);
+        $this->postJson($url,$input)->assertConflict();
+        $this->readyEditorialPolicies($a,$source,$safe);
+        // Signed link cannot outlive either independent private preview
+        // ceiling: extending the assignment's general ceiling later must
+        // never extend an existing source-bound association.
+        $this->postJson($url,$this->editorialLinkInput(
+            $a,$source,$safe,now()->addHours(3)->getTimestampMs()))
+            ->assertUnprocessable();
+        $base=json_decode($input['contract'],true);
+        foreach([
+            [...$base,'sourceMediaId'=>$safe['id']],
+            [...$base,'safeMediaId'=>$source['id']],
+            [...$base,'sourceContractHash'=>str_repeat('b',64)],
+            [...$base,'safeContractHash'=>str_repeat('b',64)],
+            [...$base,'assignmentRootHash'=>str_repeat('b',64)],
+            [...$base,'ownerAccountId'=>$this->people['recipient']['id']],
+            [...$base,'expiresAt'=>$source['expiresAt']+1000],
+            [...$base,'publication'=>'enabled'],
+            [...$base,'allowOriginal'=>true],
+            [...$base,'assignmentId'=>(string)Str::uuid()],
+        ] as $c){
+            $c['linkId']=(string)Str::uuid();
+            $c['operationId']=(string)Str::uuid();
+            $response=$this->postJson($url,$this->signEditorialLink($c));
+            $this->assertContains($response->status(),
+                [403,404,409,410,422]);
+        }
+        $bad=$input;$bad['signature']=P::encode(random_bytes(64));
+        $this->postJson($url,$bad)->assertUnauthorized();
+        $this->assertDatabaseCount('safe_assignment_editorial_links_v1',0);
+        $this->postJson($url,$input)->assertCreated();
+        $this->postJson($url,$this->editorialLinkInput($a,$source,$safe))
+            ->assertConflict();
+        $this->assertDatabaseCount('safe_assignment_editorial_links_v1',1);
+    }
+
+    public function test_editorial_link_recomputes_live_fields_and_denies_archive_retention_and_tamper():void
+    {
+        $a=$this->editorialOwnedAssignment();
+        $source=$this->newSafePhotoAsset();
+        $safe=$this->newSafePhotoAsset();
+        $this->readyEditorialPolicies($a,$source,$safe);
+        $url='/media-file-preview/v1/assignment-links';
+        $this->postJson($url,$this->editorialLinkInput($a,$source,$safe))
+            ->assertCreated();
+        $this->getJson($url.'/'.$safe['id'])->assertOk()
+            ->assertJsonPath('candidateFields.description',true);
+        $new=$this->previewPolicyInput($source,$safe,1,
+            DB::table('media_file_preview_policies_v1')
+                ->where('safe_media_id',$safe['id'])->value('contract_hash'),[
+                'description'=>false,'capturedAt'=>true,
+                'updatedAt'=>false,'tags'=>false,'authorTeam'=>false,
+                'gps'=>false,'metadata'=>false,
+            ]);
+        $this->postJson('/media-file-preview/v1/policies',$new)
+            ->assertCreated();
+        $this->getJson($url.'/'.$safe['id'])->assertOk()
+            ->assertJsonPath('candidateFields.description',false)
+            ->assertJsonPath('effectivePublicFields.description',false);
+        $row=DB::table('safe_assignment_editorial_links_v1')
+            ->where('safe_media_id',$safe['id'])->first();
+        DB::table('safe_assignment_editorial_links_v1')
+            ->where('safe_media_id',$safe['id'])
+            ->update(['source_contract_hash'=>str_repeat('c',64)]);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        DB::table('safe_assignment_editorial_links_v1')
+            ->where('safe_media_id',$safe['id'])
+            ->update(['source_contract_hash'=>$row->source_contract_hash]);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['state'=>'deleted']);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        DB::table('media_files_v1')->where('id',$source['id'])
+            ->update(['state'=>'active']);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        $archiveId=(string)Str::uuid();
+        DB::table('browser_archive_entries_v1')->insert([
+            'id'=>$archiveId,
+            'account_id'=>$this->people['owner']['id'],
+            'kind'=>'media','asset_id'=>$safe['id'],
+            'revision'=>1,'state'=>'archived',
+            'asset_expires_at_ms'=>$safe['expiresAt'],
+            'archive_until_ms'=>now()->addDay()->getTimestampMs(),
+            'media_type'=>'photo','plain_bytes'=>300,
+            'last_operation_id'=>(string)Str::uuid(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        DB::table('browser_archive_entries_v1')->where('id',$archiveId)
+            ->update(['state'=>'restored']);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        $current=DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$a['id'])->first();
+        DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$a['id'])
+            ->update(['contract_hash'=>str_repeat('e',64)]);
+        $this->getJson($url.'/'.$safe['id'])->assertConflict();
+        DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$a['id'])
+            ->update(['contract_hash'=>$current->contract_hash]);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['account_id'=>$this->people['unrelated']['id']]);
+        $this->getJson($url.'/'.$safe['id'])->assertNotFound();
+        DB::table('media_files_v1')->where('id',$safe['id'])
+            ->update(['account_id'=>$this->people['owner']['id']]);
+        $this->getJson($url.'/'.$safe['id'])->assertOk();
+
+        DB::table('assignment_records_v1')->where('id',$a['id'])
+            ->update(['files_access_until'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($url.'/'.$safe['id'])->assertGone();
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
     /** The recipient owns Fieldwork, but the contributor retains S3 ownership. */
     private function acceptedAssignment():string
     {
@@ -315,6 +1226,43 @@ final class MediaGrantV1Test extends TestCase
         ]);
         $this->postJson('/media-shares/v1/grants',$scoped)->assertForbidden();
         $this->assertDatabaseCount('media_recipient_grants_v1',0);
+    }
+
+    /** A client precisely 3 ms ahead of the server must not sign exactly
+     * 24h in the future; both clocks are independently authoritative in
+     * their own process. The backend's strict 24h ceiling is unchanged. */
+    public function test_three_millisecond_media_grant_clock_boundary_without_ttl_widening():void
+    {
+        $digest=$this->publishRecipientKey();
+        $this->asRole('owner');
+        $serverNow=now()->startOfSecond()->addMilliseconds(250);
+        \Illuminate\Support\Carbon::setTestNow($serverNow);
+        try{
+            $clientNowMs=$serverNow->getTimestampMs()+3;
+            $exact=$this->grantInput($digest,$clientNowMs+86400000);
+            $this->postJson('/media-shares/v1/grants',$exact)
+                ->assertUnprocessable();
+            $this->assertDatabaseCount('media_recipient_grants_v1',0);
+
+            $safe=$this->grantInput($digest,$clientNowMs+86400000-300000);
+            $safeContract=json_decode($safe['contract'],true,32,JSON_THROW_ON_ERROR);
+            $this->postJson('/media-shares/v1/grants',$safe)
+                ->assertCreated()->assertJsonPath('unchanged',false);
+            $this->postJson('/media-shares/v1/grants',$safe)
+                ->assertOk()->assertJsonPath('unchanged',true);
+            $this->assertDatabaseHas('media_recipient_grants_v1',[
+                'id'=>$safeContract['grantId'],
+                'expires_at'=>$safeContract['expiresAt'],
+                'contract_json'=>$safe['contract'],
+            ]);
+            $this->assertDatabaseCount('media_recipient_grants_v1',1);
+            // Explicit upper bound still applies: no server TTL extension.
+            $later=$this->grantInput($digest,$clientNowMs+86400000+1);
+            $this->postJson('/media-shares/v1/grants',$later)
+                ->assertUnprocessable();
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
     }
 
     public function test_recipient_only_gets_signed_media_and_authenticated_chunks():void

@@ -1,0 +1,17 @@
+{
+  "apps/web/src/views/CaptureView.vue": {
+    "bundle": "d9cfa58830e098c90b53b51ea3874042da8db487",
+    "pr263": "d9cfa58830e098c90b53b51ea3874042da8db487"
+  },
+  "apps/web/src/views/CaptureView.test.ts": {
+    "bundle": "b3d93de045c2df0116101d1967f318bf56ecf0a1",
+    "pr263": "b3d93de045c2df0116101d1967f318bf56ecf0a1"
+  },
+  "tests/e2e/p2-browser-camera-gps-permission.spec.ts": {
+    "bundle": "da38a7f35ead05fab71f27fa7b4000bc836fc722",
+    "pr258": "da38a7f35ead05fab71f27fa7b4000bc836fc722"
+  },
+  "apps/api/tests/Feature/StorageContracts/ContractAdapter.php": {
+    "bundle": "21c2cca8293115f13cdfdba3c94f6c6f5fd3ec92"
+  }
+}

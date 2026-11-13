@@ -1,142 +1,1651 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
+import {RouterLink} from 'vue-router'
+import {
+  captureBrowserReturnContext,takeBrowserReturn,
+} from '../features/browser/application/browser-return-context'
 import SharePanel from '../features/sharing/SharePanel.vue'
 import MediaImportPanel from '../features/media/ui/MediaImportPanel.vue'
-import { activeSession, reauthenticate } from '../features/identity/application/session'
+import {activeSession,reauthenticate} from '../features/identity/application/session'
 import {
-  flushOutbox, listLocalPhotos, listCloudPhotos,
-  readLocalPhoto, readCloudPhoto, readLocalPhotoMetadata, readCloudPhotoMetadata,
+  flushOutbox,listLocalPhotos,listCloudPhotos,
+  readLocalPhoto,readCloudPhoto,readLocalPhotoMetadata,readCloudPhotoMetadata,
 } from '../features/photo-sync/application/p1-photo'
-import type { StoredPhoto, CloudPhoto, PhotoPrivateMetadata } from '../features/photo-sync/application/p1-photo'
+import type {StoredPhoto,CloudPhoto} from '../features/photo-sync/application/p1-photo'
+import {
+  listLocalMedia,listCloudMedia,readLocalMedia,readCloudMedia,
+} from '../features/media/application/media-outbox'
+import type {StoredMedia,CloudMedia} from '../features/media/application/media-outbox'
+import {buildCatalog,filterCatalog,scopeCatalogFolders}
+  from '../features/browser/application/catalog'
+import {normalizePrivateSearch,searchPrivateMetadata,searchPrivateMetadataBatches}
+  from '../features/browser/application/private-search'
+import {loadBoundedCatalogIndex}
+  from '../features/browser/application/bounded-catalog-expansion'
+import {appendAuthenticatedCatalogPage}
+  from '../features/browser/application/authenticated-catalog-page'
+import type {PrivateSearchResult}
+  from '../features/browser/application/private-search'
+import type {CatalogFilter,CatalogSort,CatalogView,CatalogItem} from '../features/browser/application/catalog'
+import {
+  emptyWorkspace,folderChildren,folderPath,
+} from '../features/browser/domain/folders'
+import type {FolderWorkspace} from '../features/browser/domain/folders'
+import {
+  loadFolderWorkspace,changeFolderWorkspace,
+} from '../features/browser/application/folder-workspace'
+import {synchronizeFolderWorkspace} from '../features/browser/application/folder-cloud-sync'
+import {
+  getFolderLocalSync,listFolderConflictBackups,restoreFolderConflictBackup,
+} from '../features/browser/application/folder-workspace'
+import type {FolderConflictBackup} from '../features/browser/application/folder-workspace'
+import {
+  prepareFolderConflict,previewFolderConflict,applyFolderConflictPlan,
+} from '../features/browser/application/folder-conflict-resolution'
+import type {FolderConflictPlan} from '../features/browser/application/folder-conflict-resolution'
+import type {ConflictSide} from '../features/browser/domain/folder-merge'
+import {
+  listArchivePage,signedArchiveAction,retryPendingArchiveAction,
+  getPendingArchiveAction,inspectPendingArchiveAction,
+  discardObsoleteArchiveAction,
+} from '../features/browser/application/browser-archive'
+import type {ArchivePendingInspection} from '../features/browser/application/browser-archive'
+import {planArchiveBatch,executeArchiveBatch}
+  from '../features/browser/application/archive-batch'
+import {
+  localArchivePreferences,effectiveArchivePreferenceValues,
+  editArchivePreferences,synchronizeArchivePreferences,
+  discardArchivePreferenceDraft,
+} from '../features/browser/application/archive-preferences'
+import type {
+  ArchivePreferenceValues,
+} from '../features/browser/application/archive-preferences'
+import type {ArchivePending} from '../features/browser/application/archive-outbox'
+import type {ArchiveEntry,ArchiveAction} from '../features/browser/application/browser-archive'
 
-const local=ref<StoredPhoto[]>([])
-const cloud=ref<CloudPhoto[]>([])
-const cursor=ref<string|null>(null)
-const selectedUrl=ref('')
-const selectedMetadata=ref<PhotoPrivateMetadata|null>(null)
+const localPhotos=ref<StoredPhoto[]>([])
+const cloudPhotos=ref<CloudPhoto[]>([])
+const localMedia=ref<StoredMedia[]>([])
+const cloudMedia=ref<CloudMedia[]>([])
+const photoCursor=ref<string|null>(null)
+const mediaCursor=ref<string|null>(null)
+const filter=ref<CatalogFilter>('all')
+const sort=ref<CatalogSort>('newest')
+const view=ref<CatalogView>('list')
+const search=ref('')
+// Ephemeral search UI preference, never persisted or sent to the server.
+const searchFolderScope=ref<'current'|'all'>('current')
+// Search terms and decrypted match membership are VOLATILE: never persisted,
+// synced or placed in a server query parameter.
+const privateSearchResult=ref<PrivateSearchResult|null>(null)
+const privateSearchBusy=ref(false)
+const privateSearchError=ref('')
+const privateSearchUnscanned=ref(0)
+const privateSearchExpanded=ref(false)
+const privateExpansionBusy=ref(false)
+const privateExpansionStatus=ref('')
+const privateSearchProgress=ref(0)
+let privateExpansionEpoch=0
+let privateSearchEpoch=0
+let privateSearchTimer:ReturnType<typeof setTimeout>|null=null
 const busy=ref(false)
+const previewBusy=ref(false)
 const status=ref('')
 const error=ref('')
-
-function revokePreview():void {
-  selectedMetadata.value=null
-  if(selectedUrl.value){URL.revokeObjectURL(selectedUrl.value);selectedUrl.value=''}
-}
-async function refresh():Promise<void> {
-  const s=activeSession.value
-  if(!s){local.value=[];cloud.value=[];return}
-  local.value=await listLocalPhotos()
-  if(s.online){
-    try{
-      const list=await listCloudPhotos()
-      cloud.value=list.items;cursor.value=list.nextCursor
-    }catch{status.value='Не удалось получить список из облака'}
+const selectedUrl=ref('')
+const selectedType=ref<CatalogItem['type']|null>(null)
+const selectedName=ref('')
+const selectedDescription=ref('')
+const selectedCategory=ref('')
+const selectedTags=ref<string[]>([])
+const selectedGps=ref<{latitude:number;longitude:number;accuracyMeters:number}|null>(null)
+const selectedCaptured=ref<number|null>(null)
+const selectedExpiry=ref<number|null>(null)
+let generation=0
+let previewGeneration=0
+let folderEpoch=0
+let folderSyncEpoch=0
+const folderWorkspace=ref<FolderWorkspace>(emptyWorkspace())
+const folderReady=ref(false)
+const folderError=ref('')
+const folderNotice=ref('')
+const folderBusy=ref(false)
+const folderSyncBusy=ref(false)
+const folderSyncStatus=ref('')
+const mergePlan=ref<FolderConflictPlan|null>(null)
+const mergeChoices=ref<Record<string,ConflictSide>>({})
+const mergePreview=computed(()=>mergePlan.value
+  ?previewFolderConflict(mergePlan.value,mergeChoices.value):null)
+const mergeBackups=ref<Omit<FolderConflictBackup,'row'>[]>([])
+const selectedFolder=ref<string|null>(null)
+let requestedFolderReturn:string|null|undefined
+let scrollReturnKey:string|null=null
+const createFolderOpen=ref(false)
+const newFolderName=ref('')
+const editingFolderId=ref<string|null>(null)
+const editFolderName=ref('')
+const selectedKeys=ref<string[]>([])
+const bulkDestination=ref('')
+const archiveTab=ref<'all'|'archive'>('all')
+const archiveEntries=ref<ArchiveEntry[]>([])
+const archiveCursor=ref<string|null>(null)
+const archiveBusy=ref(false)
+const archiveNotice=ref('')
+const archiveBatchNotice=ref('')
+const archiveBatchProgress=ref(0)
+const archivePending=ref<ArchivePending|null>(null)
+const archivePendingError=ref('')
+const archiveInspection=ref<ArchivePendingInspection|null>(null)
+type ArchiveLocalPrefs=Awaited<ReturnType<typeof localArchivePreferences>>
+const archivePrefs=ref<ArchiveLocalPrefs|null>(null)
+let archivePrefsEpoch=0
+const archivePrefsBusy=ref(false)
+const archivePrefsNotice=ref('')
+const archivePrefsConflict=ref(false)
+const archivePrefsShown=computed<ArchivePreferenceValues>(()=>
+  archivePrefs.value?effectiveArchivePreferenceValues(archivePrefs.value)
+    :{useArchive:true,autoDeleteAfter7Days:true})
+const archivePrefsConfirmed=computed(()=>
+  !!archivePrefs.value?.confirmed&&!archivePrefs.value?.draft
+    &&!archivePrefs.value?.pending)
+async function loadArchivePrefState():Promise<void>{
+  const identity=activeSession.value
+  if(!identity)return
+  try{
+    const local=await localArchivePreferences()
+    if(identity!==activeSession.value)return
+    archivePrefs.value=local
+    if(identity.online&&navigator.onLine!==false)
+      await syncArchivePrefState()
+  }catch(e){
+    if(identity===activeSession.value)
+      archivePrefsNotice.value='Не удалось загрузить настройки архива: '+reason(e)
   }
 }
-async function sync():Promise<void> {
+async function syncArchivePrefState():Promise<void>{
+  if(archivePrefsBusy.value||!activeSession.value?.online)return
+  const identity=activeSession.value,epoch=++archivePrefsEpoch
+  archivePrefsBusy.value=true
+  try{
+    const result=await synchronizeArchivePreferences()
+    if(identity!==activeSession.value)return
+    archivePrefs.value=result.data
+    archivePrefsConflict.value=result.state==='conflict'
+    archivePrefsNotice.value=result.state==='conflict'
+      ?'Настройки на другом устройстве изменились. Локальный вариант сохранён, перезапись запрещена.'
+      :result.state==='uploaded'?'Настройки архива подтверждены сервером.'
+        :'Настройки архива получены с сервера.'
+  }catch(e){
+    if(identity===activeSession.value)
+      archivePrefsNotice.value='Изменения сохранены локально, но не подтверждены сервером: '+reason(e)
+  }finally{
+    if(epoch===archivePrefsEpoch)archivePrefsBusy.value=false
+  }
+}
+async function setArchivePref(key:keyof ArchivePreferenceValues,value:boolean):Promise<void>{
+  if(archivePrefsBusy.value)return
+  const identity=activeSession.value
+  if(!identity)return
+  try{
+    archivePrefs.value=await editArchivePreferences({[key]:value})
+    if(identity!==activeSession.value)return
+    archivePrefsNotice.value='Настройка сохранена на устройстве. Ожидает подтверждения сервера.'
+    archivePrefsConflict.value=false
+    if(identity.online&&navigator.onLine!==false)
+      void syncArchivePrefState()
+  }catch(e){
+    if(identity===activeSession.value)
+      archivePrefsNotice.value='Не удалось сохранить настройку: '+reason(e)
+  }
+}
+async function acceptServerArchivePrefs():Promise<void>{
+  if(archivePrefsBusy.value||!activeSession.value?.online
+    ||!window.confirm('Заменить неподтверждённый локальный вариант настройками с сервера? Файлы и архивные записи не удаляются.'))return
+  const identity=activeSession.value
+  archivePrefsBusy.value=true
+  try{
+    const current=await discardArchivePreferenceDraft()
+    if(identity!==activeSession.value)return
+    archivePrefs.value=current
+    archivePrefsConflict.value=false
+    archivePrefsNotice.value='Загружены подтверждённые серверные настройки.'
+  }catch(e){
+    if(identity===activeSession.value)
+      archivePrefsNotice.value='Не удалось принять серверные настройки: '+reason(e)
+  }finally{
+    if(identity===activeSession.value)archivePrefsBusy.value=false
+  }
+}
+async function refreshArchivePending():Promise<void>{
+  const identity=activeSession.value
+  if(!identity)return
+  try{
+    const item=await getPendingArchiveAction()
+    if(identity===activeSession.value){
+      archivePending.value=item
+      if(!item)archiveInspection.value=null
+      archivePendingError.value=''
+    }
+  }catch(e){
+    if(identity===activeSession.value)
+      archivePendingError.value='Не удалось прочитать зашифрованную очередь: '+reason(e)
+  }
+}
+const archiveWriteEnabled=ref(false)
+const archiveCleanupEnabled=ref(false)
+const archivedByKey=computed(()=>new Map(
+  archiveEntries.value.map(entry=>[entry.kind+':'+entry.assetId,entry] as const)
+))
+const folders=computed(()=>folderChildren(folderWorkspace.value,selectedFolder.value))
+const breadcrumb=computed(()=>folderPath(folderWorkspace.value,selectedFolder.value))
+const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
+  .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
+const importFolderOptions=computed(()=>allFolders.value.map(folder=>({
+  id:folder.id,
+  label:folderPath(folderWorkspace.value,folder.id)
+    .map(part=>part.name).join(' / '),
+})))
+
+const items=computed(()=>buildCatalog(
+  localPhotos.value,[
+    ...cloudPhotos.value,
+    ...archiveEntries.value.filter(x=>x.kind==='photo'&&x.state!=='restored').map(x=>({
+      photoId:x.assetId,expiresAt:x.expiresAt,metadataAssetId:null,
+    })),
+  ],localMedia.value,[
+    ...cloudMedia.value,
+    ...archiveEntries.value.filter(x=>x.kind==='media'&&x.mediaType!==null
+      &&x.state!=='restored').map(x=>({
+      mediaId:x.assetId,mediaType:x.mediaType!,// Nullable archive byte counts must not be displayed/sorted as zero.
+       plainBytes:x.plainBytes??Number.NaN,
+      expiresAt:x.expiresAt,
+    })),
+  ],
+))
+const searchScope=computed(()=>{
+  const authenticatedRows=filterCatalog(items.value,{
+    type:filter.value,query:'',sort:sort.value,
+  }).filter(item=>{
+    const archived=archivedByKey.value.get(item.key)?.state
+    if(archiveTab.value==='archive')
+      return archived==='archived'||archived==='deleting'
+    return archived!=='archived'&&archived!=='deleting'
+  })
+  // Folders are encrypted virtual client metadata. An all-folder query
+  // sees ONLY rows already loaded from authenticated catalog endpoints.
+  // Archive already has its own scope, independent of the active folder.
+  if(archiveTab.value==='archive'||!folderReady.value)return authenticatedRows
+  return scopeCatalogFolders(
+    authenticatedRows,folderWorkspace.value.placements,selectedFolder.value,
+    search.value.trim().length>0&&searchFolderScope.value==='all',
+  )
+})
+const visible=computed(()=>filterCatalog(searchScope.value,{
+  type:'all',query:search.value,sort:sort.value,
+  privateMatches:privateSearchResult.value?.query===normalizePrivateSearch(search.value)
+    ?privateSearchResult.value.matches:undefined,
+}))
+function catalogSizeLabel(bytes:number|null):string{
+  if(bytes===null||!Number.isSafeInteger(bytes)||bytes<0)
+    return 'Размер неизвестен'
+  const units=['Б','КиБ','МиБ','ГиБ','ТиБ'] as const
+  let value=bytes,index=0
+  while(value>=1024&&index<units.length-1){value/=1024;index++}
+  return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(value)
+    +' '+units[index]
+}
+function catalogFolderLabel(item:CatalogItem):string{
+  const placement=folderWorkspace.value.placements[item.key]??null
+  if(!placement)return 'Мои файлы'
+  return folderPath(folderWorkspace.value,placement)
+    .map(folder=>folder.name).join(' / ')
+}
+function schedulePrivateSearch():void{
+  const epoch=++privateSearchEpoch
+  if(privateSearchTimer!==null){
+    clearTimeout(privateSearchTimer)
+    privateSearchTimer=null
+  }
+  privateSearchResult.value=null
+  privateSearchError.value=''
+  privateSearchBusy.value=false
+  privateSearchUnscanned.value=0
+  privateSearchProgress.value=0
+  const query=normalizePrivateSearch(search.value)
+  const identity=activeSession.value
+  if(!identity||query.length<2||query.length>160)return
+  const rows=searchScope.value
+  const scanLimit=privateSearchExpanded.value?1000:200
+  privateSearchUnscanned.value=Math.max(0,rows.length-scanLimit)
+  privateSearchBusy.value=true
+  privateSearchTimer=setTimeout(()=>{
+    privateSearchTimer=null
+    const valid=()=>epoch===privateSearchEpoch&&activeSession.value===identity
+    const task=privateSearchExpanded.value
+      ?searchPrivateMetadataBatches(query,rows.slice(0,1000),valid,
+        done=>{if(valid())privateSearchProgress.value=done})
+      :searchPrivateMetadata(query,rows.slice(0,200),valid)
+    void task.then(result=>{
+        if(epoch===privateSearchEpoch&&activeSession.value===identity)
+          privateSearchResult.value=result
+      })
+      .catch(e=>{
+        if(epoch===privateSearchEpoch&&activeSession.value===identity)
+          privateSearchError.value='Поиск не завершён: '+reason(e)
+      })
+      .finally(()=>{
+        if(epoch===privateSearchEpoch)
+          privateSearchBusy.value=false
+      })
+  },250)
+}
+/**
+ * Explicit, bounded wider search: download only authenticated, opaque
+ * photo/media index pages (max 500 per protocol) and never send the user
+ * query, metadata plaintext, tags or folder labels over HTTP.
+ *
+ * All validation happens BEFORE publishing any newly loaded rows. A changed
+ * query, account, route refresh or offline transition cancels the scan.
+ */
+async function expandPrivateSearch():Promise<void>{
+  const identity=activeSession.value
+  const query=normalizePrivateSearch(search.value)
+  if(!identity?.online||typeof navigator!=='undefined'&&navigator.onLine===false
+    ||privateExpansionBusy.value||busy.value||archiveTab.value!=='all'
+    ||query.length<2||query.length>160)return
+  const token=++privateExpansionEpoch
+  const catGeneration=generation
+  const valid=()=>token===privateExpansionEpoch
+    &&identity===activeSession.value&&generation===catGeneration
+    &&normalizePrivateSearch(search.value)===query
+    &&archiveTab.value==='all'
+    &&(typeof navigator==='undefined'||navigator.onLine!==false)
+  privateExpansionBusy.value=true
+  privateExpansionStatus.value=''
+  try{
+    const [photos,media]=await Promise.all([
+      loadBoundedCatalogIndex(listCloudPhotos,row=>row.photoId,valid),
+      loadBoundedCatalogIndex(listCloudMedia,row=>row.mediaId,valid),
+    ])
+    if(!valid())return
+    // Local-first state is never discarded. Do not replace a previously
+    // manually loaded larger index with a 500-row bounded first-page scan.
+    if(cloudPhotos.value.length<=photos.items.length){
+      cloudPhotos.value=photos.items
+      photoCursor.value=photos.nextCursor
+    }else{
+      const known=new Map(cloudPhotos.value.map(x=>[x.photoId,x] as const))
+      for(const item of photos.items)known.set(item.photoId,item)
+      cloudPhotos.value=[...known.values()]
+    }
+    if(cloudMedia.value.length<=media.items.length){
+      cloudMedia.value=media.items
+      mediaCursor.value=media.nextCursor
+    }else{
+      const known=new Map(cloudMedia.value.map(x=>[x.mediaId,x] as const))
+      for(const item of media.items)known.set(item.mediaId,item)
+      cloudMedia.value=[...known.values()]
+    }
+    searchFolderScope.value='all'
+    privateSearchExpanded.value=true
+    privateExpansionStatus.value='Получено '+photos.items.length+' фото и '
+      +media.items.length+' медиа из авторизованных индексов. '
+      +(photos.complete&&media.complete
+        ?'Индексы этих двух типов загружены полностью.'
+        :'Дальнейшие облачные страницы ещё существуют: поиск НЕ по всему аккаунту.')
+      +' Содержимое проверяется только на устройстве (до 1000 файлов).'
+  }catch(e){
+    if(valid()){
+      privateExpansionStatus.value='Расширенный поиск не запущен: '+reason(e)
+        +'. Неполные страницы не опубликованы; попробуйте позже.'
+    }
+  }finally{
+    if(token===privateExpansionEpoch)privateExpansionBusy.value=false
+  }
+}
+
+const pendingCount=computed(()=>items.value.filter(x=>!['archived','deleting'].includes(
+  archivedByKey.value.get(x.key)?.state??'')&&x.local
+  &&x.state!=='synced').length)
+
+async function loadArchiveMore():Promise<void>{
+  const s=activeSession.value
+  if(!s?.online||archiveBusy.value||!archiveCursor.value)return
+  archiveBusy.value=true
+  const cursor=archiveCursor.value
+  try{
+    const page=await listArchivePage(cursor)
+    if(s!==activeSession.value)return
+    const ids=new Set(archiveEntries.value.map(x=>x.entryId))
+    archiveEntries.value=[...archiveEntries.value,
+      ...page.items.filter(x=>!ids.has(x.entryId))]
+    archiveCursor.value=page.nextCursor
+    archiveWriteEnabled.value=page.writeEnabled
+    archiveCleanupEnabled.value=page.autoCleanupEnabled
+  }catch(e){
+    if(s===activeSession.value)archiveNotice.value='Архив: '+reason(e)
+  }finally{
+    if(s===activeSession.value)archiveBusy.value=false
+  }
+}
+async function inspectArchivePending():Promise<void>{
+  if(archiveBusy.value||!archivePending.value||!activeSession.value?.online)
+    return
+  const session=activeSession.value
+  archiveBusy.value=true
+  archiveNotice.value=''
+  try{
+    const result=await inspectPendingArchiveAction()
+    if(session!==activeSession.value)return
+    archiveInspection.value=result
+    archiveNotice.value=result?.status==='committed'
+      ?'Сервер подтвердил ранее принятую подписанную операцию.'
+      :result?.status==='obsolete'
+        ?'Сервер подтвердил конфликт: исходная ревизия больше не действительна. Запрос не выполнен и не может быть принят позднее.'
+        :'Исходная операция ещё может быть выполнена сервером. Снимать её с очереди небезопасно.'
+    await refreshArchivePending()
+    if(result?.status==='committed'){
+      const page=await listArchivePage()
+      if(session!==activeSession.value)return
+      archiveEntries.value=page.items
+      archiveCursor.value=page.nextCursor
+      void refresh()
+    }
+  }catch(e){
+    if(session===activeSession.value)
+      archiveNotice.value='Не удалось подтвердить состояние запроса: '+reason(e)
+  }finally{
+    if(session===activeSession.value)archiveBusy.value=false
+  }
+}
+async function discardArchiveObsolete():Promise<void>{
+  if(archiveBusy.value||archiveInspection.value?.status!=='obsolete'
+    ||!activeSession.value?.online
+    ||!window.confirm('Снять запрос, который сервер подтвердил как устаревший? Это не выполняет удаление файла. Состояние архива будет загружено заново.'))return
+  const session=activeSession.value
+  archiveBusy.value=true
+  try{
+    await discardObsoleteArchiveAction()
+    if(session!==activeSession.value)return
+    archiveInspection.value=null
+    archiveNotice.value='Устаревший запрос безопасно снят после повторной серверной проверки.'
+    await refreshArchivePending()
+    const page=await listArchivePage()
+    if(session!==activeSession.value)return
+    archiveEntries.value=page.items
+    archiveCursor.value=page.nextCursor
+    void refresh()
+  }catch(e){
+    if(session===activeSession.value)
+      archiveNotice.value='Не удалось снять неподтверждённый запрос: '+reason(e)
+  }finally{
+    if(session===activeSession.value){
+      archiveBusy.value=false
+      await refreshArchivePending()
+    }
+  }
+}
+async function retryArchivePending():Promise<void>{
+  if(archiveBusy.value||!activeSession.value?.online||!archiveWriteEnabled.value)
+    return
+  const identity=activeSession.value
+  archiveBusy.value=true
+  archiveNotice.value=''
+  try{
+    const result=await retryPendingArchiveAction()
+    if(identity!==activeSession.value)return
+    archiveNotice.value=result
+      ?'Подписанный запрос восстановлен по исходному operationId. Сервер подтвердил состояние: '+result.state
+      :'Неподтверждённых операций архива нет.'
+    const page=await listArchivePage()
+    if(identity!==activeSession.value)return
+    archiveEntries.value=page.items
+    archiveCursor.value=page.nextCursor
+    archiveWriteEnabled.value=page.writeEnabled
+    archiveCleanupEnabled.value=page.autoCleanupEnabled
+    void refresh()
+  }catch(e){
+    if(identity===activeSession.value)
+      archiveNotice.value='Операция ещё не подтверждена, подписанный запрос сохранён: '+reason(e)
+  }finally{
+    if(identity===activeSession.value){
+      archiveBusy.value=false
+      await refreshArchivePending()
+    }
+  }
+}
+async function archiveAction(item:CatalogItem,action:ArchiveAction):Promise<void>{
+  if(archiveBusy.value||busy.value||!activeSession.value?.online
+    ||!archiveWriteEnabled.value)return
+  const entry=archivedByKey.value.get(item.key)
+  if(action==='restore'&&!entry)return
+  if(action==='archive'&&!archivePrefsConfirmed.value
+    ||action==='delete'&&archiveTab.value==='all'
+      &&(!archivePrefsConfirmed.value||archivePrefsShown.value.useArchive))
+    return
+  if(action==='delete'&&!window.confirm(
+    'Окончательно удалить файл? Доступ будет закрыт немедленно, физическое удаление подтвердится отдельно. Восстановление невозможно.'))return
+  if(action==='archive'&&!window.confirm(
+    'Переместить файл в архив? Срок файла не продлится. Для общих материалов могут потребоваться предварительный отзыв доступа и проверка задания.'))return
+  const identity=activeSession.value
+  archiveBusy.value=true
+  archiveNotice.value=''
+  try{
+    const result=await signedArchiveAction(entry??item,action)
+    if(identity!==activeSession.value)return
+    archiveNotice.value=result.state==='archived'
+      ?'Файл помещён в архив на сервере.'
+      :result.state==='restored'
+        ?'Файл восстановлен из архива. Срок хранения не изменился.'
+        :'Удаление запрошено. Доступ закрыт; физическая очистка S3 ещё НЕ подтверждена.'
+    const page=await listArchivePage()
+    if(identity!==activeSession.value)return
+    archiveEntries.value=page.items
+    archiveCursor.value=page.nextCursor
+    archiveWriteEnabled.value=page.writeEnabled
+    archiveCleanupEnabled.value=page.autoCleanupEnabled
+    void refresh()
+  }catch(e){
+    if(identity===activeSession.value)
+      archiveNotice.value='Операция архива не подтверждена: '+reason(e)
+  }finally{
+    if(identity===activeSession.value){
+      archiveBusy.value=false
+      await refreshArchivePending()
+    }
+  }
+}
+async function runArchiveBatch(action:ArchiveAction):Promise<void>{
+  if(archiveBusy.value||folderBusy.value||busy.value
+    ||archivePending.value||!archiveWriteEnabled.value
+    ||!archivePrefsConfirmed.value||!activeSession.value?.online)return
+  let plan
+  try{
+    plan=planArchiveBatch({
+      selectedKeys:selectedKeys.value,
+      visible:visible.value,archived:archivedByKey.value,
+      tab:archiveTab.value,useArchive:archivePrefsShown.value.useArchive,
+      action,
+    })
+  }catch(e){
+    archiveBatchNotice.value='Массовая операция отклонена до отправки: '+reason(e)
+    return
+  }
+  const irreversible=action==='delete'
+  const prompt=irreversible
+    ?'Окончательно удалить '+plan.rows.length+' файлов? Это необратимо, доступ будет закрываться последовательно по подтверждениям сервера. Физическая очистка S3 проверяется отдельно.'
+    :action==='archive'
+      ?'Переместить '+plan.rows.length+' файлов в архив? Каждый запрос будет подтверждён отдельно сервером.'
+      :'Восстановить '+plan.rows.length+' файлов из архива без продления TTL?'
+  if(!window.confirm(prompt))return
+  const identity=activeSession.value
+  archiveBusy.value=true
+  archiveBatchNotice.value=''
+  archiveBatchProgress.value=0
+  try{
+    const result=await executeArchiveBatch(
+      plan,signedArchiveAction,
+      ()=>activeSession.value===identity,
+      key=>{
+        selectedKeys.value=selectedKeys.value.filter(x=>x!==key)
+        archiveBatchProgress.value++
+      },
+    )
+    if(identity!==activeSession.value)return
+    archiveBatchNotice.value=result.failedKey
+      ?'Подтверждено '+result.completed.length+' из '+plan.rows.length+
+        '. Остановлено на следующем файле: '+reason(result.failure)+
+        '. Неподтверждённая подписанная операция сохранена; остальные файлы не затронуты.'
+      :'Все '+result.completed.length+' операций подтверждены сервером. Физическое удаление не заявлено.'
+    // Refresh authoritative list after partial success too; a failed
+    // signed request must remain visible in the existing durable outbox.
+    try{
+      const page=await listArchivePage()
+      if(identity!==activeSession.value)return
+      archiveEntries.value=page.items
+      archiveCursor.value=page.nextCursor
+      archiveWriteEnabled.value=page.writeEnabled
+      archiveCleanupEnabled.value=page.autoCleanupEnabled
+    }catch(e){
+      archiveBatchNotice.value+=' Архивный список пока не обновлён: '+reason(e)
+    }
+    void refresh()
+  }finally{
+    if(identity===activeSession.value){
+      archiveBusy.value=false
+      await refreshArchivePending()
+    }
+  }
+}
+async function loadMergeBackups():Promise<void>{
+  const session=activeSession.value
+  if(!session)return
+  try{
+    const items=await listFolderConflictBackups()
+    if(session===activeSession.value)mergeBackups.value=items
+  }catch(e){
+    if(session===activeSession.value)
+      folderNotice.value='Не удалось проверить локальные копии: '+reason(e)
+  }
+}
+async function compareFolderConflict():Promise<void>{
+  if(folderBusy.value||folderSyncBusy.value||!folderReady.value
+    ||folderError.value||!activeSession.value?.online)return
+  const session=activeSession.value,epoch=++folderSyncEpoch
+  folderSyncBusy.value=true
+  mergePlan.value=null
+  mergeChoices.value={}
+  try{
+    const plan=await prepareFolderConflict()
+    if(session!==activeSession.value||epoch!==folderSyncEpoch)return
+    mergePlan.value=plan
+    folderSyncStatus.value='Сравнение выполнено локально: проверьте изменения перед объединением.'
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderSyncEpoch)
+      folderSyncStatus.value='Сравнение не выполнено: '+reason(e)
+  }finally{
+    if(epoch===folderSyncEpoch)folderSyncBusy.value=false
+  }
+}
+async function applyFolderMerge():Promise<void>{
+  const plan=mergePlan.value
+  if(!plan||!mergePreview.value?.workspace||folderBusy.value
+    ||folderSyncBusy.value||!activeSession.value?.online)return
+  const hasExplicitChoices=mergePreview.value.conflicts.length>0
+  if(hasExplicitChoices&&!window.confirm(
+    'Применить выбранные версии конфликтующих элементов? Исходная локальная структура сохранится в зашифрованной копии.'))return
+  const session=activeSession.value,epoch=++folderSyncEpoch
+  folderSyncBusy.value=true
+  try{
+    const result=await applyFolderConflictPlan(plan,{...mergeChoices.value})
+    if(session!==activeSession.value||epoch!==folderSyncEpoch)return
+    const current=await loadFolderWorkspace()
+    if(session!==activeSession.value||epoch!==folderSyncEpoch)return
+    folderWorkspace.value=current
+    if(selectedFolder.value&&!Object.hasOwn(current.folders,selectedFolder.value))
+      selectedFolder.value=null
+    mergePlan.value=null
+    mergeChoices.value={}
+    folderSyncStatus.value=result.state==='uploaded'
+      ?'Версии папок объединены и подтверждены сервером. Локальная копия сохранена.'
+      :'Объединение сохранено на устройстве. Облако изменилось повторно: выполните сравнение ещё раз.'
+    await loadMergeBackups()
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderSyncEpoch){
+      mergePlan.value=null
+      folderSyncStatus.value='Не удалось применить объединение: '+reason(e)
+    }
+  }finally{
+    if(epoch===folderSyncEpoch)folderSyncBusy.value=false
+  }
+}
+async function restoreFolderBackup(id:string):Promise<void>{
+  if(folderBusy.value||folderSyncBusy.value||!folderReady.value
+    ||!window.confirm('Восстановить старую локальную структуру папок? Текущее состояние будет сохранено в отдельной зашифрованной копии. Облако не изменится.'))return
+  const session=activeSession.value,epoch=++folderSyncEpoch
+  folderSyncBusy.value=true
+  try{
+    const workspace=await restoreFolderConflictBackup(id)
+    if(session!==activeSession.value||epoch!==folderSyncEpoch)return
+    folderWorkspace.value=workspace
+    mergePlan.value=null
+    mergeChoices.value={}
+    selectedFolder.value=null
+    folderSyncStatus.value='Локальная копия восстановлена. Для обновления облака нужна новая синхронизация.'
+    await loadMergeBackups()
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderSyncEpoch)
+      folderSyncStatus.value='Не удалось восстановить копию: '+reason(e)
+  }finally{
+    if(epoch===folderSyncEpoch)folderSyncBusy.value=false
+  }
+}
+async function syncFoldersCloud():Promise<void>{
+  if(folderSyncBusy.value||folderBusy.value||!folderReady.value||folderError.value
+    ||!activeSession.value?.online)return
+  const session=activeSession.value,epoch=++folderSyncEpoch
+  folderSyncBusy.value=true
+  folderSyncStatus.value=''
+  mergePlan.value=null
+  mergeChoices.value={}
+  try{
+    const result=await synchronizeFolderWorkspace()
+    if(session!==activeSession.value)return
+    if(result.state==='downloaded'){
+      const fresh=await loadFolderWorkspace()
+      if(session!==activeSession.value)return
+      folderWorkspace.value=fresh
+      if(selectedFolder.value&&!Object.hasOwn(fresh.folders,selectedFolder.value))
+        selectedFolder.value=null
+    }
+    const state=({
+      uploaded:'Облачный снимок папок подтверждён сервером.',
+      downloaded:'Зашифрованные папки получены и проверены на этом устройстве.',
+      'up-to-date':'Локальная структура соответствует подтверждённой облачной версии.',
+      empty:'Сохранять в облако пока нечего.',
+      conflict:'Конфликт версий: локальные изменения сохранены. Нельзя автоматически перезаписывать облако или локальные папки.',
+    } as const)[result.state]
+    const local=await getFolderLocalSync()
+    if(session!==activeSession.value||epoch!==folderSyncEpoch)return
+    folderSyncStatus.value=local.localRevision!==local.marker.confirmedLocalRevision
+      &&result.state!=='conflict'
+      ? state+' Есть более новые локальные изменения, ещё не переданные в облако.'
+      : state
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderSyncEpoch)
+      folderSyncStatus.value='Синхронизация не подтверждена: '+reason(e)
+  }finally{
+    if(epoch===folderSyncEpoch)folderSyncBusy.value=false
+  }
+}
+async function loadFolders():Promise<void>{
+  const session=activeSession.value,epoch=++folderEpoch
+  folderWorkspace.value=emptyWorkspace()
+  folderReady.value=false
+  folderError.value=''
+  folderSyncStatus.value=''
+  mergePlan.value=null
+  mergeChoices.value={}
+  selectedFolder.value=null
+  if(!session)return
+  try{
+    const next=await loadFolderWorkspace()
+    if(session!==activeSession.value||epoch!==folderEpoch)return
+    folderWorkspace.value=next
+    // An imported return context is only a location hint. The encrypted
+    // workspace is authoritative: deleted/foreign folders resolve to root.
+    if(requestedFolderReturn!==undefined){
+      const requested=requestedFolderReturn
+      requestedFolderReturn=undefined
+      selectedFolder.value=requested!==null&&Object.hasOwn(next.folders,requested)
+        ?requested:null
+    }
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderEpoch)
+      folderError.value='Не удалось расшифровать локальные папки: '+reason(e)
+  }finally{
+    if(session===activeSession.value&&epoch===folderEpoch)folderReady.value=true
+  }
+}
+async function changeFolders(change:Parameters<typeof changeFolderWorkspace>[0]):Promise<boolean>{
+  if(!folderReady.value||folderError.value||folderBusy.value)return false
+  const session=activeSession.value,epoch=folderEpoch
+  folderBusy.value=true;folderNotice.value=''
+  mergePlan.value=null
+  mergeChoices.value={}
+  try{
+    const next=await changeFolderWorkspace(change)
+    if(session!==activeSession.value||epoch!==folderEpoch)return false
+    folderWorkspace.value=next
+    folderNotice.value='Локальные изменения сохранены. Для передачи на другое устройство синхронизируйте папки.'
+    folderSyncStatus.value='Есть новые локальные изменения.'
+    return true
+  }catch(e){
+    if(session===activeSession.value&&epoch===folderEpoch)folderNotice.value=reason(e)
+    return false
+  }finally{
+    if(session===activeSession.value&&epoch===folderEpoch)folderBusy.value=false
+  }
+}
+async function createFolder():Promise<void>{
+  const ok=await changeFolders({kind:'add',id:crypto.randomUUID(),
+    parentId:selectedFolder.value,name:newFolderName.value,at:Date.now()})
+  if(ok){newFolderName.value='';createFolderOpen.value=false}
+}
+function openRename(id:string,name:string):void{
+  editingFolderId.value=id;editFolderName.value=name
+}
+async function renameCurrentFolder():Promise<void>{
+  if(!editingFolderId.value)return
+  const ok=await changeFolders({kind:'rename',id:editingFolderId.value,
+    name:editFolderName.value})
+  if(ok)editingFolderId.value=null
+}
+async function changeFolderParent(id:string,event:Event):Promise<void>{
+  const value=(event.target as HTMLSelectElement).value
+  await changeFolders({kind:'move-folder',id,parentId:value||null})
+  // Vue rerenders the controlled value after success/failure.
+  ;(event.target as HTMLSelectElement).value=
+    folderWorkspace.value.folders[id]?.parentId??''
+}
+async function changeItemFolder(item:CatalogItem,event:Event):Promise<void>{
+  const value=(event.target as HTMLSelectElement).value
+  await changeFolders({kind:'move-file',key:item.key,folderId:value||null})
+  ;(event.target as HTMLSelectElement).value=
+    folderWorkspace.value.placements[item.key]??''
+}
+function toggleItem(key:string,checked:boolean):void{
+  if(checked){
+    if(selectedKeys.value.includes(key))return
+    if(selectedKeys.value.length>=200){
+      folderNotice.value='Для группового переноса выберите не более 200 файлов.'
+      return
+    }
+    selectedKeys.value=[...selectedKeys.value,key]
+  }else selectedKeys.value=selectedKeys.value.filter(x=>x!==key)
+}
+function selectVisible():void{
+  if(visible.value.length>200){
+    folderNotice.value='Для группового переноса выберите не более 200 файлов.'
+    return
+  }
+  selectedKeys.value=visible.value.map(x=>x.key)
+}
+async function placeImportedMedia(data:{
+  mediaIds:string[];folderId:string|null
+}):Promise<void>{
+  const identity=activeSession.value
+  if(!identity)return
+  if(data.mediaIds.length<1||data.mediaIds.length>20
+    ||new Set(data.mediaIds).size!==data.mediaIds.length)return
+  if(data.folderId!==null){
+    const keys=data.mediaIds.map(id=>'media:'+id)
+    const moved=await changeFolders({kind:'move-files',
+      keys,folderId:data.folderId})
+    if(identity!==activeSession.value)return
+    if(!moved){
+      // Never roll back or destroy already AES-GCM-encrypted outbox files.
+      // Unplaced files remain at the root and can be moved manually.
+      const error=folderNotice.value
+      folderNotice.value='Файлы зашифрованы и сохранены, но папка назначения '
+        +'не подтверждена. Файлы доступны в корне. '+error
+    }
+  }
+  if(identity===activeSession.value)void refresh()
+}
+async function moveSelected():Promise<void>{
+  const ids=selectedKeys.value.slice()
+  if(ids.length===0)return
+  const ok=await changeFolders({kind:'move-files',
+    keys:ids,folderId:bulkDestination.value||null})
+  if(ok)selectedKeys.value=[]
+}
+async function deleteEmptyFolder(id:string):Promise<void>{
+  if(!window.confirm('Удалить пустую пользовательскую папку? Файлы и облако затронуты не будут.'))return
+  const ok=await changeFolders({kind:'remove-empty',id})
+  if(ok&&selectedFolder.value===id)selectedFolder.value=null
+}
+function revokePreview():void{
+  ++previewGeneration
+  if(selectedUrl.value)URL.revokeObjectURL(selectedUrl.value)
+  selectedUrl.value=''
+  selectedType.value=null
+  selectedName.value=''
+  selectedDescription.value=''
+  selectedCategory.value=''
+  selectedTags.value=[]
+  selectedGps.value=null
+  selectedCaptured.value=null
+  selectedExpiry.value=null
+}
+function clearCatalog():void{
+  ++privateExpansionEpoch
+  privateExpansionBusy.value=false
+  privateSearchExpanded.value=false
+  privateExpansionStatus.value=''
+  localPhotos.value=[];localMedia.value=[]
+  cloudPhotos.value=[];cloudMedia.value=[]
+  photoCursor.value=null;mediaCursor.value=null
+}
+function reason(e:unknown):string{
+  return e instanceof Error?e.message:'browser.unavailable'
+}
+
+async function refresh():Promise<void>{
+  const identity=activeSession.value,token=++generation
+  clearCatalog();error.value='';status.value=''
+  if(!identity)return
+  busy.value=true
+  try{
+    const [photos,media]=await Promise.all([listLocalPhotos(),listLocalMedia()])
+    if(identity!==activeSession.value||token!==generation)return
+    localPhotos.value=photos;localMedia.value=media
+    if(!identity.online||(typeof navigator!=='undefined'&&navigator.onLine===false)){
+      status.value='Офлайн: показаны только зашифрованные файлы этого устройства.'
+      return
+    }
+    // Independent server endpoints: failure of one catalog cannot erase the
+    // other. A cloud row is visible only after an authenticated server read.
+    const [cloudP,cloudM,archive]=await Promise.allSettled([
+      listCloudPhotos(),listCloudMedia(),listArchivePage(),
+    ])
+    if(identity!==activeSession.value||token!==generation)return
+    let invalidIndex=false
+    if(cloudP.status==='fulfilled'){
+      try{
+        const page=appendAuthenticatedCatalogPage(
+          [],cloudP.value,null,row=>row.photoId)
+        cloudPhotos.value=page.items
+        photoCursor.value=page.nextCursor
+      }catch{invalidIndex=true}
+    }
+    if(cloudM.status==='fulfilled'){
+      try{
+        const page=appendAuthenticatedCatalogPage(
+          [],cloudM.value,null,row=>row.mediaId)
+        cloudMedia.value=page.items
+        mediaCursor.value=page.nextCursor
+      }catch{invalidIndex=true}
+    }
+    if(archive.status==='fulfilled'){
+      archiveEntries.value=archive.value.items
+      archiveCursor.value=archive.value.nextCursor
+      archiveWriteEnabled.value=archive.value.writeEnabled
+      archiveCleanupEnabled.value=archive.value.autoCleanupEnabled
+    }else{
+      archiveNotice.value='Статус архива не проверен: '+reason(archive.reason)
+    }
+    if(cloudP.status==='rejected'||cloudM.status==='rejected'||invalidIndex)
+      status.value='Не все облачные списки доступны или их курсоры повреждены. Локальные файлы сохранены; непроверенные страницы не добавлены.'
+  }catch(e){
+    if(identity===activeSession.value&&token===generation)error.value=reason(e)
+  }finally{
+    if(token===generation)busy.value=false
+  }
+}
+async function more():Promise<void>{
+  const identity=activeSession.value
+  if(!identity?.online||busy.value||(!photoCursor.value&&!mediaCursor.value))return
+  const token=generation
+  const previousPhotos=photoCursor.value,previousMedia=mediaCursor.value
   busy.value=true;error.value=''
+  const [photos,media]=await Promise.allSettled([
+    previousPhotos?listCloudPhotos(previousPhotos):Promise.resolve(null),
+    previousMedia?listCloudMedia(previousMedia):Promise.resolve(null),
+  ])
+  if(identity===activeSession.value&&token===generation){
+    let invalidIndex=false
+    if(photos.status==='fulfilled'&&photos.value){
+      try{
+        const next=appendAuthenticatedCatalogPage(
+          cloudPhotos.value,photos.value,previousPhotos,
+          row=>row.photoId)
+        cloudPhotos.value=next.items
+        photoCursor.value=next.nextCursor
+      }catch{invalidIndex=true}
+    }
+    if(media.status==='fulfilled'&&media.value){
+      try{
+        const next=appendAuthenticatedCatalogPage(
+          cloudMedia.value,media.value,previousMedia,
+          row=>row.mediaId)
+        cloudMedia.value=next.items
+        mediaCursor.value=next.nextCursor
+      }catch{invalidIndex=true}
+    }
+    if(photos.status==='rejected'||media.status==='rejected'||invalidIndex)
+      error.value='Не удалось проверить следующую страницу облачного каталога. Ранее загруженные файлы сохранены; курсор не изменён.'
+    busy.value=false
+  }
+}
+async function sync():Promise<void>{
+  if(busy.value)return
+  busy.value=true;error.value='';status.value=''
   try{
     if(!activeSession.value?.online)await reauthenticate()
     await flushOutbox()
     await refresh()
-    status.value='Состояние синхронизации обновлено'
-  }catch(e){error.value=e instanceof Error?e.message:'sync.unavailable'}
+    status.value='Очередь фотографий проверена. Импортированное медиа синхронизируется в блоке импорта.'
+  }catch(e){error.value=reason(e)}
   finally{busy.value=false}
 }
-async function openLocal(photoId:string):Promise<void> {
-  error.value=''
+async function openItem(item:CatalogItem,fromCloud=false):Promise<void>{
+  const identity=activeSession.value,token=++previewGeneration
+  if(!identity)return
+  previewBusy.value=true;error.value=''
   try{
-    const identity=activeSession.value
-    const [photo,metadata]=await Promise.all([
-      readLocalPhoto(photoId),readLocalPhotoMetadata(photoId),
-    ])
-    if(activeSession.value!==identity)return
+    let blob:Blob,name='',description='',category=''
+    let tags:string[]=[]
+    let gps:{latitude:number;longitude:number;accuracyMeters:number}|null=null
+    let captured:number|null=null
+    if(item.source==='photo'){
+      const [photo,metadata]=await Promise.all([
+        item.local&&!fromCloud?readLocalPhoto(item.id):readCloudPhoto(item.id),
+        item.local&&!fromCloud?readLocalPhotoMetadata(item.id):readCloudPhotoMetadata(item.id),
+      ])
+      blob=photo
+      name=item.id.slice(0,8)
+      description=metadata.description??''
+      category=metadata.category??''
+      tags=metadata.tags??[]
+      gps=metadata.gps??null
+      captured=metadata.capturedAt
+    }else{
+      const result=item.local&&!fromCloud
+        ?await readLocalMedia(item.id):await readCloudMedia(item.id)
+      blob=result.blob
+      name=result.metadata.fileName
+      description=result.metadata.description??''
+      category=result.metadata.category??''
+      tags=result.metadata.tags??[]
+      gps=result.metadata.gps??null
+      captured=result.metadata.createdAt
+    }
+    if(identity!==activeSession.value||token!==previewGeneration)return
     revokePreview()
-    selectedMetadata.value=metadata
-    selectedUrl.value=URL.createObjectURL(photo)
-  }catch(e){error.value=e instanceof Error?e.message:'photo.unavailable'}
+    selectedUrl.value=URL.createObjectURL(blob)
+    selectedType.value=item.type
+    selectedName.value=name
+    selectedDescription.value=description
+    selectedCategory.value=category
+    selectedTags.value=tags
+    selectedGps.value=gps
+    selectedCaptured.value=captured
+    selectedExpiry.value=item.expiresAt
+  }catch(e){
+    if(identity===activeSession.value&&token===previewGeneration)
+      error.value=reason(e)
+  }finally{
+    if(identity===activeSession.value)previewBusy.value=false
+  }
 }
-function showReceived(blob:Blob):void {
+function preserveViewerOrigin(item:CatalogItem,event:MouseEvent):void{
+  // A new tab has no shared JS memory; never capture a stale return context
+  // for Cmd/Ctrl/Shift/Alt-click or auxiliary-button navigation.
+  if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return
+  const identity=activeSession.value
+  if(!identity)return
+  captureBrowserReturnContext({
+    accountId:identity.accountId,deviceId:identity.deviceId,
+    fileKey:item.key,folderId:selectedFolder.value,
+    filter:filter.value,sort:sort.value,view:view.value,
+    search:search.value,searchFolderScope:searchFolderScope.value,
+    archiveTab:archiveTab.value,
+    fileKeys:visible.value.map(row=>row.key),
+  })
+}
+function showReceived(blob:Blob):void{
   revokePreview()
   selectedUrl.value=URL.createObjectURL(blob)
+  selectedType.value='photo'
+  selectedName.value='Полученный снимок'
 }
-async function openCloud(photoId:string):Promise<void> {
-  error.value=''
-  try{
-    const identity=activeSession.value
-    const [photo,metadata]=await Promise.all([
-      readCloudPhoto(photoId),readCloudPhotoMetadata(photoId),
-    ])
-    if(activeSession.value!==identity)return
-    revokePreview()
-    selectedMetadata.value=metadata
-    selectedUrl.value=URL.createObjectURL(photo)
-  }catch(e){error.value=e instanceof Error?e.message:'photo.unavailable'}
-}
-async function loadMore():Promise<void> {
-  if(!cursor.value||busy.value)return
-  busy.value=true
-  try{
-    const page=await listCloudPhotos(cursor.value)
-    cloud.value.push(...page.items);cursor.value=page.nextCursor
-  }catch(e){error.value=e instanceof Error?e.message:'photo.list_failed'}
-  finally{busy.value=false}
-}
-watch(activeSession,()=>{revokePreview();void refresh()})
-onMounted(()=>{void refresh()})
-onUnmounted(revokePreview)
+watch(activeSession,(next,previous)=>{
+  ++generation
+  ++folderSyncEpoch
+  ++archivePrefsEpoch
+  folderSyncBusy.value=false
+  archivePrefsBusy.value=false
+  // Same-device session reauthentication changes the Session reference, not
+  // the user's workspace. Retain typed folder forms and breadcrumb location.
+  // A real account/device change must clear all formerly decrypted UI state.
+  revokePreview()
+  clearCatalog()
+  if(next?.accountId!==previous?.accountId
+    ||next?.deviceId!==previous?.deviceId){
+    requestedFolderReturn=undefined
+    scrollReturnKey=null
+    editingFolderId.value=null
+    createFolderOpen.value=false
+    newFolderName.value=''
+    editFolderName.value=''
+    selectedKeys.value=[]
+    bulkDestination.value=''
+    folderNotice.value=''
+    folderSyncStatus.value=''
+    mergePlan.value=null
+    mergeChoices.value={}
+    mergeBackups.value=[]
+    archiveTab.value='all'
+    archiveEntries.value=[]
+    archiveCursor.value=null
+    archiveNotice.value=''
+    archiveWriteEnabled.value=false
+    archiveCleanupEnabled.value=false
+    archivePending.value=null
+    archivePendingError.value=''
+    archiveInspection.value=null
+    archiveBatchNotice.value=''
+    archiveBatchProgress.value=0
+    archiveBusy.value=false
+    archivePrefs.value=null
+    archivePrefsNotice.value=''
+    archivePrefsConflict.value=false
+    search.value=''
+    searchFolderScope.value='current'
+    privateSearchResult.value=null
+    void refreshArchivePending()
+    void loadFolders()
+    void loadMergeBackups()
+  }else if(next&&!folderReady.value){
+    // A first load could have been fenced out while bootstrap upgraded the
+    // same device to an online Session; retry without losing a typed form.
+    void loadFolders()
+  }
+  // Reauthentication creates a new Session object for the SAME device.
+  // Retry authoritative preference loading after the upgrade, without
+  // clearing the encrypted local draft or changing its signed revision.
+  if(next)void loadArchivePrefState()
+  void refresh()
+})
+watch([selectedFolder,filter,search,searchFolderScope,archiveTab],()=>{selectedKeys.value=[]})
+watch([search,searchScope,activeSession,privateSearchExpanded],schedulePrivateSearch)
+watch([visible,folderReady],async()=>{
+  const key=scrollReturnKey
+  if(!key||!folderReady.value||!visible.value.some(item=>item.key===key))return
+  await nextTick()
+  if(scrollReturnKey!==key)return
+  const item=document.querySelector<HTMLElement>(
+    `[data-testid="browser-row-${key}"]`)
+  if(item){item.scrollIntoView({block:'center'});scrollReturnKey=null}
+})
+watch([search,archiveTab],()=>{
+  // Broader authenticated index fetches are explicit per typed query.
+  // Changing the question/tab must invalidate in-flight work immediately.
+  ++privateExpansionEpoch
+  privateExpansionBusy.value=false
+  privateSearchExpanded.value=false
+  privateExpansionStatus.value=''
+})
+onMounted(()=>{
+  const identity=activeSession.value
+  const restored=identity?takeBrowserReturn(identity.accountId,identity.deviceId):null
+  if(restored){
+    filter.value=restored.filter;sort.value=restored.sort;view.value=restored.view
+    search.value=restored.search
+    searchFolderScope.value=restored.searchFolderScope
+    archiveTab.value=restored.archiveTab
+    requestedFolderReturn=restored.folderId
+    scrollReturnKey=restored.fileKey
+  }
+  schedulePrivateSearch()
+  void loadFolders();void loadMergeBackups();void loadArchivePrefState()
+  void refreshArchivePending();void refresh()
+})
+onUnmounted(()=>{
+  ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch
+  ++privateSearchEpoch;++privateExpansionEpoch
+  if(privateSearchTimer!==null)clearTimeout(privateSearchTimer)
+  privateSearchTimer=null
+  privateSearchResult.value=null
+  privateExpansionBusy.value=false
+  privateSearchExpanded.value=false
+  search.value=''
+  searchFolderScope.value='current'
+  scrollReturnKey=null
+  requestedFolderReturn=undefined
+  archivePrefsBusy.value=false
+  mergePlan.value=null;mergeChoices.value={};mergeBackups.value=[]
+  archivePending.value=null
+  archiveInspection.value=null
+  archivePrefs.value=null
+  revokePreview()
+})
 </script>
 
 <template>
-  <section class="foundation-content">
-    <h1>Browser</h1>
-    <p class="subtitle">P1 · зашифрованные фото, видео и аудио; личные фото камеры сохраняют прежний протокол</p>
+  <section class="foundation-content browser-v3" data-testid="browser-v3">
+    <div class="browser-title">
+      <div>
+        <h1>Browser</h1>
+        <p class="subtitle">Файлы и локальная очередь · без ожидания облака</p>
+      </div>
+      <RouterLink to="/camera">Камера</RouterLink>
+    </div>
     <div v-if="!activeSession" class="foundation-card">
       <p>Список файлов доступен после входа.</p>
       <RouterLink to="/settings">Открыть доступ</RouterLink>
     </div>
     <template v-else>
-      <div class="action-row">
+      <section class="browser-folders" data-testid="browser-folders">
+        <div class="browser-folder-head">
+          <div class="browser-breadcrumb" aria-label="Путь папки">
+            <button type="button" :aria-current="selectedFolder===null?'location':undefined"
+              @click="selectedFolder=null">Мои файлы</button>
+            <template v-for="part in breadcrumb" :key="part.id">
+              <span aria-hidden="true">/</span>
+              <button type="button"
+                :aria-current="selectedFolder===part.id?'location':undefined"
+                @click="selectedFolder=part.id">{{ part.name }}</button>
+            </template>
+          </div>
+          <button type="button" :disabled="!folderReady||!!folderError||folderBusy"
+            @click="createFolderOpen=!createFolderOpen">Новая папка</button>
+        </div>
+        <p class="muted">Названия и состав папок зашифрованы. Изменения сохраняются
+          сразу на устройстве, а общий снимок передаётся только после подтверждения сервера.
+          Перемещение по папкам не меняет шифротекст медиа и права доступа.</p>
+        <div class="browser-folder-cloud">
+          <button type="button" data-testid="browser-folder-sync"
+            :disabled="folderSyncBusy||folderBusy||!folderReady||!!folderError||!activeSession.online"
+            @click="syncFoldersCloud">
+            {{ folderSyncBusy?'Передаём папки…':'Обновить папки в облаке' }}
+          </button>
+          <span v-if="folderSyncStatus" data-testid="browser-folder-sync-status"
+            role="status" class="muted">{{ folderSyncStatus }}</span>
+        </div>
+        <div v-if="folderSyncStatus.includes('Конфликт версий')&&!mergePlan"
+          class="browser-merge-entry">
+          <button type="button" data-testid="browser-merge-open"
+            :disabled="folderSyncBusy||folderBusy||!activeSession.online"
+            @click="compareFolderConflict">Сравнить изменения папок</button>
+        </div>
+        <section v-if="mergePlan" data-testid="browser-merge-review"
+          class="browser-merge-review">
+          <h3>Согласование папок</h3>
+          <p class="muted">Облачная версия {{ mergePlan.remoteRevision }},
+            исходная версия {{ mergePlan.baseRevision }}. Сравнение выполняется только
+            на этом устройстве. Сначала проверяются независимые правки,
+            затем выбираются версии спорных элементов.</p>
+          <p v-if="mergePreview&&mergePreview.conflicts.length===0">
+            Противоречивых изменений нет. Независимые изменения объединятся.</p>
+          <div v-for="conflict in mergePreview?.conflicts??[]" :key="conflict.key"
+            class="browser-merge-conflict" :data-testid="'browser-merge-'+conflict.key">
+            <strong>{{ conflict.kind==='folder'?'Папка':'Расположение файла' }}</strong>
+            <div class="browser-merge-choices">
+              <label><input type="radio" :name="conflict.key" value="local"
+                :checked="mergeChoices[conflict.key]==='local'"
+                @change="mergeChoices[conflict.key]='local'">
+                На устройстве: {{ conflict.local }}</label>
+              <label><input type="radio" :name="conflict.key" value="cloud"
+                :checked="mergeChoices[conflict.key]==='cloud'"
+                @change="mergeChoices[conflict.key]='cloud'">
+                В облаке: {{ conflict.cloud }}</label>
+            </div>
+          </div>
+          <p v-if="mergePreview?.structuralError" role="alert">
+            Объединение небезопасно: {{ mergePreview.structuralError }}.
+            Отмените сравнение и исправьте локальную структуру.</p>
+          <p class="muted">Перед объединением будет сохранена зашифрованная
+            резервная копия текущих локальных папок. Обновление облака
+            подтверждается отдельно сервером.</p>
+          <div class="browser-merge-actions">
+            <button type="button" data-testid="browser-merge-apply"
+              :disabled="!mergePreview?.workspace||folderSyncBusy||folderBusy"
+              @click="applyFolderMerge">Применить и синхронизировать</button>
+            <button type="button" @click="mergePlan=null;mergeChoices={}">
+              Отмена</button>
+          </div>
+        </section>
+        <div v-if="mergeBackups.length" class="browser-merge-backups"
+          data-testid="browser-merge-backups">
+          <strong>Зашифрованные локальные копии ({{ mergeBackups.length }})</strong>
+          <div v-for="backup in mergeBackups" :key="backup.id"
+            class="browser-merge-backup">
+            <span>Копия от {{ new Date(backup.createdAt).toLocaleString('ru-RU') }}
+              · версия {{ backup.fromBaseRevision }}</span>
+            <button type="button" :disabled="folderBusy||folderSyncBusy"
+              :data-testid="'browser-restore-'+backup.id"
+              @click="restoreFolderBackup(backup.id)">Восстановить локально</button>
+          </div>
+        </div>
+        <form v-if="createFolderOpen" class="browser-folder-form" @submit.prevent="createFolder">
+          <label>Название папки
+            <input v-model="newFolderName" maxlength="80" autocomplete="off"
+              data-testid="browser-folder-name" required>
+          </label>
+          <button type="submit" :disabled="folderBusy">Создать</button>
+          <button type="button" @click="createFolderOpen=false">Отмена</button>
+        </form>
+        <div class="browser-folder-list">
+          <div v-for="folder in folders" :key="folder.id" class="browser-folder-item"
+            :data-testid="'browser-folder-'+folder.id">
+            <button type="button" class="browser-folder-open"
+              @click="selectedFolder=folder.id">
+              <span aria-hidden="true">▣</span> {{ folder.name }}
+            </button>
+            <button type="button" :disabled="folderBusy"
+              :aria-label="'Переименовать '+folder.name"
+              @click="openRename(folder.id,folder.name)">Переименовать</button>
+            <label class="browser-folder-parent">
+              <span>В</span>
+              <select :value="folder.parentId??''" :disabled="folderBusy"
+                :aria-label="'Переместить папку '+folder.name"
+                @change="changeFolderParent(folder.id,$event)">
+                <option value="">Корень</option>
+                <option v-for="candidate in allFolders.filter(x=>x.id!==folder.id)"
+                  :key="candidate.id" :value="candidate.id">{{ candidate.name }}</option>
+              </select>
+            </label>
+            <button type="button" :disabled="folderBusy"
+              :aria-label="'Удалить пустую папку '+folder.name"
+              @click="deleteEmptyFolder(folder.id)">Удалить</button>
+          </div>
+        </div>
+        <form v-if="editingFolderId" class="browser-folder-form"
+          @submit.prevent="renameCurrentFolder">
+          <label>Новое название
+            <input v-model="editFolderName" maxlength="80" required
+              data-testid="browser-rename-folder">
+          </label>
+          <button type="submit" :disabled="folderBusy">Сохранить</button>
+          <button type="button" @click="editingFolderId=null">Отмена</button>
+        </form>
+        <p v-if="!folderReady" role="status" class="muted">Загружаются зашифрованные папки…</p>
+        <p v-if="folderError" role="alert" class="error-text">{{ folderError }}</p>
+        <p v-if="folderNotice" role="status" class="muted">{{ folderNotice }}</p>
+      </section>
+      <section class="browser-archive-preferences" data-testid="browser-archive-preferences">
+        <h2>Настройки архива</h2>
+        <label>
+          <input type="checkbox" data-testid="browser-pref-use-archive"
+            :checked="archivePrefsShown.useArchive"
+            :disabled="archivePrefsBusy||!!archivePrefs?.pending"
+            @change="setArchivePref('useArchive',($event.target as HTMLInputElement).checked)">
+          Использовать архив
+        </label>
+        <label>
+          <input type="checkbox" data-testid="browser-pref-auto-delete"
+            :checked="archivePrefsShown.autoDeleteAfter7Days"
+            :disabled="archivePrefsBusy||!!archivePrefs?.pending"
+            @change="setArchivePref('autoDeleteAfter7Days',($event.target as HTMLInputElement).checked)">
+          Автоудаление из архива через 7 дней
+        </label>
+        <p class="muted">По умолчанию обе опции включены. Отключение архива
+          не удаляет уже архивированные файлы. При отключённом архиве
+          удаление активного файла будет прямым и необратимым после подтверждения.</p>
+        <p class="muted">Срок файла и ограничения задания всегда имеют приоритет.
+          Серверные разрешения архива и физической очистки независимы от этих переключателей.</p>
+        <p v-if="!archivePrefsConfirmed" data-testid="browser-pref-unconfirmed" class="muted">
+          Настройки не подтверждены сервером: опасные действия недоступны до синхронизации.</p>
+        <p v-if="archivePrefsNotice" data-testid="browser-pref-status" role="status">
+          {{ archivePrefsNotice }}</p>
+        <div class="browser-archive-pref-actions">
+          <button type="button" data-testid="browser-pref-sync"
+            :disabled="archivePrefsBusy||!activeSession.online"
+            @click="syncArchivePrefState">Подтвердить настройки на сервере</button>
+          <button v-if="archivePrefsConflict" type="button"
+            data-testid="browser-pref-use-server"
+            :disabled="archivePrefsBusy||!activeSession.online"
+            @click="acceptServerArchivePrefs">Принять настройки сервера</button>
+        </div>
+      </section>
+      <nav class="browser-archive-tabs" aria-label="Расположение файлов">
+        <button type="button" data-testid="browser-tab-active"
+          :aria-pressed="archiveTab==='all'" @click="archiveTab='all'">Каталог</button>
+        <button type="button" data-testid="browser-tab-archive"
+          :aria-pressed="archiveTab==='archive'" @click="archiveTab='archive'">Архив</button>
+      </nav>
+      <p v-if="archiveTab==='archive'" class="muted">
+        Файлы остаются зашифрованными до подтверждённого окончательного
+        удаления. Архив не продлевает TTL.
+        {{ archiveCleanupEnabled?'Семидневная очистка разрешена оператором.':
+          'Автоматическая очистка выключена до независимой приёмки GC.' }}
+      </p>
+      <div v-if="archivePending" data-testid="browser-archive-pending"
+        class="browser-archive-pending">
+        <p role="status">Есть неподтверждённая подписанная операция архива:
+          {{ archivePending.action==='archive'?'Архивирование'
+            :archivePending.action==='restore'?'Восстановление':'Окончательное удаление' }}
+          файла {{ archivePending.assetId.slice(0,8) }}.
+          Не создавайте новую операцию, пока сервер не ответит.</p>
+        <button type="button" data-testid="browser-archive-retry"
+          :disabled="archiveBusy||!archiveWriteEnabled||!activeSession.online"
+          @click="retryArchivePending">Повторить исходный запрос</button>
+        <button type="button" data-testid="browser-archive-inspect"
+          :disabled="archiveBusy||!activeSession.online"
+          @click="inspectArchivePending">Проверить результат на сервере</button>
+        <div v-if="archiveInspection?.status==='obsolete'"
+          data-testid="browser-archive-obsolete">
+          <p>Серверная ревизия {{ archiveInspection.currentRevision }}
+            уже новее исходной команды. После повторной проверки можно
+            снять только эту устаревшую команду; она не может изменить файл.</p>
+          <button type="button" data-testid="browser-archive-discard"
+            :disabled="archiveBusy||!activeSession.online"
+            @click="discardArchiveObsolete">Снять устаревший запрос</button>
+        </div>
+        <p v-if="archiveInspection?.status==='unresolved'" role="status">
+          Сервер пока не доказал, что операция отменена или выполнена.
+          Оставляем подписанный запрос в зашифрованной очереди.</p>
+      </div>
+      <p v-if="archivePendingError" role="alert">{{ archivePendingError }}</p>
+      <p v-if="archiveNotice" role="status" data-testid="browser-archive-status">
+        {{ archiveNotice }}</p>
+      <nav class="browser-filters" aria-label="Тип файла">
+        <button v-for="tab in (['all','photo','video','audio'] as const)" :key="tab"
+          type="button" :aria-pressed="filter===tab"
+          :class="{selected:filter===tab}" :data-testid="'browser-filter-'+tab"
+          @click="filter=tab">
+          {{ tab==='all'?'Все':tab==='photo'?'Фото':tab==='video'?'Видео':'Аудио' }}
+        </button>
+      </nav>
+      <div class="browser-toolbar">
+        <label class="browser-search">
+          <span class="browser-sr-only">Приватный поиск по ID, имени, описанию, категории или тегам</span>
+          <input v-model="search" type="search" autocomplete="off"
+            maxlength="160" spellcheck="false"
+            placeholder="ID, название, описание, категория, тег"
+            data-testid="browser-search">
+        </label>
+        <label v-if="archiveTab==='all'">
+          <span class="browser-sr-only">Область поиска по загруженным файлам</span>
+          <select v-model="searchFolderScope"
+            data-testid="browser-search-folder-scope">
+            <option value="current">Текущая папка</option>
+            <option value="all">Все папки (загруженные файлы)</option>
+          </select>
+        </label>
+        <button v-if="archiveTab==='all'&&normalizePrivateSearch(search).length>=2"
+          type="button" data-testid="browser-private-search-expand"
+          :disabled="busy||privateExpansionBusy||privateSearchExpanded
+            ||!activeSession.online||!photoCursor&&!mediaCursor
+              &&items.length===0"
+          @click="expandPrivateSearch">
+          {{ privateExpansionBusy?'Загружаем расширенную выборку…'
+            :privateSearchExpanded?'Расширенная проверка включена'
+            :'Проверить больше файлов (до 1000)' }}
+        </button>
+        <label>
+          <span class="browser-sr-only">Сортировка</span>
+          <select v-model="sort" data-testid="browser-sort">
+            <option value="newest">Новые сначала</option>
+            <option value="oldest">Старые сначала</option>
+            <option value="expiry">Ближайшее удаление</option>
+            <option value="size-largest">Размер: большие</option>
+            <option value="size-smallest">Размер: маленькие</option>
+          </select>
+        </label>
+        <div class="browser-view-switch" aria-label="Вид каталога">
+          <button type="button" :aria-pressed="view==='list'"
+            @click="view='list'">Список</button>
+          <button type="button" :aria-pressed="view==='grid'"
+            @click="view='grid'">Сетка</button>
+        </div>
         <button type="button" :disabled="busy" @click="refresh">Обновить</button>
+      </div>
+      <p class="muted" data-testid="browser-summary">
+        {{ visible.length }} файлов в загруженном каталоге
+        · {{ pendingCount }} локальных не подтверждены облаком
+      </p>
+      <p class="muted">Поиск по ID мгновенный. Имена, описания, категории и теги
+        ищутся только после расшифровки на этом устройстве. Поисковый запрос и
+        незашифрованные метаданные не передаются серверу и не сохраняются в индексе.
+        Все папки — только загруженные записи. Расширенная проверка запускается
+        отдельно, ограничена 500 фото + 500 медиа из авторизованных индексов,
+        не обещает поиск по всему аккаунту и не сохраняет приватный индекс.
+        При сортировке по размеру файлы с неизвестным размером идут последними.</p>
+      <p v-if="privateExpansionStatus||privateExpansionBusy" class="muted"
+        data-testid="browser-expanded-search-status" role="status">
+        {{ privateExpansionBusy
+          ?'Получаем только непрозрачные ID. Названия файлов и запрос серверу не передаются.'
+          :privateExpansionStatus }}
+      </p>
+      <p v-if="search.trim()" data-testid="browser-private-search-status"
+        role="status" class="muted">
+        <template v-if="normalizePrivateSearch(search).length<2">
+          Для поиска по приватным полям введите хотя бы 2 символа; поиск по ID уже доступен.
+        </template>
+        <template v-else-if="privateSearchBusy">
+          Идёт проверка зашифрованных метаданных на устройстве…
+          <span v-if="privateSearchExpanded">
+            Обработано {{ privateSearchProgress }}
+            из {{ Math.min(searchScope.length,1000) }} выбранных файлов.
+          </span>
+        </template>
+        <template v-else-if="privateSearchError">{{ privateSearchError }}</template>
+        <template v-else-if="privateSearchResult?.query===normalizePrivateSearch(search)">
+          Проверено {{ privateSearchResult.scanned }} из {{ privateSearchResult.total }}
+          загруженных файлов.
+          <span v-if="privateSearchResult.failed||privateSearchResult.skipped||privateSearchUnscanned">
+            Результат неполный: {{ privateSearchResult.failed }} ошибок,
+            {{ privateSearchResult.skipped }} недоступны или истекли,
+            {{ privateSearchUnscanned }} за пределом проверки
+            ({{ privateSearchExpanded?'1000':'200' }} за поиск).
+          </span>
+          <span v-else>Все загруженные файлы проверены.</span>
+        </template>
+      </p>
+      <div class="browser-batch-toolbar" v-if="folderReady&&!folderError">
+        <button type="button" :disabled="folderBusy||!visible.length"
+          @click="selectVisible">Выбрать всё на странице</button>
+        <button type="button" :disabled="!selectedKeys.length"
+          @click="selectedKeys=[]">Снять выделение</button>
+        <label v-if="selectedKeys.length&&archiveTab==='all'">
+          Назначение
+          <select v-model="bulkDestination" :disabled="folderBusy"
+            data-testid="browser-bulk-destination">
+            <option value="">Мои файлы</option>
+            <option v-for="folder in allFolders" :key="folder.id"
+              :value="folder.id">{{ folder.name }}</option>
+          </select>
+        </label>
+        <button v-if="selectedKeys.length&&archiveTab==='all'" type="button"
+          :disabled="folderBusy" @click="moveSelected">Переместить выбранные
+          ({{ selectedKeys.length }})</button>
+        <button v-if="selectedKeys.length&&archiveTab==='all'" type="button"
+          data-testid="browser-bulk-archive"
+          :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!archivePrefsConfirmed||!!archivePending"
+          @click="runArchiveBatch(archivePrefsShown.useArchive?'archive':'delete')">
+          {{ archivePrefsShown.useArchive?'В архив выбранные':'Удалить окончательно выбранные' }}
+          ({{ selectedKeys.length }})</button>
+        <template v-if="selectedKeys.length&&archiveTab==='archive'">
+          <button type="button" data-testid="browser-bulk-restore"
+            :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!!archivePending"
+            @click="runArchiveBatch('restore')">Восстановить выбранные
+            ({{ selectedKeys.length }})</button>
+          <button type="button" data-testid="browser-bulk-delete"
+            :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!!archivePending"
+            @click="runArchiveBatch('delete')">Удалить окончательно выбранные
+            ({{ selectedKeys.length }})</button>
+        </template>
+      </div>
+      <p v-if="archiveBatchNotice" data-testid="browser-bulk-status"
+        role="status">{{ archiveBatchNotice }}</p>
+      <p v-if="archiveBusy&&archiveBatchProgress" class="muted"
+        data-testid="browser-bulk-progress">
+        Подтверждено {{ archiveBatchProgress }} операций.
+      </p>
+      <div :class="['browser-items',view==='grid'?'browser-grid':'browser-list']"
+        data-testid="browser-catalog">
+        <div v-for="item in visible" :key="item.key"
+          :class="['browser-item', item.source==='photo'?'photo-row':'']"
+          :data-testid="'browser-row-'+item.key">
+          <label v-if="folderReady&&!folderError
+              &&(archiveTab==='all'||archivedByKey.get(item.key)?.state==='archived')"
+            class="browser-item-select">
+            <input type="checkbox" :checked="selectedKeys.includes(item.key)"
+              :aria-label="'Выбрать файл '+item.id"
+              @change="toggleItem(item.key,($event.target as HTMLInputElement).checked)">
+          </label>
+          <div class="browser-item-kind" aria-hidden="true">
+            {{ item.type==='photo'?'▧':item.type==='video'?'▷':'♫' }}
+          </div>
+          <div class="browser-item-detail">
+            <strong>{{ item.id.slice(0,8) }}</strong>
+            <small>{{ item.type==='photo'?'Фото':item.type==='video'?'Видео':'Аудио' }}
+              · {{ item.local?'На устройстве':'Только в облаке' }}
+              <template v-if="item.cloud"> · Подтверждено в облаке</template>
+            </small>
+            <small v-if="item.state">
+              Очередь: {{ item.state }}
+            </small>
+            <small>Хранение до {{ new Date(item.expiresAt).toLocaleDateString('ru-RU') }}</small>
+            <small>{{ catalogSizeLabel(item.bytes) }}</small>
+            <small v-if="archiveTab==='all'&&search.trim()&&searchFolderScope==='all'"
+              data-testid="browser-search-result-folder">
+              Папка: {{ catalogFolderLabel(item) }}
+            </small>
+          </div>
+          <div class="browser-item-actions">
+            <label v-if="archiveTab==='all'&&folderReady&&!folderError"
+              class="browser-file-move">
+              <span>Папка</span>
+              <select :value="folderWorkspace.placements[item.key]??''"
+                :disabled="folderBusy||busy" :aria-label="'Папка файла '+item.id"
+                @change="changeItemFolder(item,$event)">
+                <option value="">Мои файлы</option>
+                <option v-for="folder in allFolders" :key="folder.id"
+                  :value="folder.id">{{ folder.name }}</option>
+              </select>
+            </label>
+            <button v-if="archiveTab==='all'&&item.cloud&&archivePrefsShown.useArchive"
+              type="button"
+              :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!archivePrefsConfirmed"
+              :aria-label="'Архивировать файл '+item.id"
+              @click="archiveAction(item,'archive')">В архив</button>
+            <button v-if="archiveTab==='all'&&item.cloud&&!archivePrefsShown.useArchive"
+              type="button"
+              :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!archivePrefsConfirmed"
+              :aria-label="'Запросить прямое удаление файла '+item.id"
+              @click="archiveAction(item,'delete')">Удалить окончательно</button>
+            <template v-if="archiveTab==='archive'&&archivedByKey.get(item.key)?.state==='archived'">
+              <button type="button" :disabled="archiveBusy||!activeSession.online||!archiveWriteEnabled"
+                :aria-label="'Восстановить файл '+item.id"
+                @click="archiveAction(item,'restore')">Восстановить</button>
+              <button type="button" :disabled="archiveBusy||!activeSession.online||!archiveWriteEnabled"
+                :aria-label="'Запросить удаление файла '+item.id"
+                @click="archiveAction(item,'delete')">Удалить окончательно</button>
+            </template>
+            <span v-if="archivedByKey.get(item.key)?.state==='deleting'">
+              Удаление ожидает подтверждения GC:
+              {{ archivedByKey.get(item.key)?.physicalStatus }}</span>
+            <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
+              :aria-label="'Полный просмотр файла '+item.id"
+              @click="preserveViewerOrigin(item,$event)">Просмотр</RouterLink>
+            <button v-if="item.local" type="button" :disabled="previewBusy||busy"
+              :aria-label="item.source==='photo'?'Открыть':'Открыть файл '+item.id"
+              @click="openItem(item)">Открыть</button>
+            <button v-if="item.cloud" type="button" :disabled="previewBusy||busy"
+              aria-label="Проверить из облака"
+              @click="openItem(item,true)">Проверить из облака</button>
+          </div>
+        </div>
+      </div>
+      <p v-if="!visible.length&&folderReady" class="muted">Нет файлов для выбранного фильтра или папки.</p>
+      <button v-if="archiveTab==='archive'&&archiveCursor" type="button"
+        :disabled="archiveBusy||busy" @click="loadArchiveMore">
+        Ещё записи архива</button>
+      <p v-if="archiveTab==='all'" class="muted">
+        {{ archiveWriteEnabled
+          ?'Архив доступен только для собственных файлов без действующих/исторических передач и связей с заданиями.'
+          :'Операции архива отключены сервером до приёмки.' }}
+        {{ archiveCleanupEnabled
+          ?'Серверная семидневная очистка разрешена оператором.'
+          :'Автоудаление из архива пока отключено.' }}
+      </p>
+      <button v-if="photoCursor||mediaCursor" type="button"
+        :disabled="busy" @click="more">Загрузить ещё</button>
+      <div class="action-row">
         <button type="button" :disabled="busy" @click="sync">Синхронизировать</button>
-        <RouterLink to="/camera">Камера</RouterLink>
       </div>
-      <div class="foundation-card">
-        <h2>На этом устройстве</h2>
-        <p v-if="!local.length" class="muted">Пока нет локально зашифрованных снимков.</p>
-        <div v-for="p in local" :key="p.key" class="photo-row">
-          <div><strong>{{ p.photoId.slice(0,8) }}</strong><small>{{ p.state }} · {{ new Date(p.createdAt).toLocaleString() }}</small><small v-if="p.lastError" class="muted">Синхронизация: {{ p.lastError }}</small></div>
-          <button type="button" @click="openLocal(p.photoId)">Открыть</button>
-        </div>
+      <div v-if="selectedUrl" class="foundation-card browser-preview"
+        data-testid="browser-preview">
+        <h2>{{ selectedName }}</h2>
+        <img v-if="selectedType==='photo'" :src="selectedUrl"
+          alt="Личный снимок" class="decrypted-preview">
+        <video v-else-if="selectedType==='video'" :src="selectedUrl"
+          controls playsinline preload="metadata" class="decrypted-preview"/>
+        <audio v-else-if="selectedType==='audio'" :src="selectedUrl"
+          controls preload="metadata"/>
+        <p v-if="selectedDescription">{{ selectedDescription }}</p>
+        <p v-if="selectedCaptured">Дата: {{ new Date(selectedCaptured).toLocaleString('ru-RU') }}</p>
+        <p v-if="selectedCategory">Категория: {{ selectedCategory }}</p>
+        <p v-if="selectedTags.length">Теги: {{ selectedTags.join(', ') }}</p>
+        <p v-if="selectedGps">GPS: {{ selectedGps.latitude }}, {{ selectedGps.longitude }} · точность ±{{ Math.round(selectedGps.accuracyMeters) }} м</p>
+        <p v-if="selectedExpiry">Хранение до {{ new Date(selectedExpiry).toLocaleDateString('ru-RU') }}</p>
+        <p class="muted">Файл расшифрован на этом устройстве. Экспорт в системную галерею не выполнялся.</p>
+        <button type="button" @click="revokePreview">Закрыть просмотр</button>
       </div>
-      <div class="foundation-card">
-        <h2>Подтверждено в облаке</h2>
-        <p v-if="!activeSession.online" class="muted">Нет подтверждённой серверной сессии.</p>
-        <p v-else-if="!cloud.length" class="muted">Файлов нет либо список ещё не загружен.</p>
-        <div v-for="p in cloud" :key="p.photoId" class="photo-row">
-          <div><strong>{{ p.photoId.slice(0,8) }}</strong><small>Хранение до {{ new Date(p.expiresAt).toLocaleDateString() }}</small></div>
-          <button type="button" @click="openCloud(p.photoId)">Проверить из облака</button>
-        </div>
-        <button v-if="cursor" type="button" :disabled="busy" @click="loadMore">Ещё</button>
-      </div>
-      <MediaImportPanel />
-      <SharePanel :local-photos="local" @open-photo="showReceived" />
-      <div v-if="selectedUrl" class="foundation-card">
-        <h2>Расшифровано на устройстве</h2>
-        <img :src="selectedUrl" class="decrypted-preview" alt="Личный снимок"/>
-        <div v-if="selectedMetadata" class="muted">
-          <p>Снято: {{ new Date(selectedMetadata.capturedAt).toLocaleString() }}</p>
-          <p v-if="selectedMetadata.category">Категория: {{ selectedMetadata.category }}</p>
-          <p v-if="selectedMetadata.description">Описание: {{ selectedMetadata.description }}</p>
-          <p v-if="selectedMetadata.gps">
-            GPS: {{ selectedMetadata.gps.latitude }}, {{ selectedMetadata.gps.longitude }}
-            · точность ±{{ Math.round(selectedMetadata.gps.accuracyMeters) }} м
-          </p>
-          <p class="muted">Поля расшифрованы локально, без передачи координат в картографический сервис.</p>
-        </div>
-        <button type="button" @click="revokePreview">Закрыть</button>
-      </div>
+      <section class="browser-operations">
+        <h2>Импорт и операции</h2>
+        <p class="muted">Загрузка, выдача доступа и версии используют действующий защищённый pipeline.</p>
+        <MediaImportPanel
+          :destination-folders="importFolderOptions"
+          :default-folder-id="selectedFolder"
+          @media-imported="placeImportedMedia"
+          @catalog-change="refresh"/>
+        <SharePanel :local-photos="localPhotos" @open-photo="showReceived"/>
+      </section>
     </template>
     <p v-if="status" role="status" class="status-text">{{ status }}</p>
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>

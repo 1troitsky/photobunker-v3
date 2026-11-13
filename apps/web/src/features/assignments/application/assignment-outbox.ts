@@ -4,7 +4,7 @@ import { jsonApi } from '../../identity/infrastructure/api'
 import { importSigner, sign, verify, importSpki, digest, hex, b64, unb64 } from '../../identity/infrastructure/crypto'
 import { pinnedPeer } from '../../sharing/key-directory'
 import { listOutgoingGrants } from '../../sharing/grant-flow'
-import { listOutgoingMediaGrants } from '../../media/application/media-grants'
+import { listOutgoingMediaGrants,parseMediaGrantContract } from '../../media/application/media-grants'
 import { listLocalMedia } from '../../media/application/media-outbox'
 import type { MediaCaptureIntent } from '../../media/application/media-outbox'
 import { sealAssignment, resealOwnerAssignment, openOwnerAssignment, wrapAssignmentForRecipient, validatePrivateAssignment, upgradePrivateAssignment } from '../infrastructure/assignment-crypto'
@@ -14,9 +14,19 @@ import type { CaptureMetadataInput } from '../../photo-sync/domain/capture-metad
 import { prepareMediaPrivateFields, validateMediaPrivateRequirements } from '../../media/domain/media-crypto'
 import type { MediaPrivateFields } from '../../media/domain/media-crypto'
 import { EMPTY_ADVANCED_RULES, normalizeAdvancedRules, validateAdvancedFields } from '../domain/advanced-rules'
+import {
+  inspectAssignmentRemovalNotices,verifyCachedAssignmentRemovalProof,
+} from './verify-removal-notice'
+import type {
+  CachedAssignmentRemovalProof,CheckedCachedAssignmentRemovalProof,
+} from './verify-removal-notice'
+import {appendBoundedUuidPage} from './bounded-uuid-pages'
+import {parseAssignmentMonthlyUsage} from './monthly-usage'
+export type {AssignmentMonthlyUsage} from './monthly-usage'
+import type {AssignmentRemovalNotice,CheckedAssignmentRemovalNotice} from './verify-removal-notice'
 import type { AdvancedRules } from '../domain/advanced-rules'
 
-export type AssignmentOperationKind='create'|'invite'|'accept'|'submit'|'media-submit'|'state'|'policy'|'private'|'schedule'|'retention'
+export type AssignmentOperationKind='create'|'invite'|'accept'|'remove-member'|'submit'|'media-submit'|'state'|'policy'|'private'|'schedule'|'retention'
 export type AssignmentOperationState='queued'|'retry'|'sent'|'conflict'
 
 export interface AssignmentOperation {
@@ -89,8 +99,9 @@ export type ReceivedAssignmentInvite={
 /** P1-23: freshly fetched owner-only roster; never an offline entitlement. */
 export type AssignmentParticipant={
   inviteId:string;recipientAccountId:string;role:'contributor'
-  state:'pending'|'accepted';expiresAt:number;expired:boolean
+  state:'pending'|'accepted'|'removed';expiresAt:number;expired:boolean
   contract:string;signature:string
+  removalContract?:string|null;removalSignature?:string|null
 }
 type AssignmentParticipantsPage={
   items:AssignmentParticipant[];nextCursor:string|null;serverNowMs:number
@@ -113,7 +124,7 @@ export async function verifyAssignmentParticipantRoster(
       ||typeof item.recipientAccountId!=='string'
       ||ids.has(item.inviteId)
       ||item.role!=='contributor'
-      ||!['pending','accepted'].includes(item.state)
+      ||!['pending','accepted','removed'].includes(item.state)
       ||!Number.isSafeInteger(item.expiresAt)
       ||item.expired!==(item.state==='pending'&&item.expiresAt<=page.serverNowMs)
       ||typeof item.contract!=='string'||typeof item.signature!=='string')
@@ -130,6 +141,32 @@ export async function verifyAssignmentParticipantRoster(
       ||signed.role!==item.role||signed.expiresAt!==item.expiresAt
       ||!await verify(signer,domain('invite')+item.contract,item.signature))
       throw Error('assignment.roster_untrusted_invite')
+    if(item.state==='removed'){
+      if(typeof item.removalContract!=='string'
+        ||typeof item.removalSignature!=='string')
+        throw Error('assignment.roster_untrusted_removal')
+      let removal:Record<string,unknown>
+      try{removal=JSON.parse(item.removalContract) as Record<string,unknown>}
+      catch{throw Error('assignment.roster_untrusted_removal')}
+      const fields=['version','action','operationId','assignmentId','inviteId',
+        'ownerAccountId','recipientAccountId']
+      const keys=removal&&typeof removal==='object'&&!Array.isArray(removal)
+        ?Object.keys(removal):[]
+      if(keys.sort().join('|')!==fields.sort().join('|')
+        ||JSON.stringify(removal)!==item.removalContract
+        ||removal.version!==1||removal.action!=='remove'
+        ||removal.assignmentId!==assignmentId
+        ||removal.inviteId!==item.inviteId
+        ||removal.ownerAccountId!==ownerAccountId
+        ||removal.recipientAccountId!==item.recipientAccountId
+        ||typeof removal.operationId!=='string'
+        ||!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(removal.operationId)
+        ||!await verify(signer,domain('remove-member')+item.removalContract,
+          item.removalSignature))
+        throw Error('assignment.roster_untrusted_removal')
+    }else if(item.removalContract!=null||item.removalSignature!=null){
+      throw Error('assignment.roster_untrusted_removal')
+    }
   }
   if(page.nextCursor!==null
     &&(typeof page.nextCursor!=='string'
@@ -177,6 +214,11 @@ type CachedCapturePolicy={
 type CachedPrivateAssignment={
   key:string;accountId:string;assignmentId:string;policyHash:string
   iv:string;ciphertext:Blob // AES-GCM ciphertext only, never plaintext
+}
+type CachedVerifiedRemoval={
+  key:string;accountId:string;assignmentId:string;ownerAccountId:string
+  inviteId:string;removalContract:string;removalSignature:string
+  verifiedAt:number
 }
 export type SignedCaptureBinding={
   assignmentId:string;ownerAccountId:string;policyRevision:number
@@ -672,6 +714,7 @@ class AssignmentDB extends Dexie {
   invites!:Table<CachedInvite,string>
   capturePolicies!:Table<CachedCapturePolicy,string>
   privateSummaries!:Table<CachedPrivateAssignment,string>
+  revocations!:Table<CachedVerifiedRemoval,string>
   constructor(){
     super('pb3-assignment-operation-outbox-v1')
     this.version(1).stores({
@@ -692,6 +735,14 @@ class AssignmentDB extends Dexie {
       capturePolicies:'&key, accountId, [accountId+verifiedAt]',
       privateSummaries:'&key, accountId, assignmentId',
     })
+    this.version(4).stores({
+      operations:'&id, accountId, [accountId+createdAt], [accountId+state]',
+      assignments:'&id, ownerAccountId, [ownerAccountId+createdAt]',
+      invites:'&inviteId, assignmentId, ownerAccountId, cachedForAccountId',
+      capturePolicies:'&key, accountId, [accountId+verifiedAt]',
+      privateSummaries:'&key, accountId, assignmentId',
+      revocations:'&key, accountId, assignmentId',
+    })
   }
 }
 const db=new AssignmentDB()
@@ -704,6 +755,7 @@ function domain(kind:AssignmentOperationKind):string{
     create:'pb3.assignment.v1\n',
     invite:'pb3.assignment-invite.v1\n',
     accept:'pb3.assignment-accept.v1\n',
+    'remove-member':'pb3.assignment-member-remove.v1\n',
     submit:'pb3.assignment-submit.v1\n',
     'media-submit':'pb3.assignment-media-submit.v1\n',
     state:'pb3.assignment-state.v1\n',
@@ -715,14 +767,27 @@ function domain(kind:AssignmentOperationKind):string{
   return signedDomains[kind]
 }
 
+/**
+ * Never fall back to a v1 signature for a new media submission version.
+ * Sender, server and independently pinned recipient must agree on the
+ * exact domain string; changing a version without updating this map
+ * must fail CLOSED.
+ */
+export function mediaSubmissionSigningDomain(version:unknown):string{
+  if(!Number.isSafeInteger(version)
+    ||![1,2,3,4].includes(version as number))
+    throw Error('assignment.unsupported_media_submission_version')
+  return 'pb3.assignment-media-submit.v'+version+'\n'
+}
+
 async function signedOperation(
   kind:AssignmentOperationKind,path:string,payload:Record<string,unknown>,
   requirementGrantId?:string,
 ):Promise<AssignmentOperation>{
   const s=requireSession()
   const contract=JSON.stringify(payload)
-  const signingDomain=kind==='media-submit'&&payload.version===2
-    ?'pb3.assignment-media-submit.v2\n'
+  const signingDomain=kind==='media-submit'
+    ?mediaSubmissionSigningDomain(payload.version)
     :kind==='policy'&&payload.version===6
       ?'pb3.assignment-policy.v6\n'
       :kind==='policy'&&payload.version===5
@@ -1030,32 +1095,17 @@ export function assertSignedPolicyProgress(
     throw new Error('assignment.state_equivocation')
 }
 
-export type AssignmentMonthlyUsage={
-  planId:'free';catalogVersion:string
-  periodStart:string;periodEnd:string
-  limit:number;used:number;remaining:number
-}
 /**
- * Current server-authoritative account quota; it is informational only.
- * Local encrypted assignment drafts are never blocked or dropped offline.
- * Actual admission runs atomically in the backend on signed create.
+ * Current server-authoritative account quota; informational only. Encrypted
+ * local drafts are never discarded because the network or quota is unavailable.
+ * Actual admission remains atomic on the backend under the account lock.
  */
-export async function listServerAssignmentUsage():Promise<AssignmentMonthlyUsage>{
+export async function listServerAssignmentUsage():Promise<import('./monthly-usage').AssignmentMonthlyUsage>{
   const session=requireSession()
   if(!session.online)throw Error('assignment.offline')
-  const usage=await jsonApi<AssignmentMonthlyUsage>('/assignments/v1/usage')
+  const value=await jsonApi<unknown>('/assignments/v1/usage')
   assertSame(session)
-  if(usage.planId!=='free'
-    ||!Number.isSafeInteger(usage.limit)||usage.limit<0
-    ||!Number.isSafeInteger(usage.used)||usage.used<0
-    ||!Number.isSafeInteger(usage.remaining)||usage.remaining<0
-    ||usage.remaining!==Math.max(0,usage.limit-usage.used)
-    ||!Number.isFinite(Date.parse(usage.periodEnd))
-    ||!Number.isFinite(Date.parse(usage.periodStart))
-    ||Date.parse(usage.periodEnd)<=Date.parse(usage.periodStart)
-    ||typeof usage.catalogVersion!=='string'||!usage.catalogVersion)
-    throw Error('assignment.usage_invalid')
-  return usage
+  return parseAssignmentMonthlyUsage(value)
 }
 
 export async function listServerAssignments(after?:string):Promise<{
@@ -1088,9 +1138,12 @@ export async function listServerAssignments(after?:string):Promise<{
   assertSame(s)
   // Cache only signed, independently authenticated policy snapshots.
   // No plaintext assignment name, DEK or recovery material is persisted.
-  await db.transaction('rw',db.capturePolicies,async()=>{
+  await db.transaction('rw',db.capturePolicies,db.revocations,async()=>{
     for(const item of result.items){
       const key=s.accountId+'/'+item.assignmentId
+      // A previously authenticated owner-signed exclusion is stronger
+      // than a later stale server overview snapshot.
+      if(await db.revocations.get(key))continue
       const previous=await db.capturePolicies.get(key)
       assertSignedPolicyProgress(previous?.listing,item)
       await db.capturePolicies.put({
@@ -1104,15 +1157,61 @@ export async function listServerAssignments(after?:string):Promise<{
 }
 
 /**
+ * Owner and contributor overview: fetch every authenticated, signed server
+ * page instead of silently hiding all assignments past the first 50.
+ * Keep each exact source policy's existing independent verification.
+ */
+export async function listAllServerAssignments():Promise<AssignmentListing[]>{
+  const session=requireSession()
+  let items:AssignmentListing[]=[]
+  let after:string|null=null
+  for(let n=0;n<100;n++){
+    const page=await listServerAssignments(after??undefined)
+    assertSame(session)
+    const next:{items:AssignmentListing[];nextCursor:string|null}=
+      appendBoundedUuidPage(items,page,after,item=>item.assignmentId)
+    items=next.items
+    if(next.nextCursor===null){
+      const revoked=await db.revocations.where('accountId')
+        .equals(session.accountId).toArray()
+      assertSame(session)
+      const denied=new Set(revoked.map(r=>r.assignmentId))
+      return items.filter(row=>row.ownerAccountId===session.accountId
+        ||!denied.has(row.assignmentId))
+    }
+    after=next.nextCursor
+  }
+  throw Error('assignment.overview_pagination_limit')
+}
+
+/**
+ * Account-scoped, previously verified owner removal IDs. This is only a
+ * local display-denial fence; server permissions still require live ACL.
+ * Used at final Vue hydration commit to prevent async decryption and
+ * stale server responses reviving private assignment titles in memory.
+ */
+export async function listLocallyRevokedAssignmentIds():Promise<Set<string>>{
+  const s=requireSession()
+  const rows=await db.revocations.where('accountId').equals(s.accountId).toArray()
+  assertSame(s)
+  return new Set(rows.map(item=>item.assignmentId))
+}
+
+/**
  * A previously verified policy can be read offline for local-only capture.
  * A server can still reject a later upload if membership or state changed.
  */
 export async function listCachedAssignmentSnapshots():Promise<AssignmentListing[]>{
   const s=requireSession()
-  const rows=await db.capturePolicies.where('accountId').equals(s.accountId).toArray()
+  const [rows,removed]=await Promise.all([
+    db.capturePolicies.where('accountId').equals(s.accountId).toArray(),
+    db.revocations.where('accountId').equals(s.accountId).toArray(),
+  ])
+  const revoked=new Set(removed.map(x=>x.assignmentId))
   const verified:AssignmentListing[]=[]
   for(const row of rows){
     assertSame(s)
+    if(revoked.has(row.listing.assignmentId))continue
     try{
       await verifySignedAssignmentPolicy(row.listing,true)
       if(assignmentOpenAt(row.listing,Date.now()))
@@ -1136,7 +1235,9 @@ export async function signedCaptureBinding(
   privateFields:CaptureMetadataInput={},
 ):Promise<SignedCaptureBinding>{
   const s=requireSession()
-  const row=await db.capturePolicies.get(s.accountId+'/'+assignmentId)
+  const key=s.accountId+'/'+assignmentId
+  if(await db.revocations.get(key))throw Error('assignment.member_removed')
+  const row=await db.capturePolicies.get(key)
   if(!row)throw new Error('assignment.policy_not_cached')
   const policy=row.listing
   // Capture is deliberately Local-First. Recheck the cached owner signature
@@ -1166,6 +1267,9 @@ export async function signedCaptureBinding(
     ?policy.policyContract:policy.policyAmendmentContract
   if(!effectiveContract)throw new Error('assignment.policy_revision_not_authenticated')
   const policyHash=hex(await digest(new TextEncoder().encode(effectiveContract)))
+  // Recheck at the FINAL consent point: a previously verified signed
+  // removal may have committed while slow P-256/metadata checks ran.
+  if(await db.revocations.get(key))throw Error('assignment.member_removed')
   assertSame(s)
   return {
     assignmentId:policy.assignmentId,ownerAccountId:policy.ownerAccountId,
@@ -1208,9 +1312,18 @@ export async function cachePrivateAssignment(
     additionalData:summaryContext(s.accountId,assignmentId,policyHash),tagLength:128,
   },key,summaryEncoder.encode(JSON.stringify(data)))
   assertSame(s)
-  await db.privateSummaries.put({
-    key:s.accountId+'/'+assignmentId,accountId:s.accountId,
-    assignmentId,policyHash,iv:b64(iv),ciphertext:new Blob([encrypted]),
+  const cacheKey=s.accountId+'/'+assignmentId
+  // The completed AES-GCM encryption may have overlapped a verified
+  // exclusion. The tombstone read and summary put must be ONE IndexedDB
+  // transaction, never separate checks vulnerable to a lost race.
+  await db.transaction('rw',db.privateSummaries,db.revocations,async()=>{
+    assertSame(s)
+    if(await db.revocations.get(cacheKey))
+      throw Error('assignment.member_removed')
+    await db.privateSummaries.put({
+      key:cacheKey,accountId:s.accountId,
+      assignmentId,policyHash,iv:b64(iv),ciphertext:new Blob([encrypted]),
+    })
   })
   assertSame(s)
 }
@@ -1218,7 +1331,12 @@ export async function readCachedPrivateAssignment(
   assignmentId:string,policyContract:string,
 ):Promise<PrivateAssignment|null>{
   const s=requireSession()
-  const row=await db.privateSummaries.get(s.accountId+'/'+assignmentId)
+  const cacheKey=s.accountId+'/'+assignmentId
+  // This private cache is disposable; an authenticated removal always wins
+  // over a stale copy or a concurrent pre-revocation decrypt.
+  if(await db.revocations.get(cacheKey))
+    throw Error('assignment.member_removed')
+  const row=await db.privateSummaries.get(cacheKey)
   if(!row)return null
   const policyHash=hex(await digest(summaryEncoder.encode(policyContract)))
   if(row.accountId!==s.accountId||row.assignmentId!==assignmentId
@@ -1231,6 +1349,9 @@ export async function readCachedPrivateAssignment(
   assertSame(s)
   const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(decrypted)) as PrivateAssignment
   checkSummary(data)
+  if(await db.revocations.get(cacheKey))
+    throw Error('assignment.member_removed')
+  assertSame(s)
   return data
 }
 
@@ -1596,27 +1717,208 @@ export async function queueAssignmentInvitation(
   return inviteId
 }
 
+/**
+ * Signed, durable owner removal. The UI must pass a freshly authenticated
+ * roster item; the server checks live membership and only an owner signature
+ * can revoke it. Offline outbox never pretends the removal has succeeded.
+ */
+export async function queueAssignmentMemberRemoval(
+  assignmentId:string,person:AssignmentParticipant,
+):Promise<string>{
+  const session=requireSession()
+  const cached=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  if(!cached||cached.listing.ownerAccountId!==session.accountId)
+    throw Error('assignment.removal_requires_owner_policy')
+  await verifySignedAssignmentPolicy(cached.listing,true)
+  if(!['accepted','pending'].includes(person.state)
+    ||person.role!=='contributor'
+    ||person.recipientAccountId===session.accountId)
+    throw Error('assignment.invalid_member_removal')
+  const existing=await listAssignmentOperations()
+  if(existing.some(op=>op.kind==='remove-member'
+    &&['queued','retry'].includes(op.state)
+    &&(JSON.parse(op.contract) as {inviteId?:string}).inviteId===person.inviteId))
+    throw Error('assignment.member_removal_pending')
+  const operationId=crypto.randomUUID()
+  const payload={
+    version:1,action:'remove',operationId,assignmentId,
+    inviteId:person.inviteId,ownerAccountId:session.accountId,
+    recipientAccountId:person.recipientAccountId,
+  }
+  const op=await signedOperation('remove-member',
+    '/assignments/v1/'+encodeURIComponent(assignmentId)
+      +'/invites/'+encodeURIComponent(person.inviteId)+'/remove',payload)
+  await persist(op)
+  return operationId
+}
+
+/**
+ * Distinct recipient-only history, never part of the accepted invite inbox.
+ * Fetch all bounded pages; a single page must not starve other live invites.
+ * Only independently authenticated owner-signed removal may invalidate a
+ * previously cached accepted invite. A bad / unpinned proof is not authority.
+ */
+export async function listAssignmentRemovalNotices():Promise<CheckedAssignmentRemovalNotice[]>{
+  const session=requireSession()
+  if(!session.online||(typeof navigator!=='undefined'&&!navigator.onLine))
+    throw Error('assignment.removals_require_online')
+  const all:AssignmentRemovalNotice[]=[]
+  const seen=new Set<string>()
+  let after:string|null=null
+  for(let n=0;n<100;n++){
+    const result:{items:AssignmentRemovalNotice[];nextCursor:string|null}=
+      await jsonApi<{items:AssignmentRemovalNotice[];nextCursor:string|null}>(
+        '/assignments/v1/invites/removals'+(after
+          ?'?after='+encodeURIComponent(after):''))
+    assertSame(session)
+    if(!result||!Array.isArray(result.items)||result.items.length>50
+      ||(result.nextCursor!==null&&(
+        typeof result.nextCursor!=='string'||result.items.length!==50
+        ||result.nextCursor!==result.items[49]?.inviteId)))
+      throw Error('assignment.removals_invalid_page')
+    for(const item of result.items){
+      if(!item||typeof item.inviteId!=='string'
+        ||seen.has(item.inviteId)
+        ||(after!==null&&item.inviteId<=after)
+        ||(all.length&&item.inviteId<=all[all.length-1]!.inviteId))
+        throw Error('assignment.removals_invalid_page')
+      seen.add(item.inviteId)
+      all.push(item)
+    }
+    if(result.nextCursor===null)break
+    if(n===99)throw Error('assignment.removals_pagination_limit')
+    after=result.nextCursor
+  }
+  const checked=await inspectAssignmentRemovalNotices(all,session.accountId)
+  assertSame(session)
+  const verified=checked.filter(x=>x.verified).map(x=>x.notice)
+  if(verified.length){
+    // A verified, exact owner-signed removal is a durable denial of stale
+    // offline Fieldwork capture authority. Never clear personal photos,
+    // encrypted outbox entries, owner-created assignments or file grants.
+    await db.transaction('rw',
+      db.invites,db.capturePolicies,db.privateSummaries,db.revocations,
+      async()=>{
+        assertSame(session)
+        for(const notice of verified){
+          const key=session.accountId+'/'+notice.assignmentId
+          if(notice.recipientAccountId!==session.accountId
+            ||notice.ownerAccountId===session.accountId)
+            throw Error('assignment.invalid_revocation_scope')
+          // Write tombstone FIRST, within the same atomic transaction as
+          // removing the former local Fieldwork permissions and summary.
+          await db.revocations.put({
+            key,accountId:session.accountId,
+            assignmentId:notice.assignmentId,
+            ownerAccountId:notice.ownerAccountId,
+            inviteId:notice.inviteId,
+            removalContract:notice.removalContract,
+            removalSignature:notice.removalSignature,
+            verifiedAt:Date.now(),
+          })
+          const old=await db.invites.get(notice.inviteId)
+          if(old?.cachedForAccountId===session.accountId
+            &&old.assignmentId===notice.assignmentId
+            &&old.ownerAccountId===notice.ownerAccountId)
+            await db.invites.delete(notice.inviteId)
+          const snapshot=await db.capturePolicies.get(key)
+          if(snapshot?.accountId===session.accountId
+            &&snapshot.listing.assignmentId===notice.assignmentId
+            &&snapshot.listing.ownerAccountId===notice.ownerAccountId)
+            await db.capturePolicies.delete(key)
+          // Only a disposable account-encrypted summary of this revoked
+          // assignment is purged. Contributor's own media/outbox is untouched.
+          const summary=await db.privateSummaries.get(key)
+          if(summary?.accountId===session.accountId
+            &&summary.assignmentId===notice.assignmentId)
+            await db.privateSummaries.delete(key)
+        }
+    })
+  }
+  assertSame(session)
+  return checked
+}
+
+/**
+ * Read-only offline history: redisplay a previously independently verified
+ * owner-signed removal after rechecking the signature using ONLY a locally
+ * saved fingerprint-confirmed owner key. No API, new permission or encrypted
+ * private invitation envelope is accessed. A missing/changed pin is shown
+ * as UNVERIFIED, never as a new grant or a proof of current server state.
+ */
+export async function listCachedVerifiedAssignmentRemovals():
+  Promise<CheckedCachedAssignmentRemovalProof[]>{
+  const s=requireSession()
+  const records=await db.revocations.where('accountId').equals(s.accountId).toArray()
+  assertSame(s)
+  const result=await Promise.all(records.map(async row=>{
+    const proof:CachedAssignmentRemovalProof={
+      assignmentId:row.assignmentId,
+      inviteId:row.inviteId,ownerAccountId:row.ownerAccountId,
+      recipientAccountId:row.accountId,
+      removalContract:row.removalContract,
+      removalSignature:row.removalSignature,verifiedAt:row.verifiedAt,
+    }
+    try{
+      await verifyCachedAssignmentRemovalProof(proof,s.accountId)
+      return {proof,verified:true}
+    }catch{return {proof,verified:false}}
+  }))
+  assertSame(s)
+  return result
+}
+
 /** Display-only cached invitations; never use them as current server ACL. */
 export async function listCachedAssignmentInvites():Promise<ReceivedAssignmentInvite[]>{
   const s=requireSession()
-  const cached=await db.invites.where('cachedForAccountId').equals(s.accountId).toArray()
+  const [cached,removed]=await Promise.all([
+    db.invites.where('cachedForAccountId').equals(s.accountId).toArray(),
+    db.revocations.where('accountId').equals(s.accountId).toArray(),
+  ])
   assertSame(s)
-  return cached.map(({cachedForAccountId:_account,...item})=>{
-    void _account
-    return item
-  })
+  const denied=new Set(removed.map(x=>x.assignmentId))
+  return cached.filter(item=>!denied.has(item.assignmentId))
+    .map(({cachedForAccountId:_account,...item})=>{
+      void _account
+      return item
+    })
 }
 
 export async function listAssignmentInvites():Promise<ReceivedAssignmentInvite[]>{
   const s=requireSession()
   if(s.online&&(typeof navigator==='undefined'||navigator.onLine)){
-    const response=await jsonApi<{items:ReceivedAssignmentInvite[]}>(
-      '/assignments/v1/invites/received')
-    assertSame(s)
-    await db.transaction('rw',db.invites,async()=>{
-      for(const item of response.items)await db.invites.put({...item,cachedForAccountId:s.accountId})
+    let items:ReceivedAssignmentInvite[]=[]
+    let after:string|null=null
+    let complete=false
+    for(let n=0;n<100;n++){
+      const response:{items:ReceivedAssignmentInvite[];nextCursor:string|null}=
+        await jsonApi<{items:ReceivedAssignmentInvite[];nextCursor:string|null}>(
+        '/assignments/v1/invites/received'
+        +(after?'?after='+encodeURIComponent(after):''))
+      assertSame(s)
+      const next:{items:ReceivedAssignmentInvite[];nextCursor:string|null}=
+        appendBoundedUuidPage(items,response,after,item=>item.inviteId)
+      items=next.items
+      if(next.nextCursor===null){complete=true;break}
+      after=next.nextCursor
+    }
+    if(!complete)throw Error('assignment.inbox_pagination_limit')
+    // A signed historical removal is stronger than a stale received-inbox
+    // response. Keep the cache transaction ordered with tombstones.
+    await db.transaction('rw',db.invites,db.revocations,async()=>{
+      assertSame(s)
+      for(const item of items){
+        if(await db.revocations.get(s.accountId+'/'+item.assignmentId))
+          continue
+        await db.invites.put({...item,cachedForAccountId:s.accountId})
+      }
     })
-    return response.items
+    assertSame(s)
+    const denied=await db.revocations.where('accountId')
+      .equals(s.accountId).toArray()
+    assertSame(s)
+    const blocked=new Set(denied.map(x=>x.assignmentId))
+    return items.filter(item=>!blocked.has(item.assignmentId))
   }
   // No authority is claimed for stale local grants; these are display-only
   // ciphertext invitations until a fresh server-authenticated accept.
@@ -1680,23 +1982,44 @@ export async function queueAssignmentSubmission(
   return operationId
 }
 
-export async function listAssignmentSubmissions(assignmentId:string):Promise<Array<{
+export type AssignmentPhotoSubmission={
   submissionId:string;photoId:string;photoGrantId:string;contributorAccountId:string
-}>>{
+  // Immutable account-signed consent only. Neither camera nor GPS provenance.
+  contract:string;signature:string;contractHash:string;policyRevision:number
+}
+export async function listAssignmentSubmissionsPage(
+  assignmentId:string,after?:string,
+):Promise<{items:AssignmentPhotoSubmission[];nextCursor:string|null}>{
   const s=requireSession()
   if(!s.online)throw new Error('assignment.offline')
-  const result=await jsonApi<{items:Array<{
-    submissionId:string;photoId:string;photoGrantId:string;contributorAccountId:string
-  }>}>('/assignments/v1/'+encodeURIComponent(assignmentId)+'/submissions')
+  const result=await jsonApi<{
+    items:AssignmentPhotoSubmission[];nextCursor:string|null
+  }>('/assignments/v1/'+encodeURIComponent(assignmentId)+'/submissions'
+    +(after?'?after='+encodeURIComponent(after):''))
   assertSame(s)
-  return result.items
+  return result
+}
+/** Preserve the old first-page helper for existing consumer compatibility. */
+export async function listAssignmentSubmissions(
+  assignmentId:string,
+):Promise<AssignmentPhotoSubmission[]>{
+  return (await listAssignmentSubmissionsPage(assignmentId)).items
 }
 
-/** Media submission is not a legacy photo capture. The owner must
- * explicitly opt into video/audio via a signed policy v3 amendment.
- * A previously approved recipient DEK grant is a strict prerequisite, not
- * automatically created by assignment membership.
+/**
+ * A local removal tombstone is written ONLY after independently verifying
+ * an owner-signed member removal. This read grants no permissions, requires no
+ * network and never erases encrypted personal media or pre-existing outbox.
  */
+export async function assertNoVerifiedAssignmentRemoval(
+  assignmentId:string,
+):Promise<void>{
+  const session=requireSession()
+  if(await db.revocations.get(session.accountId+'/'+assignmentId))
+    throw Error('assignment.member_removed')
+  assertSame(session)
+}
+
 /** Authenticated warm-offline recording context for audio/video.
  * Snapshot is owner-signed and pinned. This is a CLIENT assertion of
  * recording time, not hardware/timestamp/GPS attestation.
@@ -1706,7 +2029,9 @@ export async function signedMediaCaptureIntent(
   privateFields:MediaPrivateFields={},
 ):Promise<Omit<MediaCaptureIntent,'finishedAt'>>{
   const session=requireSession()
-  const row=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  const cacheKey=session.accountId+'/'+assignmentId
+  if(await db.revocations.get(cacheKey))throw Error('assignment.member_removed')
+  const row=await db.capturePolicies.get(cacheKey)
   if(!row)throw Error('assignment.policy_not_cached')
   await verifySignedAssignmentPolicy(row.listing,true)
   assertSame(session)
@@ -1730,6 +2055,10 @@ export async function signedMediaCaptureIntent(
   validateMediaPrivateRequirements(canonical,signedMediaRequirements(policy,mediaType))
   validateAdvancedFields(canonical,signedAdvancedRequirements(policy,mediaType))
   const policyHash=hex(await digest(new TextEncoder().encode(latest)))
+  // The independently verified owner removal may commit while P-256 policy
+  // checks or private metadata validation are still in flight. Never return
+  // a newly valid assignment capture binding after that point.
+  if(await db.revocations.get(cacheKey))throw Error('assignment.member_removed')
   assertSame(session)
   return {
     assignmentId,ownerAccountId:policy.ownerAccountId,
@@ -1738,11 +2067,18 @@ export async function signedMediaCaptureIntent(
   }
 }
 
+/** Media submission is not legacy P1 photo capture. Owner must explicitly
+ * permit AV with signed policy v3+, while P2 photos require independently
+ * authorized scoped E2EE grants regardless of imported v3 / captured v4.
+ * Membership alone never exposes a contributor media DEK.
+ */
 export async function queueAssignmentMediaSubmission(
   assignmentId:string,mediaId:string,mediaGrantId:string,
 ):Promise<string>{
   const session=requireSession()
-  const cache=await db.capturePolicies.get(session.accountId+'/'+assignmentId)
+  const cacheKey=session.accountId+'/'+assignmentId
+  if(await db.revocations.get(cacheKey))throw Error('assignment.member_removed')
+  const cache=await db.capturePolicies.get(cacheKey)
   if(!cache)throw Error('assignment.policy_not_cached')
   const listing=cache.listing
   await verifySignedAssignmentPolicy(listing,true)
@@ -1755,7 +2091,7 @@ export async function queueAssignmentMediaSubmission(
     throw Error('assignment.not_accepting_submissions')
   const media=(await listLocalMedia()).find(x=>x.mediaId===mediaId)
   if(!media||media.state!=='synced'||media.expiresAt<=Date.now()
-    ||(media.mediaType!=='video'&&media.mediaType!=='audio'))
+    ||!['photo','video','audio'].includes(media.mediaType))
     throw Error('assignment.media_not_synced')
   if(!signedAllowedAssignmentMedia(listing).includes(media.mediaType))
     throw Error('assignment.media_type_not_allowed')
@@ -1765,11 +2101,25 @@ export async function queueAssignmentMediaSubmission(
     &&x.ownerAccountId===session.accountId
     &&x.state!=='conflict')
   if(!grant)throw Error('assignment.media_grant_required')
-  const policy=listing.policyAmendmentContract
+  const isP2Photo=media.mediaType==='photo'
+  const policy=listing.policyAmendmentContract??(
+    isP2Photo?listing.policyContract:null)
   if(!policy)throw Error('assignment.media_policy_v3_required')
   const activePolicy=JSON.parse(policy) as {version?:number}
-  if(![3,4,5,6].includes(activePolicy.version??0))
+  if(!isP2Photo&&![3,4,5,6].includes(activePolicy.version??0))
     throw Error('assignment.media_policy_v3_required')
+  if(isP2Photo){
+    const c=parseMediaGrantContract(JSON.parse(grant.contract))
+    if(c.version!==2||c.scope!=='read'
+      ||c.assignmentId!==assignmentId
+      ||c.mediaId!==mediaId
+      ||c.ownerAccountId!==session.accountId
+      ||c.recipientAccountId!==listing.ownerAccountId)
+      throw Error('assignment.p2_photo_scoped_e2ee_required')
+    if(!await verify(await importSpki(session.pkg.accountSpki),
+      'pb3.media-grant.v2\n'+grant.contract,grant.signature))
+      throw Error('assignment.p2_photo_invalid_grant_signature')
+  }
   const policyHash=hex(await digest(new TextEncoder().encode(policy)))
   const mediaContractHash=hex(await digest(
     new TextEncoder().encode(JSON.stringify(media.contract))))
@@ -1793,7 +2143,8 @@ export async function queueAssignmentMediaSubmission(
   }
   const op=await signedOperation('media-submit',
     '/assignments/v1/'+encodeURIComponent(assignmentId)+'/media-submissions',{
-      version:media.capture?2:1,submissionId:crypto.randomUUID(),
+      version:isP2Photo?(media.capture?4:3):media.capture?2:1,
+      submissionId:crypto.randomUUID(),
       operationId:crypto.randomUUID(),assignmentId,
       contributorAccountId:session.accountId,
       mediaId,mediaGrantId,mediaContractHash,
@@ -1801,13 +2152,24 @@ export async function queueAssignmentMediaSubmission(
       ...(captureContract&&captureSignature
         ?{captureContract,captureSignature}:{}),
     },mediaGrantId)
-  await persist(op)
+  // A signed revocation may commit while ciphertext/hash verification
+  // and account signing execute. Check and atomically persist the operation
+  // with the local denial record to prevent a stale new Fieldwork submission
+  // entering durable outbox *after* owner revocation.
+  await db.transaction('rw',db.operations,db.revocations,async()=>{
+    assertSame(session)
+    if(await db.revocations.get(cacheKey))
+      throw Error('assignment.member_removed')
+    await db.operations.put(op)
+  })
+  void flushAssignmentOutbox()
   return op.id
 }
 export type AssignmentMediaSubmission={
   submissionId:string;mediaId:string;mediaGrantId:string
-  mediaType:'video'|'audio';contributorAccountId:string
-  capturedInAssignment?:boolean
+  mediaType:'photo'|'video'|'audio';contributorAccountId:string
+  capturedInAssignment:boolean
+  contract:string;signature:string;mediaContractHash:string
 }
 export async function listAssignmentMediaSubmissions(
   assignmentId:string,after?:string,

@@ -239,6 +239,77 @@ final class PhotoGrantTest extends TestCase
         $this->assertDatabaseCount('photo_objects',2);
     }
 
+    public function test_p1_scoped_recipient_grant_denies_read_after_contributor_membership_withdrawal_but_personal_v1_survives():void
+    {
+        $digest=$this->publishRecipientKey();
+        $assignmentId=$this->acceptedAssignment();
+        $this->become('owner');
+        $scoped=$this->scopePhotoGrant($this->contract($digest),$assignmentId);
+        $scopedId=json_decode($scoped['contract'],true,32,JSON_THROW_ON_ERROR)['grantId'];
+        $this->postJson('/shares/v1/grants',$scoped)->assertCreated();
+        $personal=$this->contract($digest);
+        $personalId=json_decode($personal['contract'],true,32,JSON_THROW_ON_ERROR)['grantId'];
+        $this->postJson('/shares/v1/grants',$personal)->assertCreated();
+
+        $this->become('recipient');
+        $scopedPath='/shares/v1/grants/'.$scopedId;
+        $personalPath='/shares/v1/grants/'.$personalId;
+        $asset='/objects/'.$this->assets[0]['assetId'];
+        $this->getJson($scopedPath)->assertOk();
+        $this->get($scopedPath.$asset)->assertOk();
+
+        // Simulate future signed membership removal, not physical cleanup.
+        // The grant and ciphertext stay stored; read-time P1 v2 ACL stops.
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$assignmentId)
+            ->where('recipient_account_id',$this->people['owner']['id'])
+            ->update(['state'=>'pending']);
+        $this->getJson($scopedPath)->assertGone();
+        $this->get($scopedPath.$asset)->assertGone();
+        $visible=$this->getJson('/shares/v1/received')->assertOk()->json('items');
+        $this->assertNotContains($scopedId,array_column($visible,'grantId'));
+        $this->assertContains($personalId,array_column($visible,'grantId'));
+        $this->getJson($personalPath)->assertOk();
+        $this->get($personalPath.$asset)->assertOk();
+        $this->assertDatabaseHas('photo_records',['id'=>$this->photoId,'state'=>'active']);
+        $this->assertDatabaseHas('photo_access_grants',[
+            'id'=>$scopedId,'state'=>'active','assignment_id'=>$assignmentId,
+        ]);
+
+        // A restored accepted membership can resume an otherwise valid grant.
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$assignmentId)
+            ->where('recipient_account_id',$this->people['owner']['id'])
+            ->update(['state'=>'accepted']);
+        $this->getJson($scopedPath)->assertOk();
+        $this->get($scopedPath.$asset)->assertOk();
+        // A signed removal record wins even if an operator/migration
+        // accidentally reverts the mutable membership to 'accepted'.
+        $invite=DB::table('assignment_invites_v1')
+            ->where('assignment_id',$assignmentId)->first();
+        $operationId=(string)Str::uuid();
+        $proof=json_encode([
+            'version'=>1,'action'=>'remove','operationId'=>$operationId,
+            'assignmentId'=>$assignmentId,'inviteId'=>$invite->id,
+            'ownerAccountId'=>$this->people['recipient']['id'],
+            'recipientAccountId'=>$this->people['owner']['id'],
+        ],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        DB::table('assignment_member_removals_v1')->insert([
+            'operation_id'=>$operationId,'assignment_id'=>$assignmentId,
+            'invite_id'=>$invite->id,
+            'owner_account_id'=>$this->people['recipient']['id'],
+            'recipient_account_id'=>$this->people['owner']['id'],
+            'contract_hash'=>hash('sha256',$proof),'contract_json'=>$proof,
+            'owner_signature'=>$this->signature('recipient',
+                "pb3.assignment-member-remove.v1\n".$proof),
+            'created_at'=>now(),
+        ]);
+        $this->getJson($scopedPath)->assertGone();
+        $this->get($scopedPath.$asset)->assertGone();
+        $this->getJson($personalPath)->assertOk();
+        $this->get($personalPath.$asset)->assertOk();
+    }
+
     public function test_p1_22_scoped_grant_rejects_pending_wrong_owner_bad_domain_and_cutoff():void
     {
         $digest=$this->publishRecipientKey();
@@ -346,4 +417,83 @@ final class PhotoGrantTest extends TestCase
         $this->getJson('/shares/v1/grants/'.$id)->assertGone();
         $this->getJson('/shares/v1/received')->assertJsonPath('items',[]);
     }
+    public function test_p1_recipient_revalidates_signed_grant_and_current_exchange_key_on_every_read():void
+    {
+        $digest=$this->publishRecipientKey();
+        $this->become('owner');
+        $input=$this->contract($digest);
+        $id=json_decode($input['contract'],true,32,JSON_THROW_ON_ERROR)['grantId'];
+        $this->postJson('/shares/v1/grants',$input)->assertCreated();
+        $this->become('recipient');
+        $detail='/shares/v1/grants/'.$id;
+        $asset=$detail.'/objects/'.$this->assets[0]['assetId'];
+        $this->getJson($detail)->assertOk();
+        $this->get($asset)->assertOk();
+        $this->getJson('/shares/v1/received')->assertJsonPath('items.0.grantId',$id);
+
+        // All these mutations are synthetic inconsistent DB states. Normal
+        // signed grant create cannot produce them. Fail CLOSED at read time.
+        foreach([
+            ['contract_json','{}'],
+            ['contract_hash',str_repeat('f',64)],
+            ['account_signature',P::encode(random_bytes(64))],
+            ['recipient_key_digest',str_repeat('f',64)],
+        ] as [$column,$tampered]){
+            $original=DB::table('photo_access_grants')
+                ->where('id',$id)->value($column);
+            DB::table('photo_access_grants')->where('id',$id)
+                ->update([$column=>$tampered]);
+            $this->getJson($detail)->assertGone();
+            $this->get($asset)->assertGone();
+            $this->getJson('/shares/v1/received')->assertJsonPath('items',[]);
+            DB::table('photo_access_grants')->where('id',$id)
+                ->update([$column=>$original]);
+        }
+        $recipientId=$this->people['recipient']['id'];
+        DB::table('account_exchange_keys')->where('account_id',$recipientId)
+            ->update(['descriptor_hash'=>str_repeat('f',64)]);
+        $this->getJson($detail)->assertGone();
+        $this->get($asset)->assertGone();
+        $this->getJson('/shares/v1/received')->assertJsonPath('items',[]);
+        DB::table('account_exchange_keys')->where('account_id',$recipientId)
+            ->update(['descriptor_hash'=>$digest]);
+        $this->getJson($detail)->assertOk();
+        $this->get($asset)->assertOk();
+    }
+
+    public function test_p1_recipient_denies_synthetic_archived_source_and_forged_grant_scope():void
+    {
+        $digest=$this->publishRecipientKey();
+        $this->become('owner');
+        $input=$this->contract($digest);
+        $id=json_decode($input['contract'],true,32,JSON_THROW_ON_ERROR)['grantId'];
+        $this->postJson('/shares/v1/grants',$input)->assertCreated();
+        $archiveId=(string)Str::uuid();
+        DB::table('browser_archive_entries_v1')->insert([
+            'id'=>$archiveId,'account_id'=>$this->people['owner']['id'],
+            'kind'=>'photo','asset_id'=>$this->photoId,
+            'revision'=>1,'state'=>'archived',
+            'asset_expires_at_ms'=>now()->addDay()->getTimestampMs(),
+            'archive_until_ms'=>null,'media_type'=>null,'plain_bytes'=>null,
+            'last_operation_id'=>(string)Str::uuid(),
+            'created_at'=>now(),'updated_at'=>now(),
+        ]);
+        $this->become('recipient');
+        $this->getJson('/shares/v1/grants/'.$id)->assertGone();
+        $this->getJson('/shares/v1/received')->assertJsonPath('items',[]);
+        DB::table('browser_archive_entries_v1')->where('id',$archiveId)
+            ->update(['state'=>'restored']);
+        $this->getJson('/shares/v1/grants/'.$id)->assertOk();
+
+        // Use a real FK-backed assignment. Otherwise SQLite correctly
+        // rejects our synthetic invalid row before the read ACL can run.
+        $assignmentId=$this->acceptedAssignment();
+        // A personal v1 share may not silently acquire assignment scope.
+        DB::table('photo_access_grants')->where('id',$id)
+            ->update(['assignment_id'=>$assignmentId]);
+        $this->getJson('/shares/v1/grants/'.$id)->assertGone();
+        $this->getJson('/shares/v1/received')->assertJsonPath('items',[]);
+    }
+
+
 }

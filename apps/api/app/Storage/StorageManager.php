@@ -24,6 +24,17 @@ final class StorageManager
         return $this->appS3;
     }
 
+    /**
+     * One physical call group is a single health event. Every provider call
+     * uses the same durable circuit, independently of Identity and Camera.
+     */
+    private function io(string $provider,\Closure $operation,bool $falseIsFailure=false):mixed
+    {
+        $adapter=$this->adapter($provider);
+        return app(StorageProviderHealth::class)->call(
+            $provider,static fn()=>$operation($adapter),$falseIsFailure);
+    }
+
     private function locations(string $assetId): \Illuminate\Support\Collection
     {
         return DB::table('storage_locations')->where('asset_id', $assetId)
@@ -35,15 +46,22 @@ final class StorageManager
         $locations=$this->locations($assetId);
         if ($locations->count() !== 1) throw new \RuntimeException('storage.invalid_write_placement');
         $loc=$locations->first();
-        return $this->adapter($loc->provider)->putStream($loc->object_key,$ciphertextStream);
+        // Ticket first: a process dying after the S3 PUT still leaves a
+        // durable reference for ACK-loss verification after restart.
+        app(StorageRetryLedger::class)->remember('photo',$assetId);
+        return $this->io($loc->provider,
+            static fn(StorageAdapter $a)=>$a->putStream($loc->object_key,$ciphertextStream),true);
     }
 
     public function readAsset(string $assetId): mixed
     {
         foreach ($this->locations($assetId) as $loc) {
             if (!in_array($loc->state,['verified','active'],true)) continue;
-            $adapter=$this->adapter($loc->provider);
-            if ($adapter->exists($loc->object_key)) return $adapter->readStream($loc->object_key);
+            $stream=$this->io($loc->provider,static function(StorageAdapter $a)use($loc){
+                return $a->exists($loc->object_key)
+                    ?$a->readStream($loc->object_key):null;
+            });
+            if(is_resource($stream))return $stream;
         }
         throw new \RuntimeException('storage.no_verified_location');
     }
@@ -54,19 +72,19 @@ final class StorageManager
             if ((int)$loc->bytes!==$expectedBytes || !hash_equals($loc->sha256,$expectedSha256)) {
                 return false;
             }
-            $adapter=$this->adapter($loc->provider);
-            if (!$adapter->exists($loc->object_key) || $adapter->size($loc->object_key)!==$expectedBytes) {
-                return false;
-            }
-            $stream=$adapter->readStream($loc->object_key);
-            if (!is_resource($stream)) return false;
-            try {
-                $hash=hash_init('sha256');
-                hash_update_stream($hash,$stream);
-                if (!hash_equals($expectedSha256,hash_final($hash))) return false;
-            } finally {
-                fclose($stream);
-            }
+            $verified=$this->io($loc->provider,
+                static function(StorageAdapter $a)use($loc,$expectedBytes,$expectedSha256):bool{
+                    if(!$a->exists($loc->object_key)
+                        ||$a->size($loc->object_key)!==$expectedBytes)return false;
+                    $stream=$a->readStream($loc->object_key);
+                    if(!is_resource($stream))return false;
+                    try{
+                        $hash=hash_init('sha256');
+                        hash_update_stream($hash,$stream);
+                        return hash_equals($expectedSha256,hash_final($hash));
+                    }finally{fclose($stream);}
+                });
+            if(!$verified)return false;
         }
         // Every registered replica must validate; no missing placement bypass.
         return $this->locations($assetId)->isNotEmpty();
@@ -76,12 +94,10 @@ final class StorageManager
     public function deleteAsset(string $assetId): void
     {
         foreach ($this->locations($assetId) as $loc) {
-            $adapter=$this->adapter($loc->provider);
-            if ($adapter->exists($loc->object_key)) {
-                if (!$adapter->delete($loc->object_key) || $adapter->exists($loc->object_key)) {
-                    throw new \RuntimeException('storage.delete_unconfirmed');
-                }
-            }
+            $deleted=$this->io($loc->provider,
+                static fn(StorageAdapter $a)=>!$a->exists($loc->object_key)
+                    ||($a->delete($loc->object_key)&&!$a->exists($loc->object_key)),true);
+            if(!$deleted)throw new \RuntimeException('storage.delete_unconfirmed');
         }
     }
 
@@ -101,7 +117,9 @@ final class StorageManager
         $locs=$this->mediaLocations($chunkId);
         if($locs->count()!==1)throw new \RuntimeException('storage.invalid_media_placement');
         $loc=$locs->first();
-        return $this->adapter($loc->provider)->putStream($loc->object_key,$stream);
+        app(StorageRetryLedger::class)->remember('media',$chunkId);
+        return $this->io($loc->provider,
+            static fn(StorageAdapter $a)=>$a->putStream($loc->object_key,$stream),true);
     }
 
     public function verifyMediaChunk(string $chunkId,int $bytes,string $sha256):bool
@@ -111,16 +129,19 @@ final class StorageManager
         foreach($locs as $loc){
             if((int)$loc->bytes!==$bytes
                 ||!hash_equals($sha256,$loc->sha256))return false;
-            $adapter=$this->adapter($loc->provider);
-            if(!$adapter->exists($loc->object_key)
-                ||$adapter->size($loc->object_key)!==$bytes)return false;
-            $stream=$adapter->readStream($loc->object_key);
-            if(!is_resource($stream))return false;
-            try{
-                $hash=hash_init('sha256');
-                hash_update_stream($hash,$stream);
-                if(!hash_equals($sha256,hash_final($hash)))return false;
-            }finally{fclose($stream);}
+            $verified=$this->io($loc->provider,
+                static function(StorageAdapter $a)use($loc,$bytes,$sha256):bool{
+                    if(!$a->exists($loc->object_key)
+                        ||$a->size($loc->object_key)!==$bytes)return false;
+                    $stream=$a->readStream($loc->object_key);
+                    if(!is_resource($stream))return false;
+                    try{
+                        $hash=hash_init('sha256');
+                        hash_update_stream($hash,$stream);
+                        return hash_equals($sha256,hash_final($hash));
+                    }finally{fclose($stream);}
+                });
+            if(!$verified)return false;
         }
         return true;
     }
@@ -129,9 +150,11 @@ final class StorageManager
     {
         foreach($this->mediaLocations($chunkId) as $loc){
             if(!in_array($loc->state,['verified','active'],true))continue;
-            $adapter=$this->adapter($loc->provider);
-            if($adapter->exists($loc->object_key))
-                return $adapter->readStream($loc->object_key);
+            $stream=$this->io($loc->provider,static function(StorageAdapter $a)use($loc){
+                return $a->exists($loc->object_key)
+                    ?$a->readStream($loc->object_key):null;
+            });
+            if(is_resource($stream))return $stream;
         }
         throw new \RuntimeException('storage.media_chunk_unavailable');
     }
@@ -139,12 +162,10 @@ final class StorageManager
     public function deleteMediaChunk(string $chunkId):void
     {
         foreach($this->mediaLocations($chunkId) as $loc){
-            $adapter=$this->adapter($loc->provider);
-            if($adapter->exists($loc->object_key)){
-                if(!$adapter->delete($loc->object_key)
-                    ||$adapter->exists($loc->object_key))
-                    throw new \RuntimeException('storage.media_delete_unconfirmed');
-            }
+            $deleted=$this->io($loc->provider,
+                static fn(StorageAdapter $a)=>!$a->exists($loc->object_key)
+                    ||($a->delete($loc->object_key)&&!$a->exists($loc->object_key)),true);
+            if(!$deleted)throw new \RuntimeException('storage.media_delete_unconfirmed');
         }
     }
 
@@ -155,11 +176,10 @@ final class StorageManager
             '~^cipher/media/v1/[a-f0-9-]{36}/[a-f0-9-]{36}/[a-f0-9-]{36}$~D',
             $objectKey))
             throw new \RuntimeException('storage.invalid_media_tombstone');
-        if($this->appS3->exists($objectKey)){
-            if(!$this->appS3->delete($objectKey)
-                ||$this->appS3->exists($objectKey))
-                throw new \RuntimeException('storage.media_tombstone_retry');
-        }
+        $deleted=$this->io('app_s3',
+            static fn(StorageAdapter $a)=>!$a->exists($objectKey)
+                ||($a->delete($objectKey)&&!$a->exists($objectKey)),true);
+        if(!$deleted)throw new \RuntimeException('storage.media_tombstone_retry');
     }
 
     /** Only for tombstones created from formerly registered ciphertext paths. */
@@ -168,10 +188,9 @@ final class StorageManager
         if (!preg_match('~^cipher/v1/[a-f0-9-]{36}/[a-f0-9-]{36}/[a-f0-9-]{36}$~D', $objectKey)) {
             throw new \RuntimeException('storage.invalid_tombstone');
         }
-        if ($this->appS3->exists($objectKey)) {
-            if (!$this->appS3->delete($objectKey) || $this->appS3->exists($objectKey)) {
-                throw new \RuntimeException('storage.tombstone_retry');
-            }
-        }
+        $deleted=$this->io('app_s3',
+            static fn(StorageAdapter $a)=>!$a->exists($objectKey)
+                ||($a->delete($objectKey)&&!$a->exists($objectKey)),true);
+        if(!$deleted)throw new \RuntimeException('storage.tombstone_retry');
     }
 }

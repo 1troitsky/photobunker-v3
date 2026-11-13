@@ -172,3 +172,740 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .shell-header-actions button { background:transparent; color:#999; border:1px solid #424242;
   border-radius:8px; padding:8px 10px; font:inherit; }
 .shell-header-actions button:disabled { opacity:.5; cursor:not-allowed; }
+
+
+/* P2 Browser v3: real encrypted local/cloud catalog, independent of Matrix. */
+.browser-v3{max-width:980px}
+.browser-title{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.browser-title h1{margin-bottom:4px}
+.browser-filters{display:flex;border-bottom:1px solid var(--outline);margin-top:18px;gap:0}
+.browser-filters button{flex:1;border:0;border-radius:0;background:transparent;
+  border-bottom:2px solid transparent;color:#aaa;padding:12px 8px}
+.browser-filters button.selected{border-bottom-color:var(--accent);color:#f5f5f5}
+.browser-toolbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:16px 0}
+.browser-search{flex:1;min-width:150px}
+.browser-search input,.browser-toolbar select{min-height:40px;width:100%;background:#151515;
+  border:1px solid #444;border-radius:8px;color:inherit;padding:8px 10px;font:inherit}
+.browser-toolbar select{width:auto;max-width:100%}
+.browser-view-switch{display:flex;border:1px solid #444;border-radius:8px;overflow:hidden}
+.browser-view-switch button{border:0;border-radius:0}
+.browser-view-switch button[aria-pressed=true]{background:#324235;color:#d8f4db}
+.browser-sr-only{position:absolute;clip:rect(0,0,0,0);width:1px;height:1px;
+  overflow:hidden;white-space:nowrap}
+.browser-items{margin:10px 0 18px}
+.browser-item{display:flex;align-items:center;gap:14px;min-width:0;
+  background:var(--surface);border:1px solid var(--outline);padding:12px;
+  border-radius:9px;margin:7px 0}
+.browser-item-kind{font-size:22px;width:42px;height:42px;flex:0 0 42px;
+  display:grid;place-items:center;background:#292f2b;border-radius:8px}
+.browser-item-detail{display:flex;flex:1;flex-direction:column;min-width:0;gap:4px}
+.browser-item-detail strong{font-size:13px;font-family:ui-monospace,monospace}
+.browser-item-detail small{font-size:11px;color:#aaa;overflow-wrap:anywhere}
+.browser-item button{flex:0 0 auto}
+.browser-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+.browser-grid .browser-item{flex-direction:column;align-items:stretch;margin:0}
+.browser-grid .browser-item-kind{width:100%;height:95px}
+.browser-preview audio{width:100%}
+.browser-operations{margin-top:32px;border-top:1px solid #393939;padding-top:17px}
+.browser-operations h2{font-size:16px}
+@media(max-width:600px){
+  .browser-toolbar{align-items:stretch}
+  .browser-toolbar>.browser-search{flex-basis:100%}
+  .browser-toolbar>label:nth-child(2){flex:1;min-width:160px}
+  .browser-view-switch{flex:1}
+  .browser-item{gap:9px;padding:10px}
+  .browser-item-kind{width:34px;height:34px;flex-basis:34px}
+  .browser-item button{padding:8px}
+}
+
+.browser-item-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.browser-item.photo-row .browser-item-kind{display:grid;place-items:center}
+.browser-item.photo-row .browser-item-detail{display:flex;flex-direction:column}
+.browser-item.photo-row .browser-item-actions{display:flex;flex-direction:row}
+.browser-item.photo-row{border-top:1px solid var(--outline)}
+@media(max-width:600px){.browser-item-actions button{padding:7px 9px}}
+
+
+/* P2 File Viewer 1.0: one media stage; no automatic export or OS gallery write. */
+.browser-item-actions a{display:inline-flex;align-items:center;justify-content:center;
+  min-height:36px;padding:7px 12px;border:1px solid #555;border-radius:7px;
+  color:inherit;text-decoration:none;font-size:12px}
+.browser-item-actions a:focus-visible,.file-viewer a:focus-visible,
+.file-viewer button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.file-viewer{max-width:960px}
+.file-viewer-header{display:flex;gap:16px;align-items:center;justify-content:space-between}
+.file-viewer-header h1{font-size:20px;margin:0 0 4px}
+.file-viewer-header>div{min-width:0;flex:1}
+.file-viewer-header .muted{margin:0;font-family:ui-monospace,monospace}
+.file-viewer-back{text-decoration:none;color:var(--accent);white-space:nowrap}
+.file-viewer-navigation{display:flex;gap:15px;align-items:center;justify-content:center;
+  padding:14px 0}
+.file-viewer-navigation button{width:42px;height:42px;display:grid;place-items:center;
+  font-size:28px;line-height:1}
+.file-viewer-navigation span{font-size:12px;min-width:145px;text-align:center}
+.file-viewer-stage{height:min(55dvh,535px);min-height:240px;background:#090909;
+  border:1px solid #343434;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;
+  position:relative}
+.file-viewer-stage:fullscreen{height:100dvh;border:0;border-radius:0;background:#000}
+.file-viewer-stage img,.file-viewer-stage video{width:100%;height:100%;object-fit:contain;
+  user-select:none}
+.file-viewer-stage video{max-width:100%;max-height:100%}
+.file-viewer-wait{text-align:center;color:#aaa;font-size:13px}
+.file-viewer-audio{display:flex;flex-direction:column;align-items:center;
+  gap:26px;width:100%;padding:18px;max-width:620px}
+.file-viewer-audio>span{font-size:68px;color:#a0caaa}
+.file-viewer-audio audio{display:block;width:100%}
+.file-viewer-still,.file-viewer-audio-editor,.file-viewer-photo-editor{display:grid;gap:12px;border:1px solid var(--outline);
+  border-radius:10px;padding:15px;background:var(--surface);margin:16px 0}
+.file-viewer-photo-composition-wrap{max-width:100%;overflow:hidden;line-height:0}
+.file-viewer-photo-composition{display:inline-block;position:relative;max-width:100%;
+  line-height:normal;vertical-align:top}
+.file-viewer-photo-composition>img{display:block;width:auto;max-width:100%;
+  max-height:320px;object-fit:contain;user-select:none}
+.file-viewer-photo-shape-layer{position:absolute;z-index:1;overflow:visible;
+  cursor:move;touch-action:none;user-select:none}
+.file-viewer-photo-shape-layer.selected{outline:1px dashed #fff9;outline-offset:2px}
+.file-viewer-shape-filled{display:flex!important;align-items:center;flex-direction:row;
+  justify-content:space-between;gap:10px}
+.file-viewer-shape-filled input{width:18px;height:18px;accent-color:var(--accent)}
+.file-viewer-photo-text-settings select{background:#191919;color:#eee;border:1px solid #555;
+  padding:8px;border-radius:6px;max-width:100%}
+.file-viewer-photo-blackout-layer{position:absolute;z-index:4;
+  display:block;background:#000;border:1px solid #000;
+  box-sizing:border-box;padding:0;margin:0;min-height:0;min-width:0;
+  cursor:move;touch-action:none;user-select:none}
+.file-viewer-photo-blackout-layer.selected{outline:2px dashed #f0f0f0;
+  outline-offset:2px}
+.file-viewer-photo-blackout-layer:disabled{cursor:default;pointer-events:none}
+.file-viewer-photo-paint-layer{position:absolute;inset:0;width:100%;height:100%;
+  z-index:2;pointer-events:none;display:block}
+.file-viewer-photo-paint-layer.drawing{pointer-events:auto;touch-action:none;cursor:crosshair}
+.file-viewer-photo-history-bar{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.file-viewer-photo-history-bar button{font-size:12px}
+.file-viewer-photo-history-bar button[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
+.file-viewer-photo-draw-tools{display:flex;gap:6px;flex-wrap:wrap}
+.file-viewer-photo-draw-tools button{font-size:12px}
+.file-viewer-photo-draw-tools button.selected{border-color:var(--accent);
+  color:var(--accent)}
+.file-viewer-photo-text-layer{position:absolute;display:block;z-index:3;
+  border:1px solid transparent;border-radius:2px;padding:0;
+  margin:0;background:transparent;white-space:pre-wrap;overflow-wrap:anywhere;
+  font-family:Arial,sans-serif;font-weight:700;line-height:1.2;
+  text-align:left;text-shadow:0 1px 3px #000b;
+  cursor:move;touch-action:none;user-select:none}
+.file-viewer-photo-text-layer.selected{border:1px dashed #f4f4f4}
+.file-viewer-photo-text-layer:disabled{cursor:default;pointer-events:none}
+.file-viewer-photo-text-editor{display:grid;gap:10px;padding:13px;
+  border:1px solid var(--outline);border-radius:8px;background:#252525}
+.file-viewer-photo-text-head{display:flex;gap:9px;justify-content:space-between;
+  align-items:center;flex-wrap:wrap;font-size:13px}
+.file-viewer-photo-text-editor .muted{margin:0;font-size:11px}
+.file-viewer-photo-text-row{display:flex;gap:8px;align-items:center;
+  background:#303030;border:1px solid #484848;border-radius:6px;padding:5px}
+.file-viewer-photo-text-row.selected{border-color:#65a571}
+.file-viewer-photo-text-row>button:first-child{flex:1;min-width:0;text-align:left;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-viewer-photo-text-row>button:last-child{background:#493030;color:#f4b5b5}
+.file-viewer-photo-text-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.file-viewer-photo-text-settings label{display:grid;gap:5px;font-size:12px}
+.file-viewer-photo-text-settings label:first-child{grid-column:1/-1}
+.file-viewer-photo-text-settings textarea{resize:vertical;min-height:54px}
+.file-viewer-photo-text-settings input[type=number],
+.file-viewer-photo-text-settings textarea{background:#191919;color:#eee;
+  border:1px solid #555;border-radius:6px;padding:8px;max-width:100%;min-width:0}
+.file-viewer-photo-text-settings input[type=color]{width:60px;height:35px}
+.file-viewer-photo-text-settings input[type=range]{width:100%;accent-color:var(--accent)}
+@media(max-width:480px){.file-viewer-photo-text-settings{grid-template-columns:1fr}}
+.file-viewer-photo-editor>h2{margin:0;font-size:16px}
+.file-viewer-adjustments-heading{font-size:13px;margin:4px 0 0;color:#ddd}
+.file-viewer-photo-editor>.muted{margin:0;font-size:12px}
+.file-viewer-crop-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.file-viewer-crop-controls label{display:grid;gap:6px;font-size:12px;color:#ddd}
+.file-viewer-crop-controls input[type=range]{width:100%;accent-color:var(--accent)}
+.file-viewer-crop-controls select{min-height:36px;border:1px solid var(--outline);
+  border-radius:6px;background:#151515;color:inherit;padding:0 8px}
+@media(max-width:520px){.file-viewer-crop-controls{grid-template-columns:1fr}}
+.file-viewer-audio-editor>label{display:grid;gap:7px;font-size:12px;color:#ddd}
+.file-viewer-audio-editor input[type=range]{width:100%;accent-color:var(--accent)}
+.file-viewer-audio-editor audio{width:100%;max-width:720px}
+.file-viewer-still-heading{display:flex;align-items:center;justify-content:space-between;
+  gap:14px;flex-wrap:wrap}
+.file-viewer-still-heading h2{font-size:16px;margin:0 0 5px}
+.file-viewer-still-heading p{margin:0;font-size:12px}
+.file-viewer-still-preview{display:grid;gap:9px;min-width:0}
+.file-viewer-still-preview img{display:block;width:auto;max-width:100%;
+  max-height:320px;object-fit:contain;border-radius:6px;background:#090909}
+.file-viewer-still-preview p{margin:0;font-size:11px;overflow-wrap:anywhere}
+.file-viewer-still-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.file-viewer-still-actions a{color:var(--accent);font-size:12px}
+@media(max-width:480px){
+  .file-viewer-still-heading button{width:100%}
+  .file-viewer-still-actions>*{flex:1 1 100%}
+}
+.file-viewer-information{margin:14px 0;padding:14px 0}
+.file-viewer-info-heading{display:flex;gap:14px;justify-content:space-between;align-items:flex-start}
+.file-viewer-info-heading>div{flex:1;min-width:0}
+.file-viewer-info-heading h2{font-size:17px;overflow-wrap:anywhere;margin:0 0 5px}
+.file-viewer-info-heading .muted{margin:0}
+.file-viewer-information dl{display:grid;grid-template-columns:minmax(100px,155px) minmax(0,1fr);
+  gap:10px 12px;margin:16px 0;font-size:12px}
+.file-viewer-information dt{color:#aaa}
+.file-viewer-information dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.file-viewer-information dd code{font-size:11px;user-select:all}
+@media(max-width:560px){
+  .file-viewer-header{gap:8px;flex-wrap:wrap}
+  .file-viewer-header h1{font-size:16px}
+  .file-viewer-header button{font-size:11px;padding:9px}
+  .file-viewer-stage{height:47dvh;min-height:210px}
+  .file-viewer-navigation{gap:8px}
+  .file-viewer-information dl{grid-template-columns:95px minmax(0,1fr)}
+}
+@media(prefers-reduced-motion:reduce){
+  .file-viewer *{scroll-behavior:auto;transition:none;animation:none}
+}
+
+
+/* P2 Browser user folders: device-local E2EE metadata, no server move claims. */
+.browser-folders{margin:18px 0 20px;padding-bottom:17px;border-bottom:1px solid #393939}
+.browser-folder-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.browser-breadcrumb{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:0;flex:1}
+.browser-breadcrumb button{background:transparent;border:1px solid transparent;
+  border-radius:6px;padding:7px;color:#a9d8b2;font:inherit;overflow-wrap:anywhere}
+.browser-breadcrumb button[aria-current=location]{color:#fff;border-color:#4c5e50}
+.browser-folder-head>button{flex-shrink:0}
+.browser-folder-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:9px;margin:14px 0}
+.browser-folder-item{min-width:0;border:1px solid var(--outline);
+  background:var(--surface);padding:10px;border-radius:9px;
+  display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.browser-folder-open{flex:1;min-width:130px;text-align:left;font:inherit;
+  display:flex;align-items:center;gap:8px;overflow-wrap:anywhere}
+.browser-folder-parent{display:flex;gap:6px;align-items:center}
+.browser-folder-parent span,.browser-file-move span{font-size:11px;color:#aaa}
+.browser-folder-parent select,.browser-file-move select{max-width:175px;
+  background:#151515;color:#f5f5f5;border:1px solid #484848;
+  border-radius:7px;padding:7px;font:inherit;font-size:11px}
+.browser-folder-form{display:flex;flex-wrap:wrap;align-items:end;gap:9px;margin:12px 0}
+.browser-folder-form label{display:flex;flex-direction:column;gap:5px;flex:1;min-width:150px}
+.browser-folder-form input{width:100%;min-height:40px;max-width:350px;
+  padding:8px;background:#161616;color:inherit;border:1px solid #555;
+  border-radius:7px;font:inherit}
+.browser-file-move{display:flex;align-items:center;gap:5px}
+@media(max-width:600px){
+  .browser-folder-list{grid-template-columns:1fr}
+  .browser-folder-item{gap:6px}
+  .browser-folder-parent select,.browser-file-move select{max-width:120px}
+}
+
+/* Bounded local-only batch move, never physical deletion or cloud mutation. */
+.browser-batch-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}
+.browser-batch-toolbar label{display:flex;align-items:center;gap:7px;font-size:12px}
+.browser-batch-toolbar select{background:#151515;color:inherit;
+  border:1px solid #4a4a4a;border-radius:7px;min-height:38px;padding:7px}
+.browser-item-select{display:grid;place-items:center;padding:5px;flex:0 0 auto}
+.browser-item-select input{width:16px;height:16px;accent-color:var(--accent)}
+@media(max-width:560px){.browser-batch-toolbar>button{font-size:11px}}
+
+/* Cloud folder revisions are E2EE. Show network ACK and conflicts explicitly. */
+.browser-folder-cloud{display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+  margin:11px 0 14px}
+.browser-folder-cloud .muted{flex:1;min-width:200px;font-size:12px}
+.browser-folder-cloud [data-testid=browser-folder-sync]{min-height:38px}
+
+/* P2 Browser: decryption and three-way comparison remain client-side. */
+.browser-merge-entry{margin:10px 0}
+.browser-merge-review{border:1px solid var(--outline);border-radius:10px;
+  padding:14px;margin:14px 0;display:grid;gap:12px}
+.browser-merge-review h3{margin:0}
+.browser-merge-conflict{display:grid;gap:8px;padding:12px;
+  background:var(--surface);border:1px solid var(--outline);border-radius:8px;
+  overflow-wrap:anywhere}
+.browser-merge-choices{display:flex;gap:12px;flex-wrap:wrap}
+.browser-merge-choices label{display:flex;align-items:flex-start;gap:7px;
+  min-width:180px;flex:1;overflow-wrap:anywhere;font-size:12px}
+.browser-merge-choices input{margin-top:3px;accent-color:var(--accent)}
+.browser-merge-actions{display:flex;gap:9px;flex-wrap:wrap}
+.browser-merge-backups{padding:12px 0;border-top:1px solid var(--outline);
+  display:grid;gap:9px}
+.browser-merge-backup{display:flex;align-items:center;
+  justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px}
+@media(max-width:600px){.browser-merge-choices{flex-direction:column}}
+
+/* Signed archive is a server lifecycle, not a local hidden checkbox. */
+.browser-archive-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0}
+.browser-archive-tabs button[aria-pressed=true]{border-color:var(--accent);font-weight:700}
+.browser-item-actions>span{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+
+/* Archive preferences: user intent never replaces operator/TTL safety gates. */
+.browser-archive-preferences{display:grid;gap:10px;margin:12px 0;
+  padding:14px;border:1px solid var(--outline);border-radius:10px}
+.browser-archive-preferences h2{margin:0;font-size:15px}
+.browser-archive-preferences label{display:flex;gap:9px;align-items:center;
+  font-size:13px;cursor:pointer}
+.browser-archive-preferences input[type=checkbox]{accent-color:var(--accent);
+  width:17px;height:17px;flex:0 0 auto}
+.browser-archive-preferences .muted{font-size:12px;margin:0}
+.browser-archive-pref-actions{display:flex;gap:10px;flex-wrap:wrap}
+.browser-archive-pref-actions button{min-height:38px}
+
+/*
+ * P2 V-41: owner-accepted File Viewer 1.0 geometry (PB2 PR #56 §1).
+ * The existing App.vue is the ONLY 64px header / 82px dock. This scene
+ * owns exactly 45px path / flexible media / 114px summary / 57px actions /
+ * 48px pager inside the already bounded shell main. Editors are in a
+ * separate sheet and cannot push the scene or global dock around.
+ */
+.shell-main-viewer{overflow:hidden;min-height:0}
+.shell-main-viewer .file-viewer{
+  position:relative;height:100%;width:100%;min-height:0;max-width:none;
+  padding:0;margin:0;overflow:hidden;background:#101110
+}
+.file-viewer-fixed{
+  height:100%;width:100%;min-height:0;min-width:0;display:grid;overflow:hidden;
+  grid-template-rows:45px minmax(0,1fr) 114px 57px 48px
+}
+.file-viewer-fixed .file-viewer-path{
+  display:flex;flex-wrap:nowrap;align-items:center;min-height:0;min-width:0;
+  gap:8px;padding:0 13px;margin:0;border:0;background:transparent
+}
+.file-viewer-fixed .file-viewer-back{
+  flex:0 0 38px;height:38px;display:grid;place-items:center;color:#ddd;
+  text-decoration:none;font-size:24px
+}
+.file-viewer-path-name{flex:1;min-width:0;overflow:hidden;white-space:nowrap;
+  text-overflow:ellipsis;color:#ddd;font-size:12px}
+.file-viewer-fixed .file-viewer-path button{
+  flex:0 0 auto;min-height:34px;padding:4px 8px;border:0;background:none;
+  font-size:12px;color:var(--accent)
+}
+.file-viewer-fixed .file-viewer-stage{
+  width:100%;height:100%;min-height:0;min-width:0;border:0;border-radius:0;
+  padding:0;overflow:hidden;background:#090b0b;position:relative
+}
+.file-viewer-fixed .file-viewer-stage:fullscreen{
+  width:100vw;height:100dvh;min-height:0;background:#000
+}
+.file-viewer-stage-fullscreen{
+  position:absolute;right:12px;top:12px;z-index:3;
+  width:37px;height:37px;min-height:37px!important;padding:0!important;
+  background:#191919c9!important;border:1px solid #666!important
+}
+.file-viewer-summary{
+  box-sizing:border-box;min-width:0;min-height:0;height:114px;
+  display:grid;grid-template-columns:minmax(0,1fr) auto;
+  grid-template-rows:23px 45px minmax(0,1fr);gap:0 8px;
+  padding:8px 14px 5px;overflow:hidden;background:#171717;
+  border-top:1px solid #2e2e2e;font-size:12px
+}
+.file-viewer-summary-name{min-width:0;font-size:15px;font-weight:760;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-viewer-summary-id{font:10px/22px ui-monospace,monospace;color:#aaa;white-space:nowrap}
+.file-viewer-summary-description{grid-column:1/-1;color:#bebebe;
+  line-height:18px;margin:3px 0 0;overflow:hidden;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.file-viewer-summary-dates{grid-column:1/-1;display:flex;gap:8px;
+  align-items:center;justify-content:space-between;overflow:hidden;
+  color:#c4c4c4;font-size:11px}
+.file-viewer-summary-dates span{white-space:nowrap;min-width:0;overflow:hidden;
+  text-overflow:ellipsis}
+.file-viewer-actions{
+  height:57px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;padding:5px 12px;background:#171717;min-width:0
+}
+.file-viewer-fixed .file-viewer-actions button{
+  min-width:0;min-height:0;height:47px;padding:0 3px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;border:0;border-radius:6px;
+  background:#292929;font-size:11px;font-weight:650
+}
+.file-viewer-fixed .file-viewer-actions button:disabled{
+  opacity:.55;cursor:not-allowed
+}
+.file-viewer-fixed .file-viewer-navigation{
+  box-sizing:border-box;height:48px;min-height:0;display:flex;align-items:center;
+  justify-content:center;gap:24px;padding:0;background:#171717
+}
+.file-viewer-fixed .file-viewer-navigation button{
+  min-height:40px;width:44px;height:40px;padding:0;border:0;
+  border-radius:0;background:transparent
+}
+.file-viewer-fixed .file-viewer-navigation span{
+  min-width:92px;font-variant-numeric:tabular-nums
+}
+.file-viewer-overlay{
+  position:absolute;z-index:30;inset:0;display:flex;align-items:flex-end;
+  justify-content:center;background:#000b;overflow:hidden
+}
+.file-viewer-sheet{
+  box-sizing:border-box;display:flex;flex-direction:column;
+  width:min(100%,960px);max-height:86%;min-height:145px;overflow:hidden;
+  background:#292929;color:#f4f4f4;border-radius:13px 13px 0 0;
+  border:1px solid #454545;border-bottom:0;box-shadow:0 -9px 40px #0009
+}
+.file-viewer-sheet-heading{
+  flex:0 0 54px;display:flex;align-items:center;justify-content:space-between;
+  gap:12px;padding:6px 16px;border-bottom:1px solid #454545
+}
+.file-viewer-sheet-heading h2{font-size:16px;line-height:1.3;margin:0}
+.file-viewer-sheet-heading button{min-height:36px;padding:6px 11px}
+.file-viewer-sheet-body{flex:1;min-height:0;overflow-y:auto;
+  overscroll-behavior:contain;padding:0 16px 22px}
+.file-viewer-editor-sections{display:grid;gap:0}
+.file-viewer-sheet .file-viewer-information{margin:0;max-width:100%}
+.file-viewer-feedback{
+  position:absolute;z-index:9;top:45px;left:8px;right:8px;max-height:42%;
+  overflow-y:auto;pointer-events:none;display:grid;gap:4px
+}
+.file-viewer-feedback>p,.file-viewer-feedback>button{
+  pointer-events:auto;justify-self:start;background:#222f;
+  border:1px solid #515151;border-radius:7px;padding:8px;margin:0;
+  font-size:11px;max-width:100%;overflow-wrap:anywhere
+}
+@media(max-width:480px){
+  .file-viewer-fixed .file-viewer-path{padding:0 8px;gap:4px}
+  .file-viewer-summary{padding-inline:11px}
+  .file-viewer-actions{padding-inline:8px}
+  .file-viewer-fixed .file-viewer-navigation{gap:10px}
+  .file-viewer-summary-name{font-size:14px}
+}
+@media(prefers-reduced-motion:no-preference){
+  .file-viewer-sheet{animation:viewer-sheet-enter .22s ease-out}
+  @keyframes viewer-sheet-enter{from{transform:translateY(20px);opacity:.72}
+    to{transform:translateY(0);opacity:1}}
+}
+
+/* P2 V-43: one contextual Header owned by App.vue, never a Viewer clone. */
+.viewer-header-actions{display:flex;align-items:center;gap:3px;
+  margin-left:auto;flex:0 0 auto}
+.viewer-header-actions button{
+  display:grid;place-items:center;width:34px;height:36px;min-width:0;
+  padding:0;border:0;border-radius:7px;background:transparent;color:#d7d7d7
+}
+.viewer-header-actions svg{width:20px;height:20px;stroke-linecap:round;
+  stroke-linejoin:round;flex:0 0 auto}
+.viewer-header-actions button:disabled{color:#777;opacity:.65}
+.viewer-header-actions button:not(:disabled):hover{background:#303a32;
+  color:var(--accent)}
+.viewer-header-actions button:focus-visible{outline:2px solid var(--accent);
+  outline-offset:2px}
+@media(max-width:420px){
+  .shell-header:has(.viewer-header-actions){padding-inline:8px;gap:5px}
+  .viewer-header-actions{gap:0}
+  .viewer-header-actions button{width:31px;height:36px}
+  .viewer-header-actions svg{width:19px;height:19px}
+}
+
+/* P2 V-45: Editor route reuses the Viewer E2EE instance and shared Shell;
+   all editing/navigation UI is inside the existing bounded Shell main. */
+.editor-header-actions{display:flex;align-items:center;justify-content:flex-end;
+  margin-left:auto;gap:8px;min-width:0}
+.editor-header-actions button{background:transparent;color:#eaeaea;
+  border:0;border-radius:6px;padding:8px 10px;font-size:12px;min-height:38px}
+.editor-header-actions .editor-shell-save{background:var(--accent);
+  color:#101810;font-weight:700;padding:9px 13px}
+.editor-header-actions .editor-shell-save:disabled{opacity:.45;cursor:not-allowed}
+.file-viewer-editor-route .file-viewer-fixed{opacity:0;pointer-events:none}
+.file-viewer-editor-route .file-viewer-overlay{
+  align-items:stretch;justify-content:center;background:#1d1d1d
+}
+.file-viewer-editor-route .file-viewer-sheet{
+  width:100%;max-width:none;max-height:none;min-height:0;height:100%;
+  border:0;border-radius:0;box-shadow:none;background:#1d1d1d
+}
+.file-editor-route-heading{flex:0 0 auto;min-width:0;background:#1d1d1d;
+  border-bottom:1px solid #303030}
+.file-editor-route-path{height:45px;display:flex;align-items:center;gap:10px;
+  padding:0 13px;color:#bec5be}
+.file-editor-route-path button{width:36px;height:36px;flex:0 0 auto;
+  border:0;background:transparent;color:#ddd;font-size:25px;padding:0}
+.file-editor-route-path span{white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;font-size:12px;min-width:0}
+.file-editor-route-heading h1{font-size:19px;line-height:42px;font-weight:750;
+  height:42px;margin:0;padding:0 16px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.file-editor-route-tabs{height:45px;display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;padding:0 12px}
+.file-editor-route-tabs button{border:0;border-bottom:2px solid transparent;
+  background:transparent;color:#aaa;border-radius:0;min-width:0;
+  padding:5px 4px;font-size:12px;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.file-editor-route-tabs button[aria-current=page]{
+  color:var(--accent);border-bottom-color:var(--accent);font-weight:750
+}
+.file-viewer-editor-route .file-viewer-sheet-body{
+  flex:1;min-height:0;padding:6px 16px 26px;overflow-y:auto;
+  overscroll-behavior:contain;scrollbar-gutter:stable
+}
+.file-viewer-editor-route .file-viewer-editor-sections{max-width:960px;margin:0 auto}
+.file-editor-source{display:flex;align-items:center;justify-content:center;
+  width:100%;min-height:135px;max-width:100%;background:#080a09;border-radius:9px;
+  padding:8px;margin:12px auto 16px;overflow:hidden}
+.file-editor-source img,.file-editor-source video{
+  display:block;max-width:100%;max-height:min(44dvh,360px);
+  width:auto;height:auto;object-fit:contain;user-select:none
+}
+.file-editor-source audio{width:100%;max-width:680px;margin:28px 0}
+.file-viewer-editor-route .file-viewer-information{max-width:900px;margin:auto}
+.file-editor-review{padding:20px 0;max-width:900px;margin:0 auto}
+.file-editor-review h2{font-size:16px;margin:0 0 16px}
+.file-editor-review p{font-size:12px;line-height:1.5;color:#c9c9c9}
+.file-editor-review-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;margin:20px 0}
+.file-editor-review-controls button{min-height:42px}
+@media(max-width:430px){
+  .editor-header-actions{gap:4px}
+  .editor-header-actions button{padding:8px 6px;font-size:11px}
+  .editor-header-actions .editor-shell-save{padding:8px 9px}
+  .file-editor-route-heading h1{font-size:17px}
+  .file-viewer-editor-route .file-viewer-sheet-body{padding:6px 10px 20px}
+}
+@media(prefers-reduced-motion:reduce){
+  .file-viewer-editor-route *{scroll-behavior:auto;transition:none;animation:none}
+}
+
+/* P2 V-46: video trim is a bounded in-memory EDL, never MP4 output. */
+.file-editor-video-trim{display:grid;gap:10px;background:var(--surface);
+  padding:15px;margin:14px 0;border:1px solid var(--outline);border-radius:10px}
+.file-editor-video-trim h2{margin:0;font-size:16px}
+.file-editor-video-trim p{margin:0;font-size:12px;line-height:1.5}
+.file-editor-video-trim-controls{display:grid;gap:12px;
+  grid-template-columns:repeat(2,minmax(0,1fr))}
+.file-editor-video-trim-controls label{display:grid;gap:8px;min-width:0;
+  font-size:12px;color:#ddd}
+.file-editor-video-trim-controls input[type=range]{
+  accent-color:var(--accent);width:100%;min-width:0}
+.file-editor-video-trim-actions{display:flex;flex-wrap:wrap;gap:8px}
+.file-editor-video-trim-actions button{min-height:39px}
+@media(max-width:530px){
+  .file-editor-video-trim-controls{grid-template-columns:1fr}
+  .file-editor-video-trim-actions button{flex:1 1 130px}
+}
+
+/* P2 V-47: private Info tab is a new encrypted PERSONAL copy only, never
+   an unsigned mutation of an assignment-bound/remote MediaFile. */
+.file-editor-private-copy{display:grid;gap:10px;padding:16px;
+  margin:12px auto 20px;max-width:900px;border-radius:10px;
+  border:1px solid var(--outline);background:var(--surface);
+  box-sizing:border-box;min-width:0}
+.file-editor-private-copy h2{font-size:16px;margin:0;font-weight:750}
+.file-editor-private-copy p{font-size:12px;line-height:1.55;margin:2px 0 7px}
+.file-editor-private-copy label,.file-editor-private-tag-label{
+  display:block;font-size:12px;font-weight:650;color:#e5e5e5}
+.file-editor-private-copy input,.file-editor-private-copy textarea{
+  box-sizing:border-box;width:100%;min-width:0;resize:vertical;
+  border:1px solid #555;border-radius:7px;background:#181818;
+  color:#eee;padding:10px 12px;font:13px/1.4 inherit;min-height:41px}
+.file-editor-private-copy input:focus-visible,
+.file-editor-private-copy textarea:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px}
+.file-editor-private-tags{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.file-editor-private-tag{display:inline-flex;align-items:center;
+  border:1px solid #37774c;background:#192e23;
+  border-radius:8px;max-width:100%;overflow:hidden}
+.file-editor-private-tag button{border:0;color:#b5f1cb;background:none;
+  min-height:34px;padding:4px 9px;font-size:11px;max-width:220px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-editor-private-tag button+button{font-size:18px;padding:1px 9px;
+  border-left:1px solid #356445}
+.file-editor-private-copy .file-editor-add-tag{min-height:34px;
+  padding:5px 11px}
+.file-editor-private-tag-form{display:grid;gap:9px;padding:10px 0}
+.file-editor-private-tag-form>div{display:flex;gap:8px}
+.file-editor-private-tag-form button{min-height:37px;padding:7px 12px}
+@media(max-width:480px){
+  .file-editor-private-copy{margin:8px 0;padding:12px}
+  .file-editor-private-tag button{max-width:175px}
+}
+
+/* P2 V-48: selected aspect is applied to authenticated JPEG raster pixels
+   via cropGeometry, never a CSS-only image aspect transform. */
+.file-viewer-photo-aspects{
+  display:flex;flex-wrap:wrap;align-items:center;gap:7px;
+  margin:12px 0 14px
+}
+.file-viewer-photo-aspects>span{
+  flex:0 0 100%;font-size:12px;font-weight:700;color:#dfdfdf
+}
+.file-viewer-photo-aspects button{
+  min-width:67px;min-height:37px;border-radius:7px;padding:6px 10px;
+  border:1px solid #484848;background:#292929;color:#ddd;font-size:12px
+}
+.file-viewer-photo-aspects button[aria-pressed="true"]{
+  color:var(--accent);border-color:var(--accent);background:#203328
+}
+.file-viewer-photo-rotate-controls{display:flex;gap:9px;
+  align-items:center;justify-content:flex-start;margin:10px 0 15px}
+.file-viewer-photo-rotate-controls button{min-height:38px;padding:7px 14px}
+.file-viewer-photo-rotate-controls span{min-width:98px;text-align:center;
+  font-size:12px;color:#ccc;font-variant-numeric:tabular-nums}
+@media(max-width:420px){
+  .file-viewer-photo-aspects{gap:5px}
+  .file-viewer-photo-aspects button{flex:1 1 65px;min-width:0;padding:6px 3px}
+  .file-viewer-photo-rotate-controls button{flex:1}
+}
+
+/* V-49: the typed draft is volatile and never an exportable JPEG annotation
+   until committed. Keep input above draw, shape, label and blackout layers. */
+.file-viewer-photo-composition>img.file-viewer-photo-text-target{cursor:text}
+.file-viewer-photo-inline-input{
+  position:absolute;z-index:8;display:grid;gap:5px;box-sizing:border-box;
+  width:min(220px,85%);min-width:0;max-height:90%;overflow:visible;
+  padding:5px;background:#181d1b;border:1px solid var(--accent);
+  border-radius:7px;box-shadow:0 6px 22px #000a;line-height:normal
+}
+.file-viewer-photo-inline-input.align-end{transform:translateX(-100%)}
+.file-viewer-photo-inline-input textarea{
+  width:100%;min-height:58px;max-height:112px;resize:vertical;
+  padding:7px 8px;box-sizing:border-box;border:1px solid #566e60;
+  border-radius:5px;background:#101510;color:#f5f5f5;
+  font:700 13px/1.3 Arial,sans-serif;overflow-wrap:anywhere
+}
+.file-viewer-photo-inline-actions{display:flex;gap:6px}
+.file-viewer-photo-inline-actions button{
+  flex:1;min-height:33px;font-size:11px;padding:5px 8px
+}
+.file-viewer-photo-inline-actions button:first-child{
+  border:1px solid var(--accent);color:var(--accent)
+}
+@media(max-width:430px){
+  .file-viewer-photo-inline-input{width:min(195px,92%)}
+  .file-viewer-photo-inline-input textarea{font-size:12px}
+}
+
+/* P2 V-50: five approved shape tools on ONE row on phone and desktop.
+   The existing PhotoShapeMark drives the overlay AND encrypted JPEG raster. */
+.file-viewer-shape-choices{
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
+  width:100%;min-width:0;gap:6px;margin:11px 0 14px
+}
+.file-viewer-shape-choice{
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;min-width:0;min-height:59px;
+  padding:5px 2px;border:1px solid #515151;border-radius:8px;
+  background:#252525;color:#ebebeb;cursor:pointer
+}
+.file-viewer-shape-choice[aria-pressed="true"]{
+  border-color:var(--accent);background:#1d3425;color:var(--accent)
+}
+.file-viewer-shape-choice:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+.file-viewer-shape-glyph{font-size:23px;line-height:24px;font-weight:700}
+.file-viewer-shape-label{font-size:10px;line-height:1.2;max-width:100%;
+  overflow-wrap:anywhere;text-align:center}
+.file-viewer-shape-setting-row{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:center;gap:10px;min-width:0;margin:9px 0 13px
+}
+.file-viewer-shape-setting-row>label{
+  display:grid;gap:6px;min-width:0;font-size:12px
+}
+.file-viewer-shape-setting-row input[type=color]{
+  width:47px;min-width:47px;height:37px;border-radius:5px
+}
+.file-viewer-shape-setting-row input[type=range]{
+  width:100%;min-width:0;accent-color:var(--accent)
+}
+.file-viewer-shape-setting-row .file-viewer-shape-filled{
+  display:flex!important;flex-direction:row;justify-content:flex-end;
+  align-items:center;min-height:37px;gap:11px;white-space:normal
+}
+.file-viewer-shape-geometry>label:first-child{grid-column:auto}
+@media(max-width:430px){
+  .file-viewer-shape-choices{gap:4px}
+  .file-viewer-shape-choice{min-height:60px;padding:4px 1px}
+  .file-viewer-shape-glyph{font-size:21px}
+  .file-viewer-shape-label{font-size:9px}
+  .file-viewer-shape-setting-row{gap:8px}
+}
+@media(prefers-reduced-motion:reduce){
+  .file-viewer-shape-choice{transition:none}
+}
+
+/* P2 V-51: owner-selected three icon tools on one row; the SAME production
+   PhotoStroke model still drives Canvas ink, eraser and encrypted JPEG. */
+.file-viewer-photo-draw-tools{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;width:100%;min-width:0;margin:4px 0 7px
+}
+.file-viewer-photo-draw-tools button{
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:5px;min-width:0;min-height:62px;
+  padding:7px 4px;border:1px solid #515151;border-radius:8px;
+  color:#e8e8e8;background:#292929;font-size:11px;
+  line-height:1.2;cursor:pointer;white-space:normal
+}
+.file-viewer-photo-draw-tools button svg{
+  display:block;flex:0 0 auto;width:23px;height:23px
+}
+.file-viewer-photo-draw-tools button.selected,
+.file-viewer-photo-draw-tools button[aria-pressed="true"]{
+  border-color:var(--accent);background:#1d3425;color:var(--accent)
+}
+.file-viewer-photo-draw-tools button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+.file-viewer-photo-text-editor .file-viewer-photo-paint-settings{
+  display:flex;align-items:flex-start;flex-wrap:nowrap;
+  box-sizing:border-box;gap:12px;width:100%;max-width:100%;min-width:0
+}
+.file-viewer-photo-text-editor .file-viewer-photo-paint-settings>label:first-child{
+  grid-column:auto;flex:0 0 76px;max-width:76px
+}
+.file-viewer-photo-text-editor .file-viewer-photo-paint-settings>label:last-child{
+  flex:1 1 0;width:0;min-width:0;max-width:100%
+}
+.file-viewer-photo-paint-settings>label{
+  display:flex;flex-direction:column;align-items:stretch;
+  box-sizing:border-box;gap:5px;min-width:0;font-size:12px
+}
+.file-viewer-photo-paint-settings input[type="color"]{
+  width:46px;height:37px;max-width:100%
+}
+.file-viewer-photo-paint-settings input[type="range"]{
+  display:block;box-sizing:border-box;width:100%;max-width:100%;
+  min-width:0;margin:0;padding:0;accent-color:var(--accent)
+}
+@media(max-width:430px){
+  .file-viewer-photo-draw-tools{gap:5px}
+  .file-viewer-photo-draw-tools button{min-height:60px;padding:6px 3px}
+  .file-viewer-photo-text-editor .file-viewer-photo-paint-settings{gap:8px}
+}
+@media(prefers-reduced-motion:reduce){
+  .file-viewer-photo-draw-tools button{transition:none}
+}
+
+/* P2 V-52: owner-selected "Цвет + Размер" in ONE row below the
+   caption list. Isolated from generic mobile 1-column text form. */
+.file-viewer-photo-text-editor .file-viewer-photo-text-properties{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  min-width:0;max-width:100%;gap:10px
+}
+.file-viewer-photo-text-properties>label:first-child{
+  grid-column:1/-1
+}
+.file-viewer-photo-text-color-size{
+  grid-column:1/-1;
+  display:flex;align-items:flex-start;flex-wrap:nowrap;
+  box-sizing:border-box;gap:12px;width:100%;max-width:100%;min-width:0
+}
+.file-viewer-photo-text-color-size>label{
+  display:flex;flex-direction:column;align-items:stretch;
+  box-sizing:border-box;gap:5px;min-width:0;font-size:12px
+}
+.file-viewer-photo-text-color-size>label:first-child{
+  grid-column:auto;flex:0 0 76px;max-width:76px
+}
+.file-viewer-photo-text-color-size>label:last-child{
+  flex:1 1 0;width:0;min-width:0;max-width:100%
+}
+.file-viewer-photo-text-color-size input[type="color"]{
+  box-sizing:border-box;width:46px;height:37px;max-width:100%
+}
+.file-viewer-photo-text-color-size input[type="range"]{
+  display:block;box-sizing:border-box;
+  width:100%;max-width:100%;min-width:0;margin:0;padding:0;
+  accent-color:var(--accent)
+}
+@media(max-width:430px){
+  .file-viewer-photo-text-color-size{gap:8px}
+}

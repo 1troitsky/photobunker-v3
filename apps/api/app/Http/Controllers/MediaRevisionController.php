@@ -137,6 +137,11 @@ final class MediaRevisionController extends Controller
                 abort_unless($m&&$m->account_id===$account->id,404);
                 abort_if($m->state!=='active'
                     ||$m->expires_at<=PhotoSync::nowMs(),410);
+                // Archive must not be bypassed through a new revision link,
+                // including old root/head with a new ciphertext version.
+                abort_if(DB::table('browser_archive_entries_v1')
+                    ->where('kind','media')->where('asset_id',$m->id)
+                    ->whereIn('state',['archived','deleting'])->exists(),410);
             }
             $root=$records->get($c['rootMediaId']);
             $head=$records->get($c['previousMediaId']);

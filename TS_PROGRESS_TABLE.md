@@ -1,25 +1,25 @@
+# PB3 — единственная таблица прогресса
 
-# Единственная таблица прогресса
+**Срез 13.11.2026.** Проценты не используются: реализация, тестирование и приёмка — разные состояния. `main` проверен по удалённому SHA: **`da7327b8c9c440dae3dc864b3245b9f9f4ad14eb`**. Ошибочный merge #290 (`9160cbf1…`) в нём **не достижим**, несмотря на GitHub `merged`.
 
-Оценки ниже — **грубые ориентиры реализации функционала**, округлённые до 5–10%, а не измеренная релизная готовность. Они основаны на проверке `main`, открытых PR и доступных результатов тестов **11.11.2026**; обновляй после **крупного блока**, а не после каждого PR. Не повышай процент только за макет, документацию или непроверенный код. Если фактов недостаточно, укажи «?», а не придумывай число.
+Одна изолированная ветка `integration/global-acceptance-20261113` сохраняет #290 **`f4bce2e1…`** и его историю, переносит только clock-margin #63 с новыми Safe/ACL ceilings и обновляет 5 уязвимых Symfony patch-версий. #292 / Matrix / альтернативный GPS #262 не добавлены. Отдельного разрешения на merge main нет.
 
-| Модуль | Готовность | Что уже есть | Что ещё нужно | Приоритет |
-|---|---:|---|---|---|
-| Ядро: Identity / E2EE / Local-First / Recovery | ≈60% | P0/P1 в `main`; signed identity, шифрование, восстановление | Независимо проверить ротацию Matrix escrow из #79; сквозные device-сценарии | Высокий |
-| Shell / Dock / Навигация / Адаптивность | ≈45% | Базовый Vue shell; Messages UI и Dock в P2 Draft | Полный утверждённый UX и проверка на устройствах | Средний |
-| Камера: фото / видео / аудио / GPS | ≈40% | Браузерный capture и контракты метаданных | Полнота видео/аудио, нативные разрешения, GPS и UX | Средний |
-| Browser / Каталог / Импорт / Синхронизация / Обмен | ≈35% | Photo browser, медиа-импорт, outbox и grants | Полный каталог, массовые операции, обмен, end-to-end UX | Средний |
-| Просмотр / Редактирование / Версии файлов | ≈20% | Media revisions и базовые панели | Полноценные viewer и редакторы фото/видео/аудио | Средний |
-| Задания / Fieldwork / Участники | ≈65% | P1 signed policies, сроки, участники, media submission | Полные пользовательские сценарии и приёмка UI | Высокий |
-| Контакты / Команды / Роли | ≈70% | P1 Teams в `main`, независимый аудит 74/74 | Финальный UX, реальные устройства, сквозные сценарии | Средний |
-| Messenger / Matrix | ≈45% | Draft #64–#80: UI, RustCrypto, 4S, outbox; CI на #80 PASS | Ретест escrow; реальный A→B/SAS/QR, revoke/Panic, гонки | **Сейчас** |
-| PIN / Emergency / Dead Man’s Switch / Безопасность | ≈15% | Часть защитных контрактов; PB3 revoke в Draft #80 | Экстренный PIN, Panic, Matrix remote revoke, DMS | Высокий |
-| Профиль / Настройки / Уведомления | ≈15% | Базовый Account UI, настройки Dock в Draft | Полная функциональность и утверждённые экраны | Средний |
-| Storage Manager / S3 / Репликация / Backup | ≈20% | Garage и базовый Storage Manager | BYO S3, резервная реплика, backup/restore | Позже |
-| Тарифы / Квоты / Оплата | ≈10% | Требования и часть квот заданий | Полные тарифы, биллинг, ограничения, оплата | Позже |
-| Administration / Analytics | ≈5% | Требования в `ts.md` | Панель, приватная аналитика, управление | Позже |
-| PWA / Кроссбраузерность / Производительность / Релиз | ≈20% | Vite, Chromium CI, PWA build-путь | Safari/iOS/Android, подписанный SW, release-gates | Перед релизом |
+| Направление | Проверенный результат текущей интеграционной ветки | Осталось / статус полной функции |
+|---|---|---|
+| Git / интеграция | 198 PR проверены; 189 открытых: 40 уже main, 92 в истории #290, 14 content-equivalent | 43 divergent/evolved разобраны; только #63 требует узкого переноса; не сливать старые heads повторно |
+| Identity / Recovery / E2EE | Реальные registration, Recovery Key A→B, negative identity, ciphertext/readback, тёплый offline | Browser Recovery Key rotation / full remote revoke не приняты; cold offline shell BLOCKED |
+| Camera / GPS | Выбран #263; отрицательные #258 сохранены; JPEG / AV и GPS consent regression покрыты | Реальные сенсоры / iOS / Android NOT TESTED; AV cap 175s против 300/3000s спецификации |
+| Browser / Viewer / редакторы | Реальные E2EE media, поиск 10k, пагинация, WAV trim, JPEG canvas/маски, Safe ACL, навигация | MP4 export и все codec/mobile/long-recording сценарии не приняты |
+| Assignments / Contacts / Teams | Подписанные политики, multi-account ACL, grants/revoke; 5/5 настоящих PG quota races | Окончательная owner UX acceptance / native permissions NOT TESTED |
+| StorageManager / Garage | Реальный S3 outage/restart, новые worker / Lost ACK, SHA readback, tombstones; непустой main→HEAD upgrade сохраняет данные | BYO / replicas / failover отсутствуют; production cleanup не включён |
+| Billing / limits / TTL | 5 immutable plans; signed admission и synthetic paid/downgrade tests; clock-margin #63 восстановлен | Реальная оплата NOT TESTED; Unlimited renew / grace / backup-aware GC #203 BLOCKED |
+| Messages / Matrix | В #290 Messages route отсутствует; #292 отдельно: CI 83/85, 2 FAIL Dock | Не интегрировать автоматически; Matrix A↔B / SAS / QR / escrow / Panic отдельно BLOCKED |
+| Settings / Dock / Profile | Реальные Settings / Appearance / поиск / Dock, desktop и 2 mobile viewport | Финальный Profile, полный доступный Dock 6, физический телефон NOT TESTED |
+| Notifications / Help | Есть isolated local-inbox / Help contracts и unit tests | Нет подключённых Notifications/delivery/push; Help component не означает готовый маршрут |
+| Backup / Panic / DMS | Только backup admission/cooldown primitives | Snapshot restore, Emergency, Panic / DMS / remote wipe BLOCKED |
+| Admin / Analytics / Events | Проверенные чистые RBAC/MFA / metadata / telemetry contracts | Production MFA, маршруты, аудит операций и доставка не реализованы полностью |
+| PWA / release security | 32/32 unsigned integrity tests; Composer 8 matches → 0 после 5 patch updates; pnpm production audit 0 | Independent trust anchor / signed activation / cold offline bootstrap BLOCKED; Safari automation disabled |
 
-**Последнее обновление:** 11.11.2026.  
-**Текущий этап:** **P2 — Matrix Messenger**; `main @ a8abcc55`, продуктовая цепочка Draft #64 → #75 → #78 → #79 → **#80** (`97d73fff`); QA-only #77.  
-**Комментарий:** #80 прошёл 4/4 CI, но **P2 НЕ ПРИНЯТ**. После выявленных в #77 escrow 409 и Vite 404 созданы исправления #78–#79; теперь нужен независимый ретест реальной Recovery Key rotation на #79/#80, затем полная проверка A→B, доверия, Lost ACK и remote revoke/Panic. PB3 revoke из #80 **не** отзывает Matrix bearer. Новые чаты должны сначала проверять, не появились ли последующие PR/результаты, а затем продолжать без лишней остановки.
+**Локальные проверки:** PHP8.4.27 и PHP8.5.12 — 245/245 каждая; Vitest449/449, TS/build, PostgreSQL18.6/Garage2.5 и 5 quota races PASS. Финальный Chromium/CI и точный commit фиксируются в [едином QA-отчёте](docs/audits/PB3-GLOBAL-INTEGRATION-20261113.md) и в [Final validation PR #293](https://github.com/1troitsky/photobunker-v3/pull/293).
+
+**Решение:** кодовая сборка для review, не заявление готовности PB3/P4 к релизу. `main` не обновлять без отдельной команды владельца. Подробные evidence, полный PR inventory и blocker matrix находятся в отчёте.

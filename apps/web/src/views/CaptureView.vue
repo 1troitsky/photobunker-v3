@@ -6,10 +6,11 @@ import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
 import { enqueueEncryptedMedia } from '../features/media/application/media-outbox'
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
 import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
-import type { GPSFix } from '../features/photo-sync/domain/capture-metadata'
+import { normalizeGPS, type GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../features/assignments/domain/advanced-rules'
 import {
-  listServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
+  listAllServerAssignments, listVerifiedCapturePolicies, signedCaptureBinding,
+  assertNoVerifiedAssignmentRemoval,
   signedMediaCaptureIntent,signedAllowedAssignmentMedia,
   signedPolicyRequirements,signedMediaRequirements,signedAdvancedRequirements,
   readCachedPrivateAssignment,assignmentPrivateCacheScope,verifySignedAssignmentPolicy,
@@ -39,6 +40,9 @@ const visiblePrivateInstructions=computed(()=>{
 })
 let instructionGeneration=0
 const captureMode=ref<'photo'|'video'|'audio'>('photo')
+// Explicit migration path; legacy P1 photo remains the default until P2
+// camera/photo cross-account release is accepted by the product owner.
+const photoStorage=ref<'p1'|'p2'>('p1')
 const currentMediaInstruction=computed(()=>{
   const value=visiblePrivateInstructions.value
   if(!canCaptureType.value||value?.version!==2)return ''
@@ -112,7 +116,10 @@ const privateTags=ref('')
 const gps=ref<GPSFix|null>(null)
 const gpsLoading=ref(false)
 const gpsError=ref('')
+let captureContextGeneration=0
 let gpsAttempt=0
+let gpsPermission:PermissionStatus|null=null
+let cancelGPSRequest:(()=>void)|null=null
 const policyNotice=ref('')
 const policyLoading=ref(false)
 let refreshAgain=false
@@ -126,7 +133,7 @@ async function refreshPolicies():Promise<void> {
   policyNotice.value=''
   try{
     if(session.online && navigator.onLine){
-      try{await listServerAssignments()}
+      try{await listAllServerAssignments()}
       catch{if(ownsCamera(identity,generation))policyNotice.value='Не удалось обновить политики. Используются ранее проверенные.'}
     }
     const found=await listVerifiedCapturePolicies()
@@ -251,37 +258,112 @@ async function startCamera():Promise<void> {
       &&activeSession.value && !stream.value)void nextTick().then(startCamera)
   }
 }
+// Coordinates and consent are volatile and owned by one explicit request.
+// Permissions API reads never prompt; unsupported/failed reads cannot authorize
+// reusing a fix at shutter. No background location watcher is installed.
+async function readGPSPermission():Promise<PermissionStatus|null>{
+  if(!navigator.permissions?.query)return null
+  let timer:ReturnType<typeof setTimeout>|undefined
+  try{
+    return await Promise.race([
+      navigator.permissions.query({name:'geolocation'}),
+      new Promise<null>(resolve=>{timer=setTimeout(()=>resolve(null),1000)}),
+    ])
+  }catch{return null}
+  finally{if(timer!==undefined)clearTimeout(timer)}
+}
 function clearGPS():void {
   gpsAttempt++
+  if(gpsPermission)gpsPermission.onchange=null
+  gpsPermission=null
+  cancelGPSRequest?.();cancelGPSRequest=null
   gps.value=null
   gpsLoading.value=false
   gpsError.value=''
 }
 async function obtainGPS():Promise<void>{
+  // Clear BEFORE requesting, including missing identity/API and pending prompts.
+  clearGPS()
   const current=activeSession.value
   if(!current){gpsError.value='Сначала создайте или восстановите аккаунт';return}
   if(!navigator.geolocation){gpsError.value='Геолокация недоступна';return}
   const generation=cameraGeneration,identity=cameraIdentity(current)
-  const attempt=++gpsAttempt
-  gpsLoading.value=true;gpsError.value=''
+  const attempt=gpsAttempt
+  const owns=()=>attempt===gpsAttempt&&ownsCamera(identity,generation)
+  gpsLoading.value=true
   try{
-    // Explicit user action only. Never start a background location watcher.
+    const permission=await readGPSPermission()
+    if(!owns())return
+    gpsPermission=permission
+    if(permission)permission.onchange=()=>{
+      if(owns()&&permission.state!=='granted'){
+        clearGPS();gpsError.value='camera.gps_permission_required'
+      }
+    }
+    // Only this explicit user action can prompt. A native success provides the
+    // fix; freshness and live consent are independently checked at shutter.
     const point=await new Promise<GeolocationPosition>((resolve,reject)=>{
-      navigator.geolocation.getCurrentPosition(resolve,reject,{
-        enableHighAccuracy:true,maximumAge:0,timeout:12000,
-      })
+      const timer=setTimeout(()=>reject(Error('camera.gps_unavailable')),12000)
+      const cancel=()=>{finish();reject(Error('camera.gps_cancelled'))}
+      const finish=()=>{
+        clearTimeout(timer)
+        if(cancelGPSRequest===cancel)cancelGPSRequest=null
+      }
+      cancelGPSRequest=cancel
+      try{
+        navigator.geolocation.getCurrentPosition(
+          point=>{finish();resolve(point)},failure=>{finish();reject(failure)},
+          {enableHighAccuracy:true,maximumAge:0,timeout:12000},
+        )
+      }catch(e){finish();reject(e)}
     })
-    if(attempt!==gpsAttempt||!ownsCamera(identity,generation))return
-    gps.value={
+    if(!owns())return
+    const fix={
       latitude:point.coords.latitude,longitude:point.coords.longitude,
       accuracyMeters:point.coords.accuracy,recordedAt:Math.round(point.timestamp),
     }
+    if(permission?.state!=='granted'){
+      // A queued native callback cannot resurrect a fresh fix after silent
+      // withdrawal. Preserve the existing QA stale-provider display/error
+      // contract: invalid fixes still fail normalizeGPS at shutter, never save.
+      try{normalizeGPS(fix,Date.now())}
+      catch{gps.value=fix;return}
+      clearGPS();gpsError.value='camera.gps_permission_required';return
+    }
+    gps.value=fix
   }catch(e){
-    if(attempt===gpsAttempt&&ownsCamera(identity,generation))
+    if(owns()){
+      clearGPS()
       gpsError.value=e instanceof Error?e.message:'camera.gps_unavailable'
+    }
   }finally{
     if(attempt===gpsAttempt)gpsLoading.value=false
   }
+}
+async function consentedGPS(fix:GPSFix|null,attempt:number,at:number):Promise<GPSFix|null>{
+  if(!fix)return null
+  // Keep the existing stale/range safety gate even if consent also expired.
+  normalizeGPS(fix,at)
+  const permission=await readGPSPermission()
+  if(attempt!==gpsAttempt||gps.value!==fix)return null
+  if(permission?.state!=='granted'){
+    clearGPS();gpsError.value='camera.gps_permission_required'
+    return null
+  }
+  if(gpsPermission!==permission){
+    if(gpsPermission)gpsPermission.onchange=null
+    gpsPermission=permission
+    permission.onchange=()=>{
+      if(attempt===gpsAttempt&&permission.state!=='granted'){
+        clearGPS();gpsError.value='camera.gps_permission_required'
+      }
+    }
+  }
+  return fix
+}
+function assertGPSConsent(fix:GPSFix|null,attempt:number):void{
+  if(fix&&(attempt!==gpsAttempt||gps.value!==fix
+    ||gpsPermission?.state!=='granted'))throw Error('camera.gps_consent_changed')
 }
 function mediaMime(kind:'video'|'audio'):string{
   if(typeof MediaRecorder==='undefined')throw Error('camera.recorder_unavailable')
@@ -295,8 +377,13 @@ function mediaMime(kind:'video'|'audio'):string{
 async function beginRecording():Promise<void>{
   const mode=captureMode.value
   const identity=streamIdentity,generation=cameraGeneration
+  const contextGeneration=captureContextGeneration
   if(mode==='photo'||recording.value||busy.value||!canCaptureType.value
     ||!stream.value||!ownsCamera(identity,generation))return
+  const assertOwner=()=>{
+    if(!ownsCamera(identity,generation)||contextGeneration!==captureContextGeneration
+      ||captureMode.value!==mode)throw Error('camera.identity_changed')
+  }
   busy.value=true;error.value='';message.value=''
   try{
     const required=route.query.assignmentId
@@ -305,10 +392,13 @@ async function beginRecording():Promise<void>{
     const startedAt=Date.now()
     // Snapshot values BEFORE recording. Both policy preflight and AES-GCM
     // metadata encryption use these values, never mutable form state.
+    const gpsAtStart=gpsAttempt
     const privateFields={
       category:category.value,description:description.value,gps:gps.value,
       tags:parseRulesCsv(privateTags.value,12,48),
     }
+    privateFields.gps=await consentedGPS(privateFields.gps,gpsAtStart,startedAt)
+    assertOwner()
     // Snapshot verified owner policy BEFORE acquiring any recording bytes.
     // MediaFile v1 stays opaque; an independent account-signed capture
     // sidecar will later bind its exact ciphertext manifest digest.
@@ -316,9 +406,10 @@ async function beginRecording():Promise<void>{
       ?await signedMediaCaptureIntent(
         selectedAssignment.value,mode,startedAt,privateFields)
       :undefined
-    if(!ownsCamera(identity,generation)||captureMode.value!==mode
-      ||(intent&&selectedAssignment.value!==intent.assignmentId))
-      throw Error('camera.identity_changed')
+    assertOwner()
+    if(intent&&selectedAssignment.value!==intent.assignmentId)
+      throw Error('camera.capture_context_changed')
+    assertGPSConsent(privateFields.gps,gpsAtStart)
     const mime=mediaMime(mode)
     const streamRef=stream.value
     if(!streamRef)throw Error('camera.stream_unavailable')
@@ -363,12 +454,18 @@ async function beginRecording():Promise<void>{
         cameraWanted=false
       }
       void (async()=>{
-        if(!ownsCamera(identity,generation)||captureMode.value!==mode
+        if(!ownsCamera(identity,generation)||contextGeneration!==captureContextGeneration
+          ||captureMode.value!==mode
           ||(intent&&selectedAssignment.value!==intent.assignmentId))return
         busy.value=true
         try{
           if(bytes<128||bytes>MAX_MEDIA_BYTES)
             throw Error('media.invalid_size')
+          // A formerly valid signed recording claim must not outlive a
+          // newly verified local removal while MediaRecorder was active.
+          if(token.intent)
+            await assertNoVerifiedAssignmentRemoval(token.intent.assignmentId)
+          if(!ownsCamera(identity,generation))return
           const finishedAt=Date.now()
           if(finishedAt<=startedAt||finishedAt-startedAt>recordLimitMs+2000)
             throw Error('camera.recording_duration_invalid')
@@ -379,7 +476,17 @@ async function beginRecording():Promise<void>{
             {type:mime,lastModified:startedAt})
           const capture:MediaCaptureIntent|undefined=intent
             ?{...intent,finishedAt}:undefined
-          const id=await enqueueEncryptedMedia(file,capture,token.privateFields)
+          if(token.privateFields.gps&&await consentedGPS(
+            token.privateFields.gps,gpsAtStart,startedAt)!==token.privateFields.gps)
+            throw Error('camera.gps_consent_changed')
+          const assertCurrent=()=>{
+            assertOwner()
+            if(intent&&selectedAssignment.value!==intent.assignmentId)
+              throw Error('camera.capture_context_changed')
+            assertGPSConsent(token.privateFields.gps,gpsAtStart)
+          }
+          assertCurrent()
+          const id=await enqueueEncryptedMedia(file,capture,token.privateFields,assertCurrent)
           if(!ownsCamera(identity,generation))return
           message.value='Запись зашифрована и сохранена локально: '+id.slice(0,8)
         }catch(e){
@@ -417,13 +524,28 @@ function closeCamera():void {
 async function capture():Promise<void> {
   const v=video.value
   const identity=streamIdentity,generation=cameraGeneration
+  const contextGeneration=captureContextGeneration
   if(busy.value||starting.value||!v||!stream.value||!ownsCamera(identity,generation)
     ||v.videoWidth<1||v.videoHeight<1)return
   const assertOwner=()=>{
-    if(!cameraWanted||!ownsCamera(identity,generation))throw new Error('camera.identity_changed')
+    if(!cameraWanted||!ownsCamera(identity,generation)
+      ||contextGeneration!==captureContextGeneration)throw new Error('camera.identity_changed')
   }
+  const assignmentAtCapture=selectedAssignment.value
+  const storageAtCapture=photoStorage.value
+  const startedAt=Date.now()
   busy.value=true;error.value='';message.value=''
   try{
+    if(captureMode.value!=='photo')throw Error('camera.photo_mode_changed')
+    // Snapshot private fields at shutter click, before asynchronous JPEG
+    // rendering. User edits during toBlob cannot silently change evidence.
+    const gpsAtStart=gpsAttempt
+    const privateFields={
+      category:category.value,description:description.value,gps:gps.value,
+      tags:parseRulesCsv(privateTags.value,12,48),
+    }
+    privateFields.gps=await consentedGPS(privateFields.gps,gpsAtStart,startedAt)
+    assertOwner()
     const ratio=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight))
     const canvas=document.createElement('canvas')
     canvas.width=Math.max(1,Math.round(v.videoWidth*ratio))
@@ -444,20 +566,47 @@ async function capture():Promise<void> {
       throw new Error('assignment.policy_not_verified')
     // An offline photo carries an independently verified, versioned and
     // device-signed snapshot of the assignment policy. Personal v1 stays available.
-    const capturedAt=Date.now()
-    // Snapshot these fields once. Validation and the encrypted metadata
-    // must refer to the same input even if UI changes during async binding.
-    const privateFields={
-      category:category.value,description:description.value,gps:gps.value,
-      tags:parseRulesCsv(privateTags.value,12,48),
-    }
-    const binding=selectedAssignment.value
-      ?await signedCaptureBinding(selectedAssignment.value,capturedAt,privateFields)
+    const capturedAt=startedAt
+    // The policy binding and encrypted metadata use the SAME fields
+    // frozen at shutter click, not values edited while Canvas ran.
+    privateFields.gps=await consentedGPS(privateFields.gps,gpsAtStart,startedAt)
+    assertOwner()
+    const binding=assignmentAtCapture
+      ?await signedCaptureBinding(assignmentAtCapture,capturedAt,privateFields)
       :undefined
     assertOwner()
-    const photo=await captureEncrypted(jpeg,binding,privateFields)
-    assertOwner()
-    message.value='Зашифровано и сохранено локально: '+photo.photoId.slice(0,8)
+    if(captureMode.value!=='photo'
+      ||selectedAssignment.value!==assignmentAtCapture
+      ||photoStorage.value!==storageAtCapture)
+      throw Error('camera.capture_context_changed')
+    const assertCurrent=()=>{
+      assertOwner()
+      if(captureMode.value!=='photo'||selectedAssignment.value!==assignmentAtCapture
+        ||photoStorage.value!==storageAtCapture)throw Error('camera.capture_context_changed')
+      assertGPSConsent(privateFields.gps,gpsAtStart)
+    }
+    assertCurrent()
+    if(storageAtCapture==='p2'){
+      const intent:MediaCaptureIntent|undefined=binding
+        ?{
+          assignmentId:binding.assignmentId,
+          ownerAccountId:binding.ownerAccountId,
+          contributorAccountId:activeSession.value!.accountId,
+          policyRevision:binding.policyRevision,policyHash:binding.policyHash,
+          mediaType:'photo',startedAt:capturedAt,
+          finishedAt:Math.max(Date.now(),capturedAt+1),
+        }:undefined
+      const file=new File([jpeg],
+        'capture-'+new Date(capturedAt).toISOString()+'.jpg',
+        {type:'image/jpeg',lastModified:capturedAt})
+      const mediaId=await enqueueEncryptedMedia(file,intent,privateFields,assertCurrent)
+      assertOwner()
+      message.value='P2 JPEG зашифрован в Media Library: '+mediaId.slice(0,8)
+    }else{
+      const photo=await captureEncrypted(jpeg,binding,privateFields,assertCurrent)
+      assertOwner()
+      message.value='Зашифровано и сохранено локально: '+photo.photoId.slice(0,8)
+    }
   }catch(e){if(ownsCamera(identity,generation))error.value=e instanceof Error?e.message:'camera.capture_failed'}
   finally{busy.value=false}
 }
@@ -482,11 +631,18 @@ watch(activeSession,session=>{
 onMounted(()=>{
   if(activeSession.value){void refreshPolicies();void nextTick().then(startCamera)}
 })
-watch(selectedAssignment,()=>{void loadPrivateInstructions()})
+watch(selectedAssignment,()=>{
+  captureContextGeneration++
+  clearGPS()
+  if(recording.value)discardRecording()
+  void loadPrivateInstructions()
+},{flush:'sync'})
 watch(()=>route.query.assignmentId,()=>{
+  captureContextGeneration++
+  clearGPS()
   if(recording.value)discardRecording()
   void refreshPolicies()
-})
+},{flush:'sync'})
 watch(captureMode,()=>{
   closeCamera()
   if(!disposed&&activeSession.value){
@@ -518,6 +674,20 @@ onUnmounted(()=>{
           <option value="video">Видео</option>
           <option value="audio">Аудио</option>
         </select>
+        <div v-if="captureMode==='photo'">
+          <label for="camera-photo-storage">Сохранить фото в</label>
+          <select id="camera-photo-storage" v-model="photoStorage"
+            :disabled="busy||recording" data-testid="camera-photo-storage">
+            <option value="p1">P1 — зашифрованное фото (по умолчанию)</option>
+            <option value="p2">P2 — Media Library JPEG</option>
+          </select>
+          <p v-if="photoStorage==='p2'" class="muted">
+            Снимок сохраняется сразу в зашифрованный MediaFile без системной
+            галереи. Для задания версия правил и время съёмки подписываются
+            аккаунтом исполнителя. Это заявление клиента, не аппаратная
+            проверка камеры или достоверности GPS.
+          </p>
+        </div>
         <label for="camera-assignment">Задание для съёмки</label>
         <select id="camera-assignment" v-model="selectedAssignment" :disabled="busy||recording">
           <option value="">Личная запись (без задания)</option>

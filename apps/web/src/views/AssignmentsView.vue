@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { assignmentMonthlyPlanLabel } from '../features/assignments/application/monthly-usage'
 import { RouterLink } from 'vue-router'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
   queueAssignmentCreation, listLocalAssignmentDrafts, listServerAssignmentUsage,
-  listServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
+  listAllServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
+  listAssignmentRemovalNotices, listLocallyRevokedAssignmentIds,
+  listCachedVerifiedAssignmentRemovals,
   listCachedAssignmentInvites,
   cachePrivateAssignment, readCachedPrivateAssignment, listAssignmentOperations,
   queueAssignmentInvitation, queueAssignmentAcceptance,
-  queueAssignmentSubmission, listAssignmentSubmissions, flushAssignmentOutbox,
+  queueAssignmentSubmission, listAssignmentSubmissionsPage, flushAssignmentOutbox,
   queueAssignmentMediaSubmission, listAssignmentMediaSubmissions,
   signedAllowedAssignmentMedia,
   queueAssignmentStateTransition,queueAssignmentPolicyChange,
@@ -21,12 +24,18 @@ import {
 import type {
   ReceivedAssignmentInvite, AssignmentOperation, AssignmentListing,
   CaptureRequirements, AssignmentMonthlyUsage, AllowedAssignmentMedia,
-  AssignmentMediaSubmission,
+  AssignmentMediaSubmission, AssignmentPhotoSubmission,
 } from '../features/assignments/application/assignment-outbox'
 import { preflightAssignmentPhotoGrant } from '../features/assignments/application/submission-preflight'
 import { preflightAssignmentMediaGrant } from '../features/assignments/application/media-submission-preflight'
+import { verifyMediaSubmissionReceiptPage } from '../features/assignments/application/verify-media-submission'
+import { verifyPhotoSubmissionReceiptPage } from '../features/assignments/application/verify-photo-submission'
+import { appendOwnerMediaReceiptPage } from '../features/assignments/application/owner-media-receipt-pagination'
 import { parseRulesCsv, EMPTY_ADVANCED_RULES } from '../features/assignments/domain/advanced-rules'
 import type { AdvancedRules } from '../features/assignments/domain/advanced-rules'
+import type {
+  CheckedAssignmentRemovalNotice, CheckedCachedAssignmentRemovalProof,
+} from '../features/assignments/application/verify-removal-notice'
 import {
   openOwnerAssignment, openRecipientAssignment,
 } from '../features/assignments/infrastructure/assignment-crypto'
@@ -57,16 +66,25 @@ type VisibleAssignment={
   blockBeforeStart:boolean;blockAfterEnd:boolean
 }
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
-type Submission={submissionId:string;photoId:string;photoGrantId:string;contributorAccountId:string}
+type Submission=AssignmentPhotoSubmission
 
 const assignments=ref<VisibleAssignment[]>([])
 const invites=ref<ReceivedAssignmentInvite[]>([])
+const removalNotices=ref<CheckedAssignmentRemovalNotice[]>([])
+const cachedRemovalNotices=ref<CheckedCachedAssignmentRemovalProof[]>([])
+const removalNoticesError=ref('')
 const operations=ref<AssignmentOperation[]>([])
 const monthlyUsage=ref<AssignmentMonthlyUsage|null>(null)
 const photos=ref<StoredPhoto[]>([])
 const mediaFiles=ref<StoredMedia[]>([])
 const mediaSubmissions=ref<AssignmentMediaSubmission[]>([])
+const mediaNextCursor=ref<string|null>(null)
+const loadingMoreMedia=ref(false)
+const verifiedMediaReceipts=ref<Record<string,boolean>>({})
 const submissions=ref<Submission[]>([])
+const verifiedPhotoReceipts=ref<Record<string,boolean>>({})
+const photoNextCursor=ref<string|null>(null)
+const loadingMorePhotos=ref(false)
 const selectedId=ref('')
 const title=ref('')
 const instructions=ref('')
@@ -132,8 +150,11 @@ const pendingPolicyChange=computed(()=>selectedOperations.value.some(op=>
   op.kind==='policy'&&(op.state==='queued'||op.state==='retry')))
 const eligibleMedia=computed(()=>mediaFiles.value.filter(x=>{
   if(x.state!=='synced'||x.expiresAt<=Date.now()
-    ||(x.mediaType!=='video'&&x.mediaType!=='audio')
+    ||!['photo','video','audio'].includes(x.mediaType)
     ||!selected.value?.allowedMedia.includes(x.mediaType))return false
+  // Imported P2 JPEG (v3) has no camera claim. A P2 camera JPEG (v4)
+  // must be scoped to THIS assignment and independently signed later.
+  // Never silently widen legacy P1 camera photo_records permissions.
   if(!x.capture)return true // personal media requires distinct confirmation
   try{
     const proof=JSON.parse(x.capture.contract) as {assignmentId?:string}
@@ -175,11 +196,17 @@ function cleanPreview():void{
   if(previewUrl.value){URL.revokeObjectURL(previewUrl.value);previewUrl.value=''}
   previewPrivate.value=null
 }
+let receiptProofEpoch=0
 function resetSensitive():void {
-  assignments.value=[];invites.value=[];operations.value=[];photos.value=[]
-  mediaFiles.value=[];mediaSubmissions.value=[]
+  receiptProofEpoch++
+  assignments.value=[];invites.value=[];removalNotices.value=[]
+  cachedRemovalNotices.value=[]
+  removalNoticesError.value='';operations.value=[];photos.value=[]
+  mediaFiles.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
+  mediaNextCursor.value=null
   monthlyUsage.value=null
-  submissions.value=[];selectedId.value='';ownerCheck.value=null
+  submissions.value=[];photoNextCursor.value=null;verifiedPhotoReceipts.value={}
+  selectedId.value='';ownerCheck.value=null
   contributorCheck.value=null;showingOfflineSnapshot.value=false;cleanPreview()
 }
 function explain(e:unknown):string{
@@ -251,9 +278,9 @@ async function hydrate():Promise<void>{
   }else{
     try{
       const [server,invitesFromServer]=await Promise.all([
-        listServerAssignments(),listAssignmentInvites(),
+        listAllServerAssignments(),listAssignmentInvites(),
       ])
-      snapshots=server.items
+      snapshots=server
       received=invitesFromServer
     }catch(e){
       // navigator.onLine may remain true during API/S3 outages or captive
@@ -269,6 +296,43 @@ async function hydrate():Promise<void>{
     }
   }
   if(activeSession.value!==identity)return
+  // Receipt history is always read separately from live membership; it
+  // cannot make a removed assignment visible again.
+  removalNotices.value=[]
+  cachedRemovalNotices.value=[]
+  removalNoticesError.value=''
+  if(!offline){
+    try{
+      const notices=await listAssignmentRemovalNotices()
+      if(activeSession.value!==identity)return
+      removalNotices.value=notices
+      const verified=notices.filter(x=>x.verified).map(x=>x.notice)
+      const verifiedIds=new Set(verified.map(x=>x.inviteId))
+      const verifiedAssignments=new Set(verified.map(x=>x.assignmentId))
+      received=received.filter(item=>!verifiedIds.has(item.inviteId)
+        &&!verifiedAssignments.has(item.assignmentId))
+      // Even if an old server read or stale local snapshot slips through,
+      // an independently authenticated owner removal cannot be shown as a
+      // live recipient assignment. Owner-authored tasks are unaffected.
+      snapshots=snapshots.filter(item=>item.ownerAccountId===identity.accountId
+        ||!verifiedAssignments.has(item.assignmentId))
+    }catch(e){
+      if(activeSession.value!==identity)return
+      removalNoticesError.value=explain(e)
+    }
+  }
+  // Offline history is NOT a fresh server authorization. Reverify the
+  // persisted owner's signature against the independently pinned LOCAL
+  // key without network access; do not resurrect deleted invitations.
+  try{
+    const cached=await listCachedVerifiedAssignmentRemovals()
+    if(activeSession.value!==identity)return
+    const current=new Set(removalNotices.value.map(row=>row.notice.inviteId))
+    cachedRemovalNotices.value=cached.filter(row=>!current.has(row.proof.inviteId))
+  }catch(e){
+    if(activeSession.value!==identity)return
+    if(!removalNoticesError.value)removalNoticesError.value=explain(e)
+  }
   invites.value=received
   const rows=[...localRows]
   for(const item of snapshots){
@@ -340,8 +404,12 @@ async function hydrate():Promise<void>{
     if(previous)rows[rows.indexOf(previous)]=row
     else rows.push(row)
   }
+  // A signed removal may have committed in another tab while this route
+  // decrypted a previously received private envelope. Check just before
+  // publishing reactive rows; never show revoked recipient titles again.
+  const denied=await listLocallyRevokedAssignmentIds()
   if(activeSession.value!==identity)return
-  assignments.value=rows
+  assignments.value=rows.filter(row=>row.isOwner||!denied.has(row.id))
 }
 // Coalesce overlapping initial offline hydration, subsequent online proof and
 // explicit refresh. Dropping a refresh while the old session is still being
@@ -413,26 +481,93 @@ function populateOwnerPolicyForm(chosen:VisibleAssignment|undefined):void{
   ownerFormTouched.value=false
 }
 function choose(assignmentId:string):void{
+  receiptProofEpoch++
   selectedId.value=assignmentId
   const chosen=assignments.value.find(a=>a.id===assignmentId)
   populateOwnerPolicyForm(chosen)
   ownerCheck.value=null
   contributorCheck.value=null;recipientId.value=''
-  submissions.value=[];mediaSubmissions.value=[];cleanPreview()
+  submissions.value=[];photoNextCursor.value=null;verifiedPhotoReceipts.value={}
+  mediaSubmissions.value=[];verifiedMediaReceipts.value={}
+  mediaNextCursor.value=null
+  cleanPreview()
   if(selected.value?.isOwner)void loadSubmissions()
 }
 async function loadSubmissions():Promise<void>{
   const id=selectedId.value
   const owner=selected.value
-  if(!owner?.isOwner||!activeSession.value?.online)return
+  const identity=activeSession.value
+  if(!owner?.isOwner||!identity?.online)return
+  const epoch=++receiptProofEpoch
   try{
     const [result,mediaResult]=await Promise.all([
-      listAssignmentSubmissions(id),listAssignmentMediaSubmissions(id),
+      listAssignmentSubmissionsPage(id),listAssignmentMediaSubmissions(id),
     ])
-    if(selectedId.value===id){
-      submissions.value=result;mediaSubmissions.value=mediaResult.items
+    // A server count or an unverified string is NOT a contributor signature.
+    // Only the independently fingerprint-pinned contributor root can verify
+    // the immutable consent receipt. An unpinned/changed key remains unverified.
+    const [checks,photoChecks]=await Promise.all([
+      verifyMediaSubmissionReceiptPage(mediaResult.items,id,owner.ownerAccountId),
+      verifyPhotoSubmissionReceiptPage(result.items,id),
+    ])
+    if(selectedId.value===id&&activeSession.value===identity
+      &&receiptProofEpoch===epoch){
+      const page=appendOwnerMediaReceiptPage([],mediaResult,null)
+      const photoPage=appendOwnerMediaReceiptPage([],result,null)
+      submissions.value=photoPage.items;photoNextCursor.value=photoPage.nextCursor
+      verifiedPhotoReceipts.value=photoChecks
+      mediaSubmissions.value=page.items
+      mediaNextCursor.value=page.nextCursor
+      verifiedMediaReceipts.value=checks
     }
   }catch(e){error.value=explain(e)}
+}
+/** The legacy P1 photo list is also server-paged; count is not a page size. */
+async function loadMorePhotoSubmissions():Promise<void>{
+  const id=selectedId.value
+  const owner=selected.value
+  const identity=activeSession.value
+  const after=photoNextCursor.value
+  const epoch=receiptProofEpoch
+  if(loadingMorePhotos.value||!after||!owner?.isOwner||!identity?.online)return
+  loadingMorePhotos.value=true
+  error.value=''
+  try{
+    const page=await listAssignmentSubmissionsPage(id,after)
+    const appended=appendOwnerMediaReceiptPage(submissions.value,page,after)
+    const photoChecks=await verifyPhotoSubmissionReceiptPage(page.items,id)
+    if(selectedId.value!==id||activeSession.value!==identity
+      ||receiptProofEpoch!==epoch
+      ||photoNextCursor.value!==after)return
+    submissions.value=appended.items
+    photoNextCursor.value=appended.nextCursor
+    verifiedPhotoReceipts.value={...verifiedPhotoReceipts.value,...photoChecks}
+  }catch(e){error.value=explain(e)}
+  finally{loadingMorePhotos.value=false}
+}
+/** Explicit bounded pagination; only server-visible submissions are displayed. */
+async function loadMoreMediaSubmissions():Promise<void>{
+  const id=selectedId.value
+  const owner=selected.value
+  const identity=activeSession.value
+  const after=mediaNextCursor.value
+  const epoch=receiptProofEpoch
+  if(loadingMoreMedia.value||!after||!owner?.isOwner||!identity?.online)return
+  loadingMoreMedia.value=true
+  error.value=''
+  try{
+    const page=await listAssignmentMediaSubmissions(id,after)
+    const appended=appendOwnerMediaReceiptPage(mediaSubmissions.value,page,after)
+    const checks=await verifyMediaSubmissionReceiptPage(
+      page.items,id,owner.ownerAccountId)
+    if(selectedId.value!==id||activeSession.value!==identity
+      ||receiptProofEpoch!==epoch
+      ||mediaNextCursor.value!==after)return
+    mediaSubmissions.value=appended.items
+    mediaNextCursor.value=appended.nextCursor
+    verifiedMediaReceipts.value={...verifiedMediaReceipts.value,...checks}
+  }catch(e){error.value=explain(e)}
+  finally{loadingMoreMedia.value=false}
 }
 async function changeState(action:'finish'|'resume'):Promise<void>{
   await operate(async()=>{
@@ -500,6 +635,42 @@ async function changeGoal():Promise<void>{
   })
 }
 
+/**
+ * A newly fingerprint-confirmed contributor may own receipts on page 5.
+ * Reverify only that contributor's already loaded P1/P2 receipts in place:
+ * no page rewind, no optimistic signed status, no media or DEK download.
+ */
+async function reverifyContributorReceipts(accountId:string):Promise<void>{
+  const target=selected.value
+  const identity=activeSession.value
+  if(!target?.isOwner||!identity?.online)return
+  const photos=submissions.value.filter(item=>item.contributorAccountId===accountId)
+  const media=mediaSubmissions.value.filter(item=>item.contributorAccountId===accountId)
+  const epoch=++receiptProofEpoch
+  const [photoProofs,mediaProofs]=await Promise.all([
+    verifyPhotoSubmissionReceiptPage(photos,target.id),
+    verifyMediaSubmissionReceiptPage(media,target.id,target.ownerAccountId),
+  ])
+  if(activeSession.value!==identity||selectedId.value!==target.id
+    ||receiptProofEpoch!==epoch)return
+  verifiedPhotoReceipts.value={...verifiedPhotoReceipts.value,...photoProofs}
+  verifiedMediaReceipts.value={...verifiedMediaReceipts.value,...mediaProofs}
+}
+/** Unverified row action starts a real independent fingerprint check. */
+async function inspectContributorReceipt(accountId:string):Promise<void>{
+  recipientId.value=accountId
+  ownerCheck.value=null
+  await inspectRecipient()
+  // inspectRecipient updates this ref asynchronously inside its operation.
+  const check=ownerCheck.value as SafetyCheck|null
+  if(check?.accountId===accountId&&check.confirmed){
+    try{await reverifyContributorReceipts(accountId)}
+    catch(e){error.value=explain(e)}
+  }
+  await nextTick()
+  document.getElementById('assignment-contributor-key-verification')
+    ?.scrollIntoView({behavior:'smooth',block:'center'})
+}
 async function inspectRecipient():Promise<void>{
   await operate(async()=>{
     const id=recipientId.value.trim().toLowerCase()
@@ -517,7 +688,8 @@ async function approveRecipient():Promise<void>{
     const {accountId,fingerprint}=ownerCheck.value
     await confirmPeer(accountId,fingerprint)
     ownerCheck.value={accountId,fingerprint,confirmed:true}
-    notice.value='Ключ получателя подтверждён на этом устройстве'
+    await reverifyContributorReceipts(accountId)
+    notice.value='Ключ подтверждён на этом устройстве; подписи загруженных материалов перепроверены'
   })
 }
 async function invite():Promise<void>{
@@ -529,7 +701,7 @@ async function invite():Promise<void>{
     notice.value='Подписанное приглашение сохранено в очереди: '+id.slice(0,8)
   })
 }
-async function inspectOwner(invite:ReceivedAssignmentInvite):Promise<void>{
+async function inspectOwner(invite:Pick<ReceivedAssignmentInvite,'ownerAccountId'>):Promise<void>{
   await operate(async()=>{
     const {directory,confirmed}=await inspectPeer(invite.ownerAccountId)
     contributorCheck.value={
@@ -545,7 +717,8 @@ async function approveOwner():Promise<void>{
       throw Error('Требуется независимая сверка отпечатка')
     await confirmPeer(contributorCheck.value.accountId,contributorCheck.value.fingerprint)
     contributorCheck.value={...contributorCheck.value,confirmed:true}
-    notice.value='Ключ отправителя подтверждён'
+    await refresh()
+    notice.value='Ключ отправителя подтверждён; подписанные уведомления перепроверены'
   })
 }
 async function accept(invite:ReceivedAssignmentInvite):Promise<void>{
@@ -559,8 +732,35 @@ async function accept(invite:ReceivedAssignmentInvite):Promise<void>{
     notice.value='Согласие подписано. Если нет сети, оно ожидает отправки.'
   })
 }
+/**
+ * A rapid P1 submission click can land while router bootstrap is still
+ * proving this SAME device: /challenges -> /proof rotates the session cookie
+ * and activeSession object. Preflight must continue to fail closed on ANY
+ * actual account/device/key revision change. Wait for the existing proof
+ * before taking a signed policy snapshot, never bypass those checks.
+ *
+ * Offline Local-First submissions continue through the existing signed
+ * cached-policy gate; no login request is manufactured while offline.
+ */
+async function awaitStableSubmissionSession():Promise<void>{
+  const origin=activeSession.value
+  if(!origin)throw Error('identity.account_locked')
+  if(!navigator.onLine)return
+  const verified=await reauthenticate()
+  if(activeSession.value!==verified
+    ||verified.accountId!==origin.accountId
+    ||verified.deviceId!==origin.deviceId
+    ||verified.pkg.accountSpki!==origin.pkg.accountSpki
+    ||verified.pkg.revision!==origin.pkg.revision)
+    throw Error('identity.changed')
+  // Pending bootstrap may have invalidated an in-flight hydrated card.
+  // Re-evaluate the real owner-signed listing before any E2EE DEK grant.
+  await refresh()
+  if(activeSession.value!==verified)throw Error('identity.changed')
+}
 async function submit(photo:StoredPhoto):Promise<void>{
   await operate(async()=>{
+    await awaitStableSubmissionSession()
     const target=selected.value
     if(!target||target.isOwner||photo.state!=='synced')
       throw Error('Нужен синхронизированный снимок и принятое задание')
@@ -586,9 +786,10 @@ async function submit(photo:StoredPhoto):Promise<void>{
 }
 async function submitMedia(media:StoredMedia):Promise<void>{
   await operate(async()=>{
+    await awaitStableSubmissionSession()
     const target=selected.value
     if(!target||target.isOwner||media.state!=='synced'
-      ||!['video','audio'].includes(media.mediaType))
+      ||!['photo','video','audio'].includes(media.mediaType))
       throw Error('assignment.media_not_synced')
     if(contributorCheck.value?.accountId!==target.ownerAccountId
       ||!contributorCheck.value.confirmed)
@@ -601,8 +802,14 @@ async function submitMedia(media:StoredMedia):Promise<void>{
     if(!window.confirm(
       (media.capture?'Эта запись была создана для задания. ':'Это личный файл вне задания. ')
       +'Передать владельцу задания E2EE-ключ всего '
-      +(media.mediaType==='video'?'видео':'аудио')
-      +', включая исходное имя и приватные метаданные? Отзыв не удалит уже скачанные копии.'
+      +(media.mediaType==='video'?'видео'
+        :media.mediaType==='audio'?'аудио':'фото P2 MediaFile')
+      +', включая исходное имя и приватные метаданные? '
+      +(media.mediaType==='photo'
+        ?(media.capture
+          ?'Подпись подтверждает заявление приложения о съёмке, но НЕ аппаратную подлинность камеры, времени или GPS. '
+          :'Это подтверждает отправку импортированного файла, но НЕ факт съёмки по заданию. '):'')
+      +'Отзыв не удалит уже скачанные копии.'
     ))return
     const grantId=await queueMediaRecipientGrant(media.mediaId,target.ownerAccountId,
       target.id,checked.grantExpiresAtCap)
@@ -621,7 +828,7 @@ async function openMediaSubmission(grantId:string):Promise<void>{
     previewUrl.value=URL.createObjectURL(result.blob)
     previewMime.value=result.metadata.mime
     previewPrivate.value=result.metadata
-    notice.value='Видео/аудио и приватные метаданные расшифрованы на устройстве'
+    notice.value='Фото/видео/аудио и приватные метаданные расшифрованы на устройстве'
   })
 }
 async function openSubmission(grantId:string):Promise<void>{
@@ -672,13 +879,16 @@ onUnmounted(cleanPreview)
     <p class="subtitle">P1 · рабочий E2EE-сценарий · полный Fieldwork 5.0 / Editor 2.2 ещё не перенесён</p>
     <p v-if="activeSession&&monthlyUsage&&!showingOfflineSnapshot"
       class="muted" role="status" data-testid="assignment-monthly-usage">
-      Тариф Free · создано заданий за месяц:
-      <strong>{{ monthlyUsage.used }} / {{ monthlyUsage.limit }}</strong>.
-      <template v-if="monthlyUsage.remaining>0">
+      Тариф {{ assignmentMonthlyPlanLabel(monthlyUsage.planId) }} · создано заданий за месяц:
+      <strong>{{ monthlyUsage.used }} / {{ monthlyUsage.limit===null?'без ограничений':monthlyUsage.limit }}</strong>.
+      <template v-if="monthlyUsage.limit===null">
+        Количество заданий по тарифу не ограничено. Технические ограничения сохраняются.
+      </template>
+      <template v-else-if="monthlyUsage.remaining!==null&&monthlyUsage.remaining>0">
         Осталось {{ monthlyUsage.remaining }}.
       </template>
       <template v-else>
-        Месячная квота исчерпана. Сброс после {{ new Date(monthlyUsage.periodEnd).toLocaleDateString('ru-RU') }}.
+        Месячная квота исчерпана. Новый период с {{ new Date(monthlyUsage.periodEnd).toLocaleDateString('ru-RU') }}.
       </template>
     </p>
     <p v-else-if="activeSession&&!showingOfflineSnapshot" class="muted">
@@ -710,7 +920,7 @@ onUnmounted(cleanPreview)
         <textarea id="assignment-instructions" v-model="instructions" rows="4" maxlength="4000"/>
         <label for="assignment-goal">Нужно фотографий (необязательная цель)</label>
         <input id="assignment-goal" v-model="goal" type="number" min="1" max="9999" step="1" placeholder="Например, 30">
-        <p class="muted">Название и инструкции шифруются до сохранения. Цель нужна только для прогресса, не ограничивает число файлов. Офлайн-черновик сохраняется независимо от доступной квоты; сервер принимает создание только в пределах действующего лимита Free.</p>
+        <p class="muted">Название и инструкции шифруются до сохранения. Цель нужна только для прогресса, не ограничивает число файлов. Офлайн-черновик сохраняется независимо от квоты; сервер проверяет право создания по текущему тарифу при синхронизации.</p>
         <button type="submit" :disabled="busy">Создать зашифрованное задание</button>
       </form>
 
@@ -914,7 +1124,7 @@ onUnmounted(cleanPreview)
           <label for="assignment-recipient-id">ID аккаунта исполнителя</label>
           <input id="assignment-recipient-id" v-model="recipientId" autocomplete="off" spellcheck="false" placeholder="UUID аккаунта">
           <button type="button" :disabled="busy||!recipientId" @click="inspectRecipient">Проверить ключ исполнителя</button>
-          <div v-if="ownerCheck" class="fingerprint-panel">
+          <div v-if="ownerCheck" id="assignment-contributor-key-verification" class="fingerprint-panel">
             <strong>Отпечаток исполнителя</strong>
             <code>{{ ownerCheck.fingerprint }}</code>
             <template v-if="!ownerCheck.confirmed">
@@ -929,17 +1139,32 @@ onUnmounted(cleanPreview)
           <button type="button" :disabled="busy" @click="loadSubmissions">Обновить материалы</button>
           <p v-if="!submissions.length&&!mediaSubmissions.length" class="muted">Нет подтверждённых отправок или доступа по E2EE grant.</p>
           <div v-for="entry in submissions" :key="entry.submissionId" class="photo-row">
-            <div><strong>{{ entry.photoId.slice(0,8) }}</strong><small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small></div>
-            <button type="button" :disabled="busy" @click="openSubmission(entry.photoGrantId)">Просмотр</button>
-          </div>
-          <div v-for="entry in mediaSubmissions" :key="entry.submissionId" class="photo-row" data-testid="assignment-media-submission">
             <div>
-              <strong>{{ entry.mediaType==='video'?'Видео':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
-              <small>{{ entry.capturedInAssignment?'Запись по заданию · подписана':'Личный файл · передан вручную' }}</small>
+              <strong>{{ entry.photoId.slice(0,8) }}</strong>
+              <small>{{ verifiedPhotoReceipts[entry.submissionId]?'Подпись отправки проверена':'Подпись отправки не проверена' }}</small>
               <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
             </div>
+            <button v-if="!verifiedPhotoReceipts[entry.submissionId]" type="button" :disabled="busy" @click="inspectContributorReceipt(entry.contributorAccountId)">Сверить ключ автора</button>
+            <button type="button" :disabled="busy" @click="openSubmission(entry.photoGrantId)">Просмотр</button>
+          </div>
+          <button v-if="photoNextCursor" type="button"
+            :disabled="busy||loadingMorePhotos" @click="loadMorePhotoSubmissions">
+            {{ loadingMorePhotos?'Загрузка фотографий…':'Загрузить ещё фотографии' }}
+          </button>
+          <div v-for="entry in mediaSubmissions" :key="entry.submissionId" class="photo-row" data-testid="assignment-media-submission">
+            <div>
+              <strong>{{ entry.mediaType==='video'?'Видео':entry.mediaType==='photo'?'Фото P2':'Аудио' }} · {{ entry.mediaId.slice(0,8) }}</strong>
+              <small>{{ entry.capturedInAssignment?'Заявлена запись по заданию (не доказательство камеры)':'Личный файл · передан вручную' }}</small>
+              <small>{{ verifiedMediaReceipts[entry.submissionId]?'Подпись согласия исполнителя проверена':'Подпись согласия исполнителя не проверена' }}</small>
+              <small>Автор: {{ entry.contributorAccountId.slice(0,8) }}</small>
+            </div>
+            <button v-if="!verifiedMediaReceipts[entry.submissionId]" type="button" :disabled="busy" @click="inspectContributorReceipt(entry.contributorAccountId)">Сверить ключ автора</button>
             <button type="button" :disabled="busy" @click="openMediaSubmission(entry.mediaGrantId)">Открыть медиа задания</button>
           </div>
+          <button v-if="mediaNextCursor" type="button"
+            :disabled="busy||loadingMoreMedia" @click="loadMoreMediaSubmissions">
+            {{ loadingMoreMedia?'Загрузка материалов…':'Загрузить ещё материалы' }}
+          </button>
         </template>
 
         <template v-else>
@@ -958,11 +1183,11 @@ onUnmounted(cleanPreview)
             <button type="button" :disabled="busy||!contributorCheck?.confirmed" @click="submit(photo)">Отправить в задание</button>
           </div>
           <p v-if="!eligiblePhotos.length" class="muted">Для этого задания нет подходящих синхронизированных фотографий.</p>
-          <template v-if="selected.allowedMedia.some(kind=>kind==='video'||kind==='audio')">
-            <h3>Видео и аудио · из Browser</h3>
-            <p class="muted">Понадобится зашифрованный файл разрешённого типа. До E2EE-передачи проверяются подписанные требования задания к категории, описанию, GPS и тегам; фактические приватные значения серверу недоступны.</p>
+          <template v-if="selected.allowedMedia.length">
+            <h3>Файлы P2 · фото, видео и аудио из Browser</h3>
+            <p class="muted">Понадобится зашифрованный файл разрешённого типа. До E2EE-передачи проверяются подписанные требования задания к категории, описанию, GPS и тегам; фактические приватные значения серверу недоступны. Импортированное фото P2 считается личным файлом, отправленным участником; прямой JPEG из камеры получает отдельную подпись съёмки. Ни одна подпись не доказывает аппаратное происхождение или точность GPS.</p>
             <div v-for="file in eligibleMedia" :key="file.key" class="photo-row">
-              <div><strong>{{ file.mediaType==='video'?'Видео':'Аудио' }} · {{ file.mediaId.slice(0,8) }}</strong>
+              <div><strong>{{ file.mediaType==='video'?'Видео':file.mediaType==='photo'?'Фото P2':'Аудио' }} · {{ file.mediaId.slice(0,8) }}</strong>
                 <small>{{ file.capture?'Снято по заданию · подписано':'Личный медиафайл · требуется согласие' }}</small>
                 <small>{{ file.state }} · {{ file.plainBytes.toLocaleString('ru-RU') }} байт</small>
               </div>
@@ -970,8 +1195,8 @@ onUnmounted(cleanPreview)
                 @click="submitMedia(file)">Отправить медиа в задание</button>
             </div>
             <p v-if="!eligibleMedia.length" class="muted">Нет синхронизированных файлов разрешённого типа.</p>
-            <RouterLink to="/browser">Импортировать видео или аудио</RouterLink>
-            <p><RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Записать видео/аудио по заданию</RouterLink></p>
+            <RouterLink to="/browser">Импортировать фото, видео или аудио</RouterLink>
+            <p><RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Снять фото P2 или записать видео/аудио по заданию</RouterLink></p>
           </template>
           <RouterLink :to="{path:'/camera',query:{assignmentId:selected.id}}">Камера задания</RouterLink>
         </template>
@@ -987,6 +1212,53 @@ onUnmounted(cleanPreview)
           <button type="button" :disabled="busy||contributorCheck?.accountId!==invitation.ownerAccountId||!contributorCheck.confirmed" @click="accept(invitation)">Принять задание</button>
         </div>
       </div>
+      <div v-if="removalNotices.length||cachedRemovalNotices.length||removalNoticesError"
+        class="foundation-card" data-testid="assignment-removal-notices">
+        <h2>История участия</h2>
+        <p v-if="removalNoticesError" class="error-text" role="alert">
+          Не удалось получить подписанные уведомления: {{ removalNoticesError }}
+        </p>
+        <div v-for="row in removalNotices" :key="row.notice.inviteId"
+          class="assignment-invite" :data-testid="'assignment-removal-'+row.notice.inviteId">
+          <template v-if="row.verified">
+            <div>
+              <strong>Исключён владельцем</strong>
+              <p class="muted">Задание {{ row.notice.assignmentId.slice(0,8) }}
+                · Подпись владельца проверена на этом устройстве</p>
+            </div>
+          </template>
+          <template v-else>
+            <div>
+              <strong>Непроверенное уведомление об участии</strong>
+              <p class="muted">Подпись не подтверждена. Нельзя доверять статусу или считать это новым разрешением.</p>
+            </div>
+            <button type="button" :disabled="busy" @click="inspectOwner(row.notice)">
+              Сверить ключ владельца
+            </button>
+          </template>
+        </div>
+        <div v-for="row in cachedRemovalNotices" :key="'cached-'+row.proof.inviteId"
+          class="assignment-invite"
+          :data-testid="'assignment-offline-removal-'+row.proof.inviteId">
+          <template v-if="row.verified">
+            <div>
+              <strong>Исключён владельцем</strong>
+              <p class="muted">Задание {{ row.proof.assignmentId.slice(0,8) }}
+                · Подпись исключения повторно проверена по ранее подтверждённому ключу владельца.
+                Это сохранённая история, не новое подтверждение от сервера.</p>
+            </div>
+          </template>
+          <template v-else>
+            <div>
+              <strong>Сохранённое уведомление пока не проверено</strong>
+              <p class="muted">Нет подтверждённого локального ключа или подпись не совпала.
+                Для актуального статуса потребуется защищённое подключение.</p>
+            </div>
+          </template>
+        </div>
+        <p class="muted">Исключение закрывает будущий доступ по разрешениям задания. Уже расшифрованные офлайн-копии нельзя дистанционно отозвать.</p>
+      </div>
+
       <div v-if="contributorCheck" class="foundation-card fingerprint-panel">
         <strong>Отпечаток владельца задания</strong>
         <code>{{ contributorCheck.fingerprint }}</code>

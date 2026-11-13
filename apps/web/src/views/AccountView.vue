@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import SettingsHub from '../ui/fieldwork/SettingsHub.vue'
 import {
   activeSession, beginRegistration, finishRegistration, logout,
   restoreAccount, reauthenticate,
@@ -52,7 +53,9 @@ async function copyKey():Promise<void> {
 
 <template>
   <section class="foundation-content">
-    <h1>Настройки / Доступ</h1>
+    <SettingsHub v-if="activeSession" :online="activeSession.online" />
+    <h1 v-if="!activeSession">Настройки / Доступ</h1>
+    <h2 v-else id="identity-access" class="identity-access-title">Доступ и устройство</h2>
     <p class="subtitle">Key-Only Identity · P1</p>
     <div v-if="activeSession" class="foundation-card">
       <p><strong>Аккаунт:</strong> <code>{{ activeSession.accountId }}</code></p>
@@ -89,3 +92,13 @@ async function copyKey():Promise<void> {
     <p class="muted">PIN Shell, защищённый режим экрана и финальная страница профиля появятся на следующих этапах.</p>
   </section>
 </template>
+
+<style scoped>
+.identity-access-title {
+  margin: 28px 0 0;
+  font-size: 18px;
+  font-weight: 750;
+  letter-spacing: -.02em;
+  scroll-margin-top: 15px;
+}
+</style>

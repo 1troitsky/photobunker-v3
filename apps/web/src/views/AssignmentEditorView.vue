@@ -5,7 +5,7 @@ import { activeSession } from '../features/identity/application/session'
 import {
   flushAssignmentOutbox, listAssignmentOperations,
   listCachedAssignmentSnapshots, listServerAssignments,
-  queueAssignmentInvitation, queueAssignmentPolicyChange,
+  queueAssignmentInvitation, queueAssignmentMemberRemoval, queueAssignmentPolicyChange,
   queueAssignmentPrivateTextChange,effectiveAssignmentEnvelope,
   queueAssignmentScheduleChange,signedAssignmentSchedule,
   queueAssignmentRetentionChange,signedAssignmentRetention,
@@ -23,6 +23,15 @@ import type { PrivateAssignment, PrivateAssignmentV2 } from '../features/assignm
 import { confirmPeer, inspectPeer } from '../features/sharing/key-directory'
 import { listConfirmedContacts } from '../features/people/application/contact-book'
 import type { ConfirmedContact } from '../features/people/application/contact-book'
+import {
+  loadAssignmentPreviewCeiling,queueAssignmentPreviewCeiling,
+  flushAssignmentPreviewCeilings,assignmentPreviewCeilingState,
+} from '../features/assignments/application/assignment-preview-ceiling'
+import type {CeilingDraftState} from '../features/assignments/application/assignment-preview-ceiling'
+import {
+  emptyPreviewFields,PREVIEW_FIELD_KEYS,
+} from '../features/media/application/media-file-preview-policy'
+import type {PreviewFields,PreviewField} from '../features/media/application/media-file-preview-policy'
 
 type Tab='main'|'files'|'people'|'rules'
 const tabs:ReadonlyArray<{id:Tab;label:string}>=[
@@ -41,6 +50,19 @@ const scheduleDraft=reactive<ScheduleEditorDraft>({
 const retentionDraft=reactive<RetentionDraft>({
   filesEnabled:false,filesDate:'',assignmentEnabled:false,assignmentDate:'',
 })
+const previewFields=ref<PreviewFields>(emptyPreviewFields())
+const previewBaseline=ref('')
+const previewRevision=ref(0)
+const previewState=ref<CeilingDraftState>('none')
+const previewLoading=ref(false)
+const previewError=ref('')
+const previewNotice=ref('')
+const previewFieldLabels:Record<PreviewField,string>={
+  description:'Описание',capturedAt:'Дата съёмки',
+  updatedAt:'Дата изменения',tags:'Теги',
+  authorTeam:'Автор / команда',gps:'GPS',
+  metadata:'Технические метаданные',
+}
 const listing=ref<AssignmentListing|null>(null)
 const title=ref('')
 const instructions=ref('')
@@ -90,6 +112,8 @@ function clearPrivate():void{
   title.value='';instructions.value='';photoInstructions.value=''
   videoInstructions.value='';audioInstructions.value=''
 }
+const dirtyPreview=computed(()=>!!previewBaseline.value
+  &&JSON.stringify(previewFields.value)!==previewBaseline.value)
 const dirtyPolicy=computed(()=>!!baseline.value&&JSON.stringify(draft)!==baseline.value)
 const dirtyText=computed(()=>!!baselineText.value&&JSON.stringify(privateForm())!==baselineText.value)
 const dirtySchedule=computed(()=>!!baselineSchedule.value
@@ -106,6 +130,62 @@ function sameIdentity(a:typeof activeSession.value,b:typeof activeSession.value)
     &&a.pkg.accountSpki===b.pkg.accountSpki&&a.pkg.revision===b.pkg.revision
 }
 function fail(e:unknown):string{return e instanceof Error?e.message:'assignment.editor_error'}
+function resetPreview():void{
+  previewFields.value=emptyPreviewFields()
+  previewBaseline.value=''
+  previewRevision.value=0
+  previewState.value='none'
+  previewError.value='';previewNotice.value=''
+}
+async function loadPreview():Promise<void>{
+  const item=listing.value,session=activeSession.value
+  if(!item||!session||item.ownerAccountId!==session.accountId
+    ||previewLoading.value)return
+  previewLoading.value=true
+  previewError.value=''
+  try{
+    if(session.online&&navigator.onLine)
+      await flushAssignmentPreviewCeilings()
+    const next=await loadAssignmentPreviewCeiling(item)
+    if(!sameIdentity(activeSession.value,session)
+      ||listing.value?.assignmentId!==item.assignmentId)return
+    previewFields.value=next.contract
+      ?{...next.contract.fields}:emptyPreviewFields()
+    previewBaseline.value=JSON.stringify(previewFields.value)
+    previewRevision.value=next.contract?.toRevision??0
+    previewState.value=next.state
+  }catch(e){
+    if(sameIdentity(activeSession.value,session))
+      previewError.value=fail(e)
+  }finally{previewLoading.value=false}
+}
+async function savePreview():Promise<void>{
+  const item=listing.value,session=activeSession.value
+  if(!item||!session||previewLoading.value||!editable.value
+    ||previewState.value==='queued'||previewState.value==='retry'
+    ||previewState.value==='conflict')return
+  previewLoading.value=true;previewError.value='';previewNotice.value=''
+  try{
+    const rev=await queueAssignmentPreviewCeiling(item,previewFields.value)
+    await flushAssignmentPreviewCeilings()
+    if(!sameIdentity(activeSession.value,session)
+      ||listing.value?.assignmentId!==item.assignmentId)return
+    previewRevision.value=rev
+    previewState.value=await assignmentPreviewCeilingState(item.assignmentId)
+    previewBaseline.value=JSON.stringify(previewFields.value)
+    previewNotice.value=previewState.value==='sent'
+      ?'Подписанный черновик потолка задания сохранён. Публичный доступ выключен.'
+      :'Подписанный черновик ожидает синхронизации. Публичный доступ выключен.'
+  }catch(e){if(sameIdentity(activeSession.value,session))
+    previewError.value=fail(e)}
+  finally{previewLoading.value=false}
+}
+function updatePreviewField(field:PreviewField,event:Event):void{
+  previewFields.value={
+    ...previewFields.value,
+    [field]:(event.target as HTMLInputElement).checked,
+  }
+}
 function apply(row:AssignmentListing):void{
   const values=editorDraftFromListing(row)
   Object.assign(draft,values)
@@ -230,6 +310,7 @@ async function refresh():Promise<void>{
     await fromRow(latest,session,generation)
     if(run===generation){
       loadState.value='fresh'
+      if(activeTab.value==='rules')void loadPreview()
       void refreshRoster(id,session,generation)
       void refreshConfirmedContacts(id,session,generation)
     }
@@ -422,6 +503,34 @@ async function invite():Promise<void>{
   }catch(e){error.value=fail(e)}
   finally{busy.value=false}
 }
+async function removeMember(person:AssignmentParticipant):Promise<void>{
+  if(!owner.value||busy.value||rosterStatus.value!=='ready'
+    ||!['pending','accepted'].includes(person.state))return
+  // Revocation immediately stops assignment grants; it does NOT delete the
+  // contributor's personal files. Re-invitation requires a future protocol.
+  if(!window.confirm('Исключить исполнителя из задания? Доступ по разрешениям задания будет закрыт. Личные файлы не удаляются. Повторное приглашение пока недоступно.'))return
+  busy.value=true;error.value='';notice.value=''
+  const session=activeSession.value,generation=run
+  try{
+    const operationId=await queueAssignmentMemberRemoval(
+      assignmentId.value,person)
+    let accepted=false
+    if(session?.online&&navigator.onLine){
+      await flushAssignmentOutbox()
+      const ops=await listAssignmentOperations()
+      accepted=ops.some(op=>op.kind==='remove-member'&&op.state==='sent'
+        &&(JSON.parse(op.contract) as {operationId?:string}).operationId===operationId)
+    }
+    if(!sameIdentity(session,activeSession.value)||generation!==run)return
+    if(accepted){
+      await refreshRoster()
+      notice.value='Исключение подписано и принято сервером. Права задания отозваны.'
+    }else{
+      notice.value='Исключение подписано и сохранено в очереди. Пока сервер его не примет, права не изменятся.'
+    }
+  }catch(e){error.value=fail(e)}
+  finally{busy.value=false}
+}
 function keyTab(e:KeyboardEvent):void{
   if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return
   e.preventDefault()
@@ -433,7 +542,7 @@ function keyTab(e:KeyboardEvent):void{
   buttons[next]?.focus()
 }
 onBeforeRouteLeave(()=>{
-  if(dirty.value&&!pending.value)
+  if((dirty.value||dirtyPreview.value)&&!pending.value)
     return window.confirm('Отменить несохранённые изменения задания?')
 })
 watch(activeSession,(next,previous)=>{
@@ -452,6 +561,7 @@ watch(activeSession,(next,previous)=>{
       filesEnabled:false,filesDate:'',assignmentEnabled:false,assignmentDate:'',
     })
     peerReset()
+    resetPreview()
     confirmedContacts.value=[];contactsError.value=''
     loadState.value='loading'
     void refresh()
@@ -476,13 +586,20 @@ watch(assignmentId,()=>{
     filesEnabled:false,filesDate:'',assignmentEnabled:false,assignmentDate:'',
   })
   peerReset()
+  resetPreview()
   confirmedContacts.value=[];contactsError.value=''
   activeTab.value='main';loadState.value='loading'
   void refresh()
 })
-onMounted(()=>{void refresh()})
+const flushPreviewOnReconnect=()=>{void flushAssignmentPreviewCeilings()}
+onMounted(()=>{
+  window.addEventListener('online',flushPreviewOnReconnect)
+  document.addEventListener('visibilitychange',flushPreviewOnReconnect)
+  void refresh()
+})
 watch(activeTab,(next)=>{
   if(next==='people'&&owner.value)void refreshConfirmedContacts()
+  if(next==='rules'&&owner.value)void loadPreview()
 })
 watch(()=>scheduleDraft.endsAt,(value)=>{
   if(!value)scheduleDraft.blockAfterEnd=false
@@ -491,6 +608,9 @@ onUnmounted(()=>{
   ++run;clearPrivate();confirmedContacts.value=[]
   baseline.value='';baselineText.value=''
   baselineSchedule.value='';baselineRetention.value=''
+  resetPreview()
+  window.removeEventListener('online',flushPreviewOnReconnect)
+  document.removeEventListener('visibilitychange',flushPreviewOnReconnect)
 })
 </script>
 
@@ -651,9 +771,13 @@ onUnmounted(()=>{
               :data-testid="'editor-participant-'+person.recipientAccountId">
               <code>{{ person.recipientAccountId }}</code>
               <span> · Исполнитель · {{
+                person.state==='removed'?'Исключён владельцем':
                 person.state==='accepted'?'Принято сервером':
                 person.expired?'Приглашение истекло':'Ожидает принятия'
               }}</span>
+              <button v-if="person.state!=='removed'" type="button"
+                :disabled="busy||rosterStatus!=='ready'"
+                @click="removeMember(person)">Исключить</button>
             </li>
           </ul>
           <button type="button" :disabled="busy||rosterStatus==='loading'||!activeSession?.online"
@@ -735,7 +859,46 @@ onUnmounted(()=>{
           <input id="editor-audio-description-min" v-model.number="draft.audioDescriptionMin" type="number" min="0" max="4000" step="1">
           <label class="checkline"><input v-model="draft.audioGps" type="checkbox"> GPS обязателен</label>
         </fieldset>
-        <p class="muted">Public Card, редактирование оригинала и права на передачу пока не имеют подтверждённой модели E2EE scopes. Их здесь нельзя включить простым UI-переключателем.</p>
+        <section class="fieldwork-editor-rules" data-testid="assignment-preview-ceiling">
+          <h3>Public Card · потолок видимости задания</h3>
+          <p class="muted">Это отдельная подписанная настройка будущей публичной карточки,
+            <strong>не требование съёмки</strong>. Даже обязательный GPS НЕ
+            означает разрешение показывать его посетителю. Здесь выбирается
+            только максимально допустимый список полей. Без подтверждённой
+            связи файла с заданием и отдельного публичного разрешения итоговая
+            выдача всех полей закрыта. Публикация, копирование и скачивание
+            сейчас выключены на сервере.</p>
+          <p class="muted">Ревизия {{ previewRevision }} ·
+            {{ previewState }} · только приватный черновик</p>
+          <fieldset class="fieldwork-editor-rules"
+            :disabled="!editable||previewLoading||previewState==='queued'
+              ||previewState==='retry'||previewState==='conflict'">
+            <legend>Поля, которые задание может разрешить в будущем</legend>
+            <label v-for="field in PREVIEW_FIELD_KEYS" :key="field"
+              class="checkline">
+              <input type="checkbox" :checked="previewFields[field]"
+                :data-testid="'assignment-preview-field-'+field"
+                @change="updatePreviewField(field,$event)">
+              {{ previewFieldLabels[field] }}
+            </label>
+          </fieldset>
+          <div class="fieldwork-editor-actions">
+            <button type="button" :disabled="previewLoading"
+              data-testid="assignment-preview-refresh"
+              @click="loadPreview">Обновить черновик</button>
+            <button type="button"
+              :disabled="!editable||previewLoading||!previewBaseline
+                ||!dirtyPreview||previewState==='queued'
+                ||previewState==='retry'||previewState==='conflict'"
+              data-testid="assignment-preview-save"
+              @click="savePreview">Сохранить подписанный потолок</button>
+          </div>
+          <p v-if="previewNotice" role="status" class="status-text">{{ previewNotice }}</p>
+          <p v-if="previewError" role="alert" class="error-text">{{ previewError }}</p>
+        </section>
+        <p class="muted">Токены Public Card, открытая выдача файлов,
+          download scopes и реальные публичные E2EE-разрешения остаются
+          выключены до независимой проверки.</p>
       </div>
 
       <p v-if="pending" role="status" class="muted">Подписанное изменение правил, расписания, хранения или приватного текста ожидает подтверждения сервера. Следующее изменение пока заблокировано.</p>

@@ -36,16 +36,20 @@ final class AssignmentMediaSubmissionController extends Controller
             &&is_string($raw['signature']),422);
         $candidate=json_decode($raw['contract'],true,32);
         $v2=is_array($candidate)&&($candidate['version']??null)===2;
+        $v3=is_array($candidate)&&($candidate['version']??null)===3;
+        $v4=is_array($candidate)&&($candidate['version']??null)===4;
         $keys=[
             'version','submissionId','operationId','assignmentId',
             'contributorAccountId','mediaId','mediaGrantId',
             'mediaContractHash','policyRevision','policyHash','kind',
         ];
-        if($v2)array_push($keys,'captureContract','captureSignature');
+        if($v2||$v4)array_push($keys,'captureContract','captureSignature');
         $d=C::signed($raw['contract'],$raw['signature'],
-            $actor->account_spki,$v2
-                ?'pb3.assignment-media-submit.v2'
-                :'pb3.assignment-media-submit.v1',$keys);
+            $actor->account_spki,$v4
+                ?'pb3.assignment-media-submit.v4'
+                :($v3?'pb3.assignment-media-submit.v3'
+                    :($v2?'pb3.assignment-media-submit.v2'
+                        :'pb3.assignment-media-submit.v1')),$keys);
         C::mediaSubmission($d,$actor->id,$assignmentId);
         $hash=hash('sha256',$raw['contract']);
 
@@ -72,21 +76,60 @@ final class AssignmentMediaSubmissionController extends Controller
                 &&R::filesOpen($a,$now)
                 &&S::permits($a,$now)
                 &&(int)$a->policy_revision===$d['policyRevision'],409);
-            // Photo-only signed assignment roots cannot implicitly receive
-            // video/audio, even if an E2EE grant already exists.
-            $policy=$a->latest_policy_contract;
+            // V3 is imported P2 PhotoMediaFile consent without a camera claim.
+            // V4 requires an additional contributor account-signed camera
+            // capture assertion; it is NOT hardware/GPS provenance attestation.
+            // Legacy photo_records + existing v1/v2 AV semantics stay intact.
+            // Photo-only root assignments remain legitimately photo-capable.
+            $p2Photo=in_array($d['version'],[3,4],true);
+            $policy=$a->latest_policy_contract??$a->contract_json;
             abort_unless(is_string($policy),409);
             $p=json_decode($policy,true,32,JSON_THROW_ON_ERROR);
-            abort_unless(in_array(($p['version']??null),[3,4,5,6],true)
-                &&is_array($p['allowedMedia']??null)
-                &&C::allowedMedia($p['allowedMedia'],true)
-                &&in_array($d['kind'],$p['allowedMedia'],true)
-                &&($p['toPolicyRevision']??null)===$d['policyRevision']
-                &&hash_equals(hash('sha256',$policy),$d['policyHash']),409);
+            $v=$p['version']??null;
+            if($p2Photo){
+                abort_unless(in_array($v,[1,2,3,4,5,6],true)
+                    &&hash_equals(hash('sha256',$policy),$d['policyHash']),409);
+                if((int)$a->policy_revision===1){
+                    abort_unless($a->latest_policy_contract===null
+                        &&($p['assignmentId']??null)===$a->id
+                        &&($p['ownerAccountId']??null)===$a->owner_account_id
+                        &&P::verify(DB::table('identity_accounts')
+                            ->where('id',$a->owner_account_id)
+                            ->value('account_spki'),
+                            "pb3.assignment.v1\n".$policy,
+                            $a->owner_signature),409);
+                }else{
+                    $ownerSpki=DB::table('identity_accounts')
+                        ->where('id',$a->owner_account_id)->value('account_spki');
+                    abort_unless($a->latest_policy_contract!==null
+                        &&is_string($ownerSpki)
+                        &&($p['toPolicyRevision']??null)===$d['policyRevision']
+                        &&P::verify($ownerSpki,
+                            "pb3.assignment-policy.v".$v."\n".$policy,
+                            $a->latest_policy_signature),409);
+                }
+                abort_unless($v<3 ||(
+                    is_array($p['allowedMedia']??null)
+                    &&C::allowedMedia($p['allowedMedia'],true)
+                    &&in_array('photo',$p['allowedMedia'],true)),409);
+            }else{
+                // Older signed AV versions still require explicit v3+ opt-in.
+                abort_unless(in_array($v,[3,4,5,6],true)
+                    &&is_array($p['allowedMedia']??null)
+                    &&C::allowedMedia($p['allowedMedia'],true)
+                    &&in_array($d['kind'],$p['allowedMedia'],true)
+                    &&($p['toPolicyRevision']??null)===$d['policyRevision']
+                    &&hash_equals(hash('sha256',$policy),
+                        $d['policyHash']),409);
+            }
             $membership=DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
                 ->where('recipient_account_id',$actor->id)
-                ->where('role','contributor')->where('state','accepted')->first();
+                ->where('role','contributor')->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->first();
             abort_unless($membership,403);
 
             $media=DB::table('media_files_v1')
@@ -99,7 +142,7 @@ final class AssignmentMediaSubmissionController extends Controller
                     $d['mediaContractHash']),409);
 
             $capture=null;
-            if($d['version']===2){
+            if(in_array($d['version'],[2,4],true)){
                 abort_unless(is_string($d['captureContract']??null)
                     &&is_string($d['captureSignature']??null),422);
                 $capture=C::signed($d['captureContract'],
@@ -123,11 +166,17 @@ final class AssignmentMediaSubmissionController extends Controller
                 // Server acceptance of the signed policy predates capture.
                 // Allow only bounded client clock skew. Neither this check
                 // nor the account signature attests real-world recording time.
-                $policyAccepted=DB::table('assignment_policy_events_v1')
-                    ->where('assignment_id',$assignmentId)
-                    ->where('to_revision',$d['policyRevision'])
-                    ->value('occurred_at_ms');
+                // Photo-only roots use their already signed creation as the
+                // policy's initial acceptance; AV v2 still requires an
+                // explicit signed policy amendment event.
+                $policyAccepted=$d['policyRevision']===1&&$p2Photo
+                    ?(strtotime((string)$a->created_at)*1000)
+                    :DB::table('assignment_policy_events_v1')
+                        ->where('assignment_id',$assignmentId)
+                        ->where('to_revision',$d['policyRevision'])
+                        ->value('occurred_at_ms');
                 abort_unless($policyAccepted!==null
+                    &&$policyAccepted!==false
                     &&$capture['startedAt']>=(int)$policyAccepted-120000,409);
             }
 
@@ -140,11 +189,35 @@ final class AssignmentMediaSubmissionController extends Controller
                 ->where('recipient_account_id',$a->owner_account_id)
                 ->where('state','active')->first();
             abort_unless($grant&&$grant->expires_at>$now
-                &&($grant->assignment_id===null
-                    ||$grant->assignment_id===$assignmentId)
+                &&($p2Photo
+                    ?($grant->assignment_id===$assignmentId)
+                    :($grant->assignment_id===null
+                        ||$grant->assignment_id===$assignmentId))
                 &&$grant->expires_at<=$media->expires_at
                 &&hash_equals($grant->media_contract_hash,
                     $media->contract_hash),403);
+            if($p2Photo){
+                // v1 personal grants are NOT sufficient for a Photo
+                // assignment receipt. The contributor must separately sign
+                // an assignment-scoped v2 E2EE grant to this owner.
+                $g=json_decode($grant->contract_json,true,32);
+                $gOwner=DB::table('identity_accounts')
+                    ->where('id',$actor->id)->value('account_spki');
+                abort_unless(is_array($g)&&($g['version']??null)===2
+                    &&($g['scope']??null)==='read'
+                    &&($g['assignmentId']??null)===$assignmentId
+                    &&($g['mediaId']??null)===$media->id
+                    &&($g['mediaContractHash']??null)===$media->contract_hash
+                    &&($g['ownerAccountId']??null)===$actor->id
+                    &&($g['recipientAccountId']??null)===$a->owner_account_id
+                    &&($g['grantId']??null)===$grant->id
+                    &&($g['expiresAt']??null)===(int)$grant->expires_at
+                    &&hash_equals(hash('sha256',$grant->contract_json),
+                        $grant->contract_hash)
+                    &&is_string($gOwner)
+                    &&P::verify($gOwner,"pb3.media-grant.v2\n".
+                        $grant->contract_json,$grant->account_signature),403);
+            }
             abort_if(DB::table('assignment_media_submissions_v1')
                 ->where('media_id',$media->id)->exists(),409);
             DB::table('assignment_media_submissions_v1')->insert([
@@ -158,9 +231,9 @@ final class AssignmentMediaSubmissionController extends Controller
                 'policy_revision'=>$d['policyRevision'],
                 'policy_hash'=>$d['policyHash'],
                 'media_contract_hash'=>$media->contract_hash,
-                'capture_contract_json'=>$d['version']===2
+                'capture_contract_json'=>in_array($d['version'],[2,4],true)
                     ?$d['captureContract']:null,
-                'capture_signature'=>$d['version']===2
+                'capture_signature'=>in_array($d['version'],[2,4],true)
                     ?$d['captureSignature']:null,
                 'created_at'=>now(),
             ]);
@@ -191,13 +264,38 @@ final class AssignmentMediaSubmissionController extends Controller
             ->whereColumn('g.media_id','s.media_id')
             ->whereColumn('g.owner_account_id','s.contributor_account_id')
             ->where('g.recipient_account_id',$actor->id)
+            // Every confirmed assignment receipt requires a currently
+            // accepted contributor. Personal v1 grants remain independent,
+            // but are no longer advertised as live Fieldwork submissions.
+            ->whereExists(function($membership){
+                $membership->selectRaw('1')
+                    ->from('assignment_invites_v1 as i')
+                    ->whereColumn('i.assignment_id','s.assignment_id')
+                    ->whereColumn('i.recipient_account_id',
+                        's.contributor_account_id')
+                    ->where('i.role','contributor')
+                    ->where('i.state','accepted')
+                    ->whereNotExists(static function($rev){
+                        $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                            ->whereColumn('rm.invite_id','i.id');
+                    });
+            })
+            ->where(function($scope){
+                // P2 imported JPEG always requires an assignment-scoped
+                // recipient E2EE grant, never a personal v1 grant.
+                $scope->where('s.media_type','!=','photo')
+                    ->orWhereColumn('g.assignment_id','s.assignment_id');
+            })
             ->where('m.state','active')->where('m.expires_at','>',$now)
             ->where('g.state','active')->where('g.expires_at','>',$now);
         if($after!==null)$q->where('s.id','>',$after);
         $rows=$q->orderBy('s.id')->limit(51)->get([
             's.id','s.media_id','s.media_grant_id',
             's.media_type','s.contributor_account_id',
-            's.capture_contract_json',
+            // Return the immutable signed consent evidence, never decrypted
+            // file contents. The owner's device verifies it with its peer pin.
+            's.contract_json','s.contributor_signature',
+            's.media_contract_hash','s.capture_contract_json',
         ]);
         $more=$rows->count()>50;
         $items=$rows->take(50)->map(static fn($row)=>[
@@ -205,6 +303,9 @@ final class AssignmentMediaSubmissionController extends Controller
             'mediaGrantId'=>$row->media_grant_id,
             'mediaType'=>$row->media_type,
             'contributorAccountId'=>$row->contributor_account_id,
+            'contract'=>$row->contract_json,
+            'signature'=>$row->contributor_signature,
+            'mediaContractHash'=>$row->media_contract_hash,
             'capturedInAssignment'=>$row->capture_contract_json!==null,
         ])->values()->all();
         return $this->sync->json([

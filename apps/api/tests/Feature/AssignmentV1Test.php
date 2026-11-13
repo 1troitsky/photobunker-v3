@@ -148,6 +148,202 @@ final class AssignmentV1Test extends TestCase
         $this->postJson($url,$input)->assertOk()->assertJsonPath('unchanged',true);
     }
 
+    public function test_p2_owner_signed_member_removal_is_immutable_replayable_and_closes_live_membership():void
+    {
+        $this->createAssignment();
+        $inviteId=$this->invite();
+        $this->accept($inviteId);
+        $url='/assignments/v1/'.$this->assignmentId
+            .'/invites/'.$inviteId.'/remove';
+        $payload=[
+            'version'=>1,'action'=>'remove',
+            'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,'inviteId'=>$inviteId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'recipientAccountId'=>$this->people['recipient']['account'],
+        ];
+        $proof=$this->signed('owner','pb3.assignment-member-remove.v1',$payload);
+        $this->as('recipient');
+        $this->postJson($url,$proof)->assertUnauthorized();
+        $this->as('owner');
+        $this->postJson($url,$proof)->assertOk()
+            ->assertJsonPath('state','removed')
+            ->assertJsonPath('unchanged',false);
+        $this->assertDatabaseHas('assignment_invites_v1',[
+            'id'=>$inviteId,'state'=>'removed',
+        ]);
+        $this->assertDatabaseCount('assignment_member_removals_v1',1);
+        $this->getJson('/assignments/v1/'.$this->assignmentId.'/participants')
+            ->assertOk()->assertJsonPath('items.0.state','removed')
+            ->assertJsonPath('items.0.removalContract',$proof['contract'])
+            ->assertJsonPath('items.0.removalSignature',$proof['signature']);
+        $this->as('recipient');
+        $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1/invites/received')
+            ->assertJsonPath('items',[]);
+        $notices='/assignments/v1/invites/removals';
+        $this->getJson($notices)->assertOk()
+            ->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.inviteId',$inviteId)
+            ->assertJsonPath('items.0.assignmentId',$this->assignmentId)
+            ->assertJsonPath('items.0.ownerAccountId',$this->people['owner']['account'])
+            ->assertJsonPath('items.0.recipientAccountId',$this->people['recipient']['account'])
+            ->assertJsonPath('items.0.ownerAccountSpki',$this->people['owner']['spki'])
+            ->assertJsonPath('items.0.removalContract',$proof['contract'])
+            ->assertJsonPath('items.0.removalSignature',$proof['signature'])
+            ->assertJsonPath('nextCursor',null);
+        $this->getJson($notices.'?after=invalid')->assertUnprocessable();
+        $this->as('outsider');
+        $this->getJson($notices)->assertOk()->assertJsonPath('items',[]);
+        $this->as('owner');
+        $this->getJson($notices)->assertOk()->assertJsonPath('items',[]);
+        $this->as('recipient');
+        // An inconsistent mutable projection is NOT a new membership:
+        // the immutable signed removal event permanently wins.
+        DB::table('assignment_invites_v1')->where('id',$inviteId)
+            ->update(['state'=>'accepted']);
+        $this->getJson('/assignments/v1')->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1/invites/received')
+            ->assertJsonPath('items',[]);
+        foreach(['/policy-history','/schedule-history',
+            '/retention-history','/private-history'] as $suffix){
+            $this->getJson('/assignments/v1/'.$this->assignmentId.$suffix)
+                ->assertNotFound();
+        }
+        $acceptRecord=DB::table('assignment_invites_v1')
+            ->where('id',$inviteId)->first();
+        $this->postJson('/assignments/v1/'.$this->assignmentId
+            .'/invites/'.$inviteId.'/accept',[
+                'contract'=>$acceptRecord->accepted_contract,
+                'signature'=>$acceptRecord->accepted_signature,
+            ])->assertConflict();
+        $this->as('owner');
+        $this->postJson($url,$proof)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('assignment_invites_v1',[
+            'id'=>$inviteId,'state'=>'removed',
+        ]);
+        $finish=$this->signedState('owner','finish',1);
+        $this->postJson('/assignments/v1/'.$this->assignmentId.'/state',$finish)
+            ->assertOk()->assertJsonPath('state','finished');
+        $this->postJson($url,$proof)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->as('recipient');
+        $this->getJson($notices)->assertOk()
+            ->assertJsonPath('items.0.removalContract',$proof['contract']);
+        $this->as('owner');
+        $fork=$this->signed('owner','pb3.assignment-member-remove.v1',
+            [...$payload,'operationId'=>(string)Str::uuid()]);
+        $this->postJson($url,$fork)->assertConflict();
+        $this->assertDatabaseCount('assignment_member_removals_v1',1);
+    }
+
+    public function test_p2_pending_invitation_can_be_cancelled_with_signed_removal():void
+    {
+        $this->createAssignment();
+        $inviteId=$this->invite();
+        $payload=[
+            'version'=>1,'action'=>'remove',
+            'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,'inviteId'=>$inviteId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'recipientAccountId'=>$this->people['recipient']['account'],
+        ];
+        $proof=$this->signed('owner','pb3.assignment-member-remove.v1',$payload);
+        $this->as('owner');
+        $url='/assignments/v1/'.$this->assignmentId
+            .'/invites/'.$inviteId.'/remove';
+        $this->postJson($url,$proof)->assertOk()
+            ->assertJsonPath('state','removed');
+        $this->as('recipient');
+        $this->getJson('/assignments/v1/invites/received')
+            ->assertJsonPath('items',[]);
+        $bad=$this->signed('recipient','pb3.assignment-accept.v1',[
+            'version'=>1,'action'=>'accept','inviteId'=>$inviteId,
+            'assignmentId'=>$this->assignmentId,
+            'recipientAccountId'=>$this->people['recipient']['account'],
+            'operationId'=>(string)Str::uuid(),
+        ]);
+        $this->postJson('/assignments/v1/'.$this->assignmentId
+            .'/invites/'.$inviteId.'/accept',$bad)->assertConflict();
+        $this->assertDatabaseCount('assignment_member_removals_v1',1);
+    }
+
+    public function test_p2_26_fifty_two_signed_assignments_and_received_invites_are_cursor_paged():void
+    {
+        $this->createAssignment();
+        $firstInvite=$this->invite();
+        $this->accept($firstInvite);
+        $root=(array)DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $inv=(array)DB::table('assignment_invites_v1')
+            ->where('id',$firstInvite)->first();
+        // Generate independently signed, synthetic but FK-correct siblings
+        // without consuming a real user's limited monthly creation quota.
+        for($i=0;$i<51;$i++){
+            $assignment=(string)Str::uuid();
+            $op=(string)Str::uuid();
+            $rootPayload=json_decode($root['contract_json'],true,32,JSON_THROW_ON_ERROR);
+            $rootPayload['assignmentId']=$assignment;
+            $rootPayload['operationId']=$op;
+            $rootSigned=$this->signed('owner','pb3.assignment.v1',$rootPayload);
+            DB::table('assignment_records_v1')->insert([
+                ...$root,'id'=>$assignment,'operation_id'=>$op,
+                'contract_json'=>$rootSigned['contract'],
+                'contract_hash'=>hash('sha256',$rootSigned['contract']),
+                'owner_signature'=>$rootSigned['signature'],
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+            $inviteId=(string)Str::uuid();
+            $invitePayload=json_decode($inv['contract_json'],true,32,JSON_THROW_ON_ERROR);
+            $invitePayload['inviteId']=$inviteId;
+            $invitePayload['assignmentId']=$assignment;
+            $signedInvite=$this->signed('owner','pb3.assignment-invite.v1',$invitePayload);
+            $acceptedOp=(string)Str::uuid();
+            $accept=$this->signed('recipient','pb3.assignment-accept.v1',[
+                'version'=>1,'action'=>'accept','inviteId'=>$inviteId,
+                'assignmentId'=>$assignment,
+                'recipientAccountId'=>$this->people['recipient']['account'],
+                'operationId'=>$acceptedOp,
+            ]);
+            DB::table('assignment_invites_v1')->insert([
+                ...$inv,'id'=>$inviteId,'assignment_id'=>$assignment,
+                'contract_json'=>$signedInvite['contract'],
+                'owner_signature'=>$signedInvite['signature'],
+                'contract_hash'=>hash('sha256',$signedInvite['contract']),
+                'accepted_contract'=>$accept['contract'],
+                'accepted_signature'=>$accept['signature'],
+                'accepted_operation_id'=>$acceptedOp,
+                'accepted_at'=>now(),'state'=>'accepted',
+                'created_at'=>now(),'updated_at'=>now(),
+            ]);
+        }
+        $this->as('recipient');
+        $url='/assignments/v1/invites/received';
+        $first=$this->getJson($url)->assertOk()
+            ->assertJsonCount(50,'items')->json();
+        $this->assertSame($first['items'][49]['inviteId'],$first['nextCursor']);
+        $second=$this->getJson($url.'?after='.$first['nextCursor'])
+            ->assertOk()->assertJsonCount(2,'items')->json();
+        $this->assertNull($second['nextCursor']);
+        $this->assertCount(52,array_unique(array_merge(
+            array_column($first['items'],'inviteId'),
+            array_column($second['items'],'inviteId'),
+        )));
+        $this->getJson($url.'?after=broken-cursor')->assertUnprocessable();
+        $this->getJson($url.'?after='.$second['items'][1]['inviteId'])
+            ->assertOk()->assertJsonPath('items',[]);
+        $overview='/assignments/v1';
+        $page1=$this->getJson($overview)->assertOk()
+            ->assertJsonCount(50,'items')->json();
+        $page2=$this->getJson($overview.'?after='.$page1['nextCursor'])
+            ->assertOk()->assertJsonCount(2,'items')->json();
+        $this->assertNull($page2['nextCursor']);
+        $this->as('outsider');
+        $this->getJson($url)->assertOk()->assertJsonPath('items',[]);
+        $this->getJson($overview)->assertOk()->assertJsonPath('items',[]);
+    }
+
     private function signedState(string $role,string $action,int $from,
         ?string $operationId=null):array
     {
@@ -206,6 +402,164 @@ final class AssignmentV1Test extends TestCase
             'assignmentAccessUntil'=>$assignment,
             'deleteOriginals'=>$deleteOriginals,
         ]);
+    }
+
+    private function signedPreviewCeiling(
+        int $from=0,?string $previousHash=null,
+        ?array $fields=null,?array $actions=null,
+    ):array{
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        return $this->signed('owner','pb3.assignment-preview-ceiling.v1',[
+            'version'=>1,'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'rootPolicyHash'=>$a->contract_hash,
+            'fromRevision'=>$from,'toRevision'=>$from+1,
+            'previousPolicyHash'=>$previousHash??str_repeat('0',64),
+            'publication'=>'disabled',
+            'fields'=>$fields??[
+                'description'=>false,'capturedAt'=>false,
+                'updatedAt'=>false,'tags'=>false,'authorTeam'=>false,
+                'gps'=>false,'metadata'=>false,
+            ],
+            'actions'=>$actions??[
+                'view'=>false,'copy'=>false,'download'=>false,'share'=>false,
+            ],
+            'expiresAt'=>now()->addDays(2)->getTimestampMs(),
+        ]);
+    }
+
+    public function test_assignment_preview_ceiling_signed_immutable_private_and_independent_of_capture_rules():void
+    {
+        $this->createAssignment();
+        $url='/assignments/v1/'.$this->assignmentId.'/preview-ceiling';
+        $this->getJson($url)->assertNotFound();
+        $draft=$this->signedPreviewCeiling();
+        $this->postJson($url,$draft)->assertCreated()
+            ->assertJsonPath('revision',1)
+            ->assertJsonPath('published',false)
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$draft)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $v=$this->getJson($url)->assertOk()
+            ->assertJsonPath('contract',$draft['contract'])
+            ->assertJsonPath('published',false)
+            ->assertJsonMissingPath('publicUrl')
+            ->assertJsonMissingPath('envelope')
+            ->assertJsonMissingPath('mediaId');
+        $hash=hash('sha256',$draft['contract']);
+        $this->assertSame($hash,$v->json('policyHash'));
+
+        $next=$this->signedPreviewCeiling(1,$hash,[
+            'description'=>true,'capturedAt'=>false,
+            'updatedAt'=>false,'tags'=>true,'authorTeam'=>false,
+            'gps'=>false,'metadata'=>false,
+        ]);
+        $this->postJson($url,$next)->assertCreated()
+            ->assertJsonPath('revision',2);
+        $this->getJson($url)->assertOk()
+            ->assertJsonPath('revision',2)
+            ->assertJsonPath('contract',$next['contract']);
+        $this->assertDatabaseCount('assignment_preview_ceiling_events_v1',2);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
+        $this->assertDatabaseHas('assignment_preview_ceilings_v1',[
+            'assignment_id'=>$this->assignmentId,
+            'owner_account_id'=>$this->people['owner']['account'],
+            'revision'=>2,
+        ]);
+        $this->as('recipient');
+        $this->getJson($url)->assertNotFound();
+        $this->postJson($url,$draft)->assertNotFound();
+        $this->as('outsider');
+        $this->getJson($url)->assertNotFound();
+    }
+
+    public function test_assignment_preview_ceiling_rejects_public_scope_forgery_and_revision_forks():void
+    {
+        $this->createAssignment();
+        $url='/assignments/v1/'.$this->assignmentId.'/preview-ceiling';
+        $input=$this->signedPreviewCeiling();
+        $base=json_decode($input['contract'],true);
+        foreach([
+            [...$base,'publication'=>'public'],
+            [...$base,'publication'=>'published'],
+            [...$base,'actions'=>[...$base['actions'],'view'=>true]],
+            [...$base,'actions'=>[...$base['actions'],'copy'=>true]],
+            [...$base,'actions'=>[...$base['actions'],'download'=>true]],
+            [...$base,'actions'=>[...$base['actions'],'share'=>true]],
+            [...$base,'actions'=>[...$base['actions'],'original'=>true]],
+            [...$base,'fields'=>[...$base['fields'],'gps'=>'true']],
+            [...$base,'fields'=>[...$base['fields'],'privateKey'=>true]],
+            [...$base,'ownerAccountId'=>$this->people['recipient']['account']],
+            [...$base,'assignmentId'=>(string)Str::uuid()],
+            [...$base,'rootPolicyHash'=>str_repeat('e',64)],
+            [...$base,'expiresAt'=>0],
+            [...$base,'previousPolicyHash'=>'wrong'],
+        ] as $changed){
+            $changed['operationId']=(string)Str::uuid();
+            $response=$this->postJson($url,$this->signed(
+                'owner','pb3.assignment-preview-ceiling.v1',$changed));
+            $this->assertContains($response->status(),[403,404,409,410,422]);
+        }
+        $this->assertDatabaseCount('assignment_preview_ceiling_events_v1',0);
+        $this->postJson($url,[
+            'contract'=>$input['contract'],
+            'signature'=>P::encode(random_bytes(64)),
+        ])->assertUnauthorized();
+        $this->postJson($url,$input)->assertCreated();
+        $this->postJson($url,$this->signedPreviewCeiling())
+            ->assertConflict();
+        $conflict=json_decode($input['contract'],true);
+        $conflict['fields']['gps']=true;
+        $this->postJson($url,$this->signed(
+            'owner','pb3.assignment-preview-ceiling.v1',$conflict))
+            ->assertConflict();
+        $this->assertDatabaseCount('assignment_preview_ceiling_events_v1',1);
+    }
+
+    public function test_assignment_preview_ceiling_detects_event_tamper_retention_expiry_and_rollback():void
+    {
+        $this->createAssignment();
+        $url='/assignments/v1/'.$this->assignmentId.'/preview-ceiling';
+        $this->postJson($url,$this->signedPreviewCeiling())->assertCreated();
+        $migration=require database_path(
+            'migrations/2026_11_11_000006_create_assignment_preview_ceiling_v1.php');
+        try{
+            $migration->down();
+            $this->fail('Signed preview history must survive rollback.');
+        }catch(\RuntimeException $e){
+            $this->assertSame('pb3.assignment_preview.rollback_forbidden',
+                $e->getMessage());
+        }
+        $event=DB::table('assignment_preview_ceiling_events_v1')->first();
+        DB::table('assignment_preview_ceiling_events_v1')
+            ->where('operation_id',$event->operation_id)
+            ->update(['contract_hash'=>str_repeat('f',64)]);
+        $this->getJson($url)->assertConflict();
+        DB::table('assignment_preview_ceiling_events_v1')
+            ->where('operation_id',$event->operation_id)
+            ->update(['contract_hash'=>$event->contract_hash]);
+        $this->getJson($url)->assertOk();
+        $row=DB::table('assignment_preview_ceilings_v1')->first();
+        DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->update(['expires_at_ms'=>$row->expires_at_ms+10000]);
+        $this->getJson($url)->assertConflict();
+        DB::table('assignment_preview_ceilings_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->update(['expires_at_ms'=>$row->expires_at_ms]);
+
+        // An assignment can close access to its own preview without
+        // deleting a contributor's original or granting public access.
+        DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)
+            ->update(['files_access_until'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($url)->assertGone();
+        $this->postJson($url,$this->signedPreviewCeiling(1,
+            hash('sha256',$event->contract_json)))->assertGone();
+        $this->assertDatabaseCount('assignment_preview_ceiling_events_v1',1);
+        $this->assertDatabaseCount('media_recipient_grants_v1',0);
     }
 
     public function test_p1_21_retention_is_signed_and_replay_safe():void
@@ -647,6 +1001,7 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('error','assignment.monthly_quota_exceeded')
             ->assertJsonPath('limit',3);
         $this->assertDatabaseCount('assignment_records_v1',3);
+        $this->assertDatabaseCount('assignment_creation_meter_v1',3);
 
         // Owner's draft or server-visible state cannot reset billing usage:
         // finished records are counted too; deleting is not an escape hatch.
@@ -669,10 +1024,17 @@ final class AssignmentV1Test extends TestCase
         $this->createAssignment();
         $url='/assignments/v1/usage';
         $this->getJson($url)->assertJsonPath('used',1);
-        // A previous calendar month does not consume this month's Free
-        // quota. Records keep the actual original server-created date.
+        // A tampered/mutated live assignment timestamp cannot reset this
+        // month's quota: ONLY the append-only creation meter is authoritative.
         DB::table('assignment_records_v1')
             ->where('id',$this->assignmentId)
+            ->update(['created_at'=>now('UTC')->subMonth()->startOfMonth()]);
+        $this->getJson($url)->assertJsonPath('used',1)
+            ->assertJsonPath('remaining',2);
+        // Direct test-fixture backdating represents a genuinely old creation
+        // meter row. The current server UTC month must then exclude it.
+        DB::table('assignment_creation_meter_v1')
+            ->where('assignment_id',$this->assignmentId)
             ->update(['created_at'=>now('UTC')->subMonth()->startOfMonth()]);
         $this->getJson($url)->assertJsonPath('used',0)
             ->assertJsonPath('remaining',3);
@@ -680,6 +1042,67 @@ final class AssignmentV1Test extends TestCase
         $this->createAssignment(2);
         $this->getJson($url)->assertJsonPath('used',1)
             ->assertJsonPath('remaining',2);
+    }
+
+    public function test_verified_go_allows_paid_creations_and_deleted_items_do_not_refund_month():void
+    {
+        $owner=$this->people['owner']['account'];
+        $ledger=app(\App\Billing\EntitlementLedger::class);
+        $ledger->current($owner);
+        $start=\Carbon\CarbonImmutable::now('UTC')
+            ->subMinutes(2)->startOfSecond();
+        $end=\Carbon\CarbonImmutable::now('UTC')
+            ->addDay()->startOfSecond();
+        $ledger->advanceTrusted($owner,'go',1,
+            hash('sha256','verified-go-assignments-test:'.$owner),
+            'settlement_verified',$start,$end);
+
+        $this->as('owner');
+        $this->getJson('/assignments/v1/usage')
+            ->assertOk()->assertJsonPath('planId','go')
+            ->assertJsonPath('limit',30)
+            ->assertJsonPath('remaining',30);
+        $created=[];
+        for($i=1;$i<=4;$i++){
+            $this->assignmentId=(string)Str::uuid();
+            $this->createAssignment($i);
+            $created[]=$this->assignmentId;
+        }
+        $this->getJson('/assignments/v1/usage')
+            ->assertJsonPath('planId','go')
+            ->assertJsonPath('used',4)->assertJsonPath('remaining',26);
+        $this->assertDatabaseCount('assignment_creation_meter_v1',4);
+
+        $first=DB::table('assignment_records_v1')->where('id',$created[0])
+            ->first(['contract_json','owner_signature']);
+        DB::table('assignment_records_v1')->where('id',$created[0])->delete();
+        $this->getJson('/assignments/v1/usage')
+            ->assertJsonPath('used',4)->assertJsonPath('remaining',26);
+        $this->assertDatabaseHas('assignment_creation_meter_v1',[
+            'assignment_id'=>$created[0],'owner_account_id'=>$owner,
+        ]);
+        // A physically removed signed contract must NEVER be recreated from
+        // the original operation even after deletion. Reject resurrection.
+        $this->postJson('/assignments/v1',[
+            'contract'=>$first->contract_json,
+            'signature'=>$first->owner_signature,
+        ])->assertGone();
+        $this->assertDatabaseCount('assignment_records_v1',3);
+
+        try{
+            // Paid grace reverts to Free admission (3/month), but existing
+            // signed records and the 4-entry meter remain intact.
+            \Carbon\CarbonImmutable::setTestNow($end->addDay());
+            $this->getJson('/assignments/v1/usage')
+                ->assertJsonPath('planId','free')
+                ->assertJsonPath('limit',3)
+                ->assertJsonPath('used',4)
+                ->assertJsonPath('remaining',0);
+        }finally{
+            \Carbon\CarbonImmutable::setTestNow();
+        }
+        $this->assertDatabaseCount('assignment_creation_meter_v1',4);
+        $this->assertDatabaseCount('assignment_records_v1',3);
     }
 
     public function test_policy_history_is_signed_append_only_and_visible_only_after_consent():void
@@ -1275,7 +1698,33 @@ final class AssignmentV1Test extends TestCase
         $this->getJson('/assignments/v1')
             ->assertJsonPath('items.0.confirmedPhotoCount',1);
         $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
-            ->assertJsonPath('items.0.photoId',$photo);
+            ->assertJsonPath('items.0.photoId',$photo)
+            ->assertJsonPath('items.0.contract',$input['contract'])
+            ->assertJsonPath('items.0.signature',$input['signature'])
+            ->assertJsonPath('items.0.contractHash',hash('sha256',$input['contract']))
+            ->assertJsonPath('items.0.policyRevision',1);
+        // A member is no longer accepted: both progress and P1 owner
+        // receipt projection must stop at once, not just P2 MediaFile.
+        $this->as('owner');
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'pending']);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',0);
+        $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
+            ->assertJsonPath('items',[]);
+        // Historical signed receipt remains immutable and recoverable if
+        // membership is later restored. No personal E2EE file is deleted.
+        $this->assertDatabaseCount('assignment_submissions_v1',1);
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'accepted']);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',1);
+        $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
+            ->assertJsonCount(1,'items');
         $this->as('outsider');
         $this->getJson('/assignments/v1/'.$this->assignmentId.'/submissions')
             ->assertNotFound();
@@ -1300,6 +1749,69 @@ final class AssignmentV1Test extends TestCase
         $this->assertDatabaseHas('photo_access_grants',[
             'id'=>$grant,'state'=>'revoked',
         ]);
+    }
+
+    public function test_p1_owner_photo_submissions_paginate_beyond_fifty_with_scoped_cursor():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $contributor=$this->people['recipient']['account'];
+        $owner=$this->people['owner']['account'];
+        $device=$this->people['recipient']['device'];
+        $expiry=now()->addDay()->getTimestampMs();
+        $grantExpiry=now()->addHour()->getTimestampMs();
+        $photos=[];$grants=[];$receipts=[];
+        for($i=0;$i<52;$i++){
+            $photo=(string)Str::uuid();
+            $grant=(string)Str::uuid();
+            $photos[]=[
+                'id'=>$photo,'account_id'=>$contributor,'device_id'=>$device,
+                'operation_id'=>(string)Str::uuid(),'state'=>'active',
+                'expires_at'=>$expiry,'contract_hash'=>str_repeat('a',64),
+                'contract_json'=>'{}','signature'=>'fixture',
+                'created_at'=>now(),'updated_at'=>now(),
+            ];
+            $grants[]=[
+                'id'=>$grant,'photo_id'=>$photo,'owner_account_id'=>$contributor,
+                'recipient_account_id'=>$owner,
+                'recipient_key_digest'=>str_repeat('b',64),
+                'expires_at'=>$grantExpiry,'state'=>'active',
+                'contract_hash'=>str_repeat('c',64),
+                'contract_json'=>'{}','account_signature'=>'fixture',
+                'created_at'=>now(),'updated_at'=>now(),
+            ];
+            $receipts[]=[
+                'id'=>(string)Str::uuid(),'assignment_id'=>$this->assignmentId,
+                'contributor_account_id'=>$contributor,'photo_id'=>$photo,
+                'photo_grant_id'=>$grant,'operation_id'=>(string)Str::uuid(),
+                'policy_revision'=>1,'contract_hash'=>str_repeat('d',64),
+                'contract_json'=>'{}','contributor_signature'=>'fixture',
+                'created_at'=>now(),
+            ];
+        }
+        DB::table('photo_records')->insert($photos);
+        DB::table('photo_access_grants')->insert($grants);
+        DB::table('assignment_submissions_v1')->insert($receipts);
+        $this->as('owner');
+        $url='/assignments/v1/'.$this->assignmentId.'/submissions';
+        $first=$this->getJson($url)->assertOk()
+            ->assertJsonCount(50,'items')->json();
+        $this->assertSame($first['items'][49]['submissionId'],
+            $first['nextCursor']);
+        $second=$this->getJson($url.'?after='.$first['nextCursor'])
+            ->assertOk()->assertJsonCount(2,'items')->json();
+        $this->assertNull($second['nextCursor']);
+        $this->assertCount(52,array_unique(array_merge(
+            array_column($first['items'],'submissionId'),
+            array_column($second['items'],'submissionId'),
+        )));
+        $this->getJson($url.'?after=not-a-uuid')
+            ->assertUnprocessable();
+        $this->getJson($url.'?after='.$second['items'][1]['submissionId'])
+            ->assertOk()->assertJsonPath('items',[]);
+        $this->as('outsider');
+        $this->getJson($url.'?after='.$first['nextCursor'])
+            ->assertNotFound();
     }
 
     private function signedMediaPolicyV3(array $allowed,int $from=1):array
@@ -1537,6 +2049,256 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('items.0.confirmedVideoCount',2);
     }
 
+    /**
+     * The imported P2 photo is contributor-owned MediaFile ciphertext. The
+     * contributor explicitly signs a distinct assignment-scoped v2 media
+     * E2EE grant; it is not an original P1 photo_records permission.
+     */
+    private function signedP2PhotoGrantFixture():array
+    {
+        $media=$this->mediaAndGrant('photo');
+        $row=DB::table('media_recipient_grants_v1')
+            ->where('id',$media['grantId'])->first();
+        $fields=[
+            'version'=>2,'grantId'=>$row->id,'mediaId'=>$media['id'],
+            'ownerAccountId'=>$this->people['recipient']['account'],
+            'recipientAccountId'=>$this->people['owner']['account'],
+            'assignmentId'=>$this->assignmentId,
+            'recipientKeyDigest'=>$row->recipient_key_digest,
+            'mediaContractHash'=>$media['hash'],'scope'=>'read',
+            'expiresAt'=>(int)$row->expires_at,
+            'envelope'=>[
+                'ephemeralSpki'=>$this->people['recipient']['spki'],
+                'salt'=>P::encode(random_bytes(16)),
+                'iv'=>P::encode(random_bytes(12)),
+                'ciphertext'=>P::encode(random_bytes(48)),
+            ],
+        ];
+        $signed=$this->signed('recipient','pb3.media-grant.v2',$fields);
+        DB::table('media_recipient_grants_v1')->where('id',$row->id)
+            ->update([
+                'assignment_id'=>$this->assignmentId,
+                'contract_json'=>$signed['contract'],
+                'contract_hash'=>hash('sha256',$signed['contract']),
+                'account_signature'=>$signed['signature'],
+            ]);
+        return $media;
+    }
+
+    private function signedP2PhotoSubmit(array $media):array
+    {
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        return $this->signed('recipient','pb3.assignment-media-submit.v3',[
+            'version'=>3,'submissionId'=>(string)Str::uuid(),
+            'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'contributorAccountId'=>$this->people['recipient']['account'],
+            'mediaId'=>$media['id'],'mediaGrantId'=>$media['grantId'],
+            'mediaContractHash'=>$media['hash'],
+            'policyRevision'=>(int)$a->policy_revision,
+            'policyHash'=>hash('sha256',
+                $a->latest_policy_contract??$a->contract_json),
+            'kind'=>'photo',
+        ]);
+    }
+
+    private function signedCapturedP2PhotoSubmit(
+        array $media,array $captureChanges=[]
+    ):array
+    {
+        $a=DB::table('assignment_records_v1')
+            ->where('id',$this->assignmentId)->first();
+        $hash=hash('sha256',$a->latest_policy_contract??$a->contract_json);
+        $now=now()->getTimestampMs();
+        $policyStart=(int)(strtotime((string)$a->created_at)*1000);
+        $start=max((int)$a->starts_at,$policyStart,$now-1000);
+        $finish=max($now,$start+10);
+        $claim=array_merge([
+            'version'=>1,'assignmentId'=>$this->assignmentId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'contributorAccountId'=>$this->people['recipient']['account'],
+            'policyRevision'=>(int)$a->policy_revision,
+            'policyHash'=>$hash,
+            'mediaId'=>$media['id'],'mediaContractHash'=>$media['hash'],
+            'mediaType'=>'photo','startedAt'=>$start,'finishedAt'=>$finish,
+        ],$captureChanges);
+        $capture=$this->signed('recipient',
+            'pb3.assignment-media-capture.v1',$claim);
+        return $this->signed('recipient','pb3.assignment-media-submit.v4',[
+            'version'=>4,'submissionId'=>(string)Str::uuid(),
+            'operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,
+            'contributorAccountId'=>$this->people['recipient']['account'],
+            'mediaId'=>$media['id'],'mediaGrantId'=>$media['grantId'],
+            'mediaContractHash'=>$media['hash'],
+            'policyRevision'=>(int)$a->policy_revision,'policyHash'=>$hash,
+            'kind'=>'photo',
+            'captureContract'=>$capture['contract'],
+            'captureSignature'=>$capture['signature'],
+        ]);
+    }
+
+    public function test_p2_v4_client_signed_camera_jpeg_is_scoped_to_root_policy_and_owner_e2ee_grant():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $media=$this->signedP2PhotoGrantFixture();
+        $input=$this->signedCapturedP2PhotoSubmit($media);
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $this->as('recipient');
+        $this->postJson($url,$input)->assertCreated()
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$input)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->as('owner');
+        $this->getJson($url)->assertOk()->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.mediaId',$media['id'])
+            ->assertJsonPath('items.0.mediaType','photo')
+            ->assertJsonPath('items.0.capturedInAssignment',true)
+            ->assertJsonPath('items.0.contract',$input['contract'])
+            ->assertJsonPath('items.0.signature',$input['signature']);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',1);
+        $this->assertDatabaseHas('assignment_media_submissions_v1',[
+            'media_id'=>$media['id'],
+            'capture_contract_json'=>json_decode($input['contract'],true)['captureContract'],
+        ]);
+        // Read ACL remains independently tied to a live, scoped grant.
+        DB::table('media_recipient_grants_v1')->where('id',$media['grantId'])
+            ->update(['state'=>'revoked']);
+        $this->getJson($url)->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',0);
+        $this->as('recipient');
+        $this->postJson($url,$input)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$media['id'],'state'=>'active',
+        ]);
+    }
+
+    public function test_p2_v4_camera_photo_rejects_forged_policy_media_or_capture_claim():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $media=$this->signedP2PhotoGrantFixture();
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $this->as('recipient');
+        $ok=$this->signedCapturedP2PhotoSubmit($media);
+        $invalid=$ok;
+        $invalid['signature']=P::encode(random_bytes(64));
+        $this->postJson($url,$invalid)->assertUnauthorized();
+        foreach([
+            ['assignmentId',(string)Str::uuid()],
+            ['mediaId',(string)Str::uuid()],
+            ['mediaType','video'],
+            ['mediaContractHash',str_repeat('f',64)],
+            ['policyHash',str_repeat('f',64)],
+            ['policyRevision',2],
+            ['startedAt',now()->addHour()->getTimestampMs()],
+        ] as [$key,$value]){
+            $forged=$this->signedCapturedP2PhotoSubmit($media,[$key=>$value]);
+            $response=$this->postJson($url,$forged);
+            $this->assertContains($response->status(),[403,409,422]);
+        }
+        $payload=json_decode($ok['contract'],true);
+        $payload['captureSignature']=P::encode(random_bytes(64));
+        $signed=$this->signed('recipient',
+            'pb3.assignment-media-submit.v4',$payload);
+        $this->postJson($url,$signed)->assertUnauthorized();
+        $this->assertDatabaseCount('assignment_media_submissions_v1',0);
+    }
+
+    public function test_p2_contributor_signed_photo_receipt_requires_scoped_grant_and_counts_live_photo():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $media=$this->signedP2PhotoGrantFixture();
+        $submission=$this->signedP2PhotoSubmit($media);
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $this->as('recipient');
+        $this->postJson($url,$submission)->assertCreated()
+            ->assertJsonPath('unchanged',false);
+        $this->postJson($url,$submission)->assertOk()
+            ->assertJsonPath('unchanged',true);
+        $this->as('owner');
+        $this->getJson($url)->assertOk()->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.mediaId',$media['id'])
+            ->assertJsonPath('items.0.mediaType','photo')
+            ->assertJsonPath('items.0.capturedInAssignment',false)
+            ->assertJsonPath('items.0.contract',$submission['contract'])
+            ->assertJsonPath('items.0.signature',$submission['signature'])
+            ->assertJsonPath('items.0.mediaContractHash',$media['hash']);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',1)
+            ->assertJsonPath('items.0.confirmedVideoCount',0);
+        $this->as('outsider');
+        $this->getJson($url)->assertNotFound();
+        $this->as('owner');
+        DB::table('media_recipient_grants_v1')
+            ->where('id',$media['grantId'])->update(['state'=>'revoked']);
+        $this->getJson($url)->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',0);
+        // A revoked assignment membership may not leave a "confirmed"
+        // P2 photo receipt visible merely because the personal JPEG exists.
+        DB::table('media_recipient_grants_v1')
+            ->where('id',$media['grantId'])->update(['state'=>'active']);
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',
+                $this->people['recipient']['account'])
+            ->update(['state'=>'pending']);
+        $this->getJson($url)->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedPhotoCount',0);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$media['id'],'state'=>'active',
+        ]);
+        $this->as('recipient');
+        $this->postJson($url,$submission)->assertOk()
+            ->assertJsonPath('unchanged',true); // Lost ACK cannot restore grant
+    }
+
+    public function test_p2_photo_receipt_rejects_personal_grant_stale_policy_and_forgery():void
+    {
+        $this->createAssignment();
+        $this->accept($this->invite());
+        $unscoped=$this->mediaAndGrant('photo');
+        $url='/assignments/v1/'.$this->assignmentId.'/media-submissions';
+        $this->as('recipient');
+        $this->postJson($url,$this->signedP2PhotoSubmit($unscoped))
+            ->assertForbidden(); // fake personal share is not a v2 scope
+        $media=$this->signedP2PhotoGrantFixture();
+        $submission=$this->signedP2PhotoSubmit($media);
+        $bad=$submission;$bad['signature']=P::encode(random_bytes(64));
+        $this->postJson($url,$bad)->assertUnauthorized();
+        $payload=json_decode($submission['contract'],true);
+        foreach([
+            [...$payload,'kind'=>'video'],
+            [...$payload,'kind'=>'audio'],
+            [...$payload,'policyHash'=>str_repeat('f',64)],
+            [...$payload,'mediaContractHash'=>str_repeat('f',64)],
+            [...$payload,'assignmentId'=>(string)Str::uuid()],
+            [...$payload,'captureContract'=>'forged'],
+            [...$payload,'version'=>2],
+        ] as $invalid){
+            $invalid['submissionId']=(string)Str::uuid();
+            $invalid['operationId']=(string)Str::uuid();
+            $raw=$this->signed('recipient',
+                'pb3.assignment-media-submit.v3',$invalid);
+            $status=$this->postJson($url,$raw)->status();
+            $this->assertContains($status,[401,403,404,409,422]);
+        }
+        DB::table('media_recipient_grants_v1')->where('id',$media['grantId'])
+            ->update(['assignment_id'=>null]);
+        $this->postJson($url,$submission)->assertForbidden();
+        $this->assertDatabaseCount('assignment_media_submissions_v1',0);
+        $this->assertDatabaseCount('safe_assignment_editorial_links_v1',0);
+        $this->assertDatabaseCount('media_recipient_grants_v1',2);
+    }
+
     private function mediaAndGrant(string $kind):array
     {
         $contributor=$this->people['recipient']['account'];
@@ -1634,6 +2396,22 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('items.0.confirmedVideoCount',1)
             ->assertJsonPath('items.0.confirmedAudioCount',1);
         $this->getJson($url)->assertOk()->assertJsonCount(2,'items');
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'pending']);
+        $this->getJson($url)->assertOk()->assertJsonPath('items',[]);
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedVideoCount',0)
+            ->assertJsonPath('items.0.confirmedAudioCount',0);
+        DB::table('assignment_invites_v1')
+            ->where('assignment_id',$this->assignmentId)
+            ->where('recipient_account_id',$this->people['recipient']['account'])
+            ->update(['state'=>'accepted']);
+        $this->getJson($url)->assertOk()->assertJsonCount(2,'items');
+        $this->getJson('/assignments/v1')
+            ->assertJsonPath('items.0.confirmedVideoCount',1)
+            ->assertJsonPath('items.0.confirmedAudioCount',1);
         $this->as('outsider');
         $this->getJson($url)->assertNotFound();
 

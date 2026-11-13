@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Identity\Protocol as P;
+use App\Billing\QuotaAdmission;
+use App\Billing\RetentionAdmission;
 use App\Media\MediaContract as C;
 use App\Photo\PhotoSync;
 use App\Storage\StorageManager;
@@ -16,6 +18,8 @@ final class MediaV1Controller extends Controller
     public function __construct(
         private readonly PhotoSync $identity,
         private readonly StorageManager $storage,
+        private readonly QuotaAdmission $quota,
+        private readonly RetentionAdmission $retention,
     ) {}
 
     private function record(string $id,string $account,bool $active=false):object
@@ -40,7 +44,8 @@ final class MediaV1Controller extends Controller
         $payload=P::exact($request->json()->all(),['contract','signature']);
         abort_unless(is_string($payload['contract'])&&is_string($payload['signature']),422);
         $c=C::verify($payload['contract'],$payload['signature'],
-            $device->signing_spki,$account->id);
+            $device->signing_spki,$account->id,
+            RetentionAdmission::MAX_SIGNED_DAYS_V1);
         $hash=hash('sha256',$payload['contract']);
 
         return DB::transaction(function()use($account,$device,$c,$payload,$hash){
@@ -69,25 +74,15 @@ final class MediaV1Controller extends Controller
             // are disjoint and clients use cryptographically random UUIDs.
             abort_if(DB::table('photo_records')
                 ->where('id',$c['mediaId'])->exists(),409);
-            $photoCount=DB::table('photo_records')->where('account_id',$account->id)
-                ->where('state','!=','deleting')
-                ->where('expires_at','>',PhotoSync::nowMs())->count();
-            $mediaCount=DB::table('media_files_v1')->where('account_id',$account->id)
-                ->where('state','!=','deleting')
-                ->where('expires_at','>',PhotoSync::nowMs())->count();
-            abort_if($photoCount+$mediaCount
-                >=(int)config('photo_sync.bootstrap_free_file_cap',50),413);
-            $photoBytes=DB::table('photo_objects as o')
-                ->join('photo_records as p','p.id','=','o.photo_id')
-                ->where('p.account_id',$account->id)
-                ->where('p.state','!=','deleting')
-                ->where('p.expires_at','>',PhotoSync::nowMs())->sum('o.bytes');
-            $mediaBytes=DB::table('media_files_v1')->where('account_id',$account->id)
-                ->where('state','!=','deleting')
-                ->where('expires_at','>',PhotoSync::nowMs())
-                ->sum('cipher_bytes');
-            abort_if($photoBytes+$mediaBytes+$c['totalCipherBytes']
-                >(int)config('photo_sync.bootstrap_free_byte_cap',1000000000),413);
+            // The authenticated account's current immutable signed plan,
+            // never an untrusted client plan, bounds only NEW deadlines.
+            // The replay path above preserves an already accepted expiry.
+            $this->retention->assertNew($account->id,$c['expiresAt']);
+            // Shared account-serialized quota: no duplicate charge for lost
+            // ACK replays, and no ad-hoc Free count for verified paid plans.
+            // The existing 1e9-byte ciphertext guard remains in force until
+            // explicit GB/GiB approval for versioned paid byte limits.
+            $this->quota->admit($account->id,(int)$c['totalCipherBytes']);
 
             DB::table('media_files_v1')->insert([
                 'id'=>$c['mediaId'],'account_id'=>$account->id,
@@ -156,7 +151,15 @@ final class MediaV1Controller extends Controller
             if(in_array($c->state,['verified','active'],true))return false;
             if($c->state==='uploading'
                 &&\Carbon\CarbonImmutable::parse($c->updated_at)
-                    ->greaterThan(now()->subMinutes(2)))abort(409);
+                    ->greaterThan(now()->subMinutes(2))){
+                // Concurrent PUT or a lost ACK with a still-live upload
+                // lease is TRANSIENT. HTTP 409 permanently quarantines the
+                // encrypted IndexedDB outbox; HTTP 503 keeps ciphertext
+                // queued for the next safe retry, without a forged ACK.
+                abort(503,'media.chunk_upload_in_progress',[
+                    'Retry-After'=>'5','Cache-Control'=>'no-store',
+                ]);
+            }
             DB::table('media_chunks_v1')->where('id',$chunkId)
                 ->update(['state'=>'uploading','updated_at'=>now()]);
             return true;
@@ -265,7 +268,13 @@ final class MediaV1Controller extends Controller
         $rows=DB::table('media_files_v1')
             ->where('account_id',$account->id)
             ->where('state','active')
-            ->where('expires_at','>',PhotoSync::nowMs());
+            ->where('expires_at','>',PhotoSync::nowMs())
+            ->whereNotExists(static function($q){
+                $q->selectRaw('1')->from('browser_archive_entries_v1 as archive')
+                    ->whereColumn('archive.asset_id','media_files_v1.id')
+                    ->where('archive.kind','media')
+                    ->whereIn('archive.state',['archived','deleting']);
+            });
         if($after!==null)$rows->where('id','>',$after);
         $page=$rows->orderBy('id')->limit(51)
             ->get(['id','media_type','expires_at','plain_bytes']);

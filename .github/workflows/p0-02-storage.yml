@@ -1,7 +1,7 @@
 name: P0-02 isolated PostgreSQL 18 and Garage 2.5
 on:
   pull_request:
-    branches: [main, 'p0/**', 'p1/**']
+    branches: [main, 'p0/**', 'p1/**', 'p2/**', 'integration/**']
   push:
     branches: [main, 'p0/02-**', 'p1/**']
 permissions:
@@ -99,12 +99,19 @@ jobs:
           composer install --no-interaction --no-progress --prefer-dist
           php artisan migrate --force
           php artisan route:list
+      - name: "P1 #279 two-process PostgreSQL quota last-slot races (isolated)"
+        working-directory: apps/api
+        run: php tests/integration/p1-quota-postgres-race.php
       - name: Real S3 digest readback and SQL connectivity
         working-directory: apps/api
         run: php tests/integration/garage-postgres-smoke.php
       - name: P1-02 real Garage TTL deletion + repeated late-write sweep (synthetic only)
         working-directory: apps/api
         run: php tests/integration/lifecycle-garage-smoke.php
+      - name: P4 fault matrix - actual disposable Garage outage and recovery
+        working-directory: apps/api
+        shell: bash
+        run: bash ../../tests/integration/p4-fault-matrix/run-garage-outage.sh
       - name: Verify real health and readiness HTTP
         working-directory: apps/api
         shell: bash
@@ -129,10 +136,16 @@ jobs:
       - name: Install frozen Vue and Chromium test dependencies
         run: |
           pnpm install --frozen-lockfile
-          pnpm exec playwright install --with-deps chromium
+          # GitHub Ubuntu runners already supply Chromium's runtime libs.
+          # --with-deps invokes apt for optional fonts and can fail on
+          # transient Ubuntu mirror DNS outages BEFORE any E2E executes.
+          # The next step launches real Chromium and must still PASS.
+          pnpm exec playwright install chromium
       - name: P1 real-browser two-device E2EE photo journey
         shell: bash
         env:
+          # Disposable PostgreSQL/Garage ONLY. Real deployments default OFF.
+          PB3_ENABLE_BROWSER_ARCHIVE: 'true'
           APP_URL: http://127.0.0.1:5173
           SESSION_DRIVER: file
           SESSION_SECURE_COOKIE: 'false'

@@ -210,12 +210,15 @@ final class AssignmentContract
     public static function mediaSubmission(array $d,string $contributor,
         string $assignment):void
     {
-        abort_unless(in_array($d['version'],[1,2],true)
-            &&in_array($d['kind'],['video','audio'],true)
-            &&$d['assignmentId']===$assignment
+        $p2Photo=in_array($d['version']??null,[3,4],true);
+        abort_unless(($p2Photo&&$d['kind']==='photo')
+            ||(in_array($d['version'],[1,2],true)
+                &&in_array($d['kind'],['video','audio'],true)),422);
+        abort_unless($d['assignmentId']===$assignment
             &&$d['contributorAccountId']===$contributor
             &&is_int($d['policyRevision'])
-            &&$d['policyRevision']>=2&&$d['policyRevision']<=1001,422);
+            &&$d['policyRevision']>=($p2Photo?1:2)
+            &&$d['policyRevision']<=1001,422);
         foreach(['submissionId','operationId','assignmentId',
             'contributorAccountId','mediaId','mediaGrantId'] as $field)
             self::uuid($d,$field);
@@ -235,9 +238,10 @@ final class AssignmentContract
         abort_unless(($d['version']??null)===1
             &&($d['contributorAccountId']??null)===$account
             &&($d['assignmentId']??null)===$assignment
-            &&in_array($d['mediaType']??null,['video','audio'],true)
+            &&in_array($d['mediaType']??null,['photo','video','audio'],true)
             &&is_int($d['policyRevision']??null)
-            &&$d['policyRevision']>=2&&$d['policyRevision']<=1001,422);
+            &&$d['policyRevision']>=($d['mediaType']==='photo'?1:2)
+            &&$d['policyRevision']<=1001,422);
         foreach(['assignmentId','ownerAccountId','contributorAccountId',
             'mediaId'] as $key)self::uuid($d,$key);
         foreach(['policyHash','mediaContractHash'] as $key)
@@ -275,6 +279,20 @@ final class AssignmentContract
           &&$d['recipientAccountId']===$recipient,422);
         foreach(['assignmentId','inviteId','operationId','recipientAccountId'] as $key)
             self::uuid($d,$key);
+    }
+
+    /** Owner-signed revocation of the invitation's current live authority. */
+    public static function memberRemoval(
+        array $d,string $owner,string $assignment,string $invite
+    ):void {
+        abort_unless(($d['version']??null)===1
+            &&($d['action']??null)==='remove'
+            &&($d['assignmentId']??null)===$assignment
+            &&($d['inviteId']??null)===$invite
+            &&($d['ownerAccountId']??null)===$owner
+            &&($d['recipientAccountId']??null)!==$owner,422);
+        foreach(['operationId','assignmentId','inviteId',
+            'ownerAccountId','recipientAccountId'] as $key)self::uuid($d,$key);
     }
 
     /**

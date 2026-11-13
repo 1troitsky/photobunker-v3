@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Photo;
 
 use App\Storage\StorageManager;
+use App\Storage\TombstoneKeyScope;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -20,10 +21,7 @@ final class Lifecycle
     {
         DB::transaction(function () use ($photoId, $reason): void {
             $row = DB::table('photo_records')->where('id', $photoId)->lockForUpdate()->first();
-            if (!$row || $row->state === 'deleting') {
-                // Already marked: never postpone an existing cleanup lease.
-                return;
-            }
+            if (!$row) return;
 
             $keys = DB::table('storage_locations as l')
                 ->join('photo_objects as o', 'o.id', '=', 'l.asset_id')
@@ -31,17 +29,33 @@ final class Lifecycle
                 ->orderBy('l.object_key')
                 ->pluck('l.object_key')->all();
 
-            DB::table('photo_tombstones')->insertOrIgnore([
-                'photo_id' => $photoId,
-                'account_id' => $row->account_id,
-                'operation_id' => $row->operation_id,
-                'reason' => $reason,
-                'object_keys' => json_encode($keys, JSON_THROW_ON_ERROR),
-                // Legacy column name. Used as NEXT sweep time, not an expiry
-                // after which late writes become safe or tombstones disappear.
-                'cleanup_until' => now()->addHour(),
-                'created_at' => now(),
-            ]);
+            TombstoneKeyScope::check('photo',$row->account_id,$photoId,$keys);
+            $existing=DB::table('photo_tombstones')->where('photo_id',$photoId)
+                ->lockForUpdate()->first();
+            if($existing){
+                if($existing->account_id!==$row->account_id
+                    ||$existing->operation_id!==$row->operation_id)
+                    throw new \RuntimeException('storage.invalid_tombstone_scope');
+                if($existing->object_keys===null){
+                    // Legacy tombstone: repair while durable placement rows
+                    // still exist, BEFORE any physical deletion is allowed.
+                    DB::table('photo_tombstones')->where('photo_id',$photoId)
+                        ->update(['object_keys'=>json_encode($keys,JSON_THROW_ON_ERROR)]);
+                }else{
+                    TombstoneKeyScope::decode('photo',$row->account_id,
+                        $photoId,$existing->object_keys);
+                }
+            }else{
+                DB::table('photo_tombstones')->insert([
+                    'photo_id'=>$photoId,'account_id'=>$row->account_id,
+                    'operation_id'=>$row->operation_id,'reason'=>$reason,
+                    'object_keys'=>json_encode($keys,JSON_THROW_ON_ERROR),
+                    'cleanup_until'=>now()->addHour(),'created_at'=>now(),
+                ]);
+            }
+            // A previously 'deleting' legacy record may lack a tombstone.
+            // Rebuild it, but never postpone an existing cleanup lease.
+            if($row->state==='deleting')return;
 
             DB::table('photo_records')->where('id', $photoId)->update([
                 'state' => 'deleting',
@@ -65,12 +79,23 @@ final class Lifecycle
             409,
         );
 
-        if ($photo->state !== 'deleting') {
-            $this->mark($photoId);
-        }
-
-        $assetIds = DB::table('photo_objects')->where('photo_id', $photoId)
+        // Reconstruct a missing/legacy tombstone even if an earlier worker
+        // already changed state to deleting before crashing.
+        $this->mark($photoId);
+        $stone=DB::table('photo_tombstones')->where('photo_id',$photoId)->first();
+        if(!$stone||$stone->account_id!==$photo->account_id
+            ||$stone->operation_id!==$photo->operation_id)
+            throw new \RuntimeException('storage.missing_tombstone');
+        $allowed=TombstoneKeyScope::decode('photo',$photo->account_id,
+            $photoId,$stone->object_keys);
+        $assetIds=DB::table('photo_objects')->where('photo_id',$photoId)
             ->orderBy('id')->pluck('id')->all();
+        $placements=DB::table('storage_locations as l')
+            ->join('photo_objects as o','o.id','=','l.asset_id')
+            ->where('o.photo_id',$photoId)->pluck('l.object_key')->all();
+        TombstoneKeyScope::check('photo',$photo->account_id,$photoId,$placements);
+        if(array_diff($placements,$allowed))
+            throw new \RuntimeException('storage.untracked_gc_placement');
 
         // Never remove DB placement pointers until EVERY physical delete has
         // completed and the provider confirms absence. Partial failure retries.
@@ -187,16 +212,11 @@ final class Lifecycle
         $cleaned = 0;
         foreach ($rows as $row) {
             try {
-                $keys = json_decode($row->object_keys, true, 16, JSON_THROW_ON_ERROR);
-                if (!is_array($keys) || !array_is_list($keys)) {
-                    throw new \RuntimeException('photo.invalid_tombstone_keys');
-                }
-                foreach ($keys as $key) {
-                    if (!is_string($key)) {
-                        throw new \RuntimeException('photo.invalid_tombstone_key');
-                    }
-                    $this->storage->sweepLateWrite($key);
-                }
+                $keys=TombstoneKeyScope::decode('photo',
+                    $row->account_id,$row->photo_id,$row->object_keys);
+                // Validate entire set before any DELETE. Mixed valid+foreign
+                // keys must never delete even the otherwise valid first key.
+                foreach($keys as $key)$this->storage->sweepLateWrite($key);
 
                 DB::table('photo_tombstones')->where('photo_id', $row->photo_id)->update([
                     // Keep the immutable key list for subsequent late writes.

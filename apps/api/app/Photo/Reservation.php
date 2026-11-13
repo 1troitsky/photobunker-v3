@@ -2,18 +2,23 @@
 declare(strict_types=1);
 namespace App\Photo;
 use App\Identity\Protocol as P;
+use App\Billing\QuotaAdmission;
+use App\Billing\RetentionAdmission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 final class Reservation
 {
-    public function __construct(private readonly PhotoSync $sync){}
+    public function __construct(private readonly PhotoSync $sync,
+        private readonly QuotaAdmission $quota,
+        private readonly RetentionAdmission $retention){}
     public function reserve(Request $request):array {
         $this->sync->origin($request);
         [$account,$device]=$this->sync->actor($request);
         $d=P::exact($request->json()->all(),['contract','signature']);
         abort_unless(is_string($d['contract'])&&is_string($d['signature']),422);
-        $contract=$this->sync->validate($d['contract'],$d['signature'],$device->signing_spki);
+        $contract=$this->sync->validate($d['contract'],$d['signature'],
+            $device->signing_spki,RetentionAdmission::MAX_SIGNED_DAYS_V1);
         // Personal photographs use v1; assignment-scoped photos use v2.
         abort_unless(in_array($contract['version'],[1,2],true),422);
         foreach($contract['assets'] as $a)abort_unless($a['manifest']['accountId']===$account->id,403);
@@ -38,28 +43,17 @@ final class Reservation
             if($contract['version']===2){
                 $this->requireCaptureAuthority($contract['capture'],$account->id);
             }
+            // The same immutable signed deadline was checked for every
+            // encrypted asset in PhotoSync::validate(). Recheck against the
+            // current verified entitlement under the account lock, only
+            // for NEW uploads. Lost-ACK replay above bypasses this cap.
+            $this->retention->assertNew($account->id,$contract['expiresAt']);
             $need=array_sum(array_column($contract['assets'],'bytes'));
-            $used=DB::table('photo_objects as o')->join('photo_records as p','o.photo_id','=','p.id')
-                ->where('p.account_id',$account->id)->where('p.state','!=','deleting')
-                ->where('p.expires_at','>',PhotoSync::nowMs())->sum('o.bytes');
-            // Media/v1 and photos/v1 consume ONE shared Free file+byte
-            // entitlement; both reserve under the same identity row lock.
-            $mediaBytes=DB::table('media_files_v1')
-                ->where('account_id',$account->id)
-                ->where('state','!=','deleting')
-                ->where('expires_at','>',PhotoSync::nowMs())
-                ->sum('cipher_bytes');
-            abort_if((int)$used+(int)$mediaBytes+$need
-                >config('photo_sync.bootstrap_free_byte_cap'),413);
-            // Account row is locked above: quota/file reservations are serialized per account.
-            $count=DB::table('photo_records')->where('account_id',$account->id)
-                ->where('state','!=','deleting')->where('expires_at','>',PhotoSync::nowMs())->count();
-            $mediaCount=DB::table('media_files_v1')
-                ->where('account_id',$account->id)
-                ->where('state','!=','deleting')
-                ->where('expires_at','>',PhotoSync::nowMs())->count();
-            abort_if($count+$mediaCount
-                >=(int)config('photo_sync.bootstrap_free_file_cap',50),413);
+            // Owner-row locked and versioned: both signed Photo and
+            // MediaFile reservations consume the same atomic file/byte budget.
+            // The paid GB/GiB ceiling is still an OPEN owner decision; the
+            // pre-existing Free technical ciphertext guard remains unchanged.
+            $this->quota->admit($account->id,(int)$need);
             DB::table('photo_records')->insert([
                 'id'=>$id,'account_id'=>$account->id,'device_id'=>$device->id,
                 'operation_id'=>$contract['operationId'],'state'=>'pending',

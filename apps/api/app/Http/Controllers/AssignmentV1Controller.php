@@ -72,11 +72,18 @@ final class AssignmentV1Controller extends Controller
             }
             abort_if(DB::table('assignment_records_v1')
               ->where('operation_id',$c['operationId'])->exists(),409);
+            // Historical signed IDs and operations remain spent even if
+            // an old assignment row was physically deleted. Never revive
+            // a logically gone assignment or refund its monthly usage.
+            abort_if(DB::table('assignment_creation_meter_v1')
+              ->where('assignment_id',$c['assignmentId'])
+              ->orWhere('operation_id',$c['operationId'])->exists(),410);
             // A signed create replay above must still ACK after monthly quota
             // exhaustion. A genuinely NEW create is gated under the SAME
             // account row lock used by all concurrent create transactions.
             // The user's signed startsAt is never used to choose the month.
-            $usage=$this->quota->usage($actor->id);
+            $createdAt=\Carbon\CarbonImmutable::now('UTC');
+            $usage=$this->quota->usage($actor->id,$createdAt);
             if($usage['remaining']===0){
                 return $this->sync->json([
                     'error'=>'assignment.monthly_quota_exceeded',
@@ -91,7 +98,16 @@ final class AssignmentV1Controller extends Controller
                 'private_envelope_json'=>C::envelope($c['privateEnvelope']),
                 'state'=>'active','revision'=>1,'policy_revision'=>1,
                 'photo_goal'=>$c['photoGoal'],'starts_at'=>$c['startsAt'],
-                'ends_at'=>$c['endsAt'],'created_at'=>now(),'updated_at'=>now(),
+                'ends_at'=>$c['endsAt'],'created_at'=>$createdAt,
+                'updated_at'=>$createdAt,
+            ]);
+            // Append in the SAME account-locked transaction. It survives
+            // later assignment deletion and cannot be submitted by clients.
+            DB::table('assignment_creation_meter_v1')->insert([
+                'assignment_id'=>$c['assignmentId'],
+                'owner_account_id'=>$actor->id,
+                'operation_id'=>$c['operationId'],
+                'created_at'=>$createdAt,
             ]);
             return $this->sync->json(['assignmentId'=>$c['assignmentId'],
               'state'=>'active','revision'=>1,'unchanged'=>false],201);
@@ -302,7 +318,11 @@ final class AssignmentV1Controller extends Controller
             abort_unless(DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
                 ->where('recipient_account_id',$actor->id)
-                ->where('state','accepted')->exists(),404);
+                ->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->exists(),404);
         }
         $events=DB::table('assignment_private_events_v1')
             ->where('assignment_id',$assignmentId)
@@ -418,7 +438,11 @@ final class AssignmentV1Controller extends Controller
             abort_unless(DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
                 ->where('recipient_account_id',$actor->id)
-                ->where('state','accepted')->exists(),404);
+                ->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->exists(),404);
         }
         $events=DB::table('assignment_retention_events_v1')
             ->where('assignment_id',$assignmentId)->orderBy('to_revision')
@@ -550,7 +574,11 @@ final class AssignmentV1Controller extends Controller
             abort_unless(DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
                 ->where('recipient_account_id',$actor->id)
-                ->where('state','accepted')->exists(),404);
+                ->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->exists(),404);
         }
         $events=DB::table('assignment_schedule_events_v1')
             ->where('assignment_id',$assignmentId)
@@ -664,7 +692,12 @@ final class AssignmentV1Controller extends Controller
                     $sub->selectRaw('1')->from('assignment_invites_v1 as i')
                       ->whereColumn('i.assignment_id','a.id')
                       ->where('i.recipient_account_id',$actor->id)
-                      ->where('i.state','accepted');
+                      ->where('i.state','accepted')
+                        ->whereNotExists(static function($rev){
+                            $rev->selectRaw('1')
+                                ->from('assignment_member_removals_v1 as rm')
+                                ->whereColumn('rm.invite_id','i.id');
+                        });
                 });
           });
         if($after!==null)$q->where('a.id','>',$after);
@@ -694,10 +727,57 @@ final class AssignmentV1Controller extends Controller
                 ->whereColumn('g.photo_id','s.photo_id')
                 ->whereColumn('g.owner_account_id','s.contributor_account_id')
                 ->whereColumn('g.recipient_account_id','a.owner_account_id')
+                ->whereExists(function($member){
+                    $member->selectRaw('1')
+                        ->from('assignment_invites_v1 as i')
+                        ->whereColumn('i.assignment_id','s.assignment_id')
+                        ->whereColumn('i.recipient_account_id','s.contributor_account_id')
+                        ->whereColumn('i.owner_account_id','a.owner_account_id')
+                        ->where('i.role','contributor')
+                        ->where('i.state','accepted')
+                        ->whereNotExists(static function($rev){
+                            $rev->selectRaw('1')
+                                ->from('assignment_member_removals_v1 as rm')
+                                ->whereColumn('rm.invite_id','i.id');
+                        });
+                })
                 ->where('p.state','active')->where('p.expires_at','>',$now)
                 ->where('g.state','active')->where('g.expires_at','>',$now)
                 ->selectRaw('COUNT(*)');
         },'confirmed_photo_count');
+        // The legacy photo_records and modern encrypted P2 Photo MediaFile
+        // submission stores are distinct. Count both LIVE, assignment-scoped
+        // ciphertext grants, never queued optimistic client entries.
+        $rows->selectSub(function($sub)use($now){
+            $sub->from('assignment_media_submissions_v1 as s')
+                ->join('media_files_v1 as m','m.id','=','s.media_id')
+                ->join('media_recipient_grants_v1 as g','g.id','=','s.media_grant_id')
+                ->whereColumn('s.assignment_id','a.id')
+                ->where('s.media_type','photo')
+                ->where('m.media_type','photo')
+                ->whereColumn('m.account_id','s.contributor_account_id')
+                ->whereColumn('m.contract_hash','s.media_contract_hash')
+                ->whereColumn('g.media_id','s.media_id')
+                ->whereColumn('g.owner_account_id','s.contributor_account_id')
+                ->whereColumn('g.recipient_account_id','a.owner_account_id')
+                ->whereColumn('g.assignment_id','s.assignment_id')
+                ->whereExists(function($members){
+                    $members->selectRaw('1')->from('assignment_invites_v1 as i')
+                        ->whereColumn('i.assignment_id','s.assignment_id')
+                        ->whereColumn('i.recipient_account_id',
+                            's.contributor_account_id')
+                        ->where('i.role','contributor')
+                        ->where('i.state','accepted')
+                        ->whereNotExists(static function($rev){
+                            $rev->selectRaw('1')
+                                ->from('assignment_member_removals_v1 as rm')
+                                ->whereColumn('rm.invite_id','i.id');
+                        });
+                })
+                ->where('m.state','active')->where('m.expires_at','>',$now)
+                ->where('g.state','active')->where('g.expires_at','>',$now)
+                ->selectRaw('COUNT(*)');
+        },'confirmed_p2_photo_count');
         // Independent and full server-derived counts. Never infer progress
         // from the first 50 paginated receipts or a client-reported count.
         foreach(['video','audio'] as $kind){
@@ -712,6 +792,19 @@ final class AssignmentV1Controller extends Controller
                     ->whereColumn('g.media_id','s.media_id')
                     ->whereColumn('g.owner_account_id','s.contributor_account_id')
                     ->whereColumn('g.recipient_account_id','a.owner_account_id')
+                    ->whereExists(static function($member){
+                        $member->selectRaw('1')->from('assignment_invites_v1 as i')
+                            ->whereColumn('i.assignment_id','s.assignment_id')
+                            ->whereColumn('i.owner_account_id','a.owner_account_id')
+                            ->whereColumn('i.recipient_account_id','s.contributor_account_id')
+                            ->where('i.role','contributor')
+                            ->where('i.state','accepted')
+                            ->whereNotExists(static function($rev){
+                                $rev->selectRaw('1')
+                                    ->from('assignment_member_removals_v1 as rm')
+                                    ->whereColumn('rm.invite_id','i.id');
+                            });
+                    })
                     ->where('m.state','active')->where('m.expires_at','>',$now)
                     ->where('g.state','active')->where('g.expires_at','>',$now)
                     ->selectRaw('COUNT(*)');
@@ -736,7 +829,7 @@ final class AssignmentV1Controller extends Controller
             })(),
             'confirmedPhotoCount'=>$x->files_access_until!==null
                 &&(int)$x->files_access_until<=PhotoSync::nowMs()
-                ?0:(int)$x->confirmed_photo_count,
+                ?0:(int)$x->confirmed_photo_count+(int)$x->confirmed_p2_photo_count,
             'confirmedVideoCount'=>$x->files_access_until!==null
                 &&(int)$x->files_access_until<=PhotoSync::nowMs()
                 ?0:(int)$x->confirmed_video_count,
@@ -784,7 +877,11 @@ final class AssignmentV1Controller extends Controller
             abort_unless(DB::table('assignment_invites_v1')
                 ->where('assignment_id',$assignmentId)
                 ->where('recipient_account_id',$actor->id)
-                ->where('state','accepted')->exists(),404);
+                ->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->exists(),404);
         }
         $events=DB::table('assignment_policy_events_v1')
             ->where('assignment_id',$assignmentId)
@@ -874,12 +971,16 @@ final class AssignmentV1Controller extends Controller
             P::uuid($after);
         }
         $now=PhotoSync::nowMs();
-        $q=DB::table('assignment_invites_v1')
-            ->where('assignment_id',$a->id);
-        if($after!==null)$q->where('id','>',$after);
-        $rows=$q->orderBy('id')->limit(51)->get([
-            'id','recipient_account_id','role','state','expires_at',
-            'contract_json','owner_signature',
+        $q=DB::table('assignment_invites_v1 as i')
+            ->leftJoin('assignment_member_removals_v1 as rev',
+                'rev.invite_id','=','i.id')
+            ->where('i.assignment_id',$a->id);
+        if($after!==null)$q->where('i.id','>',$after);
+        $rows=$q->orderBy('i.id')->limit(51)->get([
+            'i.id','i.recipient_account_id','i.role','i.state','i.expires_at',
+            'i.contract_json','i.owner_signature',
+            'rev.contract_json as removal_contract',
+            'rev.owner_signature as removal_signature',
         ]);
         $more=$rows->count()>50;
         $page=$rows->take(50);
@@ -892,6 +993,8 @@ final class AssignmentV1Controller extends Controller
                 'expired'=>$x->state==='pending'&&(int)$x->expires_at<=$now,
                 'contract'=>$x->contract_json,
                 'signature'=>$x->owner_signature,
+                'removalContract'=>$x->removal_contract,
+                'removalSignature'=>$x->removal_signature,
             ])->all(),
             'nextCursor'=>$more?$page->last()->id:null,
             'serverNowMs'=>$now,
@@ -901,10 +1004,20 @@ final class AssignmentV1Controller extends Controller
     public function inbox(Request $r)
     {
         [$actor]=$this->sync->actor($r);
-        $rows=DB::table('assignment_invites_v1 as i')
+        $after=$r->query('after');
+        if($after!==null){
+            abort_unless(is_string($after),422);
+            P::uuid($after);
+        }
+        $q=DB::table('assignment_invites_v1 as i')
             ->join('assignment_records_v1 as a','a.id','=','i.assignment_id')
             ->join('identity_accounts as o','o.id','=','i.owner_account_id')
             ->where('i.recipient_account_id',$actor->id)
+            ->whereNotExists(static function($rev){
+                $rev->selectRaw('1')
+                    ->from('assignment_member_removals_v1 as rm')
+                    ->whereColumn('rm.invite_id','i.id');
+            })
             ->where(function($q):void {
                 $q->whereNull('a.assignment_access_until')
                   ->orWhere('a.assignment_access_until','>',PhotoSync::nowMs());
@@ -919,19 +1032,73 @@ final class AssignmentV1Controller extends Controller
                               ->orWhere('a.files_access_until','>',PhotoSync::nowMs());
                         });
                 });
-            })
-            ->orderBy('i.id')->limit(50)
+            });
+        if($after!==null)$q->where('i.id','>',$after);
+        $rows=$q->orderBy('i.id')->limit(51)
             ->get(['i.id','i.assignment_id','i.state','i.role',
               'i.contract_json','i.owner_signature','i.expires_at',
               'o.account_spki','i.owner_account_id']);
-        return $this->sync->json(['items'=>$rows->map(fn($x)=>[
-            'inviteId'=>$x->id,'assignmentId'=>$x->assignment_id,
-            'ownerAccountId'=>$x->owner_account_id,
-            'ownerAccountSpki'=>$x->account_spki,
-            'role'=>$x->role,'state'=>$x->state,
-            'expiresAt'=>(int)$x->expires_at,
-            'contract'=>$x->contract_json,'signature'=>$x->owner_signature,
-        ])->all()]);
+        $more=$rows->count()>50;
+        $page=$rows->take(50);
+        return $this->sync->json([
+            'items'=>$page->map(static fn($x)=>[
+                'inviteId'=>$x->id,'assignmentId'=>$x->assignment_id,
+                'ownerAccountId'=>$x->owner_account_id,
+                'ownerAccountSpki'=>$x->account_spki,
+                'role'=>$x->role,'state'=>$x->state,
+                'expiresAt'=>(int)$x->expires_at,
+                'contract'=>$x->contract_json,'signature'=>$x->owner_signature,
+            ])->values()->all(),
+            'nextCursor'=>$more?$page->last()->id:null,
+        ]);
+    }
+
+    /**
+     * Recipient-only immutable owner-signed removal notices. A removed person
+     * may read the proof of exclusion, never assignment plaintext/policy,
+     * E2EE grants, another person's roster or the original private envelope.
+     * This endpoint is not an invitation, ACK, rejoin or source of read ACL.
+     */
+    public function removalNotices(Request $r)
+    {
+        [$actor]=$this->sync->actor($r);
+        $after=$r->query('after');
+        if($after!==null){
+            abort_unless(is_string($after),422);
+            P::uuid($after);
+        }
+        $q=DB::table('assignment_member_removals_v1 as rm')
+            ->join('assignment_invites_v1 as i','i.id','=','rm.invite_id')
+            ->join('identity_accounts as o','o.id','=','rm.owner_account_id')
+            ->where('rm.recipient_account_id',$actor->id)
+            ->where('i.recipient_account_id',$actor->id)
+            ->whereColumn('i.assignment_id','rm.assignment_id')
+            ->whereColumn('i.owner_account_id','rm.owner_account_id');
+        if($after!==null)$q->where('rm.invite_id','>',$after);
+        $rows=$q->orderBy('rm.invite_id')->limit(51)->get([
+            'rm.invite_id','rm.assignment_id','rm.owner_account_id',
+            'rm.recipient_account_id',
+            'rm.contract_json as removal_contract',
+            'rm.owner_signature as removal_signature',
+            'i.contract_json as invitation_contract',
+            'i.owner_signature as invitation_signature',
+            'o.account_spki as owner_account_spki',
+        ]);
+        $more=$rows->count()>50;
+        $page=$rows->take(50);
+        return $this->sync->json([
+            'items'=>$page->map(static fn($x)=>[
+                'inviteId'=>$x->invite_id,'assignmentId'=>$x->assignment_id,
+                'ownerAccountId'=>$x->owner_account_id,
+                'recipientAccountId'=>$x->recipient_account_id,
+                'ownerAccountSpki'=>$x->owner_account_spki,
+                'invitationContract'=>$x->invitation_contract,
+                'invitationSignature'=>$x->invitation_signature,
+                'removalContract'=>$x->removal_contract,
+                'removalSignature'=>$x->removal_signature,
+            ])->values()->all(),
+            'nextCursor'=>$more?$page->last()->invite_id:null,
+        ]);
     }
 
     public function accept(Request $r,string $assignmentId,string $inviteId)
@@ -950,6 +1117,8 @@ final class AssignmentV1Controller extends Controller
                 ->where('id',$inviteId)->where('assignment_id',$a->id)
                 ->where('recipient_account_id',$actor->id)->lockForUpdate()->first();
             abort_unless($invite,404);
+            abort_if(DB::table('assignment_member_removals_v1')
+                ->where('invite_id',$inviteId)->exists(),409);
             // Accepted operation replay is idempotent even after the invite
             // expired or the assignment was finished; new consent is not.
             if($invite->state==='accepted'){
@@ -971,6 +1140,72 @@ final class AssignmentV1Controller extends Controller
             ]);
             return $this->sync->json(['inviteId'=>$inviteId,
               'state'=>'accepted','unchanged'=>false]);
+        },3);
+    }
+
+    /**
+     * Owner-signed and durable. Removes live assignment membership, NOT the
+     * original consent record, any independent personal share or ciphertext.
+     * A replay of the SAME signed command ACKs after finish or retention.
+     */
+    public function removeMember(Request $r,string $assignmentId,string $inviteId)
+    {
+        $this->sync->origin($r);
+        [$actor]=$this->sync->actor($r);
+        $c=$this->signed($r,$actor,'pb3.assignment-member-remove.v1',[
+            'version','action','operationId','assignmentId',
+            'inviteId','ownerAccountId','recipientAccountId',
+        ]);
+        C::memberRemoval($c,$actor->id,$assignmentId,$inviteId);
+        $hash=hash('sha256',$r->json('contract'));
+        return DB::transaction(function()use($actor,$c,$assignmentId,$inviteId,$hash,$r){
+            $a=DB::table('assignment_records_v1')
+                ->where('id',$assignmentId)->lockForUpdate()->first();
+            abort_unless($a&&$a->owner_account_id===$actor->id,404);
+            $invite=DB::table('assignment_invites_v1')
+                ->where('id',$inviteId)
+                ->where('assignment_id',$assignmentId)
+                ->where('owner_account_id',$actor->id)
+                ->where('recipient_account_id',$c['recipientAccountId'])
+                ->lockForUpdate()->first();
+            abort_unless($invite,404);
+            $existing=DB::table('assignment_member_removals_v1')
+                ->where('invite_id',$inviteId)->first();
+            if($existing){
+                abort_unless($existing->operation_id===$c['operationId']
+                    &&hash_equals($existing->contract_hash,$hash),409);
+                // Immutable signed removal outranks a stale mutable invite
+                // row after a migration/recovery. Exact replay repairs the
+                // projection but never destroys original consent or media.
+                if($invite->state!=='removed'){
+                    DB::table('assignment_invites_v1')
+                        ->where('id',$inviteId)
+                        ->update(['state'=>'removed','updated_at'=>now()]);
+                }
+                return $this->sync->json([
+                    'inviteId'=>$inviteId,'state'=>'removed','unchanged'=>true,
+                ]);
+            }
+            // Cancel pending invitations too, but never silently re-add an
+            // invitation whose original owner signed removal is recorded.
+            abort_unless(in_array($invite->state,['pending','accepted'],true),409);
+            DB::table('assignment_member_removals_v1')->insert([
+                'operation_id'=>$c['operationId'],
+                'assignment_id'=>$assignmentId,
+                'invite_id'=>$inviteId,
+                'owner_account_id'=>$actor->id,
+                'recipient_account_id'=>$c['recipientAccountId'],
+                'contract_hash'=>$hash,
+                'contract_json'=>$r->json('contract'),
+                'owner_signature'=>$r->json('signature'),
+                'created_at'=>now(),
+            ]);
+            DB::table('assignment_invites_v1')->where('id',$inviteId)->update([
+                'state'=>'removed','updated_at'=>now(),
+            ]);
+            return $this->sync->json([
+                'inviteId'=>$inviteId,'state'=>'removed','unchanged'=>false,
+            ]);
         },3);
     }
 
@@ -1005,7 +1240,12 @@ final class AssignmentV1Controller extends Controller
                 &&S::permitsNow($a),409);
             $joined=DB::table('assignment_invites_v1')->where('assignment_id',$a->id)
                 ->where('recipient_account_id',$actor->id)->where('role','contributor')
-                ->where('state','accepted')->first();
+                ->where('state','accepted')
+                ->whereNotExists(static function($rev){
+                    $rev->selectRaw('1')
+                        ->from('assignment_member_removals_v1 as rm')
+                        ->whereColumn('rm.invite_id','assignment_invites_v1.id');
+                })->first();
             abort_unless($joined,403);
             $photo=DB::table('photo_records')->where('id',$c['photoId'])
                 ->where('account_id',$actor->id)->first();
@@ -1059,7 +1299,12 @@ final class AssignmentV1Controller extends Controller
         $assignment=$this->assignment($assignmentId);
         abort_unless($assignment->owner_account_id===$actor->id,404);
         abort_unless(R::filesOpen($assignment),404);
-        $rows=DB::table('assignment_submissions_v1 as s')
+        $after=$r->query('after');
+        if($after!==null){
+            abort_unless(is_string($after),422);
+            P::uuid($after);
+        }
+        $query=DB::table('assignment_submissions_v1 as s')
             ->join('photo_records as p','p.id','=','s.photo_id')
             ->join('photo_access_grants as g','g.id','=','s.photo_grant_id')
             ->where('s.assignment_id',$assignmentId)
@@ -1067,14 +1312,40 @@ final class AssignmentV1Controller extends Controller
             ->whereColumn('g.photo_id','s.photo_id')
             ->whereColumn('g.owner_account_id','s.contributor_account_id')
             ->where('g.recipient_account_id',$assignment->owner_account_id)
+            ->whereExists(function($member)use($assignment){
+                $member->selectRaw('1')->from('assignment_invites_v1 as i')
+                    ->whereColumn('i.assignment_id','s.assignment_id')
+                    ->whereColumn('i.recipient_account_id','s.contributor_account_id')
+                    ->where('i.owner_account_id',$assignment->owner_account_id)
+                    ->where('i.role','contributor')
+                    ->where('i.state','accepted')
+                        ->whereNotExists(static function($rev){
+                            $rev->selectRaw('1')
+                                ->from('assignment_member_removals_v1 as rm')
+                                ->whereColumn('rm.invite_id','i.id');
+                        });
+            })
             ->where('p.state','active')->where('p.expires_at','>',PhotoSync::nowMs())
-            ->where('g.state','active')->where('g.expires_at','>',PhotoSync::nowMs())
-            ->orderBy('s.id')->limit(50)
-            ->get(['s.id','s.photo_id','s.photo_grant_id','s.contributor_account_id']);
-        return $this->sync->json(['items'=>$rows->map(fn($x)=>[
+            ->where('g.state','active')->where('g.expires_at','>',PhotoSync::nowMs());
+        if($after!==null)$query->where('s.id','>',$after);
+        $rows=$query->orderBy('s.id')->limit(51)
+            ->get(['s.id','s.photo_id','s.photo_grant_id','s.contributor_account_id',
+                // Immutable account-signed consent evidence. Never plaintext media/DEK.
+                's.policy_revision','s.contract_json','s.contract_hash',
+                's.contributor_signature']);
+        $more=$rows->count()>50;
+        $items=$rows->take(50)->map(static fn($x)=>[
             'submissionId'=>$x->id,'photoId'=>$x->photo_id,
             'photoGrantId'=>$x->photo_grant_id,
             'contributorAccountId'=>$x->contributor_account_id,
-        ])->all()]);
+            'policyRevision'=>(int)$x->policy_revision,
+            'contract'=>$x->contract_json,
+            'contractHash'=>$x->contract_hash,
+            'signature'=>$x->contributor_signature,
+        ])->values()->all();
+        return $this->sync->json([
+            'items'=>$items,
+            'nextCursor'=>$more&&$items!==[]?end($items)['submissionId']:null,
+        ]);
     }
 }

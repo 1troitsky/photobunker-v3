@@ -1,3 +1,4 @@
+import {mediaGrantExpiry,MEDIA_GRANT_MAX_TTL_MS,MEDIA_GRANT_CLOCK_MARGIN_MS} from './media-grants'
 import {describe,it,expect} from 'vitest'
 import {parseMediaGrantContract} from './media-grants'
 import type {MediaGrantContract} from './media-grants'
@@ -56,5 +57,63 @@ describe('P1-11 immutable owner-signed media recipient scope',()=>{
     expect(()=>parseMediaGrantContract({...fixture(),
       rawDEK:'never',
     })).toThrow()
+  })
+  it('accepts only v3 signed source-bound safe_read with two distinct photos',()=>{
+    const c:MediaGrantContract={
+      ...fixture(),version:3,scope:'safe_read',
+      sourceMediaId:uuid(8),sourceContractHash:'c'.repeat(64),
+    }
+    expect(parseMediaGrantContract(c).sourceMediaId).toBe(uuid(8))
+    expect(parseMediaGrantContract(c).scope).toBe('safe_read')
+    for(const item of [
+      {...c,scope:'read'}, {...c,scope:'original'},
+      {...c,sourceMediaId:undefined},{...c,sourceMediaId:c.mediaId},
+      {...c,sourceMediaId:'wrong'},{...c,sourceContractHash:undefined},
+      {...c,sourceContractHash:'f'}, {...c,assignmentId:uuid(13)},
+      {...c,originalDEK:'plaintext'},
+      {...fixture(),sourceMediaId:uuid(8),sourceContractHash:'c'.repeat(64)},
+      {...c,version:2},
+    ]){
+      expect(()=>parseMediaGrantContract(item))
+        .toThrow('media_grant.invalid_scope')
+    }
+  })
+})
+
+describe('P1 media clock-boundary grant expiry',()=>{
+  const nowMs=1_800_000_000_000
+
+  it('avoids 422 for an exact 24h grant when client clock is ahead by milliseconds',()=>{
+    const expiresAt=mediaGrantExpiry(nowMs+2*86400000,nowMs)
+    expect(expiresAt).toBe(nowMs+MEDIA_GRANT_MAX_TTL_MS-MEDIA_GRANT_CLOCK_MARGIN_MS)
+    for(const clockAheadMs of [3,1000,120000,MEDIA_GRANT_CLOCK_MARGIN_MS]){
+      const serverNowMs=nowMs-clockAheadMs
+      expect(expiresAt).toBeLessThanOrEqual(serverNowMs+MEDIA_GRANT_MAX_TTL_MS)
+    }
+    // Without a clock reserve a +3 ms client lead creates a 422.
+    expect(nowMs+MEDIA_GRANT_MAX_TTL_MS).toBeGreaterThan(
+      nowMs-3+MEDIA_GRANT_MAX_TTL_MS)
+  })
+
+  it('preserves the strict media and assignment deadlines',()=>{
+    const mediaExpiry=nowMs+600000
+    const assignmentExpiry=nowMs+120000
+    expect(mediaGrantExpiry(mediaExpiry,nowMs)).toBe(mediaExpiry)
+    expect(mediaGrantExpiry(mediaExpiry,nowMs,assignmentExpiry))
+      .toBe(assignmentExpiry)
+    expect(mediaGrantExpiry(nowMs+2*86400000,nowMs,null))
+      .toBe(nowMs+MEDIA_GRANT_MAX_TTL_MS-MEDIA_GRANT_CLOCK_MARGIN_MS)
+  })
+
+  it('rejects expired or untrusted deadline inputs before signing a grant',()=>{
+    for(const limit of [nowMs,nowMs-1,Number.NaN,
+      Number.POSITIVE_INFINITY,0,-1,1.23]){
+      expect(()=>mediaGrantExpiry(nowMs+86400000,nowMs,limit))
+        .toThrow()
+    }
+    expect(()=>mediaGrantExpiry(nowMs-1,nowMs)).toThrow(
+      'media_grant.assignment_access_expired')
+    expect(()=>mediaGrantExpiry(nowMs+86400000,Number.NaN))
+      .toThrow('media_grant.invalid_expiry_bounds')
   })
 })

@@ -267,6 +267,53 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
         assignmentId:grant.assignmentId,scope:grant.scope}
     },assignmentId)
     expect(photoScope).toEqual({status:200,version:2,assignmentId,scope:'read'})
+    // The owner's independently pinned contributor account key must verify
+    // actual immutable P1 consent, not simply the server confirmation count.
+    await expect(A.getByText('Подпись отправки проверена'))
+      .toBeVisible({timeout:20000})
+    const p1ReceiptProof=await A.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const proof=await import('/src/features/assignments/application/verify-photo-submission.ts')
+      const original=(await a.listAssignmentSubmissions(id))[0]!
+      const [valid,forged]=await Promise.all([
+        proof.verifyPhotoSubmissionReceiptPage([original],id),
+        proof.verifyPhotoSubmissionReceiptPage([
+          {...original,photoGrantId:crypto.randomUUID()},
+        ],id),
+      ])
+      return {verified:valid[original.submissionId],
+        forged:forged[original.submissionId]}
+    },assignmentId)
+    expect(p1ReceiptProof).toEqual({verified:true,forged:false})
+    // Simulate an untrusted fresh owner device by removing ONLY its local
+    // contributor fingerprint pin. No server grant or ciphertext is touched.
+    // The owner must re-confirm the author before claiming signed consent.
+    await A.evaluate(async ({ownerId,contributorId})=>{
+      const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+        const request=indexedDB.open('pb3-recipient-peer-pins-v1')
+        request.onsuccess=()=>resolve(request.result)
+        request.onerror=()=>reject(request.error)
+      })
+      await new Promise<void>((resolve,reject)=>{
+        const tx=db.transaction('peers','readwrite')
+        tx.objectStore('peers').delete(ownerId+'/'+contributorId)
+        tx.oncomplete=()=>resolve()
+        tx.onerror=()=>reject(tx.error)
+      })
+      db.close()
+    },{ownerId,contributorId})
+    await A.getByRole('button',{name:'Обновить материалы'}).click()
+    await expect(A.getByText('Подпись отправки не проверена'))
+      .toBeVisible({timeout:20000})
+    await A.getByRole('button',{name:'Сверить ключ автора'}).click()
+    await expect(A.locator('#assignment-recipient-id')).toHaveValue(contributorId)
+    await expect(A.locator('#assignment-contributor-key-verification')).toBeVisible()
+    await A.getByLabel('Я сверил отпечаток исполнителя').check()
+    await A.getByRole('button',{name:'Подтвердить исполнителя'}).click()
+    // No reloading pages, no fake optimistic grant: only after freshly
+    // verified contributor P-256 receipt does the owner UI turn verified.
+    await expect(A.getByText('Подпись отправки проверена'))
+      .toBeVisible({timeout:20000})
     await expect(A.getByRole('button',{name:'Просмотр'})).toHaveCount(1)
     await A.getByRole('button',{name:'Просмотр'}).click()
     await expect(A.getByTestId('assignment-decrypted-private-metadata'))
@@ -504,10 +551,30 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await expect(B.locator('#camera-assignment'))
       .toHaveValue(assignmentId,{timeout:20000})
     await B.getByTestId('camera-mode').selectOption('video')
+    // Changing audio -> video tears down the old MediaStream, asynchronously
+    // opens a NEW audio+video stream and starts the HTMLVideoElement.
+    // A temporarily enabled button alone is not evidence both live tracks
+    // belong to the newly chosen mode; require actual hardware state.
+    await expect.poll(()=>B.evaluate(()=>{
+      const preview=document.querySelector(
+        '.video-frame video') as HTMLVideoElement|null
+      const live=preview?.srcObject
+      if(!(live instanceof MediaStream)||!preview?.videoWidth)return false
+      return live.getVideoTracks().some(t=>t.readyState==='live')
+        &&live.getAudioTracks().some(t=>t.readyState==='live')
+    }),{timeout:30000}).toBe(true)
     await expect(B.getByTestId('camera-start-recording'))
       .toBeEnabled({timeout:20000})
     await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByTestId('camera-recording-status')).toBeVisible()
+    // If the signed-policy preflight rejects this recording, surface its
+    // exact real UI error instead of a blind missing status element.
+    await expect.poll(async()=>{
+      if(await B.getByTestId('camera-recording-status').isVisible())
+        return 'recording'
+      const alert=B.locator('.error-text[role="alert"]').first()
+      const msg=await alert.count()?await alert.textContent():null
+      return msg?'REJECTED: '+msg:'preflight_pending'
+    },{timeout:20000}).toBe('recording')
     await B.waitForTimeout(1800) // actual camera+microphone recording
     await B.getByTestId('camera-stop-recording').click()
     await expect(B.getByText(/Запись зашифрована и сохранена локально/))
@@ -565,6 +632,117 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(videoVerified.mime).toMatch(/^video\//)
     expect(videoVerified.bytes).toBeGreaterThan(128)
     expect(videoVerified.name).toMatch(/^recording-/)
+
+    // P2 V-30: real camera Canvas JPEG -> encrypted P2 MediaFile, never
+    // device gallery. Unlike Browser imported v3 photo, the account signs
+    // an additional policy/media-specific client capture assertion (v4).
+    await B.goto('/camera?assignmentId='+assignmentId)
+    await expect(B.locator('#camera-assignment'))
+      .toHaveValue(assignmentId,{timeout:20000})
+    await B.getByTestId('camera-photo-storage').selectOption('p2')
+    await B.locator('#camera-category').fill('Report')
+    await B.locator('#camera-description').fill('PRIVATE-P2-CAMERA-PHOTO')
+    await B.locator('#camera-tags').fill('photo-evidence')
+    await B.getByRole('button',{name:'Получить GPS'}).click()
+    await expect(B.getByText(/GPS получен/)).toBeVisible({timeout:12000})
+    await expect(B.getByRole('button',{name:'Сделать снимок'}))
+      .toBeEnabled({timeout:20000})
+    await B.getByRole('button',{name:'Сделать снимок'}).click()
+    await expect(B.getByText(/P2 JPEG зашифрован в Media Library/))
+      .toBeVisible({timeout:30000})
+    const cameraPhoto=await B.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      const local=(await media.listLocalMedia()).find(
+        x=>x.mediaType==='photo'&&!!x.capture)
+      if(!local?.capture)throw Error('photo.p2_camera_capture_missing')
+      const p=JSON.parse(local.capture.contract)
+      const decrypted=await media.readLocalMedia(local.mediaId)
+      const digest=await crypto.subtle.digest('SHA-256',
+        await decrypted.blob.arrayBuffer())
+      const plaintextSha256=Array.from(new Uint8Array(digest))
+        .map(b=>b.toString(16).padStart(2,'0')).join('')
+      return {
+        mediaId:local.mediaId,type:local.mediaType,
+        mime:decrypted.blob.type,bytes:decrypted.blob.size,plaintextSha256,
+        assignmentId:p.assignmentId,
+        mediaContractHash:p.mediaContractHash,mediaType:p.mediaType,
+        policyRevision:p.policyRevision,capturedAt:p.startedAt,
+        privateLeak:local.capture.contract.includes('PRIVATE-P2-CAMERA-PHOTO')
+          ||local.capture.contract.includes('41.647849'),
+        ciphertextOnly:local.chunks.every(c=>
+          c.blob.type==='application/octet-stream'),
+        metadata:decrypted.metadata,
+      }
+    })
+    expect(cameraPhoto.type).toBe('photo')
+    expect(cameraPhoto.mime).toBe('image/jpeg')
+    expect(cameraPhoto.bytes).toBeGreaterThan(128)
+    expect(cameraPhoto.assignmentId).toBe(assignmentId)
+    expect(cameraPhoto.mediaType).toBe('photo')
+    expect(cameraPhoto.policyRevision).toBe(4)
+    expect(cameraPhoto.privateLeak).toBe(false)
+    expect(cameraPhoto.ciphertextOnly).toBe(true)
+    expect(cameraPhoto.metadata.category).toBe('Report')
+    expect(cameraPhoto.metadata.description).toBe('PRIVATE-P2-CAMERA-PHOTO')
+    expect(cameraPhoto.metadata.tags).toEqual(['photo-evidence'])
+    expect(cameraPhoto.metadata.gps).toMatchObject({
+      latitude:41.647849,longitude:41.639411,
+    })
+    await B.evaluate(async()=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      await media.synchronizeMedia()
+    })
+    await expect.poll(()=>B.evaluate(async mediaId=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      return (await media.listLocalMedia())
+        .find(x=>x.mediaId===mediaId)?.state
+    },cameraPhoto.mediaId),{timeout:30000}).toBe('synced')
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
+    await B.getByRole('button',{name:'Проверить ключ владельца'}).click()
+    await expect(B.getByText('Владелец подтверждён')).toBeVisible()
+    const photoP2Row=B.locator('.assignment-detail .photo-row')
+      .filter({hasText:cameraPhoto.mediaId.slice(0,8)})
+      .filter({hasText:'Снято по заданию'})
+    await expect(photoP2Row).toBeVisible()
+    await photoP2Row.getByRole('button',{name:'Отправить медиа в задание'}).click()
+    await expect.poll(()=>B.evaluate(async()=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      return (await a.listAssignmentOperations())
+        .filter(x=>x.kind==='media-submit'&&x.state==='sent').length
+    }),{timeout:30000}).toBe(5)
+    await A.getByRole('button',{name:'Обновить',exact:true}).click()
+    const p2CameraReceipt=await A.evaluate(async({assignmentId,mediaId})=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const v=await import('/src/features/assignments/application/verify-media-submission.ts')
+      const page=await a.listAssignmentMediaSubmissions(assignmentId)
+      const item=page.items.find(x=>x.mediaId===mediaId)
+      if(!item)throw Error('photo.p2_camera_receipt_missing')
+      await v.verifyMediaSubmissionReceipt(item,assignmentId,
+        (await import('/src/features/identity/application/session.ts'))
+          .requireSession().accountId)
+      return {item,contract:JSON.parse(item.contract)}
+    },{assignmentId,mediaId:cameraPhoto.mediaId})
+    expect(p2CameraReceipt.item.capturedInAssignment).toBe(true)
+    expect(p2CameraReceipt.item.mediaType).toBe('photo')
+    expect(p2CameraReceipt.contract.version).toBe(4)
+    const photoReceived=await A.evaluate(async id=>{
+      const g=await import('/src/features/media/application/media-grants.ts')
+      const data=await g.readReceivedMediaGrant(id)
+      const digest=await crypto.subtle.digest('SHA-256',
+        await data.blob.arrayBuffer())
+      const plaintextSha256=Array.from(new Uint8Array(digest))
+        .map(b=>b.toString(16).padStart(2,'0')).join('')
+      return {type:data.blob.type,bytes:data.blob.size,
+        metadata:data.metadata,plaintextSha256}
+    },p2CameraReceipt.item.mediaGrantId)
+    expect(photoReceived.type).toBe('image/jpeg')
+    expect(photoReceived.plaintextSha256).toBe(cameraPhoto.plaintextSha256)
+    expect(photoReceived.bytes).toBeGreaterThan(128)
+    expect(photoReceived.metadata.description).toBe('PRIVATE-P2-CAMERA-PHOTO')
+    expect(photoReceived.metadata.gps).toMatchObject({
+      latitude:41.647849,longitude:41.639411,
+    })
 
     // P1-19: owner can edit E2EE private text AFTER the contributor accepted
     // the original invitation. The same old ECDH invitation decrypts the
@@ -853,6 +1031,60 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     expect(retentionStatus).toEqual({
       http:200,physicalDeleted:false,physicalStatus:'not_authorized',
     })
+
+    // V-31: a REAL independently signed owner removal becomes a durable
+    // contributor-local Fieldwork deny-list entry, not a fresh permission.
+    // The owner's separate client signs; the contributor's pinned owner key
+    // authenticates it before local AV/P2 media-grant outbox can be refused.
+    await A.goto('/assignments/'+assignmentId+'/edit')
+    await A.getByRole('tab',{name:'Участники'}).click()
+    const participant=A.getByTestId('editor-participant-'+contributorId)
+    await expect(participant).toContainText('Принято сервером',{timeout:20000})
+    A.once('dialog',dialog=>dialog.accept())
+    await participant.getByRole('button',{name:'Исключить'}).click()
+    await expect(A.getByText('Исключение подписано и принято сервером. Права задания отозваны.'))
+      .toBeVisible({timeout:20000})
+    const beforeRemoved=await B.evaluate(async()=>{
+      const m=await import('/src/features/media/application/media-outbox.ts')
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      return {media:(await m.listLocalMedia()).map(x=>x.mediaId).sort(),
+        operations:(await a.listAssignmentOperations()).map(x=>x.id).sort()}
+    })
+    await B.goto('/assignments')
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await expect(B.getByText('Исключён владельцем',{exact:true}).first())
+      .toBeVisible({timeout:30000})
+    const removed=await B.evaluate(async({assignmentId,mediaId})=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const m=await import('/src/features/media/application/media-outbox.ts')
+      const grants=await import('/src/features/assignments/application/media-submission-preflight.ts')
+      const errors:Record<string,string>={}
+      const probes:[string,()=>Promise<unknown>][]=[
+        ['video',()=>a.signedMediaCaptureIntent(assignmentId,'video')],
+        ['audio',()=>a.signedMediaCaptureIntent(assignmentId,'audio')],
+        ['media',()=>a.queueAssignmentMediaSubmission(
+          assignmentId,mediaId,crypto.randomUUID())],
+        ['grant',()=>grants.preflightAssignmentMediaGrant(
+          assignmentId,mediaId,crypto.randomUUID())],
+      ]
+      for(const [kind,probe] of probes){
+        try{await probe();errors[kind]='unexpectedly_accepted'}
+        catch(e){errors[kind]=e instanceof Error?e.message:'unknown'}
+      }
+      return {
+        errors,
+        revoked:(await a.listLocallyRevokedAssignmentIds()).has(assignmentId),
+        media:(await m.listLocalMedia()).map(x=>x.mediaId).sort(),
+        operations:(await a.listAssignmentOperations()).map(x=>x.id).sort(),
+      }
+    },{assignmentId,mediaId:cameraPhoto.mediaId})
+    expect(removed.revoked).toBe(true)
+    expect(removed.errors).toEqual({
+      video:'assignment.member_removed',audio:'assignment.member_removed',
+      media:'assignment.member_removed',grant:'assignment.member_removed',
+    })
+    expect(removed.media).toEqual(beforeRemoved.media)
+    expect(removed.operations).toEqual(beforeRemoved.operations)
 
     expect(ownerId).not.toBe(contributorId)
   }finally{
