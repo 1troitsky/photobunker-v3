@@ -76,6 +76,21 @@ describe('Encrypted device-local notification display settings',()=>{
     expect(host.textContent).toContain('Всегда включены')
     expect(el('notification-setting-push').disabled).toBe(true)
   })
+  it('clears stale saved confirmation after changing quiet hours again',async()=>{
+    await mount()
+    const toggle=el('notification-setting-quiet-enabled')
+    toggle.checked=true
+    toggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    el('notification-settings-save').click()
+    await settle()
+    expect(host.textContent).toContain('Сохранено в зашифрованном')
+    toggle.checked=false
+    toggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(host.textContent).not.toContain('Сохранено в зашифрованном')
+    expect(el('notification-settings-save').disabled).toBe(false)
+  })
   it('does not claim save on storage failure and retains a dirty draft',async()=>{
     mock.save.mockRejectedValueOnce(new Error('quota'))
     await mount()
