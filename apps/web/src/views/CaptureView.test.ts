@@ -651,7 +651,9 @@ describe('Issue #260 GPS consent and capture races',()=>{
 
 describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
   class BoundedRecorder {
+    static latest:BoundedRecorder|null=null
     static isTypeSupported() {return true}
+    constructor() {BoundedRecorder.latest=this}
     state: 'recording'|'inactive' = 'inactive'
     ondataavailable: ((event: {data: Blob}) => void)|null = null
     onstop: (() => void)|null = null
@@ -709,5 +711,27 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     button('Остановить запись').click();await settle()
     expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
   })
+  it('ignores a spontaneous microphone stop even after five seconds of data',async()=>{
+    const opened=await openMode('audio')
+    await vi.advanceTimersByTimeAsync(5_000)
+    BoundedRecorder.latest!.stop() // no explicit Stop or max timer authorization
+    await settle()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(opened.track.stop).toHaveBeenCalledTimes(1)
+  })
 
+  it('uses the user's stop instant, not a delayed browser onstop callback',async()=>{
+    await openMode('audio')
+    const recorder=BoundedRecorder.latest!
+    recorder.stop=()=>{
+      recorder.state='inactive'
+      recorder.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+      setTimeout(()=>recorder.onstop?.(),20_000)
+    }
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click()
+    await vi.advanceTimersByTimeAsync(20_000)
+    await settle()
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+  })
 })
