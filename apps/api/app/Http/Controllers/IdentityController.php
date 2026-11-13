@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Identity\Protocol as P;
+use App\Events\DatabaseEventInboxLedger;
+use App\Events\EventAdmission;
+use App\Events\EventConsumer;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -258,9 +261,34 @@ final class IdentityController extends Controller
     public function revoke(Request $r,string $id): JsonResponse {
         $this->origin($r);
         [$a,$actor]=$this->actor($r); P::uuid($id);
-        $count=DB::table('identity_devices')->where('id',$id)->where('account_id',$a->id)
-            ->whereNull('revoked_at')->update(['revoked_at'=>now(),'updated_at'=>now()]);
-        abort_unless($count===1,404);
+        DB::transaction(function () use ($a,$id):void {
+            // Account -> device is the canonical lock order shared with
+            // notification admission. A failed ledger write MUST roll back
+            // the revoke; no silent missing security notice.
+            $account=DB::table('identity_accounts')->where('id',$a->id)
+                ->lockForUpdate()->first();
+            abort_unless($account && $account->status==='ready',401);
+            $device=DB::table('identity_devices')->where('id',$id)
+                ->where('account_id',$a->id)->lockForUpdate()->first();
+            abort_unless($device && $device->revoked_at===null,404);
+            DB::table('identity_devices')->where('id',$id)
+                ->where('account_id',$a->id)->whereNull('revoked_at')
+                ->update(['revoked_at'=>now(),'updated_at'=>now()]);
+            $event=[
+                'schemaVersion'=>1,
+                'eventId'=>(string) Str::uuid(),
+                'eventType'=>'DeviceRevoked',
+                'accountId'=>(string)$a->id,
+                'subjectType'=>'device',
+                'subjectId'=>$id,
+                'occurredAtMs'=>now()->getTimestampMs(),
+                'revision'=>1,
+            ];
+            $admission=(new EventConsumer(new DatabaseEventInboxLedger()))
+                ->ingest($event,(string)$a->id);
+            abort_unless($admission===EventAdmission::Accepted,503,
+                'identity.notification_event_unavailable');
+        },3);
         if ($id===$actor->id) { $r->session()->invalidate(); $r->session()->regenerateToken(); }
         return $this->json(['revoked'=>true]);
     }
