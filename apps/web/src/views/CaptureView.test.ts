@@ -1012,6 +1012,20 @@ describe('P2 #206 private encrypted recording recovery UI',()=>{
     expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).toBeNull()
   })
 
+  it('runs bounded encrypted scratch expiry GC on mount and never crosses identity',async()=>{
+    mocks.draftPurge.mockResolvedValueOnce(25).mockResolvedValueOnce(25)
+      .mockResolvedValueOnce(7)
+    mocks.draftList.mockResolvedValue([])
+    await mount()
+    await settle()
+    expect(mocks.draftPurge).toHaveBeenCalledTimes(3)
+    expect(mocks.draftPurge).toHaveBeenNthCalledWith(1,25)
+    expect(mocks.draftPurge).toHaveBeenNthCalledWith(2,25)
+    expect(mocks.draftPurge).toHaveBeenNthCalledWith(3,25)
+    expect(mocks.draftList).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).toBeNull()
+  })
+
   it('never makes a writing draft eligible for review or confirmed deletion',async()=>{
     mocks.draftList.mockResolvedValue([{...draft,state:'writing'}])
     await mount();await settle()
