@@ -5,7 +5,7 @@ import { activeSession } from '../features/identity/application/session'
 import {
   listLocalNotifications, markNotificationRead, markAllLocalNotificationsRead,
   previewNotification, type LocalNotification,
-  readNotificationPreferences, notificationIsVisible,
+  readNotificationPreferences, notificationIsVisible, notificationBadgeVisible,
   defaultNotificationPreferences, type NotificationPreferences,
 } from '../features/notifications/application/local-inbox'
 import {
@@ -21,6 +21,9 @@ const syncing=ref(false)
 const busy=ref(false)
 const error=ref('')
 const preferences=ref<NotificationPreferences>({...defaultNotificationPreferences})
+const clock=ref(new Date())
+let clockTimer:ReturnType<typeof setInterval>|null=null
+function tickClock():void{clock.value=new Date()}
 let run=0
 
 function scope():string{
@@ -154,15 +157,19 @@ function canOpen(row:LocalNotification):boolean{
   return canSync.value&&row.targetId!==null&&
     ['new-file','assignment-invite','team-invite'].includes(row.kind)
 }
-function wake():void{void reload()}
+function wake():void{tickClock();void reload()}
 watch(activeSession,()=>{void reload()})
 onMounted(()=>{
   void reload()
   window.addEventListener('online',wake)
+  window.addEventListener('focus',tickClock)
+  clockTimer=setInterval(tickClock,60_000)
 })
 onUnmounted(()=>{
   ++run;rows.value=[];expanded.value=null
   window.removeEventListener('online',wake)
+  window.removeEventListener('focus',tickClock)
+  if(clockTimer!==null){clearInterval(clockTimer);clockTimer=null}
 })
 </script>
 
@@ -209,7 +216,7 @@ onUnmounted(()=>{
           <button type="button" class="notification-summary"
             :aria-expanded="expanded===row.id" :disabled="busy"
             @click="expand(row)">
-            <span class="notification-dot" :class="{isread:row.readAt!==null||!preferences.badges}"
+            <span class="notification-dot" :class="{isread:row.readAt!==null||!notificationBadgeVisible(row.kind,preferences,clock)}"
               aria-hidden="true"></span>
             <span class="notification-copy">
               <strong>{{ previewNotification(row).title }}</strong>
