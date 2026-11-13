@@ -92,14 +92,32 @@ export async function syncServerNotifications():Promise<{saved:number;pages:numb
  * A network failure leaves existing encrypted records intact.
  */
 let running:Promise<void>|null=null
+let runningScope:string|null=null
+function syncScope():string|null{
+  const s=activeSession.value
+  return s?.online?[s.accountId,s.deviceId,s.pkg.akek,
+    s.pkg.accountSpki,s.pkg.revision].join('|'):null
+}
 export function requestNotificationSync():Promise<void>{
-  if(running)return running
-  const session=activeSession.value
-  if(!session?.online)return Promise.resolve()
-  const task=syncServerNotifications().then(()=>undefined)
-  const safe=task.catch(()=>{ /* Safe replay at next online/visible event. */ })
-  running=safe.finally(()=>{running=null})
-  return running
+  const requested=syncScope()
+  if(!requested)return Promise.resolve()
+  if(running){
+    // Old-account requests MUST NOT consume the first sync opportunity
+    // of a replacement account. Wait for the old flight to settle, then
+    // evaluate the CURRENT identity rather than capturing stale credentials.
+    if(requested!==runningScope)
+      return running.then(()=>requestNotificationSync())
+    return running
+  }
+  runningScope=requested
+  const safe=syncServerNotifications()
+    .then(()=>undefined)
+    .catch(()=>{ /* Keep offline encrypted rows; retry on a later trigger. */ })
+  const task=safe.finally(()=>{
+    if(running===task){running=null;runningScope=null}
+  })
+  running=task
+  return task
 }
 
 export function attachNotificationSyncLifecycle():void{
