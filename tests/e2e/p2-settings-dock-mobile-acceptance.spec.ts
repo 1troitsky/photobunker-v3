@@ -119,7 +119,7 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
     await expect(dock(page).getByRole('link',{name:'Уведомления'})).toBeVisible()
     await page.getByRole('button',{name:'Сохранить',exact:true}).click()
     await dock(page).getByRole('link',{name:'Уведомления'}).click()
-    await expect(page).toHaveURL(/\\/notifications$/)
+    await expect(page).toHaveURL(/\/notifications$/)
     await expect(page.getByTestId('notifications-page')).toBeVisible()
     await expect(dock(page).getByRole('link')).toHaveCount(5)
   }finally{await context.close()}
