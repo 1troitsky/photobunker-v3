@@ -216,26 +216,77 @@ async function modify(
  * Defaults are safe if the device has never saved preferences.
  */
 export type NotificationPreferences=Readonly<{
-  version:1
+  version:2
   invitations:boolean
   deadlines:boolean
   expiry:boolean
   system:boolean
   badges:boolean
+  quietEnabled:boolean
+  quietStart:number
+  quietEnd:number
 }>
 export const defaultNotificationPreferences:NotificationPreferences=Object.freeze({
-  version:1,invitations:true,deadlines:true,expiry:true,system:true,badges:true,
+  version:2,invitations:true,deadlines:true,expiry:true,system:true,badges:true,
+  quietEnabled:false,quietStart:22*60,quietEnd:8*60,
 })
-const PREFERENCE_KEYS=['badges','deadlines','expiry','invitations','system','version'] as const
+const PREFERENCE_KEYS=[
+  'badges','deadlines','expiry','invitations','quietEnabled','quietEnd',
+  'quietStart','system','version',
+] as const
+const OLD_PREFERENCE_KEYS=['badges','deadlines','expiry','invitations','system','version'] as const
+function minute(value:unknown):value is number{
+  return typeof value==='number'&&Number.isInteger(value)&&value>=0&&value<1440
+}
 function validatePreferences(value:unknown):asserts value is NotificationPreferences{
   if(!value||typeof value!=='object'||Array.isArray(value))
     throw Error('notifications.invalid_preferences')
   const v=value as Record<string,unknown>
   if(Object.keys(v).sort().join('|')!==PREFERENCE_KEYS.join('|')
-    ||v.version!==1
-    ||['badges','deadlines','expiry','invitations','system']
-      .some(key=>typeof v[key]!=='boolean'))
+    ||v.version!==2
+    ||['badges','deadlines','expiry','invitations','system','quietEnabled']
+      .some(key=>typeof v[key]!=='boolean')
+    ||!minute(v.quietStart)||!minute(v.quietEnd)
+    ||v.quietStart===v.quietEnd)
     throw Error('notifications.invalid_preferences')
+}
+function normalizedPreferences(value:unknown):NotificationPreferences{
+  if(value&&typeof value==='object'&&!Array.isArray(value)){
+    const v=value as Record<string,unknown>
+    if(v.version===1&&Object.keys(v).sort().join('|')===OLD_PREFERENCE_KEYS.join('|')
+      &&['badges','deadlines','expiry','invitations','system']
+        .every(key=>typeof v[key]==='boolean')){
+      const upgraded={...defaultNotificationPreferences,
+        invitations:v.invitations as boolean,
+        deadlines:v.deadlines as boolean,
+        expiry:v.expiry as boolean,
+        system:v.system as boolean,
+        badges:v.badges as boolean,
+      }
+      return upgraded
+    }
+  }
+  validatePreferences(value)
+  return value
+}
+/**
+ * Quiet hours are local badge presentation only, not notification delivery,
+ * unread state, encrypted history, server cursor or future OS push permission.
+ * Uses the device's CURRENT local clock, including its timezone/DST rules.
+ */
+export function notificationBadgeVisible(
+  kind:NotificationKind,preferences:NotificationPreferences,at=new Date(),
+):boolean{
+  // Security warnings are never hidden by display preferences or quiet hours.
+  if(kind==='security')return true
+  if(!preferences.badges)return false
+  if(!preferences.quietEnabled)return true
+  const now=at.getHours()*60+at.getMinutes()
+  const {quietStart:start,quietEnd:end}=preferences
+  const quiet=start<end
+    ?now>=start&&now<end
+    :now>=start||now<end
+  return !quiet
 }
 function preferencesAAD(ownerScope:string):Uint8Array<ArrayBuffer>{
   return encoder.encode('pb3.notification-preferences.v1\\n'+ownerScope)
@@ -266,7 +317,7 @@ export async function readNotificationPreferences():Promise<NotificationPreferen
     },await cryptoKey(session,'decrypt'),unb64(stored.ciphertext))
   }catch{throw Error('notifications.encrypted_preferences_unreadable')}
   let settings:unknown
-  try{settings=JSON.parse(decoder.decode(plain));validatePreferences(settings)}
+  try{settings=normalizedPreferences(JSON.parse(decoder.decode(plain)))}
   catch{throw Error('notifications.invalid_preferences')}
   sameIdentity(session)
   return settings as NotificationPreferences
