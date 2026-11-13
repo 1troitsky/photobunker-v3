@@ -106,7 +106,7 @@ describe('#226 verified read-only subscription status',()=>{
     [{entitlement:{snapshotSha256:'bad'}},'bad snapshot marker'],
     [{lifecycle:{existingMediaPolicy:'retroactive_free_ttl'}},'implicit expiry rewrite'],
     [{lifecycle:{newWritesPolicy:'paid_unlimited'}},'faked paid writes'],
-  ])('rejects %s (%s)',(patch)=>{
+  ])('rejects %s (%s)',(patch,_label)=>{
     const x=clone() as unknown as Record<string,Record<string,unknown>>
     for(const [group,fields] of Object.entries(patch))
       Object.assign(x[group]!,fields)
