@@ -48,7 +48,6 @@ final class NotificationEventsController extends Controller
                 ->where('t.state','active')
                 ->where('t.rotation_required',false)
                 ->where('t.key_epoch',1)
-                ->whereColumn('i.team_contract_hash','t.contract_hash')
                 ->whereNotExists(static function ($q) use ($account):void {
                     $q->selectRaw('1')->from('team_members_v1 as m')
                         ->whereColumn('m.team_id','i.team_id')
