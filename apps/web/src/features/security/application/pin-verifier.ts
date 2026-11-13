@@ -31,6 +31,7 @@ type StoredPinState = {
   failures: number
   lockedUntilMs: number
   lastObservedMs: number
+  integrityTag: number[]
 }
 
 export type PinScope = {
@@ -90,6 +91,18 @@ function validateVerifier(
 }
 
 function validateState(row: StoredPinState, scope: PinScope): void {
+  const keys = [
+    'accountId', 'app', 'deviceId', 'emergency', 'failures', 'id',
+    'integrityTag', 'lastObservedMs', 'lockedUntilMs', 'revision', 'version',
+  ].sort()
+  if (!row || typeof row !== 'object' ||
+      Object.keys(row).sort().join('|') !== keys.join('|')) {
+    throw new Error('pin.corrupt_record')
+  }
+  if (!Array.isArray(row.integrityTag) || row.integrityTag.length !== TAG_BYTES ||
+      !row.integrityTag.every(n =>
+        Number.isInteger(n) && n >= 0 && n <= 255,
+      )) throw new Error('pin.corrupt_record')
   if (row.version !== 1 || row.id !== scopeId(scope) ||
       row.accountId !== scope.accountId || row.deviceId !== scope.deviceId ||
       typeof row.revision !== 'string' || row.revision.length < 16 ||
@@ -101,6 +114,42 @@ function validateState(row: StoredPinState, scope: PinScope): void {
   }
   validateVerifier(row.app)
   validateVerifier(row.emergency, true)
+}
+
+/**
+ * A device-bound MAC authenticates *both* verifier material and the mutable
+ * lockout ledger. An attacker rewriting IDB timestamps/counters cannot
+ * silently clear the lock without the non-extractable key.
+ *
+ * A replay of an OLD valid MACed snapshot is not detectable offline without
+ * an independent monotonic counter; do not advertise rollback resistance.
+ */
+function stateFrame(row: StoredPinState): Uint8Array<ArrayBuffer> {
+  return encoder.encode(JSON.stringify([
+    'PB3/PIN/ledger/v1',
+    row.id, row.version, row.accountId, row.deviceId, row.revision,
+    row.app.salt, row.app.tag,
+    row.emergency?.salt ?? null, row.emergency?.tag ?? null,
+    row.failures, row.lockedUntilMs, row.lastObservedMs,
+  ]))
+}
+
+async function calculateStateTag(
+  row: StoredPinState, secret: CryptoKey,
+): Promise<number[]> {
+  return Array.from(new Uint8Array(
+    await crypto.subtle.sign('HMAC', secret, stateFrame(row)),
+  ))
+}
+
+async function verifyStoredState(
+  row: StoredPinState, scope: PinScope, secret: CryptoKey,
+): Promise<void> {
+  validateState(row, scope)
+  const actual = new Uint8Array(await calculateStateTag(row, secret))
+  if (!sameTag(actual, row.integrityTag)) {
+    throw new Error('pin.integrity_failed')
+  }
 }
 
 async function calculateTag(
@@ -177,13 +226,16 @@ export async function enrollPinVerifier(
     throw new Error('pin.invalid_clock')
   }
   // Atomic add prevents concurrent tabs from resetting an enrolled verifier.
-  await records.add({
+  const row: StoredPinState = {
     id: scopeId(scope), version: 1,
     accountId: scope.accountId, deviceId: scope.deviceId,
     revision: crypto.randomUUID(),
     app, emergency,
     failures: 0, lockedUntilMs: 0, lastObservedMs: timestamp,
-  })
+    integrityTag: [],
+  }
+  row.integrityTag = await calculateStateTag(row, secret)
+  await records.add(row)
 }
 
 /**
@@ -198,72 +250,83 @@ export async function attemptPinVerifier(
 ): Promise<PinAttempt> {
   const id = scopeId(scope)
   requireDeviceSecret(secret)
-  const now = Date.now()
-  if (!Number.isSafeInteger(now) || now < 0) {
-    throw new Error('pin.invalid_clock')
-  }
-  const snapshot = await records.get(id)
-  if (!snapshot) throw new Error('pin.not_configured')
-  validateState(snapshot, scope)
-  // A known persisted lock or rollback cannot become an unlock while waiting
-  // for expensive KDF work. The transaction below still rechecks all guards.
-  if (now < snapshot.lastObservedMs) return {status: 'clock-rollback'}
-  if (snapshot.lockedUntilMs > now) {
-    return {status: 'locked', retryAfterMs: snapshot.lockedUntilMs - now}
-  }
-
-  // PBKDF2 is deliberately done BEFORE the IDB transaction: holding a Dexie
-  // transaction open across WebCrypto awaits can make it inactive/commit early.
-  // Both MACs are computed even on a match to avoid exposing the PIN role
-  // through early-return timing. All state updates remain in a single rw TX.
   const formatValid = /^[0-9]{4,8}$/.test(candidate)
-  const appTag = formatValid
-    ? await calculateTag(
-      candidate, 'app', new Uint8Array(snapshot.app.salt), secret, scope,
-    ) : null
-  const emergencyTag = formatValid && snapshot.emergency
-    ? await calculateTag(
-      candidate, 'emergency', new Uint8Array(snapshot.emergency.salt),
-      secret, scope,
-    ) : null
 
-  return db.transaction('rw', records, async (): Promise<PinAttempt> => {
-    const row = await records.get(id)
-    if (!row) throw new Error('pin.not_configured')
-    validateState(row, scope)
-    if (row.revision !== snapshot.revision ||
-        JSON.stringify(row.app) !== JSON.stringify(snapshot.app) ||
-        JSON.stringify(row.emergency) !== JSON.stringify(snapshot.emergency)) {
-      throw new Error('pin.state_changed')
+  // Signing and PIN PBKDF2 are intentionally OUTSIDE the IDB transaction.
+  // Holding an IDB transaction open while awaiting WebCrypto can commit it
+  // prematurely. The final conditional write is short and fully atomic.
+  const MAX_CAS_ATTEMPTS = 12
+  for (let retry = 0; retry < MAX_CAS_ATTEMPTS; retry++) {
+    const snapshot = await records.get(id)
+    if (!snapshot) throw new Error('pin.not_configured')
+    await verifyStoredState(snapshot, scope, secret)
+
+    const now = Date.now()
+    if (!Number.isSafeInteger(now) || now < 0) {
+      throw new Error('pin.invalid_clock')
     }
-    if (now < row.lastObservedMs) return {status: 'clock-rollback'}
-    if (row.lockedUntilMs > now) {
-      return {status: 'locked', retryAfterMs: row.lockedUntilMs - now}
+    if (now < snapshot.lastObservedMs) return {status: 'clock-rollback'}
+    if (snapshot.lockedUntilMs > now) {
+      return {status: 'locked', retryAfterMs: snapshot.lockedUntilMs - now}
     }
 
-    row.lastObservedMs = now
-    const appMatch = appTag !== null && sameTag(appTag, row.app.tag)
-    const emergencyMatch = emergencyTag !== null && row.emergency !== null &&
-      sameTag(emergencyTag, row.emergency.tag)
+    // Evaluate both roles before updating the ledger. A PIN matches only the
+    // authenticated verifier for this exact account and device.
+    const appTag = formatValid
+      ? await calculateTag(
+        candidate, 'app', new Uint8Array(snapshot.app.salt), secret, scope,
+      ) : null
+    const emergencyTag = formatValid && snapshot.emergency
+      ? await calculateTag(
+        candidate, 'emergency', new Uint8Array(snapshot.emergency.salt),
+        secret, scope,
+      ) : null
+    const appMatch = appTag !== null && sameTag(appTag, snapshot.app.tag)
+    const emergencyMatch = emergencyTag !== null && snapshot.emergency !== null &&
+      sameTag(emergencyTag, snapshot.emergency.tag)
 
+    const afterKdf = Date.now()
+    if (!Number.isSafeInteger(afterKdf) || afterKdf < now) {
+      throw new Error('pin.invalid_clock')
+    }
+
+    // Do not accept a successful PIN computed before an intervening lockout
+    // or clock change. A conflict retries from a newly authenticated record.
+    const row: StoredPinState = {
+      ...snapshot, revision: crypto.randomUUID(),
+      lastObservedMs: afterKdf,
+      integrityTag: [],
+    }
+    let result: PinAttempt
     if (appMatch || emergencyMatch) {
       row.failures = 0
       row.lockedUntilMs = 0
-      await records.put(row)
-      return {status: appMatch ? 'app-unlocked' : 'emergency-intent'}
+      result = {status: appMatch ? 'app-unlocked' : 'emergency-intent'}
+    } else {
+      const priorFailures = snapshot.lockedUntilMs > 0 &&
+        snapshot.lockedUntilMs <= afterKdf ? 0 : snapshot.failures
+      row.failures = Math.min(MAX_FAILURES, priorFailures + 1)
+      if (row.failures >= MAX_FAILURES) {
+        row.lockedUntilMs = afterKdf + LOCKOUT_MS
+        result = {status: 'locked', retryAfterMs: LOCKOUT_MS}
+      } else {
+        row.lockedUntilMs = 0
+        result = {status: 'invalid', attemptsRemaining: MAX_FAILURES - row.failures}
+      }
     }
+    row.integrityTag = await calculateStateTag(row, secret)
 
-    // An expired lockout starts a new five-attempt window, not an instant relock.
-    const priorFailures = row.lockedUntilMs > 0 && row.lockedUntilMs <= now
-      ? 0 : row.failures
-    row.failures = Math.min(MAX_FAILURES, priorFailures + 1)
-    if (row.failures >= MAX_FAILURES) {
-      row.lockedUntilMs = now + LOCKOUT_MS
+    const committed = await db.transaction('rw', records, async () => {
+      const current = await records.get(id)
+      // Compare EVERY field as well as revision: corrupt field mutations with
+      // an unchanged revision must never be overwritten by a stale signed row.
+      if (!current || JSON.stringify(current) !== JSON.stringify(snapshot)) {
+        return false
+      }
       await records.put(row)
-      return {status: 'locked', retryAfterMs: LOCKOUT_MS}
-    }
-    row.lockedUntilMs = 0
-    await records.put(row)
-    return {status: 'invalid', attemptsRemaining: MAX_FAILURES - row.failures}
-  })
+      return true
+    })
+    if (committed) return result
+  }
+  throw new Error('pin.concurrent_state_changed')
 }
