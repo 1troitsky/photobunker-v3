@@ -1,4 +1,4 @@
-name: P3 #226 scoped grace lifecycle acceptance
+name: "P3 #226 scoped grace lifecycle acceptance"
 
 # Existing P0 Foundation and PG/Garage workflows target main/p0/p1/p2/
 # integration PR bases only. This narrow workflow executes real PHP tests
