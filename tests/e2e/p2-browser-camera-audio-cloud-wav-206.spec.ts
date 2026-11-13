@@ -29,10 +29,6 @@ async function enroll(page:Page):Promise<{key:string;accountId:string;deviceId:s
   })
   return {key,...ids}
 }
-async function digest(blob:Blob):Promise<string>{
-  const bytes=await crypto.subtle.digest('SHA-256',await blob.arrayBuffer())
-  return Array.from(new Uint8Array(bytes),x=>x.toString(16).padStart(2,'0')).join('')
-}
 test('P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV trim → new encrypted Garage file',async({browser}:{
   browser:Browser
 })=>{
@@ -51,6 +47,9 @@ test('P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV t
     await expect(A.getByRole('button',{name:'Сделать снимок'}))
       .toBeEnabled({timeout:20_000})
     await A.getByTestId('camera-mode').selectOption('audio')
+    await A.locator('#camera-category').fill('PRIVATE206-REPORT-AUDIO')
+    await A.locator('#camera-description').fill('PRIVATE206-NO-DERIVATIVE-LEAK')
+    await A.locator('#camera-tags').fill('PRIVATE206-AUDIO-TAG')
     await expect(A.getByTestId('camera-start-recording'))
       .toBeEnabled({timeout:20_000})
     await A.getByTestId('camera-start-recording').click()
@@ -75,6 +74,9 @@ test('P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV t
       return {
         id:row.mediaId,bytes:clear.blob.size,
         mime:clear.blob.type,name:clear.metadata.fileName,
+        category:clear.metadata.category??null,
+        description:clear.metadata.description??null,
+        tags:clear.metadata.tags??[],
         digest:await (async()=>{
           const h=await crypto.subtle.digest('SHA-256',
             await clear.blob.arrayBuffer())
@@ -89,6 +91,9 @@ test('P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV t
     expect(source.mime).toMatch(/^audio\/(webm|mp4|ogg)$/)
     expect(source.name).toMatch(/^recording-.*\.(webm|mp4|ogg)$/)
     expect(source.capture).toBeNull()
+    expect(source.category).toBe('PRIVATE206-REPORT-AUDIO')
+    expect(source.description).toBe('PRIVATE206-NO-DERIVATIVE-LEAK')
+    expect(source.tags).toEqual(['PRIVATE206-AUDIO-TAG'])
     expect(source.scratch).toBe(0)
     expect(source.digest).toMatch(/^[0-9a-f]{64}$/)
 
@@ -140,13 +145,17 @@ test('P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV t
       const hash=await crypto.subtle.digest('SHA-256',await file.blob.arrayBuffer())
       return {
         mime:file.blob.type,name:file.metadata.fileName,size:file.blob.size,
+        category:file.metadata.category??null,
+        description:file.metadata.description??null,
+        tags:file.metadata.tags??[],
         digest:[...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join(''),
         localCount:(await m.listLocalMedia()).length,
       }
     },source.id)
     expect(cloud).toEqual({
       mime:source.mime,name:source.name,size:source.bytes,
-      digest:source.digest,localCount:0,
+      category:source.category,description:source.description,
+      tags:source.tags,digest:source.digest,localCount:0,
     })
 
     // Drive the ACTUAL cloud-backed FileViewer and WebAudio decoder via UI,
@@ -195,8 +204,9 @@ test('P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV t
       return {id:row.mediaId,kind:row.mediaType,plainBytes:row.plainBytes,
         mime:recovered.blob.type,name:recovered.metadata.fileName,
         capture:row.capture??null,category:recovered.metadata.category??null,
+        description:recovered.metadata.description??null,
         gps:recovered.metadata.gps??null,tags:recovered.metadata.tags??[],
-        state:row.state,
+        serializedRow:JSON.stringify(row),state:row.state,
         ciphertextOnly:row.chunks.every(x=>x.blob.type==='application/octet-stream'),
         riff:s(0,4),wave:s(8,4),fmt:s(12,4),
         channels:dv.getUint16(22,true),rate:dv.getUint32(24,true),
@@ -207,10 +217,13 @@ test('P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV t
     expect(derivative.id).not.toBe(source.id)
     expect(derivative).toMatchObject({
       kind:'audio',mime:'audio/wav',capture:null,category:null,
-      gps:null,tags:[],ciphertextOnly:true,
+      description:null,gps:null,tags:[],ciphertextOnly:true,
       riff:'RIFF',wave:'WAVE',fmt:'fmt ',
     })
     expect(derivative.name).toMatch(/-clip-200-700ms\.wav$/)
+    expect(derivative.serializedRow).not.toContain('PRIVATE206-REPORT-AUDIO')
+    expect(derivative.serializedRow).not.toContain('PRIVATE206-NO-DERIVATIVE-LEAK')
+    expect(derivative.serializedRow).not.toContain('PRIVATE206-AUDIO-TAG')
     expect(derivative.totalBytes).toBe(derivative.dataBytes+44)
     expect(derivative.dataBytes/derivative.rate/derivative.channels/2)
       .toBeGreaterThan(0.49)
