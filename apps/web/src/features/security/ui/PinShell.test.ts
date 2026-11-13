@@ -3,17 +3,23 @@ import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {createApp,nextTick,type App} from 'vue'
 
 const session=vi.hoisted(()=>({
-  pendingPinUnlock:{value:{
-    accountId:'00000000-0000-4000-8000-000000000001',
-    deviceId:'00000000-0000-4000-8000-000000000002',
-    packageRevision:1,sessionNonce:'00000000-0000-4000-8000-000000000003',
-    pinLength:4,
-  }},
-  identityBootstrapError:{value:null as string|null},
   unlockPinnedDevice:vi.fn(),
   restoreAccount:vi.fn(),
 }))
-vi.mock('../../identity/application/session',()=>session)
+// Actual Vue refs are essential here: SFC template auto-unwrapping must
+// observe the same reactive state as the production Identity module.
+vi.mock('../../identity/application/session',async()=>{
+  const {shallowRef}=await import('vue')
+  return {
+    pendingPinUnlock:shallowRef(null),
+    identityBootstrapError:shallowRef(null),
+    unlockPinnedDevice:session.unlockPinnedDevice,
+    restoreAccount:session.restoreAccount,
+  }
+})
+import {
+  pendingPinUnlock,identityBootstrapError,
+} from '../../identity/application/session'
 import PinShell from './PinShell.vue'
 
 let app:App|undefined
@@ -43,8 +49,13 @@ async function typeDigits(digits:string){
 }
 beforeEach(()=>{
   vi.clearAllMocks()
-  session.pendingPinUnlock.value.pinLength=4
-  session.identityBootstrapError.value=null
+  pendingPinUnlock.value={
+    accountId:'00000000-0000-4000-8000-000000000001',
+    deviceId:'00000000-0000-4000-8000-000000000002',
+    packageRevision:1,sessionNonce:'00000000-0000-4000-8000-000000000003',
+    pinLength:4,
+  }
+  identityBootstrapError.value=null
   session.unlockPinnedDevice.mockResolvedValue({status:'invalid',attemptsRemaining:4})
   session.restoreAccount.mockResolvedValue(undefined)
 })
@@ -130,7 +141,7 @@ describe('P3 owner-accepted full-screen PIN Shell 1.1',()=>{
   })
 
   it('does not display the keypad when boot found corrupt or mixed Identity state',async()=>{
-    session.identityBootstrapError.value='identity.mixed_sealed_devices'
+    identityBootstrapError.value='identity.mixed_sealed_devices'
     await mount()
     expect(root.querySelector('.keypad')).toBeNull()
     expect(root.textContent).toContain('Доступен только Recovery Key')
