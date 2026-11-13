@@ -32,7 +32,9 @@ jobs:
         run: |
           php -l apps/api/app/Storage/Byo/ByoS3Pin.php
           php -l apps/api/app/Storage/Byo/ByoS3EndpointGuard.php
+          php -l apps/api/app/Storage/Byo/ByoS3DnsResolver.php
           php -l apps/api/tests/Feature/ByoStorage/ByoS3EndpointGuardTest.php
+          php -l apps/api/tests/Feature/ByoStorage/ByoS3DnsResolverTest.php
           php -l scripts/p4-byo-s3-endpoint-232-smoke.php
       - name: Network-free negative SSRF and pinning checks (explicit PHP security floor)
         run: php scripts/p4-byo-s3-endpoint-232-smoke.php
