@@ -58,3 +58,8 @@ Push **не реализован и UI-переключатель выключе
 ### Notifications hardening — точный CI `fae52e19` (13.11.2026)
 
 Подтверждён новый полный прогон для кода `fae52e196ee40f8898c4e29afad5d75b15fb1439`: Foundation run `43483933213`, Security `43483933620`, UX `43483933556`, PostgreSQL 18/Garage 2.5 run `43483933703` — все **PASS**. Chromium **86/86 PASS (4.7m)**, job `132087280352`; тесты включают исправления повреждения настроек и скрытых категорий. В более поздней Draft-ветке подготовлен только серверный `PushWakePayload` (payload constant, без транспорта); его собственный CI проверяется отдельно. Никаких push подписок, Service Worker, VAPID и мобильной приёмки на основании этого PASS не утверждать.
+
+
+### Notifications: внутренний push subscription registry — Draft #296 (13.11.2026)
+
+Продолжен узкий push preflight без Service Worker и сетевой доставки: создана миграция `notification_push_subscriptions_v1` и внутренний `PushDeviceSubscriptionRegistry`, который сохраняет endpoint/auth/p256dh только как Laravel authenticated-encrypted ciphertext, индексирует лишь SHA-256 endpoint, привязывает запись к подтверждённому аккаунту и устройству и учитывает revocation. Запрещены cross-account endpoint claims, внутренние/произвольные URL и повторная регистрация отозванного устройства; damaged ciphertext недействителен. Есть PHPUnit на регистрацию, ротацию, disable, tenant isolation, tamper, SSRF и отсутствие публичного маршрута. **Реального push пока нет**: SW по-прежнему НЕ регистрируется, VAPID sender/permission/subscription API/physical iOS+Android отсутствуют. Кодовый SHA до документации `b65226ee54a48b6e0cb637363505dc987f0df602`; его CI ещё должен завершиться до каких-либо PASS-утверждений. `main` не менялся, PR #296 остаётся Draft, #198 in-progress.
