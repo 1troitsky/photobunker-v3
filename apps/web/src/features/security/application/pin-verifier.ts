@@ -67,7 +67,7 @@ function validatePin(pin: string): void {
 function requireDeviceSecret(secret: CryptoKey): void {
   const algorithm = secret.algorithm as HmacKeyAlgorithm
   if (secret.extractable || algorithm.name !== 'HMAC' ||
-      algorithm.hash?.name !== 'SHA-256' ||
+      algorithm.hash?.name !== 'SHA-256' || algorithm.length < 256 ||
       !secret.usages.includes('sign')) {
     throw new Error('pin.invalid_device_secret')
   }
