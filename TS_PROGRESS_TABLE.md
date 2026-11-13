@@ -1,0 +1,31 @@
+# PB3 — единственная таблица прогресса
+
+**Срез на 13.11.2026.** Это **фактическая карта статусов**, а не придуманные проценты готовности. Сравнены живые GitHub PR, точные SHA файлов, `main`, `ts.md`, `AGENTS.md`, полный CI последнего объединённого Draft. **Draft ≠ интегрировано в `main` ≠ готово к релизу**. Обновлять после большого этапа, не после каждого коммита. Старые примерные проценты от 11.11 не переносить как достоверную оценку.
+
+**Две разные базы:** `main` **`da7327b8c9c440dae3dc864b3245b9f9f4ad14eb`**; последний до preflight полный Product+QA Draft [#288](https://github.com/1troitsky/photobunker-v3/pull/288) **`f906f1490653db98df34b41db55fbda9cb3238e0`**, исходный CI **4/4 PASS** (PHP244 на каждой версии, Vitest446, Chromium83, PG/Garage). Новая объединённая Draft-ветка от этого SHA предназначена для проверки относительно `main`, **не для самостоятельного merge**.
+
+| Направление | Есть в `main` / проверенная база | Последняя объединённая Draft-сборка (проверено) | Что НЕ принято и что дальше |
+|---|---|---|---|
+| **Интеграция кода** | `main` неизменён | **189** открытых Draft PR, **175** stacked, **14** прямых в main; основная последовательная цепочка **84 PR** до #288; отдельный pre-main review #289 | Main-base 4/4 CI, независимый разбор недостающих веток, разрешение владельца перед слиянием |
+| Identity / Recovery / E2EE / Local-First | P0/P1 foundation | Проверенные настоящие браузерные шифрованные Photo/Media, подписанные резервации, восстановление/отказы хранилища | Реальные устройства, полный Lost ACK/escrow и приемка Matrix отдельно |
+| Камера, GPS, фото/видео/аудио | Базовый клиент и подписанные протоколы | #263 выбран вместо конфликтующего #262, отрицательные тесты GPS; E2EE uploads в Garage Chromium | Физические iOS/Android, сенсоры/разрешения, полноценные 5–300/3000 сек media capture |
+| Browser, каталог и импорт | Старый Browser | #82 и 84-последовательная продуктовая ветка: код Browser/Media и соответствующие E2E; real cloud readback | Проверить полное принятие каждой операции, UX/массовые операции и совместимость версий |
+| Viewer и редакторы | Базовые UI/медиа-интерфейсы | Photo V55 и интеграция UX в Draft; часть browser QA | Реальные video/audio редакторы, производительность на телефонах, все экспортные сценарии |
+| Assignments / Fieldwork | Signed assignment foundation | Серверные политики, квоты и 5/5 реальных PostgreSQL конкурирующих слотов; Chromium-проверки | Полная пользовательская 5.0, правила TTL задания и contributor deletion |
+| Контакты / Команды / Профиль | Базовые E2EE grants и команды | Draft-цепочка UX и интеграционные QA | Окончательная приёмка экрана, отзыв доступа, повторная проверка на физических устройствах |
+| Messenger / Matrix | Не считать полноценным готовым мессенджером | Исходная #64 Message UI/drafts **не включена в нынешний #288** в пяти путях; Matrix ветви отдельно | Matrix A→B/SAS/QR/escrow, remote revoke/Panic, обязательный Unlimited+ homeserver **BLOCKED** |
+| PIN / Emergency / DMS | Частичные security primitives | Спецификация и отдельные защитные задачи | Полный PIN, Emergency/Panic, DMS, remote wipe и негативные сценарии |
+| StorageManager / S3 / Backup | S3/PG foundation | **Реальный Garage outage/restart/lost ACK PASS**, signed E2EE uploads и SHA; тесты адаптеров присутствуют | BYO S3, независимый replica/failover, полноценный Recovery Vault/Backup restore |
+| Тарифы, квоты, TTL, оплата | Базовые серверные правила | Пять тарифов, verified ledger, Free14/Go30/Pro90, браузерные buffered 13/29/89, PG квоты; Go/Pro→Free безопасный CI-тест | **Нет подтверждённой реальной оплаты**; Unlimited renew, grace auto-expiry, физический GC, TTL миграция #203 **backlog** |
+| Уведомления | Базовая инфраструктура | Local-First encrypted inbox contract+test имеется в Draft | Полное серверное доставление/пуш, бейджи, UX и действия |
+| Help / FAQ / Legal / Shell | P0/P1 shell, исходники `docs/_uiux` | **117** UX эталонов `docs/ux/`, **14** UX integration источников; отдельный Help Center UI | Реальные тексты Terms/Privacy и проверка всех UX связей / мобильности |
+| Admin / Analytics / Events | Не считать готовой production админкой | Наборы проверенных контрактов RBAC, private telemetry и metadata events (содержимое уже есть в текущем Draft) | MFA-operational flows, разрешённые действия, privacy audit и эксплуатационная панель |
+| Signed PWA / release | Базовые PWA/development CI | SHA256 release-integrity draft contract, API+Vue сборка и Chromium E2E | Независимый trust anchor, подписанная цепочка, инсталляция iOS/Android, release chaos/load, юридические требования |
+
+## Отдельные риски интеграции
+
+- **Восемь** прямо в `main` направленных PR (#184, #186, #188, #245, #246, #247, #249, #250) имеют **полностью идентичные Git SHA содержимого своих изменённых файлов** в текущем #288. Они НЕ обязаны иметь общие коммиты; не вливать повторно и не закрывать без review.
+- #251 — частично совпадает, его тесты изменились позднее. #82 — корень 84-PR цепочки; нельзя вливать исходный PR поверх его потомков. Старые #63 / #49 требуют reconciliation, а исходная Messages #64 не входит в интеграционный bundle.
+- Исходный `TS_PROGRESS_TABLE.md` из `main` **исчез в потомках**. Эта актуальная версия восстановлена в отдельной integration review ветке; не терять её вновь.
+- Полный preflight и действия: [docs/audits/PB3-MAIN-INTEGRATION-PREFLIGHT-20261113.md](docs/audits/PB3-MAIN-INTEGRATION-PREFLIGHT-20261113.md), [Issue #289](https://github.com/1troitsky/photobunker-v3/issues/289).
+- **Правило:** никакого merge в `main` без прямого указания владельца; никакого заявления «PB3 завершён» только по зелёному CI. После принятой интеграции отдельно обновить эту единственную таблицу.
