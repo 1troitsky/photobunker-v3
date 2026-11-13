@@ -66,6 +66,18 @@ describe('Encrypted device-local notification display settings',()=>{
     expect(host.textContent).toContain('Не удалось сохранить')
     expect(el('notification-settings-save').disabled).toBe(false)
   })
+  it('keeps unsaved local switches when the same device finishes online proof',async()=>{
+    await mount()
+    const toggle=el('notification-setting-invitations')
+    toggle.checked=false
+    toggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    activeSession.value={...session(),online:true}
+    await settle()
+    expect(el('notification-setting-invitations').checked).toBe(false)
+    expect(el('notification-settings-save').disabled).toBe(false)
+    expect(mock.load).toHaveBeenCalledTimes(1)
+  })
   it('never applies encrypted preferences loaded for the previous account after switch',async()=>{
     let finish:((v:typeof defaults)=>void)|undefined
     mock.load.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
