@@ -227,3 +227,60 @@ test('P2 #206 true native audio timeslices are ciphertext before Stop and GC aft
   })
   expect(stored).toEqual([{mediaType:'audio',ciphertextOnly:true}])
 })
+
+test('P2 #206 separate live tab cannot steal recording, closed writer permits explicit encrypted-only adoption',async({page})=>{
+  test.setTimeout(150_000)
+  await register(page)
+  await page.goto('/camera')
+  await expect(page.getByRole('button',{name:'Сделать снимок'}))
+    .toBeEnabled({timeout:20_000})
+  await page.getByTestId('camera-mode').selectOption('audio')
+  await expect(page.getByTestId('camera-start-recording'))
+    .toBeEnabled({timeout:20_000})
+  await page.getByTestId('camera-start-recording').click()
+  await expect(page.getByTestId('camera-recording-status')).toBeVisible()
+  const draftId=await expect.poll(()=>page.evaluate(async()=>{
+    const m=await import('/src/features/media/application/recording-encrypted-journal.ts')
+    const d=(await m.listEncryptedRecordingDrafts())[0]
+    return d?.state==='writing'&&d.recoveryAvailable&&d.chunkCount>0
+      ?d.recordingId:''
+  }),{timeout:20_000}).not.toBe('')
+  void draftId
+  const id=await page.evaluate(async()=>{
+    const m=await import('/src/features/media/application/recording-encrypted-journal.ts')
+    return (await m.listEncryptedRecordingDrafts())[0]!.recordingId
+  })
+  const peer=await page.context().newPage()
+  try{
+    await peer.goto('/camera')
+    await expect(peer.getByRole('button',{name:'Сделать снимок'}))
+      .toBeEnabled({timeout:30_000})
+    const card=peer.getByTestId('camera-encrypted-draft-'+id)
+    await expect(card).toBeVisible({timeout:20_000})
+    await expect(card).toContainText('Возможна незавершённая запись')
+    await expect(card.getByRole('button',{name:'Просмотреть локально'})).toHaveCount(0)
+    await expect(card.getByRole('button',{name:'Удалить фрагменты'})).toHaveCount(0)
+    await card.getByRole('button',{name:'Проверить прерванную запись'}).click()
+    await expect(peer.getByTestId('camera-draft-error'))
+      .toContainText('camera.recording_writer_busy')
+    expect(await countLocalMedia(peer)).toBe(0)
+    await expect.poll(()=>page.evaluate(async id=>{
+      const m=await import('/src/features/media/application/recording-encrypted-journal.ts')
+      return (await m.listEncryptedRecordingDrafts()).find(r=>r.recordingId===id)?.state
+    },id)).toBe('writing')
+    // Closing the actual page releases its browser-held Web Lock; no mocked
+    // lock, localStorage heartbeat, or fabricated MediaRecorder.stop.
+    await page.close()
+    await expect.poll(()=>peer.evaluate(async id=>{
+      const m=await import('/src/features/media/application/recording-encrypted-journal.ts')
+      return (await m.listEncryptedRecordingDrafts()).find(r=>r.recordingId===id)?.state
+    },id),{timeout:15_000}).toBe('writing')
+    await card.getByRole('button',{name:'Проверить прерванную запись'}).click()
+    await expect(card).toContainText('Прервана',{timeout:20_000})
+    expect(await countLocalMedia(peer)).toBe(0)
+    await card.getByRole('button',{name:'Просмотреть локально'}).click()
+    await expect(peer.getByTestId('camera-private-draft-preview'))
+      .toBeVisible({timeout:15_000})
+    expect(await countLocalMedia(peer)).toBe(0)
+  }finally{await peer.close()}
+})
