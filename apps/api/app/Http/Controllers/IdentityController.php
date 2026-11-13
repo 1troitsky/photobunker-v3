@@ -7,6 +7,7 @@ use App\Identity\Protocol as P;
 use App\Events\DatabaseEventInboxLedger;
 use App\Events\EventAdmission;
 use App\Events\EventConsumer;
+use App\Events\PushDeviceSubscriptionRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -310,6 +311,14 @@ final class IdentityController extends Controller
                 EventAdmission::Accepted,
                 EventAdmission::Conflict,
             ],true),503,'identity.notification_event_unavailable');
+            // Revocation and encrypted push-credential destruction are one
+            // atomic DB change. A stale device is never eligible for push,
+            // and its stored endpoint/key material must not survive revoke.
+            // purgeRevoked() verifies this device is already revoked and
+            // cannot erase active/foreign devices' subscriptions.
+            (new PushDeviceSubscriptionRegistry())->purgeRevoked(
+                (string) $a->id, $id,
+            );
         },3);
         if ($id===$actor->id) { $r->session()->invalidate(); $r->session()->regenerateToken(); }
         return $this->json(['revoked'=>true]);
