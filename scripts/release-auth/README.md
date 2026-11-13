@@ -29,7 +29,7 @@ Both the trusted PEM **and** its fingerprint must be supplied via independently 
 
 ## Fail-closed behavior and limitations
 
-Rejects missing trust policy, wrong algorithm or key, malformed/noncanonical JSON, unsigned candidate, tampered manifest/signature, bad digest, and signed version rollback. Test keys are ephemeral and never persisted.
+Rejects missing trust policy, wrong algorithm or key, malformed/noncanonical JSON, unsigned candidate, tampered manifest/signature, bad digest, signed version rollback, and **invalid #196 manifest v1 structure** (required build metadata, non-empty unique sorted asset inventory, safe relative paths, asset metadata, and consistent Service Worker reference). The schema is independently mirrored here because #196 remains a separate unmerged Draft PR; a future integration must test both implementations against identical fixtures. Test keys are ephemeral and never persisted.
 
 This module does **not** check individual JS/CSS/HTML/SW asset hashes: integrate #196's full manifest-to-dist verification separately before future activation. It does not persist the minimum release sequence, handle key rotation/revocation, secure first boot, manage a trusted previous SW or last-known-good cache, nor prevent a compromised same-origin page lying to the user.
 
