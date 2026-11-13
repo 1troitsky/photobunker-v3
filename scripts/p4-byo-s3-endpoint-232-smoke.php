@@ -47,6 +47,7 @@ foreach ([
     'https://s3.internal',
     'https://127.0.0.1',
     'https://[::1]',
+    'https://s3.example.com:99999',
     'https://s3..example.com',
 ] as $badEndpoint) {
     $deny(static fn () => $guard->admit($badEndpoint, ['8.8.8.8']), 'storage.byo_endpoint_invalid');
