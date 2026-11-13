@@ -647,3 +647,67 @@ describe('Issue #260 GPS consent and capture races',()=>{
   })
 
 })
+
+
+describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
+  class BoundedRecorder {
+    static isTypeSupported() {return true}
+    state: 'recording'|'inactive' = 'inactive'
+    ondataavailable: ((event: {data: Blob}) => void)|null = null
+    onstop: (() => void)|null = null
+    onerror: (() => void)|null = null
+    start() {this.state='recording'}
+    stop() {
+      this.state='inactive'
+      this.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+      this.onstop?.()
+    }
+  }
+
+  async function openMode(mode:'video'|'audio') {
+    vi.stubGlobal('MediaRecorder',BoundedRecorder)
+    mocks.mediaEnqueue.mockResolvedValue('media-enqueued-after-encryption')
+    await mount()
+    requests[0]!.resolve(media().stream);await settle()
+    const input=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    input.value=mode
+    input.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const opened=media()
+    requests[1]!.resolve(opened.stream);await settle()
+    vi.useFakeTimers()
+    button('Начать запись '+(mode==='video'?'видео':'аудио')).click()
+    await settle()
+    expect(host.querySelector('[data-testid="camera-recording-status"]')).not.toBeNull()
+    return opened
+  }
+
+  it.each(['video','audio'] as const)('rejects a premature %s Stop before encrypted enqueue', async mode => {
+    const opened=await openMode(mode)
+    await vi.advanceTimersByTimeAsync(4_999)
+    button('Остановить запись').click();await settle()
+    expect(host.textContent).toContain('camera.recording_duration_invalid')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(opened.track.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['video',300_000],['audio',3_000_000],
+  ] as const)('automatically finishes valid %s at exact bound %i ms',async(mode,maxMs)=>{
+    const opened=await openMode(mode)
+    expect(host.textContent).toContain('От 5 до '+(maxMs/1000)+' секунд')
+    await vi.advanceTimersByTimeAsync(maxMs)
+    await settle()
+    expect(opened.track.stop).toHaveBeenCalledTimes(1)
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+    expect(host.textContent).toContain('Запись зашифрована и сохранена локально')
+  })
+
+  it('accepts explicit audio Stop at the exact 5 second lower bound',async()=>{
+    await openMode('audio')
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click();await settle()
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+  })
+
+})
