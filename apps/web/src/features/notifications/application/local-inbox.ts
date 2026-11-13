@@ -45,11 +45,14 @@ type CipherRow={
   iv:string
   ciphertext:string
 }
+type EncryptedPreferences={key:string;iv:string;ciphertext:string}
 class NotificationDB extends Dexie{
   rows!:Table<CipherRow,string>
+  preferences!:Table<EncryptedPreferences,string>
   constructor(){
     super('pb3-encrypted-notifications-v1')
     this.version(1).stores({rows:'&key,ownerScope'})
+    this.version(2).stores({rows:'&key,ownerScope',preferences:'&key'})
   }
 }
 const db=new NotificationDB()
@@ -204,6 +207,82 @@ async function modify(
     }
   }
   throw Error('notifications.concurrent_update')
+}
+
+
+/**
+ * Device-local display controls only: they cannot suppress server delivery,
+ * delete encrypted records or prevent security notices from being displayed.
+ * Defaults are safe if the device has never saved preferences.
+ */
+export type NotificationPreferences=Readonly<{
+  version:1
+  invitations:boolean
+  deadlines:boolean
+  expiry:boolean
+  system:boolean
+  badges:boolean
+}>
+export const defaultNotificationPreferences:NotificationPreferences=Object.freeze({
+  version:1,invitations:true,deadlines:true,expiry:true,system:true,badges:true,
+})
+const PREFERENCE_KEYS=['badges','deadlines','expiry','invitations','system','version'] as const
+function validatePreferences(value:unknown):asserts value is NotificationPreferences{
+  if(!value||typeof value!=='object'||Array.isArray(value))
+    throw Error('notifications.invalid_preferences')
+  const v=value as Record<string,unknown>
+  if(Object.keys(v).sort().join('|')!==PREFERENCE_KEYS.join('|')
+    ||v.version!==1
+    ||['badges','deadlines','expiry','invitations','system']
+      .some(key=>typeof v[key]!=='boolean'))
+    throw Error('notifications.invalid_preferences')
+}
+function preferencesAAD(ownerScope:string):Uint8Array<ArrayBuffer>{
+  return encoder.encode('pb3.notification-preferences.v1\\n'+ownerScope)
+}
+export function notificationIsVisible(
+  kind:NotificationKind,preferences:NotificationPreferences,
+):boolean{
+  // No user toggle may hide security-critical notices.
+  if(kind==='security')return true
+  if(kind==='assignment-invite'||kind==='team-invite')
+    return preferences.invitations
+  if(kind==='assignment-deadline')return preferences.deadlines
+  if(kind==='file-expiry')return preferences.expiry
+  return preferences.system
+}
+export async function readNotificationPreferences():Promise<NotificationPreferences>{
+  const session=requireSession()
+  const {ownerScope}=await keys(session)
+  sameIdentity(session)
+  const stored=await db.preferences.get(ownerScope)
+  if(!stored)return {...defaultNotificationPreferences}
+  if(stored.key!==ownerScope)throw Error('notifications.invalid_preferences')
+  let plain:ArrayBuffer
+  try{
+    plain=await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(stored.iv,12),
+      additionalData:preferencesAAD(ownerScope),tagLength:128,
+    },await cryptoKey(session,'decrypt'),unb64(stored.ciphertext))
+  }catch{throw Error('notifications.encrypted_preferences_unreadable')}
+  let settings:unknown
+  try{settings=JSON.parse(decoder.decode(plain));validatePreferences(settings)}
+  catch{throw Error('notifications.invalid_preferences')}
+  sameIdentity(session)
+  return settings as NotificationPreferences
+}
+export async function saveNotificationPreferences(value:NotificationPreferences):Promise<void>{
+  validatePreferences(value)
+  const session=requireSession()
+  const {ownerScope}=await keys(session)
+  sameIdentity(session)
+  const iv=random(12)
+  const encrypted=await crypto.subtle.encrypt({
+    name:'AES-GCM',iv,additionalData:preferencesAAD(ownerScope),tagLength:128,
+  },await cryptoKey(session,'encrypt'),encoder.encode(JSON.stringify(value)))
+  sameIdentity(session)
+  await db.preferences.put({key:ownerScope,iv:b64(iv),ciphertext:b64(encrypted)})
+  sameIdentity(session)
 }
 
 /** Locally observed events only; callers must not infer remote approval. */
