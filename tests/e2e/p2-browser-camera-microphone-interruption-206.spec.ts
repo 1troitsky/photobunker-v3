@@ -68,6 +68,16 @@ test('P2 #206 native MediaStreamTrack ended aborts an otherwise long enough real
   // Real microphone and native MediaRecorder, no fake capture or virtual clock.
   // >5s ensures this interruption isn't merely the minimum-duration rejection.
   await page.waitForTimeout(5_200)
+  // Real MediaRecorder has emitted timeslice segments: these must already
+  // be durable encrypted scratch, never a signed MediaFile before Stop.
+  const pending=await page.evaluate(async()=>{
+    const journal=await import('/src/features/media/application/recording-encrypted-journal.ts')
+    return (await journal.listEncryptedRecordingDrafts())[0]
+  })
+  expect(pending?.state).toBe('writing')
+  expect(pending?.chunkCount).toBeGreaterThan(0)
+  expect(pending?.plainBytes).toBeGreaterThan(128)
+  expect(await countLocalMedia(page)).toBe(0)
   await page.evaluate(()=>{
     const stream=(window as any).__p2MicStream as MediaStream|null
     if(!stream||!stream.getAudioTracks().length)throw Error('fixture.real_audio_missing')
@@ -88,4 +98,103 @@ test('P2 #206 native MediaStreamTrack ended aborts an otherwise long enough real
   expect(state).toEqual({ended:true,rows:0})
   await page.waitForTimeout(300)
   expect(await countLocalMedia(page)).toBe(0)
+  await expect.poll(()=>page.evaluate(async id=>{
+    const journal=await import('/src/features/media/application/recording-encrypted-journal.ts')
+    return (await journal.listEncryptedRecordingDrafts())
+      .find(row=>row.recordingId===id)?.state
+  },pending!.recordingId),{timeout:15_000}).toBe('interrupted')
+
+  // The encrypted fragments survive an actual browser navigation/reload,
+  // but interrupted content is NEVER automatically finalized or published.
+  await page.reload()
+  await expect.poll(()=>page.evaluate(async id=>{
+    const identity=await import('/src/features/identity/application/session.ts')
+    if(!identity.activeSession.value)return 'identity_bootstrapping'
+    const journal=await import('/src/features/media/application/recording-encrypted-journal.ts')
+    const row=(await journal.listEncryptedRecordingDrafts())
+      .find(record=>record.recordingId===id)
+    return row?.state??'missing'
+  },pending!.recordingId),{timeout:30_000}).toBe('interrupted')
+  const recovered=await page.evaluate(async id=>{
+    const journal=await import('/src/features/media/application/recording-encrypted-journal.ts')
+    const row=(await journal.listEncryptedRecordingDrafts()).find(r=>r.recordingId===id)
+    let rejected=''
+    try{await journal.readCompletedEncryptedRecording(id)}
+    catch(e){rejected=e instanceof Error?e.message:'unknown'}
+    return {parts:row?.chunkCount,bytes:row?.plainBytes,rejected}
+  },pending!.recordingId)
+  expect(recovered.parts).toBeGreaterThan(0)
+  expect(recovered.bytes).toBeGreaterThan(128)
+  expect(recovered.rejected).toBe('camera.recording_not_finalized')
+  expect(await countLocalMedia(page)).toBe(0)
+})
+
+test('P2 #206 true native audio timeslices are ciphertext before Stop and GC after signed E2EE save',async({page})=>{
+  test.setTimeout(130_000)
+  await register(page)
+  await page.goto('/camera')
+  await expect(page.getByRole('button',{name:'Сделать снимок'}))
+    .toBeEnabled({timeout:20_000})
+  await page.getByTestId('camera-mode').selectOption('audio')
+  await expect(page.getByTestId('camera-start-recording'))
+    .toBeEnabled({timeout:20_000})
+  await page.getByTestId('camera-start-recording').click()
+  await expect(page.getByTestId('camera-recording-status')).toBeVisible()
+  const encrypted=await expect.poll(()=>page.evaluate(async()=>{
+    const journal=await import('/src/features/media/application/recording-encrypted-journal.ts')
+    return (await journal.listEncryptedRecordingDrafts())[0]?.chunkCount??0
+  }),{timeout:20_000}).toBeGreaterThan(1)
+  void encrypted
+  // Inspect raw IndexedDB directly: only AES-GCM ciphertext Blob parts,
+  // and never a plaintext audio/* Blob in persistent storage.
+  const persisted=await page.evaluate(async()=>{
+    const database=await new Promise<IDBDatabase>((resolve,reject)=>{
+      const request=indexedDB.open('pb3-encrypted-recording-journal-v1')
+      request.onsuccess=()=>resolve(request.result)
+      request.onerror=()=>reject(request.error)
+    })
+    try{
+      return await new Promise<Array<{mime:string;size:number;plain:number}>>((resolve,reject)=>{
+        const tx=database.transaction('segments','readonly')
+        const request=tx.objectStore('segments').getAll()
+        request.onsuccess=()=>resolve((request.result as Array<{
+          ciphertext:Blob;plainBytes:number
+        }>).map(r=>({
+          mime:r.ciphertext.type,size:r.ciphertext.size,plain:r.plainBytes,
+        })))
+        request.onerror=()=>reject(request.error)
+      })
+    }finally{database.close()}
+  })
+  expect(persisted.length).toBeGreaterThan(1)
+  for(const chunk of persisted){
+    expect(chunk.mime).toBe('application/octet-stream')
+    expect(chunk.size).toBe(chunk.plain+16)
+  }
+  // A true 5+ second microphone capture must still satisfy the native gate.
+  await page.waitForTimeout(5_200)
+  await page.getByTestId('camera-stop-recording').click()
+  await expect(page.getByText(/Запись зашифрована и сохранена локально/))
+    .toBeVisible({timeout:40_000})
+  expect(await countLocalMedia(page)).toBe(1)
+  await expect.poll(()=>page.evaluate(async()=>{
+    const journal=await import('/src/features/media/application/recording-encrypted-journal.ts')
+    return (await journal.listEncryptedRecordingDrafts()).length
+  }),{timeout:15_000}).toBe(0)
+  await page.reload()
+  await expect.poll(()=>page.evaluate(async()=>{
+    const identity=await import('/src/features/identity/application/session.ts')
+    if(!identity.activeSession.value)return -1
+    const media=await import('/src/features/media/application/media-outbox.ts')
+    return (await media.listLocalMedia()).length
+  }),{timeout:30_000}).toBe(1)
+  const stored=await page.evaluate(async()=>{
+    const media=await import('/src/features/media/application/media-outbox.ts')
+    const rows=await media.listLocalMedia()
+    return rows.map(row=>({
+      mediaType:row.mediaType,
+      ciphertextOnly:row.chunks.every(chunk=>chunk.blob.type==='application/octet-stream'),
+    }))
+  })
+  expect(stored).toEqual([{mediaType:'audio',ciphertextOnly:true}])
 })
