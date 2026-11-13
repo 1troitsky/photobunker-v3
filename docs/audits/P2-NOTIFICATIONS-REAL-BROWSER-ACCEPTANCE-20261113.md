@@ -87,3 +87,18 @@ Security invariants implemented and tested:
 - PHPUnit tests cover encryption at rest, tampering, revoked-device fence, endpoint uniqueness across accounts, invalid/SSRF addresses, and absence of `/notifications/v1/push-subscriptions` routes.
 
 The registry is a **staging data model**, not a proof of actual push capability, user consent, browser permission, trust in the worker, or notification delivery. It must not be used until explicit signed Service Worker approval and E2E/mobile acceptance. Most recent code HEAD for this addition before documentation: `b65226ee54a48b6e0cb637363505dc987f0df602`; CI status checked separately.
+
+
+## 13 November CI blockers and registry retry/purge hardening
+
+### Verified CI failures — NOT an accepted PR
+
+- Draft #296 code SHA `b65226ee54a48b6e0cb637363505dc987f0df602`, isolated PostgreSQL/Garage run [43485865252](https://github.com/1troitsky/photobunker-v3/actions/runs/43485865252): **84/86 Chromium PASS, 2 FAIL**. `p1-assignment-media.spec.ts` hit a 240 s test timeout; `p2-browser-contributor-photo-submission.spec.ts` did not find `assignment-media-submission`. Both are outside new push registry files. Root causes NOT established; traces must be reviewed by their owners. Foundation, security and UX passed on this SHA.
+- Documentation SHA `21779343e6dd9945faa9808ff2ca630137f4a749`, storage run [43485985994](https://github.com/1troitsky/photobunker-v3/actions/runs/43485985994): **84/86 PASS, 2 FAIL**, different tests: `p2-browser-camera-gps-consent-race.spec.ts` did not find generated assignment code and `p2-browser-multi-import.spec.ts` did not find the folder. No foreign tests edited to suppress failures.
+- Later code SHA `bb63ca52405ebceb676b483a89f8e20497cae43a`: Foundation workflow [43488700563](https://github.com/1troitsky/photobunker-v3/actions/runs/43488700563) PHP 8.4/8.5 **FAIL before PHP tests** at `composer audit --locked`: newly published Laravel advisory `CVE-2026-128083` / `GHSA-63hm-g96r-2m2q`, affecting Laravel 13 below 13.40.0; severity **low** per Composer but enforced security floor blocks CI. Frontend passed. Dedicated [Issue #297](https://github.com/1troitsky/photobunker-v3/issues/297) created; **do not bypass audit, silently upgrade Laravel inside #198, or claim PHP acceptance**.
+
+### Internal-only registry improvements awaiting full CI
+
+On `bb63ca52405ebceb676b483a89f8e20497cae43a`, the internal registry now treats exact active subscription re-registration as a Lost-ACK replay: it keeps generation and the original encrypted ciphertext. Actual endpoint or credentials change advances generation. New `purgeRevoked(accountId,deviceId)` deletes retained encrypted push credentials only after the verified account's device has `revoked_at`, using account→device transactional lock order; it cannot purge active or foreign devices. **The future identity lifecycle has NOT been wired to invoke this method**. It does not enable remote sending, Service Worker, browser permission, VAPID, or any public registration route. New feature tests cover exact retry, rotation, revocation-only purge, tampered ciphertext and cross-account rejection.
+
+Full #198 stays IN PROGRESS. Never merge or change main without the owner's explicit approval.
