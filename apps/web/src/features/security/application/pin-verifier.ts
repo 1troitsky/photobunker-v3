@@ -242,8 +242,10 @@ export async function attemptPinVerifier(
       return {status: appMatch ? 'app-unlocked' : 'emergency-intent'}
     }
 
-    row.failures = row.lockedUntilMs === 0 || row.lockedUntilMs <= now
-      ? Math.min(MAX_FAILURES, row.failures + 1) : row.failures
+    // An expired lockout starts a new five-attempt window, not an instant relock.
+    const priorFailures = row.lockedUntilMs > 0 && row.lockedUntilMs <= now
+      ? 0 : row.failures
+    row.failures = Math.min(MAX_FAILURES, priorFailures + 1)
     if (row.failures >= MAX_FAILURES) {
       row.lockedUntilMs = now + LOCKOUT_MS
       await records.put(row)
