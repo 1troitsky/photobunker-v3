@@ -37,6 +37,24 @@ final class NotificationEventsController extends Controller
                 ->where('state', 'active')
                 ->where('expires_at', '>', PhotoSync::nowMs())->exists();
         }
+        if ($type === 'team_invite_v1') {
+            $now = PhotoSync::nowMs();
+            return DB::table('team_invites_v1 as i')
+                ->join('team_records_v1 as t','t.id','=','i.team_id')
+                ->where('i.id',$subject)
+                ->where('i.recipient_account_id',$account)
+                ->where('i.state','pending')
+                ->where('i.expires_at','>',$now)
+                ->where('t.state','active')
+                ->where('t.rotation_required',false)
+                ->where('t.key_epoch',1)
+                ->whereColumn('i.team_contract_hash','t.contract_hash')
+                ->whereNotExists(static function ($q) use ($account):void {
+                    $q->selectRaw('1')->from('team_members_v1 as m')
+                        ->whereColumn('m.team_id','i.team_id')
+                        ->where('m.account_id',$account)->where('m.state','active');
+                })->exists();
+        }
         if ($type === 'team_invite_v2') {
             $now = PhotoSync::nowMs();
             return DB::table('team_invites_v2 as i')
@@ -104,7 +122,7 @@ final class NotificationEventsController extends Controller
         // A revoked/expired invite is never a navigation capability.
         abort_unless(in_array($event->eventType,[
             'MediaCommitted','AssignmentInvitationCreated',
-            'TeamEpochInvitationCreated',
+            'TeamEpochInvitationCreated','TeamInitialInvitationCreated',
         ],true),404);
         $candidate = NotificationProjection::project(
             $event, $accountId,
