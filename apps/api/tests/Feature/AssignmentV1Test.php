@@ -176,6 +176,18 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('kind','assignment-invite')
             ->assertJsonPath('targetId',$inviteId);
 
+        // Expired invitations are hidden even when the old encrypted inbox
+        // still retains a historical notification. A server recheck wins.
+        DB::table('assignment_invites_v1')->where('id',$inviteId)
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($path)->assertNotFound();
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(0,'items');
+        DB::table('assignment_invites_v1')->where('id',$inviteId)
+            ->update(['expires_at'=>now()->addHour()->getTimestampMs()]);
+        $this->getJson($path)->assertOk()
+            ->assertJsonPath('targetId',$inviteId);
+
         // Exercise the actual owner-signed removal endpoint, not a forged
         // database tombstone: a formerly downloaded notice grants nothing.
         $remove=$this->signed('owner','pb3.assignment-member-remove.v1',[
