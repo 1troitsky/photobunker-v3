@@ -124,12 +124,14 @@ for(const {plan,days,serverMax} of plans){
       // object: original contract, ID and expiration must be preserved.
       const photoContract=photo.signedPhotoContract(captured)
       const signedPhotoReplay=await auth.signPhotoContract(photoContract)
-      const photoRetry=await api.jsonApi<{state:string;expiresAt:number}>(
+      const photoRetry=await api.jsonApi<{
+        state:string;receipt?:{expiresAt:number;receiptHash:string}
+      }>(
         '/photos/v1/reserve','POST',{
           contract:photoContract,signature:signedPhotoReplay,
         })
       const mediaRetry=await api.jsonApi<{
-        state:string;expiresAt:number;receipt?:unknown
+        state:string;receipt?:{expiresAt:number;receiptHash:string}
       }>('/media/v1/reserve','POST',{
         contract:JSON.stringify(mediaRow.contract),
         signature:mediaRow.signature,
@@ -154,7 +156,8 @@ for(const {plan,days,serverMax} of plans){
               .every(byte=>byte===91),
           indexed:photoIndex.items.some(row=>row.photoId===captured.photoId),
           replay:photoRetry.state,
-          replaySameExpiry:photoRetry.expiresAt===captured.expiresAt,
+          replaySameExpiry:photoRetry.receipt?.expiresAt===captured.expiresAt,
+          receiptReturned:typeof photoRetry.receipt?.receiptHash==='string',
         },
         media:{
           id:mediaId,
@@ -169,8 +172,8 @@ for(const {plan,days,serverMax} of plans){
           privateFilename:mediaCloud.metadata.fileName,
           indexed:mediaIndex.items.some(row=>row.mediaId===mediaId),
           replay:mediaRetry.state,
-          replaySameExpiry:mediaRetry.expiresAt===mediaRow.expiresAt,
-          receiptReturned:Boolean(mediaRetry.receipt),
+          replaySameExpiry:mediaRetry.receipt?.expiresAt===mediaRow.expiresAt,
+          receiptReturned:typeof mediaRetry.receipt?.receiptHash==='string',
         },
       }
     },{expectedPlan:plan})
@@ -186,6 +189,7 @@ for(const {plan,days,serverMax} of plans){
       delta:days*DAY,manifestSame:true,contractSame:true,
       state:'synced',encrypted:true,realCloudDecrypted:true,
       indexed:true,replay:'active',replaySameExpiry:true,
+      receiptReturned:true,
     })
     expect(actual.media).toMatchObject({
       delta:days*DAY,contractSame:true,
