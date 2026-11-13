@@ -127,6 +127,35 @@ test('P2 #206 native MediaStreamTrack ended aborts an otherwise long enough real
   expect(recovered.bytes).toBeGreaterThan(128)
   expect(recovered.rejected).toBe('camera.recording_not_finalized')
   expect(await countLocalMedia(page)).toBe(0)
+
+  // Preview is strictly opt-in after reload, remains a volatile same-tab
+  // object URL and never converts interrupted scratch into a MediaFile.
+  await expect(page.getByTestId('camera-encrypted-draft-recovery'))
+    .toBeVisible({timeout:30_000})
+  const card=page.getByTestId('camera-encrypted-draft-'+pending!.recordingId)
+  await expect(card).toContainText('Прервана')
+  await card.getByRole('button',{name:'Просмотреть локально'}).click()
+  const review=page.getByTestId('camera-private-draft-preview')
+  await expect(review).toBeVisible({timeout:20_000})
+  const privateSrc=await review.locator('audio').getAttribute('src')
+  expect(privateSrc).toMatch(/^blob:/)
+  expect(await countLocalMedia(page)).toBe(0)
+  await review.getByRole('button',{name:'Закрыть предпросмотр'}).click()
+  await expect(review).toHaveCount(0)
+  // The object URL has been revoked and should not be a durable/share URL.
+  const alive=await page.evaluate(async src=>{
+    try{return (await fetch(src!)).ok}catch{return false}
+  },privateSrc)
+  expect(alive).toBe(false)
+
+  // Deleting scratch always needs an explicit browser confirmation.
+  page.once('dialog',dialog=>dialog.accept())
+  await card.getByRole('button',{name:'Удалить фрагменты'}).click()
+  await expect.poll(()=>page.evaluate(async id=>{
+    const journal=await import('/src/features/media/application/recording-encrypted-journal.ts')
+    return (await journal.listEncryptedRecordingDrafts()).some(x=>x.recordingId===id)
+  },pending!.recordingId),{timeout:15_000}).toBe(false)
+  expect(await countLocalMedia(page)).toBe(0)
 })
 
 test('P2 #206 true native audio timeslices are ciphertext before Stop and GC after signed E2EE save',async({page})=>{
