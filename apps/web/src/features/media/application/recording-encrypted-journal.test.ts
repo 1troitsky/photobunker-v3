@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
-import {afterEach,describe,expect,it} from 'vitest'
+import {afterEach,describe,expect,it,vi} from 'vitest'
 import {activeSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
 import {freshPackage} from '../../identity/infrastructure/crypto'
@@ -10,9 +10,11 @@ import {
   listEncryptedRecordingDrafts,readCompletedEncryptedRecording,
   sealEncryptedRecordingDraft,purgeExpiredEncryptedRecordingDrafts,
   readEncryptedRecordingForPrivateReview,eraseAllEncryptedRecordingScratchForPanic,
+  recoverAbandonedEncryptedRecordingDraft,
 } from './recording-encrypted-journal'
+import {acquireCameraWriterLease} from './recording-writer-lease'
 
-afterEach(()=>{activeSession.value=null})
+afterEach(()=>{activeSession.value=null;vi.unstubAllGlobals()})
 async function account(id:string=crypto.randomUUID()):Promise<Session>{
   const {pkg}=await freshPackage(id)
   const session={
@@ -248,6 +250,60 @@ describe('P2 #206 account-bound encrypted MediaRecorder scratch (not a MediaFile
       .rejects.toThrow('camera.recording_mime_invalid')
     await expect(createEncryptedRecordingDraft('video','audio/webm'))
       .rejects.toThrow('camera.recording_mime_invalid')
+  })
+
+  it('recovers only explicitly claimed lock-backed abandoned writing fragments',async()=>{
+    const scopes=new Set<string>()
+    vi.stubGlobal('navigator',{locks:{
+      request:async(name:string,_options:unknown,
+        work:(lock:{name:string;mode:string}|null)=>Promise<void>)=>{
+        if(scopes.has(name))return work(null)
+        scopes.add(name)
+        try{return await work({name,mode:'exclusive'})}
+        finally{scopes.delete(name)}
+      },
+    }})
+    const session=await account()
+    const live=await acquireCameraWriterLease(session.accountId)
+    expect(live?.isHeld()).toBe(true)
+    const id=await createEncryptedRecordingDraft('audio','audio/webm',live)
+    await appendEncryptedRecordingSegment(id,0,sample(251,34))
+    const before=(await listEncryptedRecordingDrafts())[0]!
+    expect(before.state).toBe('writing')
+    expect(before.recoveryAvailable).toBe(true)
+    await expect(recoverAbandonedEncryptedRecordingDraft(id))
+      .rejects.toThrow('camera.recording_writer_busy')
+    expect((await listEncryptedRecordingDrafts())[0]?.state).toBe('writing')
+    await expect(readEncryptedRecordingForPrivateReview(id))
+      .rejects.toThrow('camera.recording_not_finalized')
+    live?.release()
+    await vi.waitFor(()=>expect(scopes.size).toBe(0))
+    await recoverAbandonedEncryptedRecordingDraft(id)
+    const after=(await listEncryptedRecordingDrafts())[0]!
+    expect(after.state).toBe('interrupted')
+    expect((await readEncryptedRecordingForPrivateReview(id)).size).toBe(251)
+    await expect(readCompletedEncryptedRecording(id))
+      .rejects.toThrow('camera.recording_not_finalized')
+  })
+
+  it('refuses legacy without a verified writer lease, even if no other tab holds a lock',async()=>{
+    const scopes=new Set<string>()
+    vi.stubGlobal('navigator',{locks:{
+      request:async(name:string,_opts:unknown,
+        callback:(lock:{name:string;mode:string}|null)=>Promise<void>)=>{
+        if(scopes.has(name))return callback(null)
+        scopes.add(name)
+        try{return await callback({name,mode:'exclusive'})}
+        finally{scopes.delete(name)}
+      },
+    }})
+    await account()
+    const id=await createEncryptedRecordingDraft('audio','audio/webm')
+    await appendEncryptedRecordingSegment(id,0,sample(256))
+    expect((await listEncryptedRecordingDrafts())[0]?.recoveryAvailable).toBe(false)
+    await expect(recoverAbandonedEncryptedRecordingDraft(id))
+      .rejects.toThrow('camera.recording_recovery_unsupported')
+    expect((await listEncryptedRecordingDrafts())[0]?.state).toBe('writing')
   })
 
   // LAST test by design: Panic erasure locks the module's current JS realm.
