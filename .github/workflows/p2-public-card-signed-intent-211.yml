@@ -104,6 +104,37 @@ jobs:
           composer audit --locked --no-interaction
           composer install --no-interaction --no-progress --prefer-dist
           php artisan migrate --force
+      - name: Verify real owner-signed Public Card feature flows against disposable PostgreSQL 18
+        working-directory: apps/api
+        run: |
+          # phpunit.xml forcibly selects SQLite. This CI-only copy switches
+          # ONLY the fully disposable test DB to the PG18 service; never
+          # modify shared project phpunit.xml or product DB credentials.
+          cp phpunit.xml phpunit-pg18-public-card-ci.xml
+          php -r '
+          $file = "phpunit-pg18-public-card-ci.xml";
+          $raw = file_get_contents($file);
+          $from = [
+              "<env name=\"DB_CONNECTION\" value=\"sqlite\" force=\"true\"/>",
+              "<env name=\"DB_DATABASE\" value=\":memory:\" force=\"true\"/>",
+          ];
+          $to = [
+              "<env name=\"DB_CONNECTION\" value=\"pgsql\" force=\"true\"/>",
+              "<env name=\"DB_DATABASE\" value=\"pb3_public_card_ci\" force=\"true\"/>",
+          ];
+          foreach ($from as $entry) {
+              if (substr_count($raw, $entry) !== 1) exit(20);
+          }
+          file_put_contents($file, str_replace($from, $to, $raw));
+          '
+          for test in \
+            tests/Feature/PublicCardSignedPublicationIntentTest.php \
+            tests/Feature/PublicCardGrantLedgerTest.php \
+            tests/Feature/PublicCardSignedPreviewCeilingAuditTest.php \
+            tests/Feature/PublicCardSignedEditorialBindingAuditTest.php; do
+            php vendor/bin/phpunit --configuration phpunit-pg18-public-card-ci.xml --no-progress "$test"
+          done
+          rm -f phpunit-pg18-public-card-ci.xml
       - name: Confirm PostgreSQL 18 ledger schema and unique token-hash fence
         working-directory: apps/api
         run: |
