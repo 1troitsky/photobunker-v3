@@ -72,7 +72,7 @@ final class NotificationEventsHttpTest extends TestCase
         [$bob] = $this->publish('bob', 1);
         $this->login('alice');
         $response = $this->getJson('/notifications/v1/events')->assertOk()
-            ->assertHeader('Cache-Control', 'no-store')
+            ->assertHeader('Cache-Control', 'no-store, private')
             ->assertJsonPath('schemaVersion', 1)
             ->assertJsonPath('hasMore', false);
         $this->assertSame([$alice['eventId']], array_column($response->json('items'), 'id'));
