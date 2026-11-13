@@ -5,6 +5,8 @@ import { activeSession } from '../features/identity/application/session'
 import {
   listLocalNotifications, markNotificationRead, markAllLocalNotificationsRead,
   previewNotification, type LocalNotification,
+  readNotificationPreferences, notificationIsVisible,
+  defaultNotificationPreferences, type NotificationPreferences,
 } from '../features/notifications/application/local-inbox'
 import {
   syncServerNotifications, resolveNotificationTarget,
@@ -18,6 +20,7 @@ const loading=ref(false)
 const syncing=ref(false)
 const busy=ref(false)
 const error=ref('')
+const preferences=ref<NotificationPreferences>({...defaultNotificationPreferences})
 let run=0
 
 function scope():string{
@@ -28,8 +31,9 @@ function scope():string{
 function current(owner:string,token:number):boolean{
   return run===token&&scope()===owner
 }
-const visible=computed(()=>rows.value.filter(row=>tab.value==='all'||row.readAt===null))
-const unread=computed(()=>rows.value.filter(row=>row.readAt===null).length)
+const shown=computed(()=>rows.value.filter(row=>notificationIsVisible(row.kind,preferences.value)))
+const visible=computed(()=>shown.value.filter(row=>tab.value==='all'||row.readAt===null))
+const unread=computed(()=>shown.value.filter(row=>row.readAt===null).length)
 const canSync=computed(()=>activeSession.value?.online===true)
 function time(ms:number):string{
   return new Intl.DateTimeFormat('ru-RU',{
@@ -45,8 +49,15 @@ async function reload():Promise<void>{
   rows.value=[];expanded.value=null;error.value=''
   if(!owner)return
   loading.value=true
-  try{await readLocal(token,owner)}
-  catch{if(current(owner,token))error.value='Не удалось открыть зашифрованные уведомления.'}
+  try{
+    const [items,settings]=await Promise.all([
+      listLocalNotifications(),readNotificationPreferences(),
+    ])
+    if(current(owner,token)){
+      rows.value=items
+      preferences.value=settings
+    }
+  }catch{if(current(owner,token))error.value='Не удалось открыть зашифрованные уведомления или настройки.'}
   finally{if(current(owner,token))loading.value=false}
   if(!current(owner,token)||!canSync.value)return
   if(typeof navigator!=='undefined'&&!navigator.onLine)return
@@ -151,8 +162,8 @@ onUnmounted(()=>{
           :disabled="busy||unread===0" data-testid="notifications-mark-all"
           @click="markAll">✓ <span>Прочитать все</span></button>
         <button type="button" aria-label="Настройки уведомлений"
-          title="Настройки уведомлений появятся после приёмки" disabled
-          data-testid="notifications-settings">⚙</button>
+          title="Настройки уведомлений"
+          data-testid="notifications-settings" @click="router.push('/notifications/settings')">⚙</button>
       </div>
     </header>
     <nav class="notifications-tabs" aria-label="Фильтр уведомлений">
@@ -185,7 +196,7 @@ onUnmounted(()=>{
           <button type="button" class="notification-summary"
             :aria-expanded="expanded===row.id" :disabled="busy"
             @click="expand(row)">
-            <span class="notification-dot" :class="{isread:row.readAt!==null}"
+            <span class="notification-dot" :class="{isread:row.readAt!==null||!preferences.badges}"
               aria-hidden="true"></span>
             <span class="notification-copy">
               <strong>{{ previewNotification(row).title }}</strong>
