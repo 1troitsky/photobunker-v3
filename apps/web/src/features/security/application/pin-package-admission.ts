@@ -61,7 +61,15 @@ function readTrusted(
   if (expected && !unchanged(expected,current)) {
     throw new Error('pin.session_changed')
   }
-  return current
+  // Copy scalars before any async work. A caller may reuse and mutate the
+  // same context object; retaining its reference would make both comparisons
+  // see the changed values and silently defeat the session fence.
+  return Object.freeze({
+    accountId:current.accountId,
+    deviceId:current.deviceId,
+    packageRevision:current.packageRevision,
+    sessionNonce:current.sessionNonce,
+  })
 }
 
 /**
