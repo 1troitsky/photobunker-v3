@@ -818,7 +818,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     button('Начать запись аудио').click()
     await settle();await settle()
     expect(host.textContent).toContain('camera.recording_storage_unavailable')
-    expect(BoundedRecorder.latest?.state).toBe('inactive')
+    expect((BoundedRecorder.latest as BoundedRecorder|null)?.state).toBe('inactive')
     expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
     expect(mocks.draftSeal).not.toHaveBeenCalled()
   })
