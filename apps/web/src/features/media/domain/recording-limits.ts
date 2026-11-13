@@ -19,3 +19,22 @@ export function assertRecordingDuration(kind: RecordedMediaKind, elapsedMs: numb
   if (!Number.isFinite(elapsedMs) || elapsedMs < minMs || elapsedMs > maxMs)
     throw Error('camera.recording_duration_invalid')
 }
+
+/**
+ * The assignment's contributor-signed capture starts BEFORE async GPS/policy
+ * preflight, while MediaRecorder's monotonic duration begins only at start().
+ * Reserve a modest grace to avoid allowing a max-length recording whose
+ * self-declared signed startedAt→finishedAt interval exceeds the backend cap.
+ * This is a client clock declaration, NOT proof of physical recording time.
+ */
+export function signedRecordingBudget(
+  kind: RecordedMediaKind, signedStartedAt: number, now: number,
+): number {
+  if(!Number.isSafeInteger(signedStartedAt)||!Number.isSafeInteger(now)
+    ||now<signedStartedAt)throw Error('camera.recording_duration_invalid')
+  const {minMs,maxMs}=recordingBounds(kind)
+  const available=maxMs-(now-signedStartedAt)-250
+  if(!Number.isSafeInteger(available)||available<minMs)
+    throw Error('camera.recording_duration_invalid')
+  return available
+}
