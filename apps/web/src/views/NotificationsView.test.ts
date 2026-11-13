@@ -8,6 +8,7 @@ const mocks=vi.hoisted(()=>({
     occurredAt:number;readAt:number|null;origin:'local';version:1}>,
   sync:vi.fn(),resolve:vi.fn(),push:vi.fn(),
   local:vi.fn(),mark:vi.fn(),markAll:vi.fn(),
+  preferences:vi.fn(),
 }))
 vi.mock('vue-router',()=>({
   useRouter:()=>({push:mocks.push}),
@@ -15,6 +16,12 @@ vi.mock('vue-router',()=>({
 }))
 vi.mock('../features/notifications/application/local-inbox',()=>({
   listLocalNotifications:mocks.local,
+  defaultNotificationPreferences:{version:1,invitations:true,deadlines:true,expiry:true,system:true,badges:true},
+  readNotificationPreferences:mocks.preferences,
+  notificationIsVisible:(kind:string,prefs:{invitations:boolean;deadlines:boolean;expiry:boolean;system:boolean})=>
+    kind==='security'||(kind==='team-invite'||kind==='assignment-invite'
+      ?prefs.invitations:kind==='file-expiry'?prefs.expiry
+        :kind==='assignment-deadline'?prefs.deadlines:prefs.system),
   markNotificationRead:mocks.mark,
   markAllLocalNotificationsRead:mocks.markAll,
   previewNotification:(row:{id:string;kind:string;occurredAt:number;readAt:number|null})=>({
@@ -59,6 +66,7 @@ beforeEach(()=>{
   mocks.rows=[{id:ID,kind:'new-file',targetId:TARGET,occurredAt:moment,
     readAt:null,origin:'local',version:1}]
   mocks.local.mockReset().mockImplementation(async()=>mocks.rows.map(x=>({...x})))
+  mocks.preferences.mockReset().mockResolvedValue({version:1,invitations:true,deadlines:true,expiry:true,system:true,badges:true})
   mocks.mark.mockReset().mockImplementation(async(id:string)=>{
     mocks.rows=mocks.rows.map(x=>x.id===id?{...x,readAt:moment+1}:x)
     return mocks.rows.find(x=>x.id===id)??null
@@ -156,6 +164,28 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     await settle()
     expect(mocks.sync).toHaveBeenCalledTimes(2)
     expect(el('notifications-list').textContent).toContain('Новые материалы')
+  })
+  it('filters only display categories but always shows security and retains encrypted records',async()=>{
+    mocks.rows=[
+      {...mocks.rows[0]!,kind:'team-invite'},
+      {...mocks.rows[0]!,id:'66666666-6666-4666-8666-666666666666',
+        kind:'security',targetId:null},
+    ]
+    mocks.preferences.mockResolvedValueOnce({
+      version:1,invitations:false,deadlines:false,expiry:false,system:false,badges:false,
+    })
+    await mount()
+    expect(el('notifications-list').textContent).not.toContain('Приглашение в команду')
+    expect(el('notifications-list').textContent).toContain('Новые материалы')
+    expect(host.querySelectorAll('.notification-dot.isread')).toHaveLength(1)
+    expect(mocks.rows).toHaveLength(2)
+    expect(mocks.markAll).not.toHaveBeenCalled()
+  })
+  it('opens a real notification display settings route',async()=>{
+    await mount()
+    el('notifications-settings').click()
+    await settle()
+    expect(mocks.push).toHaveBeenCalledWith('/notifications/settings')
   })
   it('does not offer a target action for a generic expired retention notification',async()=>{
     mocks.rows=[{...mocks.rows[0]!,kind:'file-expiry',targetId:null}]
