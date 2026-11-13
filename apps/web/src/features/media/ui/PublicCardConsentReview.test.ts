@@ -2,7 +2,7 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {createApp,h,nextTick,shallowReactive,type App} from 'vue'
 import {activeSession,type Session} from '../../identity/application/session'
-import {digest,hex,freshPackage} from '../../identity/infrastructure/crypto'
+import {digest,hex} from '../../identity/infrastructure/crypto'
 import type {PreparedSafePublicJpeg} from '../application/public-card-safe-jpeg'
 import type {ConsentBinding} from '../application/public-card-consent-outbox'
 import PublicCardConsentReview from './PublicCardConsentReview.vue'
@@ -42,10 +42,19 @@ async function safe():Promise<PreparedSafePublicJpeg>{
   }
 }
 async function session():Promise<Session>{
+  // The real signature/AKEK is exercised by application outbox tests.
+  // This isolated jsdom DOM test needs only an identity sentinel; jsdom and
+  // Node WebCrypto ArrayBuffer realms cannot create an exportable P256 key
+  // through the production package serializer.
   const accountId=crypto.randomUUID()
-  const {pkg}=await freshPackage(accountId)
   return {
-    accountId,deviceId:crypto.randomUUID(),pkg,online:false,
+    accountId,deviceId:crypto.randomUUID(),
+    pkg:{
+      v:2,accountId,accountSpki:'fixture-identity-spki',
+      accountPkcs8:'fixture-private-key',akek:'fixture-akek',
+      signingKeyId:'fixture-signer',wrappingKeyId:'fixture-wrapper',
+      revision:1,
+    },online:false,
   } as unknown as Session
 }
 async function settle():Promise<void>{
@@ -57,7 +66,7 @@ const button=(host:HTMLElement,testid:string)=>host.querySelector<HTMLButtonElem
 const checkbox=(host:HTMLElement,testid:string)=>host.querySelector<HTMLInputElement>(
   '[data-testid="'+testid+'"]'
 )!
-let app:App
+let app:App|undefined
 let host:HTMLDivElement
 let props:{prepared:PreparedSafePublicJpeg|null;binding:ConsentBinding|null}
 let preparedEvent:ReturnType<typeof vi.fn>
@@ -120,7 +129,7 @@ beforeEach(()=>{
   }))
 })
 afterEach(()=>{
-  if(app)app.unmount()
+  if(app){app.unmount();app=undefined}
   host?.remove()
   activeSession.value=null
   if(originalCreate)Object.defineProperty(URL,'createObjectURL',originalCreate)
@@ -265,7 +274,7 @@ describe('#211 contributor reviewed-safe-JPEG isolated UI (no publication)',()=>
     const first=host.querySelector<HTMLImageElement>(
       '[data-testid="public-card-review-image"]'
     )!.src
-    app.unmount()
+    app!.unmount();app=undefined
     expect(revokeObjectURL).toHaveBeenCalledWith(first)
     expect(ops.prepare).not.toHaveBeenCalled()
   })
