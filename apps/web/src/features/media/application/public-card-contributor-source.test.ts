@@ -237,7 +237,8 @@ describe('#211 contributor local signed submission → actual safe JPEG reviewer
     await expect(decide()).rejects.toThrow(
       'public_card.source_single_sent_submission_required')
     operation.state='sent'
-    operation.signature='a'.repeat(86)
+    // Valid-length P-256 P1363 bytes with an invalid signature, not malformed base64.
+    operation.signature=b64(new Uint8Array(64))
     await expect(decide()).rejects.toThrow(
       'public_card.source_submission_signature_invalid')
     await operationSigned()
