@@ -1,0 +1,50 @@
+name: P2 Public Card owner signature and scope #211
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/app/PublicCard/**"
+      - "apps/api/tests/Feature/PublicCardSignedPublicationIntentTest.php"
+      - "apps/api/composer.lock"
+      - ".github/workflows/p2-public-card-signed-intent-211.yml"
+  push:
+    branches:
+      - "p2/211-public-card-policy-preflight-20261113"
+    paths:
+      - "apps/api/app/PublicCard/**"
+      - "apps/api/tests/Feature/PublicCardSignedPublicationIntentTest.php"
+      - "apps/api/composer.lock"
+      - ".github/workflows/p2-public-card-signed-intent-211.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  signed-intent-contract:
+    name: PHP ${{ matrix.php }} signed intent
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.4", "8.5"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+          extensions: mbstring, xml, curl, zip, pdo_sqlite
+          coverage: none
+      - name: Enforce supported security-floor runtimes
+        run: |
+          php -r 'if (!((PHP_VERSION_ID >= 80427 && PHP_VERSION_ID < 80500) || (PHP_VERSION_ID >= 80512 && PHP_VERSION_ID < 80600))) { fwrite(STDERR,"unsupported PHP security version\n"); exit(1); }'
+      - name: Install audited locked dependencies
+        working-directory: apps/api
+        run: |
+          composer validate --strict --no-check-publish --no-interaction
+          composer audit --locked --no-interaction
+          composer install --no-interaction --prefer-dist --no-progress
+      - name: Signed public intent negative tests
+        working-directory: apps/api
+        run: php vendor/bin/phpunit tests/Feature/PublicCardSignedPublicationIntentTest.php --no-progress
