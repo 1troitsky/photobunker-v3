@@ -110,3 +110,24 @@ On authorized user Stop or bounded auto-stop, the browser's final `dataavailable
 - Full Security and UX workflows at exact code HEAD must be checked and recorded separately. PHP8.4/8.5 foundation on main dependency lock STILL blocked before PHPUnit by #297 Composer CVE; no bypass and no new PHP test accepted.
 
 **NOT VERIFIED / still needed before #206 can be called complete:** final real Chromium acceptance of this live-journal change; genuine browser crash/process death during a MediaRecorder `writing` transaction; user-visible explicit safe salvage/recovery of interrupted media; native iOS Safari and Android MediaRecorder+codec+permission; full 50-minute low-memory capture; signed two-account real cloud audio → WAV editing/readback; checked PHP contract tests after independent #297 security integration. IndexedDB write durability is subject to browser storage quota, persistence policy and eviction: successful Dexie commit does not promise impossible loss-proof storage under system eviction.
+
+## 2026-11-14 — live recorder E2E ACCEPTANCE checkpoint and signed max-timer budget
+
+**Verified real end-to-end acceptance:** [PG18/Garage/Chromium 43519643539](https://github.com/1troitsky/photobunker-v3/actions/runs/43519643539) at code SHA `f555ea452e2029e9f4232df0014b356eaac23ce1` finished **SUCCESS / 87 of 87 real Chromium E2E PASS**, including:
+1. Signed-assignment real microphone/video E2EE capture, GPS, signed policy, cloud Garage, owner received media; earlier baseline remains covered.
+2. Native real microphone after >5s: AES-GCM ciphertext-only IndexedDB parts **before Stop**, no unauthorized MediaFile, then real Stop, signed E2EE MediaFile queued, scratch ciphertext explicitly GC, same MediaFile survives page reload.
+3. Native real microphone unexpected `MediaStreamTrack.ended` after already encrypted parts: **no signed MediaFile**, fragments persist encrypted and marked interrupted, survive real page reload, `readCompletedEncryptedRecording` rejects incomplete drafts.
+4. Native microphone NotAllowedError denial: browser private error not displayed, explicit retry required.
+
+The user-facing camera code is now genuinely connected to durable encrypted pieces as expected by §14; exact scope remains **Chrome CI on fake device streams**, not physically interrupted iPhone or Android.
+
+**Signed max-timer safety fix:** capture's signed `startedAt` precedes async GPS/policy checks and journal preparation, so the old native `recordingBounds(mode).maxMs` auto timer could produce a signed `finishedAt-startedAt` exceeding 300s (video) or 3000s (audio) despite correctly bounded monotonic MediaRecorder duration. New OWN pure `signedRecordingBudget(kind,startedAt,Date.now())` reserves **250ms** plus already elapsed preflight time, requires budget >=5000ms, rejects backwards/invalid wall clocks, and uses the resulting bounded timeout for native `MediaRecorder.stop()`. This is best-effort clock-skew protection, **not hardware or trusted time attestation**. Added boundary tests in OWN `recording-limits.test.ts`.
+
+**Latest code SHA** `885117531ec111f613e4720145573a5f27b5e05a`:
+- [Foundation 43520553376](https://github.com/1troitsky/photobunker-v3/actions/runs/43520553376): frontend TypeScript/Vite and **87 files / 509/509 Vitest PASS** (including signed timer budget).
+- [Security 43520553382](https://github.com/1troitsky/photobunker-v3/actions/runs/43520553382): PASS.
+- [UX 43520553453](https://github.com/1troitsky/photobunker-v3/actions/runs/43520553453): PASS.
+- [Real PG18/Garage/Chromium 43520553373](https://github.com/1troitsky/photobunker-v3/actions/runs/43520553373): **IN PROGRESS** at report checkpoint; do not claim this last exact CODE SHA 87/87 until completed.
+- PHP 8.4/8.5 Foundation FAIL before PHPUnit due the original main Laravel Composer lock advisory CVE-2026-128083, separately owned #297 / Draft #298. New server signed 300/3000s feature test is **NOT EXECUTED** against patched baseline.
+
+**Still NOT IMPLEMENTED / NOT VERIFIED:** explicit safely reviewed user-facing recovery/publish action for interrupted fragments; process-kill mid-transaction, mobile PWA eviction, browser storage durability guarantees; automatic expired draft GC invocation and emergency PIN/Panic/Remote-Wipe integration of the new encrypted recording scratch database; 50min hardware capture on physical iOS/Android; full cross-device cloud audio → WAV trim exact flow; native codec/bitrate fidelity. **Panic/remote wipe integration is a required security gate before this new scratch storage is production accepted**. These gaps mean #206 stays **IN PROGRESS/PARTIAL**. No changes to other agents' #220 PIN or #223 DMS/Panic work.
