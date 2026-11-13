@@ -122,8 +122,7 @@ final class PublicationLedger
                 abort_unless($existing->kind === 'revoke'
                     && $existing->account_id === $c['accountId']
                     && $existing->safe_media_id === $c['safeMediaId']
-                    && hash_equals($existing->signed_json, $json)
-, 409);
+                    && hash_equals($existing->signed_json, $json), 409);
                 $head = DB::table('public_card_intent_heads_v1')
                     ->where('safe_media_id', $c['safeMediaId'])->first();
                 abort_unless($head !== null, 409);
