@@ -429,4 +429,43 @@ final class PublicCardSignedContributorReceiptAuditTest extends TestCase
         self::assertFalse($result['cameraAttested']);
         self::assertFalse($result['publicAuthorized']);
     }
+
+    public function test_v1_personal_grant_cannot_be_upgraded_to_assignment_receipt(): void
+    {
+        $g = DB::table('media_recipient_grants_v1')->where('id', self::GRANT)->first();
+        $grant = json_decode($g->contract_json, true, 32, JSON_THROW_ON_ERROR);
+        $grant['version'] = 1;
+        unset($grant['assignmentId']);
+        $raw = self::canonical($grant);
+        DB::table('media_recipient_grants_v1')->where('id', self::GRANT)->update([
+            'assignment_id' => null,
+            'contract_json' => $raw,
+            'contract_hash' => hash('sha256', $raw),
+            'account_signature' => $this->sign('contributor',
+                "pb3.media-grant.v1\n", $raw),
+        ]);
+        $this->rejected(fn () => $this->asOwner(), 410);
+        self::assertDatabaseHas('media_files_v1', ['id' => self::MEDIA, 'state' => 'active']);
+    }
+
+    public function test_unmodified_receipt_is_denied_after_contributor_retirement(): void
+    {
+        DB::table('identity_accounts')->where('id', self::CONTRIBUTOR)
+            ->update(['status' => 'retired']);
+        $this->rejected(fn () => $this->asOwner(), 404);
+    }
+
+    public function test_current_policy_hash_corruption_and_invitation_hash_corruption_denied(): void
+    {
+        DB::table('assignment_invites_v1')->where('id', self::INVITE)
+            ->update(['contract_hash' => str_repeat('f', 64)]);
+        $this->rejected(fn () => $this->asOwner(), 410);
+    }
+
+    public function test_expired_e2ee_grant_is_never_reopened_by_valid_receipt(): void
+    {
+        $this->travelTo(Carbon::createFromTimestampUTC(1800000031));
+        $this->rejected(fn () => $this->asOwner(), 410);
+    }
+
 }
