@@ -8,10 +8,11 @@ import {
   appendEncryptedRecordingSegment,createEncryptedRecordingDraft,
   deleteEncryptedRecordingDraft,interruptEncryptedRecordingDraft,
   listEncryptedRecordingDrafts,purgeExpiredEncryptedRecordingDrafts,
-  readEncryptedRecordingForPrivateReview,
+  readEncryptedRecordingForPrivateReview,recoverAbandonedEncryptedRecordingDraft,
   readCompletedEncryptedRecording,sealEncryptedRecordingDraft,
 } from '../features/media/application/recording-encrypted-journal'
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
+import {acquireCameraWriterLease,type CameraWriterLease} from '../features/media/application/recording-writer-lease'
 import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
 import {assertRecordingDuration, recordingBounds, signedRecordingBudget} from '../features/media/domain/recording-limits'
 import {AUDIO_TARGET_BITRATES, DEFAULT_AUDIO_TARGET_BITRATE, recordingOptions} from '../features/media/domain/recording-options'
@@ -126,7 +127,8 @@ async function refreshLocalRecordingDrafts(pruneExpired=false):Promise<void>{
     if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value))){
       // Active drafts may belong to an open recorder in another tab. Never
       // expose an in-progress plaintext preview or provide a destructive UI.
-      localDrafts.value=found.filter(r=>r.state==='interrupted'||r.state==='complete')
+      localDrafts.value=found.filter(r=>r.state==='interrupted'||r.state==='complete'
+        ||(r.state==='writing'&&r.recoveryAvailable))
       localDraftError.value=''
     }
   }catch{
@@ -164,6 +166,20 @@ async function reviewPrivateRecordingDraft(id:string):Promise<void>{
       localDraftError.value='camera.recording_review_unavailable'
   }
 }
+async function checkAbandonedPrivateRecordingDraft(id:string):Promise<void>{
+  if(recording.value||busy.value||!localDrafts.value.some(
+    row=>row.recordingId===id&&row.state==='writing'&&row.recoveryAvailable))return
+  const identity=cameraIdentity(activeSession.value)
+  localDraftError.value=''
+  try{
+    await recoverAbandonedEncryptedRecordingDraft(id)
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      await refreshLocalRecordingDrafts()
+  }catch(e){
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      localDraftError.value=e instanceof Error?e.message:'camera.recording_recovery_unavailable'
+  }
+}
 async function removePrivateRecordingDraft(id:string):Promise<void>{
   if(recording.value||busy.value||!localDrafts.value.some(
     row=>row.recordingId===id&&row.state!=='writing'))return
@@ -193,6 +209,7 @@ type RecordingTicket={
   saveOnStop:boolean;startedMono:number;stoppedMono:number|null
   finishedAt:number|null;draftId:string;writeTail:Promise<void>
   nextIndex:number;pendingBytes:number;writeError:Error|null
+  writerLease:CameraWriterLease|null
 }
 let activeRecording:RecordingTicket|null=null
 let releaseRecordingTrackListeners:(()=>void)|null=null
@@ -309,7 +326,8 @@ function discardRecording():void {
       // Lost identity/key/expiry must fail closed. Scratch is not published.
     }
     void refreshLocalRecordingDrafts()
-  })
+    ticket.writerLease?.release()
+  }).catch(()=>ticket.writerLease?.release())
   if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
   if(old&&old.state!=='inactive'){
     old.ondataavailable=null
@@ -515,6 +533,7 @@ async function beginRecording():Promise<void>{
       ||captureMode.value!==mode)throw Error('camera.identity_changed')
   }
   busy.value=true;error.value='';message.value=''
+  let acquiringLease:CameraWriterLease|null=null
   try{
     const required=route.query.assignmentId
     if(typeof required==='string'&&required&&selectedAssignment.value!==required)
@@ -551,14 +570,19 @@ async function beginRecording():Promise<void>{
     // Create account-key-wrapped journal BEFORE accepting media bytes. Any
     // database/crypto failure refuses to start recording instead of leaving
     // a long-running plaintext-only recording in volatile memory.
-    const draftId=await createEncryptedRecordingDraft(mode,mime)
+    acquiringLease=await acquireCameraWriterLease(activeSession.value!.accountId)
+    assertOwner()
+    const draftId=await createEncryptedRecordingDraft(mode,mime,acquiringLease)
     assertOwner()
     const token={identity,generation,mode,intent,startedAt,mime,
       privateFields,saveOnStop:false,startedMono:performance.now(),
       stoppedMono:null as number|null,finishedAt:null as number|null,
       draftId,writeTail:Promise.resolve(),nextIndex:0,pendingBytes:0,
-      writeError:null as Error|null}
+      writeError:null as Error|null,writerLease:acquiringLease}
     activeRecording=token
+    // Transfer lock lifetime to the recording ticket. Always release only
+    // after pending AEAD writes and final E2EE enqueue or interrupt.
+    acquiringLease=null
     recordedSize=0
     recorder.value=worker
     // Hardware revoke/interruption can end a track without a MediaRecorder.stop
@@ -693,7 +717,10 @@ async function beginRecording():Promise<void>{
           void refreshLocalRecordingDrafts()
           if(ownsCamera(identity,generation))
             error.value=e instanceof Error?e.message:'camera.media_failed'
-        }finally{busy.value=false}
+        }finally{
+          token.writerLease?.release()
+          busy.value=false
+        }
       })()
     }
     // Signed intent was captured before async policy/GPS preflight. Reserve
@@ -710,6 +737,7 @@ async function beginRecording():Promise<void>{
       }
     },stopBudgetMs)
   }catch(e){
+    acquiringLease?.release()
     discardRecording()
     if(ownsCamera(identity,generation))
       error.value=e instanceof Error?e.message:'camera.recording_failed'
@@ -1034,13 +1062,17 @@ onUnmounted(()=>{
             {{ draft.kind==='audio'?'Аудио':'Видео' }} ·
             {{ draft.chunkCount }} фрагментов ·
             {{ Math.ceil(draft.plainBytes/1024) }} КиБ ·
-            {{ draft.state==='interrupted'?'Прервана':'Не отправлена' }}
+            {{ draft.state==='writing'?'Возможна незавершённая запись в другой вкладке':draft.state==='interrupted'?'Прервана':'Не отправлена' }}
             <div class="action-row">
-              <button type="button" :disabled="recording||busy"
+              <button v-if="draft.state==='writing'" type="button"
+                :disabled="recording||busy" @click="checkAbandonedPrivateRecordingDraft(draft.recordingId)">
+                Проверить прерванную запись
+              </button>
+              <button v-if="draft.state!=='writing'" type="button" :disabled="recording||busy"
                 @click="reviewPrivateRecordingDraft(draft.recordingId)">
                 Просмотреть локально
               </button>
-              <button type="button" :disabled="recording||busy"
+              <button v-if="draft.state!=='writing'" type="button" :disabled="recording||busy"
                 @click="removePrivateRecordingDraft(draft.recordingId)">
                 Удалить фрагменты
               </button>
