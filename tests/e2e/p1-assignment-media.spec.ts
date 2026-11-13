@@ -577,7 +577,9 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       const msg=await alert.count()?await alert.textContent():null
       return msg?'REJECTED: '+msg:'preflight_pending'
     },{timeout:20000}).toBe('recording')
-    await B.waitForTimeout(1800) // actual camera+microphone recording
+    // P2 #206 requires real camera+microphone recording >=5s before
+    // a signed, encrypted video MediaFile can be persisted.
+    await B.waitForTimeout(5500)
     await B.getByTestId('camera-stop-recording').click()
     await expect(B.getByText(/Запись зашифрована и сохранена локально/))
       .toBeVisible({timeout:30000})
