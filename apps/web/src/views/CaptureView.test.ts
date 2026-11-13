@@ -51,8 +51,23 @@ function identity(): Session {
   } as Session
 }
 function media() {
-  const track = {readyState: 'live', stop: vi.fn(() => {track.readyState = 'ended'})}
-  return {stream: markRaw({getTracks: () => [track]}) as unknown as MediaStream, track}
+  const listeners = new Set<() => void>()
+  const track = {
+    readyState: 'live',
+    stop: vi.fn(() => {track.readyState = 'ended'}),
+    addEventListener: vi.fn((type: string, listener: () => void) => {
+      if(type==='ended')listeners.add(listener)
+    }),
+    removeEventListener: vi.fn((type: string, listener: () => void) => {
+      if(type==='ended')listeners.delete(listener)
+    }),
+  }
+  const emitEnded = () => {
+    track.readyState='ended'
+    for(const listener of [...listeners])listener()
+  }
+  return {stream: markRaw({getTracks: () => [track]}) as unknown as MediaStream,
+    track,emitEnded}
 }
 async function settle() { for (let i = 0; i < 8; i++) {await Promise.resolve(); await nextTick()} }
 let app: App | undefined
@@ -737,6 +752,69 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     button('Остановить запись').click();await settle()
     expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
   })
+  it('stops and discards an audio capture on native microphone hardware interruption',async()=>{
+    const opened=await openMode('audio')
+    await vi.advanceTimersByTimeAsync(5_200)
+    opened.emitEnded()
+    await settle()
+    expect(host.textContent).toContain('camera.recording_interrupted')
+    expect(host.querySelector('[data-testid="camera-recording-status"]')).toBeNull()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(opened.track.removeEventListener).toHaveBeenCalledWith('ended',expect.any(Function))
+    await vi.advanceTimersByTimeAsync(3_000_000)
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('cancels pending explicit Stop when a microphone ends before the native onstop event',async()=>{
+    const opened=await openMode('audio')
+    const worker=BoundedRecorder.latest!
+    worker.stop=()=>{
+      worker.state='inactive'
+      worker.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+      setTimeout(()=>worker.onstop?.(),1_000)
+    }
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click()
+    opened.emitEnded()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await settle()
+    expect(host.textContent).toContain('camera.recording_interrupted')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('maps denied native audio permissions without retaining a microphone stream',async()=>{
+    await mount()
+    requests[0]!.resolve(media().stream)
+    await settle()
+    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    requests[1]!.reject(Object.assign(new Error('browser-specific private text'),{
+      name:'NotAllowedError',
+    }))
+    await settle()
+    expect(host.textContent).toContain('camera.microphone_permission_denied')
+    expect(host.textContent).not.toContain('browser-specific private text')
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="camera-start-recording"]')!.disabled)
+      .toBe(true)
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('rejects a permission result containing already-ended microphone hardware',async()=>{
+    await mount()
+    requests[0]!.resolve(media().stream)
+    await settle()
+    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const opened=media()
+    opened.track.stop()
+    requests[1]!.resolve(opened.stream)
+    await settle()
+    expect(host.textContent).toContain('camera.stream_ended')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
   it('ignores a spontaneous microphone stop even after five seconds of data',async()=>{
     const opened=await openMode('audio')
     await vi.advanceTimersByTimeAsync(5_000)
