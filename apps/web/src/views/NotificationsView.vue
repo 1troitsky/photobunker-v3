@@ -70,7 +70,7 @@ async function reload():Promise<void>{
       }
     }
   }
-  finally{if(current(owner,token))loading.value=false}
+  if(current(owner,token))loading.value=false
   if(!current(owner,token)||!canSync.value)return
   if(typeof navigator!=='undefined'&&!navigator.onLine)return
   await refresh(token,owner)
