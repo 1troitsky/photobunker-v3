@@ -1,0 +1,122 @@
+name: "P1 #311 Identity ciphertext tamper QA"
+
+# A stacked security-base Draft PR does not trigger existing main-only
+# Foundation/PG18 workflows. This workflow adds isolated exact-head checks
+# without editing those shared workflows or skipping the composer audit.
+on:
+  push:
+    branches: ['qa/p1-311-identity-ciphertext-tamper-20261114']
+  pull_request:
+    branches: ['security/297-laravel-13-audit-20261113']
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Full frontend + 8 independently randomized Identity repeat runs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - name: Full frontend Vitest (no skip, no retry-as-pass)
+        run: pnpm test:web
+      - name: Repeat isolated Identity v2 full cryptographic negative suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Each run creates 256 independent AES-GCM recovery envelopes;
+          # separate invocations do not re-use the test fixture's nonce.
+          for attempt in $(seq 1 8); do
+            echo "Independent Identity cryptographic suite pass $attempt/8"
+            pnpm --filter @pb3/web exec vitest run src/features/identity/infrastructure/crypto.test.ts
+          done
+
+  php:
+    name: Full Laravel PHPUnit + Composer audit (PHP ${{ matrix.php }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, dom, xml, openssl, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          tools: composer:v2
+          coverage: none
+      - run: php scripts/check-runtime.php
+      - name: Composer install from security-patched lock
+        working-directory: apps/api
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Audit lock and verify dependency constraints
+        run: |
+          composer validate --no-check-publish --strict --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+      - name: Full Laravel PHPUnit
+        working-directory: apps/api
+        run: php vendor/bin/phpunit
+
+  pg18:
+    name: Real PostgreSQL 18 Identity tests (disposable)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_identity_ci
+          POSTGRES_USER: pb3_identity
+          POSTGRES_PASSWORD: pb3_identity_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb3_identity -d pb3_identity_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: https://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_identity_ci
+      DB_USERNAME: pb3_identity
+      DB_PASSWORD: pb3_identity_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, fileinfo, curl, zip
+          tools: composer:v2
+          coverage: none
+      - run: php scripts/check-runtime.php
+      - name: Composer audit
+        run: composer audit --locked --no-interaction --working-dir=apps/api
+      - name: Install locked Laravel dependencies
+        working-directory: apps/api
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Migrate disposable PG18 and run real Identity v2 Feature suite
+        working-directory: apps/api
+        run: |
+          php artisan migrate --force
+          # phpunit.xml forces SQLite, so use this job's actual PG18 env.
+          php vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php \
+            tests/Feature/IdentityV2Test.php
