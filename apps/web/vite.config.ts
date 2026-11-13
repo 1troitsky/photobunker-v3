@@ -65,6 +65,7 @@ export default defineConfig(({ mode }) => {
         '/assignments/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/teams/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/teams/v2': { target:'http://127.0.0.1:8000', changeOrigin:false },
+        '/notifications/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/folders/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/browser/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
       },
