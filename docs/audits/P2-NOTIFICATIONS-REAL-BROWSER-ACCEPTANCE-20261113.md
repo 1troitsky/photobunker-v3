@@ -72,3 +72,18 @@ All four workflows completed **PASS** on `fae52e196ee40f8898c4e29afad5d75b15fb14
 - Isolated PostgreSQL 18/Garage 2.5 run [43483933703](https://github.com/1troitsky/photobunker-v3/actions/runs/43483933703), job `132087280352`: **86/86 Chromium PASS (4.7m)**.
 
 These checks include the previously hardened encrypted preferences loading (tampered preferences cannot hide inbox) and filtered Mark All (hidden events remain unread). This is the newest fully accepted **automated** Notifications code prior to the push wake contract addition. The `PushWakePayload` code HEAD `4f53143cece4a330a83039347585505718a8d1f3` completed Foundation/Security/UX PASS but its PostgreSQL/Garage run is still in progress at writing; do not use older green results for that code.
+
+
+## Internal-only push device subscription registry preflight — not active push
+
+A new migration `2026_11_13_000004_create_notification_push_subscriptions_v1.php` and `App\\Events\\PushDeviceSubscriptionRegistry` provide **internal-only** server-side subscription staging. There is deliberately **no browser route, no registration UI, no Service Worker, no VAPID sender, and no outbound request**. Device registration remains gated by the earlier signed-release and physical-device requirements.
+
+Security invariants implemented and tested:
+- Each row belongs to an existing `identity_accounts` account and `identity_devices` device, with canonical **account → device** transactional lock order.
+- Revoked devices or inactive accounts cannot be registered/re-enabled or marked delivery-eligible.
+- Push endpoint, P-256 ECDH browser key and auth secret are stored together as Laravel authenticated-encrypted ciphertext; the only indexed endpoint data is its SHA-256 hash. Stored ciphertext is checked before declaring eligibility.
+- Registrations replace existing device secrets atomically with monotonic generation numbers; disabling is idempotent. An endpoint cannot be reassigned to another device/account.
+- Strict allowlist of known HTTPS Web Push provider hosts (no internal IP, HTTP, arbitrary port, userinfo, fragment or extra fields); this is defense-in-depth only, **not** approval to make outbound requests. A future sender MUST separately enforce egress restrictions and DNS/IP validation.
+- PHPUnit tests cover encryption at rest, tampering, revoked-device fence, endpoint uniqueness across accounts, invalid/SSRF addresses, and absence of `/notifications/v1/push-subscriptions` routes.
+
+The registry is a **staging data model**, not a proof of actual push capability, user consent, browser permission, trust in the worker, or notification delivery. It must not be used until explicit signed Service Worker approval and E2E/mobile acceptance. Most recent code HEAD for this addition before documentation: `b65226ee54a48b6e0cb637363505dc987f0df602`; CI status checked separately.
