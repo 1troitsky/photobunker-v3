@@ -115,6 +115,18 @@ describe('#198 trusted event replay → encrypted IndexedDB',()=>{
     await expect(resolveNotificationTarget('invalid')).rejects
       .toThrow('notifications.invalid_target')
   })
+  it('preserves only the server-authorized assignment invite target kind',async()=>{
+    const targetId='66666666-6666-4666-8666-666666666666'
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,kind:'assignment-invite',targetId,
+    })
+    await expect(resolveNotificationTarget(EVENT)).resolves.toEqual({
+      kind:'assignment-invite',targetId,
+    })
+    expect(mockApi.jsonApi).toHaveBeenCalledWith(
+      '/notifications/v1/events/'+EVENT+'/target',
+    )
+  })
   it('rejects stale notification target after session switch',async()=>{
     mockApi.jsonApi.mockImplementationOnce(async()=>{
       activeSession.value={...session,deviceId:crypto.randomUUID()}
