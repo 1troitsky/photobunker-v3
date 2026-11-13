@@ -86,6 +86,9 @@ final class DeviceRevokedNotificationTest extends TestCase
 
     public function test_cross_account_and_missing_origin_cannot_revoke_or_emit(): void
     {
+        // Supply the valid Origin so this assertion isolates missing auth,
+        // rather than correctly failing the Origin gate first.
+        $this->withHeader('Origin','https://localhost');
         $this->postJson('/identity/v2/devices/'.$this->otherDevice.'/revoke', [])
             ->assertUnauthorized();
         $this->login();
