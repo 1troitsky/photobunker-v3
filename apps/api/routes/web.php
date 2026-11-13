@@ -54,6 +54,7 @@ Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function(){
     Route::get('/time',[IdentityController::class,'time']);
     Route::post('/logout',[IdentityController::class,'logout']);
     Route::get('/devices',[IdentityController::class,'devices']);
+    Route::post('/devices/{id}/revoke',[IdentityController::class,'revoke'])->whereUuid('id');
 });
 
 Route::prefix('photos/v1')->middleware('throttle:120,1')->group(function(){
