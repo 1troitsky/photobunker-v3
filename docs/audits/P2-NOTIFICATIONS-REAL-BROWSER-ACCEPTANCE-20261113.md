@@ -42,3 +42,16 @@
 ## Release and safety gate
 
 Do NOT merge PR #296 or mark issue #198 ready until all remaining P2 issue acceptance gates are resolved and the product owner explicitly authorizes a merge. Local notification ACK is a device-scoped delivery cursor, **not a read receipt**; the UI marks read only in encrypted local storage. After a recipient invite is revoked or expired, server target validation rejects old cached local notification click attempts. No change to Matrix, Camera, or other PR branches.
+
+
+## Encrypted display settings acceptance — follow-up code SHA
+
+**Exact code SHA** `01f2d5a3462f65b93abf23daa648dc0cb361fb29` — all four workflows **PASS**:
+- [Foundation / PHP 8.4 + 8.5 / frontend](https://github.com/1troitsky/photobunker-v3/actions/runs/43482531707).
+- [Security](https://github.com/1troitsky/photobunker-v3/actions/runs/43482531702).
+- [UX](https://github.com/1troitsky/photobunker-v3/actions/runs/43482531730).
+- [PostgreSQL 18/Garage 2.5/real Chromium](https://github.com/1troitsky/photobunker-v3/actions/runs/43482531723), job `132082388790`, **86/86 Chromium PASS (6.2m)**. Includes the new real browser notification settings test after login, reload and encrypted IndexedDB readback.
+
+The display settings scope: opt-in local visibility for invitation/deadline/expiry/system and badge marks, mandatory security notifications visible, AES-GCM per-account IndexedDB storage; push remains disabled. The complete database event and delivery cursor is never filtered by client display settings.
+
+**Subsequent hardening — NOT YET ACCEPTED:** Starting with `321e7abe` and through code HEAD `fd224c1aea1e737a6014b831beb96aa902a663e4`, separate bugfixes ensure tampered preferences cannot hide the independently decrypted notification list, and mark-all excludes hidden categories. These commits introduce new tests and require **their own exact-head** frontend and Chromium CI; do not extend the `01f2d5a3` 86/86 PASS claim to them.
