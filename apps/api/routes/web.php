@@ -260,3 +260,5 @@ Route::get('/notifications/v1/events', [NotificationEventsController::class, 'in
     ->middleware('throttle:40,1');
 Route::get('/notifications/v1/events/{eventId}/target', [NotificationEventsController::class, 'target'])
     ->whereUuid('eventId')->middleware('throttle:40,1');
+Route::post('/notifications/v1/ack', [NotificationEventsController::class, 'acknowledge'])
+    ->middleware('throttle:40,1');
