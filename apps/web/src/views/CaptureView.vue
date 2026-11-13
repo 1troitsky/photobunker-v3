@@ -4,6 +4,11 @@ import { RouterLink, useRoute } from 'vue-router'
 import { activeSession, type Session } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
 import { enqueueEncryptedMedia } from '../features/media/application/media-outbox'
+import {
+  appendEncryptedRecordingSegment,createEncryptedRecordingDraft,
+  deleteEncryptedRecordingDraft,interruptEncryptedRecordingDraft,
+  readCompletedEncryptedRecording,sealEncryptedRecordingDraft,
+} from '../features/media/application/recording-encrypted-journal'
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
 import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
 import {assertRecordingDuration, recordingBounds} from '../features/media/domain/recording-limits'
@@ -94,10 +99,16 @@ const recordingMaxSeconds=computed(()=>captureMode.value==='photo'?0
 const recorder=shallowRef<MediaRecorder|null>(null)
 const recordingStartedAt=ref<number|null>(null)
 let recordingTimer:ReturnType<typeof setTimeout>|null=null
-let recordingParts:Blob[]=[]
+// Keep only bounded, queued native chunks in RAM. All durable draft parts
+// are AEAD ciphertext before IndexedDB writes; never persist raw MediaRecorder blobs.
+const MAX_PENDING_CLEAR_BYTES=16*1024*1024
 let recordedSize=0
-let activeRecording:{saveOnStop:boolean;startedMono:number
-  stoppedMono:number|null;finishedAt:number|null}|null=null
+type RecordingTicket={
+  saveOnStop:boolean;startedMono:number;stoppedMono:number|null
+  finishedAt:number|null;draftId:string;writeTail:Promise<void>
+  nextIndex:number;pendingBytes:number;writeError:Error|null
+}
+let activeRecording:RecordingTicket|null=null
 let releaseRecordingTrackListeners:(()=>void)|null=null
 function detachRecordingTrackListeners():void {
   releaseRecordingTrackListeners?.()
@@ -197,13 +208,21 @@ function ownsCamera(identity:CameraIdentity,generation:number):boolean {
 }
 function discardRecording():void {
   detachRecordingTrackListeners()
+  const ticket=activeRecording
   const old=recorder.value
   recorder.value=null
   activeRecording=null
   recording.value=false
   recordingStartedAt.value=null
-  recordingParts=[]
   recordedSize=0
+  // Cancellation/revocation can never become an authorized signed MediaFile.
+  // Only already encrypted, successfully written parts remain as interrupted
+  // private scratch for later EXPLICIT salvage policy, not automatic playback.
+  if(ticket)void ticket.writeTail.then(async()=>{
+    try{await interruptEncryptedRecordingDraft(ticket.draftId)}catch{
+      // Lost identity/key/expiry must fail closed. Scratch is not published.
+    }
+  })
   if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
   if(old&&old.state!=='inactive'){
     old.ondataavailable=null
@@ -442,11 +461,17 @@ async function beginRecording():Promise<void>{
       throw Error('camera.stream_ended')
     const worker=new MediaRecorder(streamRef,recordingOptions(
       mode,mime,audioTargetBitrate.value))
+    // Create account-key-wrapped journal BEFORE accepting media bytes. Any
+    // database/crypto failure refuses to start recording instead of leaving
+    // a long-running plaintext-only recording in volatile memory.
+    const draftId=await createEncryptedRecordingDraft(mode,mime)
+    assertOwner()
     const token={identity,generation,mode,intent,startedAt,mime,
       privateFields,saveOnStop:false,startedMono:performance.now(),
-      stoppedMono:null as number|null,finishedAt:null as number|null}
+      stoppedMono:null as number|null,finishedAt:null as number|null,
+      draftId,writeTail:Promise.resolve(),nextIndex:0,pendingBytes:0,
+      writeError:null as Error|null}
     activeRecording=token
-    recordingParts=[]
     recordedSize=0
     recorder.value=worker
     // Hardware revoke/interruption can end a track without a MediaRecorder.stop
@@ -474,12 +499,29 @@ async function beginRecording():Promise<void>{
     recordingStartedAt.value=startedAt
     worker.ondataavailable=event=>{
       if(activeRecording!==token||!event.data.size)return
-      recordingParts.push(event.data)
-      recordedSize+=event.data.size
-      if(recordedSize>MAX_MEDIA_BYTES){
+      const piece=event.data
+      recordedSize+=piece.size
+      if(recordedSize>MAX_MEDIA_BYTES||piece.size>8*1024*1024
+        ||token.pendingBytes+piece.size>MAX_PENDING_CLEAR_BYTES){
         error.value='media.invalid_size'
         closeCamera()
+        return
       }
+      const index=token.nextIndex++
+      token.pendingBytes+=piece.size
+      // Explicit single-writer ordering: MediaRecorder callbacks are sync
+      // but AES-GCM/IndexedDB are async. A failed commit must not skip an
+      // index or allow Stop to publish a partially encrypted recording.
+      token.writeTail=token.writeTail.then(async()=>{
+        if(token.writeError)return
+        await appendEncryptedRecordingSegment(token.draftId,index,piece)
+      }).catch(e=>{
+        token.writeError=e instanceof Error?e:Error('camera.recording_storage_failed')
+        if(activeRecording===token){
+          error.value='camera.recording_storage_failed'
+          closeCamera()
+        }
+      }).finally(()=>{token.pendingBytes-=piece.size})
     }
     worker.onerror=()=>{error.value='camera.recording_failed';closeCamera()}
     worker.onstop=()=>{
@@ -494,8 +536,6 @@ async function beginRecording():Promise<void>{
       }
       detachRecordingTrackListeners()
       if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
-      const parts=recordingParts
-      recordingParts=[]
       recorder.value=null;recording.value=false;recordingStartedAt.value=null
       activeRecording=null
       const bytes=recordedSize;recordedSize=0
@@ -511,11 +551,13 @@ async function beginRecording():Promise<void>{
         cameraWanted=false
       }
       void (async()=>{
-        if(!ownsCamera(identity,generation)||contextGeneration!==captureContextGeneration
-          ||captureMode.value!==mode
-          ||(intent&&selectedAssignment.value!==intent.assignmentId))return
         busy.value=true
         try{
+          // Native final dataavailable may be encrypted AFTER onstop fires;
+          // await every ordered ciphertext commit before any signed enqueue.
+          await token.writeTail
+          if(token.writeError)throw token.writeError
+          assertOwner()
           if(bytes<128||bytes>MAX_MEDIA_BYTES)
             throw Error('media.invalid_size')
           // A formerly valid signed recording claim must not outlive a
@@ -530,9 +572,16 @@ async function beginRecording():Promise<void>{
             token.privateFields.gps,gpsAtStart,startedAt)!==token.privateFields.gps)
             throw Error('camera.gps_consent_changed')
           assertRecordingDuration(mode,durationMs)
+          await sealEncryptedRecordingDraft(token.draftId,durationMs)
+          assertOwner()
+          // Decrypted bytes only exist in RAM at explicit finalization.
+          // Existing MediaFile E2EE encrypts again before durable outbox.
+          const recorded=await readCompletedEncryptedRecording(token.draftId)
+          assertOwner()
+          if(recorded.size!==bytes)throw Error('camera.recording_size_mismatch')
           const suffix=mime.includes('webm')?'webm'
             :mime.includes('ogg')?'ogg':'mp4'
-          const file=new File(parts,
+          const file=new File([recorded],
             'recording-'+new Date(startedAt).toISOString()+'.'+suffix,
             {type:mime,lastModified:startedAt})
           const capture:MediaCaptureIntent|undefined=intent
@@ -545,9 +594,14 @@ async function beginRecording():Promise<void>{
           }
           assertCurrent()
           const id=await enqueueEncryptedMedia(file,capture,token.privateFields,assertCurrent)
+          // Only after durable signed encrypted MediaFile exists may we GC
+          // the scratch ciphertext. A failed GC cannot invalidate success.
+          try{await deleteEncryptedRecordingDraft(token.draftId)}catch{}
           if(!ownsCamera(identity,generation))return
           message.value='Запись зашифрована и сохранена локально: '+id.slice(0,8)
         }catch(e){
+          // No implicit publication of invalid or interrupted drafts.
+          try{await interruptEncryptedRecordingDraft(token.draftId)}catch{}
           if(ownsCamera(identity,generation))
             error.value=e instanceof Error?e.message:'camera.media_failed'
         }finally{busy.value=false}
