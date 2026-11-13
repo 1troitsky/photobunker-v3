@@ -1,0 +1,24 @@
+name: P3 release signature verifier (#230)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p3-release-auth-230.yml'
+      - 'scripts/release-auth/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-auth-verifier:
+    name: Ed25519 candidate contract (no PWA activation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run isolated positive and negative release signature tests
+        run: node --test scripts/release-auth/verify.test.mjs
