@@ -26,6 +26,7 @@ final readonly class EventEnvelope implements JsonSerializable
         'AssignmentChanged' => 'assignment',
         'AssignmentInvitationCreated' => 'assignment_invite',
         'TeamEpochInvitationCreated' => 'team_invite_v2',
+        'TeamInitialInvitationCreated' => 'team_invite_v1',
         'MediaCommitted' => 'media',
         'MediaExpired' => 'media',
         'GrantRevoked' => 'grant',
