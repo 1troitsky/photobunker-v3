@@ -4,8 +4,12 @@ import Dexie from 'dexie'
  * Offline PIN check only. This is NOT session authorization and must never directly
  * unlock account keys or execute the emergency/Panic workflow.
  *
- * A non-extractable high-entropy HMAC key must be supplied by a separately verified
- * device/account session and must NEVER be saved beside the local verifier.
+ * Standalone Dexie callers must supply a separate non-extractable high-entropy
+ * HMAC key; do not persist it in that standalone verifier database.
+ * The separate, UNWIRED Identity-v2 co-located migration deliberately persists
+ * a non-extractable HMAC CryptoKey in the same device row as the verifier for
+ * atomicity. It DOES NOT prevent offline guessing by same-origin code that can
+ * invoke WebCrypto operations on that key; never present it as a trusted gate.
  */
 const PBKDF2_ITERATIONS = 600_000
 const MAX_FAILURES = 5
@@ -239,8 +243,9 @@ export async function enrollPinVerifier(
 }
 
 /**
- * Failed attempts (including wrong device keys) update one IndexedDB row
- * atomically across tabs. No network request, plaintext PIN or HMAC key stored.
+ * Wrong PIN attempts update one standalone IndexedDB row atomically
+ * across tabs. A wrong HMAC device key fails record-integrity validation
+ * without resetting any counter. No network request or plaintext PIN stored.
  * A rollback of the device wall clock fails closed until trusted time catches up.
  */
 export async function attemptPinVerifier(
