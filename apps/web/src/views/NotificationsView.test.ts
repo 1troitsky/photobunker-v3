@@ -111,6 +111,20 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     expect(mocks.push).toHaveBeenCalledWith('/browser/file/media/'+TARGET)
     expect(mocks.push).not.toHaveBeenCalledWith(expect.stringContaining('test-key'))
   })
+  it('keeps a stale encrypted notification but never navigates after server revocation',async()=>{
+    activeSession.value=identity(true)
+    mocks.resolve.mockRejectedValueOnce(new Error('api.http_404'))
+    await mount()
+    el('notification-'+ID).querySelector('button')!.click()
+    await settle()
+    el('notification-open').click()
+    await settle()
+    expect(mocks.resolve).toHaveBeenCalledWith(ID)
+    expect(mocks.push).not.toHaveBeenCalled()
+    expect(host.textContent).toContain('Доступ к событию больше не подтверждён')
+    expect(host.textContent).not.toContain(TARGET)
+    expect(el('notifications-list').textContent).toContain('Новые материалы')
+  })
   it('prevents redirect if account changes during an in-flight target ACL check',async()=>{
     activeSession.value=identity(true)
     let done:((x:{kind:'new-file';targetId:string})=>void)|undefined
