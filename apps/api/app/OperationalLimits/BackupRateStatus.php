@@ -40,11 +40,13 @@ final class BackupRateStatus
             ->orderByDesc('accepted_at')
             ->first(['accepted_at']);
 
-        $minimum = config('operational_limits.backup.minimum_start_interval_seconds',
-            self::INTERVAL_SECONDS);
-        // Same floor as BackupAdmission. Invalid config cannot lower the
-        // safety floor (nor should it permit a "ready" browser claim).
-        $floor = max(self::INTERVAL_SECONDS, is_int($minimum) ? $minimum : self::INTERVAL_SECONDS);
+        // Match BackupAdmission::minimumInterval() byte-for-byte on config
+        // coercion: a numeric string from deployment config must not let the
+        // advisory GET show an earlier start than atomic POST admission.
+        $floor = max(self::INTERVAL_SECONDS, (int) config(
+            'operational_limits.backup.minimum_start_interval_seconds',
+            self::INTERVAL_SECONDS
+        ));
         $cooldownUntil = $last === null ? null
             : CarbonImmutable::parse($last->accepted_at)->utc()->addSeconds($floor);
         $activeUntil = $lease === null ? null
