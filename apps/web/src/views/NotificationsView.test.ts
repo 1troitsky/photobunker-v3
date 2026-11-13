@@ -203,7 +203,7 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
         kind:'security',targetId:null},
     ]
     mocks.preferences.mockResolvedValueOnce({
-      version:1,invitations:false,deadlines:false,expiry:false,system:false,badges:false,
+      version:2,invitations:false,deadlines:false,expiry:false,system:false,badges:false,quietEnabled:false,quietStart:1320,quietEnd:480,
     })
     await mount()
     expect(el('notifications-list').textContent).not.toContain('Приглашение в команду')
