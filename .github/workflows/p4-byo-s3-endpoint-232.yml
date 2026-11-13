@@ -27,7 +27,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-          tools: none
+          tools: phpunit:12
       - name: Syntax-check isolated BYO S3 production guard and tests
         run: |
           php -l apps/api/app/Storage/Byo/ByoS3Pin.php
@@ -36,5 +36,9 @@ jobs:
           php -l apps/api/tests/Feature/ByoStorage/ByoS3EndpointGuardTest.php
           php -l apps/api/tests/Feature/ByoStorage/ByoS3DnsResolverTest.php
           php -l scripts/p4-byo-s3-endpoint-232-smoke.php
+          php -l scripts/p4-byo-s3-phpunit-bootstrap-232.php
       - name: Network-free negative SSRF and pinning checks (explicit PHP security floor)
         run: php scripts/p4-byo-s3-endpoint-232-smoke.php
+
+      - name: Run actual isolated PHPUnit 12 BYO S3 endpoint/DNS tests
+        run: phpunit --no-configuration --colors=never --bootstrap scripts/p4-byo-s3-phpunit-bootstrap-232.php apps/api/tests/Feature/ByoStorage
