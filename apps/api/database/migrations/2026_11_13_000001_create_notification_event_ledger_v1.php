@@ -24,11 +24,17 @@ return new class extends Migration {
             $t->unsignedInteger('revision');
             $t->char('fingerprint', 64);
             $t->text('envelope_json');
+            $t->unsignedBigInteger('delivery_sequence')->nullable();
             $t->string('admission_state', 16); // deferred or sequenced
             $t->timestampTz('received_at');
             $t->primary(['account_id', 'event_id'], 'notif_event_pk');
             $t->unique(['account_id', 'subject_type', 'subject_id', 'revision'], 'notif_revision_unique');
             $t->index(['account_id', 'subject_type', 'subject_id', 'admission_state'], 'notif_pending_idx');
+            $t->unique(['account_id', 'delivery_sequence'], 'notif_account_delivery_unique');
+        });
+        Schema::create('notification_account_delivery_v1', static function (Blueprint $t): void {
+            $t->foreignUuid('account_id')->primary()->constrained('identity_accounts');
+            $t->unsignedBigInteger('last_sequence')->default(0);
         });
     }
 
