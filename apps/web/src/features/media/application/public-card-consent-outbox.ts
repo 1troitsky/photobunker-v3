@@ -223,8 +223,10 @@ export async function prepareReviewedContributorConsent(
   binding:ConsentBinding,prepared:PreparedSafePublicJpeg,
   reviewed:{visiblePixelsReviewed:true;reviewedSha256:string},
   fields:ConsentFields,expiresAt:number,
+  assertCurrentReview:()=>void=()=>{},
 ):Promise<string>{
   const s=requireSession()
+  assertCurrentReview()
   checkedBinding(binding,s.accountId)
   if(!reviewed||reviewed.visiblePixelsReviewed!==true
     ||!validHash(reviewed.reviewedSha256))
@@ -254,9 +256,11 @@ export async function prepareReviewedContributorConsent(
   checkedContract(contract)
   await decodedImageMatches(prepared,reviewed.reviewedSha256)
   checkIdentity(s)
+  assertCurrentReview()
   const raw=JSON.stringify(contract)
   const signature=await sign(await importSigner(s.pkg.accountPkcs8),DOMAIN+raw)
   checkIdentity(s)
+  assertCurrentReview()
   const ownerScope=await scopeFor(s.accountId)
   const rowKey=await keyFor(s.accountId,binding.submissionId)
   const cipherKey=await secret(s.pkg.akek,'encrypt')
@@ -266,6 +270,7 @@ export async function prepareReviewedContributorConsent(
     additionalData:additionalData(ownerScope,rowKey),tagLength:128,
   },cipherKey,enc.encode(JSON.stringify({contract:raw,signature})))
   checkIdentity(s)
+  assertCurrentReview()
   await db.transaction('rw',db.prepared,db.withdrawals,async()=>{
     // Atomic exclusion: no stale async sign can overwrite withdrawn entry.
     if(await db.withdrawals.get(rowKey))
@@ -273,6 +278,7 @@ export async function prepareReviewedContributorConsent(
     if(await db.prepared.get(rowKey))
       throw Error('public_card.consent_already_prepared')
     checkIdentity(s)
+    assertCurrentReview()
     await db.prepared.add({
       key:rowKey,ownerScope,iv:b64(iv),ciphertext:b64(ciphertext),
     })
