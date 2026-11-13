@@ -12,7 +12,12 @@ function fixture(sequence=12) {
   const manifestBytes=encode({assets:[{path:'index.html',sha256:'a'.repeat(64),size:12,type:'html'}],build_time:'2026-11-13T00:00:00.000Z',feature_flags:{},manifest_version:1,minimum_client_version:'1.0.0',release_id:'r12',release_sequence:sequence,service_worker:null})
   const envelopeBytes=encode({key_id:trustedKeySha256,manifest_sha256:sha(manifestBytes),
     signature:sign(null,manifestBytes,privateKey).toString('base64url'),signature_version:1})
-  return {manifestBytes,envelopeBytes,trustedPublicKeyPem,trustedKeySha256,minimumSequence:12}
+  const candidate={manifestBytes,envelopeBytes,trustedPublicKeyPem,trustedKeySha256,minimumSequence:12}
+  candidate.resign=()=>{
+    candidate.envelopeBytes=encode({key_id:trustedKeySha256,manifest_sha256:sha(candidate.manifestBytes),
+      signature:sign(null,candidate.manifestBytes,privateKey).toString('base64url'),signature_version:1})
+  }
+  return candidate
 }
 const rejects=(s,code)=>assert.throws(()=>verifyRelease(s),e=>e?.code===code)
 test('valid Ed25519 signature under externally supplied policy',()=>{
@@ -76,37 +81,50 @@ test('CLI verifies a genuine detached signature only with independently supplied
 
 test('signed empty asset inventory is rejected (no executable release)',()=>{
   const s=fixture(), m=JSON.parse(s.manifestBytes);m.assets=[]
-  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+  s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
 })
 test('signed unexpected manifest fields are rejected',()=>{
   const s=fixture(),m=JSON.parse(s.manifestBytes);m.unexpected='hidden'
-  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+  s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
 })
 test('signed duplicate or unsorted assets are rejected',()=>{
   const s=fixture(),m=JSON.parse(s.manifestBytes);m.assets.push({...m.assets[0]})
-  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+  s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
 })
 test('signed unsafe path traversal is rejected',()=>{
   const s=fixture(),m=JSON.parse(s.manifestBytes);m.assets[0].path='../index.html'
-  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+  s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
 })
 test('signed encoded path traversal is rejected',()=>{
   const s=fixture(),m=JSON.parse(s.manifestBytes);m.assets[0].path='%2e%2e/index.html'
-  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+  s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
 })
 test('signed incorrect asset type is rejected',()=>{
   const s=fixture(),m=JSON.parse(s.manifestBytes);m.assets[0].type='js'
-  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+  s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
 })
 test('signed mismatched Service Worker reference is rejected',()=>{
   const s=fixture(),m=JSON.parse(s.manifestBytes);m.service_worker='sw.js'
-  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+  s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
 })
 test('signed bad asset digest is rejected',()=>{
   const s=fixture(),m=JSON.parse(s.manifestBytes);m.assets[0].sha256='not-sha256'
-  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+  s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
 })
 test('signed unsafe build timestamp is rejected',()=>{
   const s=fixture(),m=JSON.parse(s.manifestBytes);m.build_time='tomorrow'
-  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+  s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
+})
+
+test('validly re-signed PWA service worker metadata passes signature+schema contract',()=>{
+ const s=fixture(),m=JSON.parse(s.manifestBytes)
+ m.assets.push({path:'sw.js',sha256:'b'.repeat(64),size:123,type:'service-worker'})
+ m.service_worker='sw.js'
+ s.manifestBytes=encode(m);s.resign()
+ const r=verifyRelease(s);assert.equal(r.releaseSequence,12)
+})
+test('validly re-signed HTML masquerading as Service Worker rejected',()=>{
+ const s=fixture(),m=JSON.parse(s.manifestBytes)
+ m.service_worker='index.html';m.assets[0].type='service-worker'
+ s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
 })
