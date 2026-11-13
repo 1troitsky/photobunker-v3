@@ -9,6 +9,7 @@ import {
   deleteEncryptedRecordingDraft,interruptEncryptedRecordingDraft,
   listEncryptedRecordingDrafts,readCompletedEncryptedRecording,
   sealEncryptedRecordingDraft,purgeExpiredEncryptedRecordingDrafts,
+  readEncryptedRecordingForPrivateReview,eraseAllEncryptedRecordingScratchForPanic,
 } from './recording-encrypted-journal'
 
 afterEach(()=>{activeSession.value=null})
@@ -195,11 +196,85 @@ describe('P2 #206 account-bound encrypted MediaRecorder scratch (not a MediaFile
     }finally{peek.close()}
   })
 
+  it('allows explicitly requested account-local interrupted preview but forbids normal publish',async()=>{
+    const session=await account()
+    const id=await createEncryptedRecordingDraft('audio','audio/webm')
+    await appendEncryptedRecordingSegment(id,0,sample(222,17))
+    await appendEncryptedRecordingSegment(id,1,sample(223,26))
+    await interruptEncryptedRecordingDraft(id)
+    await expect(readCompletedEncryptedRecording(id))
+      .rejects.toThrow('camera.recording_not_finalized')
+    const reviewed=await readEncryptedRecordingForPrivateReview(id)
+    expect(reviewed.size).toBe(445)
+    expect(reviewed.type).toBe('audio/webm')
+    expect(new Uint8Array(await reviewed.arrayBuffer())).toEqual(
+      new Uint8Array([...new Uint8Array(222).fill(17),
+        ...new Uint8Array(223).fill(26)]))
+    const {part}=await rawRecording(id,session.accountId)
+    expect((part.ciphertext as Blob).type).toBe('application/octet-stream')
+    expect((part.ciphertext as Blob).size).toBe(238)
+    expect((await listEncryptedRecordingDrafts())[0]?.state).toBe('interrupted')
+  })
+
+  it('refuses review of unsealed writing segments, wrong account or tampered ciphertext',async()=>{
+    const s=await account()
+    const id=await createEncryptedRecordingDraft('audio','audio/webm')
+    await appendEncryptedRecordingSegment(id,0,sample())
+    await expect(readEncryptedRecordingForPrivateReview(id))
+      .rejects.toThrow('camera.recording_not_finalized')
+    await interruptEncryptedRecordingDraft(id)
+    const foreign=await account()
+    await expect(readEncryptedRecordingForPrivateReview(id))
+      .rejects.toThrow('camera.recording_draft_unavailable')
+    expect(foreign.accountId).not.toBe(s.accountId)
+    activeSession.value=s
+    const peek=new Dexie('pb3-encrypted-recording-journal-v1')
+    peek.version(1).stores({
+      recordings:'&key,accountId,[accountId+createdAt]',
+      segments:'&key,recordingKey,[recordingKey+index]',
+    })
+    try{
+      await peek.table('segments').update(s.accountId+'/'+id+'/0',{
+        ciphertext:new Blob([new Uint8Array(216).fill(99)],
+          {type:'application/octet-stream'}),
+      })
+    }finally{peek.close()}
+    await expect(readEncryptedRecordingForPrivateReview(id)).rejects.toThrow()
+  })
+
   it('refuses an already-untrusted/unsupported MediaRecorder format',async()=>{
     await account()
     await expect(createEncryptedRecordingDraft('audio','application/octet-stream'))
       .rejects.toThrow('camera.recording_mime_invalid')
     await expect(createEncryptedRecordingDraft('video','audio/webm'))
       .rejects.toThrow('camera.recording_mime_invalid')
+  })
+
+  // LAST test by design: Panic erasure locks the module's current JS realm.
+  it('erases ALL accounts local ciphertext even after session loss, then denies new writes',async()=>{
+    const accountA=await account()
+    const one=await createEncryptedRecordingDraft('audio','audio/webm')
+    await appendEncryptedRecordingSegment(one,0,sample())
+    const accountB=await account()
+    const two=await createEncryptedRecordingDraft('video','video/webm')
+    await appendEncryptedRecordingSegment(two,0,sample())
+    activeSession.value=null
+    await eraseAllEncryptedRecordingScratchForPanic()
+    const peek=new Dexie('pb3-encrypted-recording-journal-v1')
+    peek.version(1).stores({
+      recordings:'&key,accountId,[accountId+createdAt]',
+      segments:'&key,recordingKey,[recordingKey+index]',
+    })
+    try{
+      expect(await peek.table('recordings').count()).toBe(0)
+      expect(await peek.table('segments').count()).toBe(0)
+    }finally{peek.close()}
+    activeSession.value=accountA
+    await expect(createEncryptedRecordingDraft('audio','audio/webm'))
+      .rejects.toThrow('camera.recording_scratch_wiped')
+    activeSession.value=accountB
+    await expect(appendEncryptedRecordingSegment(two,1,sample()))
+      .rejects.toThrow('camera.recording_scratch_wiped')
+    expect(one).not.toBe(two)
   })
 })
