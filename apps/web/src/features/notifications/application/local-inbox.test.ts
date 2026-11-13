@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { activeSession, type Session } from '../../identity/application/session'
-import { b64, random, freshPackage, digest, hex } from '../../identity/infrastructure/crypto'
+import { b64, unb64, random, freshPackage, digest, hex } from '../../identity/infrastructure/crypto'
 import {
   localUnreadCount, listLocalNotifications, markAllLocalNotificationsRead,
   markNotificationRead, previewNotification, recordLocalNotification,
@@ -63,6 +63,41 @@ describe('PB3 encrypted Local-First notifications',()=>{
     activeSession.value=alice
     expect(await readNotificationPreferences()).toEqual(preferences)
     expect(bob.accountId).not.toBe(alice.accountId)
+  })
+  it('migrates authenticated encrypted legacy v1 preferences without erasing switches',async()=>{
+    const alice=await session()
+    const key=hex(await digest(new TextEncoder().encode(
+      'pb3.notification-index.v1\n'+alice.accountId,
+    )))
+    const legacy={
+      version:1,invitations:false,deadlines:true,expiry:false,
+      system:true,badges:false,
+    }
+    const iv=random(12)
+    const aes=await crypto.subtle.importKey(
+      'raw',unb64(alice.pkg.akek,32),{name:'AES-GCM'},false,['encrypt'],
+    )
+    const encrypted=await crypto.subtle.encrypt({
+      name:'AES-GCM',iv,
+      additionalData:new TextEncoder().encode(
+        'pb3.notification-preferences.v1\\n'+key,
+      ),tagLength:128,
+    },aes,new TextEncoder().encode(JSON.stringify(legacy)))
+    const raw=new Dexie('pb3-encrypted-notifications-v1')
+    raw.version(2).stores({rows:'&key,ownerScope',preferences:'&key'})
+    await raw.table('preferences').put({
+      key,iv:b64(iv),ciphertext:b64(encrypted),
+    })
+    raw.close()
+    expect(await readNotificationPreferences()).toEqual({
+      ...defaultNotificationPreferences,
+      invitations:false,expiry:false,badges:false,
+    })
+    await saveNotificationPreferences(await readNotificationPreferences())
+    expect(await readNotificationPreferences()).toEqual({
+      ...defaultNotificationPreferences,
+      invitations:false,expiry:false,badges:false,
+    })
   })
   it('quiet hours cover midnight and boundaries without suppressing security indicators',async()=>{
     const settings={...defaultNotificationPreferences,
