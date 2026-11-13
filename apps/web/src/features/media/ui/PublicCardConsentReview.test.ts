@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import {Blob as NodeBlob} from 'node:buffer'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {createApp,h,nextTick,shallowReactive,type App} from 'vue'
 import {activeSession,type Session} from '../../identity/application/session'
@@ -36,7 +37,7 @@ const binding=():ConsentBinding=>({
 async function safe():Promise<PreparedSafePublicJpeg>{
   const data=bytes()
   return {
-    blob:new Blob([data],{type:'image/jpeg'}),
+    blob:new NodeBlob([data],{type:'image/jpeg'}) as unknown as Blob,
     width:3,height:2,sha256:hex(await digest(data)),
     published:false,humanReviewRequired:true,
   }
