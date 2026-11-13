@@ -9,6 +9,7 @@ import { buildPinVerifierSnapshot, evaluatePinVerifierSnapshot } from './pin-ver
 import type { PinAttempt, PinScope, StoredPinState } from './pin-verifier'
 import { openPinProtectedPackage, sealPinProtectedPackage } from './pin-sealed-package'
 import type { PinSealedPackage } from './pin-sealed-package'
+import { publishPinDeviceSealed } from './pin-tab-fence'
 
 /**
  * PREINTEGRATION / NOT CALLED BY PRODUCT.
@@ -236,6 +237,9 @@ export async function migrateLegacyLocalDeviceToPin(input:{
     throw new Error('pin.verifier_unavailable')
   denyIfLive()
   await transactionalReplace(scope,initial,encrypted,secret,verifier,appPin.length)
+  // This is a best-effort wakeup for active other tabs, not acknowledgement
+  // or proof of revocation. The atomic persisted row is authoritative.
+  publishPinDeviceSealed(scope)
 }
 
 /**
