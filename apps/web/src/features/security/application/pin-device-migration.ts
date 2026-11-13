@@ -22,6 +22,7 @@ import type { PinSealedPackage } from './pin-sealed-package'
 export type SealedPinDevice = Omit<LocalDevice,'envelope'> & {
   envelope:PinSealedPackage
   pinMode:'pin-v1'
+  pinLength:number
   pinHmacKey:CryptoKey
   pinVerifier:StoredPinState
 }
@@ -129,7 +130,7 @@ async function validateLegacyDevice(
 
 function transactionalReplace(
   scope:PinScope,source:LocalDevice,encrypted:PinSealedPackage,hmac:CryptoKey,
-  verifier:StoredPinState,
+  verifier:StoredPinState,pinLength:number,
 ):Promise<void>{
   return openIdentityDB().then(db=>new Promise<void>((resolve,reject)=>{
     let tx:IDBTransaction
@@ -155,8 +156,8 @@ function transactionalReplace(
             throw new Error('pin.live_session_must_be_closed')
           // The only write in this transaction. No residual old v2 envelope.
           const sealed:SealedPinDevice={
-            ...still,envelope:encrypted,pinMode:'pin-v1',pinHmacKey:hmac,
-            pinVerifier:verifier,
+            ...still,envelope:encrypted,pinMode:'pin-v1',pinLength:pinLength,
+            pinHmacKey:hmac,pinVerifier:verifier,
           }
           tx.objectStore('devices').put(sealed)
         }catch(err){
@@ -234,7 +235,7 @@ export async function migrateLegacyLocalDeviceToPin(input:{
   if(evaluated.result.status!=='app-unlocked' || !evaluated.next)
     throw new Error('pin.verifier_unavailable')
   denyIfLive()
-  await transactionalReplace(scope,initial,encrypted,secret,verifier)
+  await transactionalReplace(scope,initial,encrypted,secret,verifier,appPin.length)
 }
 
 /**
@@ -245,6 +246,7 @@ export async function readSealedPinDevice(scope:PinScope):Promise<{
   encrypted:PinSealedPackage
   verifierDeviceHmac:CryptoKey
   envelopeDeviceAes:CryptoKey
+  pinLength:number
 }|null>{
   validScope(scope)
   const rows=await readRows()
@@ -258,11 +260,12 @@ export async function readSealedPinDevice(scope:PinScope):Promise<{
      row.pinHmacKey?.extractable!==false ||
      row.encryptionKey?.extractable!==false ||
      !row.pinVerifier || row.pinVerifier.accountId!==scope.accountId ||
-     row.pinVerifier.deviceId!==scope.deviceId)
+     row.pinVerifier.deviceId!==scope.deviceId ||
+     !Number.isInteger(row.pinLength) || row.pinLength<4 || row.pinLength>8)
     throw new Error('pin.corrupt_sealed_device')
   return {
     encrypted:row.envelope,verifierDeviceHmac:row.pinHmacKey,
-    envelopeDeviceAes:row.encryptionKey,
+    envelopeDeviceAes:row.encryptionKey,pinLength:row.pinLength,
   }
 }
 
