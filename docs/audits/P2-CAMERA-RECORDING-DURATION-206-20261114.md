@@ -30,3 +30,11 @@ The pre-change `CaptureView.vue` used one `recordLimitMs=175000` for BOTH video 
 ## Security and integration gates
 
 No storage API / PHP route / database / S3 / assignment policy / authorization / workflow / `ts.md` / `TS_PROGRESS_TABLE.md` modification. No Service Worker claims, no merge, no deployment. Exact-head CI and physical-device acceptance are separate required gates.
+
+## 2026-11-14 follow-up: exact-head browser regression and bitrate target
+
+Initial exact HEAD `b60d9e511a09b7cd54921e0b2f170d87107eb7f1`: real [PostgreSQL/Garage/Chromium 43510743826](https://github.com/1troitsky/photobunker-v3/actions/runs/43510743826) **83/84 PASS, 1 FAIL**. At `tests/e2e/p1-assignment-media.spec.ts` the genuine `MediaRecorder` scenario requested stop after **1600ms** then asserted an encrypted MediaFile; this test was incompatible with the now-normative `ts.md` §14 / §25.5 minimum **5000ms**. The product denied under-5s save. Updated **only this recording fixture** to wait 5500ms of real Chromium microphone data; preserved real signed requirements, GPS, MediaFile enqueue, ciphertext inspection and owner-receipt assertions. No `skip`, fake clock, bypass or security-test weakening.
+
+Additional product contract: `recording-options.ts` adds native `MediaRecorderOptions.audioBitsPerSecond` selected from **64/128/192/256 kbit/s** for `audio` only. Invalid targets throw before opening recorder; `video` options remain unchanged. UI clearly calls it **target bitrate** and says actual encoded codec/bitrate depends on browser. Pre-start selection is included in new recorder options; selector is disabled while recording. `recording-options.test.ts` checks the four targets, invalid values and video isolation; mounted camera suite checks the real options passed to the fake native constructor and timing/security gates.
+
+**Still NOT TESTED:** hardware codec/bitrate, real sustained 50min audio, iOS Safari and Android Chrome, partial encrypted durable chunks during capture, real E2EE cross-device round-trip and separate WAV editor. The 128MiB cap is not relaxed. Browser MediaRecorder still accumulates ephemeral plaintext chunks in memory pending Stop; do not classify #206 as feature-complete.
