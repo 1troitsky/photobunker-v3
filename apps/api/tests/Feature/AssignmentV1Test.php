@@ -176,18 +176,19 @@ final class AssignmentV1Test extends TestCase
             ->assertJsonPath('kind','assignment-invite')
             ->assertJsonPath('targetId',$inviteId);
 
-        // Removing the invite overrides an already downloaded encrypted
-        // notification; neither the feed nor a click can restore membership.
-        DB::table('assignment_member_removals_v1')->insert([
-            'operation_id'=>(string)Str::uuid(),
-            'assignment_id'=>$this->assignmentId,
-            'invite_id'=>$inviteId,
-            'owner_account_id'=>$this->people['owner']['account'],
-            'recipient_account_id'=>$recipient,
-            'contract_hash'=>str_repeat('a',64),
-            'contract_json'=>'{}','owner_signature'=>'fixture',
-            'created_at'=>now(),
+        // Exercise the actual owner-signed removal endpoint, not a forged
+        // database tombstone: a formerly downloaded notice grants nothing.
+        $remove=$this->signed('owner','pb3.assignment-member-remove.v1',[
+            'version'=>1,'action'=>'remove','operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,'inviteId'=>$inviteId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'recipientAccountId'=>$recipient,
         ]);
+        $this->as('owner');
+        $this->postJson('/assignments/v1/'.$this->assignmentId.
+            '/invites/'.$inviteId.'/remove',$remove)->assertOk()
+            ->assertJsonPath('state','removed');
+        $this->as('recipient');
         $this->getJson($path)->assertNotFound();
         $this->getJson('/notifications/v1/events')->assertOk()
             ->assertJsonCount(0,'items');
