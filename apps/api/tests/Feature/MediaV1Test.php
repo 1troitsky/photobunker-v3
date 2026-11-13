@@ -393,8 +393,12 @@ final class MediaV1Test extends TestCase
         ]);
         $lifecycle=app(MediaLifecycle::class);
         $lifecycle->mark($id);
-        $lifecycle->mark($id); // one permanent tombstone only
+        $lifecycle->mark($id); // one permanent tombstone and notice intent
         $this->assertDatabaseCount('media_tombstones_v1',1);
+        $this->assertDatabaseHas('media_expiry_notification_outbox_v1',[
+            'media_id'=>$id,'account_id'=>$this->account,'published_at'=>null,
+        ]);
+        $this->assertDatabaseCount('media_expiry_notification_outbox_v1',1);
         $this->assertDatabaseHas('media_files_v1',['id'=>$id,'state'=>'deleting']);
         $keys=DB::table('media_chunk_locations_v1')
             ->orderBy('object_key')->pluck('object_key')->all();
@@ -408,6 +412,21 @@ final class MediaV1Test extends TestCase
         $this->assertDatabaseCount('media_chunk_locations_v1',0);
         $this->assertDatabaseCount('media_tombstones_v1',1);
         $this->assertSame([],Storage::disk('ciphertext')->allFiles());
+        // A crashed worker may publish AFTER physical S3 + SQL media removal:
+        // the outbox survives and the notice is generic/non-clickable.
+        $this->assertSame(['published'=>1,'errors'=>0],
+            $lifecycle->publishExpiredNotices(10));
+        $this->assertSame(['published'=>0,'errors'=>0],
+            $lifecycle->publishExpiredNotices(10));
+        $this->assertDatabaseHas('notification_event_ledger_v1',[
+            'account_id'=>$this->account,
+            'subject_type'=>'media_retention','subject_id'=>$id,
+            'admission_state'=>'sequenced',
+        ]);
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.kind','file-expiry')
+            ->assertJsonPath('items.0.targetId',null);
         $this->postJson('/media/v1/reserve',[
             'contract'=>$f['json'],'signature'=>$f['signature'],
         ])->assertGone();
