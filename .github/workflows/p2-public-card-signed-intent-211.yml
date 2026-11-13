@@ -5,6 +5,8 @@ on:
     paths:
       - "apps/api/app/PublicCard/**"
       - "apps/api/tests/Feature/PublicCardSignedPublicationIntentTest.php"
+      - "apps/api/tests/Feature/PublicCardGrantLedgerTest.php"
+      - "apps/api/database/migrations/2026_11_14_000211_create_public_card_publication_ledger_v1.php"
       - "apps/api/composer.lock"
       - ".github/workflows/p2-public-card-signed-intent-211.yml"
   push:
@@ -13,6 +15,8 @@ on:
     paths:
       - "apps/api/app/PublicCard/**"
       - "apps/api/tests/Feature/PublicCardSignedPublicationIntentTest.php"
+      - "apps/api/tests/Feature/PublicCardGrantLedgerTest.php"
+      - "apps/api/database/migrations/2026_11_14_000211_create_public_card_publication_ledger_v1.php"
       - "apps/api/composer.lock"
       - ".github/workflows/p2-public-card-signed-intent-211.yml"
 
@@ -45,6 +49,8 @@ jobs:
           composer validate --strict --no-check-publish --no-interaction
           composer audit --locked --no-interaction
           composer install --no-interaction --prefer-dist --no-progress
-      - name: Signed public intent negative tests
+      - name: Full Laravel Foundation and Public Card tests
         working-directory: apps/api
-        run: php vendor/bin/phpunit tests/Feature/PublicCardSignedPublicationIntentTest.php --no-progress
+        run: |
+          php vendor/bin/phpunit --no-progress
+          php vendor/bin/phpunit tests/Unit/PublicCard/SafeCardProjectionTest.php --no-progress
