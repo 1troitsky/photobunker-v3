@@ -4,6 +4,10 @@ declare(strict_types=1);
 namespace App\Media;
 
 use App\Photo\PhotoSync;
+use App\Events\DatabaseEventInboxLedger;
+use App\Events\EventAdmission;
+use App\Events\EventConsumer;
+use Illuminate\Support\Str;
 use App\Storage\StorageManager;
 use App\Storage\TombstoneKeyScope;
 use Illuminate\Support\Facades\DB;
@@ -47,6 +51,18 @@ final class MediaLifecycle
                 ]);
             }
             if($m->state==='deleting')return;
+            // Exactly one durable notice intent for a previously active file
+            // whose retention deadline has really passed. Never say S3 has
+            // been deleted; physical cleanup remains independently gated.
+            // No event ledger call here: media row -> account row would invert
+            // the lock order and a failed notification must NEVER stop GC.
+            if($m->state==='active' && (int)$m->expires_at<=PhotoSync::nowMs()){
+                DB::table('media_expiry_notification_outbox_v1')->insertOrIgnore([
+                    'media_id'=>$mediaId,'account_id'=>$m->account_id,
+                    'expired_at_ms'=>(int)$m->expires_at,
+                    'created_at'=>now(),'published_at'=>null,
+                ]);
+            }
             DB::table('media_files_v1')->where('id',$mediaId)->update([
                 'state'=>'deleting','cleanup_next_at'=>now()->addMinutes(
                     (int)config('media_sync.cleanup_lease_minutes',15)),
@@ -93,6 +109,62 @@ final class MediaLifecycle
             DB::table('media_files_v1')->where('id',$mediaId)->delete();
             // Permanent tombstone survives (late-write sweeps retry forever).
         },3);
+    }
+
+    /**
+     * Retryable, non-destructive notification drain. Outbox persists after
+     * physical media and chunk rows are removed. Each (event, published_at)
+     * pair commits atomically under account row lock; interrupted delivery
+     * never duplicates or blocks ciphertext TTL cleanup.
+     * @return array{published:int,errors:int}
+     */
+    public function publishExpiredNotices(int $batch):array
+    {
+        $pending=DB::table('media_expiry_notification_outbox_v1')
+            ->whereNull('published_at')
+            ->orderBy('created_at')->orderBy('media_id')
+            ->limit(max(1,min(500,$batch)))->get(['media_id','account_id']);
+        $result=['published'=>0,'errors'=>0];
+        foreach($pending as $intent){
+            try{
+                $committed=DB::transaction(function()use($intent):bool{
+                    // Consistent order with every other event producer:
+                    // recipient account BEFORE locked outbox row.
+                    $account=DB::table('identity_accounts')
+                        ->where('id',$intent->account_id)->lockForUpdate()->first();
+                    if(!$account || $account->status!=='ready')return false;
+                    $row=DB::table('media_expiry_notification_outbox_v1')
+                        ->where('media_id',$intent->media_id)
+                        ->where('account_id',$intent->account_id)
+                        ->lockForUpdate()->first();
+                    if(!$row || $row->published_at!==null)return false;
+                    $event=[
+                        'schemaVersion'=>1,'eventId'=>(string)Str::uuid(),
+                        'eventType'=>'MediaRetentionExpired',
+                        'accountId'=>$intent->account_id,
+                        'subjectType'=>'media_retention','subjectId'=>$intent->media_id,
+                        'occurredAtMs'=>(int)$row->expired_at_ms,
+                        'revision'=>1,
+                    ];
+                    // Separate stream handles pre-ledger historical media.
+                    // Outbox may be processed after physical deletion.
+                    $admission=(new EventConsumer(new DatabaseEventInboxLedger()))
+                        ->ingest($event,$intent->account_id);
+                    if($admission!==EventAdmission::Accepted)
+                        throw new \RuntimeException('notifications.ttl_event_unavailable');
+                    DB::table('media_expiry_notification_outbox_v1')
+                        ->where('media_id',$intent->media_id)
+                        ->whereNull('published_at')
+                        ->update(['published_at'=>now()]);
+                    return true;
+                },3);
+                if($committed)$result['published']++;
+            }catch(\Throwable){
+                // Never block actual cleanup or discard outbox on outage.
+                $result['errors']++;
+            }
+        }
+        return $result;
     }
 
     /** Stalled upload recovery cannot silently delete unexpired ciphertext. */

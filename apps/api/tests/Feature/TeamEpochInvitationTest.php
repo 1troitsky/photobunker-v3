@@ -184,6 +184,68 @@ final class TeamEpochInvitationTest extends TestCase
         ];
     }
 
+    public function test_signed_team_epoch_invitation_notification_is_recipient_scoped_and_revoked_on_rotation():void
+    {
+        $invite=$this->invite();
+        $signed=$this->postInvite($invite);
+        $guest=$this->users['guest']['id'];
+        $row=DB::table('notification_event_ledger_v1')
+            ->where('account_id',$guest)
+            ->where('subject_type','team_invite_v2')
+            ->where('subject_id',$invite['inviteId'])->first();
+        $this->assertNotNull($row);
+        $this->assertSame('sequenced',$row->admission_state);
+        // Signed replay must not append another event or alter recipient.
+        $this->postJson('/teams/v2/'.$this->teamId.'/invites',$signed)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertSame(1,DB::table('notification_event_ledger_v1')
+            ->where('account_id',$guest)->count());
+        $target='/notifications/v1/events/'.$row->event_id.'/target';
+        $this->getJson($target)->assertNotFound(); // owner
+        $this->login('stranger');
+        $this->getJson($target)->assertNotFound();
+        $this->login('guest');
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.kind','team-invite')
+            ->assertJsonPath('items.0.targetId',$invite['inviteId']);
+        $this->getJson($target)->assertOk()
+            ->assertJsonPath('kind','team-invite')
+            ->assertJsonPath('targetId',$invite['inviteId']);
+        // Epoch drift disallows the stale envelope without touching the
+        // immutable event audit history or signed invitation contract.
+        DB::table('team_records_v1')->where('id',$this->teamId)
+            ->update(['rotation_required'=>true]);
+        $this->getJson($target)->assertNotFound();
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(0,'items');
+        DB::table('team_records_v1')->where('id',$this->teamId)
+            ->update(['rotation_required'=>false,'key_epoch'=>3]);
+        $this->getJson($target)->assertNotFound();
+        $this->assertDatabaseHas('notification_event_ledger_v1',[
+            'account_id'=>$guest,'event_id'=>$row->event_id,
+        ]);
+    }
+
+    public function test_team_notification_expiry_and_revoked_state_fail_closed():void
+    {
+        $invite=$this->invite();
+        $this->postInvite($invite);
+        $row=DB::table('notification_event_ledger_v1')
+            ->where('subject_id',$invite['inviteId'])->first();
+        $target='/notifications/v1/events/'.$row->event_id.'/target';
+        $this->login('guest');
+        $this->getJson($target)->assertOk();
+        DB::table('team_invites_v2')->where('id',$invite['inviteId'])
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($target)->assertNotFound();
+        DB::table('team_invites_v2')->where('id',$invite['inviteId'])
+            ->update(['expires_at'=>now()->addHour()->getTimestampMs(),'state'=>'revoked']);
+        $this->getJson($target)->assertNotFound();
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(0,'items');
+    }
+
     public function test_v2_invite_and_explicit_consent_allow_new_epoch_member_only():void
     {
         $invite=$this->invite();

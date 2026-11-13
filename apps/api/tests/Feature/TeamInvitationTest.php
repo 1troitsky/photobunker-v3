@@ -150,6 +150,42 @@ final class TeamInvitationTest extends TestCase
         ];
     }
 
+    public function test_initial_epoch_signed_team_invite_notification_expires_on_rotation():void
+    {
+        $signed=$this->invite();
+        $inv=json_decode($signed['contract'],true,32,JSON_THROW_ON_ERROR);
+        $recipient=$this->accounts['recipient']['id'];
+        $row=DB::table('notification_event_ledger_v1')
+            ->where('account_id',$recipient)
+            ->where('subject_type','team_invite_v1')
+            ->where('subject_id',$inv['inviteId'])->first();
+        $this->assertNotNull($row);
+        $this->postJson('/teams/v1/'.$this->teamId.'/invites',$signed)
+            ->assertOk()->assertJsonPath('unchanged',true);
+        $this->assertSame(1,DB::table('notification_event_ledger_v1')
+            ->where('account_id',$recipient)->count());
+        $target='/notifications/v1/events/'.$row->event_id.'/target';
+        $this->getJson($target)->assertNotFound(); // owner
+        $this->as('outsider');
+        $this->getJson($target)->assertNotFound();
+        $this->as('recipient');
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.kind','team-invite')
+            ->assertJsonPath('items.0.targetId',$inv['inviteId']);
+        $this->getJson($target)->assertOk()
+            ->assertJsonPath('targetId',$inv['inviteId']);
+        DB::table('team_records_v1')->where('id',$this->teamId)
+            ->update(['rotation_required'=>true]);
+        $this->getJson($target)->assertNotFound();
+        DB::table('team_records_v1')->where('id',$this->teamId)
+            ->update(['rotation_required'=>false,'key_epoch'=>2]);
+        $this->getJson($target)->assertNotFound();
+        $this->assertDatabaseHas('notification_event_ledger_v1',[
+            'event_id'=>$row->event_id,'account_id'=>$recipient,
+        ]);
+    }
+
     public function test_explicit_invite_and_signed_consent_grant_only_team_membership():void
     {
         $signed=$this->invite();

@@ -4,6 +4,10 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Identity\Protocol as P;
+use App\Events\DatabaseEventInboxLedger;
+use App\Events\EventAdmission;
+use App\Events\EventConsumer;
+use App\Events\PushDeviceSubscriptionRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -161,6 +165,22 @@ final class IdentityController extends Controller
                     'status'=>'ready','updated_at'=>now(),
                 ]);
                 $this->insertDevice($account->id,$p['deviceId'],$p['deviceSpki']);
+                // The first registration proof is the sole source of this
+                // event. The challenge is consumed in the SAME transaction;
+                // replay/login/recovery do not create another AccountCreated.
+                $created=[
+                    'schemaVersion'=>1,
+                    'eventId'=>(string) Str::uuid(),
+                    'eventType'=>'AccountCreated',
+                    'accountId'=>(string)$account->id,
+                    'subjectType'=>'account',
+                    'subjectId'=>(string)$account->id,
+                    'occurredAtMs'=>now()->getTimestampMs(),
+                    'revision'=>1,
+                ];
+                abort_unless((new EventConsumer(new DatabaseEventInboxLedger()))
+                    ->ingest($created,(string)$account->id)===EventAdmission::Accepted,
+                    503,'identity.registration_event_unavailable');
             } elseif (in_array($purpose,['recover','pair-enroll'],true)) {
                 $sameDevice=$device && $device->account_id===$account->id
                     && hash_equals($device->signing_spki,$p['deviceSpki']) && !$device->revoked_at;
@@ -258,9 +278,48 @@ final class IdentityController extends Controller
     public function revoke(Request $r,string $id): JsonResponse {
         $this->origin($r);
         [$a,$actor]=$this->actor($r); P::uuid($id);
-        $count=DB::table('identity_devices')->where('id',$id)->where('account_id',$a->id)
-            ->whereNull('revoked_at')->update(['revoked_at'=>now(),'updated_at'=>now()]);
-        abort_unless($count===1,404);
+        DB::transaction(function () use ($a,$id):void {
+            // Account -> device is the canonical lock order shared with
+            // notification admission. A failed ledger write MUST roll back
+            // the revoke; no silent missing security notice.
+            $account=DB::table('identity_accounts')->where('id',$a->id)
+                ->lockForUpdate()->first();
+            abort_unless($account && $account->status==='ready',401);
+            $device=DB::table('identity_devices')->where('id',$id)
+                ->where('account_id',$a->id)->lockForUpdate()->first();
+            abort_unless($device && $device->revoked_at===null,404);
+            DB::table('identity_devices')->where('id',$id)
+                ->where('account_id',$a->id)->whereNull('revoked_at')
+                ->update(['revoked_at'=>now(),'updated_at'=>now()]);
+            $event=[
+                'schemaVersion'=>1,
+                'eventId'=>(string) Str::uuid(),
+                'eventType'=>'DeviceRevoked',
+                'accountId'=>(string)$a->id,
+                'subjectType'=>'device',
+                'subjectId'=>$id,
+                'occurredAtMs'=>now()->getTimestampMs(),
+                'revision'=>1,
+            ];
+            $admission=(new EventConsumer(new DatabaseEventInboxLedger()))
+                ->ingest($event,(string)$a->id);
+            // Revoking a compromised device takes precedence over delivery.
+            // A pre-existing ledger revision collision must NOT grant that
+            // device continued access. Keep the DB revoke committed; this
+            // exceptional missing notice is audited during acceptance.
+            abort_unless(in_array($admission,[
+                EventAdmission::Accepted,
+                EventAdmission::Conflict,
+            ],true),503,'identity.notification_event_unavailable');
+            // Revocation and encrypted push-credential destruction are one
+            // atomic DB change. A stale device is never eligible for push,
+            // and its stored endpoint/key material must not survive revoke.
+            // purgeRevoked() verifies this device is already revoked and
+            // cannot erase active/foreign devices' subscriptions.
+            (new PushDeviceSubscriptionRegistry())->purgeRevoked(
+                (string) $a->id, $id,
+            );
+        },3);
         if ($id===$actor->id) { $r->session()->invalidate(); $r->session()->regenerateToken(); }
         return $this->json(['revoked'=>true]);
     }

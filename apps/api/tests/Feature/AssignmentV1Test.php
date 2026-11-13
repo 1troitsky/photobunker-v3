@@ -148,6 +148,70 @@ final class AssignmentV1Test extends TestCase
         $this->postJson($url,$input)->assertOk()->assertJsonPath('unchanged',true);
     }
 
+    public function test_real_signed_invite_notification_is_recipient_only_and_rechecks_current_acl():void
+    {
+        $this->createAssignment();
+        $inviteId=$this->invite(); // includes exact lost-ACK signed replay
+        $recipient=$this->people['recipient']['account'];
+        $event=DB::table('notification_event_ledger_v1')
+            ->where('account_id',$recipient)
+            ->where('subject_type','assignment_invite')
+            ->where('subject_id',$inviteId)->first();
+        $this->assertNotNull($event);
+        $this->assertSame('sequenced',$event->admission_state);
+        $this->assertSame(1,DB::table('notification_event_ledger_v1')
+            ->where('account_id',$recipient)->count());
+
+        $path='/notifications/v1/events/'.$event->event_id.'/target';
+        $this->as('owner');
+        $this->getJson($path)->assertNotFound();
+        $this->as('outsider');
+        $this->getJson($path)->assertNotFound();
+        $this->as('recipient');
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.kind','assignment-invite')
+            ->assertJsonPath('items.0.targetId',$inviteId);
+        $this->getJson($path)->assertOk()
+            ->assertJsonPath('kind','assignment-invite')
+            ->assertJsonPath('targetId',$inviteId);
+
+        // Expired invitations are hidden even when the old encrypted inbox
+        // still retains a historical notification. A server recheck wins.
+        DB::table('assignment_invites_v1')->where('id',$inviteId)
+            ->update(['expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($path)->assertNotFound();
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(0,'items');
+        DB::table('assignment_invites_v1')->where('id',$inviteId)
+            ->update(['expires_at'=>now()->addHour()->getTimestampMs()]);
+        $this->getJson($path)->assertOk()
+            ->assertJsonPath('targetId',$inviteId);
+
+        // Exercise the actual owner-signed removal endpoint, not a forged
+        // database tombstone: a formerly downloaded notice grants nothing.
+        $remove=$this->signed('owner','pb3.assignment-member-remove.v1',[
+            'version'=>1,'action'=>'remove','operationId'=>(string)Str::uuid(),
+            'assignmentId'=>$this->assignmentId,'inviteId'=>$inviteId,
+            'ownerAccountId'=>$this->people['owner']['account'],
+            'recipientAccountId'=>$recipient,
+        ]);
+        $this->as('owner');
+        $this->postJson('/assignments/v1/'.$this->assignmentId.
+            '/invites/'.$inviteId.'/remove',$remove)->assertOk()
+            ->assertJsonPath('state','removed');
+        $this->as('recipient');
+        $this->getJson($path)->assertNotFound();
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(0,'items');
+
+        // Revoked events stay in append-only journal for audit; never replay
+        // as a new grant and never erase recipient's encrypted local history.
+        $this->assertDatabaseHas('notification_event_ledger_v1',[
+            'account_id'=>$recipient,'event_id'=>$event->event_id,
+        ]);
+    }
+
     public function test_p2_owner_signed_member_removal_is_immutable_replayable_and_closes_live_membership():void
     {
         $this->createAssignment();

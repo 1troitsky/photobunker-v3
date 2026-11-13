@@ -27,9 +27,9 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
     await page.getByTestId('settings-nav-appearance').click()
     await expect(page.getByTestId('appearance-page')).toBeVisible()
 
-    // Seven UX choices exist, but only FIVE implemented destinations.
-    // Never simulate a sixth working link or approve missing Matrix routes.
-    await expect(page.getByTestId('dock-add-notifications')).toBeDisabled()
+    // Six real destinations (Notifications added), but the default Dock
+    // remains FIVE and Messages/Matrix is still unavailable.
+    await expect(page.getByTestId('dock-add-notifications')).toBeEnabled()
     await expect(page.getByTestId('dock-add-messages')).toBeDisabled()
     await expect(page.getByTestId('dock-remove-settings')).toHaveCount(0)
 
@@ -110,6 +110,18 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
       }
     })
     expect(geometry).toEqual({count:5,equal:true,inside:true,bottom:true})
+
+    // Replace one default shortcut with the newly implemented Notifications
+    // route. Do not expand the mobile Dock beyond its accepted five items.
+    await page.getByTestId('dock-remove-contacts').click()
+    await page.getByTestId('dock-add-notifications').click()
+    await expect(page.getByTestId('dock-count')).toHaveText('5 / 6')
+    await expect(dock(page).getByRole('link',{name:'Уведомления'})).toBeVisible()
+    await page.getByRole('button',{name:'Сохранить',exact:true}).click()
+    await dock(page).getByRole('link',{name:'Уведомления'}).click()
+    await expect(page).toHaveURL(/\/notifications$/)
+    await expect(page.getByTestId('notifications-page')).toBeVisible()
+    await expect(dock(page).getByRole('link')).toHaveCount(5)
   }finally{await context.close()}
 })
 

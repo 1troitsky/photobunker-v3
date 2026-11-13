@@ -151,10 +151,88 @@ final class MediaV1Test extends TestCase
                 'id'=>$c['mediaId'],'state'=>'active',
                 'account_id'=>$this->account,'media_type'=>$type,
             ]);
+            // The real verified finalize, not a synthetic producer fixture,
+            // must atomically publish exactly one event even on lost ACK replay.
+            $this->assertDatabaseHas('notification_event_ledger_v1',[
+                'account_id'=>$this->account,
+                'subject_type'=>'media',
+                'subject_id'=>$c['mediaId'],
+                'revision'=>1,
+                'admission_state'=>'sequenced',
+            ]);
+            $this->assertSame($i+1,DB::table('notification_event_ledger_v1')
+                ->where('account_id',$this->account)->count());
         }
         $this->getJson('/media/v1')->assertOk()
             ->assertJsonCount(3,'items');
         $this->assertDatabaseCount('media_files_v1',3);
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(3,'items')
+            ->assertJsonPath('items.0.kind','new-file')
+            ->assertJsonPath('nextCursor','3');
+
+        // Target navigation is never authorized by a cached targetId alone:
+        // server re-evaluates CURRENT media ownership/state/expiry on click.
+        $event=DB::table('notification_event_ledger_v1')
+            ->where('account_id',$this->account)
+            ->where('subject_type','media')
+            ->orderBy('delivery_sequence')->first();
+        $this->assertNotNull($event);
+        $path='/notifications/v1/events/'.$event->event_id.'/target';
+        $this->getJson($path)->assertOk()
+            ->assertJsonPath('schemaVersion',1)
+            ->assertJsonPath('kind','new-file')
+            ->assertJsonPath('targetId',$event->subject_id);
+        $this->getJson('/notifications/v1/events/'.Str::uuid().'/target')
+            ->assertNotFound();
+        DB::table('media_files_v1')->where('id',$event->subject_id)
+            ->update(['state'=>'deleting']);
+        $this->getJson($path)->assertNotFound();
+        // A retained local event must not resurrect revoked/deleting content.
+        DB::table('media_files_v1')->where('id',$event->subject_id)
+            ->update(['state'=>'active','expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($path)->assertNotFound();
+    }
+
+    public function test_media_activation_rolls_back_when_atomic_event_admission_conflicts():void
+    {
+        $f=$this->fixture('photo',2048);
+        $c=$f['contract'];
+        $id=$c['mediaId'];
+        $this->postJson('/media/v1/reserve',[
+            'contract'=>$f['json'],'signature'=>$f['signature'],
+        ])->assertCreated();
+        foreach(array_keys($c['chunks']) as $index) {
+            $this->send($f,$index)->assertOk();
+        }
+
+        // Inject a competing revision in the disposable test database.
+        // A mismatched second revision=1 cannot be silently ACKed as
+        // MediaCommitted; the entire media activation must roll back.
+        $event=[
+            'schemaVersion'=>1,
+            'eventId'=>(string)Str::uuid(),
+            'eventType'=>'MediaCommitted',
+            'accountId'=>$this->account,
+            'subjectType'=>'media',
+            'subjectId'=>$id,
+            'occurredAtMs'=>now()->getTimestampMs(),
+            'revision'=>1,
+        ];
+        $this->assertSame(\App\Events\EventAdmission::Accepted,
+            (new \App\Events\EventConsumer(
+                new \App\Events\DatabaseEventInboxLedger()
+            ))->ingest($event,$this->account));
+
+        $this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$c['operationId'],
+        ])->assertStatus(503);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$id,'state'=>'pending','receipt'=>null,
+        ]);
+        $this->assertSame(0,DB::table('media_chunks_v1')
+            ->where('media_id',$id)->where('state','active')->count());
+        $this->assertDatabaseCount('notification_event_ledger_v1',1);
     }
 
     public function test_fresh_chunk_upload_lease_is_retryable_and_stale_lease_resumes():void
@@ -294,6 +372,30 @@ final class MediaV1Test extends TestCase
             ->assertUnauthorized();
     }
 
+    public function test_unexpired_manual_media_tombstone_is_not_falsely_called_ttl_expiry():void
+    {
+        $f=$this->fixture('photo',1024);
+        $id=$f['contract']['mediaId'];
+        $this->postJson('/media/v1/reserve',[
+            'contract'=>$f['json'],'signature'=>$f['signature'],
+        ])->assertCreated();
+        foreach($f['contract']['chunks'] as $index=>$_)$this->send($f,$index)->assertOk();
+        $this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$f['contract']['operationId'],
+        ])->assertOk();
+        $this->assertTrue((int)DB::table('media_files_v1')
+            ->where('id',$id)->value('expires_at')>\App\Photo\PhotoSync::nowMs());
+        $lifecycle=app(MediaLifecycle::class);
+        $lifecycle->mark($id);
+        $this->assertDatabaseHas('media_files_v1',['id'=>$id,'state'=>'deleting']);
+        $this->assertDatabaseCount('media_expiry_notification_outbox_v1',0);
+        $this->assertSame(['published'=>0,'errors'=>0],
+            $lifecycle->publishExpiredNotices(10));
+        // Existing MediaCommitted becomes non-navigable after state change.
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(0,'items');
+    }
+
     public function test_gated_ttl_tombstones_survive_cleanup_and_resweep_late_s3_writes():void
     {
         $f=$this->fixture('audio',1024);
@@ -315,8 +417,28 @@ final class MediaV1Test extends TestCase
         ]);
         $lifecycle=app(MediaLifecycle::class);
         $lifecycle->mark($id);
-        $lifecycle->mark($id); // one permanent tombstone only
+        $lifecycle->mark($id); // one permanent tombstone and notice intent
         $this->assertDatabaseCount('media_tombstones_v1',1);
+        $this->assertDatabaseHas('media_expiry_notification_outbox_v1',[
+            'media_id'=>$id,'account_id'=>$this->account,'published_at'=>null,
+        ]);
+        $this->assertDatabaseCount('media_expiry_notification_outbox_v1',1);
+        // Simulated poisoned ledger revision: publication must fail/retry,
+        // yet physical S3 cleanup is NEVER coupled to notification delivery.
+        DB::table('notification_event_streams_v1')->insert([
+            'account_id'=>$this->account,
+            'subject_type'=>'media_retention','subject_id'=>$id,
+            'contiguous_revision'=>1,
+        ]);
+        $this->assertSame(['published'=>0,'errors'=>1],
+            $lifecycle->publishExpiredNotices(10));
+        $this->assertDatabaseHas('media_expiry_notification_outbox_v1',[
+            'media_id'=>$id,'published_at'=>null,
+        ]);
+        DB::table('notification_event_streams_v1')
+            ->where('account_id',$this->account)
+            ->where('subject_type','media_retention')
+            ->where('subject_id',$id)->delete();
         $this->assertDatabaseHas('media_files_v1',['id'=>$id,'state'=>'deleting']);
         $keys=DB::table('media_chunk_locations_v1')
             ->orderBy('object_key')->pluck('object_key')->all();
@@ -330,6 +452,21 @@ final class MediaV1Test extends TestCase
         $this->assertDatabaseCount('media_chunk_locations_v1',0);
         $this->assertDatabaseCount('media_tombstones_v1',1);
         $this->assertSame([],Storage::disk('ciphertext')->allFiles());
+        // A crashed worker may publish AFTER physical S3 + SQL media removal:
+        // the outbox survives and the notice is generic/non-clickable.
+        $this->assertSame(['published'=>1,'errors'=>0],
+            $lifecycle->publishExpiredNotices(10));
+        $this->assertSame(['published'=>0,'errors'=>0],
+            $lifecycle->publishExpiredNotices(10));
+        $this->assertDatabaseHas('notification_event_ledger_v1',[
+            'account_id'=>$this->account,
+            'subject_type'=>'media_retention','subject_id'=>$id,
+            'admission_state'=>'sequenced',
+        ]);
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.kind','file-expiry')
+            ->assertJsonPath('items.0.targetId',null);
         $this->postJson('/media/v1/reserve',[
             'contract'=>$f['json'],'signature'=>$f['signature'],
         ])->assertGone();

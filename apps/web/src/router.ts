@@ -9,6 +9,8 @@ import CaptureView from './views/CaptureView.vue'
 import PhotoBrowserView from './views/PhotoBrowserView.vue'
 import FileViewerView from './views/FileViewerView.vue'
 import ContactsTeamsView from './views/ContactsTeamsView.vue'
+import NotificationsView from './views/NotificationsView.vue'
+import NotificationSettingsView from './views/NotificationSettingsView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -27,6 +29,9 @@ export const router = createRouter({
       component: FileViewerView, meta: { title: 'Редактирование файла' } },
     { path: '/camera', component: CaptureView, meta: { title: 'Камера' } },
     { path: '/contacts', component: ContactsTeamsView, meta: { title: 'Контакты и Команды' } },
+    { path: '/notifications', component: NotificationsView, meta: { title: 'Уведомления' } },
+    { path: '/notifications/settings', component: NotificationSettingsView,
+      meta: { title: 'Настройки уведомлений' } },
     { path: '/settings', component: AccountView, meta: { title: 'Настройки' } },
     { path: '/settings/appearance', component: AppearanceView,
       meta: { title: 'Оформление' } },

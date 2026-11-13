@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\IdentityController;
+use App\Http\Controllers\NotificationEventsController;
 use App\Http\Controllers\BillingV1Controller;
 use App\Http\Controllers\BrowserFolderSyncController;
 use App\Http\Controllers\BrowserArchiveController;
@@ -53,6 +54,7 @@ Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function(){
     Route::get('/time',[IdentityController::class,'time']);
     Route::post('/logout',[IdentityController::class,'logout']);
     Route::get('/devices',[IdentityController::class,'devices']);
+    Route::post('/devices/{id}/revoke',[IdentityController::class,'revoke'])->whereUuid('id');
 });
 
 Route::prefix('photos/v1')->middleware('throttle:120,1')->group(function(){
@@ -252,3 +254,11 @@ Route::prefix('browser/v1/archive')->middleware('throttle:pb3-media')->group(fun
     Route::get('/preferences',[BrowserArchivePreferencesController::class,'show']);
     Route::post('/preferences',[BrowserArchivePreferencesController::class,'update']);
 });
+
+// P2 #198: read-only trusted event feed. No client emission, no server read ACK.
+Route::get('/notifications/v1/events', [NotificationEventsController::class, 'index'])
+    ->middleware('throttle:40,1');
+Route::get('/notifications/v1/events/{eventId}/target', [NotificationEventsController::class, 'target'])
+    ->whereUuid('eventId')->middleware('throttle:40,1');
+Route::post('/notifications/v1/ack', [NotificationEventsController::class, 'acknowledge'])
+    ->middleware('throttle:40,1');

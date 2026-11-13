@@ -73,6 +73,15 @@ final class IdentityV2Test extends TestCase
           'envelope'=>$envelope];
         $this->postIdentity('proof',$body)->assertOk()->assertJsonPath('accountId',$aid);
         $this->assertDatabaseHas('identity_devices',['account_id'=>$aid,'id'=>$deviceId]);
+        // Initial registration and AccountCreated are committed together.
+        $this->assertDatabaseHas('notification_event_ledger_v1',[
+            'account_id'=>$aid,'subject_type'=>'account','subject_id'=>$aid,
+            'revision'=>1,'admission_state'=>'sequenced',
+        ]);
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(1,'items')
+            ->assertJsonPath('items.0.kind','security')
+            ->assertJsonPath('items.0.targetId',null);
         $time=$this->getJson('/identity/v2/time')->assertOk()
             ->assertHeader('Cache-Control','no-store, private')->json('serverUtc');
         $this->assertIsString($time);
@@ -101,6 +110,9 @@ final class IdentityV2Test extends TestCase
             ])->assertOk()->assertJsonPath('deviceId',$recoveredId);
         }
         $this->assertDatabaseCount('identity_devices',2);
+        // Recovery and ordinary login must never re-emit AccountCreated.
+        $this->assertSame(1,DB::table('notification_event_ledger_v1')
+            ->where('account_id',$aid)->count());
 
     }
     public function test_origin_protection_and_no_unauthenticated_devices():void {
