@@ -77,6 +77,9 @@ function validateVerifier(
   verifier: StoredVerifier | null | undefined, optional = false,
 ): void {
   if (verifier === null && optional) return
+  if (!verifier || typeof verifier !== 'object') {
+    throw new Error('pin.corrupt_record')
+  }
   if (!Array.isArray(verifier.salt) || verifier.salt.length !== SALT_BYTES ||
       !Array.isArray(verifier.tag) || verifier.tag.length !== TAG_BYTES ||
       ![...verifier.salt, ...verifier.tag].every(
