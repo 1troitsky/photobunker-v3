@@ -185,6 +185,11 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
   it('Recovery Key + online proof can replace a locked PIN device, without legacy fallback',async()=>{
     const f=await protectedAccount()
     await resumeExistingDevice()
+    // A stale, locally saved legacy sibling must not be auto-resumed after
+    // valid Recovery Key server proof; not merely the PIN-pending device.
+    const sibling=await newLocalDevice(f.scope.accountId)
+    sibling.envelope=await sealDevice(f.pkg,sibling.deviceId,sibling.encryptionKey)
+    await saveDevice(sibling)
     const kit=await createPB2()
     const recovery=await sealRecovery(f.pkg,kit)
     mocks.jsonApi.mockImplementation(async(url:string,_method?:string,body?:{
@@ -228,6 +233,7 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     expect(restored.online).toBe(true)
     expect(pendingPinUnlock.value).toBeNull()
     expect(await isSignedOut(f.scope.accountId,f.scope.deviceId)).toBe(true)
+    expect(await isSignedOut(f.scope.accountId,sibling.deviceId)).toBe(true)
     expect((await getDevice(f.scope.accountId,f.scope.deviceId))!.envelope)
       .toEqual(expect.objectContaining({purpose:'preunlock-package'}))
   },120_000)
