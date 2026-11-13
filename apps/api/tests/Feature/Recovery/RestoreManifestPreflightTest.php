@@ -394,4 +394,261 @@ final class RestoreManifestPreflightTest extends TestCase
         unset($f['generation']['verifiedAt']);
         $this->reject($f);
     }
+    /** A real signed fixture with actual ciphertext and envelope bytes. */
+    private function signedByteFixture(): array
+    {
+        $f=$this->fixture();
+        $streams=[
+            self::FILE_A=>['ciphertext'=>"\x00\xffencrypted-A\x01", 'envelope'=>"AEAD wrapped key A"],
+            self::FILE_B=>['ciphertext'=>"\x03encrypted-B\x00", 'envelope'=>"AEAD wrapped key B"],
+        ];
+        foreach ($f['manifest']['files'] as &$file) {
+            $b=$streams[$file['assetId']];
+            $file['ciphertextSha256']=hash('sha256',$b['ciphertext']);
+            $file['ciphertextBytes']=strlen($b['ciphertext']);
+            $file['envelopeSha256']=hash('sha256',$b['envelope']);
+            $f['policy'][$file['assetId']]['ciphertextSha256']=$file['ciphertextSha256'];
+            $f['policy'][$file['assetId']]['ciphertextBytes']=$file['ciphertextBytes'];
+        }
+        unset($file);
+        $this->resign($f);
+        return [$f,$streams];
+    }
+
+    /** Open real seekable binary resources (provider never uses network). */
+    private static function memoryStreams(array $payload): array
+    {
+        $result=[];
+        foreach (['ciphertext','envelope'] as $name) {
+            $stream=fopen('php://temp','w+b');
+            self::assertIsResource($stream);
+            if ($payload[$name] !== '') {
+                self::assertSame(strlen($payload[$name]), fwrite($stream,$payload[$name]));
+            }
+            rewind($stream);
+            $result[$name]=$stream;
+        }
+        return $result;
+    }
+
+    /** Executes the actual authenticated preflight before opening any streams. */
+    private function verifyReadback(array $f, callable $provider): array
+    {
+        return (new RestoreManifestPreflight())->inspectAndVerifyReadback(
+            $f['bytes'],$f['signature'],$f['spki'],$f['generation'],$f['policy'],
+            $f['actor'],$f['now'],$provider,
+        );
+    }
+
+    public function test_p256_signed_current_generation_verifies_real_ciphertext_and_envelope_bytes(): void
+    {
+        [$f,$payloads]=$this->signedByteFixture();
+        $opened=[];
+        try {
+            $result=$this->verifyReadback($f,static function(string $assetId) use($payloads,&$opened):array{
+                $streams=self::memoryStreams($payloads[$assetId]);
+                $opened[]=$streams;
+                return $streams;
+            });
+            self::assertSame(2,count($opened));
+            self::assertSame([self::FILE_A,self::FILE_B],array_column($result['eligible'],'assetId'));
+            self::assertSame(strlen($payloads[self::FILE_A]['ciphertext'])
+                +strlen($payloads[self::FILE_B]['ciphertext']),$result['ciphertextBytes']);
+        } finally {
+            foreach($opened as $streams) {
+                foreach($streams as $stream) if(is_resource($stream))fclose($stream);
+            }
+        }
+    }
+
+    public function test_same_length_ciphertext_modification_fails_without_restore_write(): void
+    {
+        [$f,$payloads]=$this->signedByteFixture();
+        $bad=$payloads[self::FILE_A];
+        $bad['ciphertext'][1]="\x00";
+        $opened=[];
+        try {
+            $this->expectExceptionMessage('recovery.readback_integrity_denied');
+            $this->verifyReadback($f,static function(string $id)use($payloads,$bad,&$opened):array{
+                $s=self::memoryStreams($id===self::FILE_A?$bad:$payloads[$id]);
+                $opened[]=$s;
+                return $s;
+            });
+        } finally {
+            foreach($opened as $pair)foreach($pair as $stream)if(is_resource($stream))fclose($stream);
+        }
+    }
+
+    public function test_truncated_or_extra_ciphertext_fails_even_if_unsigned_metadata_claims_match(): void
+    {
+        [$f,$payloads]=$this->signedByteFixture();
+        foreach(['truncated','extra'] as $change) {
+            $payload=$payloads[self::FILE_A];
+            $payload['ciphertext']=$change==='truncated'
+                ?substr($payload['ciphertext'],0,-1)
+                :$payload['ciphertext']."\x99";
+            $opened=[];
+            try {
+                $this->verifyReadback($f,static function(string $id)use($payloads,$payload,&$opened):array{
+                    $s=self::memoryStreams($id===self::FILE_A?$payload:$payloads[$id]);
+                    $opened[]=$s;
+                    return $s;
+                });
+                self::fail('Ciphertext '.$change.' accepted');
+            } catch(DomainException $e) {
+                self::assertSame('recovery.readback_integrity_denied',$e->getMessage());
+            } finally {
+                foreach($opened as $pair)foreach($pair as $stream)if(is_resource($stream))fclose($stream);
+            }
+        }
+    }
+
+    public function test_corrupted_empty_or_oversized_envelope_fails_even_if_ciphertext_is_valid(): void
+    {
+        [$f,$payloads]=$this->signedByteFixture();
+        foreach(['AEAD wrapped key C','',str_repeat('X',65_537)] as $corruption) {
+            $payload=$payloads[self::FILE_A];
+            $payload['envelope']=$corruption;
+            $opened=[];
+            try {
+                $this->verifyReadback($f,static function(string $id)use($payloads,$payload,&$opened):array{
+                    $s=self::memoryStreams($id===self::FILE_A?$payload:$payloads[$id]);
+                    $opened[]=$s;
+                    return $s;
+                });
+                self::fail('Corrupt/oversized envelope accepted');
+            } catch(DomainException $e) {
+                self::assertSame('recovery.readback_integrity_denied',$e->getMessage());
+            } finally {
+                foreach($opened as $pair)foreach($pair as $stream)if(is_resource($stream))fclose($stream);
+            }
+        }
+    }
+
+    public function test_invalid_closed_and_wrong_position_streams_fail_closed(): void
+    {
+        [$f,$payloads]=$this->signedByteFixture();
+        foreach(['null','closed','offset'] as $case) {
+            $opened=[];
+            try {
+                $this->verifyReadback($f,static function(string $id)use($payloads,$case,&$opened):array{
+                    $s=self::memoryStreams($payloads[$id]);
+                    $opened[]=$s;
+                    if($id===self::FILE_A) {
+                        if($case==='null')$s['ciphertext']=null;
+                        if($case==='closed')fclose($s['ciphertext']);
+                        if($case==='offset')fseek($s['ciphertext'],1);
+                    }
+                    return $s;
+                });
+                self::fail('Invalid resource '.$case.' accepted');
+            } catch(DomainException $e) {
+                self::assertSame('recovery.readback_integrity_denied',$e->getMessage());
+            } finally {
+                foreach($opened as $pair)foreach($pair as $stream)if(is_resource($stream))fclose($stream);
+            }
+        }
+    }
+
+    public function test_expired_tombstoned_or_foreign_assets_are_never_opened_for_readback(): void
+    {
+        [$f,$payloads]=$this->signedByteFixture();
+        foreach([
+            ['tombstoned'=>true],['ownerAccountId'=>self::FOREIGN],
+            ['restorable'=>false],['expiresAt'=>self::NOW],
+        ] as $denial) {
+            $candidate=$f;
+            $candidate['policy'][self::FILE_A]=array_replace(
+                $candidate['policy'][self::FILE_A],$denial,
+            );
+            $opened=[];
+            $handles=[];
+            try {
+                $report=$this->verifyReadback($candidate,
+                    static function(string $id)use($payloads,&$opened,&$handles):array {
+                        $opened[]=$id;
+                        if($id===self::FILE_A)throw new \RuntimeException('forbidden read');
+                        $s=self::memoryStreams($payloads[$id]);
+                        $handles[]=$s;
+                        return $s;
+                    });
+                self::assertSame([self::FILE_B],$opened);
+                self::assertSame([self::FILE_A],array_column($report['excluded'],'assetId'));
+            } finally {
+                foreach($handles as $pair)foreach($pair as $stream)if(is_resource($stream))fclose($stream);
+            }
+        }
+    }
+
+    public function test_missing_current_grants_open_no_streams(): void
+    {
+        [$f]=$this->signedByteFixture();
+        $f['policy']=[];
+        $called=0;
+        $result=$this->verifyReadback($f,static function()use(&$called):never{
+            $called++;
+            throw new \RuntimeException('unexpected stream open');
+        });
+        self::assertSame(0,$called);
+        self::assertSame([],$result['eligible']);
+    }
+
+    public function test_tampered_signature_or_unverified_generation_rejected_before_opening_streams(): void
+    {
+        [$f]=$this->signedByteFixture();
+        foreach(['signature','receipt'] as $mode) {
+            $candidate=$f;
+            if($mode==='signature')$candidate['signature']=str_repeat('A',86);
+            else $candidate['generation']['active']=false;
+            $called=0;
+            try {
+                $this->verifyReadback($candidate,static function()use(&$called):never{
+                    $called++;
+                    throw new \RuntimeException('should not open');
+                });
+                self::fail('Unauthenticated readback accepted');
+            } catch(DomainException $e) {
+                self::assertSame('recovery.restore_preflight_denied',$e->getMessage());
+            }
+            self::assertSame(0,$called);
+        }
+    }
+
+    public function test_stream_provider_exception_and_malformed_result_are_fail_closed(): void
+    {
+        [$f]=$this->signedByteFixture();
+        foreach([
+            static function():never {throw new \RuntimeException('S3 secret');},
+            static fn():array => [],
+            static fn():array => ['ciphertext'=>null,'envelope'=>null],
+        ] as $provider) {
+            try {
+                $this->verifyReadback($f,$provider);
+                self::fail('Invalid provider result accepted');
+            } catch(DomainException $e) {
+                self::assertContains($e->getMessage(),[
+                    'recovery.restore_preflight_denied','recovery.readback_integrity_denied',
+                ]);
+            }
+        }
+    }
+
+    public function test_readback_cannot_be_faked_by_changing_manifest_fields_or_sha_without_signature(): void
+    {
+        [$f,$payloads]=$this->signedByteFixture();
+        $f['manifest']['files'][0]['ciphertextSha256']=hash('sha256','attacker');
+        $f['bytes']=json_encode($f['manifest'],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $f['generation']['manifestSha256']=hash('sha256',$f['bytes']);
+        $count=0;
+        try {
+            $this->verifyReadback($f,static function()use(&$count):never{
+                $count++;throw new \RuntimeException('never open before verifying signature');
+            });
+            self::fail('Unsigned replacement hash accepted');
+        } catch(DomainException $e) {
+            self::assertSame('recovery.restore_preflight_denied',$e->getMessage());
+        }
+        self::assertSame(0,$count);
+    }
+
 }
