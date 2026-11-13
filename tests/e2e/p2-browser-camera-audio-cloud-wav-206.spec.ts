@@ -167,13 +167,21 @@ test('P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV t
     await B.goto('/browser/file/media/'+source.id)
     const audio=B.getByTestId('file-viewer-audio')
     await expect(audio).toBeVisible({timeout:30_000})
-    await expect.poll(()=>audio.evaluate((el:HTMLAudioElement)=>el.duration),
-      {timeout:30_000}).toBeGreaterThan(5)
+    await expect.poll(()=>audio.evaluate((el:HTMLAudioElement)=>el.readyState),
+      {timeout:30_000}).toBeGreaterThanOrEqual(1)
+    const nativeDuration=await audio.evaluate((el:HTMLAudioElement)=>el.duration)
+    expect((Number.isFinite(nativeDuration)&&nativeDuration>5)
+      ||nativeDuration===Infinity).toBe(true)
     await B.getByTestId('viewer-action-edit').click()
     const editor=B.getByTestId('file-viewer-audio-editor')
     await expect(editor).toBeVisible({timeout:25_000})
     const start=B.getByTestId('file-viewer-audio-start')
     const end=B.getByTestId('file-viewer-audio-end')
+    // A streamed native WebM may expose HTMLAudioElement.duration=Infinity.
+    // Real authenticated WebAudio fallback must resolve finite bounds; a
+    // missing range is a PRODUCT FAIL, not an unbounded focus() hang.
+    await expect(start).toBeVisible({timeout:30_000})
+    await expect(end).toBeVisible({timeout:30_000})
     await start.focus();await start.press('ArrowRight');await start.press('ArrowRight')
     await end.focus();await end.press('Home')
     for(let i=0;i<7;i++)await end.press('ArrowRight')
@@ -294,6 +302,8 @@ test('P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV t
   }finally{
     // Recovery Key stays in transient Playwright test memory only.
     recoveryKey=null
-    await ac.close();await bc.close();await cc.close()
+    // Never mask an earlier product error/timeout with cleanup on a
+    // browser that Playwright already force-closed.
+    await Promise.allSettled([ac.close(),bc.close(),cc.close()])
   }
 })
