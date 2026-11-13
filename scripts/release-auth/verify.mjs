@@ -46,12 +46,17 @@ function validateManifestShape(m) {
   if (m.service_worker !== null && (!pathOk(m.service_worker) || !m.service_worker.endsWith('.js'))) fail('INVALID_MANIFEST')
   if (!Array.isArray(m.assets) || m.assets.length === 0 || m.assets.length > 50000) fail('INVALID_MANIFEST')
   let last = '', workerCount=0
+  // #196 auto-detects conventional worker filenames even if the manifest omits its reference.
+  // A signed candidate must not silently relabel an auto-detected worker as ordinary JS.
+  const conventionalWorker = /^(?:sw|service-worker)(?:\.[a-z0-9_-]+)?\.js$/i
   for (const asset of m.assets) {
     if (!exact(asset,['path','sha256','size','type']) || !pathOk(asset.path) ||
         (last && cmp(last,asset.path) >= 0) ||
         typeof asset.sha256 !== 'string' || !HEX.test(asset.sha256) ||
         !Number.isSafeInteger(asset.size) || asset.size < 0) fail('INVALID_MANIFEST')
     last=asset.path
+    if (m.service_worker === null &&
+        conventionalWorker.test(asset.path.split('/').at(-1))) fail('INVALID_MANIFEST')
     const ext=asset.path.slice(asset.path.lastIndexOf('.')+1).toLowerCase()
     const expected=asset.path === m.service_worker ? 'service-worker' :
       ['js','mjs','cjs'].includes(ext) ? 'js' : ext === 'css' ? 'css' :
