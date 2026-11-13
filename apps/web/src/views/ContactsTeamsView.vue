@@ -8,6 +8,7 @@ import {
 import type { ConfirmedContact } from '../features/people/application/contact-book'
 import {
   listLocallyBlockedPeers, locallyBlockPeer, locallyUnblockPeer,
+  excludeLocallyBlockedContacts,
 } from '../features/people/application/contact-blocklist'
 import type { LocallyBlockedPeer } from '../features/people/application/contact-blocklist'
 import { listLocalTeams, queueTeam, refreshTeams } from '../features/people/application/team-book'
@@ -111,8 +112,7 @@ async function reload():Promise<void>{
     blocked.value=hidden
     const rows=await listConfirmedContacts()
     if(sessionMatches(owner,token)){
-      const ids=new Set(hidden.map(x=>x.peerAccountId))
-      contacts.value=rows.filter(x=>!ids.has(x.peerAccountId))
+      contacts.value=excludeLocallyBlockedContacts(rows,hidden)
     }
   }catch(e){
     if(sessionMatches(owner,token))
