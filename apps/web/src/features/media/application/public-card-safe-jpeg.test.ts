@@ -26,6 +26,11 @@ function jpeg(opts:{before?:number[];after?:number[];width?:number;height?:numbe
     0xff,0xd9,...(opts.end??[]),...(opts.after??[]),
   ])
 }
+const jpegBlob=(bytes:Uint8Array,type='image/jpeg'):Blob=>{
+  const copy=new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  return new Blob([copy],{type})
+}
 afterEach(()=>{
   vi.unstubAllGlobals()
   vi.useRealTimers()
@@ -86,7 +91,7 @@ describe('P2 #211 client-only safe JPEG prepublication gate',()=>{
     }
   })
   it('rejects truncated output and excessive image input before allocation',async()=>{
-    const input=new Blob([jpeg()],{type:'image/png'})
+    const input=jpegBlob(jpeg(),'image/png')
     await expect(prepareSafePublicJpeg(input))
       .rejects.toThrow('public_card.invalid_source_jpeg')
     const oversize={type:'image/jpeg',size:PUBLIC_JPEG_MAX_SOURCE_BYTES+1}
@@ -94,8 +99,8 @@ describe('P2 #211 client-only safe JPEG prepublication gate',()=>{
       .rejects.toThrow('public_card.invalid_source_jpeg')
   })
   it('re-encodes locally, verifies exact output bytes and returns NO public capability',async()=>{
-    const input=new Blob([jpeg()],{type:'image/jpeg'})
-    const out=new Blob([jpeg()],{type:'image/jpeg'})
+    const input=jpegBlob(jpeg())
+    const out=jpegBlob(jpeg())
     const close=vi.fn()
     const decoder=vi.fn(async()=>({width:3,height:2,close}))
     const drawImage=vi.fn()
@@ -123,9 +128,8 @@ describe('P2 #211 client-only safe JPEG prepublication gate',()=>{
     expect(canvas.height).toBe(0)
   })
   it('never returns a JPEG if Canvas inserts metadata or changes dimensions',async()=>{
-    const src=new Blob([jpeg()],{type:'image/jpeg'})
-    const exif=new Blob([jpeg({before:seg(0xe1,[1,2,3,4])})],
-      {type:'image/jpeg'})
+    const src=jpegBlob(jpeg())
+    const exif=jpegBlob(jpeg({before:seg(0xe1,[1,2,3,4])}))
     const close=vi.fn()
     const decoder=vi.fn(async()=>({width:3,height:2,close}))
     const canvas={
@@ -144,7 +148,7 @@ describe('P2 #211 client-only safe JPEG prepublication gate',()=>{
   })
   it('fails closed when client Canvas encoder stalls and releases bitmap',async()=>{
     vi.useFakeTimers()
-    const src=new Blob([jpeg()],{type:'image/jpeg'})
+    const src=jpegBlob(jpeg())
     const close=vi.fn()
     const canvas={
       width:0,height:0,
