@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import {Blob as NodeBlob} from 'node:buffer'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {createApp,h,nextTick,shallowReactive,type App} from 'vue'
 import {activeSession,type Session} from '../../identity/application/session'
@@ -36,9 +35,14 @@ const binding=():ConsentBinding=>({
 })
 async function safe():Promise<PreparedSafePublicJpeg>{
   const data=bytes()
+  const blob=new Blob([data],{type:'image/jpeg'})
+  // This jsdom Blob implementation omits arrayBuffer(), while production
+  // browsers provide it. Polyfill only the real fixture byte-read method,
+  // never mock the digest, JPEG parser or validation code under test.
+  Object.defineProperty(blob,'arrayBuffer',{configurable:true,value:
+    async():Promise<ArrayBuffer>=>data.slice().buffer})
   return {
-    blob:new NodeBlob([data],{type:'image/jpeg'}) as unknown as Blob,
-    width:3,height:2,sha256:hex(await digest(data)),
+    blob,width:3,height:2,sha256:hex(await digest(data)),
     published:false,humanReviewRequired:true,
   }
 }
@@ -92,7 +96,8 @@ async function mount():Promise<void>{
   app=createApp({
     render:()=>h(PublicCardConsentReview,{
       prepared:props.prepared,binding:props.binding,
-      onPrepared:preparedEvent,onWithdrawn:withdrawnEvent,
+      onPrepared:(id:string)=>preparedEvent(id),
+      onWithdrawn:(id:string)=>withdrawnEvent(id),
     }),
   })
   app.mount(host)
