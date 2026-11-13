@@ -19,6 +19,26 @@ const expanded=ref<string|null>(null)
 const loading=ref(false)
 const syncing=ref(false)
 const busy=ref(false)
+// A read/ACL operation belongs to one identity and one UI generation.
+// On account switch, release the old lock; stale promises cannot unlock
+// a new account's pending operation.
+let busyOwner=''
+let busyGeneration=0
+function fenceBusy(owner:string):void{
+  if(busyOwner===owner)return
+  busyOwner=owner
+  busyGeneration++
+  busy.value=false
+}
+function beginBusy(owner:string):number{
+  busyOwner=owner
+  busy.value=true
+  return ++busyGeneration
+}
+function finishBusy(owner:string,generation:number):void{
+  if(busyGeneration===generation&&busyOwner===owner&&scope()===owner)
+    busy.value=false
+}
 const error=ref('')
 const preferences=ref<NotificationPreferences>({...defaultNotificationPreferences})
 const clock=ref(new Date())
@@ -49,6 +69,7 @@ async function readLocal(token:number,owner:string):Promise<void>{
 }
 async function reload():Promise<void>{
   const owner=scope(),token=++run
+  fenceBusy(owner)
   rows.value=[];expanded.value=null;error.value=''
   preferences.value={...defaultNotificationPreferences}
   if(!owner)return
@@ -113,23 +134,23 @@ async function expand(row:LocalNotification):Promise<void>{
   if(!owner)return
   expanded.value=expanded.value===row.id?null:row.id
   if(expanded.value!==row.id||row.readAt!==null)return
-  busy.value=true
+  const generation=beginBusy(owner)
   try{
     await markNotificationRead(row.id)
     if(current(owner,token))await readLocal(token,owner)
   }catch{if(current(owner,token))error.value='Не удалось сохранить отметку о прочтении.'}
-  finally{busy.value=false}
+  finally{finishBusy(owner,generation)}
 }
 async function markAll():Promise<void>{
   if(busy.value||unread.value===0)return
   const owner=scope(),token=run
-  busy.value=true
+  const generation=beginBusy(owner)
   try{
     const ids=shown.value.filter(row=>row.readAt===null).map(row=>row.id)
     await markAllLocalNotificationsRead(Date.now(),ids)
     if(current(owner,token))await readLocal(token,owner)
   }catch{if(current(owner,token))error.value='Не удалось сохранить отметки о прочтении.'}
-  finally{busy.value=false}
+  finally{finishBusy(owner,generation)}
 }
 async function openTarget(row:LocalNotification):Promise<void>{
   // The encrypted local target is intentionally NOT used for navigation.
@@ -137,7 +158,8 @@ async function openTarget(row:LocalNotification):Promise<void>{
   // checked once more by the actual destination.
   if(busy.value||!activeSession.value?.online)return
   const owner=scope(),token=run
-  busy.value=true;error.value=''
+  const generation=beginBusy(owner)
+  error.value=''
   try{
     const target=await resolveNotificationTarget(row.id)
     if(!current(owner,token))return
@@ -151,7 +173,7 @@ async function openTarget(row:LocalNotification):Promise<void>{
   }catch{
     if(current(owner,token))
       error.value='Доступ к событию больше не подтверждён. Проверьте приглашение или файл.'
-  }finally{busy.value=false}
+  }finally{finishBusy(owner,generation)}
 }
 function canOpen(row:LocalNotification):boolean{
   return canSync.value&&row.targetId!==null&&
@@ -167,6 +189,7 @@ onMounted(()=>{
 })
 onUnmounted(()=>{
   ++run;rows.value=[];expanded.value=null
+  busyOwner='';busyGeneration++;busy.value=false
   window.removeEventListener('online',wake)
   window.removeEventListener('focus',tickClock)
   if(clockTimer!==null){clearInterval(clockTimer);clockTimer=null}
