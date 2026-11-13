@@ -4,6 +4,10 @@ import {wrapAssetDEK,unwrapAssetDEK,b64,unb64} from '../../identity/infrastructu
 import type {PackageV2} from '../../identity/infrastructure/crypto'
 import {MAX_MEDIA_BYTES} from '../domain/media-crypto'
 import {assertRecordingDuration} from '../domain/recording-limits'
+import {
+  supportsCameraWriterLease,withIdleCameraWriterLease,
+  type CameraWriterLease,
+} from './recording-writer-lease'
 
 /**
  * Transient MediaRecorder chunks are encrypted BEFORE IndexedDB writes.
@@ -17,6 +21,9 @@ type DraftRow={
   key:string;accountId:string;recordingId:string;kind:RecordingKind
   mime:string;createdAt:number;expiresAt:number;revision:number
   wrappingKeyId:string
+  // Only entries created while holding a native origin-wide writer lock
+  // can later be safely classified as abandoned after a process crash.
+  writerLeaseProtocol?:number
   wrapped:WrappedKey;nextIndex:number;plainBytes:number;state:DraftState
   durationMs:number|null
 }
@@ -96,9 +103,11 @@ function ensureWrite(row:DraftRow):void{
 }
 /** Only opaque identity, timing and codec metadata; no GPS, tags or filename. */
 export async function createEncryptedRecordingDraft(
-  kind:RecordingKind,mime:string,
+  kind:RecordingKind,mime:string,lease?:CameraWriterLease|null,
 ):Promise<string>{
   const s=owner()
+  if(lease&&(!lease.isHeld()||lease.accountId!==s.accountId))
+    throw Error('camera.recording_writer_busy')
   if(!formats[kind]?.includes(mime))throw Error('camera.recording_mime_invalid')
   const recordingId=crypto.randomUUID()
   const createdAt=Date.now(),expiresAt=createdAt+ONE_DAY
@@ -107,7 +116,7 @@ export async function createEncryptedRecordingDraft(
   const row:DraftRow={
     key:keyOf(s,recordingId),accountId:s.accountId,recordingId,
     kind,mime,createdAt,expiresAt,revision:s.pkg.revision,
-    wrappingKeyId:s.pkg.wrappingKeyId,
+    wrappingKeyId:s.pkg.wrappingKeyId,writerLeaseProtocol:lease?1:0,
     wrapped,nextIndex:0,plainBytes:0,state:'writing',durationMs:null,
   }
   await db.recordings.add(row)
@@ -197,6 +206,7 @@ export async function interruptEncryptedRecordingDraft(id:string):Promise<void>{
 export async function listEncryptedRecordingDrafts():Promise<Array<{
   recordingId:string;kind:RecordingKind;createdAt:number;expiresAt:number
   chunkCount:number;plainBytes:number;state:DraftState
+  recoveryAvailable:boolean
 }>>{
   const s=owner()
   const rows=await db.recordings.where('accountId').equals(s.accountId)
@@ -208,7 +218,40 @@ export async function listEncryptedRecordingDrafts():Promise<Array<{
       recordingId:r.recordingId,kind:r.kind,createdAt:r.createdAt,
       expiresAt:r.expiresAt,chunkCount:r.nextIndex,
       plainBytes:r.plainBytes,state:r.state,
+      recoveryAvailable:r.writerLeaseProtocol===1&&supportsCameraWriterLease(),
     }))
+}
+/**
+ * Explicitly adopt a journal whose recording owner DOCUMENT crashed. The
+ * origin-wide exclusive lock, not a wall-clock heartbeat, proves no cooperating
+ * current tab is writing. Legacy journals not created under this lock remain
+ * fail-closed, as do platforms without native Web Locks.
+ *
+ * This ONLY marks encrypted fragments "interrupted" for private review.
+ * It never seals, signs, exports, uploads or claims captured duration.
+ */
+export async function recoverAbandonedEncryptedRecordingDraft(id:string):Promise<void>{
+  const s=owner()
+  await withIdleCameraWriterLease(s.accountId,async()=>{
+    const row=await rowFor(s,id)
+    if(row.writerLeaseProtocol!==1)
+      throw Error('camera.recording_recovery_unsupported')
+    if(row.state!=='writing')
+      throw Error('camera.recording_draft_sealed')
+    if(row.nextIndex<1||row.plainBytes<128)
+      throw Error('camera.recording_empty')
+    await db.transaction('rw',db.recordings,async()=>{
+      const current=await db.recordings.get(row.key)
+      assertOwner(s)
+      if(!current||current.accountId!==s.accountId
+        ||current.writerLeaseProtocol!==1||current.state!=='writing'
+        ||current.nextIndex!==row.nextIndex
+        ||current.plainBytes!==row.plainBytes)
+        throw Error('camera.recording_sequence_invalid')
+      await db.recordings.update(row.key,{state:'interrupted'})
+      assertOwner(s)
+    })
+  })
 }
 /**
  * Interrupted and active drafts are never materialized as a playable file
