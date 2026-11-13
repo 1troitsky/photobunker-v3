@@ -69,10 +69,17 @@ const rawDb=():Dexie=>{
 }
 type RawCipher={key:string;ownerScope:string;iv:string;ciphertext:string}
 type RawTomb={key:string;ownerScope:string;withdrawnAt:number}
+async function accountScope():Promise<string>{
+  return hex(await digest(new TextEncoder().encode(
+    'pb3.public-card-prepared-consent-index.v1\n'+alice.accountId
+  )))
+}
 async function rawRows():Promise<RawCipher[]>{
   const db=rawDb()
-  try{return await db.table<RawCipher>('prepared').toArray()}
-  finally{db.close()}
+  try{
+    return await db.table<RawCipher>('prepared')
+      .where('ownerScope').equals(await accountScope()).toArray()
+  }finally{db.close()}
 }
 const stamp=()=>Date.now()+900_000
 let alice:Session
@@ -233,7 +240,8 @@ describe('#211 encrypted owner-private prepared review consent journal',()=>{
       withdrawn:true,localOnly:true,publicGrantRevoked:false,
     })
     const db=rawDb()
-    const tombs=await db.table<RawTomb>('withdrawals').toArray()
+    const tombs=await db.table<RawTomb>('withdrawals')
+      .where('ownerScope').equals(await accountScope()).toArray()
     expect(tombs).toHaveLength(1)
     expect(JSON.stringify(tombs)).not.toContain(alice.accountId)
     expect(JSON.stringify(tombs)).not.toContain(origin.submissionId)
@@ -274,7 +282,7 @@ describe('#211 encrypted owner-private prepared review consent journal',()=>{
     await prepareReviewedContributorConsent(origin,prepared,review(prepared),
       fields(),stamp())
     const db=rawDb()
-    const row=(await db.table<RawCipher>('prepared').toArray())[0]!
+    const row=(await rawRows())[0]!
     await db.table('prepared').put({...row,iv:'AA'})
     await expect(listPreparedContributorConsents())
       .rejects.toThrow('public_card.consent_ciphertext_unreadable')
@@ -289,7 +297,8 @@ describe('#211 encrypted owner-private prepared review consent journal',()=>{
     await expect(withdrawPreparedContributorConsent(origin.submissionId))
       .rejects.toThrow('public_card.consent_not_prepared')
     const db=rawDb()
-    expect(await db.table('withdrawals').count()).toBe(0)
+    expect(await db.table('withdrawals').where('ownerScope')
+      .equals(await accountScope()).count()).toBe(0)
     db.close()
   })
 })
