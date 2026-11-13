@@ -69,8 +69,22 @@ final class PushDeviceSubscriptionRegistry
             if ($row->account_id !== $accountId) {
                 throw new InvalidArgumentException('notifications.push.invalid_device');
             }
-            // Never need to decrypt the old secret to renew: replacing the
-            // full authenticated ciphertext rotates secrets atomically.
+            // Lost-ACK replay of an unchanged active subscription must NOT
+            // silently advance generation. A corrupt old row is never trusted
+            // as equality; an authorized new registration can replace it.
+            if ($row->disabled_at === null && hash_equals($row->endpoint_hash, $index)) {
+                try {
+                    $old = json_decode(Crypt::decryptString(
+                        $row->subscription_ciphertext,
+                    ), true, 16, JSON_THROW_ON_ERROR);
+                    if ($old === $subscription) {
+                        return ['registered' => true, 'generation' => (int) $row->generation];
+                    }
+                } catch (\Throwable) {
+                    // No plaintext is recoverable from a corrupted row.
+                }
+            }
+            // Rotated endpoint or credentials replace the encrypted secret.
             $generation = (int) $row->generation + 1;
             DB::table(self::TABLE)->where('device_id', $deviceId)->update([
                 'endpoint_hash' => $index,
@@ -92,6 +106,34 @@ final class PushDeviceSubscriptionRegistry
                 ->where('device_id', $deviceId)
                 ->whereNull('disabled_at')
                 ->update(['disabled_at' => now(), 'updated_at' => now()]) === 1;
+        }, 3);
+    }
+
+    /**
+     * Internal post-revocation secret purge. This does NOT revoke a device;
+     * it requires that identity revocation has already been committed.
+     * The old endpoint hash and encrypted credentials leave the database,
+     * so the same device cannot resume push with retained secrets.
+     *
+     * Caller of the future identity lifecycle must invoke this separately;
+     * until wired, eligible() still fences revoked devices immediately.
+     */
+    public function purgeRevoked(string $accountId, string $deviceId): bool
+    {
+        return DB::transaction(static function () use ($accountId, $deviceId): bool {
+            if (!EventEnvelope::isCanonicalUuid($accountId)
+                || !EventEnvelope::isCanonicalUuid($deviceId)) {
+                throw new InvalidArgumentException('notifications.push.invalid_device');
+            }
+            $account = DB::table('identity_accounts')->where('id', $accountId)
+                ->lockForUpdate()->first(['id']);
+            $device = DB::table('identity_devices')->where('id', $deviceId)
+                ->where('account_id', $accountId)->lockForUpdate()->first(['revoked_at']);
+            if ($account === null || $device === null || $device->revoked_at === null) {
+                throw new InvalidArgumentException('notifications.push.not_revoked');
+            }
+            return DB::table(self::TABLE)->where('account_id', $accountId)
+                ->where('device_id', $deviceId)->delete() === 1;
         }, 3);
     }
 
