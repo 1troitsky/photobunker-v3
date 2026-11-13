@@ -2,7 +2,7 @@
 
 **Решение:** одна проверенная кодовая integration-кандидатура для review. **main НЕ изменён, merge в main/deploy НЕ выполнялись. Полный PB3/P4 к релизу НЕ готов.** Ни один существующий PR не закрыт, ни одна ветка/пользовательская запись не удалена; force-push не применялся.
 
-**Ветка:** `integration/global-acceptance-20261113`, создана от действительного `origin/main` и fast-forward до точного #290, затем два узких integration/security коммита. Проверенный локальный код: **`9e2fbd71b0ef6b56d9b647eb84f6e9d023bfcd57`**. Окончательный SHA с этим отчётом и **все exact-head CI run URLs** публикуются в **Final validation** описания единственного итогового integration Draft PR. [Сравнение ветки с main](https://github.com/1troitsky/photobunker-v3/compare/main...integration/global-acceptance-20261113).
+**Ветка:** `integration/global-acceptance-20261113`, создана от действительного `origin/main` и fast-forward до точного #290, затем два узких integration/security коммита. Проверенный локальный код: **`9e2fbd71b0ef6b56d9b647eb84f6e9d023bfcd57`**. Окончательный SHA с этим отчётом и **все exact-head CI run URLs** публикуются в **Final validation** описания [единственного integration Draft PR #293](https://github.com/1troitsky/photobunker-v3/pull/293). [Сравнение ветки с main](https://github.com/1troitsky/photobunker-v3/compare/main...integration/global-acceptance-20261113).
 
 Этот отчёт — актуальный срез. Старые слова «pending», «merged» и проценты в исторических PR/аудитах не подменяют проверку текущих refs, деревьев и запущенных сценариев.
 
@@ -111,7 +111,7 @@
 
 ## 4. Security finding вне зелёного CI — исправлено в integration
 
-Обычные checks #290 проверяли floor/контракты, но **не Composer advisory audit**. `composer audit --locked --format=json` локально вернул exit1: **9 advisory matches / 5 пакетов**; не заявляем, что все эти уязвимости были эксплуатируемы через PB3. [Полное before evidence](evidence/PB3-GLOBAL-INTEGRATION-20261113-composer-before.json).
+Обычные checks #290 проверяли floor/контракты, но **не Composer advisory audit**. `composer audit --locked --format=json` локально вернул exit1: **8 advisory matches / 5 пакетов**; не заявляем, что все эти уязвимости были эксплуатируемы через PB3. [Полное before evidence](evidence/PB3-GLOBAL-INTEGRATION-20261113-composer-before.json).
 
 | Пакет | Было | Минимальный patch |
 |---|---|---|
