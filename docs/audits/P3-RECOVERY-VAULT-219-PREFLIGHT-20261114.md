@@ -46,3 +46,20 @@ CI results and exact SHA to be appended only after verification on GitHub. The n
 ## Status
 
 Partial signed-manifest, account/TTL/ACL preflight under active development. Issue #219 remains IN PROGRESS; Draft PR is NOT an accepted full feature and must NOT be merged into main without explicit owner approval. Other agents #198/#296 and #211/#301 and their files remain untouched.
+
+## 2026-11-14 — exact-code-head CI acceptance (isolated only)
+
+**Exact production/test code HEAD:** 8264e774b0b06f5b445b27e528e4957b8ae302f2.
+
+- [Dedicated P3 GitHub Actions #43506972095](https://github.com/1troitsky/photobunker-v3/actions/runs/43506972095), **2/2 jobs PASS**.
+- PHP **8.4.27**, job **132167050200**: production/test/bootstrap PHP syntax clean, real PHPUnit 12.5.44 **19/19 PASS, 770 assertions**.
+- PHP **8.5.12**, job **132167049405**: PHP syntax clean, real PHPUnit 12.5.44 **19/19 PASS, 770 assertions**.
+- [P0 Security #43506971947](https://github.com/1troitsky/photobunker-v3/actions/runs/43506971947) **PASS**; [UX lane guard #43506971872](https://github.com/1troitsky/photobunker-v3/actions/runs/43506971872) **PASS**; [Foundation #43506971913](https://github.com/1troitsky/photobunker-v3/actions/runs/43506971913) frontend **PASS**, PHP8.4/8.5 **FAIL before PHPUnit** at unmodified Composer audit --locked: Laravel framework **13.39.0, CVE-2026-128083 / GHSA-63hm-g96r-2m2q**. Separate security #297 Draft #298 owns the lock; did not disable audit or modify Composer. [PG18/Garage #43506971960](https://github.com/1troitsky/photobunker-v3/actions/runs/43506971960) **IN PROGRESS** at observation; that workflow does NOT exercise real Backup Vault restore.
+
+### Truthful acceptance
+
+**PASS:** standalone cryptographic manifest P-256 verification, detached domain binding, signed v1 syntax, *externally claimed* active verified receipt digest/account matching and read-only exclude logic using explicitly supplied policy. Test keys are ephemeral generated in PHP; no production private keys are accessed.
+
+**NOT TESTED/BLOCKED:** independent producer #218, durable snapshot receipt, real A→B device enrollment, Recovery Key decrypt, strict cross-device key policy, real ciphertext bytes/readback, actual grants from DB, S3 restored object, lost ACK, Panic and tombstone classifications, native Safari/Android, real retention billing and dedup. Neither a properly signed manifest nor the module's output proves those conditions exist. No destructive operations.
+
+No main / merge / deploy / shared CI changes. Draft PR needs separate review and the full producer+restore integration before acceptance.
