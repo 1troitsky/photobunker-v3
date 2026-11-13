@@ -262,7 +262,7 @@ export async function refreshPinSessionFence():Promise<boolean>{
   activeSession.value=null
   resetCsrf()
   pendingPinUnlock.value=null
-  if(hasPin && !signedOut){
+  if(hasPin && stored && !signedOut){
     try{
       pendingPinUnlock.value=pendingPinContext(stored)
       identityBootstrapError.value=null
@@ -321,6 +321,18 @@ async function resumeLocalDevice():Promise<Session|null> {
       other.deviceId!==saved.deviceId && isSealedCandidate(other)))
     throw new Error('identity.mixed_sealed_devices')
   const pkg=await openDevice(saved.envelope,saved.encryptionKey,saved.accountId,saved.deviceId)
+  // A second tab may have sealed/replaced this device WHILE our legacy
+  // AES-GCM decrypt was in progress. Never activate a stale DB snapshot.
+  // The verified IDB row must still be the same unsealed revision, and this
+  // device must still be locally authorized. No async gap after this fence
+  // before activate() publishes a Session.
+  const latest=await getDevice(saved.accountId,saved.deviceId)
+  if(!latest || isSealedCandidate(latest) ||
+     latest.deviceSpki!==saved.deviceSpki ||
+     canonical(latest.envelope as unknown as Record<string,unknown>) !==
+       canonical(saved.envelope as unknown as Record<string,unknown>) ||
+     await isSignedOut(saved.accountId,saved.deviceId))
+    throw new Error('identity.device_changed')
   if(activeSession.value)return activeSession.value
   // Unprotected legacy devices preserve their prior behavior.
   pendingPinUnlock.value=null
