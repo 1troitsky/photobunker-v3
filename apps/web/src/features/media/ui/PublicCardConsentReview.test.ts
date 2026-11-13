@@ -144,6 +144,7 @@ afterEach(()=>{
 describe('#211 contributor reviewed-safe-JPEG isolated UI (no publication)',()=>{
   it('never prepares consent automatically or without decoded image load and checkbox',async()=>{
     await mount()
+    if(!createObjectURL.mock.calls.length)throw Error('review_ui_diagnostic:'+host.innerHTML)
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     expect(button(host,'public-card-review-prepare').disabled).toBe(true)
     expect(ops.prepare).not.toHaveBeenCalled()
