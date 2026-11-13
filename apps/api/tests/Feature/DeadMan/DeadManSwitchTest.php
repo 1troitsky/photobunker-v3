@@ -162,7 +162,7 @@ final class DeadManSwitchTest extends TestCase
             $p['months']=$period;
             $r=$this->submit($p,$key);
             self::assertSame($period===0?'disabled':'armed',$r['state']);
-            self::assertSame($period===0,null!==$r['deadlineAt']?false:true:true,
+            self::assertSame($period===0, $r['deadlineAt'] === null,
                 'Disabled has null deadline');
             self::assertSame($period,(int)DB::table('dead_man_switches_v1')
                 ->where('account_id',$account)->value('months'));
@@ -181,9 +181,9 @@ final class DeadManSwitchTest extends TestCase
     public function test_warning_is_idempotent_and_has_no_destructive_side_effect():void
     {
         $this->submit($this->payload());
-        $this->advance('2027-02-12 12:00:00 UTC');
+        $this->advance('2027-02-12 11:59:59 UTC');
         self::assertSame(['warning'=>0,'expiredReview'=>0],$this->service->sweepDue());
-        $this->advance('2027-02-12 12:00:01 UTC');
+        $this->advance('2027-02-12 12:00:00 UTC');
         // Exact threshold is 2027-02-12 12:00 UTC (30 days before Mar 14).
         self::assertSame(['warning'=>1,'expiredReview'=>0],$this->service->sweepDue());
         self::assertSame(['warning'=>0,'expiredReview'=>0],$this->service->sweepDue());
