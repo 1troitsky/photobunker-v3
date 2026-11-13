@@ -172,6 +172,47 @@ final class MediaV1Test extends TestCase
             ->assertJsonPath('nextCursor','3');
     }
 
+    public function test_media_activation_rolls_back_when_atomic_event_admission_conflicts():void
+    {
+        $f=$this->fixture('photo',2048);
+        $c=$f['contract'];
+        $id=$c['mediaId'];
+        $this->postJson('/media/v1/reserve',[
+            'contract'=>$f['json'],'signature'=>$f['signature'],
+        ])->assertCreated();
+        foreach(array_keys($c['chunks']) as $index) {
+            $this->send($f,$index)->assertOk();
+        }
+
+        // Inject a competing revision in the disposable test database.
+        // A mismatched second revision=1 cannot be silently ACKed as
+        // MediaCommitted; the entire media activation must roll back.
+        $event=[
+            'schemaVersion'=>1,
+            'eventId'=>(string)Str::uuid(),
+            'eventType'=>'MediaCommitted',
+            'accountId'=>$this->account,
+            'subjectType'=>'media',
+            'subjectId'=>$id,
+            'occurredAtMs'=>now()->getTimestampMs(),
+            'revision'=>1,
+        ];
+        $this->assertSame(\App\Events\EventAdmission::Accepted,
+            (new \App\Events\EventConsumer(
+                new \App\Events\DatabaseEventInboxLedger()
+            ))->ingest($event,$this->account));
+
+        $this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$c['operationId'],
+        ])->assertStatus(503);
+        $this->assertDatabaseHas('media_files_v1',[
+            'id'=>$id,'state'=>'pending','receipt'=>null,
+        ]);
+        $this->assertSame(0,DB::table('media_chunks_v1')
+            ->where('media_id',$id)->where('state','active')->count());
+        $this->assertDatabaseCount('notification_event_ledger_v1',1);
+    }
+
     public function test_fresh_chunk_upload_lease_is_retryable_and_stale_lease_resumes():void
     {
         // One data + one metadata chunk: finalize must prove BOTH, no skip.
