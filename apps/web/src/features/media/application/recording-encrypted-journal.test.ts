@@ -8,7 +8,7 @@ import {
   appendEncryptedRecordingSegment,createEncryptedRecordingDraft,
   deleteEncryptedRecordingDraft,interruptEncryptedRecordingDraft,
   listEncryptedRecordingDrafts,readCompletedEncryptedRecording,
-  sealEncryptedRecordingDraft,
+  sealEncryptedRecordingDraft,purgeExpiredEncryptedRecordingDrafts,
 } from './recording-encrypted-journal'
 
 afterEach(()=>{activeSession.value=null})
@@ -167,6 +167,32 @@ describe('P2 #206 account-bound encrypted MediaRecorder scratch (not a MediaFile
       })
     }finally{peek.close()}
     await expect(readCompletedEncryptedRecording(id)).rejects.toThrow()
+  })
+
+  it('purges only expired ciphertext from this account, with an exact bound',async()=>{
+    const s=await account()
+    const first=await createEncryptedRecordingDraft('audio','audio/webm')
+    await appendEncryptedRecordingSegment(first,0,sample())
+    const active=await createEncryptedRecordingDraft('audio','audio/webm')
+    await appendEncryptedRecordingSegment(active,0,sample())
+    const peek=new Dexie('pb3-encrypted-recording-journal-v1')
+    peek.version(1).stores({
+      recordings:'&key,accountId,[accountId+createdAt]',
+      segments:'&key,recordingKey,[recordingKey+index]',
+    })
+    try{
+      await peek.table('recordings').update(s.accountId+'/'+first,{
+        expiresAt:Date.now()-1,
+      })
+      await expect(purgeExpiredEncryptedRecordingDrafts(0))
+        .rejects.toThrow('camera.recording_gc_limit_invalid')
+      expect(await purgeExpiredEncryptedRecordingDrafts(1)).toBe(1)
+      expect(await peek.table('recordings').get(s.accountId+'/'+first)).toBeUndefined()
+      expect(await peek.table('segments').get(s.accountId+'/'+first+'/0')).toBeUndefined()
+      expect(await peek.table('recordings').get(s.accountId+'/'+active)).toBeDefined()
+      expect(await peek.table('segments').get(s.accountId+'/'+active+'/0')).toBeDefined()
+      expect(await purgeExpiredEncryptedRecordingDrafts()).toBe(0)
+    }finally{peek.close()}
   })
 
   it('refuses an already-untrusted/unsupported MediaRecorder format',async()=>{
