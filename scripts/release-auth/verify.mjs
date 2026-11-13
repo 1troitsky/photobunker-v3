@@ -26,6 +26,42 @@ function parseCanonical(bytes, code) {
   if (`${canonical(obj)}\n` !== s) fail(code)
   return obj
 }
+
+/** Strict schema mirror of #196 manifest_version=1. Signatures do not replace asset-byte checks. */
+function validateManifestShape(m) {
+  const exact = (obj, keys) => plain(obj) &&
+    Object.keys(obj).length === keys.length && keys.every(key => Object.hasOwn(obj,key))
+  if (!exact(m,['manifest_version','release_id','release_sequence','build_time',
+    'minimum_client_version','feature_flags','service_worker','assets'])) fail('INVALID_MANIFEST')
+  if (typeof m.build_time !== 'string' || Number.isNaN(Date.parse(m.build_time)) ||
+      new Date(m.build_time).toISOString() !== m.build_time) fail('INVALID_MANIFEST')
+  if (typeof m.minimum_client_version !== 'string' ||
+      !/^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?$/.test(m.minimum_client_version)) fail('INVALID_MANIFEST')
+  if (!plain(m.feature_flags) || Object.entries(m.feature_flags).some(([name,value]) =>
+      !/^[a-z][a-z0-9_.-]{0,63}$/.test(name) || typeof value !== 'boolean')) fail('INVALID_MANIFEST')
+  const pathOk = path => typeof path === 'string' && path.length > 0 && path.length <= 1024 &&
+    !path.startsWith('/') && !path.includes('\\\\') && !/[\\u0000-\\u001f\\u007f%?#:]/.test(path) &&
+    path.split('/').every(s => s !== '' && s !== '.' && s !== '..' &&
+      s.length <= 255 && s === s.normalize('NFC'))
+  if (m.service_worker !== null && !pathOk(m.service_worker)) fail('INVALID_MANIFEST')
+  if (!Array.isArray(m.assets) || m.assets.length === 0 || m.assets.length > 50000) fail('INVALID_MANIFEST')
+  let last = '', workerCount=0
+  for (const asset of m.assets) {
+    if (!exact(asset,['path','sha256','size','type']) || !pathOk(asset.path) ||
+        (last && cmp(last,asset.path) >= 0) ||
+        typeof asset.sha256 !== 'string' || !HEX.test(asset.sha256) ||
+        !Number.isSafeInteger(asset.size) || asset.size < 0) fail('INVALID_MANIFEST')
+    last=asset.path
+    const ext=asset.path.slice(asset.path.lastIndexOf('.')+1).toLowerCase()
+    const expected=asset.path === m.service_worker ? 'service-worker' :
+      ['js','mjs','cjs'].includes(ext) ? 'js' : ext === 'css' ? 'css' :
+      ['html','htm'].includes(ext) ? 'html' : ext === 'wasm' ? 'wasm' : 'asset'
+    if (asset.type !== expected) fail('INVALID_MANIFEST')
+    if (expected === 'service-worker') workerCount++
+  }
+  if (workerCount !== (m.service_worker === null ? 0 : 1)) fail('INVALID_MANIFEST')
+}
+
 export function verifyRelease({manifestBytes,envelopeBytes,trustedPublicKeyPem,trustedKeySha256,minimumSequence}) {
   if (typeof trustedKeySha256 !== 'string' || !HEX.test(trustedKeySha256) ||
       !Number.isSafeInteger(minimumSequence) || minimumSequence < 1) fail('UNTRUSTED_POLICY')
@@ -39,6 +75,7 @@ export function verifyRelease({manifestBytes,envelopeBytes,trustedPublicKeyPem,t
       typeof manifest.release_id !== 'string' ||
       !/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(manifest.release_id) ||
       !Number.isSafeInteger(manifest.release_sequence) || manifest.release_sequence < 1) fail('INVALID_RELEASE')
+  validateManifestShape(manifest)
   if (manifest.release_sequence < minimumSequence) fail('ROLLBACK')
   const envelope=parseCanonical(envelopeBytes,'MALFORMED_SIGNATURE')
   if (!plain(envelope) || Object.keys(envelope).length !== 4 ||
