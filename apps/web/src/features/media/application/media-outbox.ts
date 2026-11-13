@@ -3,6 +3,7 @@ import { activeSession, requireSession, reauthenticate } from '../../identity/ap
 import { jsonApi, putCiphertext, readCiphertext } from '../../identity/infrastructure/api'
 import { importSigner, sign } from '../../identity/infrastructure/crypto'
 import { sha } from '../../local-storage/infrastructure/cipher'
+import { newSignedExpiry } from './retention-hint'
 import {
   encryptMediaFile,decryptMediaChunks,decryptMediaMetadataOnly,validateMediaContract,
 } from '../domain/media-crypto'
@@ -82,7 +83,9 @@ export async function enqueueEncryptedMedia(
   assertCurrent()
   const session=requireSession()
   const createdAt=Date.now()
-  const expiresAt=createdAt+13*86400000
+  // Authenticated, short-lived paid policy is an optional synchronous hint.
+  // Never await network here: the encrypted offline outbox comes first.
+  const expiresAt=newSignedExpiry(createdAt,session)
   const {contract,chunks}=await encryptMediaFile(
     file,session.pkg,expiresAt,()=>same(session),
     privateFields,capture?.startedAt??createdAt)
