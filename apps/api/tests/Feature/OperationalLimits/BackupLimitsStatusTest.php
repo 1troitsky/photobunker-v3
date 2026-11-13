@@ -202,5 +202,18 @@ final class BackupLimitsStatusTest extends TestCase
         $this->getJson('/backup/v1/limits')->assertOk()
             ->assertJsonPath('minimumStartIntervalSeconds', 3600)
             ->assertJsonPath('technicalGate', 'cooldown');
+
+        // Actual BackupAdmission casts config to int; a deployment string
+        // value must never produce a shorter GET deadline than real reserve.
+        config()->set('operational_limits.backup.minimum_start_interval_seconds', '7200');
+        $status = $this->getJson('/backup/v1/limits')->assertOk()
+            ->assertJsonPath('minimumStartIntervalSeconds', 7200)
+            ->assertJsonPath('technicalGate', 'cooldown')->json();
+        $this->assertGreaterThan(3600, $status['retryAfterSeconds']);
+        $this->assertLessThanOrEqual(7200, $status['retryAfterSeconds']);
+        $real = $admission->reserve($a, (string) Str::uuid());
+        $this->assertFalse($real->allowed);
+        $this->assertSame('backup.cooldown', $real->code);
+        $this->assertGreaterThan(3600, $real->retryAfter);
     }
 }
