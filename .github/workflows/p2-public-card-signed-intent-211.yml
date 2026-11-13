@@ -6,6 +6,7 @@ on:
       - "apps/api/app/PublicCard/**"
       - "apps/api/tests/Feature/PublicCardSignedPublicationIntentTest.php"
       - "apps/api/tests/Feature/PublicCardGrantLedgerTest.php"
+      - "apps/api/tests/Feature/PublicCardCurrentReadDenialGateTest.php"
       - "apps/api/tests/Feature/PublicCardSignedPreviewCeilingAuditTest.php"
       - "apps/api/tests/Feature/PublicCardSignedEditorialBindingAuditTest.php"
       - "apps/api/tests/Feature/PublicCardSignedContributorReceiptAuditTest.php"
@@ -31,6 +32,7 @@ on:
       - "apps/api/app/PublicCard/**"
       - "apps/api/tests/Feature/PublicCardSignedPublicationIntentTest.php"
       - "apps/api/tests/Feature/PublicCardGrantLedgerTest.php"
+      - "apps/api/tests/Feature/PublicCardCurrentReadDenialGateTest.php"
       - "apps/api/tests/Feature/PublicCardSignedPreviewCeilingAuditTest.php"
       - "apps/api/tests/Feature/PublicCardSignedEditorialBindingAuditTest.php"
       - "apps/api/tests/Feature/PublicCardSignedContributorReceiptAuditTest.php"
@@ -156,6 +158,7 @@ jobs:
           for test in \
             tests/Feature/PublicCardSignedPublicationIntentTest.php \
             tests/Feature/PublicCardGrantLedgerTest.php \
+            tests/Feature/PublicCardCurrentReadDenialGateTest.php \
             tests/Feature/PublicCardSignedPreviewCeilingAuditTest.php \
             tests/Feature/PublicCardSignedEditorialBindingAuditTest.php \
             tests/Feature/PublicCardSignedContributorReceiptAuditTest.php \
