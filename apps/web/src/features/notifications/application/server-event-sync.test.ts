@@ -127,6 +127,15 @@ describe('#198 trusted event replay → encrypted IndexedDB',()=>{
       '/notifications/v1/events/'+EVENT+'/target',
     )
   })
+  it('does not rewrite a server-authorized team invite as file access',async()=>{
+    const targetId='77777777-7777-4777-8777-777777777777'
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,kind:'team-invite',targetId,
+    })
+    await expect(resolveNotificationTarget(EVENT)).resolves.toEqual({
+      kind:'team-invite',targetId,
+    })
+  })
   it('rejects stale notification target after session switch',async()=>{
     mockApi.jsonApi.mockImplementationOnce(async()=>{
       activeSession.value={...session,deviceId:crypto.randomUUID()}
