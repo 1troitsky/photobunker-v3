@@ -9,4 +9,5 @@ if (!((PHP_VERSION_ID >= 80427 && PHP_VERSION_ID < 80500)
     fwrite(STDERR, "PB3 PHP security floor rejected: ".PHP_VERSION.PHP_EOL);
     exit(1);
 }
+require_once __DIR__ . '/../apps/api/app/Recovery/RestoreCiphertextReadback.php';
 require_once __DIR__ . '/../apps/api/app/Recovery/RestoreManifestPreflight.php';
