@@ -18,7 +18,9 @@ test('UX Appearance 1.3: Dock draft, cancel, save, device reload and protected S
     await expect(dock.getByRole('link')).toHaveCount(5)
     await expect(page.getByTestId('dock-remove-settings')).toHaveCount(0)
     await expect(page.getByTestId('dock-add-notifications')).toBeDisabled()
-    await expect(page.getByTestId('dock-add-messages')).toBeDisabled()
+    // #291: the approved Beta inbox now has a genuine /messages route.
+    // Allow opt-in, but do not imply any Matrix delivery/room feature.
+    await expect(page.getByTestId('dock-add-messages')).toBeEnabled()
 
     // Editing the actual Shell Dock previews immediately but is NOT persisted.
     await page.getByTestId('dock-remove-contacts').click()
