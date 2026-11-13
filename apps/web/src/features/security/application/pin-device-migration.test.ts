@@ -198,6 +198,26 @@ describe('P3 #220 actual Identity v2 local PIN envelope migration acceptance (UN
       .toBeDefined()
   },75_000)
 
+  it('refuses two concurrent migrations from the same legacy row without a second plaintext fallback',async()=>{
+    const f=await createDevice()
+    const first={
+      scope:f.scope,verifiedPackage:f.pkg,appPin:'1234',emergencyPin:'4321',
+    }
+    const outcomes=await Promise.allSettled([
+      migrateLegacyLocalDeviceToPin(first),
+      migrateLegacyLocalDeviceToPin(first),
+    ])
+    expect(outcomes.filter(x=>x.status==='fulfilled')).toHaveLength(1)
+    expect(outcomes.filter(x=>x.status==='rejected')).toHaveLength(1)
+    const row=await getDevice(f.scope.accountId,f.scope.deviceId)
+    expect((row!.envelope as unknown as {purpose:string}).purpose)
+      .toBe('preunlock-package')
+    await expect(openDevice(row!.envelope,row!.encryptionKey,
+      f.scope.accountId,f.scope.deviceId)).rejects.toThrow()
+    const protectedDevice=await readSealedPinDevice(f.scope)
+    expect(protectedDevice).not.toBeNull()
+  },95_000)
+
   it('without a verifier record, encrypted device still cannot produce an unlocked package',async()=>{
     const f=await createDevice()
     await migrateLegacyLocalDeviceToPin({
