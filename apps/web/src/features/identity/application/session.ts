@@ -35,6 +35,8 @@ export type PendingPinUnlock = Readonly<{
 }>
 export const pendingPinUnlock = shallowRef<PendingPinUnlock|null>(null)
 export const identityBootstrapReady = shallowRef(false)
+/** Fail closed if a saved Identity row is corrupt or mixed with a legacy copy. */
+export const identityBootstrapError = shallowRef<string|null>(null)
 
 export function requireSession(): Session {
   const state = activeSession.value
@@ -125,6 +127,7 @@ export async function finishRegistration(recoveryKey:string):Promise<Session> {
   await saveDevice(device)
   await dropPending(pending.operationId)
   await markSignedOut(device.accountId,device.deviceId,false)
+  identityBootstrapError.value=null
   identityBootstrapReady.value=true
   return activate(pkg,device,true)
 }
@@ -160,6 +163,7 @@ export async function restoreAccount(recoveryKey:string):Promise<Session> {
   if(previous && previous.deviceId!==device.deviceId)
     await markSignedOut(previous.accountId,previous.deviceId,true)
   pendingPinUnlock.value=null
+  identityBootstrapError.value=null
   identityBootstrapReady.value=true
   return activate(pkg,device,true)
 }
@@ -167,7 +171,11 @@ export async function restoreAccount(recoveryKey:string):Promise<Session> {
 let pendingSessionResume:Promise<Session|null>|null=null
 export function resumeExistingDevice():Promise<Session|null> {
   if (pendingSessionResume) return pendingSessionResume
-  pendingSessionResume=resumeLocalDevice().finally(()=>{
+  pendingSessionResume=resumeLocalDevice().catch(error=>{
+    identityBootstrapError.value=error instanceof Error?error.message:
+      'identity.storage_unavailable'
+    throw error
+  }).finally(()=>{
     pendingSessionResume=null
     identityBootstrapReady.value=true
   })
@@ -216,12 +224,13 @@ async function resumeLocalDevice():Promise<Session|null> {
       break
     }
   }
-  if(!saved){pendingPinUnlock.value=null;return null}
+  if(!saved){pendingPinUnlock.value=null;identityBootstrapError.value=null;return null}
   if(isSealedCandidate(saved)){
     if(devices.some(other=>other.deviceId!==saved.deviceId &&
       other.accountId===saved.accountId))
       throw new Error('identity.mixed_sealed_devices')
     pendingPinUnlock.value=pendingPinContext(saved)
+    identityBootstrapError.value=null
     return null
   }
   if(devices.some(other=>other.accountId===saved.accountId &&
@@ -287,6 +296,7 @@ async function unlockPinnedDeviceInternal(candidate:string):Promise<PinAttempt> 
     throw new Error('identity.pin_device_changed')
   // Keep sealed envelope: never generate/write a legacy device-only fallback.
   pendingPinUnlock.value=null
+  identityBootstrapError.value=null
   const local=activate(attempt.pkg,device,false)
   try{
     await prove('login',{
