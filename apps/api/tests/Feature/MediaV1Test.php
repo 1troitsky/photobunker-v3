@@ -372,6 +372,30 @@ final class MediaV1Test extends TestCase
             ->assertUnauthorized();
     }
 
+    public function test_unexpired_manual_media_tombstone_is_not_falsely_called_ttl_expiry():void
+    {
+        $f=$this->fixture('photo',1024);
+        $id=$f['contract']['mediaId'];
+        $this->postJson('/media/v1/reserve',[
+            'contract'=>$f['json'],'signature'=>$f['signature'],
+        ])->assertCreated();
+        foreach($f['contract']['chunks'] as $index=>$_)$this->send($f,$index)->assertOk();
+        $this->postJson('/media/v1/'.$id.'/finalize',[
+            'operationId'=>$f['contract']['operationId'],
+        ])->assertOk();
+        $this->assertTrue((int)DB::table('media_files_v1')
+            ->where('id',$id)->value('expires_at')>\App\Photo\PhotoSync::nowMs());
+        $lifecycle=app(MediaLifecycle::class);
+        $lifecycle->mark($id);
+        $this->assertDatabaseHas('media_files_v1',['id'=>$id,'state'=>'deleting']);
+        $this->assertDatabaseCount('media_expiry_notification_outbox_v1',0);
+        $this->assertSame(['published'=>0,'errors'=>0],
+            $lifecycle->publishExpiredNotices(10));
+        // Existing MediaCommitted becomes non-navigable after state change.
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(0,'items');
+    }
+
     public function test_gated_ttl_tombstones_survive_cleanup_and_resweep_late_s3_writes():void
     {
         $f=$this->fixture('audio',1024);
