@@ -175,6 +175,60 @@ final class RestoreManifestPreflight
         ];
     }
 
+    /**
+     * Integrate signed active-generation preflight with ACTUAL encrypted byte
+     * readback, before any downstream restore write is even considered.
+     *
+     * Provider must supply fresh streams at offset zero from the intended
+     * backup generation; it MUST NOT accept an untrusted asset-to-object mapping,
+     * follow redirects or re-resolve an unpinned remote host.
+     *
+     * @param callable(string):array{ciphertext:mixed,envelope:mixed} $openStreams
+     *        Called ONLY for entries freshly eligible under current policy.
+     *        Caller owns the streams and MUST close them in its provider.
+     * @return array<string,mixed> A read-only inspection report, NOT a grant.
+     */
+    public function inspectAndVerifyReadback(
+        string $manifestBytes,
+        string $signatureP1363,
+        string $trustedAccountSpki,
+        array $trustedGeneration,
+        array $currentAssets,
+        string $requesterAccountId,
+        int $now,
+        callable $openStreams,
+    ): array {
+        // IMPORTANT: do not accept a caller-supplied "approved" plan. This
+        // method always authenticates it from signed bytes + server state.
+        $result = $this->inspect(
+            $manifestBytes,
+            $signatureP1363,
+            $trustedAccountSpki,
+            $trustedGeneration,
+            $currentAssets,
+            $requesterAccountId,
+            $now,
+        );
+        $readback = new RestoreCiphertextReadback();
+        foreach ($result['eligible'] as $item) {
+            try {
+                $streams = $openStreams($item['assetId']);
+            } catch (\Throwable) {
+                $this->deny();
+            }
+            if (!is_array($streams) || array_is_list($streams)) {
+                $this->deny();
+            }
+            $keys = array_keys($streams);
+            sort($keys,SORT_STRING);
+            if ($keys !== ['ciphertext','envelope']) {
+                $this->deny();
+            }
+            $readback->verify($item,$streams['ciphertext'],$streams['envelope']);
+        }
+        return $result;
+    }
+
     private function verifyOwnerSignature(string $encodedSpki, string $encodedP1363, string $manifest): void
     {
         $spki = $this->decodeB64Url($encodedSpki, 70, 150);
