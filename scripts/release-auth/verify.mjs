@@ -36,11 +36,11 @@ function validateManifestShape(m) {
   if (typeof m.build_time !== 'string' || Number.isNaN(Date.parse(m.build_time)) ||
       new Date(m.build_time).toISOString() !== m.build_time) fail('INVALID_MANIFEST')
   if (typeof m.minimum_client_version !== 'string' ||
-      !/^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z.-]+)?$/.test(m.minimum_client_version)) fail('INVALID_MANIFEST')
+      !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?$/.test(m.minimum_client_version)) fail('INVALID_MANIFEST')
   if (!plain(m.feature_flags) || Object.entries(m.feature_flags).some(([name,value]) =>
       !/^[a-z][a-z0-9_.-]{0,63}$/.test(name) || typeof value !== 'boolean')) fail('INVALID_MANIFEST')
   const pathOk = path => typeof path === 'string' && path.length > 0 && path.length <= 1024 &&
-    !path.startsWith('/') && !path.includes('\\\\') && !/[\\u0000-\\u001f\\u007f%?#:]/.test(path) &&
+    !path.startsWith('/') && !path.includes('\\') && !/[\u0000-\u001f\u007f%?#:]/.test(path) &&
     path.split('/').every(s => s !== '' && s !== '.' && s !== '..' &&
       s.length <= 255 && s === s.normalize('NFC'))
   if (m.service_worker !== null && !pathOk(m.service_worker)) fail('INVALID_MANIFEST')
