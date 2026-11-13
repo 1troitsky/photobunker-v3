@@ -45,11 +45,20 @@ const formats:Record<RecordingKind,string[]>={
 }
 
 type Owner={accountId:string;pkg:PackageV2}
+// Emergency-delete acts on ALL accounts' local scratch (never remote media).
+// Stay locked in this JS realm until the page reloads. Cross-tab/device
+// coordination belongs to the verified Panic orchestrator, not this API.
+let scratchWipeLock=false
+function refuseDuringScratchWipe():void {
+  if(scratchWipeLock)throw Error('camera.recording_scratch_wiped')
+}
 function owner():Owner{
+  refuseDuringScratchWipe()
   const s=requireSession()
   return {accountId:s.accountId,pkg:s.pkg}
 }
 function assertOwner(s:Owner):void{
+  refuseDuringScratchWipe()
   const now=activeSession.value
   if(!now||now.accountId!==s.accountId
     ||now.pkg.accountId!==s.accountId
@@ -205,10 +214,13 @@ export async function listEncryptedRecordingDrafts():Promise<Array<{
  * Interrupted and active drafts are never materialized as a playable file
  * without an explicit future verified salvage flow. No OS gallery writes.
  */
-export async function readCompletedEncryptedRecording(id:string):Promise<Blob>{
+async function decryptLocallyReviewedRecording(
+  id:string,allowInterrupted:boolean,
+):Promise<Blob>{
   const s=owner()
   const row=await rowFor(s,id)
-  if(row.state!=='complete'||row.nextIndex<1)
+  if((row.state!=='complete'&&(!allowInterrupted||row.state!=='interrupted'))
+    ||row.nextIndex<1)
     throw Error('camera.recording_not_finalized')
   const pieces=await db.segments.where('recordingKey').equals(row.key).sortBy('index')
   assertOwner(s)
@@ -237,6 +249,19 @@ export async function readCompletedEncryptedRecording(id:string):Promise<Blob>{
     throw Error('camera.recording_size_mismatch')
   return new Blob(clearParts,{type:row.mime})
   }finally{for(const bytes of clearParts)bytes.fill(0)}
+}
+/** Complete recordings only: used for exact encrypted E2EE finalization. */
+export function readCompletedEncryptedRecording(id:string):Promise<Blob>{
+  return decryptLocallyReviewedRecording(id,false)
+}
+/**
+ * Only an explicit local user preview can decrypt interrupted fragments.
+ * The return value is volatile plaintext in memory; caller MUST revoke any
+ * object URL at logout/exit. Never authorize MediaFile signing/assignment
+ * submission from this function. Codec may require a missing final frame.
+ */
+export function readEncryptedRecordingForPrivateReview(id:string):Promise<Blob>{
+  return decryptLocallyReviewedRecording(id,true)
 }
 /**
  * Explicit bounded GC for expired scratch recordings. The server MediaFile
@@ -274,4 +299,25 @@ export async function deleteEncryptedRecordingDraft(id:string):Promise<void>{
     await db.recordings.delete(row.key)
     assertOwner(s)
   })
+}
+
+/**
+ * Fail-closed, no-identity-needed LOCAL erasure hook for a future verified
+ * Panic/Emergency/Remote-Wipe orchestrator. This method itself is never called
+ * by PIN success, Dead Man's Switch or any page load.
+ *
+ * Locks this tab against future recording writes, then clears ALL account
+ * scratch segments+records in one IndexedDB transaction. The higher-level
+ * orchestrator MUST stop capture, revoke other tabs/devices and verify DB
+ * deletion/remote actions separately before claiming successful Panic.
+ * A JS tab cannot guarantee deletion of persisted storage in a killed peer.
+ */
+export async function eraseAllEncryptedRecordingScratchForPanic():Promise<void>{
+  scratchWipeLock=true
+  await db.transaction('rw',db.recordings,db.segments,async()=>{
+    await db.segments.clear()
+    await db.recordings.clear()
+  })
+  if(await db.recordings.count()||await db.segments.count())
+    throw Error('camera.recording_scratch_wipe_unverified')
 }
