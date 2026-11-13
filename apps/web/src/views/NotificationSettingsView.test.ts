@@ -114,6 +114,25 @@ describe('Encrypted device-local notification display settings',()=>{
     expect(el('notification-settings-save').disabled).toBe(false)
     expect(mock.load).toHaveBeenCalledTimes(1)
   })
+  it('does not report a prior account save after identity changes mid-write',async()=>{
+    let finish:((value:undefined)=>void)|undefined
+    mock.save.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve}))
+    await mount()
+    const toggle=el('notification-setting-invitations')
+    toggle.checked=false
+    toggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    el('notification-settings-save').click()
+    await settle()
+    expect(mock.save).toHaveBeenCalledOnce()
+    activeSession.value=session('33333333-3333-4333-8333-333333333333')
+    await settle()
+    finish?.(undefined)
+    await settle()
+    expect(host.textContent).not.toContain('Сохранено в зашифрованном')
+    expect(el('notification-setting-invitations').checked).toBe(true)
+    expect(el('notification-settings-save').disabled).toBe(true)
+  })
   it('never applies encrypted preferences loaded for the previous account after switch',async()=>{
     let finish:((v:typeof defaults)=>void)|undefined
     mock.load.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
