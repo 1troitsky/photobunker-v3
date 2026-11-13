@@ -44,7 +44,7 @@ async function initialize():Promise<void>{
       error.value='Не удалось прочитать зашифрованные настройки уведомлений.'
   }finally{if(version===token)loading.value=false}
 }
-type CategoryFlag='invitations'|'deadlines'|'expiry'|'system'|'badges'
+type CategoryFlag='invitations'|'deadlines'|'expiry'|'system'|'badges'|'quietEnabled'
 function update(key:CategoryFlag,value:boolean):void{
   draft.value={...draft.value,[key]:value}
   error.value='';status.value=''
@@ -111,7 +111,7 @@ onMounted(()=>{void initialize()})
           <span><strong>Тихие часы</strong><small>Скрывать обычные индикаторы на этом устройстве, не скрывая уведомления</small></span>
           <input type="checkbox" :checked="draft.quietEnabled"
             data-testid="notification-setting-quiet-enabled" :disabled="saving"
-            @change="draft={...draft,quietEnabled:($event.target as HTMLInputElement).checked}">
+            @change="update('quietEnabled',($event.target as HTMLInputElement).checked)">
         </label>
         <div class="setting-option quiet-hours">
           <label>
