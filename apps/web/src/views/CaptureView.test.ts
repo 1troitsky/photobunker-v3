@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   draftCreate:vi.fn(),draftAppend:vi.fn(),draftSeal:vi.fn(),
   draftRead:vi.fn(),draftDelete:vi.fn(),draftInterrupt:vi.fn(),
   draftList:vi.fn(),draftPurge:vi.fn(),draftPrivateReview:vi.fn(),
+  draftRecover:vi.fn(),leaseAcquire:vi.fn(),
   requiredGps:false,
   privateCache: vi.fn(), verifyPolicy: vi.fn(), privateScope: vi.fn(),
   allowedMedia: ['photo'] as string[],
@@ -21,6 +22,9 @@ vi.mock('vue-router', () => ({
 }))
 vi.mock('../features/photo-sync/application/p1-photo', () => ({captureEncrypted: mocks.capture}))
 vi.mock('../features/media/application/media-outbox', () => ({enqueueEncryptedMedia: mocks.mediaEnqueue}))
+vi.mock('../features/media/application/recording-writer-lease',()=>({
+  acquireCameraWriterLease:mocks.leaseAcquire,
+}))
 vi.mock('../features/media/application/recording-encrypted-journal',()=>({
   createEncryptedRecordingDraft:mocks.draftCreate,
   appendEncryptedRecordingSegment:mocks.draftAppend,
@@ -31,6 +35,7 @@ vi.mock('../features/media/application/recording-encrypted-journal',()=>({
   listEncryptedRecordingDrafts:mocks.draftList,
   purgeExpiredEncryptedRecordingDrafts:mocks.draftPurge,
   readEncryptedRecordingForPrivateReview:mocks.draftPrivateReview,
+  recoverAbandonedEncryptedRecordingDraft:mocks.draftRecover,
 }))
 vi.mock('../features/assignments/application/assignment-outbox', () => ({
   listServerAssignments: mocks.server, listAllServerAssignments: mocks.server,
@@ -111,6 +116,8 @@ beforeEach(() => {
   mocks.draftList.mockResolvedValue([])
   mocks.draftPurge.mockResolvedValue(0)
   mocks.draftPrivateReview.mockResolvedValue(new Blob([new Uint8Array(201)],{type:'audio/webm'}))
+  mocks.draftRecover.mockResolvedValue(undefined)
+  mocks.leaseAcquire.mockResolvedValue(null)
   requests = []
   getUserMedia = vi.fn(() => {
     const request = deferred<MediaStream>(); requests.push(request); return request.promise
@@ -830,6 +837,39 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     expect(mocks.draftSeal).not.toHaveBeenCalled()
   })
 
+  it('retains origin-wide writer lease until valid native Stop is fully encrypted',async()=>{
+    const lease={accountId:'account-a',isHeld:()=>true,release:vi.fn()}
+    mocks.leaseAcquire.mockResolvedValueOnce(lease)
+    await openMode('audio')
+    expect(mocks.draftCreate).toHaveBeenCalledWith(
+      'audio','audio/webm',lease)
+    expect(lease.release).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click();await settle()
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+    expect(lease.release).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds origin-wide writer lock through interrupted ciphertext drain',async()=>{
+    const lease={accountId:'account-a',isHeld:()=>true,release:vi.fn()}
+    mocks.leaseAcquire.mockResolvedValueOnce(lease)
+    const opened=await openMode('audio')
+    opened.emitEnded()
+    await settle();await settle()
+    expect(mocks.draftInterrupt).toHaveBeenCalledTimes(1)
+    expect(lease.release).toHaveBeenCalledTimes(1)
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('refuses camera capture when another tab owns native recording lock',async()=>{
+    mocks.leaseAcquire.mockRejectedValueOnce(Error('camera.recording_writer_busy'))
+    const opened=await openMode('audio')
+    expect(host.textContent).toContain('camera.recording_writer_busy')
+    expect(mocks.draftCreate).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(opened.track.stop).not.toHaveBeenCalled()
+  })
+
   it('does not apply audio-only target setting to video recorder',async()=>{
     await openMode('video')
     expect(BoundedRecorder.latest!.options).toEqual({mimeType:'video/webm'})
@@ -1024,6 +1064,36 @@ describe('P2 #206 private encrypted recording recovery UI',()=>{
     expect(mocks.draftPurge).toHaveBeenNthCalledWith(3,25)
     expect(mocks.draftList).toHaveBeenCalledTimes(1)
     expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).toBeNull()
+  })
+
+  it('offers explicit abandoned check only for lease-backed writing drafts',async()=>{
+    const writing={...draft,state:'writing',recoveryAvailable:true}
+    mocks.draftList.mockResolvedValueOnce([writing]).mockResolvedValueOnce([
+      {...writing,state:'interrupted'},
+    ])
+    await mount();await settle()
+    expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).not.toBeNull()
+    expect(host.textContent).toContain('Возможна незавершённая запись')
+    expect([...host.querySelectorAll('button')].some(b=>
+      b.textContent?.trim()==='Просмотреть локально')).toBe(false)
+    expect([...host.querySelectorAll('button')].some(b=>
+      b.textContent?.trim()==='Удалить фрагменты')).toBe(false)
+    button('Проверить прерванную запись').click();await settle()
+    expect(mocks.draftRecover).toHaveBeenCalledWith(id)
+    expect(host.textContent).toContain('Прервана')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(mocks.draftPrivateReview).not.toHaveBeenCalled()
+  })
+
+  it('does not classify a live-other-tab writer as abandoned on BUSY Web Lock',async()=>{
+    mocks.draftList.mockResolvedValue([{...draft,state:'writing',recoveryAvailable:true}])
+    mocks.draftRecover.mockRejectedValueOnce(Error('camera.recording_writer_busy'))
+    await mount();await settle()
+    button('Проверить прерванную запись').click();await settle()
+    expect(host.textContent).toContain('camera.recording_writer_busy')
+    expect(host.textContent).toContain('Возможна незавершённая запись')
+    expect(mocks.draftPrivateReview).not.toHaveBeenCalled()
+    expect(mocks.draftDelete).not.toHaveBeenCalled()
   })
 
   it('never makes a writing draft eligible for review or confirmed deletion',async()=>{
