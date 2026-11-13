@@ -153,11 +153,6 @@ final class AssignmentV1Controller extends Controller
         C::policyAmendment($c,$actor->id,$assignmentId);
         $hash=hash('sha256',$r->json('contract'));
         return DB::transaction(function()use($c,$actor,$assignmentId,$r,$hash){
-            // Recipient account first: serialize their event stream before
-            // taking assignment lock; no publication after commit.
-            $recipientLock=DB::table('identity_accounts')
-                ->where('id',$c['recipientAccountId'])->lockForUpdate()->first();
-            abort_unless($recipientLock && $recipientLock->status==='ready',404);
             $a=DB::table('assignment_records_v1')
                 ->where('id',$assignmentId)->lockForUpdate()->first();
             abort_unless($a&&$a->owner_account_id===$actor->id,404);
@@ -924,6 +919,11 @@ final class AssignmentV1Controller extends Controller
         C::invite($c,$actor->id,$assignmentId);
         $hash=hash('sha256',$r->json('contract'));
         return DB::transaction(function()use($c,$actor,$assignmentId,$r,$hash){
+            // Recipient account first: serialize their event stream before
+            // taking assignment lock; no publication after commit.
+            $recipientLock=DB::table('identity_accounts')
+                ->where('id',$c['recipientAccountId'])->lockForUpdate()->first();
+            abort_unless($recipientLock && $recipientLock->status==='ready',404);
             $a=DB::table('assignment_records_v1')
                 ->where('id',$assignmentId)->lockForUpdate()->first();
             abort_unless($a&&$a->owner_account_id===$actor->id,404);
