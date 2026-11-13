@@ -6,7 +6,7 @@ import { listLocalNotifications, markNotificationRead } from './local-inbox'
 
 const mockApi=vi.hoisted(()=>({jsonApi:vi.fn()}))
 vi.mock('../../identity/infrastructure/api',()=>mockApi)
-import { syncServerNotifications } from './server-event-sync'
+import { syncServerNotifications, resolveNotificationTarget } from './server-event-sync'
 
 const EVENT='44444444-4444-4444-8444-444444444444'
 let session:Session
@@ -69,6 +69,33 @@ describe('#198 trusted event replay → encrypted IndexedDB',()=>{
     await expect(syncServerNotifications()).rejects.toThrow('notifications.session_changed')
     activeSession.value=session
     expect(await listLocalNotifications()).toEqual([])
+  })
+  it('resolves a target only through fresh server ACL and exact envelope',async()=>{
+    const targetId='55555555-5555-4555-8555-555555555555'
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,kind:'new-file',targetId,
+    })
+    await expect(resolveNotificationTarget(EVENT)).resolves
+      .toEqual({kind:'new-file',targetId})
+    expect(mockApi.jsonApi).toHaveBeenCalledWith(
+      '/notifications/v1/events/'+EVENT+'/target',
+    )
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,kind:'new-file',targetId,caption:'SECRET',
+    })
+    await expect(resolveNotificationTarget(EVENT)).rejects
+      .toThrow('notifications.invalid_target')
+    await expect(resolveNotificationTarget('invalid')).rejects
+      .toThrow('notifications.invalid_target')
+  })
+  it('rejects stale notification target after session switch',async()=>{
+    mockApi.jsonApi.mockImplementationOnce(async()=>{
+      activeSession.value={...session,deviceId:crypto.randomUUID()}
+      return {schemaVersion:1,kind:'new-file',
+        targetId:'55555555-5555-4555-8555-555555555555'}
+    })
+    await expect(resolveNotificationTarget(EVENT)).rejects
+      .toThrow('notifications.session_changed')
   })
   it('never tries network when session is offline',async()=>{
     activeSession.value={...session,online:false}
