@@ -63,3 +63,24 @@ Partial signed-manifest, account/TTL/ACL preflight under active development. Iss
 **NOT TESTED/BLOCKED:** independent producer #218, durable snapshot receipt, real A→B device enrollment, Recovery Key decrypt, strict cross-device key policy, real ciphertext bytes/readback, actual grants from DB, S3 restored object, lost ACK, Panic and tombstone classifications, native Safari/Android, real retention billing and dedup. Neither a properly signed manifest nor the module's output proves those conditions exist. No destructive operations.
 
 No main / merge / deploy / shared CI changes. Draft PR needs separate review and the full producer+restore integration before acceptance.
+
+## 2026-11-14 — Signed manifest to real encrypted stream readback (CHAT-C)
+
+Coordination: #302 START 6864973747; #219 exclusive CLAIM addendum 6864978953. No shared routes, Composer, StorageManager, other agents' files or main.
+
+**Exact code and test HEAD before audit commit: 76943f49b3d00774f8a83a2aa5a6f5151c685bfd.**
+
+- NEW apps/api/app/Recovery/RestoreCiphertextReadback.php: hashes ACTUAL binary ciphertext and encrypted key-envelope bytes incrementally with SHA-256; rejects wrong digest, truncated, appended, empty, unreadable or closed streams, mismatched ciphertext lengths, and envelopes larger than a provisional 65536-byte bound. Reads up to 65536 bytes per chunk, no writes/decrypt/network.
+- UPDATED own apps/api/app/Recovery/RestoreManifestPreflight.php: inspectAndVerifyReadback authenticates current P-256 owner-signed canonical manifest, independent pinned public key, active+verified generation receipt, exact digest and current ACL/TTL/tombstone policy BEFORE invoking a callback to open streams. Excluded assets are NEVER opened. No unsigned caller-supplied eligible-plan shortcut.
+- UPDATED own apps/api/tests/Feature/Recovery/RestoreManifestPreflightTest.php: 10 more tests with genuine P-256 signatures and actual binary memory streams, covering both correct files, unchanged-length tamper, truncation, trailing content, corrupt/empty/oversized key envelope, invalid/closed/wrong-offset resources, revoked/tombstoned/foreign/expired file not opened, no current grants, invalid signature/receipt before any open, provider failures and unsigned hash substitution.
+- UPDATED own scripts/p3-219-restore-preflight-bootstrap.php and .github/workflows/p3-219-restore-preflight.yml to load and lint the new class.
+
+**Exact-code-head CI:** [P3 GitHub Actions 43508569126](https://github.com/1troitsky/photobunker-v3/actions/runs/43508569126) **2/2 PASS**. PHP 8.4.27 job 132172516686: **29/29 PHPUnit / 1090 assertions PASS**; PHP 8.5.12 job 132172516112: **29/29 PHPUnit / 1090 assertions PASS**; all four PHP files syntax-clean. [Security 43508569054](https://github.com/1troitsky/photobunker-v3/actions/runs/43508569054) PASS, [UX 43508568715](https://github.com/1troitsky/photobunker-v3/actions/runs/43508568715) PASS. [Foundation 43508568965](https://github.com/1troitsky/photobunker-v3/actions/runs/43508568965) FAIL inherited Laravel Composer audit CVE-2026-128083 (#297 / Draft #298). [PG18/Garage 43508568918](https://github.com/1troitsky/photobunker-v3/actions/runs/43508568918) IN PROGRESS at observation; is not a real backup-restore acceptance test.
+
+**Limitations / NOT ACCEPTED:**
+1. Test streams contain real binary bytes, but there is NO actual #218 verified backup producer, durable independently authenticated S3 snapshot or integrated object-store stream provider. The openStreams callback must map account/generation/asset to trusted immutable ciphertext object IDs; preserve TLS peer, no redirects, retry limits, and return a fresh stream positioned at zero. Provider owns streams and closes them.
+2. Hash-consistent ciphertext does NOT prove E2EE envelope decryptability, device authorization, Recovery Key possession, or correct restored MediaFile. No Recovery Key / DEK / local decrypted index and no network or object-store access here.
+3. Owner/account authorization, effective TTL, tombstones, grants, key epoch, quota and trusted generation must be revalidated at future RESTORE COMMIT, after potentially slow downloads. No S3 write, persistence, atomic generation switching, backup GC, lost ACK, destructive operation or Panic handling.
+4. V1 manifest layout and 64KiB envelope bound require #218 compatibility and independent security review. Native Safari/Android and real A-to-B Recovery Key recovery NOT TESTED.
+
+**Verdict:** isolated signed-candidate-to-real-ciphertext/envelope binary integrity check PASS. Full #219 Recovery Vault restore remains IN PROGRESS/BLOCKED. No main modifications or merge/deploy.
