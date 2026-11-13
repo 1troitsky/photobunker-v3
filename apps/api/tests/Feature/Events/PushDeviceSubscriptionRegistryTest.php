@@ -99,6 +99,47 @@ final class PushDeviceSubscriptionRegistryTest extends TestCase
         self::assertTrue($this->registry->eligible($this->alice,$this->deviceA));
     }
 
+    public function test_exact_subscription_retry_does_not_rotate_generation_or_ciphertext(): void
+    {
+        $sub=$this->subscription();
+        $first=$this->registry->put($this->alice,$this->deviceA,$sub);
+        $ciphertext=DB::table('notification_push_subscriptions_v1')
+            ->where('device_id',$this->deviceA)->value('subscription_ciphertext');
+        self::assertSame(['registered'=>true,'generation'=>1],$first);
+        self::assertSame($first,$this->registry->put($this->alice,$this->deviceA,$sub));
+        self::assertSame($ciphertext,DB::table('notification_push_subscriptions_v1')
+            ->where('device_id',$this->deviceA)->value('subscription_ciphertext'));
+        // Endpoint unchanged, but actual auth secret differs.
+        $changed=[...$sub,'auth'=>rtrim(strtr(base64_encode(str_repeat('t',16)),'+/','-_'),'=')];
+        self::assertSame(2,$this->registry->put($this->alice,$this->deviceA,$changed)['generation']);
+        self::assertSame(2,$this->registry->put($this->alice,$this->deviceA,$changed)['generation']);
+    }
+
+    public function test_only_a_proven_revoked_device_can_have_subscription_secret_purged(): void
+    {
+        $this->registry->put($this->alice,$this->deviceA,$this->subscription());
+        try {
+            $this->registry->purgeRevoked($this->alice,$this->deviceA);
+            self::fail('Active device push secrets purged by revoke-only operation');
+        } catch (InvalidArgumentException $e) {
+            self::assertSame('notifications.push.not_revoked',$e->getMessage());
+        }
+        DB::table('identity_devices')->where('id',$this->deviceA)
+            ->update(['revoked_at'=>now()]);
+        self::assertFalse($this->registry->eligible($this->alice,$this->deviceA));
+        try {
+            $this->registry->purgeRevoked($this->bob,$this->deviceA);
+            self::fail('Other account could purge another device');
+        } catch (InvalidArgumentException $e) {
+            self::assertSame('notifications.push.not_revoked',$e->getMessage());
+        }
+        self::assertTrue($this->registry->purgeRevoked($this->alice,$this->deviceA));
+        self::assertFalse($this->registry->purgeRevoked($this->alice,$this->deviceA));
+        self::assertDatabaseMissing('notification_push_subscriptions_v1',[
+            'device_id'=>$this->deviceA,
+        ]);
+    }
+
     public function test_cross_account_device_claim_and_endpoint_replay_fail_closed(): void
     {
         $sub=$this->subscription();
