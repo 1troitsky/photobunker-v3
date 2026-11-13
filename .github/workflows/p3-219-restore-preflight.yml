@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/p3-219-restore-preflight.yml'
       - 'apps/api/app/Recovery/RestoreManifestPreflight.php'
+      - 'apps/api/app/Recovery/RestoreCiphertextReadback.php'
       - 'apps/api/tests/Feature/Recovery/RestoreManifestPreflightTest.php'
       - 'scripts/p3-219-restore-preflight-bootstrap.php'
       - 'docs/audits/P3-RECOVERY-VAULT-219-PREFLIGHT-20261114.md'
@@ -32,6 +33,7 @@ jobs:
       - name: Verify PHP security floor and lint own files
         run: |
           php -l apps/api/app/Recovery/RestoreManifestPreflight.php
+          php -l apps/api/app/Recovery/RestoreCiphertextReadback.php
           php -l apps/api/tests/Feature/Recovery/RestoreManifestPreflightTest.php
           php -l scripts/p3-219-restore-preflight-bootstrap.php
       - name: Run real detached P-256 signed recovery-manifest and retention negatives
