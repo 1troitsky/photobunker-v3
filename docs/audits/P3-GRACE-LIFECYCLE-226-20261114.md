@@ -36,7 +36,7 @@ These tests exercise Laravel session, real DB tables and production code; **sett
 
 ## Safety boundaries / remaining acceptance
 
-**No** new payment/DePay activation (#225), operator MFA (#227), physical deletion/grace GC (#203/#193), account suspension/frozen policy, billing UX, S3 fault-injection, actual time-elapsed mobile tests or production credentials. No routes, migrations, config/plans.php, Photo/Media/StorageManager/Camera, frontend, or shared TS_PROGRESS_TABLE modifications. Full #226 remains **IN PROGRESS / PARTIAL**. In particular, this is a server read-only lifecycle slice, **not** completed renewal/downgrade/GC acceptance.
+**No** new payment/DePay activation (#225), operator MFA (#227), physical deletion/grace GC (#203/#193), account suspension/frozen policy, full payments/renewal/history UI, S3 fault-injection, actual time-elapsed mobile tests or production credentials. No routes, migrations, config/plans.php, Photo/Media/StorageManager/Camera, or shared TS_PROGRESS_TABLE modifications. The only new frontend is an explicitly read-only grace status panel in the existing Settings screen; no paid mutation, price or quota constants are introduced. Full #226 remains **IN PROGRESS / PARTIAL**. In particular, this is a server read-only lifecycle slice, **not** completed renewal/downgrade/GC acceptance.
 
 ## Exact-head evidence · 2026-11-14 Asia/Tbilisi
 
@@ -50,3 +50,24 @@ These tests exercise Laravel session, real DB tables and production code; **sett
 - Assistant's local PHP 8.4.24 is below mandatory 8.4.27; **not** treated as production acceptance.
 
 **Result: PARTIAL / IN PROGRESS** for #226. This is a verified server read-only grace lifecycle projection, **not** approval of paid renewal, actual payment settlement, frozen/suspended account, physical deletion/grace GC, comprehensive Garage fault handling or native-device acceptance. No merge, deploy or destructive action.
+
+
+## Stage 2 — authenticated Settings grace readout, 2026-11-14
+
+**Own CLAIM addendum:** [#226 comment 6867185851](https://github.com/1troitsky/photobunker-v3/issues/226#issuecomment-6867185851). This is a further PARTIAL vertical slice of the same Issue/branch/Draft, not a new Issue, new PR or foreign-code change.
+
+**New exclusive paths**:
+- `apps/web/src/features/billing/application/grace-client.ts` + `grace-client.test.ts`
+- `apps/web/src/features/billing/ui/GraceStatusPanel.vue` + `GraceStatusPanel.test.ts`
+- NARROW modification `apps/web/src/views/AccountView.vue` (only import and render panel when a local identity session exists).
+- Updates to this OWN QA report, and PR/Issue comments. All earlier own code/CI files remain unchanged.
+
+**Runtime behavior:** The Account Settings screen now shows a small read-only **Тариф и сроки** panel. It requests only `GET /billing/v1/me` using the existing same-origin session cookies. It displays server plan, status (Free/active/grace/expired/pending), UTC deadline and last server timestamp only when the server has supplied a self-consistent `entitlement` and `lifecycle` pair. Client checks both authenticated server structures' schema, revision, hash marker, status, UTC dates, grace bounds, rights, effective Free fallback and exact deadline arithmetic. These checks are **defensive consistency, not a digital signature or a substitute for the Laravel session**. UI never sends a client-selected plan, account ID, price or expiry, and never caches/persists tariff status. Offline identity, network/auth error, logout, account/device change and late async HTTP responses must not display stale paid rights. Refresh is explicit. On grace and expiry, UI explains that new writes use current Free limits while previously signed assets obey their own immutable TTL plus ACL; the view cannot itself grant or erase media.
+
+**New frontend tests:** real Vue component mounts plus client/parser tests cover server Free/active/grace/expired states, malformed dates, forged paid privileges, wrong revision/plan, inconsistent expired clocks, cross-account and device races, logout/offline, stale HTTP, transient error, refresh and local absence of payment deadlines. No synthetic local payment activation is treated as verified merchant settlement.
+
+**Prior failing CI preserved, not suppressed:** earlier incremental code SHAs `c8bd7593`, `14db044f`, `fb4e4cdf`, `c102466a` exposed TypeScript Vitest tuple callback typing failure at `grace-client.test.ts:109`. The only correction was to accept the complete `it.each` row signature in its own new test, no test assertion removed or weakened. No backend errors were identified in those runs.
+
+**Stage 2 verified code SHA:** `1fb4e4c65ace6670f2aa0cd0f75c639feb46c446`. [Scoped GHA 43525180055](https://github.com/1troitsky/photobunker-v3/actions/runs/43525180055) and [43525186674](https://github.com/1troitsky/photobunker-v3/actions/runs/43525186674): BOTH **4/4 jobs PASS** on that exact SHA. PHP 8.4 and 8.5 full PHPUnit **252/252 each, 3782 assertions each**, locked Composer Audit PASS; genuine PG18 **7/7**, 121 assertions; TypeScript/build and frontend **481/481 Vitest (85 files) PASS**. [P0 Security 43525186551](https://github.com/1troitsky/photobunker-v3/actions/runs/43525186551) PASS and [UX 43525186485](https://github.com/1troitsky/photobunker-v3/actions/runs/43525186485) PASS on the same code HEAD.
+
+**NOT TESTED ON THIS BRANCH:** production payment finality, actual elapsed wall clock settlement/grace, full PostgreSQL/Garage/Chromium browser vertical, physical iOS/Android, account suspend/frozen enforcement, destructive GC or expiry-to-deletion. Vue mounted unit tests do **not** replace physical/mobile acceptance. Existing P0 Foundation and Storage workflows do not trigger for the security-base P3 PR, so the OWN scoped CI verifies PHP, PG18 and web; it does not prove real Garage/Chromium for this new readout. Original #226 remains **IN PROGRESS / PARTIAL**, do not mark full user lifecycle or paid checkout accepted.
