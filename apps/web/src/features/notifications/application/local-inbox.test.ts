@@ -6,7 +6,7 @@ import { b64, random, freshPackage, digest, hex } from '../../identity/infrastru
 import {
   localUnreadCount, listLocalNotifications, markAllLocalNotificationsRead,
   markNotificationRead, previewNotification, recordLocalNotification,
-  readNotificationPreferences, saveNotificationPreferences, notificationIsVisible,
+  readNotificationPreferences, saveNotificationPreferences, notificationIsVisible, notificationBadgeVisible,
   defaultNotificationPreferences,
   type LocalNotificationInput,
 } from './local-inbox'
@@ -63,6 +63,39 @@ describe('PB3 encrypted Local-First notifications',()=>{
     activeSession.value=alice
     expect(await readNotificationPreferences()).toEqual(preferences)
     expect(bob.accountId).not.toBe(alice.accountId)
+  })
+  it('quiet hours cover midnight and boundaries without suppressing security indicators',async()=>{
+    const settings={...defaultNotificationPreferences,
+      quietEnabled:true,quietStart:22*60,quietEnd:8*60}
+    const at=(hour:number,minute=0):Date=>{
+      const date=new Date(2026,10,13,hour,minute)
+      return date
+    }
+    expect(notificationBadgeVisible('new-file',settings,at(21,59))).toBe(true)
+    expect(notificationBadgeVisible('new-file',settings,at(22))).toBe(false)
+    expect(notificationBadgeVisible('new-file',settings,at(0))).toBe(false)
+    expect(notificationBadgeVisible('team-invite',settings,at(7,59))).toBe(false)
+    expect(notificationBadgeVisible('team-invite',settings,at(8))).toBe(true)
+    expect(notificationBadgeVisible('security',settings,at(23))).toBe(true)
+    expect(notificationIsVisible('team-invite',settings)).toBe(true)
+    expect(notificationBadgeVisible('new-file',
+      {...settings,quietEnabled:false},at(23))).toBe(true)
+    expect(notificationBadgeVisible('security',
+      {...settings,badges:false},at(23))).toBe(true)
+  })
+  it('rejects zero duration, invalid minutes and untrusted quiet hour fields',async()=>{
+    await session()
+    for(const value of [
+      {...defaultNotificationPreferences,quietStart:1440},
+      {...defaultNotificationPreferences,quietEnd:-1},
+      {...defaultNotificationPreferences,quietStart:480,quietEnd:480},
+      {...defaultNotificationPreferences,quietEnabled:'true'},
+      {...defaultNotificationPreferences,quietTimeZone:'private'},
+    ]){
+      await expect(saveNotificationPreferences(
+        value as unknown as typeof defaultNotificationPreferences,
+      )).rejects.toThrow('notifications.invalid_preferences')
+    }
   })
   it('rejects invalid preference shape and tampered ciphertext without applying it',async()=>{
     await session()
