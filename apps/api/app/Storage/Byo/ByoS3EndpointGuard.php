@@ -30,6 +30,51 @@ final class ByoS3EndpointGuard
         array $resolvedAddresses,
         array $allowedPorts = [443],
     ): ByoS3Pin {
+        $validated = $this->parseOrigin($endpoint, $allowedPorts);
+        $host = $validated['hostname'];
+        $port = $validated['port'];
+
+        if (
+            !array_is_list($resolvedAddresses)
+            || count($resolvedAddresses) < 1
+            || count($resolvedAddresses) > self::MAX_DNS_ADDRESSES
+        ) {
+            throw new \DomainException('storage.byo_dns_unsafe');
+        }
+
+        $approved = [];
+        foreach ($resolvedAddresses as $address) {
+            if (!is_string($address) || !$this->isPublicGlobalIp($address)) {
+                // All records must be public; a mixed public/private RR set fails.
+                throw new \DomainException('storage.byo_dns_unsafe');
+            }
+            $binary = inet_pton($address);
+            if ($binary === false) {
+                throw new \DomainException('storage.byo_dns_unsafe');
+            }
+            $canonical = inet_ntop($binary);
+            if (!in_array($canonical, $approved, true)) {
+                $approved[] = $canonical;
+            }
+        }
+
+        return new ByoS3Pin(
+            'https://' . $host . ($port === 443 ? '' : ':' . $port),
+            $host,
+            $port,
+            $approved,
+        );
+    }
+
+    /**
+     * Validate the origin BEFORE any DNS I/O to avoid querying attacker-supplied
+     * local/invalid hostnames. Server policy owns the allowed port list.
+     *
+     * @param non-empty-list<int> $allowedPorts
+     * @return array{hostname: string, port: int}
+     */
+    public function parseOrigin(string $endpoint, array $allowedPorts = [443]): array
+    {
         if (
             $endpoint === ''
             || strlen($endpoint) > self::MAX_ENDPOINT_BYTES
@@ -70,36 +115,7 @@ final class ByoS3EndpointGuard
             throw new \DomainException('storage.byo_port_denied');
         }
 
-        if (
-            !array_is_list($resolvedAddresses)
-            || count($resolvedAddresses) < 1
-            || count($resolvedAddresses) > self::MAX_DNS_ADDRESSES
-        ) {
-            throw new \DomainException('storage.byo_dns_unsafe');
-        }
-
-        $approved = [];
-        foreach ($resolvedAddresses as $address) {
-            if (!is_string($address) || !$this->isPublicGlobalIp($address)) {
-                // All records must be public; a mixed public/private RR set fails.
-                throw new \DomainException('storage.byo_dns_unsafe');
-            }
-            $binary = inet_pton($address);
-            if ($binary === false) {
-                throw new \DomainException('storage.byo_dns_unsafe');
-            }
-            $canonical = inet_ntop($binary);
-            if (!in_array($canonical, $approved, true)) {
-                $approved[] = $canonical;
-            }
-        }
-
-        return new ByoS3Pin(
-            'https://' . $host . ($port === 443 ? '' : ':' . $port),
-            $host,
-            $port,
-            $approved,
-        );
+        return ['hostname' => $host, 'port' => $port];
     }
 
     private function validPublicHostname(string $host): bool
