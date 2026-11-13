@@ -74,8 +74,13 @@ describe('PB3 encrypted Local-First notifications',()=>{
     await saveNotificationPreferences(original)
     const raw=new Dexie('pb3-encrypted-notifications-v1')
     raw.version(2).stores({rows:'&key,ownerScope',preferences:'&key'})
-    const stored=await raw.table('preferences').toArray()
-    const row=stored[0]!
+    // The shared fake IndexedDB contains rows from earlier test accounts.
+    // Corrupt THIS authenticated account, never an arbitrary first record.
+    const scopedKey=hex(await digest(new TextEncoder().encode(
+      'pb3.notification-index.v1\\n'+ownerId,
+    )))
+    const row=await raw.table('preferences').get(scopedKey)
+    expect(row).toBeDefined()
     await raw.table('preferences').put({...row,iv:b64(random(12))})
     await expect(readNotificationPreferences())
       .rejects.toThrow('notifications.encrypted_preferences_unreadable')
