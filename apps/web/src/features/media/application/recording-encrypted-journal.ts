@@ -238,6 +238,33 @@ export async function readCompletedEncryptedRecording(id:string):Promise<Blob>{
   return new Blob(clearParts,{type:row.mime})
   }finally{for(const bytes of clearParts)bytes.fill(0)}
 }
+/**
+ * Explicit bounded GC for expired scratch recordings. The server MediaFile
+ * retention/GC policy is separate and is never touched by this operation.
+ * Only delete rows of the CURRENT account; never purge another identity.
+ */
+export async function purgeExpiredEncryptedRecordingDrafts(limit=25):Promise<number>{
+  if(!Number.isSafeInteger(limit)||limit<1||limit>25)
+    throw Error('camera.recording_gc_limit_invalid')
+  const s=owner(),now=Date.now()
+  const expired=await db.recordings.where('accountId').equals(s.accountId)
+    .filter(row=>row.expiresAt<=now).limit(limit).toArray()
+  assertOwner(s)
+  let removed=0
+  for(const row of expired){
+    await db.transaction('rw',db.recordings,db.segments,async()=>{
+      assertOwner(s)
+      const current=await db.recordings.get(row.key)
+      if(!current||current.accountId!==s.accountId||current.expiresAt>now)
+        return
+      await db.segments.where('recordingKey').equals(row.key).delete()
+      await db.recordings.delete(row.key)
+      assertOwner(s)
+      removed++
+    })
+  }
+  return removed
+}
 export async function deleteEncryptedRecordingDraft(id:string):Promise<void>{
   const s=owner()
   const row=await rowFor(s,id)
