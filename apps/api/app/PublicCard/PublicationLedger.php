@@ -35,7 +35,6 @@ final class PublicationLedger
             if ($existing !== null) {
                 abort_unless($existing->kind === 'stage'
                     && hash_equals($existing->signed_json, $json)
-                    && hash_equals($existing->owner_signature, $signature)
                     && $existing->account_id === $intent['accountId']
                     && $existing->safe_media_id === $intent['safeMediaId'], 409);
                 $head = DB::table('public_card_intent_heads_v1')
@@ -124,7 +123,7 @@ final class PublicationLedger
                     && $existing->account_id === $c['accountId']
                     && $existing->safe_media_id === $c['safeMediaId']
                     && hash_equals($existing->signed_json, $json)
-                    && hash_equals($existing->owner_signature, $signature), 409);
+, 409);
                 $head = DB::table('public_card_intent_heads_v1')
                     ->where('safe_media_id', $c['safeMediaId'])->first();
                 abort_unless($head !== null, 409);
