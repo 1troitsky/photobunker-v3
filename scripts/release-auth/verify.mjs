@@ -62,9 +62,19 @@ function validateManifestShape(m) {
   if (workerCount !== (m.service_worker === null ? 0 : 1)) fail('INVALID_MANIFEST')
 }
 
-export function verifyRelease({manifestBytes,envelopeBytes,trustedPublicKeyPem,trustedKeySha256,minimumSequence}) {
+export function verifyRelease({manifestBytes,envelopeBytes,trustedPublicKeyPem,trustedKeySha256,minimumSequence,trustedCheckpoint}) {
   if (typeof trustedKeySha256 !== 'string' || !HEX.test(trustedKeySha256) ||
       !Number.isSafeInteger(minimumSequence) || minimumSequence < 1) fail('UNTRUSTED_POLICY')
+  // Optional out-of-origin trusted release checkpoint: prevent equivocation at the same sequence.
+  // This value MUST NOT be derived from the candidate origin or unprotected local browser state.
+  if (trustedCheckpoint !== undefined &&
+      (!plain(trustedCheckpoint) || Object.keys(trustedCheckpoint).length !== 2 ||
+       !Object.hasOwn(trustedCheckpoint,'releaseSequence') ||
+       !Object.hasOwn(trustedCheckpoint,'manifestSha256') ||
+       !Number.isSafeInteger(trustedCheckpoint.releaseSequence) ||
+       trustedCheckpoint.releaseSequence < 1 ||
+       typeof trustedCheckpoint.manifestSha256 !== 'string' ||
+       !HEX.test(trustedCheckpoint.manifestSha256))) fail('UNTRUSTED_CHECKPOINT')
   let key
   try { key=createPublicKey(trustedPublicKeyPem) } catch { fail('INVALID_TRUSTED_KEY') }
   if (key.asymmetricKeyType !== 'ed25519') fail('INVALID_TRUSTED_KEY')
@@ -87,24 +97,39 @@ export function verifyRelease({manifestBytes,envelopeBytes,trustedPublicKeyPem,t
   const sig=Buffer.from(envelope.signature,'base64url')
   if (sig.length !== 64 || sig.toString('base64url') !== envelope.signature) fail('MALFORMED_SIGNATURE')
   if (!edVerify(null,manifestBytes,key,sig)) fail('BAD_SIGNATURE')
+  if (trustedCheckpoint !== undefined) {
+    if (manifest.release_sequence < trustedCheckpoint.releaseSequence) fail('ROLLBACK')
+    if (manifest.release_sequence === trustedCheckpoint.releaseSequence &&
+        envelope.manifest_sha256 !== trustedCheckpoint.manifestSha256)
+      fail('RELEASE_EQUIVOCATION')
+  }
   return Object.freeze({status:'VERIFIED_WITH_PROVIDED_ANCHOR',releaseId:manifest.release_id,
     releaseSequence:manifest.release_sequence,manifestSha256:envelope.manifest_sha256,trustedKeySha256:fingerprint})
 }
 async function cli() {
   const args=process.argv.slice(2)
-  if (args[0] !== 'verify' || args.length !== 11) fail('USAGE')
+  if (args[0] !== 'verify' || (args.length !== 11 && args.length !== 15)) fail('USAGE')
   const fields=new Map()
   for(let i=1;i<args.length;i+=2) {
-    if(!['--manifest','--signature','--trusted-key','--trusted-key-sha256','--minimum-sequence'].includes(args[i]) || fields.has(args[i])) fail('USAGE')
+    if(!['--manifest','--signature','--trusted-key','--trusted-key-sha256','--minimum-sequence','--trusted-checkpoint-sequence','--trusted-checkpoint-sha256'].includes(args[i]) || fields.has(args[i])) fail('USAGE')
     fields.set(args[i],args[i+1])
   }
-  if(fields.size !== 5 || !/^[1-9][0-9]*$/.test(fields.get('--minimum-sequence')??'')) fail('USAGE')
+  const hasCheckpointSeq=fields.has('--trusted-checkpoint-sequence')
+  const hasCheckpointHash=fields.has('--trusted-checkpoint-sha256')
+  if (fields.size !== (hasCheckpointSeq ? 7 : 5) || hasCheckpointSeq !== hasCheckpointHash ||
+      !/^[1-9][0-9]*$/.test(fields.get('--minimum-sequence')??'') ||
+      (hasCheckpointSeq && !/^[1-9][0-9]*$/.test(fields.get('--trusted-checkpoint-sequence')??'')))
+    fail('USAGE')
   const result=verifyRelease({
     manifestBytes:await readFile(fields.get('--manifest')),
     envelopeBytes:await readFile(fields.get('--signature')),
     trustedPublicKeyPem:await readFile(fields.get('--trusted-key'),'utf8'),
     trustedKeySha256:fields.get('--trusted-key-sha256'),
-    minimumSequence:Number(fields.get('--minimum-sequence'))})
+    minimumSequence:Number(fields.get('--minimum-sequence')),
+    trustedCheckpoint:hasCheckpointSeq ? {
+      releaseSequence:Number(fields.get('--trusted-checkpoint-sequence')),
+      manifestSha256:fields.get('--trusted-checkpoint-sha256'),
+    } : undefined})
   process.stdout.write(`${JSON.stringify(result)}\n`)
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
