@@ -164,6 +164,22 @@ final class IdentityController extends Controller
                     'status'=>'ready','updated_at'=>now(),
                 ]);
                 $this->insertDevice($account->id,$p['deviceId'],$p['deviceSpki']);
+                // The first registration proof is the sole source of this
+                // event. The challenge is consumed in the SAME transaction;
+                // replay/login/recovery do not create another AccountCreated.
+                $created=[
+                    'schemaVersion'=>1,
+                    'eventId'=>(string) Str::uuid(),
+                    'eventType'=>'AccountCreated',
+                    'accountId'=>(string)$account->id,
+                    'subjectType'=>'account',
+                    'subjectId'=>(string)$account->id,
+                    'occurredAtMs'=>now()->getTimestampMs(),
+                    'revision'=>1,
+                ];
+                abort_unless((new EventConsumer(new DatabaseEventInboxLedger()))
+                    ->ingest($created,(string)$account->id)===EventAdmission::Accepted,
+                    503,'identity.registration_event_unavailable');
             } elseif (in_array($purpose,['recover','pair-enroll'],true)) {
                 $sameDevice=$device && $device->account_id===$account->id
                     && hash_equals($device->signing_spki,$p['deviceSpki']) && !$device->revoked_at;
