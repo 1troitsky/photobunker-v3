@@ -187,3 +187,29 @@ test('CLI accepts externally provided matching checkpoint and rejects re-signed 
     assert.match(bad.stderr,/RELEASE_EQUIVOCATION/)
   } finally {await rm(dir,{recursive:true,force:true})}
 })
+
+test('CLI refuses missing checkpoint digest rather than silently disabling equivocation guard',async()=>{
+  const {mkdtemp,writeFile,rm}=await import('node:fs/promises')
+  const {tmpdir}=await import('node:os')
+  const {join}=await import('node:path')
+  const {fileURLToPath}=await import('node:url')
+  const {spawnSync}=await import('node:child_process')
+  const dir=await mkdtemp(join(tmpdir(),'pb3-release-auth-checkpoint-incomplete-'))
+  try {
+    const s=fixture()
+    const manifest=join(dir,'manifest.json'),signature=join(dir,'signature.json'),key=join(dir,'trusted.pem')
+    await Promise.all([writeFile(manifest,s.manifestBytes),writeFile(signature,s.envelopeBytes),writeFile(key,s.trustedPublicKeyPem)])
+    const script=fileURLToPath(new URL('./verify.mjs',import.meta.url))
+    const args=['verify','--manifest',manifest,'--signature',signature,'--trusted-key',key,
+      '--trusted-key-sha256',s.trustedKeySha256,'--minimum-sequence','12',
+      '--trusted-checkpoint-sequence','12']
+    const rejected=spawnSync(process.execPath,[script,...args],{encoding:'utf8',timeout:10000})
+    assert.equal(rejected.status,1)
+    assert.match(rejected.stderr,/RELEASE_AUTH_REJECTED: USAGE/)
+  } finally {await rm(dir,{recursive:true,force:true})}
+})
+test('externally trusted checkpoint rejects unequal sequence with invalid hash even if signature is valid',()=>{
+  const s=fixture(13)
+  s.trustedCheckpoint={releaseSequence:12,manifestSha256:'not-a-digest'}
+  rejects(s,'UNTRUSTED_CHECKPOINT')
+})
