@@ -330,13 +330,21 @@ export async function markNotificationRead(id:string,at=Date.now()):Promise<Loca
     return {...event,readAt:Math.max(event.occurredAt,at)}
   })
 }
-export async function markAllLocalNotificationsRead(at=Date.now()):Promise<number>{
+export async function markAllLocalNotificationsRead(
+  at=Date.now(),onlyIds?:readonly string[],
+):Promise<number>{
   if(!Number.isSafeInteger(at)||at<0)throw Error('notifications.invalid_read')
+  // Display filters must not silently read hidden events. The optional
+  // snapshot is selected by the UI; the original all-items API is preserved.
+  if(onlyIds && (onlyIds.length>MAX_ROWS||onlyIds.some(id=>!UUID.test(id))))
+    throw Error('notifications.invalid_read')
+  const allowed=onlyIds?new Set(onlyIds):null
   const session=requireSession()
   const events=await listLocalNotifications({unreadOnly:true})
   let changed=0
   for(const event of events){
     sameIdentity(session)
+    if(allowed&&!allowed.has(event.id))continue
     const result=await markNotificationRead(event.id,at)
     if(result&&result.readAt!==null)changed++
   }
