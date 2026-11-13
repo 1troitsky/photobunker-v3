@@ -3,7 +3,8 @@ import {beforeEach,describe,expect,it,vi} from 'vitest'
 import {
   activeSession,beginRegistration,identityBootstrapError,
   identityBootstrapReady,pendingPinUnlock,restoreAccount,
-  resumeExistingDevice,unlockPinnedDevice,
+  resumeExistingDevice,unlockPinnedDevice,refreshPinSessionFence,
+  signPhotoContract,
 } from './session'
 import {
   b64,canonical,createPB2,digest,freshPackage,hex,random,
@@ -14,6 +15,8 @@ import {
   openIdentityDB,saveDevice,
 } from '../infrastructure/storage'
 import {migrateLegacyLocalDeviceToPin} from '../../security/application/pin-device-migration'
+import {sealPinProtectedPackage} from '../../security/application/pin-sealed-package'
+import {buildPinVerifierSnapshot} from '../../security/application/pin-verifier'
 
 const mocks=vi.hoisted(()=>({jsonApi:vi.fn(),resetCsrf:vi.fn()}))
 vi.mock('../infrastructure/api',()=>mocks)
@@ -76,6 +79,26 @@ async function corruptDevice(deviceId:string,edit:(row:Record<string,unknown>)=>
       tx.onabort=()=>reject(tx.error??Error('test.write_aborted'))
     })
   }finally{db.close()}
+}
+
+
+async function simulateForeignPinSeal(f:Awaited<ReturnType<typeof account>>){
+  // A second browser tab has its OWN activeSession instance. Write the same
+  // authenticated device-row shape without using migration() here, because
+  // this test tab is deliberately still logged in.
+  const hmac=await crypto.subtle.generateKey(
+    {name:'HMAC',hash:'SHA-256',length:256},false,['sign'],
+  )
+  const envelope=await sealPinProtectedPackage(
+    f.pkg,f.scope,'4826',f.device.encryptionKey,
+  )
+  const verifier=await buildPinVerifierSnapshot(
+    f.scope,hmac,'4826','6284',
+  )
+  await saveDevice({
+    ...f.device,envelope,pinMode:'pin-v1',
+    pinHmacKey:hmac,pinVerifier:verifier,pinLength:4,
+  } as unknown as typeof f.device)
 }
 
 describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()=>{
@@ -199,6 +222,69 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     expect(activeSession.value).not.toBeNull()
     vi.useRealTimers()
   },120_000)
+
+  it('locks an already active legacy tab when a second tab seals the same device',async()=>{
+    const f=await account()
+    await resumeExistingDevice()
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+    await simulateForeignPinSeal(f)
+    expect(await refreshPinSessionFence()).toBe(true)
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value).toEqual({
+      ...f.scope,pinLength:4,packageRevision:f.pkg.revision,
+      sessionNonce:expect.any(String),
+    })
+    await expect(signPhotoContract('signed media'))
+      .rejects.toThrow('identity.account_locked')
+    expect(identityBootstrapError.value).toBeNull()
+  },95_000)
+
+  it('rechecks the saved device before signing, even if the BroadcastChannel hint was missed',async()=>{
+    const f=await account()
+    await resumeExistingDevice()
+    await simulateForeignPinSeal(f)
+    await expect(signPhotoContract('signed media'))
+      .rejects.toThrow('identity.changed')
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value?.deviceId).toBe(f.scope.deviceId)
+  },95_000)
+
+  it('does not lock a different active account just because some other device is sealed',async()=>{
+    const f=await account()
+    await resumeExistingDevice()
+    const other=await account()
+    await simulateForeignPinSeal(other)
+    expect(await refreshPinSessionFence()).toBe(false)
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+    expect(pendingPinUnlock.value).toBeNull()
+  },95_000)
+
+  it('locks a PIN-unlocked tab if another tab changes its PIN ledger revision',async()=>{
+    const f=await protectedAccount()
+    await resumeExistingDevice()
+    await unlockPinnedDevice('4826')
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+    await corruptDevice(f.scope.deviceId,row=>{
+      const pinVerifier=row.pinVerifier as Record<string,unknown>
+      row.pinVerifier={...pinVerifier,revision:crypto.randomUUID()}
+    })
+    expect(await refreshPinSessionFence()).toBe(true)
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value?.deviceId).toBe(f.scope.deviceId)
+    // The tampered verifier MAC is still rejected by actual PIN admission.
+    await expect(unlockPinnedDevice('4826'))
+      .rejects.toThrow('pin.integrity_failed')
+  },110_000)
+
+  it('locks on a durable signout marker while the tab was active',async()=>{
+    const f=await account()
+    await resumeExistingDevice()
+    await markSignedOut(f.scope.accountId,f.scope.deviceId,true)
+    expect(await refreshPinSessionFence()).toBe(true)
+    expect(activeSession.value).toBeNull()
+    expect(identityBootstrapError.value).toBe('identity.device_changed')
+    expect(pendingPinUnlock.value).toBeNull()
+  },65_000)
 
   it('Recovery Key + online proof can replace a locked PIN device, without legacy fallback',async()=>{
     const f=await protectedAccount()
