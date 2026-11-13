@@ -19,9 +19,16 @@ test('P2-01: verified contact → real encrypted message draft → fullscreen ov
   try{
     const ownerId=await enroll(A)
     const peerId=await enroll(B)
-    await B.goto('/browser')
-    await expect(B.getByText('Ключ обмена подготовлен'))
-      .toBeVisible({timeout:25000})
+    // #64's old Browser status text was removed by the current Shell.
+    // Assert the STRONGER current invariant: B's actual account-bound,
+    // cryptographically verified exchange key is published through the real
+    // sharing protocol, rather than waiting for obsolete UI copy.
+    await B.evaluate(async(accountId)=>{
+      const {ensureOwnExchangeKey}=await import('/src/features/sharing/key-directory.ts')
+      const key=await ensureOwnExchangeKey()
+      if(key.directory.accountId!==accountId)
+        throw Error('messages.peer_exchange_directory_mismatch')
+    },peerId)
 
     await A.goto('/contacts')
     await A.getByTestId('contacts-lookup-id').fill(peerId)
