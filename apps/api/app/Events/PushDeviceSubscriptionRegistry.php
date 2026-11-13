@@ -101,7 +101,9 @@ final class PushDeviceSubscriptionRegistry
      */
     public function eligible(string $accountId, string $deviceId): bool
     {
-        return DB::table(self::TABLE.' as p')
+        if (!EventEnvelope::isCanonicalUuid($accountId)
+            || !EventEnvelope::isCanonicalUuid($deviceId)) return false;
+        $row = DB::table(self::TABLE.' as p')
             ->join('identity_accounts as a','a.id','=','p.account_id')
             ->join('identity_devices as d','d.id','=','p.device_id')
             ->where('p.account_id', $accountId)
@@ -110,7 +112,20 @@ final class PushDeviceSubscriptionRegistry
             ->where('a.status', 'ready')
             ->where('d.account_id', $accountId)
             ->whereNull('d.revoked_at')
-            ->exists();
+            ->first(['p.endpoint_hash','p.subscription_ciphertext']);
+        if ($row === null) return false;
+        try {
+            $value = json_decode(Crypt::decryptString(
+                $row->subscription_ciphertext,
+            ), true, 16, JSON_THROW_ON_ERROR);
+            if (!is_array($value)) return false;
+            $this->validate($value);
+            return hash_equals($row->endpoint_hash, hash('sha256',$value['endpoint']));
+        } catch (\Throwable) {
+            // Corrupted ciphertext or stale/mismatched endpoint is never
+            // eligible for delivery, even when its device remains active.
+            return false;
+        }
     }
 
     /** Account first, device second, as in identity and event ledger. */
