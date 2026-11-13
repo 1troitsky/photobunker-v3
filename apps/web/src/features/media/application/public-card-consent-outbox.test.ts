@@ -301,4 +301,21 @@ describe('#211 encrypted owner-private prepared review consent journal',()=>{
       .equals(await accountScope()).count()).toBe(0)
     db.close()
   })
+
+  it('refuses stale reviewed-image selection midway through async JPEG digest before local commit',async()=>{
+    const prepared=await img()
+    let current=true
+    const actual=prepared.blob.arrayBuffer.bind(prepared.blob)
+    vi.spyOn(prepared.blob,'arrayBuffer').mockImplementation(async()=>{
+      const bytes=await actual()
+      current=false // UI replaced image while browser was asynchronously reading.
+      return bytes
+    })
+    await expect(prepareReviewedContributorConsent(
+      origin,prepared,review(prepared),fields(),stamp(),
+      ()=>{if(!current)throw Error('public_card.review_changed')},
+    )).rejects.toThrow('public_card.review_changed')
+    expect(await listPreparedContributorConsents()).toEqual([])
+  })
+
 })
