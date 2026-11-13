@@ -25,6 +25,44 @@ final class NotificationEventsController extends Controller
      * events return identical 404 without disclosing object existence.
      * This response is NOT a file-read capability or a public URL.
      */
+    /**
+     * The event is a signal, not permission: re-check CURRENT recipient
+     * invitation, removal proof, assignment state and all access deadlines.
+     */
+    private static function currentTargetAllowed(string $account, string $type, string $subject): bool
+    {
+        if ($type === 'media') {
+            return DB::table('media_files_v1')
+                ->where('account_id', $account)->where('id', $subject)
+                ->where('state', 'active')
+                ->where('expires_at', '>', PhotoSync::nowMs())->exists();
+        }
+        if ($type !== 'assignment_invite') {
+            return false;
+        }
+        $now = PhotoSync::nowMs();
+        return DB::table('assignment_invites_v1 as i')
+            ->join('assignment_records_v1 as a', 'a.id', '=', 'i.assignment_id')
+            ->where('i.id', $subject)
+            ->where('i.recipient_account_id', $account)
+            ->where('i.state', 'pending')
+            ->where('i.expires_at', '>', $now)
+            ->where('a.state', 'active')
+            ->where(function ($q) use ($now):void {
+                $q->whereNull('a.assignment_access_until')
+                    ->orWhere('a.assignment_access_until', '>', $now);
+            })
+            ->where(function ($q) use ($now):void {
+                $q->whereNull('a.files_access_until')
+                    ->orWhere('a.files_access_until', '>', $now);
+            })
+            ->whereNotExists(static function ($q):void {
+                $q->selectRaw('1')
+                    ->from('assignment_member_removals_v1 as rm')
+                    ->whereColumn('rm.invite_id', 'i.id');
+            })->exists();
+    }
+
     public function target(Request $request, string $eventId): JsonResponse
     {
         [$actor] = $this->identity->actor($request);
@@ -42,20 +80,15 @@ final class NotificationEventsController extends Controller
         $event = EventEnvelope::fromArray(json_decode(
             $row->envelope_json, true, 512, JSON_THROW_ON_ERROR,
         ));
-        // Currently only owner-owned live media is navigable. A revoked or
-        // expired item MUST NOT leak its identifier through stale cached UI.
-        abort_unless($event->eventType === 'MediaCommitted', 404);
+        // Both media and pending assignment invites require FRESH server ACL.
+        // A revoked/expired invite is never a navigation capability.
+        abort_unless(in_array($event->eventType,[
+            'MediaCommitted','AssignmentInvitationCreated',
+        ],true),404);
         $candidate = NotificationProjection::project(
             $event, $accountId,
-            static function (string $account, string $type, string $subject): bool {
-                return $type === 'media'
-                    && DB::table('media_files_v1')
-                        ->where('account_id', $account)
-                        ->where('id', $subject)
-                        ->where('state', 'active')
-                        ->where('expires_at', '>', PhotoSync::nowMs())
-                        ->exists();
-            },
+            static fn(string $account,string $type,string $subject):bool =>
+                self::currentTargetAllowed($account,$type,$subject),
         );
         abort_unless($candidate !== null && $candidate['targetId'] !== null, 404);
         return $this->identity->json([
@@ -150,17 +183,8 @@ final class NotificationEventsController extends Controller
             // Trusted server-stored ledger still does not confer media ACL.
             $candidate = NotificationProjection::project(
                 $event, $accountId,
-                static function (string $account, string $type, string $subject): bool {
-                    if ($type !== 'media') {
-                        return false;
-                    }
-                    return DB::table('media_files_v1')
-                        ->where('account_id', $account)
-                        ->where('id', $subject)
-                        ->where('state', 'active')
-                        ->where('expires_at', '>', PhotoSync::nowMs())
-                        ->exists();
-                },
+                static fn(string $account,string $type,string $subject):bool =>
+                    self::currentTargetAllowed($account,$type,$subject),
             );
             if ($candidate !== null) {
                 $items[] = $candidate;
