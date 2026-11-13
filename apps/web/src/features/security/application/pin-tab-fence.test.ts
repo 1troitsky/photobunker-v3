@@ -28,7 +28,6 @@ class FakeChannel{
     channels.get(this.name)?.delete(this)
   }
 }
-const original=globalThis.BroadcastChannel
 beforeEach(()=>{
   channels.clear()
   vi.stubGlobal('BroadcastChannel',FakeChannel)
