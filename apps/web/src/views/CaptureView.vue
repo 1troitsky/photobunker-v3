@@ -7,6 +7,8 @@ import { enqueueEncryptedMedia } from '../features/media/application/media-outbo
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
 import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
 import {assertRecordingDuration, recordingBounds} from '../features/media/domain/recording-limits'
+import {AUDIO_TARGET_BITRATES, DEFAULT_AUDIO_TARGET_BITRATE, recordingOptions} from '../features/media/domain/recording-options'
+import type {AudioTargetBitrate} from '../features/media/domain/recording-options'
 import { normalizeGPS, type GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../features/assignments/domain/advanced-rules'
 import {
@@ -44,6 +46,8 @@ const captureMode=ref<'photo'|'video'|'audio'>('photo')
 // Explicit migration path; legacy P1 photo remains the default until P2
 // camera/photo cross-account release is accepted by the product owner.
 const photoStorage=ref<'p1'|'p2'>('p1')
+// Device encoder target: the browser may choose a different effective bitrate.
+const audioTargetBitrate=ref<AudioTargetBitrate>(DEFAULT_AUDIO_TARGET_BITRATE)
 const currentMediaInstruction=computed(()=>{
   const value=visiblePrivateInstructions.value
   if(!canCaptureType.value||value?.version!==2)return ''
@@ -416,7 +420,8 @@ async function beginRecording():Promise<void>{
     const mime=mediaMime(mode)
     const streamRef=stream.value
     if(!streamRef)throw Error('camera.stream_unavailable')
-    const worker=new MediaRecorder(streamRef,{mimeType:mime})
+    const worker=new MediaRecorder(streamRef,recordingOptions(
+      mode,mime,audioTargetBitrate.value))
     const token={identity,generation,mode,intent,startedAt,mime,
       privateFields,saveOnStop:false,startedMono:performance.now(),
       stoppedMono:null as number|null,finishedAt:null as number|null}
@@ -689,6 +694,16 @@ onUnmounted(()=>{
           <option value="video">Видео</option>
           <option value="audio">Аудио</option>
         </select>
+        <template v-if="captureMode==='audio'">
+          <label for="camera-audio-bitrate">Целевой битрейт аудио</label>
+          <select id="camera-audio-bitrate" v-model.number="audioTargetBitrate"
+            :disabled="recording||busy" data-testid="camera-audio-bitrate">
+            <option v-for="rate in AUDIO_TARGET_BITRATES" :key="rate" :value="rate">
+              {{ rate/1000 }} кбит/с
+            </option>
+          </select>
+          <p class="muted">Это настройка кодировщика. Фактические качество и формат зависят от браузера.</p>
+        </template>
         <div v-if="captureMode==='photo'">
           <label for="camera-photo-storage">Сохранить фото в</label>
           <select id="camera-photo-storage" v-model="photoStorage"
