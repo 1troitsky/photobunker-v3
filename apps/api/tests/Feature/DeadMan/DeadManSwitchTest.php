@@ -372,8 +372,10 @@ final class DeadManSwitchTest extends TestCase
             'SELECT clock_timestamp() AS db_now',
         )->db_now);
         $confirmed=CarbonImmutable::parse($this->row()->last_confirmed_at);
-        self::assertTrue($confirmed->greaterThanOrEqualTo($before));
-        self::assertTrue($confirmed->lessThanOrEqualTo($after));
+        // Eloquent/PDO may round timestamps to whole seconds; the DB clock
+        // still has to fall inside the surrounding real PostgreSQL samples.
+        self::assertTrue($confirmed->greaterThanOrEqualTo($before->subSecond()));
+        self::assertTrue($confirmed->lessThanOrEqualTo($after->addSecond()));
         self::assertSame($confirmed->addMonthsNoOverflow(4)->toIso8601String(),
             CarbonImmutable::parse($first['deadlineAt'])->toIso8601String());
         self::assertSame(1,DB::table('dead_man_operations_v1')->count());
