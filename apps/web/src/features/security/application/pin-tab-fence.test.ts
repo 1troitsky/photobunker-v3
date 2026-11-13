@@ -54,7 +54,7 @@ describe('P3 #220 non-secret cross-tab notification (not an auth authority)',()=
       deviceId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
     })
     const json=JSON.stringify(consumer.mock.calls[0][0])
-    expect(json).not.toMatch(/ciphertext|signingKey|akek|pin|recoveryKey/i)
+    expect(json).not.toMatch(/ciphertext|signingKey|akek|secret|recoveryKey|accountPkcs8/i)
     stop()
   })
 
