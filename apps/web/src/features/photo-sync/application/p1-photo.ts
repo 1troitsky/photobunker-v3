@@ -6,6 +6,7 @@ import { decryptAsset, encryptAsset, sha } from '../../local-storage/infrastruct
 import type { CipherManifest, Scope } from '../../local-storage/domain/contracts'
 import type { SignedCaptureBinding } from '../../assignments/application/assignment-outbox'
 import { preparePhotoMetadata, parsePhotoMetadata } from '../domain/capture-metadata'
+import { newSignedExpiry } from '../../media/application/retention-hint'
 import type { CaptureMetadataInput, PhotoMetadata } from '../domain/capture-metadata'
 
 export type {
@@ -87,9 +88,10 @@ export async function captureEncrypted(
   const createdAt=capture?.capturedAt??Date.now()
   if(capture &&(createdAt>Date.now()+120000||createdAt<Date.now()-120000))
     throw new Error('assignment.capture_clock_invalid')
-  // 13 days is an intentional conservative buffer against the initial 14-day
-  // Free cap and unsynchronized browser clocks. Authoritative TTL needs P1 clock sync.
-  const expiresAt=createdAt+13*86400000
+  // A fresh, own-account server entitlement may conservatively select 29/89
+  // paid days. Cold/offline capture still signs 13 days without awaiting GET.
+  // Immutable expiry is chosen BEFORE wrapping encrypted media DEKs.
+  const expiresAt=newSignedExpiry(createdAt,session)
   // All optional category/description/GPS fields stay *inside* the
   // AEAD-encrypted metadata asset. The server sees only ciphertext length and
   // hash, never plaintext coordinates, labels or free text.
