@@ -86,6 +86,7 @@ test('Integration #63: +2min client clock, real signed media grant/replay/readba
       const response=await fetch('/media-shares/v1/grants/'+id,{headers:{Accept:'application/json'}})
       return response.status
     },grant.id)
-    expect(denied).toBe(404)
+    // The existing API deliberately returns Gone for a revoked grant.
+    expect(denied).toBe(410)
   }finally{await a.close();await b.close()}
 })
