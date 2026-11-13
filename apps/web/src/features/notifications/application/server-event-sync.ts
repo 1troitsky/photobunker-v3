@@ -133,5 +133,5 @@ export async function resolveNotificationTarget(eventId:string):Promise<{kind:'n
     ||(value.kind!=='new-file'&&value.kind!=='assignment-invite')
     ||typeof value.targetId!=='string'||!uuid.test(value.targetId))
     throw Error('notifications.invalid_target')
-  return {kind:'new-file',targetId:value.targetId}
+  return {kind:value.kind,targetId:value.targetId}
 }
