@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
  */
 final class DatabaseEventInboxLedger implements EventInboxLedger
 {
+    private const MAX_PENDING_GAP = 128;
     private const EVENTS = 'notification_event_ledger_v1';
     private const STREAMS = 'notification_event_streams_v1';
 
@@ -48,6 +49,12 @@ final class DatabaseEventInboxLedger implements EventInboxLedger
                 $revision = 0;
             } else {
                 $revision = (int) $state->contiguous_revision;
+            }
+
+            // Bound the number of durable deferred revisions per stream. A producer
+            // with a huge revision jump cannot exhaust persistent storage.
+            if ($event->revision > $revision + self::MAX_PENDING_GAP) {
+                return EventAdmission::Quarantined;
             }
 
             if ($event->revision <= $revision ||
