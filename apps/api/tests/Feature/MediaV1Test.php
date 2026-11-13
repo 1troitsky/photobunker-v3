@@ -170,6 +170,28 @@ final class MediaV1Test extends TestCase
             ->assertJsonCount(3,'items')
             ->assertJsonPath('items.0.kind','new-file')
             ->assertJsonPath('nextCursor','3');
+
+        // Target navigation is never authorized by a cached targetId alone:
+        // server re-evaluates CURRENT media ownership/state/expiry on click.
+        $event=DB::table('notification_event_ledger_v1')
+            ->where('account_id',$this->account)
+            ->where('subject_type','media')
+            ->orderBy('delivery_sequence')->first();
+        $this->assertNotNull($event);
+        $path='/notifications/v1/events/'.$event->event_id.'/target';
+        $this->getJson($path)->assertOk()
+            ->assertJsonPath('schemaVersion',1)
+            ->assertJsonPath('kind','new-file')
+            ->assertJsonPath('targetId',$event->subject_id);
+        $this->getJson('/notifications/v1/events/'.Str::uuid().'/target')
+            ->assertNotFound();
+        DB::table('media_files_v1')->where('id',$event->subject_id)
+            ->update(['state'=>'deleting']);
+        $this->getJson($path)->assertNotFound();
+        // A retained local event must not resurrect revoked/deleting content.
+        DB::table('media_files_v1')->where('id',$event->subject_id)
+            ->update(['state'=>'active','expires_at'=>now()->subSecond()->getTimestampMs()]);
+        $this->getJson($path)->assertNotFound();
     }
 
     public function test_media_activation_rolls_back_when_atomic_event_admission_conflicts():void
