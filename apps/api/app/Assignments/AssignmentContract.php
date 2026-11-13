@@ -249,7 +249,14 @@ final class AssignmentContract
                 &&preg_match('/^[a-f0-9]{64}$/D',$d[$key])===1,422);
         $start=self::millis($d['startedAt']);
         $end=self::millis($d['finishedAt']);
-        abort_unless($end>$start &&$end-$start<=3*60000
+        // The account-signed clock is a declaration, not hardware attestation.
+        // Keep the legacy photo ceiling and apply Camera 1.2 per-kind maxima.
+        $maxDuration=match($d['mediaType']){
+            'video'=>300000,
+            'audio'=>3000000,
+            default=>180000,
+        };
+        abort_unless($end>$start &&$end-$start<=$maxDuration
             &&$end<=PhotoSync::nowMs()+120000,422);
     }
 

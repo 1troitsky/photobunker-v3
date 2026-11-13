@@ -25,7 +25,7 @@ import {
 } from '../features/browser/application/personal-media-copy'
 import type {PersonalMediaCopyDraft} from '../features/browser/application/personal-media-copy'
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
-import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
+import {audioClipName,makeWavClip,probeBoundedAudioDuration} from '../features/browser/application/audio-wav'
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
 import {describePhotoExportError}
   from '../features/browser/application/photo-export-budget'
@@ -987,17 +987,53 @@ function clearAudioClip():void{
   audioClipNotice.value=''
   audioClipSavedId.value=null
 }
-function onAudioMetadata():void{
-  const duration=audioElement.value?.duration
-  if(!duration||!Number.isFinite(duration)||duration<=0)return
+let audioDurationProbeEpoch=0
+let audioDurationProbeSource:Blob|null=null
+let audioDurationProbeTask:Promise<number>|null=null
+function setAudioDuration(duration:number):void{
+  if(!Number.isFinite(duration)||duration<=0)return
   if(audioDuration.value>0){
-    // A repeated metadata event must not reset a range the user has edited.
+    // Repeated metadata events must not overwrite user-edited trim bounds.
     audioDuration.value=duration
     return
   }
   audioDuration.value=duration
   trimStart.value=0
   trimEnd.value=Math.min(duration,60)
+  audioClipError.value=''
+}
+function onAudioMetadata():void{
+  const duration=audioElement.value?.duration
+  if(duration&&Number.isFinite(duration)&&duration>0){
+    setAudioDuration(duration)
+    return
+  }
+  // Native MediaRecorder WebM/Opus commonly omits duration in the segment
+  // header; HTMLAudioElement reports Infinity although the samples are valid.
+  // Only a previously AUTHENTICATED, decrypted and bounded local Blob can be
+  // decoded in memory to establish editing duration. This does NOT change
+  // the source media, persist PCM, export to OS or bypass MediaFile ACL.
+  const session=activeSession.value,source=fileBlob.value,url=fileUrl.value
+  const epoch=fileEpoch
+  if(!session||!source||!url||preview.value?.type!=='audio'
+    ||audioDuration.value>0)return
+  const request=++audioDurationProbeEpoch
+  if(audioDurationProbeSource!==source||!audioDurationProbeTask){
+    audioDurationProbeSource=source
+    audioDurationProbeTask=probeBoundedAudioDuration(source)
+  }
+  void audioDurationProbeTask.then(decodedDuration=>{
+    if(request!==audioDurationProbeEpoch||!sameSession(session,epoch)
+      ||fileUrl.value!==url||fileBlob.value!==source
+      ||preview.value?.type!=='audio')return
+    setAudioDuration(decodedDuration)
+  }).catch(()=>{
+    if(request!==audioDurationProbeEpoch||!sameSession(session,epoch)
+      ||fileUrl.value!==url||fileBlob.value!==source
+      ||preview.value?.type!=='audio')return
+    audioClipError.value='Не удалось определить длительность аудио. '
+      +'Для локальной обрезки поддерживаются файлы до 32 МиБ с доступным кодеком.'
+  })
 }
 // Video Editor 1.1: in-memory edit decision list only. This never creates
 // MP4 ciphertext, replaces the source asset or asserts a server ACK.
@@ -1118,6 +1154,10 @@ function clearBlob():void{
   clearStill()
   clearVideoTrim()
   clearAudioClip()
+  // Invalidate in-flight local audio PCM decode on file/account/route change.
+  ++audioDurationProbeEpoch
+  audioDurationProbeSource=null
+  audioDurationProbeTask=null
   audioDuration.value=0
   trimStart.value=0
   trimEnd.value=0

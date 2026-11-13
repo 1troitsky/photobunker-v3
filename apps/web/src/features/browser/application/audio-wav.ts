@@ -19,6 +19,44 @@ type DecodedPCM=Pick<AudioBuffer,
   getChannelData(channel:number):Float32Array
 }
 
+function validateDecodedPCM(pcm:DecodedPCM):void{
+  if(!Number.isSafeInteger(pcm.sampleRate)
+    ||pcm.sampleRate<8000||pcm.sampleRate>96000
+    ||!Number.isSafeInteger(pcm.numberOfChannels)
+    ||pcm.numberOfChannels<1||pcm.numberOfChannels>2
+    ||!Number.isSafeInteger(pcm.length)||pcm.length<=0
+    ||pcm.length*pcm.numberOfChannels>MAX_DECODED_SAMPLES)
+    throw Error('viewer.audio_decode_limit')
+}
+
+/**
+ * MediaRecorder's streaming WebM/Opus can report Infinity for HTMLAudioElement
+ * duration even when every media sample is valid. For SHORT, explicitly
+ * owner-decrypted sources, measure the true decoded audio duration without
+ * changing the source container, emitting an OS file or persisting plaintext.
+ *
+ * Apply the SAME 32MiB input / 24M decoded sample limits as the WAV editor.
+ * This is a fallback only, not a whole-file scan for 50-minute sources.
+ */
+export async function probeBoundedAudioDuration(source:Blob):Promise<number>{
+  if(!(source instanceof Blob)||source.size<128||source.size>MAX_AUDIO_DECODE_BYTES)
+    throw Error('viewer.audio_source_limit')
+  const AudioConstructor=typeof AudioContext!=='undefined'?AudioContext:
+    (globalThis as typeof globalThis & {
+      webkitAudioContext?:typeof AudioContext
+    }).webkitAudioContext
+  if(!AudioConstructor)throw Error('viewer.audio_decoder_unsupported')
+  const context=new AudioConstructor()
+  try{
+    const pcm=await context.decodeAudioData(await source.arrayBuffer())
+    validateDecodedPCM(pcm)
+    const duration=pcm.length/pcm.sampleRate
+    if(!Number.isFinite(duration)||duration<=0)
+      throw Error('viewer.audio_decode_limit')
+    return duration
+  }finally{await context.close()}
+}
+
 function validRange(start:number,end:number,duration:number):void{
   if(!Number.isFinite(start)||!Number.isFinite(end)
     ||!Number.isFinite(duration)||duration<=0
@@ -43,13 +81,7 @@ function ascii(view:DataView,offset:number,text:string):void{
 export function encodePcm16Wav(
   pcm:DecodedPCM,startSeconds:number,endSeconds:number,
 ):Uint8Array<ArrayBuffer>{
-  if(!Number.isSafeInteger(pcm.sampleRate)
-    ||pcm.sampleRate<8000||pcm.sampleRate>96000
-    ||!Number.isSafeInteger(pcm.numberOfChannels)
-    ||pcm.numberOfChannels<1||pcm.numberOfChannels>2
-    ||!Number.isSafeInteger(pcm.length)||pcm.length<=0
-    ||pcm.length*pcm.numberOfChannels>MAX_DECODED_SAMPLES)
-    throw Error('viewer.audio_decode_limit')
+  validateDecodedPCM(pcm)
   validRange(startSeconds,endSeconds,pcm.length/pcm.sampleRate)
   const start=Math.floor(startSeconds*pcm.sampleRate)
   const end=Math.min(pcm.length,Math.ceil(endSeconds*pcm.sampleRate))
