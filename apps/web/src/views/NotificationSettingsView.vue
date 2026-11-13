@@ -68,7 +68,9 @@ function cancel():void{
   draft.value={...saved.value}
   void router.push('/notifications')
 }
-watch(activeSession,()=>{void initialize()})
+// Revalidate on identity/key change, but keep unsaved changes when the
+// same device simply finishes an online proof or loses connectivity.
+watch(owner,()=>{void initialize()})
 onMounted(()=>{void initialize()})
 </script>
 
