@@ -23,3 +23,16 @@ Date: 2026-11-14. Agent CHAT-C. Base `main@6565a0fe852882ea5fc26e493df81affed687
 ## CI evidence
 
 Exact code HEAD/CI to be recorded after Draft PR and run. Existing PHP Foundation inherits Composer audit CVE-2026-128083 (#297 fix in isolated PR #298); do not suppress audit, change lock, or misattribute unrelated failure. Frontend Vitest/build and E2E must be checked against exact submitted code HEAD; no native device claim.
+
+## Verified exact-code-head CI, 2026-11-14
+
+**Code/tests HEAD: `6eafc2b6011b416752a044f3b68b14c74299ca1c`**.
+
+- First submitted HEAD `00930202ad5069c413c15c064ce30007fcaf1f93` [Foundation Actions 43504925761](https://github.com/1troitsky/photobunker-v3/actions/runs/43504925761): frontend **FAIL 1/458** (457 PASS) due to a flawed negative **test fixture**, not a runtime acceptance: numeric-only UUID did not change when uppercased. Exact failure preserved. Corrected fixture in own test file to include alphabetic hex; not weakened/skipped.
+- [Foundation Actions 43505137925](https://github.com/1troitsky/photobunker-v3/actions/runs/43505137925) on corrected HEAD: **frontend PASS**, 84/84 test files, **458/458 Vitest PASS**, TypeScript `vue-tsc -b` PASS, production Vite build PASS (job `132160699229`). Includes **9 local Blacklist tests** covering encrypted offline readback, session/account isolation, AKEK mismatch, row corruption/swapping, no API/network calls and filtered Team picker.
+- [P0 Security 43505137847](https://github.com/1troitsky/photobunker-v3/actions/runs/43505137847) **PASS**; [UX lane scope 43505137816](https://github.com/1troitsky/photobunker-v3/actions/runs/43505137816) **PASS**.
+- Same Foundation PHP8.4/8.5 jobs **FAIL BEFORE PHPUnit** at `composer audit --locked` due to inherited Laravel `CVE-2026-128083`; separate #297 PR #298 handles security lock and is NOT merged. Not caused by this TS-only PR.
+- [PG18/Garage/Chromium 43505137991](https://github.com/1troitsky/photobunker-v3/actions/runs/43505137991) **IN PROGRESS** at this observation; current browser suite isn't a native/blocklist-specific E2E gate.
+- Real multi-device sync/Contacts ACL/revoke/Team keys and iOS/Android: **NOT TESTED / BLOCKED**.
+
+**Verdict:** encrypted local-only Blacklist + invitation picker UI slice PASS unit/build/security on exact code HEAD; **overall Issue #210 IN PROGRESS**. Do not merge automatically or describe it as network-side block/revoke or complete P2 Profile.
