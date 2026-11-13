@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { activeSession } from '../features/identity/application/session'
 import {
@@ -30,6 +30,8 @@ function owner():string{
 async function initialize():Promise<void>{
   const token=++version,scope=owner()
   error.value='';status.value='';loading.value=true
+  draft.value={...defaultNotificationPreferences}
+  saved.value={...defaultNotificationPreferences}
   if(!scope){loading.value=false;return}
   try{
     const value=await readNotificationPreferences()
@@ -66,6 +68,7 @@ function cancel():void{
   draft.value={...saved.value}
   void router.push('/notifications')
 }
+watch(activeSession,()=>{void initialize()})
 onMounted(()=>{void initialize()})
 </script>
 
