@@ -466,7 +466,9 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await B.locator('#camera-tags').fill('evidence')
     await B.getByTestId('camera-start-recording').click()
     await expect(B.getByTestId('camera-recording-status')).toBeVisible()
-    await B.waitForTimeout(1600) // actual microphone media data, not debounce
+    // P2 #206: real microphone recording must satisfy the 5s minimum.
+    // Do not bypass the production duration gate to make the encrypted E2E pass.
+    await B.waitForTimeout(5500)
     await B.getByTestId('camera-stop-recording').click()
     await expect(B.getByText(/Запись зашифрована и сохранена локально/))
       .toBeVisible({timeout:30000})
