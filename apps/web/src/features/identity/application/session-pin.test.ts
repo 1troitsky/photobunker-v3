@@ -239,6 +239,40 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     expect(identityBootstrapError.value).toBeNull()
   },95_000)
 
+  it('refuses a legacy resume whose AES decrypt races a foreign tab PIN seal',async()=>{
+    const f=await account()
+    const decryptActual=crypto.subtle.decrypt.bind(crypto.subtle)
+    let signalStarted!:()=>void
+    let releaseDecrypt!:()=>void
+    const started=new Promise<void>(resolve=>{signalStarted=resolve})
+    const blocked=new Promise<void>(resolve=>{releaseDecrypt=resolve})
+    let once=false
+    const spy=vi.spyOn(crypto.subtle,'decrypt').mockImplementation(async(
+      algorithm,key,data,
+    )=>{
+      // DeviceEnvelope carries authenticated AAD; capability probe does not.
+      if(!once && typeof algorithm==='object' &&
+         'additionalData' in algorithm){
+        once=true
+        signalStarted()
+        await blocked
+      }
+      return decryptActual(algorithm,key,data)
+    })
+    try{
+      const pending=resumeExistingDevice()
+      await started
+      await simulateForeignPinSeal(f)
+      releaseDecrypt()
+      await expect(pending).rejects.toThrow('identity.device_changed')
+      expect(activeSession.value).toBeNull()
+      expect(identityBootstrapError.value).toBe('identity.device_changed')
+    }finally{
+      releaseDecrypt()
+      spy.mockRestore()
+    }
+  },100_000)
+
   it('rechecks the saved device before signing, even if the BroadcastChannel hint was missed',async()=>{
     const f=await account()
     await resumeExistingDevice()
