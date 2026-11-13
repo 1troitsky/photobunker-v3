@@ -93,6 +93,13 @@ final class DatabaseEventInboxLedgerTest extends TestCase
         self::assertSame(0, DB::table('notification_event_ledger_v1')->count());
     }
 
+    public function test_far_future_revision_is_quarantined_without_storage(): void
+    {
+        self::assertSame(EventAdmission::Quarantined,
+            $this->consumer->ingest($this->event(130), $this->account));
+        self::assertSame(0, DB::table('notification_event_ledger_v1')->count());
+    }
+
     public function test_inactive_account_is_not_admitted(): void
     {
         DB::table('identity_accounts')->where('id', $this->account)
