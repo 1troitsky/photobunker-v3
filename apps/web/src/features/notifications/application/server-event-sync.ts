@@ -93,3 +93,27 @@ export function attachNotificationSyncLifecycle():void{
       void requestNotificationSync()
   })
 }
+
+/**
+ * Resolve ONLY a server-stored event ID at the moment of a user click.
+ * A cached local targetId never authorizes navigation or grants media read.
+ * Callers must still perform the regular protected media fetch afterwards.
+ */
+export async function resolveNotificationTarget(eventId:string):Promise<{kind:'new-file';targetId:string}>{
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+  if(!uuid.test(eventId))throw Error('notifications.invalid_target')
+  const session=requireSession()
+  if(!session.online)throw Error('notifications.offline')
+  const {accountId,deviceId}=session,akek=session.pkg.akek
+  sameSession(accountId,deviceId,akek)
+  const raw=await jsonApi<unknown>('/notifications/v1/events/'+eventId+'/target')
+  sameSession(accountId,deviceId,akek)
+  if(!raw||typeof raw!=='object'||Array.isArray(raw))
+    throw Error('notifications.invalid_target')
+  const value=raw as Record<string,unknown>
+  if(Object.keys(value).sort().join('|')!=='kind|schemaVersion|targetId'
+    ||value.schemaVersion!==1||value.kind!=='new-file'
+    ||typeof value.targetId!=='string'||!uuid.test(value.targetId))
+    throw Error('notifications.invalid_target')
+  return {kind:'new-file',targetId:value.targetId}
+}
