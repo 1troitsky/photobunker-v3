@@ -59,7 +59,13 @@ async function session():Promise<Session>{
   } as unknown as Session
 }
 async function settle():Promise<void>{
-  for(let i=0;i<14;i++){await Promise.resolve();await nextTick()}
+  // Browser WebCrypto SHA-256 resolves on a later event-loop turn, not
+  // necessarily among microtasks. Let the real digest/decoder complete
+  // before asserting the Vue DOM, without mocking away verification.
+  for(let i=0;i<10;i++){
+    await new Promise<void>(resolve=>setTimeout(resolve,0))
+    await nextTick()
+  }
 }
 const button=(host:HTMLElement,testid:string)=>host.querySelector<HTMLButtonElement>(
   '[data-testid="'+testid+'"]'
@@ -144,7 +150,6 @@ afterEach(()=>{
 describe('#211 contributor reviewed-safe-JPEG isolated UI (no publication)',()=>{
   it('never prepares consent automatically or without decoded image load and checkbox',async()=>{
     await mount()
-    if(!createObjectURL.mock.calls.length)throw Error('review_ui_diagnostic:'+host.innerHTML)
     expect(createObjectURL).toHaveBeenCalledTimes(1)
     expect(button(host,'public-card-review-prepare').disabled).toBe(true)
     expect(ops.prepare).not.toHaveBeenCalled()
