@@ -98,6 +98,22 @@ describe('P3 #220 isolated dual-PIN admission; not hooked to Identity or emergen
     expect(activeSession.value).toBeNull()
   },45_000)
 
+  it('detects in-place mutation of a reused session context object during PIN work',async()=>{
+    const f=await fixture()
+    let reads=0
+    const mutable={...f.trusted}
+    await expect(admitPinProtectedPackage({
+      encryptedPackage:f.envelope,candidate:'1234',
+      verifierDeviceHmac:f.hmac,envelopeDeviceAes:f.aes,
+      readTrustedContext:()=>{
+        if (++reads===2) mutable.sessionNonce=crypto.randomUUID()
+        return mutable
+      },
+    })).rejects.toThrow('pin.session_changed')
+    expect(reads).toBe(2)
+    expect(activeSession.value).toBeNull()
+  },45_000)
+
   it('rejects same-account session incarnation change during ciphertext decrypt',async()=>{
     const f=await fixture()
     let reads=0
