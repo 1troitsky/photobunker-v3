@@ -37,8 +37,9 @@ test('real Chromium strips source JPEG APP1 EXIF while preserving safe pixels',a
       if(marker===0xda||length<2)break
       cursor+=length+2
     }
-    try{safe.inspectFlattenedSafeJpeg(originalBytes)}
-    catch(e){throw Error('chromium_original_jpeg_headers='+JSON.stringify(headers)+':'+String(e))}
+    // The unmodified Chromium result may have APP2 ICC (and must then be
+    // rejected by the strict final-file inspector). The local preparation
+    // strips only that known profile before validating the final file.
 
     // Exif APP1 header with a minimal TIFF IFD + a hidden GPS-like comment;
     // no GPS text is drawn into the image's actual pixels.
@@ -60,7 +61,11 @@ test('real Chromium strips source JPEG APP1 EXIF while preserving safe pixels',a
     let rejectedRaw=false
     try{safe.inspectFlattenedSafeJpeg(dirtyBytes)}
     catch{rejectedRaw=true}
-    const prepared=await safe.prepareSafePublicJpeg(withExif)
+    let prepared
+    try{prepared=await safe.prepareSafePublicJpeg(withExif)}
+    catch(e){
+      throw Error('chromium_canvas_headers='+JSON.stringify(headers)+':'+String(e))
+    }
     const sanitized=new Uint8Array(await prepared.blob.arrayBuffer())
     const checked=safe.inspectFlattenedSafeJpeg(sanitized)
     const h=new Uint8Array(await crypto.subtle.digest(
