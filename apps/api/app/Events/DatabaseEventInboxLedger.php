@@ -75,6 +75,7 @@ final class DatabaseEventInboxLedger implements EventInboxLedger
                 'fingerprint' => $event->fingerprint(),
                 'envelope_json' => json_encode($event, JSON_THROW_ON_ERROR),
                 'admission_state' => $inOrder ? 'sequenced' : 'deferred',
+                'delivery_sequence' => null,
                 'received_at' => now(),
             ]);
 
@@ -82,8 +83,10 @@ final class DatabaseEventInboxLedger implements EventInboxLedger
                 return EventAdmission::Deferred;
             }
 
-            // Fill contiguous holes; no external side effects inside the
-            // transaction. Pending rows remain queryable after worker restart.
+            // Assign publication order only WHEN a revision becomes contiguous.
+            // Admission time is not delivery order: a previously deferred
+            // event must never be hidden behind an already issued feed cursor.
+            $this->publish($event->accountId, $event->eventId);
             $next = $event->revision + 1;
             while ($next <= 2147483647) {
                 $pending = DB::table(self::EVENTS)
@@ -95,10 +98,7 @@ final class DatabaseEventInboxLedger implements EventInboxLedger
                 if ($pending === null) {
                     break;
                 }
-                DB::table(self::EVENTS)
-                    ->where('account_id', $event->accountId)
-                    ->where('event_id', $pending->event_id)
-                    ->update(['admission_state' => 'sequenced']);
+                $this->publish($event->accountId, $pending->event_id);
                 $next++;
             }
             $this->streamQuery($event)->update([
@@ -106,6 +106,35 @@ final class DatabaseEventInboxLedger implements EventInboxLedger
             ]);
             return EventAdmission::Accepted;
         }, 3);
+    }
+
+    /**
+     * Called only under identity_accounts FOR UPDATE, in the event admission
+     * transaction; guaranteed single writer per account across workers.
+     * A deferred event has NO delivery_sequence until its gap closes.
+     */
+    private function publish(string $accountId, string $eventId): void
+    {
+        $state = DB::table('notification_account_delivery_v1')
+            ->where('account_id', $accountId)->first();
+        if ($state === null) {
+            $sequence = 1;
+            DB::table('notification_account_delivery_v1')->insert([
+                'account_id' => $accountId, 'last_sequence' => $sequence,
+            ]);
+        } else {
+            $sequence = (int) $state->last_sequence + 1;
+            DB::table('notification_account_delivery_v1')
+                ->where('account_id', $accountId)
+                ->update(['last_sequence' => $sequence]);
+        }
+        DB::table(self::EVENTS)
+            ->where('account_id', $accountId)
+            ->where('event_id', $eventId)
+            ->update([
+                'admission_state' => 'sequenced',
+                'delivery_sequence' => $sequence,
+            ]);
     }
 
     private function streamQuery(EventEnvelope $event): \Illuminate\Database\Query\Builder
