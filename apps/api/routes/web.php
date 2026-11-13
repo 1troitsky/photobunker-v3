@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\IdentityController;
+use App\Http\Controllers\NotificationEventsController;
 use App\Http\Controllers\BillingV1Controller;
 use App\Http\Controllers\BrowserFolderSyncController;
 use App\Http\Controllers\BrowserArchiveController;
@@ -252,3 +253,7 @@ Route::prefix('browser/v1/archive')->middleware('throttle:pb3-media')->group(fun
     Route::get('/preferences',[BrowserArchivePreferencesController::class,'show']);
     Route::post('/preferences',[BrowserArchivePreferencesController::class,'update']);
 });
+
+// P2 #198: read-only trusted event feed. No client emission, no server read ACK.
+Route::get('/notifications/v1/events', [NotificationEventsController::class, 'index'])
+    ->middleware('throttle:40,1');
