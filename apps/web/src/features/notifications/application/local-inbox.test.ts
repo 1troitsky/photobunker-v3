@@ -77,7 +77,7 @@ describe('PB3 encrypted Local-First notifications',()=>{
     // The shared fake IndexedDB contains rows from earlier test accounts.
     // Corrupt THIS authenticated account, never an arbitrary first record.
     const scopedKey=hex(await digest(new TextEncoder().encode(
-      'pb3.notification-index.v1\\n'+ownerId,
+      'pb3.notification-index.v1\n'+ownerId,
     )))
     const row=await raw.table('preferences').get(scopedKey)
     expect(row).toBeDefined()
