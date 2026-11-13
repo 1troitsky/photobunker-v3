@@ -92,6 +92,8 @@ describe('Codex protocol v2 executable deterministic vectors',()=>{
     wrongKit.secret[0]=wrongKit.secret[0]! ^ 0x01
     expect(wrongKit.secret[0]).not.toBe(kit.secret[0])
     await expect(openRecovery(env,wrongKit,accountId)).rejects.toThrow()
+    await expect(openRecovery(env,kit,'00000000-0000-4000-8000-000000000003'))
+      .rejects.toThrow()
     await expect(openRecovery({...env,iv:tamperEncodedByte(env.iv)},kit,accountId))
       .rejects.toThrow()
     await expect(openRecovery({...env,revision:env.revision+1},kit,accountId))
@@ -102,6 +104,8 @@ describe('Codex protocol v2 executable deterministic vectors',()=>{
     const signature=await sign(privateKey,message)
     expect(await verify(publicKey,message,signature)).toBe(true)
     expect(await verify(publicKey,message+'!',signature)).toBe(false)
+    const corruptedSignature=tamperEncodedByte(signature)
+    expect(await verify(publicKey,message,corruptedSignature)).toBe(false)
   })
   it('non-extractable device envelope separates device and recovery purposes',async()=>{
     const {pkg}=await freshPackage(accountId)
