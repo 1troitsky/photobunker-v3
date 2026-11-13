@@ -182,7 +182,7 @@ export function resumeExistingDevice():Promise<Session|null> {
   return pendingSessionResume
 }
 function isSealedCandidate(row:LocalDevice):boolean {
-  const mode=(row as Partial<SealedPinDevice>).pinMode
+  const mode=(row as unknown as Partial<SealedPinDevice>).pinMode
   const purpose=(row.envelope as {purpose?:unknown}|undefined)?.purpose
   return mode!==undefined || purpose==='preunlock-package'
 }
