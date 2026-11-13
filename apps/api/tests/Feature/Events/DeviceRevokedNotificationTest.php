@@ -102,7 +102,7 @@ final class DeviceRevokedNotificationTest extends TestCase
             ->where('id', $this->otherDevice)->value('revoked_at'));
     }
 
-    public function test_event_collision_rolls_back_revoke(): void
+    public function test_event_collision_cannot_keep_compromised_device_active(): void
     {
         $this->login();
         $event = [
@@ -115,8 +115,8 @@ final class DeviceRevokedNotificationTest extends TestCase
             (new EventConsumer(new DatabaseEventInboxLedger()))
                 ->ingest($event, $this->owner));
         $this->postJson('/identity/v2/devices/'.$this->otherDevice.'/revoke', [])
-            ->assertStatus(503);
-        $this->assertNull(DB::table('identity_devices')
+            ->assertOk()->assertJsonPath('revoked', true);
+        $this->assertNotNull(DB::table('identity_devices')
             ->where('id', $this->otherDevice)->value('revoked_at'));
         $this->assertDatabaseCount('notification_event_ledger_v1', 1);
     }
