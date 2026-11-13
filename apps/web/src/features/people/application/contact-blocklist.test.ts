@@ -6,6 +6,7 @@ import { activeSession } from '../../identity/application/session'
 import type { Session } from '../../identity/application/session'
 import {
   listLocallyBlockedPeers, locallyBlockPeer, locallyUnblockPeer,
+  excludeLocallyBlockedContacts,
 } from './contact-blocklist'
 
 const peerId='22222222-2222-4222-8222-222222222222'
@@ -109,6 +110,20 @@ describe('P2 #210 encrypted Local-First blocked-contact selection',()=>{
     await expect(listLocallyBlockedPeers()).rejects.toThrow('contacts.blocklist_unreadable')
     raw.close()
   })
+  it('filters local blocks out of both visible Contacts and Team invite choices',async()=>{
+    await login(accountId)
+    await locallyBlockPeer(peerId)
+    const contacts=[
+      {peerAccountId:peerId,alias:'Blocked'},
+      {peerAccountId:otherPeer,alias:'Allowed'},
+    ]
+    const available=excludeLocallyBlockedContacts(contacts,await listLocallyBlockedPeers())
+    expect(available).toEqual([{peerAccountId:otherPeer,alias:'Allowed'}])
+    expect(contacts).toHaveLength(2)
+    await locallyUnblockPeer(peerId)
+    expect(excludeLocallyBlockedContacts(contacts,await listLocallyBlockedPeers()))
+      .toEqual(contacts)
+  })
   it('never touches server grant or invitation APIs when adding/removing local blocks',async()=>{
     await login(accountId)
     const fetchSpy=vi.spyOn(globalThis,'fetch').mockImplementation(async()=>{
@@ -119,7 +134,7 @@ describe('P2 #210 encrypted Local-First blocked-contact selection',()=>{
     expect(fetchSpy).not.toHaveBeenCalled()
     fetchSpy.mockRestore()
   })
-  it('does not write a block after account switch while encryption is in flight',async()=>{
+  it('never shows the previous account local blocks after identity switch',async()=>{
     const alice=await login(accountId)
     const prior=await locallyBlockPeer(peerId)
     expect(prior.peerAccountId).toBe(peerId)
