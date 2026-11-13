@@ -40,6 +40,19 @@ describe('#198 trusted event replay → encrypted IndexedDB',()=>{
     expect((await listLocalNotifications())[0]?.readAt).toBe(1800000000001)
     expect((await listLocalNotifications())).toHaveLength(1)
   })
+  it('persists non-navigable expired-retention notice before ACK',async()=>{
+    const item={id:EVENT,kind:'file-expiry',targetId:null,occurredAt:1800000000000}
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[item],nextCursor:'1',hasMore:false})
+      .mockImplementationOnce(async()=>{
+        expect((await listLocalNotifications())[0]).toMatchObject(item)
+        return {schemaVersion:1,acknowledgedCursor:'1',advanced:true}
+      })
+    expect(await syncServerNotifications()).toEqual({saved:1,pages:1})
+    expect(mockApi.jsonApi.mock.calls.at(-1))
+      .toEqual(['/notifications/v1/ack','POST',{cursor:'1'}])
+    expect((await listLocalNotifications())[0]?.targetId).toBeNull()
+  })
   it('does not fetch the next page after corrupt/forged local event',async()=>{
     mockApi.jsonApi.mockResolvedValueOnce({
       schemaVersion:1,
