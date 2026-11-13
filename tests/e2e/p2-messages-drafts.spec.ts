@@ -111,3 +111,28 @@ test('P2-01: verified contact → real encrypted message draft → fullscreen ov
     await ctxA.close();await ctxB.close()
   }
 })
+
+
+test('P2-01: optional Messages Dock route uses current Shell and never promises Matrix delivery',async({page})=>{
+  await page.goto('/assignments')
+  // Existing five-point default is unchanged. The accepted Beta is opt-in
+  // through Appearance; preview controls the SAME shared Dock, not a fake UI.
+  await page.evaluate(async()=>{
+    const {previewDock}=await import('/src/ui/fieldwork/dock-preferences.ts')
+    if(!previewDock(['assignments','browser','messages','settings']))
+      throw Error('messages.opt_in_dock_rejected')
+  })
+  const dock=page.getByRole('navigation',{name:'Главная навигация'})
+  const link=dock.getByRole('link',{name:'Сообщения'})
+  await expect(link).toHaveAttribute('href','/messages')
+  await link.click()
+  await expect(page).toHaveURL(/\/messages$/)
+  await expect(page.getByTestId('messages-page')).toBeVisible()
+  await expect(page.getByRole('heading',{name:'Сообщения'})).toBeVisible()
+  await expect(page.getByText('Matrix пока не подключён',{exact:false})).toBeVisible()
+  await expect(page.getByTestId('messages-compose')).toBeDisabled()
+  // There must NOT be a separate thread route, extra Shell or fake sent state.
+  await expect(page.getByTestId('messages-thread')).toHaveCount(0)
+  await expect(page.locator('.shell-header')).toHaveCount(1)
+  await expect(page.locator('.shell-dock')).toHaveCount(1)
+})
