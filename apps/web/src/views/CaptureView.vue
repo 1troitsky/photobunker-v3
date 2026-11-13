@@ -230,7 +230,11 @@ async function startCamera():Promise<void> {
   if(starting.value||stream.value||disposed||!cameraWanted)return
   error.value=''
   if(!activeSession.value){error.value='Сначала создайте или восстановите аккаунт';return}
-  if(!navigator.mediaDevices?.getUserMedia){error.value='Браузер не поддерживает камеру';return}
+  if(!navigator.mediaDevices?.getUserMedia){
+    error.value=captureMode.value==='audio'
+      ?'Браузер не поддерживает доступ к микрофону':'Браузер не поддерживает камеру'
+    return
+  }
   starting.value=true
   const identity=cameraIdentity(activeSession.value),generation=cameraGeneration
   const mode=captureMode.value
@@ -841,7 +845,9 @@ onUnmounted(()=>{
         Аудиозапись использует только микрофон. Видеопоток не запрашивается.
       </p>
       <div class="action-row">
-        <button type="button" :disabled="!!stream||starting" @click="openCamera">Включить камеру</button>
+        <button type="button" :disabled="!!stream||starting" @click="openCamera">
+          {{ captureMode==='audio'?'Включить микрофон':'Включить камеру' }}
+        </button>
         <button v-if="captureMode==='photo'" type="button"
           :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
           @click="capture">
