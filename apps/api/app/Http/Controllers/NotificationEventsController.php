@@ -66,6 +66,59 @@ final class NotificationEventsController extends Controller
         ])->header('Cache-Control', 'no-store');
     }
 
+    /**
+     * Server-side receipt of the client's scanned cursor, scoped to the
+     * authenticated device. Not "read", not proof of client persistence,
+     * not a license to delete or withhold anything on future replays.
+     */
+    public function acknowledge(Request $request): JsonResponse
+    {
+        $this->identity->origin($request);
+        [$actor, $device] = $this->identity->actor($request);
+        $body = $request->json()->all();
+        abort_unless(is_array($body) && array_keys($body) === ['cursor'], 422);
+        $raw = $body['cursor'];
+        abort_unless(is_string($raw)
+            && preg_match('/\A(?:0|[1-9][0-9]{0,14})\z/D', $raw) === 1
+            && (float) $raw <= 9007199254740991, 422);
+        $cursor = (int) $raw;
+        $accountId = (string) $actor->id;
+        $deviceId = (string) $device->id;
+
+        $result = DB::transaction(static function () use ($accountId, $deviceId, $cursor):array {
+            // Event publisher and device revoke use account-first locking.
+            $account = DB::table('identity_accounts')
+                ->where('id', $accountId)->lockForUpdate()->first(['status']);
+            abort_unless($account && $account->status === 'ready', 401);
+            $currentDevice = DB::table('identity_devices')
+                ->where('id', $deviceId)->where('account_id', $accountId)
+                ->lockForUpdate()->first(['revoked_at']);
+            abort_unless($currentDevice && $currentDevice->revoked_at === null, 401);
+            $published = DB::table('notification_account_delivery_v1')
+                ->where('account_id', $accountId)->value('last_sequence');
+            $max = (int) ($published ?? 0);
+            abort_if($cursor > $max, 409, 'notifications.ack_future_cursor');
+
+            $query = DB::table('notification_device_ack_v1')
+                ->where('account_id', $accountId)->where('device_id', $deviceId);
+            $existing = $query->first();
+            $previous = (int) ($existing->ack_cursor ?? 0);
+            $next = max($previous, $cursor);
+            if ($existing === null) {
+                DB::table('notification_device_ack_v1')->insert([
+                    'account_id' => $accountId, 'device_id' => $deviceId,
+                    'ack_cursor' => $next, 'updated_at' => now(),
+                ]);
+            } elseif ($next > $previous) {
+                $query->update(['ack_cursor' => $next, 'updated_at' => now()]);
+            }
+            return ['schemaVersion' => 1, 'acknowledgedCursor' => (string) $next,
+                'advanced' => $next > $previous];
+        }, 3);
+
+        return $this->identity->json($result);
+    }
+
     public function index(Request $request): JsonResponse
     {
         [$actor] = $this->identity->actor($request);
