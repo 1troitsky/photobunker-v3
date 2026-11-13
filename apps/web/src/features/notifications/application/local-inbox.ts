@@ -67,7 +67,7 @@ const messages:Record<NotificationKind,readonly [string,string]>={
 }
 const requireTarget=new Set<NotificationKind>([
   'assignment-invite','team-invite','assignment-deadline',
-  'new-file','media-review','file-expiry',
+  'new-file','media-review',
 ])
 
 function isKind(value:unknown):value is NotificationKind{
@@ -97,7 +97,9 @@ function validateInput(value:unknown):asserts value is LocalNotificationInput{
     ||(v.targetId!==null &&
       (typeof v.targetId!=='string'||!UUID.test(v.targetId)))
     ||requireTarget.has(v.kind)&&v.targetId===null
-    ||!requireTarget.has(v.kind)&&v.targetId!==null)
+    // Historical file-expiry events can have an opaque old target; a newly
+    // expired/deleting file notice has NO clickable target and cannot grant.
+    ||!requireTarget.has(v.kind)&&v.kind!=='file-expiry'&&v.targetId!==null)
     throw Error('notifications.invalid_event')
 }
 function validateRecord(value:unknown):asserts value is LocalNotification{
