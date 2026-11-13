@@ -9,7 +9,7 @@ function fixture(sequence=12) {
   const {publicKey,privateKey}=generateKeyPairSync('ed25519')
   const trustedPublicKeyPem=publicKey.export({type:'spki',format:'pem'})
   const trustedKeySha256=sha(publicKey.export({type:'spki',format:'der'}))
-  const manifestBytes=encode({assets:[],manifest_version:1,release_id:'r12',release_sequence:sequence})
+  const manifestBytes=encode({assets:[{path:'index.html',sha256:'a'.repeat(64),size:12,type:'html'}],build_time:'2026-11-13T00:00:00.000Z',feature_flags:{},manifest_version:1,minimum_client_version:'1.0.0',release_id:'r12',release_sequence:sequence,service_worker:null})
   const envelopeBytes=encode({key_id:trustedKeySha256,manifest_sha256:sha(manifestBytes),
     signature:sign(null,manifestBytes,privateKey).toString('base64url'),signature_version:1})
   return {manifestBytes,envelopeBytes,trustedPublicKeyPem,trustedKeySha256,minimumSequence:12}
@@ -72,4 +72,41 @@ test('CLI verifies a genuine detached signature only with independently supplied
     assert.notEqual(withoutPin.status,0)
     assert.match(withoutPin.stderr,/RELEASE_AUTH_REJECTED/)
   } finally {await rm(dir,{recursive:true,force:true})}
+})
+
+test('signed empty asset inventory is rejected (no executable release)',()=>{
+  const s=fixture(), m=JSON.parse(s.manifestBytes);m.assets=[]
+  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+})
+test('signed unexpected manifest fields are rejected',()=>{
+  const s=fixture(),m=JSON.parse(s.manifestBytes);m.unexpected='hidden'
+  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+})
+test('signed duplicate or unsorted assets are rejected',()=>{
+  const s=fixture(),m=JSON.parse(s.manifestBytes);m.assets.push({...m.assets[0]})
+  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+})
+test('signed unsafe path traversal is rejected',()=>{
+  const s=fixture(),m=JSON.parse(s.manifestBytes);m.assets[0].path='../index.html'
+  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+})
+test('signed encoded path traversal is rejected',()=>{
+  const s=fixture(),m=JSON.parse(s.manifestBytes);m.assets[0].path='%2e%2e/index.html'
+  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+})
+test('signed incorrect asset type is rejected',()=>{
+  const s=fixture(),m=JSON.parse(s.manifestBytes);m.assets[0].type='js'
+  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+})
+test('signed mismatched Service Worker reference is rejected',()=>{
+  const s=fixture(),m=JSON.parse(s.manifestBytes);m.service_worker='sw.js'
+  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+})
+test('signed bad asset digest is rejected',()=>{
+  const s=fixture(),m=JSON.parse(s.manifestBytes);m.assets[0].sha256='not-sha256'
+  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
+})
+test('signed unsafe build timestamp is rejected',()=>{
+  const s=fixture(),m=JSON.parse(s.manifestBytes);m.build_time='tomorrow'
+  s.manifestBytes=encode(m);rejects(s,'INVALID_MANIFEST')
 })
