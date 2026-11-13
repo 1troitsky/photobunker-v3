@@ -199,6 +199,9 @@ test('P2 #198 encrypted local notification display preferences survive reload wi
   await expect(page.getByTestId('notifications-list')).toContainText(
     'Событие безопасности',{timeout:30000})
   expect(await notices(page)).toHaveLength(1)
-  // Even with badges hidden, critical security notices remain visible.
-  await expect(page.locator('.notification-dot.isread')).toHaveCount(1)
+  // Even with badges hidden or quiet hours enabled, critical security
+  // events AND their unread indicator must remain visible. The old test
+  // incorrectly asserted the pre-security-exception dimmed-dot behavior.
+  await expect(page.locator('.notification-dot')).toHaveCount(1)
+  await expect(page.locator('.notification-dot.isread')).toHaveCount(0)
 })
