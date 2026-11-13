@@ -11,7 +11,7 @@ import {
 } from '../features/media/application/recording-encrypted-journal'
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
 import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
-import {assertRecordingDuration, recordingBounds} from '../features/media/domain/recording-limits'
+import {assertRecordingDuration, recordingBounds, signedRecordingBudget} from '../features/media/domain/recording-limits'
 import {AUDIO_TARGET_BITRATES, DEFAULT_AUDIO_TARGET_BITRATE, recordingOptions} from '../features/media/domain/recording-options'
 import type {AudioTargetBitrate} from '../features/media/domain/recording-options'
 import { normalizeGPS, type GPSFix } from '../features/photo-sync/domain/capture-metadata'
@@ -607,6 +607,10 @@ async function beginRecording():Promise<void>{
         }finally{busy.value=false}
       })()
     }
+    // Signed intent was captured before async policy/GPS preflight. Reserve
+    // enough of its server-visible wall-clock window for both clocks to stay
+    // under the same 300s/3000s ceiling when the native max timer fires.
+    const stopBudgetMs=signedRecordingBudget(mode,startedAt,Date.now())
     worker.start(1000)
     recordingTimer=setTimeout(()=>{
       if(activeRecording===token&&worker.state==='recording'){
@@ -615,7 +619,7 @@ async function beginRecording():Promise<void>{
         token.finishedAt=Date.now()
         worker.stop()
       }
-    },recordingBounds(mode).maxMs)
+    },stopBudgetMs)
   }catch(e){
     discardRecording()
     if(ownsCamera(identity,generation))
