@@ -20,11 +20,13 @@ const memory = (start?: string): DockStorage & {value: string | null} => {
 afterEach(() => { savedDock.value = [...defaultDock]; restoreDock() })
 
 describe('Appearance 1.3 dock with fail-safe Local-First persistence', () => {
-  it('uses the accepted five-point default and rejects hidden routes', () => {
+  it('keeps the five-point default; allows opt-in drafts-only Messages, rejects missing Notifications', () => {
     expect(defaultDock).toEqual(['assignments','browser','camera','contacts','settings'])
-    expect(dockDefinitions.messages.to).toBeNull()
+    expect(dockDefinitions.messages.to).toBe('/messages')
     expect(dockDefinitions.notifications.to).toBeNull()
-    expect(validateDock(['assignments','messages','settings'])).toBeNull()
+    expect(validateDock(['assignments','messages','settings'])).toEqual([
+      'assignments','messages','settings',
+    ])
     expect(validateDock(['assignments','notifications','settings'])).toBeNull()
   })
   it('enforces mandatory Settings, uniqueness and 3–6 navigation entries', () => {
@@ -43,7 +45,9 @@ describe('Appearance 1.3 dock with fail-safe Local-First persistence', () => {
   })
   it('recovers safely from corrupt, malicious or outdated stored preferences', () => {
     expect(readDock(memory('not-json'))).toEqual(defaultDock)
-    expect(readDock(memory('["settings","messages","camera"]'))).toEqual(defaultDock)
+    expect(readDock(memory('["settings","messages","camera"]'))).toEqual([
+      'settings','messages','camera',
+    ])
     expect(readDock(memory(JSON.stringify(['settings','browser','camera']))))
       .toEqual(['settings','browser','camera'])
     expect(readDock({getItem:()=>{throw Error('private mode')},setItem:()=>{}}))
