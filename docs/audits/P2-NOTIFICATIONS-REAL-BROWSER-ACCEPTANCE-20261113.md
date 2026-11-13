@@ -64,3 +64,11 @@ The PWA entry `apps/web/src/main.ts` explicitly does NOT register a Service Work
 The new server-side pure `App\\Events\\PushWakePayload` is a forward-compatible **fail-closed payload contract only**: its only byte-exact body is `{"v":1,"action":"check-inbox"}`. It contains no event, subject, account, recipient, device, media, invitation, location, read marker or key metadata. Only an authenticated client can later fetch the durable inbox under existing identity proof and ACL. The test rejects extra JSON keys, event identifiers, alternate actions, schema versions and reordered serialization, and checks the same fixed body across event types. This class is not wired to any transport and cannot be used to infer delivery or authorization.
 
 To implement push in a future independently claimed step: approve signed service-worker release verification and security update mechanism; add user-gesture permission, account/device authenticated push subscription lifecycle, VAPID secrets in protected environment, unsubscribe on logout/key rotation/revoke/emergency PIN, delivery retries/expiry/remote wake without PII, payload and callback audits, Safari iOS installed PWA + Android device tests, failure/replay/abuse limits and no silent worker activation. Server ACK remains encrypted-local-commit delivery status, never push or read receipt.
+
+## Hardening automated acceptance — exact SHA `fae52e19`
+
+All four workflows completed **PASS** on `fae52e196ee40f8898c4e29afad5d75b15fb1439`:
+- Foundation `43483933213`, Security `43483933620`, UX `43483933556`: PASS.
+- Isolated PostgreSQL 18/Garage 2.5 run [43483933703](https://github.com/1troitsky/photobunker-v3/actions/runs/43483933703), job `132087280352`: **86/86 Chromium PASS (4.7m)**.
+
+These checks include the previously hardened encrypted preferences loading (tampered preferences cannot hide inbox) and filtered Mark All (hidden events remain unread). This is the newest fully accepted **automated** Notifications code prior to the push wake contract addition. The `PushWakePayload` code HEAD `4f53143cece4a330a83039347585505718a8d1f3` completed Foundation/Security/UX PASS but its PostgreSQL/Garage run is still in progress at writing; do not use older green results for that code.
