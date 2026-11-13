@@ -20,7 +20,7 @@ return new class extends Migration {
             $t->uuid('account_id');
             $t->uuid('source_media_id');
             $t->unsignedInteger('revision');
-            $t->string('state', 12); // staged / revoked; NO published state
+            $t->enum('state', ['staged', 'revoked']); // no published state
             $t->char('current_event_hash', 64);
             $t->char('token_hash', 64);
             $t->unsignedBigInteger('expires_at_ms');
@@ -34,7 +34,7 @@ return new class extends Migration {
             $t->uuid('source_media_id');
             $t->uuid('safe_media_id');
             $t->unsignedInteger('revision');
-            $t->string('kind', 12); // stage / revoke
+            $t->enum('kind', ['stage', 'revoke']);
             $t->char('previous_event_hash', 64);
             $t->char('event_hash', 64);
             $t->char('token_hash', 64);
