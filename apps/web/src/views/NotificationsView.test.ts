@@ -208,7 +208,8 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     await mount()
     expect(el('notifications-list').textContent).not.toContain('Приглашение в команду')
     expect(el('notifications-list').textContent).toContain('Новые материалы')
-    expect(host.querySelectorAll('.notification-dot.isread')).toHaveLength(1)
+    // Even when ordinary badge dots are off, security remains conspicuous.
+    expect(host.querySelectorAll('.notification-dot.isread')).toHaveLength(0)
     expect(mocks.rows).toHaveLength(2)
     expect(mocks.markAll).not.toHaveBeenCalled()
   })
