@@ -118,8 +118,8 @@ describe('P3 #220 — protected offline dual-PIN verifier (not active PIN Shell)
     await expect(attemptPinVerifier({...owner,deviceId:crypto.randomUUID()},secret,'1234'))
       .rejects.toThrow('pin.not_configured')
     const otherSecret=await hmacSecret()
-    expect(await attemptPinVerifier(owner,otherSecret,'1234'))
-      .toEqual({status:'invalid',attemptsRemaining:4})
+    await expect(attemptPinVerifier(owner,otherSecret,'1234'))
+      .rejects.toThrow('pin.integrity_failed')
     expect(await attemptPinVerifier(owner,secret,'1234'))
       .toEqual({status:'app-unlocked'})
   }, 30_000)
@@ -134,13 +134,14 @@ describe('P3 #220 — protected offline dual-PIN verifier (not active PIN Shell)
       const record=await db.table('records').get(owner.accountId+':'+owner.deviceId)
       expect(record).toBeDefined()
       expect(record.app.salt).toHaveLength(32)
+      expect(record.integrityTag).toHaveLength(32)
       expect(record.app.tag).toHaveLength(32)
       expect(record.emergency.salt).toHaveLength(32)
       expect(record.emergency.tag).toHaveLength(32)
       expect(record.app.salt).not.toEqual(record.emergency.salt)
       expect(Object.keys(record).sort()).toEqual([
         'accountId','app','deviceId','emergency','failures','id',
-        'lastObservedMs','lockedUntilMs','revision','version',
+        'integrityTag','lastObservedMs','lockedUntilMs','revision','version',
       ])
       expect(JSON.stringify(record)).not.toContain('"1357"')
       expect(JSON.stringify(record)).not.toContain('"2468"')
@@ -164,6 +165,58 @@ describe('P3 #220 — protected offline dual-PIN verifier (not active PIN Shell)
       db.close()
     }
   }, 30_000)
+
+  it('detects direct IndexedDB counter reset after five failures before evaluating correct PIN', async () => {
+    const owner=scope()
+    const secret=await hmacSecret()
+    await enrollPinVerifier(owner,secret,'1234','4321')
+    for(let i=0;i<5;i++) await attemptPinVerifier(owner,secret,'9999')
+
+    const db=new Dexie('pb3_pin_verifier_v1')
+    db.version(1).stores({records:'id'})
+    try {
+      const key=owner.accountId+':'+owner.deviceId
+      await db.table('records').update(key,{
+        failures:0,lockedUntilMs:0,lastObservedMs:0,
+      })
+      await expect(attemptPinVerifier(owner,secret,'1234'))
+        .rejects.toThrow('pin.integrity_failed')
+      await expect(attemptPinVerifier(owner,secret,'4321'))
+        .rejects.toThrow('pin.integrity_failed')
+    } finally {
+      db.close()
+    }
+  }, 60_000)
+
+  it('detects tampered verifier salts, tags and unsigned legacy state', async () => {
+    for (const corruption of ['salt','tag','missing-mac'] as const) {
+      const owner=scope()
+      const secret=await hmacSecret()
+      await enrollPinVerifier(owner,secret,'1234',null)
+      const db=new Dexie('pb3_pin_verifier_v1')
+      db.version(1).stores({records:'id'})
+      try {
+        const key=owner.accountId+':'+owner.deviceId
+        const row=await db.table('records').get(key)
+        if(corruption==='salt'){
+          const salt=[...row.app.salt]
+          salt[0]=(salt[0]+1)%256
+          await db.table('records').update(key,{app:{...row.app,salt}})
+        } else if(corruption==='tag'){
+          const tag=[...row.app.tag]
+          tag[0]=(tag[0]+1)%256
+          await db.table('records').update(key,{app:{...row.app,tag}})
+        } else {
+          await db.table('records').update(key,{integrityTag:undefined})
+        }
+        await expect(attemptPinVerifier(owner,secret,'1234'))
+          .rejects.toThrow(corruption==='missing-mac'?
+            'pin.corrupt_record':'pin.integrity_failed')
+      } finally {
+        db.close()
+      }
+    }
+  }, 60_000)
 
   it('cannot reset an enrolled verifier by repeating enroll, even after invalid PIN', async () => {
     const owner=scope()
