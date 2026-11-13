@@ -52,17 +52,34 @@ async function reload():Promise<void>{
   if(typeof navigator!=='undefined'&&!navigator.onLine)return
   await refresh(token,owner)
 }
+let refreshTask:Promise<void>|null=null
+let refreshOwner:string|null=null
 async function refresh(token=run,owner=scope()):Promise<void>{
-  if(!owner||!canSync.value||syncing.value||!current(owner,token))return
+  if(!owner||!canSync.value||!current(owner,token))return
+  if(refreshTask){
+    // A previous account's in-flight request must not suppress the first
+    // refresh of the replacement account. Wait, then re-check identity.
+    if(refreshOwner===owner)return refreshTask
+    await refreshTask
+    if(!current(owner,token)||!canSync.value)return
+  }
   syncing.value=true
-  try{
-    await syncServerNotifications()
-    if(current(owner,token))await readLocal(token,owner)
-  }catch{
-    // Old encrypted offline records remain visible; a transport error is
-    // not evidence that anything was marked read or lost.
-    if(current(owner,token))error.value='Сервер недоступен. Показаны сохранённые уведомления.'
-  }finally{syncing.value=false}
+  refreshOwner=owner
+  const task=(async()=>{
+    try{
+      await syncServerNotifications()
+      if(current(owner,token))await readLocal(token,owner)
+    }catch{
+      // Old encrypted offline records remain visible; a transport error is
+      // not evidence that anything was marked read or lost.
+      if(current(owner,token))error.value='Сервер недоступен. Показаны сохранённые уведомления.'
+    }finally{syncing.value=false}
+  })()
+  refreshTask=task
+  try{await task}
+  finally{
+    if(refreshTask===task){refreshTask=null;refreshOwner=null}
+  }
 }
 async function expand(row:LocalNotification):Promise<void>{
   if(busy.value)return
