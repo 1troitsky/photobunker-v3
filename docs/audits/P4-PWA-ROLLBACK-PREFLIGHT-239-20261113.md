@@ -8,3 +8,7 @@
 - **Evidence:** documentation review candidate only; no code execution and no behavior tested on browsers or devices. GitHub workflow result on exact doc HEAD to be tracked in PR; existing CI success doesn't prove threat mitigations.
 - **BLOCKED:** production signer, root distribution/rotation, independent security approval, #196/#230 integration, no trusted SW bootstrap, cross-browser E2E, physical native devices, any destructive production rollout.
 - **Security verdict:** NO CLAIM of a PWA security protection, NOT an approved threat-model review, NOT ready to implement or enable SW. This Draft PR is the prerequisite for formal independent review.
+
+## Exact HEAD CI observation
+
+Doc source HEAD `f745ab19bcfbdd552a04169abd029a0ac867b8a3`: [security workflow 43493083052](https://github.com/1troitsky/photobunker-v3/actions/runs/43493083052) **PASS**; [foundation 43493083070](https://github.com/1troitsky/photobunker-v3/actions/runs/43493083070) **FAIL** due to inherited Composer audit Laravel CVE-2026-128083, owned by parallel Issue #297; [storage 43493083119](https://github.com/1troitsky/photobunker-v3/actions/runs/43493083119) **IN PROGRESS** at observation. None of these CI outcomes constitute acceptance of this security model, independent signature trust, protected SW activation or mobile E2E. Documentation-only follow-up commit to record evidence changes no runtime code.
