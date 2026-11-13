@@ -1,48 +1,41 @@
-# PB3 — актуальный прогресс и интеграционный checkpoint
+# PB3 — актуальная карта разработки
 
-**Дата:** 2026-11-11. **Source of truth:** `AGENTS.md`, `ts.md`, Github commits/PR/CI.
+**Обновлено:** 2026-11-11 · **основная ветка:** `main @ 2c8ad9f6f18da9e87797d8df2cc0d6c3cf4eb7a6` · **развёртывание:** не выполнялось.
 
-## Интеграционный рубеж Teams: P1-27 → P1-29C
+Документ служит оперативной картой, а не сертификатом безопасности. Источники требований: `ts.md`, `AGENTS.md`, исходные UX-решения и конкретные PR/CI. Архив предыдущего рубежа — [P1 Teams integration](history/2026-11-11-P1-TEAMS-INTEGRATED.md).
 
-**База до интеграции:** `main @ ee0cbe6836b5359e971319dfc8ae91ef695c7d42`.
-**Проверенная кандидатная версия:** `54f984162451e44e49d374ba5c08cb3a2b7a0536`, [продуктовый Draft #60](https://github.com/1troitsky/photobunker-v3/pull/60).
-**Единый PR для технической интеграции:** [Draft #62](https://github.com/1troitsky/photobunker-v3/pull/62) (эта ветка; до подтверждённого merge `main` не считать обновлённым).
+## Закрытый рубеж: Teams P1-27–P1-29C
 
-**Включить ровно один раз:** #50 → #51 → #52 → #53 → #56 → #57 → #59 → #60. Старый #54 — несовместимый исторический источник v2, **не сливать**. QA-only PR #55/#58/#61 — независимые исходные проверки и evidence; их код не смешивать с продуктовой цепочкой автоматически.
+**[PR #62](https://github.com/1troitsky/photobunker-v3/pull/62) слит** обычным merge с историей. Продуктовый код совпадает с независимо проверенным [#60](https://github.com/1troitsky/photobunker-v3/pull/60); стек #50→#51→#52→#53→#56→#57→#59→#60 вошёл один раз. Исторический несовместимый #54 и QA-only #55/#58/#61 **не сливались**. Evidence и независимые отчёты сохранены в `docs/audits/`.
 
-| Компонент | Проверенный результат на #60 |
+**Exact-main CI:** [PHP8.4/8.5 + frontend](https://github.com/1troitsky/photobunker-v3/actions/runs/42898003940) **109 PHPUnit / 1807 assertions на каждой версии; Vitest 151/151; TypeScript/build PASS**. [PostgreSQL18/Garage2.5/Chromium](https://github.com/1troitsky/photobunker-v3/actions/runs/42898003754) **19/19 PASS**; [Security](https://github.com/1troitsky/photobunker-v3/actions/runs/42898003566) **PASS**. Независимый аудит [#61](https://github.com/1troitsky/photobunker-v3/pull/61) — **74/74 PASS** только в явно проверенном security/integration объёме.
+
+**Действующие проверенные контракты:** encrypted Local-First owner Teams; подписанные v1/v2 приглашения и отдельное consent; роли и реальные ACL; исключение с quarantine, новый Team DEK и подписанные цепочки эпох; точный подписанный отзыв pending v1+v2; защита от отката epoch/revision на устройстве с сохранённым AES-GCM-кешем. Team membership **никогда не выдаёт автоматически** Media/File/Assignment DEK grants. Ранее выданный plaintext исключённому участнику не может быть отозван.
+
+## Текущий точечный фикс: Media-grant clock boundary
+
+- [Draft #63](https://github.com/1troitsky/photobunker-v3/pull/63): код на базе нового `main`, отдельная ветка, **ещё не слит**. Клиент при создании подписанного media grant резервирует **5 минут** от серверного лимита 24h, чтобы разница часов в миллисекунды и короткая задержка подписи не вызывали ошибку HTTP422. Серверный предел, E2EE, scope, signed bytes и неизменный Lost ACK replay **не меняются**.
+- Проверенный продуктовый SHA #63: `c0e48e8eabf816d0b371cb7b77fe7a5e551cd732`; PHP 8.4/8.5 **110/110, 1817 assertions**; Vitest **154/154**; TypeScript/build, security, PostgreSQL/Garage, Chromium **19/19**, CI **3/3 PASS**. Документационный checkpoint является отдельным коммитом, его CI требуется проверять по новому HEAD.
+- Это **ограниченная mitigation**, а не доказательство точной причины исторического HTTP422: часы устройства, опережающие сервер больше чем на пять минут, всё ещё могут вызвать 422. Исторический server-millisecond timestamp неизвестен. Правило server-authoritative time из `ts.md` остаётся архитектурным ориентиром для последующего улучшения.
+
+## Дальнейшая разработка (P1–P4)
+
+| Блок | Подтверждённое состояние / следующий шаг |
 |---|---|
-| Teams owner / encrypted local state | P1-27 — подписанный Team DEK; локальный шифрованный outbox |
-| Signed invites / explicit consent | P1-28/P1-29C — v1/v2, pinning/ECDH/AAД, повторное приглашение в новой эпохе |
-| Authoritative roles / removals / quarantine | P1-29A — owner-signed membership receipt, server ACL |
-| Team DEK rotation / signed pending retirement | P1-29B/P1-29C — fresh DEK + signed epochs, exact union pending v1+v2 under row lock |
-| Freshness / rollback and role receipt | #57/#60 — AEAD sealed monotonic floor и signed revision, invite-id scoped role receipts |
+| Identity/Recovery, E2EE, Local-First | Основные P0/P1 сценарии в main; trusted device/cache rollback и native ещё не закрыты |
+| Фото/видео/аудио, Camera/GPS | Web/Chromium production-style интеграции есть; реальный iPhone/Safari/Android NOT TESTED |
+| Assignments, Media access, TTL/GC | Основные подписи/ACL и криптография в main; срок grant в #63; дальнейшие политики/архив |
+| Contacts & Teams | **Интегрированы в main**, scope P1-27–P1-29C закрыт после независимого QA |
+| Browser, File viewer, Edit | Полная утверждённая production версия UI/редакторов ещё не подтверждена |
+| Matrix Messenger | Обязательный следующий крупный модуль, не объявлять готовым |
+| Storage Manager, BYO/Replica S3 | Базовый Garage ciphertext path есть; пользовательские S3/replica/restore — впереди |
+| Security/Privacy, Backup/Panic/DMS | Нужны полные runtime и восстановительные сценарии |
+| Tariffs, Billing, Admin/Analytics | Дальнейшие обязательные фазы, 5 конфигурируемых тарифов по `ts.md` |
+| Release security, native/device | Signed PWA, independent trust anchor, native Safari/Android, production locks NOT TESTED |
 
-**Независимый аудит:** [#61](https://github.com/1troitsky/photobunker-v3/pull/61), [полный отчёт](../audits/P1-29C-INDEPENDENT-INTEGRATION-AUDIT.md). Исходный #59 **FAIL 72/74**, исправленный #60 **PASS 74/74**. PHPUnit PHP8.4 и 8.5 **109/109, 1807 assertions**, Vitest **151/151**, Chromium **19/19**, реальные PG18/Garage2.5, CI **3/3 PASS на точном #60 SHA**. Отчёт отдельно фиксирует реальные параллельные PG row-lock waiters, signed retirement v1/v2, rollback/fork/role replay и отсутствие неявных media/assignment grants.
+## Открытые границы и процесс
 
-**После любого интеграционного документационного коммита:** повторить CI на точном HEAD интеграционного PR; локальный QA 74/74 относится к **неизменённому продуктовому коду** от #60, не переименовывать его в QA нового коммита.
-
-## Ограничения, не блокирующие дальнейшую разработку
-
-- Исторический media-grant **HTTP422 — OPEN**: воспроизведена чувствительность к точной границе client/server clock (±3 мс), но нет доказательства фактической причины исторического отказа. Требует отдельного точечного исправления time-authority, без широкого повторного аудита Teams.
-- Native Safari/iPhone/Android, реальные background PWA ограничения и production migration locks/load — **NOT TESTED**.
-- Полный device/IndexedDB rollback, compromise same-origin JS и независимый trust anchor — **BLOCKED BY DESIGN / не решено**.
-- Server не читает Team DEK и зашифрованный профиль. Публичные технические UUID серверных ledgers допустимы по `ts.md`. Team membership **не** выдаёт автоматически права на чужие фото, задания, медиа, сообщения.
-- Уже полученный ранее plaintext у исключённого участника невозможно отозвать криптографически.
-
-## Продуктовая дорожная карта — фактически, без искусственных процентов
-
-| Модуль | Текущий статус |
-|---|---|
-| Identity / Recovery / E2EE / Local-First | Основные P0/P1 сценарии в `main`; физические устройства и release gates впереди |
-| Camera / Photo / Video / Audio / GPS | Browser-style реализации и регрессии есть; native не подтверждён |
-| Assignments / encrypted media / retention | Базовые signed grants реализованы, media422 OPEN |
-| Contacts / Teams | Contacts в `main`; полный Teams стек в кандидате интеграции #62 (не говорить «в main» до merge) |
-| Browser / viewer / редакторы | Полный утверждённый UX и production editor не подтверждены |
-| Matrix Messenger | Следующий отдельный обязательный крупный блок |
-| Security & Privacy / backups / emergency | Требуются полноценные runtime сценарии и восстановление |
-| Storage Manager / BYO S3 / replica | Garage-путь есть; BYO/replica и backup впереди |
-| Billing / tariffs / Admin / Analytics | Дальнейшие обязательные этапы |
-| Native PWA / deployment | Физические устройства и release security gates впереди |
-
-**Следующая критическая операция:** интегрировать одну проверенную продуктовую голову #60 через #62 в `main`, при совпадении ожидаемой базы и PASS CI на точном интеграционном коммите. Без нового security-аудита. **Затем:** разрабатывать дальше от нового `main`; исторический media422 исправить отдельной узкой задачей самостоятельно, локального агента на это не расходовать.
+- Полный device/IndexedDB rollback и компрометированный same-origin JS: **BLOCKED BY DESIGN** без независимого trust anchor.
+- Native device permissions, реальный S3 failover и production migration locks/load: **NOT TESTED**. Green Chromium ≠ Safari approval.
+- Отдельный независимый Teams-wide аудит **не повторять** без конкретного нового security blocker. Обычный CI и точечные регрессии выполнять на каждом PR.
+- Local agent использовать только для критического действия, которое нельзя безопасно закончить самостоятельно (например, разрешённая интеграция/выпуск). Новые функциональные ветки/PR создавать самостоятельно и **не менять main** без явного разрешения.

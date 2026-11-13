@@ -21,6 +21,36 @@ const GRANT_DOMAIN='pb3.media-grant.v1\n'
 const SCOPED_GRANT_DOMAIN='pb3.media-grant.v2\n'
 const REVOKE_DOMAIN='pb3.media-revoke.v1\n'
 const URI='/media-shares/v1'
+/**
+ * The backend enforces `expiresAt <= server_now + 24h`. Signing the
+ * client-side exact +24h boundary is rejected if the device clock leads
+ * the server by even a millisecond. Reserve five minutes for ordinary
+ * clock drift, request latency and encryption/signing; never widen the
+ * server's TTL or alter an already-signed grant during retry.
+ *
+ * This is a bounded mitigation, not authoritative time sync: devices
+ * whose clocks are more than five minutes fast may still receive 422.
+ */
+export const MEDIA_GRANT_MAX_TTL_MS=86400000
+export const MEDIA_GRANT_CLOCK_MARGIN_MS=5*60000
+export function mediaGrantExpiry(
+  mediaExpiresAt:number,createdAtMs:number,assignmentAccessUntil?:number|null,
+):number{
+  if(!Number.isSafeInteger(createdAtMs)||createdAtMs<=0
+    ||!Number.isSafeInteger(mediaExpiresAt)||mediaExpiresAt<=0
+    ||assignmentAccessUntil!=null
+      &&(!Number.isSafeInteger(assignmentAccessUntil)
+        ||assignmentAccessUntil<=0))
+    throw Error('media_grant.invalid_expiry_bounds')
+  const expiresAt=Math.min(
+    mediaExpiresAt,
+    createdAtMs+MEDIA_GRANT_MAX_TTL_MS-MEDIA_GRANT_CLOCK_MARGIN_MS,
+    assignmentAccessUntil??Number.POSITIVE_INFINITY,
+  )
+  if(expiresAt<=createdAtMs)
+    throw Error('media_grant.assignment_access_expired')
+  return expiresAt
+}
 export type MediaEnvelope={
   ephemeralSpki:string;salt:string;iv:string;ciphertext:string
 }
@@ -129,9 +159,12 @@ export async function queueMediaRecipientGrant(
   })
   const grantId=crypto.randomUUID()
   const mediaContractHash=await sha(enc.encode(JSON.stringify(row.contract)))
-  const expiresAt=Math.min(row.expiresAt,Date.now()+86400000,
-    assignmentId&&maxExpiresAt!=null?maxExpiresAt:Number.POSITIVE_INFINITY)
-  if(expiresAt<=Date.now())throw Error('media_grant.assignment_access_expired')
+  // Sample once, before expensive crypto. Do not sign the backend's
+  // exact +24h upper boundary; it is based on independent server time.
+  const createdAtMs=Date.now()
+  const expiresAt=mediaGrantExpiry(
+    row.expiresAt,createdAtMs,assignmentId?maxExpiresAt:null,
+  )
   const scope={
     ownerAccountId:session.accountId,recipientAccountId,
     mediaId,grantId,expiresAt,mediaContractHash,
