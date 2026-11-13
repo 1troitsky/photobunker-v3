@@ -6,6 +6,7 @@ import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
 import { enqueueEncryptedMedia } from '../features/media/application/media-outbox'
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
 import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
+import {assertRecordingDuration, recordingBounds} from '../features/media/domain/recording-limits'
 import { normalizeGPS, type GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../features/assignments/domain/advanced-rules'
 import {
@@ -84,13 +85,15 @@ async function loadPrivateInstructions():Promise<void>{
   }
 }
 const recording=ref(false)
-const recordLimitMs=175000
+const recordingMaxSeconds=computed(()=>captureMode.value==='photo'?0
+  :recordingBounds(captureMode.value).maxMs/1000)
 const recorder=shallowRef<MediaRecorder|null>(null)
 const recordingStartedAt=ref<number|null>(null)
 let recordingTimer:ReturnType<typeof setTimeout>|null=null
 let recordingParts:Blob[]=[]
 let recordedSize=0
-let activeRecording:{saveOnStop:boolean}|null=null
+let activeRecording:{saveOnStop:boolean;startedMono:number
+  stoppedMono:number|null;finishedAt:number|null}|null=null
 const canCaptureType=computed(()=>{
   const required=route.query.assignmentId
   if(typeof required==='string'&&required
@@ -415,7 +418,8 @@ async function beginRecording():Promise<void>{
     if(!streamRef)throw Error('camera.stream_unavailable')
     const worker=new MediaRecorder(streamRef,{mimeType:mime})
     const token={identity,generation,mode,intent,startedAt,mime,
-      privateFields,saveOnStop:false}
+      privateFields,saveOnStop:false,startedMono:performance.now(),
+      stoppedMono:null as number|null,finishedAt:null as number|null}
     activeRecording=token
     recordingParts=[]
     recordedSize=0
@@ -437,13 +441,17 @@ async function beginRecording():Promise<void>{
       // Automatic browser/permission interruption is never permission to
       // persist a partial recording. Only user Stop or the bounded timer
       // may turn this ephemeral MediaRecorder buffer into a new MediaFile.
-      if(!token.saveOnStop){closeCamera();return}
+      if(!token.saveOnStop||token.stoppedMono===null||token.finishedAt===null){
+        closeCamera();return
+      }
       if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
       const parts=recordingParts
       recordingParts=[]
       recorder.value=null;recording.value=false;recordingStartedAt.value=null
       activeRecording=null
       const bytes=recordedSize;recordedSize=0
+      const finishedAt=token.finishedAt
+      const durationMs=token.stoppedMono-token.startedMono
       // MediaRecorder.stop() by itself does NOT release the hardware.
       // Release microphone and camera immediately before encryption; a
       // second recording requires the explicit "Включить камеру" action.
@@ -466,9 +474,13 @@ async function beginRecording():Promise<void>{
           if(token.intent)
             await assertNoVerifiedAssignmentRemoval(token.intent.assignmentId)
           if(!ownsCamera(identity,generation))return
-          const finishedAt=Date.now()
-          if(finishedAt<=startedAt||finishedAt-startedAt>recordLimitMs+2000)
-            throw Error('camera.recording_duration_invalid')
+          if(finishedAt<=startedAt)throw Error('camera.recording_duration_invalid')
+          // Recheck sensitive consent before generic duration failures. A
+          // revoked GPS permission must remain a distinct fail-closed reason.
+          if(token.privateFields.gps&&await consentedGPS(
+            token.privateFields.gps,gpsAtStart,startedAt)!==token.privateFields.gps)
+            throw Error('camera.gps_consent_changed')
+          assertRecordingDuration(mode,durationMs)
           const suffix=mime.includes('webm')?'webm'
             :mime.includes('ogg')?'ogg':'mp4'
           const file=new File(parts,
@@ -476,9 +488,6 @@ async function beginRecording():Promise<void>{
             {type:mime,lastModified:startedAt})
           const capture:MediaCaptureIntent|undefined=intent
             ?{...intent,finishedAt}:undefined
-          if(token.privateFields.gps&&await consentedGPS(
-            token.privateFields.gps,gpsAtStart,startedAt)!==token.privateFields.gps)
-            throw Error('camera.gps_consent_changed')
           const assertCurrent=()=>{
             assertOwner()
             if(intent&&selectedAssignment.value!==intent.assignmentId)
@@ -499,9 +508,11 @@ async function beginRecording():Promise<void>{
     recordingTimer=setTimeout(()=>{
       if(activeRecording===token&&worker.state==='recording'){
         token.saveOnStop=true
+        token.stoppedMono=performance.now()
+        token.finishedAt=Date.now()
         worker.stop()
       }
-    },recordLimitMs)
+    },recordingBounds(mode).maxMs)
   }catch(e){
     discardRecording()
     if(ownsCamera(identity,generation))
@@ -511,7 +522,11 @@ async function beginRecording():Promise<void>{
 function endRecording():void{
   const worker=recorder.value
   if(worker&&worker.state==='recording'){
-    if(activeRecording)activeRecording.saveOnStop=true
+    if(activeRecording){
+      activeRecording.saveOnStop=true
+      activeRecording.stoppedMono=performance.now()
+      activeRecording.finishedAt=Date.now()
+    }
     worker.stop()
   }
 }
@@ -789,7 +804,7 @@ onUnmounted(()=>{
         </button>
       </div>
       <p v-if="recording" role="status" class="status-text" data-testid="camera-recording-status">
-        Идёт запись с {{ recordingStartedAt?new Date(recordingStartedAt).toLocaleTimeString():'' }}. Максимум 175 секунд и 128 MiB.
+        Идёт запись с {{ recordingStartedAt?new Date(recordingStartedAt).toLocaleTimeString():'' }}. От 5 до {{ recordingMaxSeconds }} секунд, не более 128 MiB.
       </p>
       <p class="muted">В системную медиатеку запись не сохраняется. Сначала создаётся только зашифрованный файл в локальном хранилище. Во время MediaRecorder исходные части находятся в оперативной памяти браузера; закрытие страницы до шифрования приведёт к потере несохранённой записи.</p>
     </template>
