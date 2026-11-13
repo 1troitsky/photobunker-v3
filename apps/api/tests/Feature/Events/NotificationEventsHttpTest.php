@@ -121,6 +121,45 @@ final class NotificationEventsHttpTest extends TestCase
             $this->accounts['bob'][0])->assertStatus(422);
     }
 
+    public function test_ack_is_device_scoped_bounded_and_monotonic_not_read_state(): void
+    {
+        [$alice] = $this->publish('alice', 1);
+        $this->publish('bob', 1);
+        $path = '/notifications/v1/ack';
+        $this->withHeader('Origin', 'https://localhost');
+        $this->postJson($path, ['cursor' => '1'])->assertUnauthorized();
+        $this->login('alice');
+        $this->postJson($path, ['cursor' => '1'])->assertOk()
+            ->assertJsonPath('schemaVersion', 1)
+            ->assertJsonPath('acknowledgedCursor', '1')
+            ->assertJsonPath('advanced', true);
+        $this->postJson($path, ['cursor' => '1'])->assertOk()
+            ->assertJsonPath('advanced', false);
+        $this->postJson($path, ['cursor' => '0'])->assertOk()
+            ->assertJsonPath('acknowledgedCursor', '1')
+            ->assertJsonPath('advanced', false);
+        $this->postJson($path, ['cursor' => '2'])->assertStatus(409);
+        $this->postJson($path, ['cursor' => '01'])->assertStatus(422);
+        $this->postJson($path, [
+            'cursor' => '1','deviceId' => $this->accounts['bob'][1],
+        ])->assertStatus(422);
+        $this->assertDatabaseHas('notification_device_ack_v1', [
+            'account_id' => $this->accounts['alice'][0],
+            'device_id' => $this->accounts['alice'][1],
+            'ack_cursor' => 1,
+        ]);
+        $this->assertSame(0, DB::table('notification_device_ack_v1')
+            ->where('account_id', $this->accounts['bob'][0])->count());
+        // ACK never deletes server events or turns notification into read.
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonPath('items.0.id', $alice['eventId']);
+
+        DB::table('identity_devices')->where('id', $this->accounts['alice'][1])
+            ->update(['revoked_at' => now()]);
+        $this->postJson($path, ['cursor' => '1'])->assertUnauthorized();
+        $this->assertDatabaseCount('notification_event_ledger_v1', 2);
+    }
+
     public function test_click_target_denies_foreign_non_navigable_and_untrusted_queries(): void
     {
         [$alice] = $this->publish('alice', 1);
