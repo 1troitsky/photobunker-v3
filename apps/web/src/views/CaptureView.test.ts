@@ -805,9 +805,22 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
   })
 
   it('refuses to start MediaRecorder if encrypted recording journal cannot initialize',async()=>{
-    const opened=await openMode('audio')
-    expect(BoundedRecorder.latest!.state).toBe('recording')
-    expect(opened.track.stop).not.toHaveBeenCalled()
+    BoundedRecorder.latest=null
+    vi.stubGlobal('MediaRecorder',BoundedRecorder)
+    await mount()
+    requests[0]!.resolve(media().stream);await settle()
+    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const opened=media()
+    requests[1]!.resolve(opened.stream);await settle()
+    mocks.draftCreate.mockRejectedValueOnce(Error('camera.recording_storage_unavailable'))
+    button('Начать запись аудио').click()
+    await settle();await settle()
+    expect(host.textContent).toContain('camera.recording_storage_unavailable')
+    expect(BoundedRecorder.latest?.state).toBe('inactive')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(mocks.draftSeal).not.toHaveBeenCalled()
   })
 
   it('does not apply audio-only target setting to video recorder',async()=>{
