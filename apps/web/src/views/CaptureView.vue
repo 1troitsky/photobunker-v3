@@ -7,6 +7,8 @@ import { enqueueEncryptedMedia } from '../features/media/application/media-outbo
 import {
   appendEncryptedRecordingSegment,createEncryptedRecordingDraft,
   deleteEncryptedRecordingDraft,interruptEncryptedRecordingDraft,
+  listEncryptedRecordingDrafts,purgeExpiredEncryptedRecordingDrafts,
+  readEncryptedRecordingForPrivateReview,
   readCompletedEncryptedRecording,sealEncryptedRecordingDraft,
 } from '../features/media/application/recording-encrypted-journal'
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
@@ -91,6 +93,83 @@ async function loadPrivateInstructions():Promise<void>{
       assignmentPrivateScope.value=''
       privateInstructionState.value='unavailable'
     }
+  }
+}
+type LocalRecordingDraft=Awaited<ReturnType<typeof listEncryptedRecordingDrafts>>[number]
+const localDrafts=ref<LocalRecordingDraft[]>([])
+const privateReviewUrl=ref<string|null>(null)
+const privateReviewKind=ref<'audio'|'video'|null>(null)
+const privateReviewId=ref<string|null>(null)
+const localDraftError=ref('')
+let privateReviewEpoch=0
+function closePrivateRecordingReview():void {
+  privateReviewEpoch++
+  const url=privateReviewUrl.value
+  privateReviewUrl.value=null
+  privateReviewKind.value=null
+  privateReviewId.value=null
+  if(url)URL.revokeObjectURL(url)
+}
+async function refreshLocalRecordingDrafts(pruneExpired=false):Promise<void>{
+  const identity=cameraIdentity(activeSession.value)
+  if(!identity){localDrafts.value=[];return}
+  try{
+    if(pruneExpired)await purgeExpiredEncryptedRecordingDrafts()
+    const found=await listEncryptedRecordingDrafts()
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value))){
+      // Active drafts may belong to an open recorder in another tab. Never
+      // expose an in-progress plaintext preview or provide a destructive UI.
+      localDrafts.value=found.filter(r=>r.state==='interrupted'||r.state==='complete')
+      localDraftError.value=''
+    }
+  }catch{
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value))){
+      localDrafts.value=[]
+      localDraftError.value='camera.recording_draft_unavailable'
+    }
+  }
+}
+async function reviewPrivateRecordingDraft(id:string):Promise<void>{
+  if(recording.value||busy.value||!localDrafts.value.some(
+    row=>row.recordingId===id&&row.state!=='writing'))return
+  closePrivateRecordingReview()
+  const reviewEpoch=privateReviewEpoch
+  const identity=cameraIdentity(activeSession.value)
+  localDraftError.value=''
+  try{
+    const blob=await readEncryptedRecordingForPrivateReview(id)
+    if(disposed||reviewEpoch!==privateReviewEpoch
+      ||!sameIdentity(identity,cameraIdentity(activeSession.value)))return
+    const entry=localDrafts.value.find(row=>row.recordingId===id)
+    if(!entry||entry.state==='writing')return
+    const url=URL.createObjectURL(blob)
+    if(disposed||reviewEpoch!==privateReviewEpoch
+      ||!sameIdentity(identity,cameraIdentity(activeSession.value))){
+      URL.revokeObjectURL(url)
+      return
+    }
+    privateReviewKind.value=entry.kind
+    privateReviewUrl.value=url
+    privateReviewId.value=id
+  }catch{
+    if(!disposed&&reviewEpoch===privateReviewEpoch
+      &&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      localDraftError.value='camera.recording_review_unavailable'
+  }
+}
+async function removePrivateRecordingDraft(id:string):Promise<void>{
+  if(recording.value||busy.value||!localDrafts.value.some(
+    row=>row.recordingId===id&&row.state!=='writing'))return
+  if(!window.confirm('Удалить зашифрованные фрагменты этой записи с устройства?'))return
+  const identity=cameraIdentity(activeSession.value)
+  if(privateReviewId.value===id)closePrivateRecordingReview()
+  try{
+    await deleteEncryptedRecordingDraft(id)
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      await refreshLocalRecordingDrafts()
+  }catch{
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      localDraftError.value='camera.recording_delete_failed'
   }
 }
 const recording=ref(false)
@@ -222,6 +301,7 @@ function discardRecording():void {
     try{await interruptEncryptedRecordingDraft(ticket.draftId)}catch{
       // Lost identity/key/expiry must fail closed. Scratch is not published.
     }
+    void refreshLocalRecordingDrafts()
   })
   if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
   if(old&&old.state!=='inactive'){
@@ -597,11 +677,13 @@ async function beginRecording():Promise<void>{
           // Only after durable signed encrypted MediaFile exists may we GC
           // the scratch ciphertext. A failed GC cannot invalidate success.
           try{await deleteEncryptedRecordingDraft(token.draftId)}catch{}
+          void refreshLocalRecordingDrafts()
           if(!ownsCamera(identity,generation))return
           message.value='Запись зашифрована и сохранена локально: '+id.slice(0,8)
         }catch(e){
           // No implicit publication of invalid or interrupted drafts.
           try{await interruptEncryptedRecordingDraft(token.draftId)}catch{}
+          void refreshLocalRecordingDrafts()
           if(ownsCamera(identity,generation))
             error.value=e instanceof Error?e.message:'camera.media_failed'
         }finally{busy.value=false}
@@ -737,6 +819,8 @@ async function capture():Promise<void> {
 watch(activeSession,session=>{
   const identity=cameraIdentity(session)
   if(!sameIdentity(observedIdentity,identity)){
+    closePrivateRecordingReview()
+    localDrafts.value=[];localDraftError.value=''
     observedIdentity=identity;cameraGeneration++
     releaseStream()
     policies.value=[];selectedAssignment.value='';policyNotice.value=''
@@ -747,11 +831,16 @@ watch(activeSession,session=>{
     message.value='';error.value=''
   }
   if(!session)return
+  void refreshLocalRecordingDrafts(true)
   void refreshPolicies()
   void nextTick().then(startCamera)
 },{flush:'sync'})
 onMounted(()=>{
-  if(activeSession.value){void refreshPolicies();void nextTick().then(startCamera)}
+  if(activeSession.value){
+    void refreshLocalRecordingDrafts(true)
+    void refreshPolicies()
+    void nextTick().then(startCamera)
+  }
 })
 watch(selectedAssignment,()=>{
   captureContextGeneration++
@@ -766,6 +855,7 @@ watch(()=>route.query.assignmentId,()=>{
   void refreshPolicies()
 },{flush:'sync'})
 watch(captureMode,()=>{
+  closePrivateRecordingReview()
   closeCamera()
   if(!disposed&&activeSession.value){
     cameraWanted=true
@@ -773,6 +863,7 @@ watch(captureMode,()=>{
   }
 })
 onUnmounted(()=>{
+  closePrivateRecordingReview()
   disposed=true;++instructionGeneration;assignmentPrivate.value=null
   assignmentPrivateScope.value=''
   privateInstructionState.value='none';closeCamera()
@@ -925,7 +1016,40 @@ onUnmounted(()=>{
       <p v-if="recording" role="status" class="status-text" data-testid="camera-recording-status">
         Идёт запись с {{ recordingStartedAt?new Date(recordingStartedAt).toLocaleTimeString():'' }}. От 5 до {{ recordingMaxSeconds }} секунд, не более 128 MiB.
       </p>
-      <p class="muted">В системную медиатеку запись не сохраняется. Сначала создаётся только зашифрованный файл в локальном хранилище. Во время MediaRecorder исходные части находятся в оперативной памяти браузера; закрытие страницы до шифрования приведёт к потере несохранённой записи.</p>
+      <p class="muted">В системную медиатеку запись не сохраняется. Полученные фрагменты последовательно шифруются в локальном хранилище. Ещё не зашифрованные части остаются только в оперативной памяти; закрытие страницы может привести к потере последних фрагментов.</p>
+      <section v-if="localDrafts.length" class="foundation-card"
+        data-testid="camera-encrypted-draft-recovery">
+        <h2>Сохранённые зашифрованные фрагменты</h2>
+        <p class="muted">После прерывания доступны только для приватного просмотра на этом устройстве. Частичный файл может не воспроизводиться из-за формата браузера. Ничего не отправляется в облако автоматически.</p>
+        <ul>
+          <li v-for="draft in localDrafts" :key="draft.recordingId"
+            :data-testid="'camera-encrypted-draft-'+draft.recordingId">
+            {{ draft.kind==='audio'?'Аудио':'Видео' }} ·
+            {{ draft.chunkCount }} фрагментов ·
+            {{ Math.ceil(draft.plainBytes/1024) }} КиБ ·
+            {{ draft.state==='interrupted'?'Прервана':'Не отправлена' }}
+            <div class="action-row">
+              <button type="button" :disabled="recording||busy"
+                @click="reviewPrivateRecordingDraft(draft.recordingId)">
+                Просмотреть локально
+              </button>
+              <button type="button" :disabled="recording||busy"
+                @click="removePrivateRecordingDraft(draft.recordingId)">
+                Удалить фрагменты
+              </button>
+            </div>
+          </li>
+        </ul>
+        <div v-if="privateReviewUrl" data-testid="camera-private-draft-preview">
+          <audio v-if="privateReviewKind==='audio'" controls :src="privateReviewUrl"
+            aria-label="Приватный предпросмотр аудиофрагментов"/>
+          <video v-else controls playsinline :src="privateReviewUrl"
+            aria-label="Приватный предпросмотр видеофрагментов"/>
+          <button type="button" @click="closePrivateRecordingReview">Закрыть предпросмотр</button>
+        </div>
+      </section>
+      <p v-if="localDraftError" role="alert" class="error-text"
+        data-testid="camera-draft-error">{{ localDraftError }}</p>
     </template>
     <p v-if="message" role="status" class="status-text">{{ message }}</p>
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>
