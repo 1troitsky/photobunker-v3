@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../apps/api/app/Storage/Byo/ByoS3Pin.php';
 require_once __DIR__ . '/../apps/api/app/Storage/Byo/ByoS3EndpointGuard.php';
+require_once __DIR__ . '/../apps/api/app/Storage/Byo/ByoS3DnsResolver.php';
 
 use App\Storage\Byo\ByoS3EndpointGuard;
+use App\Storage\Byo\ByoS3DnsResolver;
 
 $version = PHP_VERSION_ID;
 if (!(($version >= 80427 && $version < 80500) || ($version >= 80512 && $version < 80600))) {
@@ -69,5 +71,77 @@ $v6 = $guard->admit('https://s3.example.com', ['2001:4860:4860::8888']);
 $v6->assertConnectedPeer('2001:4860:4860:0:0:0:0:8888');
 $count++;
 $deny(static fn () => $v6->assertConnectedPeer('2001:4860:4860::8844'), 'storage.byo_peer_not_pinned');
+
+
+$dns = new ByoS3DnsResolver($guard);
+$queries = [];
+$rrs = [
+    's3.example.com' => [['host' => 's3.example.com', 'type' => 'CNAME', 'target' => 'edge.example.net.']],
+    'edge.example.net' => [
+        ['host' => 'edge.example.net.', 'type' => 'A', 'ip' => '8.8.8.8'],
+        ['host' => 'edge.example.net.', 'type' => 'AAAA', 'ipv6' => '2001:4860:4860::8888'],
+    ],
+];
+$lookup = static function (string $host) use ($rrs, &$queries): array {
+    $queries[] = $host;
+    return $rrs[$host] ?? [];
+};
+$resolved = $dns->resolve('https://S3.Example.Com/', $lookup);
+$check($resolved->hostname === 's3.example.com', 'DNS CNAME preserves original HTTPS hostname');
+$check($resolved->addresses() === ['8.8.8.8', '2001:4860:4860::8888'], 'all final A/AAAA pinned');
+$check($queries === ['s3.example.com', 'edge.example.net'], 'DNS walks only validated alias chain');
+$deny(static fn () => $resolved->assertConnectedPeer('10.0.0.1'), 'storage.byo_peer_not_pinned');
+$deny(
+    static fn () => $dns->resolve('https://s3.example.com',
+        static fn (string $h): array => [['host'=>$h,'type'=>'A','ip'=>'127.0.0.1']]),
+    'storage.byo_dns_unsafe',
+);
+$deny(
+    static fn () => $dns->resolve('https://s3.example.com',
+        static fn (string $h): array => [
+            ['host'=>$h,'type'=>'A','ip'=>'8.8.8.8'],
+            ['host'=>$h,'type'=>'AAAA','ipv6'=>'fd00::1'],
+        ]),
+    'storage.byo_dns_unsafe',
+);
+$deny(
+    static fn () => $dns->resolve('https://s3.example.com',
+        static fn (string $h): array => [['host'=>$h,'type'=>'CNAME','target'=>$h]]),
+    'storage.byo_dns_unsafe',
+);
+$deny(
+    static fn () => $dns->resolve('https://s3.example.com',
+        static fn (string $h): array => [
+            ['host'=>$h,'type'=>'CNAME','target'=>'edge.example.net'],
+            ['host'=>$h,'type'=>'A','ip'=>'8.8.8.8'],
+        ]),
+    'storage.byo_dns_unsafe',
+);
+$deny(
+    static fn () => $dns->resolve('https://s3.example.com',
+        static fn (string $h): array => [['host'=>$h,'type'=>'CNAME','target'=>'metadata.google.internal']]),
+    'storage.byo_dns_unsafe',
+);
+$deny(
+    static fn () => $dns->resolve('https://s3.example.com',
+        static fn (string $h): array => [['host'=>'elsewhere.example.net','type'=>'A','ip'=>'8.8.8.8']]),
+    'storage.byo_dns_unsafe',
+);
+$deny(
+    static fn () => $dns->resolve('https://s3.example.com', static fn (string $h): array => []),
+    'storage.byo_dns_unsafe',
+);
+$deny(
+    static fn () => $dns->resolve('https://s3.example.com', static function (string $h): never {
+        throw new RuntimeException('upstream DNS exception suppressed');
+    }),
+    'storage.byo_dns_unsafe',
+);
+$before = count($queries);
+$deny(
+    static fn () => $dns->resolve('http://s3.example.com', $lookup),
+    'storage.byo_endpoint_invalid',
+);
+$check(count($queries) === $before, 'invalid origin causes no DNS IO');
 
 fwrite(STDOUT, "BYO S3 endpoint offline contract PASS: {$count} checks, PHP " . PHP_VERSION . "; no network, credentials or S3 I/O\n");
