@@ -1,0 +1,1135 @@
+{
+  "date": "2026-11-13",
+  "main": "da7327b8c9c440dae3dc864b3245b9f9f4ad14eb",
+  "bundle": "f4bce2e1ab3e5ad72ec1d7e8c8f4d7517e286faa",
+  "validated_code": "9e2fbd71b0ef6b56d9b647eb84f6e9d023bfcd57",
+  "integration_branch": "integration/global-acceptance-20261113",
+  "environment": {
+    "php": [
+      "8.4.27",
+      "8.5.12"
+    ],
+    "laravel": "13.39.0",
+    "postgres": "18.6",
+    "garage": "2.5.0",
+    "node": "22.23.3",
+    "pnpm": "10.20.0",
+    "python": "3.9.6",
+    "chromium": "Playwright1.56.1 macOS fake-camera/synthetic-geolocation fixtures",
+    "loopback_only": true,
+    "separate_compose_project": true,
+    "separate_named_volumes": true,
+    "CI_fixture_guard_compatibility_GITHUB_ACTIONS_true": "Local isolated namespace only; not a GitHub-hosted CI claim"
+  },
+  "local": {
+    "typescript": {
+      "status": "PASS",
+      "command": "pnpm typecheck",
+      "exit": 0
+    },
+    "build": {
+      "status": "PASS",
+      "command": "pnpm build",
+      "exit": 0
+    },
+    "vitest": {
+      "status": "PASS",
+      "command": "pnpm test:web",
+      "exit": 0,
+      "passed": 449
+    },
+    "phpunit": {
+      "status": "PASS",
+      "command": "php vendor/bin/phpunit --colors=never",
+      "runtimes": {
+        "8.4.27": {
+          "exit": 0,
+          "tests": 245,
+          "assertions": 3661
+        },
+        "8.5.12": {
+          "exit": 0,
+          "tests": 245,
+          "assertions": 3661
+        }
+      }
+    },
+    "fresh_pg_migrations": {
+      "status": "PASS",
+      "command": "php artisan migrate --force",
+      "exit": 0,
+      "migrations": 36
+    },
+    "nonempty_main_upgrade": {
+      "status": "PASS",
+      "main_migrations": 24,
+      "added_migrations": 12,
+      "original_rows_unchanged": 6,
+      "garage_bytes_unchanged": true,
+      "meter_backfill_correct": true,
+      "scope": "synthetic database rows and random-byte object preservation; not separate cryptographic provenance"
+    },
+    "quota_races": {
+      "status": "PASS",
+      "command": "php tests/integration/p1-quota-postgres-race.php",
+      "exit": 0,
+      "independent_two_process_cases": 5
+    },
+    "garage_smoke": {
+      "status": "PASS",
+      "command": "php tests/integration/garage-postgres-smoke.php",
+      "exit": 0
+    },
+    "garage_lifecycle": {
+      "status": "PASS",
+      "command": "php tests/integration/lifecycle-garage-smoke.php",
+      "exit": 0
+    },
+    "garage_outage_new_worker_lost_ack": {
+      "status": "PASS",
+      "command": "php tests/integration/p4-fault-matrix/garage-outage.php prepare|s3-down|recover, with actual owned Garage stop/start between processes",
+      "exit": 0,
+      "database_failure": "injected unavailable PG connection, PostgreSQL server remains live",
+      "patched_dependencies_rerun": "PASS via exported local.py fault; new per-run fixture path preserves previous evidence"
+    },
+    "unsigned_release_integrity": {
+      "status": "PASS",
+      "command": "TMPDIR=<canonical-private-dir> node --test scripts/release-integrity/integrity.test.mjs",
+      "exit": 0,
+      "tests": 32,
+      "signature_verification_claimed": false
+    },
+    "ux_source": {
+      "status": "PASS",
+      "command": "node docs/ux-integration/verify-source.mjs",
+      "exit": 0,
+      "exact_reference_files": 117
+    },
+    "ux_lane": {
+      "status": "PASS",
+      "command": "node --test docs/ux-integration/check-pr-lane.test.mjs",
+      "exit": 0,
+      "tests": 5
+    },
+    "chromium_final": {
+      "status": "PASS",
+      "command": "pnpm exec playwright test --config tests/playwright.config.ts --reporter=json",
+      "exit": 0,
+      "passed": 84,
+      "skipped": 0,
+      "retries": 0,
+      "duration_ms": 248300.17799999999,
+      "cases": [
+        {
+          "file": "p1-assignment-media.spec.ts",
+          "title": "P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-billing-retention-proxy.spec.ts",
+          "title": "P1 #283 unauthenticated billing is denied, enrolled PWA reads own Free retention cap",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-camera-session.spec.ts",
+          "title": "late permission survives real online hydration with one live stream",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-camera-session.spec.ts",
+          "title": "equivalent Session replacement keeps the existing stream",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-camera-session.spec.ts",
+          "title": "real account switch during permission stops the stale result before opening another",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-camera-session.spec.ts",
+          "title": "leaving before permission resolves releases every late track without reopening",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-camera-session.spec.ts",
+          "title": "denied permission is recoverable by a single explicit retry",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-camera-session.spec.ts",
+          "title": "hydrated camera captures offline against an already verified signed assignment policy",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-contact-assignment-picker.spec.ts",
+          "title": "P1-26: confirmed contact → explicit owner-signed assignment invitation, no implicit access",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-encrypted-contacts.spec.ts",
+          "title": "P1-25: verified peer → encrypted Contacts & Teams → offline persistence → local removal",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-fault-injection-envelopes.spec.ts",
+          "title": "P1-25 lost finalize ACK: real commit, offline E2EE outbox, idempotent replay, stranger denied",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-fault-injection-envelopes.spec.ts",
+          "title": "P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean retry",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-grant-revocation-matrix.spec.ts",
+          "title": "P1 ACL matrix: A→B verified grant only, C denied, source namespace denied, revoke blocks B and recovered B2",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-identity-photo.spec.ts",
+          "title": "P1-09: Free monthly quota accepts three signed creates, rejects fourth without deleting local ciphertext",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-identity-photo.spec.ts",
+          "title": "two browser identities: key-only account, encrypted camera photo, Garage recovery",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-identity-photo.spec.ts",
+          "title": "P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-identity-photo.spec.ts",
+          "title": "P1-04: A creates encrypted assignment, B accepts and submits a photo grant, A decrypts",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-identity-photo.spec.ts",
+          "title": "P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-media-resumable-large.spec.ts",
+          "title": "P1 #200 >64MiB ciphertext survives offline, lost ACK, reload and independent E2EE readback",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-media-revisions.spec.ts",
+          "title": "P1-12: immutable owner-signed media versions survive Garage+Recovery Key without modifying original or inheriting grants",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-media.spec.ts",
+          "title": "P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → independent recovered owner decrypt",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-media.spec.ts",
+          "title": "P1-11: two independently verified accounts exchange 1-key E2EE audio grant, recipient decrypts and owner revokes without deleting original",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-qa-paid-downgrade-retention.spec.ts",
+          "title": "P1 #287 synthetic go to Free retains original E2EE and new Free13 writes",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-qa-paid-downgrade-retention.spec.ts",
+          "title": "P1 #287 synthetic pro to Free retains original E2EE and new Free13 writes",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-qa-paid-retention-garage.spec.ts",
+          "title": "P1 #285 synthetic verified go signed 29d Photo+Media E2EE to real Garage",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-qa-paid-retention-garage.spec.ts",
+          "title": "P1 #285 synthetic verified pro signed 89d Photo+Media E2EE to real Garage",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-recovery-device-acceptance.spec.ts",
+          "title": "P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and offline access boundary",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-recovery-device-acceptance.spec.ts",
+          "title": "P1 #199: wrong Recovery Key, invalid signed login proof and other account denied",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-teams-invitations.spec.ts",
+          "title": "P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p1-teams-owner.spec.ts",
+          "title": "P1-27: owner-signed encrypted Team → durable local queue → server ACL → offline local read",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-archive-batch.spec.ts",
+          "title": "P2 Browser: owner-confirmed sequential batch archive and restore use real signed per-file ledger",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-archive-conflict.spec.ts",
+          "title": "P2 Archive: unresolved signed delete/archival command cannot be discarded; obsolete CAS can",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-archive-preferences.spec.ts",
+          "title": "P2 Browser: Local-First signed archive settings, independent-device recovery, no auto-TTL extension and direct delete",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-archive.spec.ts",
+          "title": "P2 Browser: signed owner media archive, restore, then permanent tombstone without fabricated GC ACK",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-assignment-preview-ceiling.spec.ts",
+          "title": "P2 assignment: signed owner-only field ceiling, queued offline revision and NO public grant",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-audio-wav.spec.ts",
+          "title": "P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser with separate OS export",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-camera-gps-consent-race.spec.ts",
+          "title": "Issue #260 revoke between fix and shutter without re-request; required=false",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-camera-gps-consent-race.spec.ts",
+          "title": "Issue #260 revoke between fix and shutter without re-request; required=true",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-camera-gps-permission.spec.ts",
+          "title": "P2 #208 explicit high-accuracy GPS request, private AES-GCM capture and no plaintext network leak",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-camera-gps-permission.spec.ts",
+          "title": "P2 #208 signed required-GPS policy rejects denied capture offline, then accepts genuine consent",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-camera-gps-permission.spec.ts",
+          "title": "P2 #208 3-minute-old GPS provider fix fails closed even with earlier consent",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-camera-gps-permission.spec.ts",
+          "title": "P2 #208 revoking geolocation must invalidate old fix before another capture",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-catalog.spec.ts",
+          "title": "P2 Browser v3: real anonymous login → offline encrypted media → catalog filters and decrypted viewer",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-catalog.spec.ts",
+          "title": "P2 Browser: sort two genuinely encrypted offline files by confirmed byte size",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-contributor-photo-submission.spec.ts",
+          "title": "P2 contributor: signed imported Photo MediaFile receipt requires scoped E2EE, owner decrypt and revoke",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-editor-personal-metadata-copy.spec.ts",
+          "title": "P2 V-47: private Info edits create only a separate AES-GCM personal copy without GPS/ACL inheritance",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-editor-route-journey.spec.ts",
+          "title": "P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save → same Viewer → Browser",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-file-viewer-index-target.spec.ts",
+          "title": "P2 File Viewer: authenticated deep-link target on opaque index page 2, reject replay and preserve ciphertext",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-folder-cloud-sync.spec.ts",
+          "title": "P2 Browser: two recovered devices exchange signed E2EE folders, replay Lost ACK and refuse divergent offline edits",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-folders.spec.ts",
+          "title": "P2 Browser: encrypted device-local nested folders survive reload and never move media ciphertext",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-folders.spec.ts",
+          "title": "P2 Browser: corrupt encrypted folder snapshot fails closed without overwriting ciphertext",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-https-link-import.spec.ts",
+          "title": "P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder -> Garage -> recovered device, no source URL in API",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-https-link-import.spec.ts",
+          "title": "P2 Browser: rejects private/HTTP address locally and never contacts the source",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-large-account.spec.ts",
+          "title": "P2 Browser 10k+ metadata: AES-GCM fixtures, 201 cursor pages, bounded search, stable sort",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-large-account.spec.ts",
+          "title": "P2 Browser: 10k index cannot grant access; real E2EE deep link page 2 is server-authorized",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-media-grant-clock-margin.spec.ts",
+          "title": "Integration #63: +2min client clock, real signed media grant/replay/readback/revoke",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-multi-import.spec.ts",
+          "title": "P2 Browser: offline multi-select and drag-drop AES-GCM import into selected folder persists after reload and cloud sync",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-photo-aspect-presets.spec.ts",
+          "title": "P2 V-48: authenticated JPEG ratio presets and +90° rotate are real raster pixels, then E2EE save",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-photo-before-after.spec.ts",
+          "title": "P2 Viewer: before/after shows original without exporting or changing edited E2EE derivative",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-photo-blackouts.spec.ts",
+          "title": "P2 Viewer: opaque blackout overwrites JPEG pixels only in a new encrypted personal derivative",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-photo-crop.spec.ts",
+          "title": "P2 Viewer: real JPEG crop/rotate → preview only → independent encrypted Browser copy",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-photo-five-shape-toolbar.spec.ts",
+          "title": "P2 V-50: five real shape tools stay on one mobile row, fill and stroke flatten into encrypted JPEG",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-photo-fullresolution-export.spec.ts",
+          "title": "P2 V55: >4096px / >16.8MP encrypted JPEG preserves native pixels; low-memory fails closed",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-photo-inline-text.spec.ts",
+          "title": "P2 V-49: tap a photo to type text inline, synchronize list/undo/redo, save genuine encrypted JPEG",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-photo-shapes.spec.ts",
+          "title": "P2 Viewer: shape stroke and fill flatten into separate E2EE JPEG without leaking mark data",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-photo-strokes.spec.ts",
+          "title": "P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixels",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-photo-text.spec.ts",
+          "title": "P2 Viewer: editable movable photo text is flattened only into new E2EE JPEG",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-private-search.spec.ts",
+          "title": "P2 Browser: offline private metadata search and second-device cloud search without plaintext disclosure",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-safe-recipient.spec.ts",
+          "title": "P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and revokes read",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-video-still.spec.ts",
+          "title": "P2 Viewer: decoded video frame → volatile JPEG → offline E2EE Browser file and confirmed device download",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-video-trim-edl.spec.ts",
+          "title": "P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/undo without MP4 export",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-viewer-accepted-layout.spec.ts",
+          "title": "P2 V-41: File Viewer fixed mobile/desktop geometry, media switching and accessible sheets",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-viewer-origin-scoped-pager.spec.ts",
+          "title": "P2 File Viewer: navigate exactly the Browser folder/filter order and return to last viewed encrypted file",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-viewer-return-context.spec.ts",
+          "title": "P2 Browser->File Viewer->Browser: restore encrypted folder, filter, private search and list anchor",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-browser-viewer.spec.ts",
+          "title": "P2 File Viewer: actual encrypted media, same-origin export, keyboard navigation and logout wipe",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-settings-appearance-dock.spec.ts",
+          "title": "UX Appearance 1.3: Dock draft, cancel, save, device reload and protected Settings",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-settings-appearance-start-page.spec.ts",
+          "title": "UX Appearance 1.3: atomic Dock and Start Page, Cancel, reload, exact search and deep links",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-settings-dock-mobile-acceptance.spec.ts",
+          "title": "P2 #214 mobile 320px: three/four/five real Dock routes, offline save, reload and Cancel",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-settings-dock-mobile-acceptance.spec.ts",
+          "title": "P2 #214 keyboard drag, mandatory Profile and rollback of draft order",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-settings-dock-mobile-acceptance.spec.ts",
+          "title": "P2 #214 mobile RU/EN Dock search focus, retap one-level and hidden-section navigation",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-settings-dock-retap.spec.ts",
+          "title": "UX Dock retap: Settings goes back one in-section screen and root never stacks",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-settings-dock-retap.spec.ts",
+          "title": "UX Dock retap: editor -> viewer -> browser without external history back",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-settings-hub-identity-safe.spec.ts",
+          "title": "UX: settings hub provides real Contacts route without breaking Key-Only Identity",
+          "status": "PASS",
+          "attempts": 1
+        },
+        {
+          "file": "p2-settings-search-deep-link.spec.ts",
+          "title": "UX Settings search: Header, RU/EN synonym, exact Dock field, browser Back and pending language",
+          "status": "PASS",
+          "attempts": 1
+        }
+      ]
+    },
+    "clock_margin_target": {
+      "status": "PASS",
+      "passed": 1,
+      "exit": 0,
+      "server_revoke_response": 410,
+      "real_clock_lead_ms": 120000
+    },
+    "upgrade_private_dumps_preserved": {
+      "primary_bytes": 3080083,
+      "upgrade_bytes": 117339,
+      "mode": "0600"
+    }
+  },
+  "security": {
+    "composer_before": {
+      "status": "FAIL",
+      "advisory_matches": 8,
+      "affected_packages": 5,
+      "exit": 1
+    },
+    "patch": {
+      "symfony/filesystem": {
+        "before": "v8.1.9",
+        "after": "v8.1.11"
+      },
+      "symfony/http-foundation": {
+        "before": "v8.1.9",
+        "after": "v8.1.11"
+      },
+      "symfony/http-kernel": {
+        "before": "v8.1.9",
+        "after": "v8.1.11"
+      },
+      "symfony/mime": {
+        "before": "v8.1.7",
+        "after": "v8.1.10"
+      },
+      "symfony/routing": {
+        "before": "v8.1.9",
+        "after": "v8.1.11"
+      }
+    },
+    "composer_after": {
+      "status": "PASS",
+      "exit": 0,
+      "advisories": 0,
+      "abandoned": 0
+    },
+    "pnpm_production": {
+      "status": "PASS",
+      "exit": 0,
+      "vulnerabilities": 0,
+      "scope": "production dependency graph, 41 dependencies; not proof of exploit absence"
+    },
+    "exploitation_tests": "NOT TESTED"
+  },
+  "limits": {
+    "safari_automation": "BLOCKED; owner setting disabled, unchanged",
+    "physical_iOS_Android_GNSS": "NOT TESTED",
+    "matrix_connection": "NOT TESTED / excluded by owner",
+    "merchant_payment": "NOT TESTED",
+    "backup_restore_panic_dms": "BLOCKED / incomplete",
+    "signed_PWA": "BLOCKED independent trust anchor / no registered SW"
+  },
+  "diagnostics": {
+    "first_browser_hmr": {
+      "stats": {
+        "startTime": "2026-11-13T12:52:31.369Z",
+        "duration": 383674.184,
+        "expected": 79,
+        "skipped": 0,
+        "unexpected": 4,
+        "flaky": 0
+      },
+      "environment_cause": "Vite was edited before suite; timestamped versus bare offline module URLs",
+      "preserved_traces_private": true
+    },
+    "cold_browser_wrong_new_oracle": {
+      "stats": {
+        "startTime": "2026-11-13T13:01:08.590Z",
+        "duration": 251077.03,
+        "expected": 83,
+        "skipped": 0,
+        "unexpected": 1,
+        "flaky": 0
+      },
+      "existing_83_pass": true,
+      "new_oracle_fix": "Strict existing HTTP410 for revoke; corrected target 1/1 PASS",
+      "original_negative_tests_unchanged": true
+    },
+    "release_integrity_symlink_env": "default macOS /var temp parent rejected; canonical TMPDIR 32/32 PASS without weakening symlink gate",
+    "container_setup": "Garage binary /garage was mistaken for directory; missing vendor mountpoint; both harness-only corrected",
+    "phpunit_environment": "HTTP file-session env leaked into CLI; set exact PHPUnit/CI environment",
+    "phpunit_cli": "Removed unsupported cache-result-file argument; correct cache-directory used",
+    "python39": "Compatible archive extraction validates paths and rejects links"
+  },
+  "commands": [
+    {
+      "name": "compose-up-infra",
+      "command": "docker compose -f <private-audit-dir>/compose.json up -d --wait anchor postgres garage",
+      "exit": 1,
+      "elapsed_seconds": 0.663,
+      "artifact_private": true
+    },
+    {
+      "name": "compose-up-infra",
+      "command": "docker compose -f <private-audit-dir>/compose.json up -d --wait anchor postgres garage",
+      "exit": 0,
+      "elapsed_seconds": 5.36,
+      "artifact_private": true
+    },
+    {
+      "name": "garage-node",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T garage /garage node id -q",
+      "exit": 0,
+      "elapsed_seconds": 0.172,
+      "artifact_private": true
+    },
+    {
+      "name": "garage-layout",
+      "command": "docker compose exec garage /garage layout assign -z audit -c 1G <fixture-node>",
+      "exit": 0,
+      "elapsed_seconds": 0.292,
+      "artifact_private": true
+    },
+    {
+      "name": "garage-apply",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T garage /garage layout apply --version 1",
+      "exit": 0,
+      "elapsed_seconds": 0.236,
+      "artifact_private": true
+    },
+    {
+      "name": "garage-bucket",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T garage /garage bucket create pb3-ci-p0",
+      "exit": 0,
+      "elapsed_seconds": 0.181,
+      "artifact_private": true
+    },
+    {
+      "name": "typecheck",
+      "command": "pnpm typecheck",
+      "exit": 0,
+      "elapsed_seconds": 5.714,
+      "artifact_private": true
+    },
+    {
+      "name": "private-garage-key",
+      "command": "docker compose exec garage /garage key create <disposable-alias>",
+      "exit": 0,
+      "elapsed_seconds": 0.225,
+      "artifact_private": true
+    },
+    {
+      "name": "garage-grant",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T garage /garage bucket allow --read --write --owner pb3-ci-p0 --key audit-key",
+      "exit": 0,
+      "elapsed_seconds": 0.188,
+      "artifact_private": true
+    },
+    {
+      "name": "composer-install",
+      "command": "docker compose -f <private-audit-dir>/compose.json run --rm --no-deps api composer install --no-interaction --no-progress --prefer-dist",
+      "exit": 1,
+      "elapsed_seconds": 0.435,
+      "artifact_private": true
+    },
+    {
+      "name": "vitest",
+      "command": "pnpm test:web",
+      "exit": 0,
+      "elapsed_seconds": 8.714,
+      "artifact_private": true
+    },
+    {
+      "name": "build",
+      "command": "pnpm build",
+      "exit": 0,
+      "elapsed_seconds": 7.638,
+      "artifact_private": true
+    },
+    {
+      "name": "ux-source",
+      "command": "node docs/ux-integration/verify-source.mjs",
+      "exit": 0,
+      "elapsed_seconds": 0.13,
+      "artifact_private": true
+    },
+    {
+      "name": "ux-lane",
+      "command": "node --test docs/ux-integration/check-pr-lane.test.mjs",
+      "exit": 0,
+      "elapsed_seconds": 0.187,
+      "artifact_private": true
+    },
+    {
+      "name": "release-integrity",
+      "command": "node --test scripts/release-integrity/integrity.test.mjs",
+      "exit": 1,
+      "elapsed_seconds": 0.29,
+      "artifact_private": true
+    },
+    {
+      "name": "composer-install",
+      "command": "docker compose -f <private-audit-dir>/compose.json run --rm --no-deps api composer install --no-interaction --no-progress --prefer-dist",
+      "exit": 0,
+      "elapsed_seconds": 8.763,
+      "artifact_private": true
+    },
+    {
+      "name": "migrate",
+      "command": "docker compose -f <private-audit-dir>/compose.json run --rm --no-deps api php artisan migrate --force",
+      "exit": 0,
+      "elapsed_seconds": 0.912,
+      "artifact_private": true
+    },
+    {
+      "name": "api-up",
+      "command": "docker compose -f <private-audit-dir>/compose.json up -d api",
+      "exit": 0,
+      "elapsed_seconds": 0.333,
+      "artifact_private": true
+    },
+    {
+      "name": "runtime84",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php -r require \"vendor/autoload.php\"; echo PHP_VERSION,\" / \",Illuminate\\Foundation\\Application::VERSION,PHP_EOL;",
+      "exit": 0,
+      "elapsed_seconds": 0.455,
+      "artifact_private": true
+    },
+    {
+      "name": "phpunit84",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php vendor/bin/phpunit --colors=never",
+      "exit": 1,
+      "elapsed_seconds": 3.556,
+      "artifact_private": true
+    },
+    {
+      "name": "runtime84",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php -r require \"vendor/autoload.php\"; echo PHP_VERSION,\" / \",Illuminate\\Foundation\\Application::VERSION,PHP_EOL;",
+      "exit": 0,
+      "elapsed_seconds": 0.201,
+      "artifact_private": true
+    },
+    {
+      "name": "phpunit84",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T -e SESSION_DRIVER=array -e CACHE_STORE=array -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: -e APP_URL=https://localhost -e PB3_ENABLE_BROWSER_ARCHIVE=false api php vendor/bin/phpunit --colors=never",
+      "exit": 0,
+      "elapsed_seconds": 4.279,
+      "artifact_private": true
+    },
+    {
+      "name": "runtime85",
+      "command": "docker compose -f <private-audit-dir>/compose.json run --rm --no-deps php85 php -r require \"vendor/autoload.php\"; echo PHP_VERSION,\" / \",Illuminate\\Foundation\\Application::VERSION,PHP_EOL;",
+      "exit": 0,
+      "elapsed_seconds": 0.724,
+      "artifact_private": true
+    },
+    {
+      "name": "phpunit85",
+      "command": "docker compose -f <private-audit-dir>/compose.json run --rm --no-deps -e SESSION_DRIVER=array -e CACHE_STORE=array -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: -e APP_URL=https://localhost -e PB3_ENABLE_BROWSER_ARCHIVE=false php85 php vendor/bin/phpunit --colors=never",
+      "exit": 0,
+      "elapsed_seconds": 4.422,
+      "artifact_private": true
+    },
+    {
+      "name": "route-list",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php artisan route:list",
+      "exit": 0,
+      "elapsed_seconds": 0.228,
+      "artifact_private": true
+    },
+    {
+      "name": "migration-status",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php artisan migrate:status",
+      "exit": 0,
+      "elapsed_seconds": 0.206,
+      "artifact_private": true
+    },
+    {
+      "name": "pg-quota-races",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php tests/integration/p1-quota-postgres-race.php",
+      "exit": 0,
+      "elapsed_seconds": 5.215,
+      "artifact_private": true
+    },
+    {
+      "name": "garage-smoke",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php tests/integration/garage-postgres-smoke.php",
+      "exit": 0,
+      "elapsed_seconds": 0.49,
+      "artifact_private": true
+    },
+    {
+      "name": "garage-lifecycle",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php tests/integration/lifecycle-garage-smoke.php",
+      "exit": 0,
+      "elapsed_seconds": 0.311,
+      "artifact_private": true
+    },
+    {
+      "name": "fault-prepare",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php tests/integration/p4-fault-matrix/garage-outage.php prepare",
+      "exit": 0,
+      "elapsed_seconds": 0.312,
+      "artifact_private": true
+    },
+    {
+      "name": "fault-stop-garage",
+      "command": "docker compose -f <private-audit-dir>/compose.json stop -t 5 garage",
+      "exit": 0,
+      "elapsed_seconds": 0.836,
+      "artifact_private": true
+    },
+    {
+      "name": "fault-s3-down",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php tests/integration/p4-fault-matrix/garage-outage.php s3-down",
+      "exit": 0,
+      "elapsed_seconds": 0.643,
+      "artifact_private": true
+    },
+    {
+      "name": "fault-restart-garage",
+      "command": "docker compose -f <private-audit-dir>/compose.json start garage",
+      "exit": 0,
+      "elapsed_seconds": 0.189,
+      "artifact_private": true
+    },
+    {
+      "name": "fault-recover",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php tests/integration/p4-fault-matrix/garage-outage.php recover",
+      "exit": 0,
+      "elapsed_seconds": 0.294,
+      "artifact_private": true
+    },
+    {
+      "name": "runtime84",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php -r require \"vendor/autoload.php\"; echo PHP_VERSION,\" / \",Illuminate\\Foundation\\Application::VERSION,PHP_EOL;",
+      "exit": 0,
+      "elapsed_seconds": 0.817,
+      "artifact_private": true
+    },
+    {
+      "name": "phpunit84",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T -e SESSION_DRIVER=array -e CACHE_STORE=array -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: -e APP_URL=https://localhost -e PB3_ENABLE_BROWSER_ARCHIVE=false api php vendor/bin/phpunit --colors=never --cache-result-file=/audit/phpunit84.cache",
+      "exit": 2,
+      "elapsed_seconds": 0.361,
+      "artifact_private": true
+    },
+    {
+      "name": "runtime84",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php -r require \"vendor/autoload.php\"; echo PHP_VERSION,\" / \",Illuminate\\Foundation\\Application::VERSION,PHP_EOL;",
+      "exit": 0,
+      "elapsed_seconds": 0.93,
+      "artifact_private": true
+    },
+    {
+      "name": "phpunit84",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T -e SESSION_DRIVER=array -e CACHE_STORE=array -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: -e APP_URL=https://localhost -e PB3_ENABLE_BROWSER_ARCHIVE=false api php vendor/bin/phpunit --colors=never --cache-directory=/audit/phpunit84.cache",
+      "exit": 0,
+      "elapsed_seconds": 5.082,
+      "artifact_private": true
+    },
+    {
+      "name": "runtime85",
+      "command": "docker compose -f <private-audit-dir>/compose.json run --rm --no-deps php85 php -r require \"vendor/autoload.php\"; echo PHP_VERSION,\" / \",Illuminate\\Foundation\\Application::VERSION,PHP_EOL;",
+      "exit": 0,
+      "elapsed_seconds": 0.868,
+      "artifact_private": true
+    },
+    {
+      "name": "phpunit85",
+      "command": "docker compose -f <private-audit-dir>/compose.json run --rm --no-deps -e SESSION_DRIVER=array -e CACHE_STORE=array -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: -e APP_URL=https://localhost -e PB3_ENABLE_BROWSER_ARCHIVE=false php85 php vendor/bin/phpunit --colors=never --cache-directory=/audit/phpunit85.cache",
+      "exit": 0,
+      "elapsed_seconds": 4.898,
+      "artifact_private": true
+    },
+    {
+      "name": "chromium",
+      "command": "pnpm exec playwright test --config tests/playwright.config.ts --reporter=json",
+      "exit": 1,
+      "elapsed_seconds": 385.508,
+      "artifact_private": true
+    },
+    {
+      "name": "chromium",
+      "command": "pnpm exec playwright test --config tests/playwright.config.ts --reporter=json",
+      "exit": 1,
+      "elapsed_seconds": 251.869,
+      "artifact_private": true
+    },
+    {
+      "name": "runtime84",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T api php -r require \"vendor/autoload.php\"; echo PHP_VERSION,\" / \",Illuminate\\Foundation\\Application::VERSION,PHP_EOL;",
+      "exit": 0,
+      "elapsed_seconds": 0.424,
+      "artifact_private": true
+    },
+    {
+      "name": "phpunit84",
+      "command": "docker compose -f <private-audit-dir>/compose.json exec -T -e SESSION_DRIVER=array -e CACHE_STORE=array -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: -e APP_URL=https://localhost -e PB3_ENABLE_BROWSER_ARCHIVE=false api php vendor/bin/phpunit --colors=never --cache-directory=/audit/phpunit84.cache",
+      "exit": 0,
+      "elapsed_seconds": 4.371,
+      "artifact_private": true
+    },
+    {
+      "name": "runtime85",
+      "command": "docker compose -f <private-audit-dir>/compose.json run --rm --no-deps php85 php -r require \"vendor/autoload.php\"; echo PHP_VERSION,\" / \",Illuminate\\Foundation\\Application::VERSION,PHP_EOL;",
+      "exit": 0,
+      "elapsed_seconds": 0.526,
+      "artifact_private": true
+    },
+    {
+      "name": "phpunit85",
+      "command": "docker compose -f <private-audit-dir>/compose.json run --rm --no-deps -e SESSION_DRIVER=array -e CACHE_STORE=array -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: -e APP_URL=https://localhost -e PB3_ENABLE_BROWSER_ARCHIVE=false php85 php vendor/bin/phpunit --colors=never --cache-directory=/audit/phpunit85.cache",
+      "exit": 0,
+      "elapsed_seconds": 4.46,
+      "artifact_private": true
+    },
+    {
+      "name": "chromium",
+      "command": "pnpm exec playwright test --config tests/playwright.config.ts --reporter=json",
+      "exit": 0,
+      "elapsed_seconds": 249.079,
+      "artifact_private": true
+    }
+  ],
+  "candidate_commit_record": "Exact final commit and all final GitHub workflow URLs are recorded in the integration PR Final validation block.",
+  "performance": {
+    "scope": "three warm Vite navigation samples per snapshot, not RUM",
+    "before_ms": [
+      53.99,
+      50.91,
+      53.56
+    ],
+    "after_ms": [
+      51.77,
+      50.55,
+      52.76
+    ],
+    "status": "NOT VERIFIED",
+    "reason": "N=3, no accepted threshold; first fixture had HMR activity. Samples are disclosed, not treated as a valid regression baseline."
+  },
+  "inventory_refreeze": {
+    "all_prs": 198,
+    "open_prs": 189,
+    "new_existing_prs": 0,
+    "head_or_state_drift": false
+  },
+  "patched_fault_commands": [
+    {
+      "name": "fault-prepare",
+      "exit": 0,
+      "elapsed_seconds": 0.312
+    },
+    {
+      "name": "fault-stop-garage",
+      "exit": 0,
+      "elapsed_seconds": 0.836
+    },
+    {
+      "name": "fault-s3-down",
+      "exit": 0,
+      "elapsed_seconds": 0.643
+    },
+    {
+      "name": "fault-restart-garage",
+      "exit": 0,
+      "elapsed_seconds": 0.189
+    },
+    {
+      "name": "fault-recover",
+      "exit": 0,
+      "elapsed_seconds": 0.294
+    },
+    {
+      "name": "fault-directory",
+      "exit": 0,
+      "elapsed_seconds": 0.535
+    },
+    {
+      "name": "fault-prepare",
+      "exit": 0,
+      "elapsed_seconds": 0.531
+    },
+    {
+      "name": "fault-stop-garage",
+      "exit": 0,
+      "elapsed_seconds": 0.579
+    },
+    {
+      "name": "fault-s3-down",
+      "exit": 0,
+      "elapsed_seconds": 0.757
+    },
+    {
+      "name": "fault-restart-garage",
+      "exit": 0,
+      "elapsed_seconds": 0.206
+    },
+    {
+      "name": "fault-recover",
+      "exit": 0,
+      "elapsed_seconds": 0.244
+    }
+  ]
+}
