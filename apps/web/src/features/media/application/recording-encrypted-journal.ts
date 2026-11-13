@@ -16,6 +16,7 @@ type WrappedKey={iv:string;ciphertext:string}
 type DraftRow={
   key:string;accountId:string;recordingId:string;kind:RecordingKind
   mime:string;createdAt:number;expiresAt:number;revision:number
+  wrappingKeyId:string
   wrapped:WrappedKey;nextIndex:number;plainBytes:number;state:DraftState
   durationMs:number|null
 }
@@ -58,7 +59,7 @@ function assertOwner(s:Owner):void{
     throw Error('camera.recording_account_changed')
 }
 function keyOf(s:Owner,id:string):string {
-  if(!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/.test(id))
+  if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(id))
     throw Error('camera.recording_id_invalid')
   return s.accountId+'/'+id
 }
@@ -74,7 +75,9 @@ async function rowFor(s:Owner,id:string):Promise<DraftRow>{
   const row=await db.recordings.get(keyOf(s,id))
   assertOwner(s)
   if(!row||row.accountId!==s.accountId||row.recordingId!==id
-    ||row.revision!==s.pkg.revision||row.expiresAt<=Date.now())
+    ||row.revision!==s.pkg.revision
+    ||row.wrappingKeyId!==s.pkg.wrappingKeyId
+    ||row.expiresAt<=Date.now())
     throw Error('camera.recording_draft_unavailable')
   return row
 }
@@ -95,6 +98,7 @@ export async function createEncryptedRecordingDraft(
   const row:DraftRow={
     key:keyOf(s,recordingId),accountId:s.accountId,recordingId,
     kind,mime,createdAt,expiresAt,revision:s.pkg.revision,
+    wrappingKeyId:s.pkg.wrappingKeyId,
     wrapped,nextIndex:0,plainBytes:0,state:'writing',durationMs:null,
   }
   await db.recordings.add(row)
@@ -189,7 +193,8 @@ export async function listEncryptedRecordingDrafts():Promise<Array<{
   const rows=await db.recordings.where('accountId').equals(s.accountId)
     .reverse().sortBy('createdAt')
   assertOwner(s)
-  return rows.filter(r=>r.expiresAt>Date.now()&&r.revision===s.pkg.revision)
+  return rows.filter(r=>r.expiresAt>Date.now()&&r.revision===s.pkg.revision
+    &&r.wrappingKeyId===s.pkg.wrappingKeyId)
     .map(r=>({
       recordingId:r.recordingId,kind:r.kind,createdAt:r.createdAt,
       expiresAt:r.expiresAt,chunkCount:r.nextIndex,
@@ -213,7 +218,7 @@ export async function readCompletedEncryptedRecording(id:string):Promise<Blob>{
   assertOwner(s)
   const clearParts:Uint8Array<ArrayBuffer>[]=[]
   let total=0
-  for(const [index,piece] of pieces.entries()){
+  try{for(const [index,piece] of pieces.entries()){
     if(piece.index!==index||piece.plainBytes<1||piece.plainBytes>MAX_SEGMENT
       ||piece.ciphertext.type!=='application/octet-stream'
       ||piece.ciphertext.size!==piece.plainBytes+16)
@@ -231,6 +236,7 @@ export async function readCompletedEncryptedRecording(id:string):Promise<Blob>{
   if(total!==row.plainBytes||total>MAX_MEDIA_BYTES)
     throw Error('camera.recording_size_mismatch')
   return new Blob(clearParts,{type:row.mime})
+  }finally{for(const bytes of clearParts)bytes.fill(0)}
 }
 export async function deleteEncryptedRecordingDraft(id:string):Promise<void>{
   const s=owner()
