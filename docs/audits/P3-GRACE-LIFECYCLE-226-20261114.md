@@ -38,8 +38,15 @@ These tests exercise Laravel session, real DB tables and production code; **sett
 
 **No** new payment/DePay activation (#225), operator MFA (#227), physical deletion/grace GC (#203/#193), account suspension/frozen policy, billing UX, S3 fault-injection, actual time-elapsed mobile tests or production credentials. No routes, migrations, config/plans.php, Photo/Media/StorageManager/Camera, frontend, or shared TS_PROGRESS_TABLE modifications. Full #226 remains **IN PROGRESS / PARTIAL**. In particular, this is a server read-only lifecycle slice, **not** completed renewal/downgrade/GC acceptance.
 
-## Evidence
+## Exact-head evidence · 2026-11-14 Asia/Tbilisi
 
-- Before CI: code/test SHA `506ba8f8318f203a4a2b9749ccf47ceec45520fc`; exact-head CI to be recorded after GitHub workflows finish.
-- PHPUnit, PHP 8.4/8.5, security audit, PG18/Garage/Chromium and UX checks must be reported individually as **PASS/FAIL/NOT TESTED** at their actual HEAD; no assumed PASS. PHP installed in the assistant's local sandbox is 8.4.24, below AGENTS.md floor 8.4.27 — not used as production acceptance evidence.
-- No merge, deploy, destructive actions, foreign branch modifications.
+**Verified code/workflow SHA:** `41eac5dc8902052be4dd01a770211f90ebcbf2d8`, directly descended from security #298 HEAD `60407676c7cb9bdb649f5017cf9450aff25eedab`. Before final evidence-only documentation edit, this was the exact PR/code HEAD; compare against the parent yields exactly 5 owned paths.
+
+- [Own scoped CI 43523849742](https://github.com/1troitsky/photobunker-v3/actions/runs/43523849742): **4/4 jobs PASS**. PHP 8.4 and 8.5 each **252/252 PHPUnit, 3782 assertions**, Composer validate+audit locked PASS, patched PHP runtime floor PASS, production/test PHP syntax PASS. Independent **real disposable PostgreSQL 18: 7/7 GraceLifecycleTest, 121 assertions PASS** (PHPUnit explicitly uses PG env rather than forcing SQLite). Frontend TypeScript + Vite build + **449/449 Vitest (83 files) PASS**.
+- [Security floor 43523850908](https://github.com/1troitsky/photobunker-v3/actions/runs/43523850908): **PASS** on the same exact SHA.
+- [UX scope guard 43523850342](https://github.com/1troitsky/photobunker-v3/actions/runs/43523850342): **PASS** on the same exact SHA.
+- Existing P0-02 Foundation/Storage workflows target PR bases main/p0/p1/p2/integration and did NOT run on this security-branch stack. Own narrow CI supplies PHP/frontend+PG coverage, but **Garage E2E / Chromium full suite / iOS Safari / Android PWA: NOT TESTED on this PR SHA**. Earlier #287 evidence is historical, not newly run.
+- The last change to this audit is documentation-only and does not alter the verified product/CI code at SHA above. Any later CI must be reported at its own exact HEAD.
+- Assistant's local PHP 8.4.24 is below mandatory 8.4.27; **not** treated as production acceptance.
+
+**Result: PARTIAL / IN PROGRESS** for #226. This is a verified server read-only grace lifecycle projection, **not** approval of paid renewal, actual payment settlement, frozen/suspended account, physical deletion/grace GC, comprehensive Garage fault handling or native-device acceptance. No merge, deploy or destructive action.
