@@ -133,6 +133,40 @@ describe('Encrypted device-local notification display settings',()=>{
     expect(el('notification-setting-invitations').checked).toBe(true)
     expect(el('notification-settings-save').disabled).toBe(true)
   })
+  it('old account save completion cannot release a new account in-flight save',async()=>{
+    let completeOld:(()=>void)|undefined
+    let completeNew:(()=>void)|undefined
+    mock.save.mockImplementationOnce(()=>new Promise<void>(resolve=>{completeOld=resolve}))
+      .mockImplementationOnce(()=>new Promise<void>(resolve=>{completeNew=resolve}))
+    await mount()
+    const oldToggle=el('notification-setting-invitations')
+    oldToggle.checked=false
+    oldToggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    el('notification-settings-save').click()
+    await settle()
+    expect(mock.save).toHaveBeenCalledTimes(1)
+    // A new account must not inherit the previous pending save lock.
+    activeSession.value=session('33333333-3333-4333-8333-333333333333')
+    await settle()
+    expect(el('notification-settings-save').disabled).toBe(true)
+    const nextToggle=el('notification-setting-expiry')
+    nextToggle.checked=false
+    nextToggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    el('notification-settings-save').click()
+    await settle()
+    expect(mock.save).toHaveBeenCalledTimes(2)
+    expect(el('notification-settings-save').disabled).toBe(true)
+    // The old asynchronous finally must not unlock the NEW pending write.
+    completeOld?.()
+    await settle()
+    expect(el('notification-settings-save').disabled).toBe(true)
+    expect(host.textContent).not.toContain('Сохранено в зашифрованном')
+    completeNew?.()
+    await settle()
+    expect(host.textContent).toContain('Сохранено в зашифрованном')
+  })
   it('never applies encrypted preferences loaded for the previous account after switch',async()=>{
     let finish:((v:typeof defaults)=>void)|undefined
     mock.load.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}))
