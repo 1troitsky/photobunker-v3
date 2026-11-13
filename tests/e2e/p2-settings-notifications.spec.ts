@@ -41,6 +41,25 @@ test('P2 #198 A→B encrypted notification, lost ACK, offline local read and ten
     expect(initial).toHaveLength(1)
     expect(initial[0]).toMatchObject({kind:'security',targetId:null,readAt:null})
     const eventId=initial[0]!.id
+    const rawIndexedDb=await a.evaluate(async()=>{
+      const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+        const request=indexedDB.open('pb3-encrypted-notifications-v1')
+        request.onsuccess=()=>resolve(request.result)
+        request.onerror=()=>reject(request.error)
+      })
+      try{
+        const tx=db.transaction('rows','readonly')
+        const request=tx.objectStore('rows').getAll()
+        const rows=await new Promise<unknown[]>((resolve,reject)=>{
+          request.onsuccess=()=>resolve(request.result as unknown[])
+          request.onerror=()=>reject(request.error)
+        })
+        return JSON.stringify(rows)
+      }finally{db.close()}
+    })
+    expect(rawIndexedDb).not.toContain(eventId)
+    expect(rawIndexedDb).not.toContain('security')
+    expect(rawIndexedDb).not.toContain('AccountCreated')
 
     // Prove ACK loss cannot destroy or replace locally encrypted data.
     // Server rows remain replayable; transport responds with a real failure.
@@ -88,6 +107,24 @@ test('P2 #198 A→B encrypted notification, lost ACK, offline local read and ten
     await expect(b.getByTestId('notifications-list')).toContainText(
       'Событие безопасности',{timeout:30000})
     expect(await notices(b)).toEqual([{id:eventId,kind:'security',targetId:null,readAt:null}])
+
+    // Revoke the SECOND device through the real authenticated route.
+    // Its cached ciphertext stays local but its server polling authorization
+    // must immediately fail; a prior delivery ACK is not a privilege grant.
+    const bDevice=await b.evaluate(async()=>{
+      const session=await import('/src/features/identity/application/session.ts')
+      return session.activeSession.value?.deviceId ?? null
+    })
+    expect(bDevice).toMatch(/^[0-9a-f-]{36}$/)
+    const revoked=await a.evaluate(async deviceId=>{
+      const api=await import('/src/features/identity/infrastructure/api.ts')
+      return api.jsonApi<{revoked:boolean}>(
+        '/identity/v2/devices/'+deviceId+'/revoke','POST',{})
+    },bDevice!)
+    expect(revoked.revoked).toBe(true)
+    const denied=await b.request.get('/notifications/v1/events')
+    expect(denied.status()).toBe(401)
+    expect((await notices(b))[0]?.id).toBe(eventId)
 
     // A different account never receives another account's event ID.
     await register(c)
