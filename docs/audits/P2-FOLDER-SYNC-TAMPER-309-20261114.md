@@ -16,10 +16,16 @@
 - NEW scoped `.github/workflows/p2-folder-sync-tamper-309.yml`: independent PR-base frontend full TypeScript/Vite/Vitest, **eight extra focused runs** (>=1024 new snapshots per CI execution) and patched PHP8.4/8.5 locked Composer Audit/full PHPUnit, disposable PostgreSQL18 Browser Folder Sync backend acceptance. Does not edit shared/main-targeted workflows.
 - THIS report `docs/audits/P2-FOLDER-SYNC-TAMPER-309-20261114.md`. Own PR diff must contain **exactly these three paths**.
 
-## Validation (pending)
+## Verified code and exact-head QA, 2026-11-14
 
-- Current code SHA: to record after CI; **NOT YET TESTED** until exact GitHub Actions finish. Do not claim pass prematurely.
-- PASS requires all freshly re-signed tampered ciphertext to reject *after* valid signature verification; any successful authenticated decryption is **FAIL / P0 escalation** and cannot be concealed by skips.
-- Full TypeScript/Vitest/build, PHP8.4/8.5/composer audit, real PG18: **NOT YET TESTED**.
-- Real Garage + Chromium end-to-end, physical iOS Safari and Android PWA, production key handling and independent cryptographic audit: **NOT TESTED** in this isolated test-only branch. It remains necessary for full production acceptance.
-- No changes to `folder-sync-crypto.ts`, `crypto.ts`, Identity PIN #220, Camera #206, Public Card #211, main, foreign PRs, database, E2EE secrets or deployments. Never merge without owner approval.
+**CODE/QA SHA:** `296900326d82644047ae8e44125511450984bcad` (includes original test + workflow + this audit before verification update). Parent security #298 remains `60407676c7cb9bdb649f5017cf9450aff25eedab`; comparison yields exactly 3 exclusive claimed paths.
+
+- Full scoped CI [43527744793](https://github.com/1troitsky/photobunker-v3/actions/runs/43527744793) **4/4 PASS** and independently [43527782435](https://github.com/1troitsky/photobunker-v3/actions/runs/43527782435) **4/4 PASS**, both on exact SHA `296900326d82644047ae8e44125511450984bcad`.
+- **Frontend:** TypeScript strict check PASS, Vite build PASS, full Vitest **450/450 (83 test files) PASS**. Each full CI repeats the focused Folder Sync cryptographic suite **8/8 times**, each 6/6 tests PASS, including **128 independently generated P-256 account keys / ECDSA-signed account contracts / AES-GCM encrypted folder snapshots with unique operation and IV**. This is **1,024 distinct fresh folder snapshots per CI run**, at least **2,048** across two independent CI runs (plus the full-suite runs). A genuine signed contract opens successfully across two device identities; corrupted one-bit ciphertext **always** fails stale ECDSA signature; a legitimately re-signed corrupted contract **always** fails AES-GCM tag. No skips, retries-as-pass, mock crypto or weakened assertion.
+- **Backend PHP 8.4.27+ and PHP 8.5.12+:** Composer lock validate+audit PASS and full PHPUnit **245/245 tests, 3,661 assertions** on each runtime.
+- **PostgreSQL18 disposable real database:** migrations and dedicated BrowserFolderSync suite **4/4 tests, 43 assertions PASS**; PHPUnit configuration explicitly uses PG connection rather than sqlite-forced default.
+- Existing [UX guard 43527782582](https://github.com/1troitsky/photobunker-v3/actions/runs/43527782582): PASS; [P0 Security 43527782464](https://github.com/1troitsky/photobunker-v3/actions/runs/43527782464) still IN PROGRESS at moment of documenting this code SHA. Do not report its outcome without a completed workflow.
+- **Original intermittent FAIL remains cited** [43522314912](https://github.com/1troitsky/photobunker-v3/actions/runs/43522314912) and same-SHA passing retry job 132220100537. This fix removes the decoded-byte no-op possibility, *not* a newly discovered production AEAD exploit.
+- **NOT TESTED:** Real Garage ciphertext readback + Chromium full Browser vertical on THIS branch, actual physical iOS Safari/Android, independent production crypto audit, deployment. P0 main-only Foundation and Storage workflows do not trigger on this security-stacked PR; scoped CI explicitly covers focused real PG18 but not full S3/Chromium acceptance.
+- **Result:** Folder Sync **QA test reliability verified** on exact code SHA. Issue #309 may move to **review** for owner acceptance, without merge, main mutation, E2EE data/key changes, backend or destructive action. No modifications to `folder-sync-crypto.ts`, `crypto.ts`, Identity PIN #220, Camera #206, Public Card #211 or other agents' claims.
+
