@@ -6,7 +6,7 @@ import { listLocalNotifications, markNotificationRead } from './local-inbox'
 
 const mockApi=vi.hoisted(()=>({jsonApi:vi.fn()}))
 vi.mock('../../identity/infrastructure/api',()=>mockApi)
-import { syncServerNotifications, resolveNotificationTarget } from './server-event-sync'
+import { syncServerNotifications, resolveNotificationTarget, requestNotificationSync } from './server-event-sync'
 
 const EVENT='44444444-4444-4444-8444-444444444444'
 let session:Session
@@ -98,6 +98,40 @@ describe('#198 trusted event replay → encrypted IndexedDB',()=>{
       mockApi.jsonApi.mockResolvedValueOnce(bad)
       await expect(syncServerNotifications()).rejects.toThrow()
     }
+  })
+  it('replays pending online sync for replacement account after first flight settles',async()=>{
+    let release:((value:unknown)=>void)|undefined
+    mockApi.jsonApi.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve}))
+    const first=requestNotificationSync()
+    expect(mockApi.jsonApi.mock.calls[0]?.[0])
+      .toBe('/notifications/v1/events?after=0')
+    const previous=activeSession.value!
+    activeSession.value={...previous,accountId:crypto.randomUUID()}
+    const second=requestNotificationSync()
+    expect(mockApi.jsonApi).toHaveBeenCalledTimes(1)
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,items:[],nextCursor:'0',hasMore:false,
+    }).mockResolvedValueOnce({
+      schemaVersion:1,acknowledgedCursor:'0',advanced:false,
+    })
+    release?.({schemaVersion:1,items:[],nextCursor:'0',hasMore:false})
+    await Promise.all([first,second])
+    expect(mockApi.jsonApi.mock.calls.map(c=>c[0])).toEqual([
+      '/notifications/v1/events?after=0',
+      '/notifications/v1/events?after=0',
+      '/notifications/v1/ack',
+    ])
+    expect((await listLocalNotifications())).toHaveLength(0)
+  })
+  it('does not restart previous device after logout while request is in flight',async()=>{
+    let release:((value:unknown)=>void)|undefined
+    mockApi.jsonApi.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve}))
+    const first=requestNotificationSync()
+    activeSession.value=null
+    await requestNotificationSync()
+    release?.({schemaVersion:1,items:[],nextCursor:'0',hasMore:false})
+    await first
+    expect(mockApi.jsonApi).toHaveBeenCalledTimes(1)
   })
   it('rejects device/account switch before writing server payload',async()=>{
     mockApi.jsonApi.mockImplementationOnce(async()=>{
