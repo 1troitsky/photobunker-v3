@@ -275,6 +275,15 @@ test('P2 #206 separate live tab cannot steal recording, closed writer permits ex
       const m=await import('/src/features/media/application/recording-encrypted-journal.ts')
       return (await m.listEncryptedRecordingDrafts()).find(r=>r.recordingId===id)?.state
     },id),{timeout:15_000}).toBe('writing')
+    // Page.close() is not a synchronous proof that Chromium has already
+    // released the closed document's native Web Lock. A genuine second-tab
+    // click while it is STILL held must reject with writer_busy. Wait for
+    // the *browser lock manager itself* to report no holder, instead of
+    // guessing from page close/timers or retrying a destructive recovery.
+    await expect.poll(()=>peer.evaluate(async()=>{
+      const locks=await navigator.locks.query()
+      return locks.held.some(row=>row.name.startsWith('pb3.camera.writer.v1.'))
+    }),{timeout:25_000}).toBe(false)
     await card.getByRole('button',{name:'Проверить прерванную запись'}).click()
     await expect(card).toContainText('Прервана',{timeout:20_000})
     expect(await countLocalMedia(peer)).toBe(0)
