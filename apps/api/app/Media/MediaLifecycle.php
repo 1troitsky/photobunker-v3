@@ -142,12 +142,12 @@ final class MediaLifecycle
                         'schemaVersion'=>1,'eventId'=>(string)Str::uuid(),
                         'eventType'=>'MediaRetentionExpired',
                         'accountId'=>$intent->account_id,
-                        'subjectType'=>'media','subjectId'=>$intent->media_id,
+                        'subjectType'=>'media_retention','subjectId'=>$intent->media_id,
                         'occurredAtMs'=>(int)$row->expired_at_ms,
-                        'revision'=>2,
+                        'revision'=>1,
                     ];
-                    // MediaCommitted is stream revision 1. The account-bound
-                    // outbox may be processed after physical deletion.
+                    // Separate stream handles pre-ledger historical media.
+                    // Outbox may be processed after physical deletion.
                     $admission=(new EventConsumer(new DatabaseEventInboxLedger()))
                         ->ingest($event,$intent->account_id);
                     if($admission!==EventAdmission::Accepted)
