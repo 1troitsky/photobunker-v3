@@ -1,6 +1,7 @@
 import { shallowRef } from 'vue'
 import type { PinAttempt } from '../../security/application/pin-verifier'
 import type { SealedPinDevice } from '../../security/application/pin-device-migration'
+import {watchPinDeviceSealed} from '../../security/application/pin-tab-fence'
 import { jsonApi, resetCsrf } from '../infrastructure/api'
 import {
   b64, canonical, createPB2, digest, freshPackage, hex,
@@ -178,6 +179,7 @@ export async function restoreAccount(recoveryKey:string):Promise<Session> {
 
 let pendingSessionResume:Promise<Session|null>|null=null
 export function resumeExistingDevice():Promise<Session|null> {
+  installPinTabReconciliation()
   if (pendingSessionResume) return pendingSessionResume
   pendingSessionResume=resumeLocalDevice().catch(error=>{
     identityBootstrapError.value=error instanceof Error?error.message:
@@ -218,6 +220,80 @@ function pendingPinContext(row:LocalDevice):PendingPinUnlock {
     packageRevision:sealed.envelope.packageRevision,
     pinLength:sealed.pinLength,
     sessionNonce:crypto.randomUUID(),
+  })
+}
+
+
+/**
+ * Reconcile ONLY already-active sessions with a persisted IDB identity row.
+ * An incoming BroadcastChannel message is an UNTRUSTED hint, not a grant
+ * or revocation proof. On a mismatch, lock the UI before another operation
+ * can use requireSession(). This cannot zero copied keys in other contexts.
+ */
+export async function refreshPinSessionFence():Promise<boolean>{
+  const before=activeSession.value
+  if(!before)return false
+  let stored:LocalDevice|undefined
+  let signedOut:boolean
+  try{
+    [stored,signedOut]=await Promise.all([
+      getDevice(before.accountId,before.deviceId),
+      isSignedOut(before.accountId,before.deviceId),
+    ])
+  }catch{
+    if(activeSession.value!==before)return false
+    activeSession.value=null
+    pendingPinUnlock.value=null
+    identityBootstrapError.value='identity.storage_unavailable'
+    resetCsrf()
+    return true
+  }
+  if(activeSession.value!==before)return false
+  const hadPin=isSealedCandidate(before.device)
+  const hasPin=stored!==undefined && isSealedCandidate(stored)
+  const oldRev=hadPin
+    ?(before.device as unknown as SealedPinDevice).pinVerifier?.revision:null
+  const newRev=hasPin
+    ?(stored as unknown as SealedPinDevice).pinVerifier?.revision:null
+  if(!signedOut && stored &&
+     (hadPin===hasPin && (!hadPin||oldRev===newRev)))
+    return false
+
+  activeSession.value=null
+  resetCsrf()
+  pendingPinUnlock.value=null
+  if(hasPin && !signedOut){
+    try{
+      pendingPinUnlock.value=pendingPinContext(stored)
+      identityBootstrapError.value=null
+    }catch{
+      identityBootstrapError.value='identity.invalid_sealed_device'
+    }
+  }else{
+    identityBootstrapError.value='identity.device_changed'
+  }
+  identityBootstrapReady.value=true
+  return true
+}
+
+let pinTabWatchInstalled=false
+function installPinTabReconciliation():void {
+  if(pinTabWatchInstalled || typeof window==='undefined')return
+  pinTabWatchInstalled=true
+  // BroadcastChannel has no trusted sender. It *only* triggers a persisted
+  // row check, and an unrelated account never sees its content or keys.
+  watchPinDeviceSealed(notice=>{
+    const active=activeSession.value
+    if(active?.accountId===notice.accountId &&
+       active.deviceId===notice.deviceId)
+      void refreshPinSessionFence()
+  })
+  // A suspended tab may MISS messages entirely. At least ensure it
+  // validates the IDB row as it returns to foreground.
+  const onFocus=()=>{void refreshPinSessionFence()}
+  window.addEventListener('focus',onFocus)
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible')onFocus()
   })
 }
 
@@ -325,13 +401,20 @@ export async function reauthenticate():Promise<Session> {
   // Do not race a second login/proof against the automatic session bootstrap:
   // either proof can rotate the cookie/CSRF state while an S3 PUT is in flight.
   if(pendingSessionResume) await pendingSessionResume
+  const before=requireSession()
+  await refreshPinSessionFence()
+  if(activeSession.value!==before)throw new Error('identity.changed')
   const state=requireSession()
   if(state.online) return state
   await prove('login',{accountId:state.accountId,deviceId:state.deviceId,purpose:'login'},state.device.deviceKey)
+  if(activeSession.value!==state)throw new Error('identity.changed')
   return activate(state.pkg,state.device,true)
 }
 
 export async function signPhotoContract(json:string):Promise<string> {
+  const before=requireSession()
+  await refreshPinSessionFence()
+  if(activeSession.value!==before)throw new Error('identity.changed')
   const current=requireSession()
   if(!current.online) throw new Error('identity.offline')
   const signature=await sign(current.device.deviceKey,'photobunker.photo-sync.v1\n'+json)
