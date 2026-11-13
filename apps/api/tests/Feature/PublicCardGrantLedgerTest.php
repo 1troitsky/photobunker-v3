@@ -173,7 +173,10 @@ final class PublicCardGrantLedgerTest extends TestCase
         self::assertFalse($res['published']);
         self::assertFalse($res['unchanged']);
         self::assertSame(1, $res['revision']);
-        self::assertSame($res, $this->ledger->statusForOwner(self::ACCOUNT, self::SAFE));
+        $ownerStatus = $this->ledger->statusForOwner(self::ACCOUNT, self::SAFE);
+        self::assertTrue($ownerStatus['unchanged']);
+        self::assertSame($res['eventHash'], $ownerStatus['eventHash']);
+        self::assertSame('staged', $ownerStatus['state']);
         self::assertSame(1, DB::table('public_card_intent_events_v1')->count());
         self::assertSame(1, DB::table('public_card_token_reservations_v1')->count());
         self::assertDatabaseHas('public_card_intent_heads_v1', [
