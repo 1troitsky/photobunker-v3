@@ -354,6 +354,47 @@ final class DeadManSwitchTest extends TestCase
         self::assertObjectNotHasProperty('message_body',$op);
     }
 
+    /**
+     * PG18 acceptance uses clock_timestamp(), NOT Carbon's test clock.
+     * This proves signed state and due transitions against a real DB clock.
+     */
+    public function test_pg_server_clock_and_non_destructive_transitions():void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            self::markTestSkipped('PG18-only server clock acceptance');
+        }
+        $before=CarbonImmutable::parse(DB::selectOne(
+            'SELECT clock_timestamp() AS db_now',
+        )->db_now);
+        $p=$this->payload();
+        $first=$this->submit($p);
+        $after=CarbonImmutable::parse(DB::selectOne(
+            'SELECT clock_timestamp() AS db_now',
+        )->db_now);
+        $confirmed=CarbonImmutable::parse($this->row()->last_confirmed_at);
+        self::assertTrue($confirmed->greaterThanOrEqualTo($before));
+        self::assertTrue($confirmed->lessThanOrEqualTo($after));
+        self::assertSame($confirmed->addMonthsNoOverflow(4)->toIso8601String(),
+            CarbonImmutable::parse($first['deadlineAt'])->toIso8601String());
+        self::assertSame(1,DB::table('dead_man_operations_v1')->count());
+
+        DB::table('dead_man_switches_v1')->where('account_id',$this->account)
+            ->update([
+                'warning_at'=>DB::raw("clock_timestamp() - interval '1 second'"),
+                'deadline_at'=>DB::raw("clock_timestamp() + interval '1 day'"),
+            ]);
+        self::assertSame(['warning'=>1,'expiredReview'=>0],$this->service->sweepDue());
+        self::assertSame('warning',$this->row()->state);
+        DB::table('dead_man_switches_v1')->where('account_id',$this->account)
+            ->update(['deadline_at'=>DB::raw("clock_timestamp() - interval '1 second'")]);
+        self::assertSame(['warning'=>0,'expiredReview'=>1],$this->service->sweepDue());
+        self::assertSame(['warning'=>0,'expiredReview'=>0],$this->service->sweepDue());
+        self::assertSame('expired_review',$this->row()->state);
+        self::assertDatabaseCount('identity_accounts',1);
+        self::assertDatabaseCount('identity_devices',1);
+        self::assertDatabaseCount('dead_man_operations_v1',1);
+    }
+
     private function signedMessage(array $p):string
     {
         ksort($p,SORT_STRING);
