@@ -47,17 +47,29 @@ async function readLocal(token:number,owner:string):Promise<void>{
 async function reload():Promise<void>{
   const owner=scope(),token=++run
   rows.value=[];expanded.value=null;error.value=''
+  preferences.value={...defaultNotificationPreferences}
   if(!owner)return
   loading.value=true
+  // Display preferences are NOT an authorization boundary. Corrupted
+  // preferences must not conceal independently decrypted security notices.
   try{
-    const [items,settings]=await Promise.all([
-      listLocalNotifications(),readNotificationPreferences(),
-    ])
-    if(current(owner,token)){
-      rows.value=items
-      preferences.value=settings
+    const items=await listLocalNotifications()
+    if(current(owner,token))rows.value=items
+  }catch{
+    if(current(owner,token))
+      error.value='Не удалось открыть зашифрованные уведомления.'
+  }
+  if(current(owner,token)){
+    try{
+      const settings=await readNotificationPreferences()
+      if(current(owner,token))preferences.value=settings
+    }catch{
+      if(current(owner,token)){
+        preferences.value={...defaultNotificationPreferences}
+        error.value='Настройки отображения повреждены. Показаны все сохранённые уведомления.'
+      }
     }
-  }catch{if(current(owner,token))error.value='Не удалось открыть зашифрованные уведомления или настройки.'}
+  }
   finally{if(current(owner,token))loading.value=false}
   if(!current(owner,token)||!canSync.value)return
   if(typeof navigator!=='undefined'&&!navigator.onLine)return
@@ -110,7 +122,8 @@ async function markAll():Promise<void>{
   const owner=scope(),token=run
   busy.value=true
   try{
-    await markAllLocalNotificationsRead()
+    const ids=shown.value.filter(row=>row.readAt===null).map(row=>row.id)
+    await markAllLocalNotificationsRead(Date.now(),ids)
     if(current(owner,token))await readLocal(token,owner)
   }catch{if(current(owner,token))error.value='Не удалось сохранить отметки о прочтении.'}
   finally{busy.value=false}
