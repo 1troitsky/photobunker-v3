@@ -5,26 +5,25 @@ import {
 import type { PackageV2, DeviceEnvelope } from '../../identity/infrastructure/crypto'
 import { openIdentityDB } from '../../identity/infrastructure/storage'
 import type { LocalDevice } from '../../identity/infrastructure/storage'
-import { attemptPinVerifier, enrollPinVerifier } from './pin-verifier'
-import type { PinScope } from './pin-verifier'
+import { buildPinVerifierSnapshot, evaluatePinVerifierSnapshot } from './pin-verifier'
+import type { PinAttempt, PinScope, StoredPinState } from './pin-verifier'
 import { openPinProtectedPackage, sealPinProtectedPackage } from './pin-sealed-package'
 import type { PinSealedPackage } from './pin-sealed-package'
 
 /**
  * PREINTEGRATION / NOT CALLED BY PRODUCT.
  *
- * This performs a CAS replacement of one legacy device envelope in the real
- * identity-v2 IndexedDB store. The PIN verifier lives in a DIFFERENT DB, so
- * enrollment and device swap CANNOT be a single atomic browser transaction.
- * A crash after verifier enrollment but before swap leaves legacy access
- * available and a stranded verifier. Do NOT expose this operation as "PIN on"
- * in UI or use on a live device before the full lifecycle / Recovery Key
- * acceptance has been audited.
+ * This replaces a legacy envelope and inserts its HMAC PIN verifier in ONE
+ * identity-v2 devices row / transaction. No cross-database two-phase commit
+ * and no verifier-only orphan are possible in this new PIN device mode.
+ * Do NOT expose this operation as "PIN on" in the live app before trusted
+ * cross-tab bootstrap, key custody and Recovery Key acceptance are audited.
  */
 export type SealedPinDevice = Omit<LocalDevice,'envelope'> & {
   envelope:PinSealedPackage
   pinMode:'pin-v1'
   pinHmacKey:CryptoKey
+  pinVerifier:StoredPinState
 }
 
 type DeviceRow = LocalDevice | SealedPinDevice
@@ -130,6 +129,7 @@ async function validateLegacyDevice(
 
 function transactionalReplace(
   scope:PinScope,source:LocalDevice,encrypted:PinSealedPackage,hmac:CryptoKey,
+  verifier:StoredPinState,
 ):Promise<void>{
   return openIdentityDB().then(db=>new Promise<void>((resolve,reject)=>{
     let tx:IDBTransaction
@@ -156,6 +156,7 @@ function transactionalReplace(
           // The only write in this transaction. No residual old v2 envelope.
           const sealed:SealedPinDevice={
             ...still,envelope:encrypted,pinMode:'pin-v1',pinHmacKey:hmac,
+            pinVerifier:verifier,
           }
           tx.objectStore('devices').put(sealed)
         }catch(err){
@@ -190,10 +191,10 @@ export async function inspectPinDeviceMigration(scope:PinScope):Promise<void>{
  * package and a Recovery Key recovery path; it must NEVER be called merely
  * because a user typed a PIN in the UI.
  *
- * PIN verifier in a separate DB is enrolled BEFORE the transactional swap,
- * so a crash can strand a verifier; it cannot produce a partially overwritten
- * device row. On stale/corrupt state, fail closed; Recovery Key is the only
- * guaranteed recovery, no silent downgrade/fallback.
+ * Verifier and PIN ciphertext commit in ONE devices row; a crash before
+ * transaction commit leaves the complete original legacy envelope intact.
+ * This does NOT prove it is safe to activate for a real user: old tabs may
+ * retain a decrypted session and origin JS can access nonextractable keys.
  */
 export async function migrateLegacyLocalDeviceToPin(input:{
   scope:PinScope
@@ -222,14 +223,18 @@ export async function migrateLegacyLocalDeviceToPin(input:{
     canonical(pkg as unknown as Record<string,unknown>))
     throw new Error('pin.package_mismatch')
   denyIfLive()
-  // No completion marker is written until both enrollment and final swap
-  // succeed. The orphan-verifier window remains documented and fail-closed.
-  await enrollPinVerifier(scope,secret,appPin,emergencyPin)
-  const accepted=await attemptPinVerifier(scope,secret,appPin)
-  if(accepted.status!=='app-unlocked')
+  // In-memory HMAC state and ciphertext are prepared before touching IDB.
+  // A single transaction commits both or neither; no separate PIN DB write.
+  const verifier=await buildPinVerifierSnapshot(
+    scope,secret,appPin,emergencyPin,
+  )
+  const evaluated=await evaluatePinVerifierSnapshot(
+    scope,secret,appPin,verifier,
+  )
+  if(evaluated.result.status!=='app-unlocked' || !evaluated.next)
     throw new Error('pin.verifier_unavailable')
   denyIfLive()
-  await transactionalReplace(scope,initial,encrypted,secret)
+  await transactionalReplace(scope,initial,encrypted,secret,verifier)
 }
 
 /**
@@ -251,10 +256,110 @@ export async function readSealedPinDevice(scope:PinScope):Promise<{
   if(row.envelope.accountId!==scope.accountId ||
      row.envelope.deviceId!==scope.deviceId ||
      row.pinHmacKey?.extractable!==false ||
-     row.encryptionKey?.extractable!==false)
+     row.encryptionKey?.extractable!==false ||
+     !row.pinVerifier || row.pinVerifier.accountId!==scope.accountId ||
+     row.pinVerifier.deviceId!==scope.deviceId)
     throw new Error('pin.corrupt_sealed_device')
   return {
     encrypted:row.envelope,verifierDeviceHmac:row.pinHmacKey,
     envelopeDeviceAes:row.encryptionKey,
   }
+}
+
+
+/**
+ * Authenticated local PIN attempt on a PIN-sealed device. Verifier + lockout
+ * are read and CAS-updated in the SAME identity-v2 devices row, including the
+ * encrypted package. No second PIN database is used. All PBKDF2/HMAC happens
+ * OUTSIDE the short IndexedDB transaction.
+ *
+ * Returns a receipt revision only when a successful app PIN was recorded.
+ * The caller must validate that exact revision before AND after decrypting
+ * and require an independently trusted session fence.
+ */
+export async function attemptSealedPinDevice(
+  scope:PinScope,candidate:string,
+):Promise<{result:PinAttempt; receiptRevision:string|null}>{
+  validScope(scope)
+  const MAX_RETRIES=12
+  for(let retry=0;retry<MAX_RETRIES;retry++){
+    const rows=await readRows()
+    const snapshot=rows.devices.find(x=>x.deviceId===scope.deviceId)
+    if(!isSealed(snapshot)||snapshot.accountId!==scope.accountId)
+      throw new Error('pin.sealed_device_unavailable')
+    if(!snapshot.pinVerifier || !snapshot.pinHmacKey)
+      throw new Error('pin.corrupt_sealed_device')
+    const decision=await evaluatePinVerifierSnapshot(
+      scope,snapshot.pinHmacKey,candidate,snapshot.pinVerifier,
+    )
+    if(!decision.next){
+      return {result:decision.result,receiptRevision:null}
+    }
+    if(activeSession.value!==null)
+      throw new Error('pin.live_session_must_be_closed')
+    const db=await openIdentityDB()
+    let committed=false
+    try{
+      // Revision fencing uses the entire authenticated snapshot and envelope.
+      // No asynchronous cryptography is performed inside this transaction.
+      committed=await new Promise<boolean>((resolve,reject)=>{
+        const tx=db.transaction('devices','readwrite')
+        const store=tx.objectStore('devices')
+        let matched=false
+        let cause:Error|null=null
+        const request=store.get(scope.deviceId)
+        request.onsuccess=()=>{
+          const current=request.result as DeviceRow|undefined
+          if(isSealed(current)&&current.accountId===scope.accountId &&
+             current.pinVerifier &&
+             JSON.stringify(current.pinVerifier)===
+               JSON.stringify(snapshot.pinVerifier) &&
+             canonical(current.envelope as unknown as Record<string,unknown>)===
+               canonical(snapshot.envelope as unknown as Record<string,unknown>) &&
+             activeSession.value===null){
+            matched=true
+            store.put({...current,pinVerifier:decision.next})
+          }
+        }
+        request.onerror=()=>{cause=new Error('pin.device_storage_error')}
+        tx.oncomplete=()=>resolve(matched)
+        tx.onabort=()=>reject(cause??tx.error??new Error('pin.device_storage_aborted'))
+        tx.onerror=()=>{ /* onabort reports durable error */ }
+      })
+    }finally{db.close()}
+    if(committed){
+      return {
+        result:decision.result,
+        receiptRevision:decision.result.status==='app-unlocked'?
+          decision.next.revision:null,
+      }
+    }
+  }
+  throw new Error('pin.concurrent_state_changed')
+}
+
+/**
+ * Read the sealed device for an exact successful verifier receipt.
+ * Reject concurrent PIN failures/identity replacement while decrypting.
+ * This is not an authoritative user-session proof or full app startup.
+ */
+export async function readSealedDeviceWithReceipt(
+  scope:PinScope,revision:string,
+):Promise<{
+  encrypted:PinSealedPackage
+  envelopeDeviceAes:CryptoKey
+}>{
+  validScope(scope)
+  if(typeof revision!=='string'||revision.length<16)
+    throw new Error('pin.invalid_receipt')
+  const rows=await readRows()
+  const row=rows.devices.find(x=>x.deviceId===scope.deviceId)
+  if(!isSealed(row)||row.accountId!==scope.accountId||
+      row.pinVerifier?.revision!==revision||
+      row.pinVerifier?.accountId!==scope.accountId||
+      row.pinVerifier?.deviceId!==scope.deviceId||
+      row.envelope?.accountId!==scope.accountId||
+      row.envelope?.deviceId!==scope.deviceId)
+    throw new Error('pin.receipt_expired')
+  return {encrypted:row.envelope,envelopeDeviceAes:row.encryptionKey}
 }
