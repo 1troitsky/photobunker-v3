@@ -44,12 +44,27 @@ async function initialize():Promise<void>{
       error.value='Не удалось прочитать зашифрованные настройки уведомлений.'
   }finally{if(version===token)loading.value=false}
 }
-function update(key:keyof Omit<NotificationPreferences,'version'>,value:boolean):void{
+type CategoryFlag='invitations'|'deadlines'|'expiry'|'system'|'badges'
+function update(key:CategoryFlag,value:boolean):void{
   draft.value={...draft.value,[key]:value}
+  error.value='';status.value=''
+}
+function clockValue(minute:number):string{
+  return String(Math.floor(minute/60)).padStart(2,'0')+':'+
+    String(minute%60).padStart(2,'0')
+}
+function changeQuietClock(key:'quietStart'|'quietEnd',value:string):void{
+  if(!/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(value))return
+  const [hour,minute]=value.split(':').map(Number)
+  draft.value={...draft.value,[key]:hour!*60+minute!}
   error.value='';status.value=''
 }
 async function save():Promise<void>{
   if(saving.value||loading.value||!dirty.value)return
+  if(draft.value.quietStart===draft.value.quietEnd){
+    error.value='Начало и окончание тихих часов не должны совпадать.'
+    return
+  }
   const token=version,scope=owner(),next={...draft.value}
   if(!scope)return
   saving.value=true;error.value=''
@@ -92,6 +107,26 @@ onMounted(()=>{void initialize()})
             :data-testid="'notification-setting-'+choice.id"
             :disabled="saving" @change="update(choice.id,($event.target as HTMLInputElement).checked)">
         </label>
+        <label class="setting-option">
+          <span><strong>Тихие часы</strong><small>Скрывать обычные индикаторы на этом устройстве, не скрывая уведомления</small></span>
+          <input type="checkbox" :checked="draft.quietEnabled"
+            data-testid="notification-setting-quiet-enabled" :disabled="saving"
+            @change="draft={...draft,quietEnabled:($event.target as HTMLInputElement).checked}">
+        </label>
+        <div class="setting-option quiet-hours">
+          <label>
+            <span>Начало</span>
+            <input type="time" data-testid="notification-setting-quiet-start"
+              :value="clockValue(draft.quietStart)" :disabled="saving||!draft.quietEnabled"
+              @change="changeQuietClock('quietStart',($event.target as HTMLInputElement).value)">
+          </label>
+          <label>
+            <span>Окончание</span>
+            <input type="time" data-testid="notification-setting-quiet-end"
+              :value="clockValue(draft.quietEnd)" :disabled="saving||!draft.quietEnabled"
+              @change="changeQuietClock('quietEnd',($event.target as HTMLInputElement).value)">
+          </label>
+        </div>
         <div class="setting-option fixed">
           <span><strong>Уведомления безопасности</strong><small>Отзыв устройств и важные изменения доступа всегда видны</small></span>
           <span>Всегда включены</span>
@@ -101,7 +136,7 @@ onMounted(()=>{void initialize()})
           <input type="checkbox" disabled data-testid="notification-setting-push">
         </div>
       </div>
-      <p class="settings-hint">Эти параметры скрывают категории только в локальном списке. Серверные события продолжают сохраняться; просмотр и доступ к файлам проверяются отдельно. Настройки не синхронизируются между устройствами.</p>
+      <p class="settings-hint">Настройки категорий скрывают записи только в локальном списке. Тихие часы скрывают лишь обычные индикаторы; события безопасности видны всегда. Это не управление OS push. Серверные события продолжают сохраняться; просмотр и доступ к файлам проверяются отдельно. Настройки не синхронизируются между устройствами.</p>
       <p v-if="status" role="status">{{status}}</p>
       <p v-if="error" role="alert">{{error}}</p>
       <div class="settings-actions">
@@ -125,7 +160,11 @@ onMounted(()=>{void initialize()})
 .setting-option input{width:18px;height:18px;accent-color:var(--accent)}
 .setting-option.fixed{color:#aab2aa}
 .setting-option.fixed>span:last-child{font-size:11px;white-space:nowrap}
+.quiet-hours{justify-content:flex-start;gap:24px}
+.quiet-hours label{display:flex;align-items:center;gap:10px;font-size:12px}
+.quiet-hours input{width:auto;height:auto;color:inherit;background:transparent;border:1px solid var(--outline);border-radius:5px;padding:5px}
 .settings-hint{margin:20px 0}
 .settings-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 @media(max-width:480px){.setting-option{padding:12px}.setting-option.fixed>span:last-child{white-space:normal;text-align:right}}
 </style>
+
