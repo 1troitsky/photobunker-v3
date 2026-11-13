@@ -145,6 +145,21 @@ describe('PB3 encrypted Local-First notifications',()=>{
     expect(await localUnreadCount()).toBe(0)
     expect(await listLocalNotifications()).toHaveLength(2)
   })
+  it('mark-all visibility snapshot never marks hidden unread notifications',async()=>{
+    await session()
+    const a=input()
+    const b={...input('66666666-6666-4666-8666-666666666666'),
+      kind:'team-invite' as const}
+    await recordLocalNotification(a)
+    await recordLocalNotification(b)
+    expect(await markAllLocalNotificationsRead(1_760_000_000_000,[a.id])).toBe(1)
+    const items=await listLocalNotifications()
+    expect(items.find(row=>row.id===a.id)?.readAt).not.toBeNull()
+    expect(items.find(row=>row.id===b.id)?.readAt).toBeNull()
+    expect(await localUnreadCount()).toBe(1)
+    await expect(markAllLocalNotificationsRead(Date.now(),['bad-id']))
+      .rejects.toThrow('notifications.invalid_read')
+  })
   it('encrypts non-clickable retention deadline notice without old media target',async()=>{
     await session()
     const event={id:eventId,kind:'file-expiry' as const,
