@@ -183,4 +183,37 @@ describe('#283 Local-First server-authenticated paid TTL hints',()=>{
     vi.setSystemTime(now+60001)
     expect(newSignedExpiry(now+60001,s)).toBe(now+60001+13*DAY)
   })
+
+  it('does not poll the billing ledger on every Free-camera burst frame',async()=>{
+    const s=await identity()
+    const fetch=mockBilling(reply('free'))
+    await refreshRetentionHint(s)
+    const now=Date.now()
+    for(let i=0;i<20;i++)
+      expect(newSignedExpiry(now+i,s)).toBe(now+i+13*DAY)
+    await Promise.resolve()
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not repeatedly query a failing billing endpoint during offline fallback',async()=>{
+    const s=await identity()
+    const fetch=vi.fn(async()=>new Response('unavailable',{status:503}))
+    vi.stubGlobal('fetch',fetch)
+    await refreshRetentionHint(s)
+    const now=Date.now()
+    for(let i=0;i<20;i++)
+      expect(newSignedExpiry(now+i,s)).toBe(now+i+13*DAY)
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('an explicit navigator.offline revokes any formerly fresh paid hint',async()=>{
+    const s=await identity()
+    mockBilling(reply('go'))
+    await refreshRetentionHint(s)
+    const now=Date.now()
+    expect(newSignedExpiry(now,s)).toBe(now+29*DAY)
+    // Distinguish explicitly reported offline from merely absent onLine.
+    vi.stubGlobal('navigator',{onLine:false})
+    expect(newSignedExpiry(now,s)).toBe(now+13*DAY)
+  })
 })
