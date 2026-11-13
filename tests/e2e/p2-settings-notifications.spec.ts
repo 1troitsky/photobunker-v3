@@ -160,12 +160,19 @@ test('P2 #198 encrypted local notification display preferences survive reload wi
   const invitation=page.getByTestId('notification-setting-invitations')
   await invitation.uncheck()
   await page.getByTestId('notification-setting-badges').uncheck()
+  // A quiet-hours schedule is a device-local presentation rule, NOT OS push.
+  await page.getByTestId('notification-setting-quiet-enabled').check()
+  await page.getByTestId('notification-setting-quiet-start').fill('22:00')
+  await page.getByTestId('notification-setting-quiet-end').fill('08:00')
   await page.getByTestId('notification-settings-save').click()
   await expect(page.getByText('Сохранено в зашифрованном хранилище этого устройства.'))
     .toBeVisible()
   await page.reload()
   await expect(invitation).not.toBeChecked()
   await expect(page.getByTestId('notification-setting-badges')).not.toBeChecked()
+  await expect(page.getByTestId('notification-setting-quiet-enabled')).toBeChecked()
+  await expect(page.getByTestId('notification-setting-quiet-start')).toHaveValue('22:00')
+  await expect(page.getByTestId('notification-setting-quiet-end')).toHaveValue('08:00')
   // Stored ciphertext cannot expose switches or event metadata.
   const raw=await page.evaluate(async()=>{
     const request=indexedDB.open('pb3-encrypted-notifications-v1')
@@ -184,6 +191,9 @@ test('P2 #198 encrypted local notification display preferences survive reload wi
   })
   expect(raw).not.toContain('invitations')
   expect(raw).not.toContain('badges')
+  expect(raw).not.toContain('quietStart')
+  expect(raw).not.toContain('quietEnabled')
+  expect(raw).not.toContain('22:00')
   expect(raw).not.toContain('security')
   await page.goto('/notifications')
   await expect(page.getByTestId('notifications-list')).toContainText(
