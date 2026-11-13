@@ -67,3 +67,29 @@ export async function syncServerNotifications():Promise<{saved:number;pages:numb
   }
   throw Error('notifications.feed_limit')
 }
+
+/**
+ * Single-flight lifecycle used by the Shell. No timer, no background service
+ * worker and no implicit privilege; online/visibility events only initiate
+ * another idempotent encrypted replay for the currently authenticated session.
+ * A network failure leaves existing encrypted records intact.
+ */
+let running:Promise<void>|null=null
+export function requestNotificationSync():Promise<void>{
+  if(running)return running
+  const session=activeSession.value
+  if(!session?.online)return Promise.resolve()
+  const task=syncServerNotifications().then(()=>undefined)
+  const safe=task.catch(()=>{ /* Safe replay at next online/visible event. */ })
+  running=safe.finally(()=>{running=null})
+  return running
+}
+
+export function attachNotificationSyncLifecycle():void{
+  if(typeof window==='undefined'||typeof document==='undefined')return
+  window.addEventListener('online',()=>{void requestNotificationSync()})
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='visible'&&navigator.onLine)
+      void requestNotificationSync()
+  })
+}
