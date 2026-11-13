@@ -1,0 +1,44 @@
+name: P4 BYO S3 endpoint admission (#232)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p4-byo-s3-endpoint-232.yml'
+      - 'apps/api/app/Storage/Byo/**'
+      - 'apps/api/tests/Feature/ByoStorage/**'
+      - 'scripts/p4-byo-s3-endpoint-232-smoke.php'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-endpoint-guard:
+    name: Fail-closed SSRF and pinned-peer contract / PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: phpunit:12
+      - name: Syntax-check isolated BYO S3 production guard and tests
+        run: |
+          php -l apps/api/app/Storage/Byo/ByoS3Pin.php
+          php -l apps/api/app/Storage/Byo/ByoS3EndpointGuard.php
+          php -l apps/api/app/Storage/Byo/ByoS3DnsResolver.php
+          php -l apps/api/tests/Feature/ByoStorage/ByoS3EndpointGuardTest.php
+          php -l apps/api/tests/Feature/ByoStorage/ByoS3DnsResolverTest.php
+          php -l scripts/p4-byo-s3-endpoint-232-smoke.php
+          php -l scripts/p4-byo-s3-phpunit-bootstrap-232.php
+      - name: Network-free negative SSRF and pinning checks (explicit PHP security floor)
+        run: php scripts/p4-byo-s3-endpoint-232-smoke.php
+
+      - name: Run actual isolated PHPUnit 12 BYO S3 endpoint/DNS tests
+        run: phpunit --no-configuration --colors=never --bootstrap scripts/p4-byo-s3-phpunit-bootstrap-232.php apps/api/tests/Feature/ByoStorage
