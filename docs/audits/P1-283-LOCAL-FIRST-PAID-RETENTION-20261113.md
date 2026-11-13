@@ -27,6 +27,17 @@ One-day buffer preserves former Free13 behavior and mitigates normal client/serv
 
 Photo: `newSignedExpiry(createdAt,session)` is called BEFORE `wrapAssetDEK`, both AES-GCM asset manifests and the signed Photo contract share the same immutable deadline. Media: expiry selected before `encryptMediaFile`, including AAD and wrapped keys; outbox stores the exact signed contract.
 
+## Real Chromium failure triage and routing correction
+
+The first full QA head `8924f6299dd93623a01917b7177f521ac35f7792` has **3/4 GitHub workflows PASS, 1 FAIL**: [PG18/Garage/Chromium 43335545993](https://github.com/1troitsky/photobunker-v3/actions/runs/43335545993) returned **77/78 Chromium**, specifically existing `tests/e2e/p2-browser-camera-gps-permission.spec.ts:120` ("signed required-GPS policy..."). No retries or old-test edits were used. The live 5/5 PG quota races and physical Garage restart/ACK recovery remain PASS; PHP8.4/8.5 244/244 and 446/446 frontend unit tests PASS.
+
+**Primary confirmed integration defect (trace-driven):** downloaded real Playwright artifact `p1-browser-traces` #13996284621, nested `trace.zip`, inspected network and screenshot. Following registration, the browser issued GET `/billing/v1/me` **twice**, both **404 from Vite**: `apps/web/vite.config.ts` had no billing proxy, even though Laravel `apps/api/routes/web.php` already exposes `GET billing/v1/me`. This meant paid client hints never became available to real web users. Fixed only the real dev routing: new `'/billing/v1'` Vite proxy to Laravel, preserving exact same-origin cookie and no access-control bypass. Added **NEW** `tests/e2e/p1-billing-retention-proxy.spec.ts` asserting unauthenticated HTTP401 and authenticated Key-Only Free14 JSON200 **over actual proxy**, with immutable Free13 client fallback.
+
+**Separate existing GPS E2E result:** in the saved failure trace POST `/assignments/v1` was 201, subsequent GET `/assignments/v1` 200 and the created assignment was visibly present in the rendered list, but `.assignment-detail code` was absent because its detail was no longer selected. The trace shows no API authorization denial for that assignment. This is a **selection/rehydration race candidate**, not proven to originate in the paid hint module. No old GPS/assignment tests or product AssignmentView were altered to hide the failure. A new exact-head full-run is required after routing correction; repeat occurrences must be tracked separately, not auto-marked green.
+
+**Scope extension documented:** `apps/web/vite.config.ts` and NEW real-browser smoke, plus this audit, added to #283's exclusive ownership. Only development routing is proven; deployed ingress/reverse proxy still requires independent verification.
+
+---
 ## Acceptance
 
 New Vitest coverage must prove: verified Free/Go/Pro/Unlimited matrix; positive live encrypted Photo/Media creation and readback with Go29/Pro89; old upload session with delayed entitlement response cannot contaminate a recovered session, including same account; network failure and offline conservative fallback; malformed/forged paid flags, wrong limits/plan/status/revision, near/expired entitlement and ambiguous UTC rejected; no network-await on the cold Camera path; in-memory hints expire at 60s. Existing signed E2EE, Local-First, lost ACK/retry and backend tests unchanged.
