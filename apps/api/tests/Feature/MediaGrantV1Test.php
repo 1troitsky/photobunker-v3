@@ -1228,6 +1228,43 @@ final class MediaGrantV1Test extends TestCase
         $this->assertDatabaseCount('media_recipient_grants_v1',0);
     }
 
+    /** A client precisely 3 ms ahead of the server must not sign exactly
+     * 24h in the future; both clocks are independently authoritative in
+     * their own process. The backend's strict 24h ceiling is unchanged. */
+    public function test_three_millisecond_media_grant_clock_boundary_without_ttl_widening():void
+    {
+        $digest=$this->publishRecipientKey();
+        $this->asRole('owner');
+        $serverNow=now()->startOfSecond()->addMilliseconds(250);
+        \Illuminate\Support\Carbon::setTestNow($serverNow);
+        try{
+            $clientNowMs=$serverNow->getTimestampMs()+3;
+            $exact=$this->grantInput($digest,$clientNowMs+86400000);
+            $this->postJson('/media-shares/v1/grants',$exact)
+                ->assertUnprocessable();
+            $this->assertDatabaseCount('media_recipient_grants_v1',0);
+
+            $safe=$this->grantInput($digest,$clientNowMs+86400000-300000);
+            $safeContract=json_decode($safe['contract'],true,32,JSON_THROW_ON_ERROR);
+            $this->postJson('/media-shares/v1/grants',$safe)
+                ->assertCreated()->assertJsonPath('unchanged',false);
+            $this->postJson('/media-shares/v1/grants',$safe)
+                ->assertOk()->assertJsonPath('unchanged',true);
+            $this->assertDatabaseHas('media_recipient_grants_v1',[
+                'id'=>$safeContract['grantId'],
+                'expires_at'=>$safeContract['expiresAt'],
+                'contract_json'=>$safe['contract'],
+            ]);
+            $this->assertDatabaseCount('media_recipient_grants_v1',1);
+            // Explicit upper bound still applies: no server TTL extension.
+            $later=$this->grantInput($digest,$clientNowMs+86400000+1);
+            $this->postJson('/media-shares/v1/grants',$later)
+                ->assertUnprocessable();
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
     public function test_recipient_only_gets_signed_media_and_authenticated_chunks():void
     {
         $digest=$this->publishRecipientKey();

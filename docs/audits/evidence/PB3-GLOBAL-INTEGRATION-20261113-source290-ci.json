@@ -1,0 +1,46 @@
+{
+  "source_sha": "f4bce2e1ab3e5ad72ec1d7e8c8f4d7517e286faa",
+  "status": "PASS",
+  "runs": [
+    {
+      "id": 43358069464,
+      "name": "P0-02 isolated PostgreSQL 18 and Garage 2.5",
+      "head_sha": "f4bce2e1ab3e5ad72ec1d7e8c8f4d7517e286faa",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43358069464"
+    },
+    {
+      "id": 43358069595,
+      "name": "P0-02 real Laravel + Vue foundation",
+      "head_sha": "f4bce2e1ab3e5ad72ec1d7e8c8f4d7517e286faa",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43358069595"
+    },
+    {
+      "id": 43358069485,
+      "name": "P0 security floor and contract checks",
+      "head_sha": "f4bce2e1ab3e5ad72ec1d7e8c8f4d7517e286faa",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43358069485"
+    },
+    {
+      "id": 43358069647,
+      "name": "PB3 UX lane scope guard",
+      "head_sha": "f4bce2e1ab3e5ad72ec1d7e8c8f4d7517e286faa",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43358069647"
+    },
+    {
+      "id": 43358069460,
+      "name": "UX source integrity and integration map",
+      "head_sha": "f4bce2e1ab3e5ad72ec1d7e8c8f4d7517e286faa",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43358069460"
+    }
+  ]
+}

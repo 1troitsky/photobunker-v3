@@ -30,6 +30,7 @@ jobs:
       - name: Composer consistency and all PHP syntax
         run: |
           composer validate --no-check-publish --strict --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
           find apps/api/app apps/api/bootstrap apps/api/config apps/api/routes apps/api/database apps/api/tests scripts -name '*.php' -type f -print0 | xargs -0 -n1 php -l
       - name: Laravel boot and focused tests
         working-directory: apps/api

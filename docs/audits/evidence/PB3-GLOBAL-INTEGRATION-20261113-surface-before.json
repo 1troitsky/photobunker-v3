@@ -1,0 +1,503 @@
+{
+  "environment": "Chromium on macOS, synthetic camera, no physical device",
+  "routes": [
+    {
+      "requested": "/assignments",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "path": "/assignments",
+      "headings": [
+        "Задания"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/browser",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "path": "/browser",
+      "headings": [
+        "Browser"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "A",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/camera",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "path": "/camera",
+      "headings": [
+        "Камера"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "SELECT",
+        "visible": true,
+        "outline": "auto"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/contacts",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "path": "/contacts",
+      "headings": [
+        "Контакты и Команды"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/settings",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "path": "/settings",
+      "headings": [
+        "Настройки"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "auto"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/settings/appearance",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "path": "/settings/appearance",
+      "headings": [
+        "Оформление"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "auto"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/settings/search",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "path": "/settings/search",
+      "headings": [
+        "Поиск по настройкам"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "A",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/messages",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "path": "/assignments",
+      "headings": [
+        "Задания"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "BLOCKED"
+    },
+    {
+      "requested": "/notifications",
+      "viewport": {
+        "width": 375,
+        "height": 812
+      },
+      "path": "/assignments",
+      "headings": [
+        "Задания"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "BLOCKED"
+    },
+    {
+      "requested": "/assignments",
+      "viewport": {
+        "width": 812,
+        "height": 375
+      },
+      "path": "/assignments",
+      "headings": [
+        "Задания"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/browser",
+      "viewport": {
+        "width": 812,
+        "height": 375
+      },
+      "path": "/browser",
+      "headings": [
+        "Browser"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "A",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/camera",
+      "viewport": {
+        "width": 812,
+        "height": 375
+      },
+      "path": "/camera",
+      "headings": [
+        "Камера"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "SELECT",
+        "visible": true,
+        "outline": "auto"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/contacts",
+      "viewport": {
+        "width": 812,
+        "height": 375
+      },
+      "path": "/contacts",
+      "headings": [
+        "Контакты и Команды"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/settings",
+      "viewport": {
+        "width": 812,
+        "height": 375
+      },
+      "path": "/settings",
+      "headings": [
+        "Настройки"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "auto"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/settings/appearance",
+      "viewport": {
+        "width": 812,
+        "height": 375
+      },
+      "path": "/settings/appearance",
+      "headings": [
+        "Оформление"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "auto"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/settings/search",
+      "viewport": {
+        "width": 812,
+        "height": 375
+      },
+      "path": "/settings/search",
+      "headings": [
+        "Поиск по настройкам"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "A",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/messages",
+      "viewport": {
+        "width": 812,
+        "height": 375
+      },
+      "path": "/assignments",
+      "headings": [
+        "Задания"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "BLOCKED"
+    },
+    {
+      "requested": "/notifications",
+      "viewport": {
+        "width": 812,
+        "height": 375
+      },
+      "path": "/assignments",
+      "headings": [
+        "Задания"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "BLOCKED"
+    },
+    {
+      "requested": "/assignments",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "path": "/assignments",
+      "headings": [
+        "Задания"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/browser",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "path": "/browser",
+      "headings": [
+        "Browser"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "A",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/camera",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "path": "/camera",
+      "headings": [
+        "Камера"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "SELECT",
+        "visible": true,
+        "outline": "auto"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/contacts",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "path": "/contacts",
+      "headings": [
+        "Контакты и Команды"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/settings",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "path": "/settings",
+      "headings": [
+        "Настройки"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "auto"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/settings/appearance",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "path": "/settings/appearance",
+      "headings": [
+        "Оформление"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "auto"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/settings/search",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "path": "/settings/search",
+      "headings": [
+        "Поиск по настройкам"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "A",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "PASS"
+    },
+    {
+      "requested": "/messages",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "path": "/assignments",
+      "headings": [
+        "Задания"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "BLOCKED"
+    },
+    {
+      "requested": "/notifications",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "path": "/assignments",
+      "headings": [
+        "Задания"
+      ],
+      "overflow": false,
+      "focus": {
+        "tag": "BUTTON",
+        "visible": true,
+        "outline": "solid"
+      },
+      "status": "BLOCKED"
+    }
+  ],
+  "timings": [
+    53.99,
+    50.91,
+    53.56
+  ],
+  "hardware": "NOT TESTED",
+  "matrixRequests": 0,
+  "serviceWorkers": 0,
+  "coldOfflineReload": {
+    "status": "BLOCKED",
+    "reason": "page.reload: net::ERR_INTERNET_DISCONNECTED"
+  }
+}

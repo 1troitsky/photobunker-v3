@@ -1,31 +1,25 @@
 # PB3 — единственная таблица прогресса
 
-**Срез на 13.11.2026.** Это **фактическая карта статусов**, а не придуманные проценты готовности. Сравнены живые GitHub PR, точные SHA файлов, `main`, `ts.md`, `AGENTS.md`, полный CI последнего объединённого Draft. **Draft ≠ интегрировано в `main` ≠ готово к релизу**. Обновлять после большого этапа, не после каждого коммита. Старые примерные проценты от 11.11 не переносить как достоверную оценку.
+**Срез 13.11.2026.** Проценты не используются: реализация, тестирование и приёмка — разные состояния. `main` проверен по удалённому SHA: **`da7327b8c9c440dae3dc864b3245b9f9f4ad14eb`**. Ошибочный merge #290 (`9160cbf1…`) в нём **не достижим**, несмотря на GitHub `merged`.
 
-**Две разные базы:** `main` **`da7327b8c9c440dae3dc864b3245b9f9f4ad14eb`**; последний до preflight полный Product+QA Draft [#288](https://github.com/1troitsky/photobunker-v3/pull/288) **`f906f1490653db98df34b41db55fbda9cb3238e0`**, исходный CI **4/4 PASS** (PHP244 на каждой версии, Vitest446, Chromium83, PG/Garage). Новая объединённая Draft-ветка от этого SHA предназначена для проверки относительно `main`, **не для самостоятельного merge**.
+Одна изолированная ветка `integration/global-acceptance-20261113` сохраняет #290 **`f4bce2e1…`** и его историю, переносит только clock-margin #63 с новыми Safe/ACL ceilings и обновляет 5 уязвимых Symfony patch-версий. #292 / Matrix / альтернативный GPS #262 не добавлены. Отдельного разрешения на merge main нет.
 
-| Направление | Есть в `main` / проверенная база | Последняя объединённая Draft-сборка (проверено) | Что НЕ принято и что дальше |
-|---|---|---|---|
-| **Интеграция кода** | `main` неизменён | **189** открытых Draft PR, **175** stacked, **14** прямых в main; основная последовательная цепочка **84 PR** до #288; отдельный pre-main review #289 | Main-base 4/4 CI, независимый разбор недостающих веток, разрешение владельца перед слиянием |
-| Identity / Recovery / E2EE / Local-First | P0/P1 foundation | Проверенные настоящие браузерные шифрованные Photo/Media, подписанные резервации, восстановление/отказы хранилища | Реальные устройства, полный Lost ACK/escrow и приемка Matrix отдельно |
-| Камера, GPS, фото/видео/аудио | Базовый клиент и подписанные протоколы | #263 выбран вместо конфликтующего #262, отрицательные тесты GPS; E2EE uploads в Garage Chromium | Физические iOS/Android, сенсоры/разрешения, полноценные 5–300/3000 сек media capture |
-| Browser, каталог и импорт | Старый Browser | #82 и 84-последовательная продуктовая ветка: код Browser/Media и соответствующие E2E; real cloud readback | Проверить полное принятие каждой операции, UX/массовые операции и совместимость версий |
-| Viewer и редакторы | Базовые UI/медиа-интерфейсы | Photo V55 и интеграция UX в Draft; часть browser QA | Реальные video/audio редакторы, производительность на телефонах, все экспортные сценарии |
-| Assignments / Fieldwork | Signed assignment foundation | Серверные политики, квоты и 5/5 реальных PostgreSQL конкурирующих слотов; Chromium-проверки | Полная пользовательская 5.0, правила TTL задания и contributor deletion |
-| Контакты / Команды / Профиль | Базовые E2EE grants и команды | Draft-цепочка UX и интеграционные QA | Окончательная приёмка экрана, отзыв доступа, повторная проверка на физических устройствах |
-| Messenger / Matrix | Не считать полноценным готовым мессенджером | Исходная #64 Message UI/drafts **не включена в нынешний #288** в пяти путях; Matrix ветви отдельно | Matrix A→B/SAS/QR/escrow, remote revoke/Panic, обязательный Unlimited+ homeserver **BLOCKED** |
-| PIN / Emergency / DMS | Частичные security primitives | Спецификация и отдельные защитные задачи | Полный PIN, Emergency/Panic, DMS, remote wipe и негативные сценарии |
-| StorageManager / S3 / Backup | S3/PG foundation | **Реальный Garage outage/restart/lost ACK PASS**, signed E2EE uploads и SHA; тесты адаптеров присутствуют | BYO S3, независимый replica/failover, полноценный Recovery Vault/Backup restore |
-| Тарифы, квоты, TTL, оплата | Базовые серверные правила | Пять тарифов, verified ledger, Free14/Go30/Pro90, браузерные buffered 13/29/89, PG квоты; Go/Pro→Free безопасный CI-тест | **Нет подтверждённой реальной оплаты**; Unlimited renew, grace auto-expiry, физический GC, TTL миграция #203 **backlog** |
-| Уведомления | Базовая инфраструктура | Local-First encrypted inbox contract+test имеется в Draft | Полное серверное доставление/пуш, бейджи, UX и действия |
-| Help / FAQ / Legal / Shell | P0/P1 shell, исходники `docs/_uiux` | **117** UX эталонов `docs/ux/`, **14** UX integration источников; отдельный Help Center UI | Реальные тексты Terms/Privacy и проверка всех UX связей / мобильности |
-| Admin / Analytics / Events | Не считать готовой production админкой | Наборы проверенных контрактов RBAC, private telemetry и metadata events (содержимое уже есть в текущем Draft) | MFA-operational flows, разрешённые действия, privacy audit и эксплуатационная панель |
-| Signed PWA / release | Базовые PWA/development CI | SHA256 release-integrity draft contract, API+Vue сборка и Chromium E2E | Независимый trust anchor, подписанная цепочка, инсталляция iOS/Android, release chaos/load, юридические требования |
+| Направление | Проверенный результат текущей интеграционной ветки | Осталось / статус полной функции |
+|---|---|---|
+| Git / интеграция | 198 PR проверены; 189 открытых: 40 уже main, 92 в истории #290, 14 content-equivalent | 43 divergent/evolved разобраны; только #63 требует узкого переноса; не сливать старые heads повторно |
+| Identity / Recovery / E2EE | Реальные registration, Recovery Key A→B, negative identity, ciphertext/readback, тёплый offline | Browser Recovery Key rotation / full remote revoke не приняты; cold offline shell BLOCKED |
+| Camera / GPS | Выбран #263; отрицательные #258 сохранены; JPEG / AV и GPS consent regression покрыты | Реальные сенсоры / iOS / Android NOT TESTED; AV cap 175s против 300/3000s спецификации |
+| Browser / Viewer / редакторы | Реальные E2EE media, поиск 10k, пагинация, WAV trim, JPEG canvas/маски, Safe ACL, навигация | MP4 export и все codec/mobile/long-recording сценарии не приняты |
+| Assignments / Contacts / Teams | Подписанные политики, multi-account ACL, grants/revoke; 5/5 настоящих PG quota races | Окончательная owner UX acceptance / native permissions NOT TESTED |
+| StorageManager / Garage | Реальный S3 outage/restart, новые worker / Lost ACK, SHA readback, tombstones; непустой main→HEAD upgrade сохраняет данные | BYO / replicas / failover отсутствуют; production cleanup не включён |
+| Billing / limits / TTL | 5 immutable plans; signed admission и synthetic paid/downgrade tests; clock-margin #63 восстановлен | Реальная оплата NOT TESTED; Unlimited renew / grace / backup-aware GC #203 BLOCKED |
+| Messages / Matrix | В #290 Messages route отсутствует; #292 отдельно: CI 83/85, 2 FAIL Dock | Не интегрировать автоматически; Matrix A↔B / SAS / QR / escrow / Panic отдельно BLOCKED |
+| Settings / Dock / Profile | Реальные Settings / Appearance / поиск / Dock, desktop и 2 mobile viewport | Финальный Profile, полный доступный Dock 6, физический телефон NOT TESTED |
+| Notifications / Help | Есть isolated local-inbox / Help contracts и unit tests | Нет подключённых Notifications/delivery/push; Help component не означает готовый маршрут |
+| Backup / Panic / DMS | Только backup admission/cooldown primitives | Snapshot restore, Emergency, Panic / DMS / remote wipe BLOCKED |
+| Admin / Analytics / Events | Проверенные чистые RBAC/MFA / metadata / telemetry contracts | Production MFA, маршруты, аудит операций и доставка не реализованы полностью |
+| PWA / release security | 32/32 unsigned integrity tests; Composer 8 matches → 0 после 5 patch updates; pnpm production audit 0 | Independent trust anchor / signed activation / cold offline bootstrap BLOCKED; Safari automation disabled |
 
-## Отдельные риски интеграции
+**Локальные проверки:** PHP8.4.27 и PHP8.5.12 — 245/245 каждая; Vitest449/449, TS/build, PostgreSQL18.6/Garage2.5 и 5 quota races PASS. Финальный Chromium/CI и точный commit фиксируются в [едином QA-отчёте](docs/audits/PB3-GLOBAL-INTEGRATION-20261113.md) и в [Final validation PR #293](https://github.com/1troitsky/photobunker-v3/pull/293).
 
-- **Восемь** прямо в `main` направленных PR (#184, #186, #188, #245, #246, #247, #249, #250) имеют **полностью идентичные Git SHA содержимого своих изменённых файлов** в текущем #288. Они НЕ обязаны иметь общие коммиты; не вливать повторно и не закрывать без review.
-- #251 — частично совпадает, его тесты изменились позднее. #82 — корень 84-PR цепочки; нельзя вливать исходный PR поверх его потомков. Старые #63 / #49 требуют reconciliation, а исходная Messages #64 не входит в интеграционный bundle.
-- Исходный `TS_PROGRESS_TABLE.md` добавлен в `main` отдельным коммитом `da7327b8` **после разветвления** продуктовой цепочки. Отсутствие файла в #288 — не доказательство удаления потомками. Эта обновлённая версия добавлена в отдельной integration review ветке. Различие версий разрешается **только в этой ветке** отдельным Git-коммитом, который учитывает обе истории, сохраняет обновлённый файл и не меняет `main`. Перед любым слиянием PR в `main` всё равно нужно явное разрешение владельца.
-- Полный preflight и действия: [docs/audits/PB3-MAIN-INTEGRATION-PREFLIGHT-20261113.md](docs/audits/PB3-MAIN-INTEGRATION-PREFLIGHT-20261113.md), [Issue #289](https://github.com/1troitsky/photobunker-v3/issues/289).
-- **Правило:** никакого merge в `main` без прямого указания владельца; никакого заявления «PB3 завершён» только по зелёному CI. После принятой интеграции отдельно обновить эту единственную таблицу.
+**Решение:** кодовая сборка для review, не заявление готовности PB3/P4 к релизу. `main` не обновлять без отдельной команды владельца. Подробные evidence, полный PR inventory и blocker matrix находятся в отчёте.
