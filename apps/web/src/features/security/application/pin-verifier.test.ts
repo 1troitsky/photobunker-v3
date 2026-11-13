@@ -33,6 +33,11 @@ describe('P3 #220 — protected offline dual-PIN verifier (not active PIN Shell)
       .rejects.toThrow('pin.emergency_mismatch')
     await expect(enrollPinVerifier(owner, await hmacSecret(true), '1234', null))
       .rejects.toThrow('pin.invalid_device_secret')
+    const weakKey = await crypto.subtle.importKey(
+      'raw', new Uint8Array(8), {name:'HMAC',hash:'SHA-256'}, false, ['sign'],
+    )
+    await expect(enrollPinVerifier(owner, weakKey, '1234', null))
+      .rejects.toThrow('pin.invalid_device_secret')
     await expect(attemptPinVerifier({accountId:'bad',deviceId:'bad'}, secret,'1234'))
       .rejects.toThrow('pin.invalid_scope')
   })
