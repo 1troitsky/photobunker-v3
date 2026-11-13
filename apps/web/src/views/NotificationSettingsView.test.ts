@@ -60,6 +60,7 @@ describe('Encrypted device-local notification display settings',()=>{
     await mount()
     const toggle=el('notification-setting-expiry')
     toggle.checked=false;toggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle() // Vue must update the Save button's disabled state.
     el('notification-settings-save').click()
     await settle()
     expect(host.textContent).toContain('Не удалось сохранить')
