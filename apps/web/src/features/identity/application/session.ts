@@ -249,6 +249,10 @@ async function resumeLocalDevice():Promise<Session|null> {
   // Unprotected legacy devices preserve their prior behavior.
   pendingPinUnlock.value=null
   const local=activate(pkg,saved,false)
+  // Local-First: cached content is available as soon as the local envelope
+  // has been opened, not after a potentially stalled offline server proof.
+  // PIN-protected rows NEVER reach this legacy path.
+  identityBootstrapReady.value=true
   try {
     await prove('login',{accountId:saved.accountId,deviceId:saved.deviceId,purpose:'login'},saved.deviceKey)
     if (activeSession.value===local) activate(pkg,saved,true)
