@@ -7,6 +7,8 @@ import CaptureView from './CaptureView.vue'
 const mocks = vi.hoisted(() => ({
   capture: vi.fn(), policies: vi.fn(), server: vi.fn(), binding: vi.fn(),
   mediaEnqueue: vi.fn(), mediaIntent: vi.fn(),
+  draftCreate:vi.fn(),draftAppend:vi.fn(),draftSeal:vi.fn(),
+  draftRead:vi.fn(),draftDelete:vi.fn(),draftInterrupt:vi.fn(),
   requiredGps:false,
   privateCache: vi.fn(), verifyPolicy: vi.fn(), privateScope: vi.fn(),
   allowedMedia: ['photo'] as string[],
@@ -18,6 +20,14 @@ vi.mock('vue-router', () => ({
 }))
 vi.mock('../features/photo-sync/application/p1-photo', () => ({captureEncrypted: mocks.capture}))
 vi.mock('../features/media/application/media-outbox', () => ({enqueueEncryptedMedia: mocks.mediaEnqueue}))
+vi.mock('../features/media/application/recording-encrypted-journal',()=>({
+  createEncryptedRecordingDraft:mocks.draftCreate,
+  appendEncryptedRecordingSegment:mocks.draftAppend,
+  sealEncryptedRecordingDraft:mocks.draftSeal,
+  readCompletedEncryptedRecording:mocks.draftRead,
+  deleteEncryptedRecordingDraft:mocks.draftDelete,
+  interruptEncryptedRecordingDraft:mocks.draftInterrupt,
+}))
 vi.mock('../features/assignments/application/assignment-outbox', () => ({
   listServerAssignments: mocks.server, listAllServerAssignments: mocks.server,
   listVerifiedCapturePolicies: mocks.policies,
@@ -88,6 +98,12 @@ async function mount(session = identity()) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.draftCreate.mockResolvedValue('00000000-0000-4000-8000-000000000001')
+  mocks.draftAppend.mockResolvedValue(undefined)
+  mocks.draftSeal.mockResolvedValue(undefined)
+  mocks.draftRead.mockResolvedValue(new Blob([new Uint8Array(512)],{type:'audio/webm'}))
+  mocks.draftDelete.mockResolvedValue(undefined)
+  mocks.draftInterrupt.mockResolvedValue(undefined)
   requests = []
   getUserMedia = vi.fn(() => {
     const request = deferred<MediaStream>(); requests.push(request); return request.promise
