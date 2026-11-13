@@ -100,6 +100,28 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     expect(mocks.resolve).not.toHaveBeenCalled()
     expect(mocks.push).not.toHaveBeenCalled()
   })
+  it('still renders encrypted security events when preference ciphertext is unreadable',async()=>{
+    mocks.rows=[{...mocks.rows[0]!,kind:'security',targetId:null}]
+    mocks.preferences.mockRejectedValueOnce(Error('notifications.encrypted_preferences_unreadable'))
+    await mount()
+    expect(el('notifications-list').textContent).toContain('Новые материалы')
+    expect(host.textContent).toContain('Настройки отображения повреждены')
+    expect(mocks.markAll).not.toHaveBeenCalled()
+  })
+  it('mark all passes only visible unread IDs, never hidden categories',async()=>{
+    mocks.rows=[
+      {...mocks.rows[0]!,id:ID},
+      {...mocks.rows[0]!,id:'66666666-6666-4666-8666-666666666666',
+        kind:'team-invite'},
+    ]
+    mocks.preferences.mockResolvedValueOnce({
+      version:1,invitations:false,deadlines:true,expiry:true,system:true,badges:true,
+    })
+    await mount()
+    el('notifications-mark-all').click()
+    await settle()
+    expect(mocks.markAll).toHaveBeenCalledWith(expect.any(Number),[ID])
+  })
   it('marks all locally without falsely acknowledging a server read',async()=>{
     await mount()
     el('notifications-mark-all').click()
