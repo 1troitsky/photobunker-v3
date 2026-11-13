@@ -146,3 +146,49 @@ test('P2 #198 A→B encrypted notification, lost ACK, offline local read and ten
     await aContext.close();await bContext.close();await cContext.close()
   }
 })
+
+
+test('P2 #198 encrypted local notification display preferences survive reload without changing server feed',async({page})=>{
+  test.setTimeout(120000)
+  await register(page)
+  await page.goto('/notifications')
+  await expect(page.getByTestId('notifications-list')).toContainText(
+    'Событие безопасности',{timeout:30000})
+  await page.getByTestId('notifications-settings').click()
+  await expect(page).toHaveURL(/\/notifications\/settings$/)
+  await expect(page.getByTestId('notification-setting-push')).toBeDisabled()
+  const invitation=page.getByTestId('notification-setting-invitations')
+  await invitation.uncheck()
+  await page.getByTestId('notification-setting-badges').uncheck()
+  await page.getByTestId('notification-settings-save').click()
+  await expect(page.getByText('Сохранено в зашифрованном хранилище этого устройства.'))
+    .toBeVisible()
+  await page.reload()
+  await expect(invitation).not.toBeChecked()
+  await expect(page.getByTestId('notification-setting-badges')).not.toBeChecked()
+  // Stored ciphertext cannot expose switches or event metadata.
+  const raw=await page.evaluate(async()=>{
+    const request=indexedDB.open('pb3-encrypted-notifications-v1')
+    const db=await new Promise<IDBDatabase>((resolve,reject)=>{
+      request.onsuccess=()=>resolve(request.result)
+      request.onerror=()=>reject(request.error)
+    })
+    try{
+      const tx=db.transaction('preferences','readonly')
+      const rows=tx.objectStore('preferences').getAll()
+      return await new Promise<string>((resolve,reject)=>{
+        rows.onsuccess=()=>resolve(JSON.stringify(rows.result))
+        rows.onerror=()=>reject(rows.error)
+      })
+    }finally{db.close()}
+  })
+  expect(raw).not.toContain('invitations')
+  expect(raw).not.toContain('badges')
+  expect(raw).not.toContain('security')
+  await page.goto('/notifications')
+  await expect(page.getByTestId('notifications-list')).toContainText(
+    'Событие безопасности',{timeout:30000})
+  expect(await notices(page)).toHaveLength(1)
+  // Even with badges hidden, critical security notices remain visible.
+  await expect(page.locator('.notification-dot.isread')).toHaveCount(1)
+})
