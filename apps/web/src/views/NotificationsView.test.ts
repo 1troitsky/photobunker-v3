@@ -180,6 +180,52 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     expect(mocks.push).not.toHaveBeenCalled()
     expect(host.textContent).not.toContain(TARGET)
   })
+  it('fences the old account read finalizer while a new account has a pending read',async()=>{
+    let finishOld:(()=>void)|undefined
+    let finishNew:(()=>void)|undefined
+    mocks.mark
+      .mockImplementationOnce(()=>new Promise<void>(resolve=>{finishOld=resolve}))
+      .mockImplementationOnce(()=>new Promise<void>(resolve=>{finishNew=resolve}))
+    await mount()
+    const summary=()=>el('notification-'+ID).querySelector('button')!
+    summary().click()
+    await settle()
+    expect(mocks.mark).toHaveBeenCalledTimes(1)
+    expect(summary().disabled).toBe(true)
+
+    activeSession.value={...identity(false),
+      accountId:'33333333-3333-4333-8333-333333333333'}
+    await settle()
+    expect(summary().disabled).toBe(false)
+    summary().click()
+    await settle()
+    expect(mocks.mark).toHaveBeenCalledTimes(2)
+    expect(summary().disabled).toBe(true)
+
+    // A stale async finally must NEVER re-enable a replacement account's UI.
+    finishOld?.()
+    await settle()
+    expect(summary().disabled).toBe(true)
+    finishNew?.()
+    await settle()
+    expect(summary().disabled).toBe(false)
+  })
+  it('does not strand the read lock after a same-account session refresh',async()=>{
+    let finish:(()=>void)|undefined
+    mocks.mark.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve}))
+    await mount()
+    const summary=()=>el('notification-'+ID).querySelector('button')!
+    summary().click()
+    await settle()
+    expect(summary().disabled).toBe(true)
+    // Online/offline proof may replace the Session object without key change.
+    activeSession.value={...identity(false)}
+    await settle()
+    expect(summary().disabled).toBe(true)
+    finish?.()
+    await settle()
+    expect(summary().disabled).toBe(false)
+  })
   it('does not lose new-account refresh while old sync is still in flight',async()=>{
     activeSession.value=identity(true)
     let finishOld:(()=>void)|undefined
