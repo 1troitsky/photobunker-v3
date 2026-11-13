@@ -295,4 +295,43 @@ final class PublicCardGrantLedgerTest extends TestCase
         $this->rejected(fn () => $this->revoke($payload), 404);
         self::assertSame(0, DB::table('public_card_intent_events_v1')->count());
     }
+
+    public function test_existing_archive_record_denies_staging_despite_client_ceiling(): void
+    {
+        DB::table('browser_archive_entries_v1')->insert([
+            'id' => (string) Str::uuid(),
+            'account_id' => self::ACCOUNT,
+            'kind' => 'media', 'asset_id' => self::SAFE,
+            'revision' => 1, 'state' => 'archived',
+            'asset_expires_at_ms' => self::NOW + 30_000,
+            'media_type' => 'photo', 'plain_bytes' => 2048,
+            'last_operation_id' => (string) Str::uuid(),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->rejected(fn () => $this->stage(), 410);
+        self::assertSame(0, DB::table('public_card_intent_events_v1')->count());
+    }
+
+    public function test_media_tombstone_dominates_forged_active_preview_snapshot(): void
+    {
+        DB::table('media_tombstones_v1')->insert([
+            'media_id' => self::SAFE, 'account_id' => self::ACCOUNT,
+            'operation_id' => (string) Str::uuid(),
+            'object_keys' => '[]',
+            'next_sweep_at' => now()->addHour(),
+            'created_at' => now(),
+        ]);
+        $this->rejected(fn () => $this->stage(), 410);
+        self::assertSame(0, DB::table('public_card_token_reservations_v1')->count());
+    }
+
+    public function test_bad_signed_revoke_contract_cannot_create_event(): void
+    {
+        $first = $this->stage();
+        $payload = $this->revokePayload($first);
+        $payload['hiddenAdminBypass'] = true;
+        $this->rejected(fn () => $this->revoke($payload), 422);
+        self::assertSame(1, DB::table('public_card_intent_events_v1')->count());
+    }
+
 }
