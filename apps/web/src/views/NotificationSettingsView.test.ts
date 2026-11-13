@@ -2,12 +2,15 @@
 import { afterEach,beforeEach,describe,expect,it,vi } from 'vitest'
 import { createApp,nextTick,type App } from 'vue'
 import { activeSession,type Session } from '../features/identity/application/session'
-const mock=vi.hoisted(()=>({load:vi.fn(),save:vi.fn(),push:vi.fn()}))
-const defaults={version:1 as const,invitations:true,deadlines:true,
-  expiry:true,system:true,badges:true}
+const mock=vi.hoisted(()=>({
+  load:vi.fn(),save:vi.fn(),push:vi.fn(),
+  defaults:{version:1 as const,invitations:true,deadlines:true,
+    expiry:true,system:true,badges:true},
+}))
+const defaults=mock.defaults
 vi.mock('vue-router',()=>({useRouter:()=>({push:mock.push})}))
 vi.mock('../features/notifications/application/local-inbox',()=>({
-  defaultNotificationPreferences:defaults,
+  defaultNotificationPreferences:mock.defaults,
   readNotificationPreferences:mock.load,
   saveNotificationPreferences:mock.save,
 }))
