@@ -73,8 +73,10 @@ function requireDeviceSecret(secret: CryptoKey): void {
   }
 }
 
-function validateVerifier(verifier: StoredVerifier | null): void {
-  if (verifier === null) return
+function validateVerifier(
+  verifier: StoredVerifier | null | undefined, optional = false,
+): void {
+  if (verifier === null && optional) return
   if (!Array.isArray(verifier.salt) || verifier.salt.length !== SALT_BYTES ||
       !Array.isArray(verifier.tag) || verifier.tag.length !== TAG_BYTES ||
       ![...verifier.salt, ...verifier.tag].every(
@@ -95,7 +97,7 @@ function validateState(row: StoredPinState, scope: PinScope): void {
     throw new Error('pin.corrupt_record')
   }
   validateVerifier(row.app)
-  validateVerifier(row.emergency)
+  validateVerifier(row.emergency, true)
 }
 
 async function calculateTag(
@@ -200,6 +202,12 @@ export async function attemptPinVerifier(
   const snapshot = await records.get(id)
   if (!snapshot) throw new Error('pin.not_configured')
   validateState(snapshot, scope)
+  // A known persisted lock or rollback cannot become an unlock while waiting
+  // for expensive KDF work. The transaction below still rechecks all guards.
+  if (now < snapshot.lastObservedMs) return {status: 'clock-rollback'}
+  if (snapshot.lockedUntilMs > now) {
+    return {status: 'locked', retryAfterMs: snapshot.lockedUntilMs - now}
+  }
 
   // PBKDF2 is deliberately done BEFORE the IDB transaction: holding a Dexie
   // transaction open across WebCrypto awaits can make it inactive/commit early.
