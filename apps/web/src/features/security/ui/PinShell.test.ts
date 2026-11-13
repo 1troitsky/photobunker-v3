@@ -92,6 +92,17 @@ describe('P3 owner-accepted full-screen PIN Shell 1.1',()=>{
     expect(root.textContent).not.toContain('4826')
   })
 
+  it('does not submit early for an enrolled eight-digit PIN',async()=>{
+    pendingPinUnlock.value={...pendingPinUnlock.value!,pinLength:8}
+    await mount()
+    expect(root.querySelectorAll('.pin-indicators span')).toHaveLength(8)
+    await typeDigits('1234567')
+    expect(session.unlockPinnedDevice).not.toHaveBeenCalled()
+    await typeDigits('8')
+    expect(session.unlockPinnedDevice).toHaveBeenCalledWith('12345678')
+    expect(root.querySelectorAll('.pin-indicators .filled')).toHaveLength(0)
+  })
+
   it('uses the SAME keypad for emergency PIN and never claims delete/wipe',async()=>{
     session.unlockPinnedDevice.mockResolvedValue({status:'emergency-intent'})
     await mount()
