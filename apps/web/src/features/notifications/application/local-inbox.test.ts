@@ -94,6 +94,18 @@ describe('PB3 encrypted Local-First notifications',()=>{
     expect(await localUnreadCount()).toBe(0)
     expect(await listLocalNotifications()).toHaveLength(2)
   })
+  it('encrypts non-clickable retention deadline notice without old media target',async()=>{
+    await session()
+    const event={id:eventId,kind:'file-expiry' as const,
+      targetId:null,occurredAt:1_750_000_000_000}
+    await recordLocalNotification(event)
+    expect((await listLocalNotifications())[0]).toMatchObject(event)
+    expect((await rows())[0]).toBeDefined()
+    expect(JSON.stringify(await rows())).not.toContain(eventId)
+    const preview=previewNotification((await listLocalNotifications())[0]!)
+    expect(preview.title).toBe('Удаление файла')
+    expect(preview.description).toBe('Проверьте срок хранения файла.')
+  })
   it('resolves concurrent marking and event dedup without losing read state',async()=>{
     await session()
     const row=input()
