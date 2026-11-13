@@ -145,3 +145,11 @@ export async function locallyUnblockPeer(peerAccountId:string):Promise<void> {
   await db.blocks.delete(ids.key!)
   assertIdentity(session)
 }
+
+/** Pure view filter: blocked peers never enter the team invitation contact picker. */
+export function excludeLocallyBlockedContacts<T extends {peerAccountId:string}>(
+  contacts:readonly T[],blocked:readonly LocallyBlockedPeer[],
+):T[] {
+  const hidden=new Set(blocked.map(x=>x.peerAccountId))
+  return contacts.filter(x=>!hidden.has(x.peerAccountId))
+}
