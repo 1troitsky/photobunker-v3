@@ -156,12 +156,20 @@ export async function restoreAccount(recoveryKey:string):Promise<Session> {
   await prove('recover',payload,await importSigner(pkg.accountPkcs8),device.deviceKey)
   await saveDevice(device)
   await dropRecoveryPending(kit.locator)
-  await markSignedOut(device.accountId,device.deviceId,false)
-  // Successful Recovery Key + server 'recover' proof permits switching from
-  // a PIN-locked local device. Sign it out, never restore device-only access.
+  // The Recovery Key plus successful server proof is the *only* accepted
+  // alternate to a corrupt/lost PIN device. Sign out all old saved devices
+  // for this recovered account, including malformed sealed rows that could
+  // not publish pendingPinUnlock, BEFORE allowing the new device to auto-resume.
+  // These are local signed-out markers, not server revocation or key erasure.
   const previous=pendingPinUnlock.value
-  if(previous && previous.deviceId!==device.deviceId)
-    await markSignedOut(previous.accountId,previous.deviceId,true)
+  const localDevices=await listDevices()
+  for(const former of localDevices){
+    if(former.deviceId!==device.deviceId &&
+       (former.accountId===device.accountId ||
+        former.deviceId===previous?.deviceId))
+      await markSignedOut(former.accountId,former.deviceId,true)
+  }
+  await markSignedOut(device.accountId,device.deviceId,false)
   pendingPinUnlock.value=null
   identityBootstrapError.value=null
   identityBootstrapReady.value=true
