@@ -123,6 +123,24 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     expect(identityBootstrapReady.value).toBe(true)
   },60_000)
 
+  it('preserves Local-First legacy session while server proof is stalled',async()=>{
+    const f=await account()
+    let rejectProof:((error:Error)=>void)|undefined
+    mocks.jsonApi.mockImplementation(()=>new Promise((_resolve,reject)=>{
+      rejectProof=(error:Error)=>reject(error)
+    }))
+    const pending=resumeExistingDevice()
+    await vi.waitFor(()=>expect(rejectProof).toBeTypeOf('function'),{
+      timeout:5000,
+    })
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+    expect(activeSession.value?.online).toBe(false)
+    expect(identityBootstrapReady.value).toBe(true)
+    expect(pendingPinUnlock.value).toBeNull()
+    rejectProof!(new Error('offline'))
+    await pending
+  },60_000)
+
   it('refuses malformed sealed metadata and never falls back to app shell data',async()=>{
     const f=await protectedAccount()
     await corruptDevice(f.device.deviceId,row=>{row.pinLength=3})
