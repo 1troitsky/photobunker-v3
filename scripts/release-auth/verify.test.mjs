@@ -213,3 +213,18 @@ test('externally trusted checkpoint rejects unequal sequence with invalid hash e
   s.trustedCheckpoint={releaseSequence:12,manifestSha256:'not-a-digest'}
   rejects(s,'UNTRUSTED_CHECKPOINT')
 })
+
+test('genuinely signed conventional SW path cannot be hidden as ordinary JS',()=>{
+  const s=fixture(),m=JSON.parse(s.manifestBytes)
+  m.assets.push({path:'sw.js',sha256:'b'.repeat(64),size:12,type:'js'})
+  m.service_worker=null
+  s.manifestBytes=encode(m);s.resign()
+  rejects(s,'INVALID_MANIFEST')
+})
+test('genuinely signed nested service-worker asset requires explicit worker reference',()=>{
+  const s=fixture(),m=JSON.parse(s.manifestBytes)
+  m.assets.unshift({path:'app/service-worker.v2.js',sha256:'b'.repeat(64),size:12,type:'js'})
+  m.assets.sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0)
+  s.manifestBytes=encode(m);s.resign()
+  rejects(s,'INVALID_MANIFEST')
+})
