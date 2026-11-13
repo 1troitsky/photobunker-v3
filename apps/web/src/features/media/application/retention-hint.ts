@@ -64,7 +64,10 @@ function validatedPaidHint(payload:unknown,now:number):{
 
 function connected(s:Session):boolean{
   return activeSession.value===s&&s.online
-    &&(typeof navigator==='undefined'||navigator.onLine)
+    // Navigator connectivity is only an advisory OFFLINE signal: some
+    // PWA/worker/test environments expose no onLine property at all.
+    // An attempted GET still fails closed on every real network error.
+    &&(typeof navigator==='undefined'||navigator.onLine!==false)
 }
 
 /** Background refresh, deduplicated per currently authenticated session. */
