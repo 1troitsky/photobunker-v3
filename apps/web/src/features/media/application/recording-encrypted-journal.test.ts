@@ -12,7 +12,7 @@ import {
 } from './recording-encrypted-journal'
 
 afterEach(()=>{activeSession.value=null})
-async function account(id=crypto.randomUUID()):Promise<Session>{
+async function account(id:string=crypto.randomUUID()):Promise<Session>{
   const {pkg}=await freshPackage(id)
   const session={
     accountId:id,deviceId:crypto.randomUUID(),pkg,online:false,
