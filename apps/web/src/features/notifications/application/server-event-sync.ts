@@ -31,8 +31,8 @@ function parsePage(raw:unknown,previous:number):FeedPage{
     ||!Array.isArray(v.items)||v.items.length>50)
     throw Error('notifications.invalid_feed')
   const next=cursor(v.nextCursor)
-  if(next<previous||v.hasMore&&next===previous
-    ||v.hasMore&&v.items.length===0)
+  // All scanned rows may be ACL-filtered; a cursor can advance with 0 items.
+  if(next<previous||v.hasMore&&next===previous)
     throw Error('notifications.invalid_feed')
   // Each item is additionally validated by the strict encrypted inbox writer.
   return v as FeedPage
