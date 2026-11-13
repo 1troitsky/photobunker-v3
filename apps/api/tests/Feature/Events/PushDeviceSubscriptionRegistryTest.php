@@ -150,6 +150,28 @@ final class PushDeviceSubscriptionRegistryTest extends TestCase
         }
     }
 
+    public function test_tampered_ciphertext_and_mismatched_endpoint_hash_are_ineligible(): void
+    {
+        $this->registry->put($this->alice,$this->deviceA,$this->subscription());
+        self::assertTrue($this->registry->eligible($this->alice,$this->deviceA));
+        $ciphertext=DB::table('notification_push_subscriptions_v1')
+            ->where('device_id',$this->deviceA)->value('subscription_ciphertext');
+        DB::table('notification_push_subscriptions_v1')
+            ->where('device_id',$this->deviceA)
+            ->update(['subscription_ciphertext'=>'corrupted']);
+        self::assertFalse($this->registry->eligible($this->alice,$this->deviceA));
+        DB::table('notification_push_subscriptions_v1')
+            ->where('device_id',$this->deviceA)
+            ->update(['subscription_ciphertext'=>$ciphertext,
+                'endpoint_hash'=>str_repeat('0',64)]);
+        self::assertFalse($this->registry->eligible($this->alice,$this->deviceA));
+        // The original account+device can rotate, replacing ciphertext.
+        self::assertSame(2,$this->registry->put(
+            $this->alice,$this->deviceA,$this->subscription('new'),
+        )['generation']);
+        self::assertTrue($this->registry->eligible($this->alice,$this->deviceA));
+    }
+
     public function test_malformed_subscription_and_ssrf_endpoints_never_write(): void
     {
         $base=$this->subscription();
