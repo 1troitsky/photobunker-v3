@@ -21,6 +21,6 @@
 - No public route should be activated by this preflight-only slice.
 
 ## Acceptance status
-- Contract code and negative unit tests written; exact-head CI to be recorded only after a real run. This is **PARTIAL / preflight**, never full #211 PASS.
+- Contract code and negative unit tests written. One-shot security-floor PHP 8.5 workflow committed removal of its own workflow as commit `8df5e5f1e445dbbaa9015789715afa1e28b38279` only after `composer validate --strict`, `composer audit --locked`, Composer install and `php vendor/bin/phpunit tests/Unit/PublicCard/SafeCardProjectionTest.php` commands. This is evidence of successful command-chain completion, **not independently retrieved stdout/test-count evidence**. Standard PR workflows on subsequent authored HEAD must be checked separately. This is **PARTIAL / preflight**, never full #211 PASS.
 - Real iOS/Android NOT TESTED; anonymous grant/read NOT IMPLEMENTED; user-facing public page NOT IMPLEMENTED.
 - No merge, deployment or main updates.
