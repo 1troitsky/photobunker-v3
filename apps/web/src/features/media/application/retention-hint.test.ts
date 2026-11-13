@@ -35,7 +35,8 @@ function reply(plan:'free'|'go'|'pro'|'unlimited'|'unlimited_plus'='go',
       revision:2,snapshotSha256:hash,
       planId:plan,effectivePlanId:plan,
       status:'active',paidPrivilegesActive:plan!=='free',
-      endsAt:new Date(Date.now()+DAY).toISOString().replace('.000Z','Z'),
+      endsAt:new Date(Math.floor((Date.now()+DAY)/1000)*1000)
+        .toISOString().replace('.000Z','Z'),
       effectiveLimits:{retention:
         plan==='go'?{days:30}:plan==='pro'?{days:90}
         :plan==='free'?{days:14}
@@ -88,7 +89,8 @@ describe('#283 Local-First server-authenticated paid TTL hints',()=>{
     expect(await listLocalPhotos()).toHaveLength(1)
     finish(new Response(JSON.stringify(reply('go')),{status:200}))
     await refreshRetentionHint(s)
-    expect(newSignedExpiry(Date.now(),s)-Date.now()).toBe(29*DAY)
+    const now=Date.now()
+    expect(newSignedExpiry(now,s)-now).toBe(29*DAY)
   })
 
   it('a verified Go response signs real Photo and Media AES-GCM payloads for 29 days',async()=>{
