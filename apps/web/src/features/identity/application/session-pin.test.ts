@@ -1,0 +1,234 @@
+import 'fake-indexeddb/auto'
+import {beforeEach,describe,expect,it,vi} from 'vitest'
+import {
+  activeSession,beginRegistration,identityBootstrapError,
+  identityBootstrapReady,pendingPinUnlock,restoreAccount,
+  resumeExistingDevice,unlockPinnedDevice,
+} from './session'
+import {
+  b64,canonical,createPB2,digest,freshPackage,hex,random,
+  sealDevice,sealRecovery,
+} from '../infrastructure/crypto'
+import {
+  getDevice,isSignedOut,markSignedOut,newLocalDevice,
+  openIdentityDB,saveDevice,
+} from '../infrastructure/storage'
+import {migrateLegacyLocalDeviceToPin} from '../../security/application/pin-device-migration'
+
+const mocks=vi.hoisted(()=>({jsonApi:vi.fn(),resetCsrf:vi.fn()}))
+vi.mock('../infrastructure/api',()=>mocks)
+
+async function resetStorage(){
+  const db=await openIdentityDB()
+  try{
+    await new Promise<void>((resolve,reject)=>{
+      const tx=db.transaction([
+        'devices','pending','recoveries','pairings','rotations','sessions','probe',
+      ],'readwrite')
+      for(const store of [
+        'devices','pending','recoveries','pairings','rotations','sessions','probe',
+      ])tx.objectStore(store).clear()
+      tx.oncomplete=()=>resolve()
+      tx.onabort=()=>reject(tx.error??Error('test.reset_aborted'))
+    })
+  }finally{db.close()}
+}
+beforeEach(async()=>{
+  vi.useRealTimers()
+  activeSession.value=null
+  pendingPinUnlock.value=null
+  identityBootstrapReady.value=false
+  identityBootstrapError.value=null
+  vi.resetAllMocks()
+  mocks.jsonApi.mockRejectedValue(new Error('offline'))
+  await resetStorage()
+})
+
+async function account(){
+  const accountId=crypto.randomUUID()
+  const pkg=(await freshPackage(accountId)).pkg
+  const device=await newLocalDevice(accountId)
+  device.envelope=await sealDevice(pkg,device.deviceId,device.encryptionKey)
+  await saveDevice(device)
+  return {pkg,device,scope:{accountId,deviceId:device.deviceId}}
+}
+async function protectedAccount(){
+  const f=await account()
+  await migrateLegacyLocalDeviceToPin({
+    scope:f.scope,verifiedPackage:f.pkg,appPin:'4826',emergencyPin:'6284',
+  })
+  return f
+}
+async function corruptDevice(deviceId:string,edit:(row:Record<string,unknown>)=>void){
+  const db=await openIdentityDB()
+  try{
+    const row=await new Promise<Record<string,unknown>>((resolve,reject)=>{
+      const tx=db.transaction('devices','readonly')
+      const get=tx.objectStore('devices').get(deviceId)
+      get.onsuccess=()=>resolve(get.result as Record<string,unknown>)
+      get.onerror=()=>reject(get.error)
+    })
+    edit(row)
+    await new Promise<void>((resolve,reject)=>{
+      const tx=db.transaction('devices','readwrite')
+      tx.objectStore('devices').put(row)
+      tx.oncomplete=()=>resolve()
+      tx.onabort=()=>reject(tx.error??Error('test.write_aborted'))
+    })
+  }finally{db.close()}
+}
+
+describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()=>{
+  it('discovers a saved PIN device without any plaintext PackageV2 or offline session',async()=>{
+    const f=await protectedAccount()
+    const result=await resumeExistingDevice()
+    expect(result).toBeNull()
+    expect(identityBootstrapReady.value).toBe(true)
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value).toEqual({
+      ...f.scope,pinLength:4,packageRevision:f.pkg.revision,
+      sessionNonce:expect.any(String),
+    })
+    expect(JSON.stringify(pendingPinUnlock.value)).not.toContain(f.pkg.akek)
+    await expect(beginRegistration()).rejects.toThrow('identity.pin_locked')
+  },90_000)
+
+  it('unlocks the *same persisted* package offline only after normal PIN',async()=>{
+    const f=await protectedAccount()
+    await resumeExistingDevice()
+    expect(await unlockPinnedDevice('0000'))
+      .toEqual({status:'invalid',attemptsRemaining:4})
+    expect(activeSession.value).toBeNull()
+    expect(await unlockPinnedDevice('6284'))
+      .toEqual({status:'emergency-intent'})
+    expect(activeSession.value).toBeNull()
+    expect(await unlockPinnedDevice('4826'))
+      .toEqual({status:'app-unlocked'})
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+    expect(activeSession.value?.online).toBe(false)
+    expect(pendingPinUnlock.value).toBeNull()
+    const row=await getDevice(f.scope.accountId,f.scope.deviceId)
+    expect((row!.envelope as unknown as {purpose:string}).purpose)
+      .toBe('preunlock-package')
+    expect(mocks.jsonApi).toHaveBeenCalled()
+  },120_000)
+
+  it('keeps legacy no-PIN devices compatible and does not display a PIN screen',async()=>{
+    const f=await account()
+    const resumed=await resumeExistingDevice()
+    expect(resumed?.accountId).toBe(f.scope.accountId)
+    expect(resumed?.pkg).toEqual(f.pkg)
+    expect(resumed?.online).toBe(false)
+    expect(pendingPinUnlock.value).toBeNull()
+    expect(identityBootstrapReady.value).toBe(true)
+  },60_000)
+
+  it('refuses malformed sealed metadata and never falls back to app shell data',async()=>{
+    const f=await protectedAccount()
+    await corruptDevice(f.device.deviceId,row=>{row.pinLength=3})
+    await expect(resumeExistingDevice()).rejects.toThrow('identity.invalid_sealed_device')
+    expect(activeSession.value).toBeNull()
+    expect(identityBootstrapReady.value).toBe(true)
+    expect(identityBootstrapError.value).toBe('identity.invalid_sealed_device')
+  },60_000)
+
+  it('rejects mixed sealed and legacy copies of one account before unwrapping either',async()=>{
+    const f=await protectedAccount()
+    const another=await newLocalDevice(f.scope.accountId)
+    another.envelope=await sealDevice(
+      f.pkg,another.deviceId,another.encryptionKey,
+    )
+    await saveDevice(another)
+    await expect(resumeExistingDevice()).rejects.toThrow('identity.mixed_sealed_devices')
+    expect(activeSession.value).toBeNull()
+    expect(identityBootstrapError.value).toBe('identity.mixed_sealed_devices')
+  },60_000)
+
+  it('signed-out PIN device never silently resumes or opens the stored package',async()=>{
+    const f=await protectedAccount()
+    await markSignedOut(f.scope.accountId,f.scope.deviceId,true)
+    expect(await resumeExistingDevice()).toBeNull()
+    expect(pendingPinUnlock.value).toBeNull()
+    expect(activeSession.value).toBeNull()
+    expect(identityBootstrapReady.value).toBe(true)
+  },60_000)
+
+  it('fails closed if a PIN session incarnation changes during async crypto',async()=>{
+    await protectedAccount()
+    await resumeExistingDevice()
+    const pending=unlockPinnedDevice('4826')
+    pendingPinUnlock.value={
+      ...pendingPinUnlock.value!,sessionNonce:crypto.randomUUID(),
+    }
+    await expect(pending).rejects.toThrow('identity.pin_session_changed')
+    expect(activeSession.value).toBeNull()
+  },70_000)
+
+  it('enforces persistent 5-failure/30min lock during the real login flow',async()=>{
+    vi.useFakeTimers({toFake:['Date']})
+    vi.setSystemTime(new Date('2026-11-14T09:00:00Z'))
+    await protectedAccount()
+    await resumeExistingDevice()
+    for(let i=1;i<=4;i++){
+      expect(await unlockPinnedDevice('9999'))
+        .toEqual({status:'invalid',attemptsRemaining:5-i})
+    }
+    expect((await unlockPinnedDevice('9999')).status).toBe('locked')
+    expect((await unlockPinnedDevice('4826')).status).toBe('locked')
+    expect(activeSession.value).toBeNull()
+    vi.setSystemTime(new Date('2026-11-14T09:30:00Z'))
+    expect(await unlockPinnedDevice('4826')).toEqual({status:'app-unlocked'})
+    expect(activeSession.value).not.toBeNull()
+    vi.useRealTimers()
+  },120_000)
+
+  it('Recovery Key + online proof can replace a locked PIN device, without legacy fallback',async()=>{
+    const f=await protectedAccount()
+    await resumeExistingDevice()
+    const kit=await createPB2()
+    const recovery=await sealRecovery(f.pkg,kit)
+    mocks.jsonApi.mockImplementation(async(url:string,_method?:string,body?:{
+      payload?:Record<string,string>
+    })=>{
+      if(url==='/identity/v2/recovery/'+kit.locator)
+        return {accountId:f.scope.accountId,accountSpki:f.pkg.accountSpki,
+          revision:f.pkg.revision,envelope:recovery}
+      if(url==='/identity/v2/challenges'){
+        const payload=body?.payload
+        if(!payload)throw Error('test.missing_payload')
+        const expiresAt=new Date(Date.now()+60_000).toISOString()
+        const nonce=b64(random(32))
+        const digestHex=hex(await digest(new TextEncoder().encode(canonical(payload)))
+        )
+        const id=crypto.randomUUID()
+        return {
+          id,nonce,expiresAt,digest:digestHex,
+          message:[
+            'photobunker.identity.v2',payload.purpose,id,nonce,
+            expiresAt,digestHex,
+          ].join('\n'),
+        }
+      }
+      if(url==='/identity/v2/proof'){
+        const last=mocks.jsonApi.mock.calls.findLast(
+          (call:unknown[])=>call[0]==='/identity/v2/challenges'
+        )
+        const payload=last?.[2]?.payload as Record<string,string>|undefined
+        if(!payload)throw Error('test.missing_proof_payload')
+        return {
+          accountId:payload.accountId,deviceId:payload.deviceId,
+          purpose:'recover',expiresAt:new Date(Date.now()+60_000).toISOString(),
+        }
+      }
+      throw Error('test.unexpected_url_'+url)
+    })
+    const restored=await restoreAccount(kit.encoded)
+    expect(restored.accountId).toBe(f.scope.accountId)
+    expect(restored.deviceId).not.toBe(f.scope.deviceId)
+    expect(restored.online).toBe(true)
+    expect(pendingPinUnlock.value).toBeNull()
+    expect(await isSignedOut(f.scope.accountId,f.scope.deviceId)).toBe(true)
+    expect((await getDevice(f.scope.accountId,f.scope.deviceId))!.envelope)
+      .toEqual(expect.objectContaining({purpose:'preunlock-package'}))
+  },120_000)
+})
