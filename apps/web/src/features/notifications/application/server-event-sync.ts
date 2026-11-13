@@ -37,6 +37,17 @@ function parsePage(raw:unknown,previous:number):FeedPage{
   // Each item is additionally validated by the strict encrypted inbox writer.
   return v as FeedPage
 }
+/** ACK is only a server receipt of this device's scanned offset. */
+async function acknowledgeCursor(after:number):Promise<void>{
+  const raw=await jsonApi<unknown>('/notifications/v1/ack','POST',{cursor:String(after)})
+  if(!raw||typeof raw!=='object'||Array.isArray(raw))
+    throw Error('notifications.invalid_ack')
+  const v=raw as Record<string,unknown>
+  if(Object.keys(v).sort().join('|')!=='acknowledgedCursor|advanced|schemaVersion'
+    ||v.schemaVersion!==1||typeof v.advanced!=='boolean'
+    ||cursor(v.acknowledgedCursor)<after)
+    throw Error('notifications.invalid_ack')
+}
 function sameSession(accountId:string,deviceId:string,akek:string):void{
   const now=activeSession.value
   if(!now||now.accountId!==accountId||now.deviceId!==deviceId
@@ -62,7 +73,13 @@ export async function syncServerNotifications():Promise<{saved:number;pages:numb
       sameSession(accountId,deviceId,akek)
       saved++
     }
-    after=cursor(page.nextCursor)
+    // Never send ACK before ALL encrypted local row writes complete.
+    // Even after ACK the server retains replayable journal entries.
+    const next=cursor(page.nextCursor)
+    sameSession(accountId,deviceId,akek)
+    await acknowledgeCursor(next)
+    sameSession(accountId,deviceId,akek)
+    after=next
     if(!page.hasMore)return {saved,pages:pages+1}
   }
   throw Error('notifications.feed_limit')
