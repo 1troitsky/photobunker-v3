@@ -18,15 +18,17 @@
 
 All changes are test/QA evidence/isolated CI. **No edits** to production `crypto.ts`, PIN/Identity session, Folder Sync #309, other agents' files, payment, database migration, frontend runtime, S3, PWA, main, deploy or merges.
 
-## Acceptance evidence (pending new CI)
+## Exact-head acceptance evidence — code SHA `c05256fa02409e1c2ce5552e7e32ccd447af73c8`
 
-- CI SHA: to be recorded after all workflow jobs complete.
-- Identity tamper: real non-identical byte stream after corruption, canonical Base64URL, AES-256-GCM authenticated decrypt negative on each new random envelope. Verify no surprise successful decryption; if any occurs, STOP, mark FAIL and escalate as genuine security issue instead of making the test less strict.
-- Full TypeScript + Vite build and all Vitest: **NOT YET TESTED** for new branch.
-- PHP 8.4/8.5 full PHPUnit/Composer Audit and real PG18 Identity: **NOT YET TESTED**.
-- Browser Chromium on real device, iOS Safari, Android PWA, end-to-end account recovery over HTTP, full physical-device / production security independent audit: **NOT TESTED** and not implied by tests.
-- Do NOT claim production cryptographic acceptance from only a green test suite. No merge approval requested.
+- **Exact code/test/workflow SHA:** `c05256fa02409e1c2ce5552e7e32ccd447af73c8`. [CI 43526888071](https://github.com/1troitsky/photobunker-v3/actions/runs/43526888071) **4/4 jobs PASS**, [independent CI 43526896000](https://github.com/1troitsky/photobunker-v3/actions/runs/43526896000) **4/4 jobs PASS**. Both runs compile and test the same exact code SHA.
+- **Frontend TypeScript / Vite build:** PASS. Full **451/451 Vitest** (83 files) PASS. Focused **8/8 independent extra Identity cryptographic suite repetitions PASS** per full CI run. Each repetition includes **256 fresh AES-GCM recovery encryptions with unique random IVs**, canonical decoded-byte XOR, successful original open, and rejected changed ciphertext: at least 2,048 separately sealed envelopes per CI run, at least **4,096** across the two independent full runs (beyond the full-suite copies). The explicitly added wrong Recovery Key material, wrong account ID, IV mutation, revision AAD mutation and ECDSA message + signature-byte negatives PASS. The code does not skip, mock or downgrade WebCrypto verification.
+- **PHP 8.4.27+ and PHP 8.5.12+:** full locked Composer validate+audit PASS, full PHPUnit **245/245 tests / 3,661 assertions on each version** PASS.
+- **Real disposable PostgreSQL 18:** migrations and `IdentityV2Test.php` **4/4 tests / 34 assertions PASS** (PHPUnit explicitly bypasses root phpunit.xml SQLite override, exercising actual PG18).
+- [Security 43526895964](https://github.com/1troitsky/photobunker-v3/actions/runs/43526895964) **PASS**, [UX scope 43526896064](https://github.com/1troitsky/photobunker-v3/actions/runs/43526896064) **PASS** on the exact code SHA.
+- **Prior original intermittent failure remains preserved:** [43525442010](https://github.com/1troitsky/photobunker-v3/actions/runs/43525442010) Vitest 480/481 FAIL, identical SHA [43525451177](https://github.com/1troitsky/photobunker-v3/actions/runs/43525451177) 481/481 PASS. The old Base64URL suffix corruption was nondeterministic; a real decoded byte XOR now never accidentally becomes a no-op. No evidence of AES-GCM bypass in the confirmed tests.
+- **NOT TESTED:** real browser Chromium/iOS Safari/Android hardware, full 2-device E2EE over remote Garage, independent formal crypto audit, real deployment. Native/device and production readiness cannot be inferred from Node WebCrypto/PG18 results. The existing P0 Foundation/Storage workflows only auto-trigger for their configured bases; the new scoped CI is explicit and narrower than full storage end-to-end.
+- **Result:** #311 *QA test reliability slice verified*. Reviewer can accept these checks for review; not permission to merge, nor evidence of production-grade end-to-end E2EE acceptance.
 
 ## Handoff state
 
-- ISSUE: `in-progress` while checks are pending. Final state must use exact HEAD, run IDs and PASS/FAIL/NOT TESTED, and preserve original FAIL.
+- ISSUE: candidate `review` after exact-head independent checks; hold for owner review, no merge or main mutation. Preserve old FAIL and separate #309 Folder Sync scope.
