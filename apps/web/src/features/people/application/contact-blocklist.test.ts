@@ -81,7 +81,7 @@ describe('P2 #210 encrypted Local-First blocked-contact selection',()=>{
   })
   it('rejects own ID, arbitrary peer strings and missing session',async()=>{
     await login(accountId)
-    for(const bad of [accountId,'127.0.0.1','',peerId.toUpperCase(),' '+peerId]){
+    for(const bad of [accountId,'127.0.0.1','','a2222222-2222-4222-8222-222222222222'.toUpperCase(),' '+peerId]){
       await expect(locallyBlockPeer(bad)).rejects.toThrow('contacts.blocklist_invalid_peer')
       await expect(locallyUnblockPeer(bad)).rejects.toThrow('contacts.blocklist_invalid_peer')
     }
