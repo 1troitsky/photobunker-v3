@@ -21,6 +21,9 @@ type VerifiedHint={
   days:29|89
 }
 let verified:VerifiedHint|null=null
+// Cache even a negative or failed lookup briefly. Free-camera bursts must
+// never issue one expensive billing/usage read for each encrypted frame.
+let lastChecked:{session:Session;at:number}|null=null
 let pending:{session:Session;task:Promise<void>}|null=null
 
 function record(value:unknown):value is Record<string,unknown>{
@@ -77,6 +80,9 @@ export function refreshRetentionHint(session:Session):Promise<void>{
     return Promise.resolve()
   }
   if(pending?.session===session)return pending.task
+  const now=Date.now()
+  if(lastChecked?.session===session&&lastChecked.at<=now
+    &&now-lastChecked.at<=FRESH_MS)return Promise.resolve()
   const task=(async()=>{
     try{
       const payload=await jsonApi<unknown>('/billing/v1/me')
@@ -85,6 +91,7 @@ export function refreshRetentionHint(session:Session):Promise<void>{
       if(!connected(session))return
       const now=Date.now()
       const accepted=validatedPaidHint(payload,now)
+      lastChecked={session,at:now}
       verified=accepted?{
         session,receivedAt:now,
         expiresAt:accepted.expiresAt,days:accepted.days,
@@ -92,7 +99,10 @@ export function refreshRetentionHint(session:Session):Promise<void>{
     }catch{
       // A failed lookup is NOT a claim of paid entitlement. Keep Local-First
       // capture working with the existing signed 13-day baseline.
-      if(activeSession.value===session)verified=null
+      if(activeSession.value===session){
+        verified=null
+        lastChecked={session,at:Date.now()}
+      }
     }
   })()
   pending={session,task}
