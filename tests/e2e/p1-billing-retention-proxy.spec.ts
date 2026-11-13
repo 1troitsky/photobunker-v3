@@ -11,6 +11,7 @@ test('P1 #283 unauthenticated billing is denied, enrolled PWA reads own Free ret
   const denied=await page.evaluate(async()=>{
     const response=await fetch('/billing/v1/me',{
       credentials:'same-origin',cache:'no-store',
+      headers:{Accept:'application/json'},
     })
     return {status:response.status,contentType:response.headers.get('content-type')}
   })
@@ -27,6 +28,7 @@ test('P1 #283 unauthenticated billing is denied, enrolled PWA reads own Free ret
   const authenticated=await page.evaluate(async()=>{
     const response=await fetch('/billing/v1/me',{
       credentials:'same-origin',cache:'no-store',
+      headers:{Accept:'application/json'},
     })
     if(!response.ok)return {status:response.status}
     const body=await response.json() as {
