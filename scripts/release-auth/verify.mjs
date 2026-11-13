@@ -43,7 +43,7 @@ function validateManifestShape(m) {
     !path.startsWith('/') && !path.includes('\\') && !/[\u0000-\u001f\u007f%?#:]/.test(path) &&
     path.split('/').every(s => s !== '' && s !== '.' && s !== '..' &&
       s.length <= 255 && s === s.normalize('NFC'))
-  if (m.service_worker !== null && !pathOk(m.service_worker)) fail('INVALID_MANIFEST')
+  if (m.service_worker !== null && (!pathOk(m.service_worker) || !m.service_worker.endsWith('.js'))) fail('INVALID_MANIFEST')
   if (!Array.isArray(m.assets) || m.assets.length === 0 || m.assets.length > 50000) fail('INVALID_MANIFEST')
   let last = '', workerCount=0
   for (const asset of m.assets) {
