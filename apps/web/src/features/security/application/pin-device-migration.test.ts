@@ -1,5 +1,4 @@
 import 'fake-indexeddb/auto'
-import Dexie from 'dexie'
 import {afterEach, describe, expect, it, vi} from 'vitest'
 import {activeSession} from '../../identity/application/session'
 import {
@@ -10,10 +9,10 @@ import {
   getDevice, markSignedOut, newLocalDevice, openIdentityDB, saveDevice,
 } from '../../identity/infrastructure/storage'
 import type {LocalDevice} from '../../identity/infrastructure/storage'
-import {admitPinProtectedPackage} from './pin-package-admission'
+import {admitCoLocatedPinDevice} from './pin-device-admission'
 import {
   inspectPinDeviceMigration, migrateLegacyLocalDeviceToPin,
-  readSealedPinDevice,
+  readSealedPinDevice, attemptSealedPinDevice,
 } from './pin-device-migration'
 
 afterEach(()=>{
@@ -81,14 +80,11 @@ describe('P3 #220 actual Identity v2 local PIN envelope migration acceptance (UN
       ...f.scope,packageRevision:f.pkg.revision,sessionNonce:crypto.randomUUID(),
     }
     const args={
-      encryptedPackage:pinDevice!.encrypted,
-      verifierDeviceHmac:pinDevice!.verifierDeviceHmac,
-      envelopeDeviceAes:pinDevice!.envelopeDeviceAes,
-      readTrustedContext:()=>ctx,
+      scope:f.scope,readTrustedContext:()=>ctx,
     }
-    expect(await admitPinProtectedPackage({...args,candidate:'1836'}))
+    expect(await admitCoLocatedPinDevice({...args,candidate:'1836'}))
       .toEqual({status:'unlocked',pkg:f.pkg})
-    expect(await admitPinProtectedPackage({...args,candidate:'6381'}))
+    expect(await admitCoLocatedPinDevice({...args,candidate:'6381'}))
       .toEqual({status:'emergency-intent'})
     expect(activeSession.value).toBeNull()
   },95_000)
@@ -218,32 +214,67 @@ describe('P3 #220 actual Identity v2 local PIN envelope migration acceptance (UN
     expect(protectedDevice).not.toBeNull()
   },95_000)
 
-  it('without a verifier record, encrypted device still cannot produce an unlocked package',async()=>{
+  it('corrupted missing co-located verifier fails closed without legacy fallback',async()=>{
     const f=await createDevice()
     await migrateLegacyLocalDeviceToPin({
       scope:f.scope,verifiedPackage:f.pkg,appPin:'1234',emergencyPin:null,
     })
-    const sealed=await readSealedPinDevice(f.scope)
-    expect(sealed).not.toBeNull()
-    const db=new Dexie('pb3_pin_verifier_v1')
-    db.version(1).stores({records:'id'})
-    try{
-      // Simulate storage eviction / incomplete cross-DB migration on a
-      // disposable test identity. Must not downgrade to legacy or grant.
-      await db.table('records').delete(f.scope.accountId+':'+f.scope.deviceId)
-      await expect(admitPinProtectedPackage({
-        encryptedPackage:sealed!.encrypted,candidate:'1234',
-        verifierDeviceHmac:sealed!.verifierDeviceHmac,
-        envelopeDeviceAes:sealed!.envelopeDeviceAes,
-        readTrustedContext:()=>({
-          ...f.scope,packageRevision:f.pkg.revision,
-          sessionNonce:crypto.randomUUID(),
-        }),
-      })).rejects.toThrow('pin.not_configured')
-    }finally{db.close()}
+    const row=await getDevice(f.scope.accountId,f.scope.deviceId)
+    expect(row).toBeDefined()
+    await putIdentityRow('devices',{...row,pinVerifier:undefined})
+    await expect(admitCoLocatedPinDevice({
+      scope:f.scope,candidate:'1234',
+      readTrustedContext:()=>({
+        ...f.scope,packageRevision:f.pkg.revision,
+        sessionNonce:crypto.randomUUID(),
+      }),
+    })).rejects.toThrow('pin.corrupt_sealed_device')
     const persisted=await getDevice(f.scope.accountId,f.scope.deviceId)
     expect((persisted!.envelope as unknown as {purpose:string}).purpose)
       .toBe('preunlock-package')
+    await expect(openDevice(
+      persisted!.envelope,persisted!.encryptionKey,
+      f.scope.accountId,f.scope.deviceId,
+    )).rejects.toThrow()
+  },75_000)
+
+  it('co-located PIN attempt counters persist and lock at five failures; emergency cannot bypass',async()=>{
+    vi.useFakeTimers({toFake:['Date']})
+    vi.setSystemTime(new Date('2026-11-14T09:00:00.000Z'))
+    const f=await createDevice()
+    await migrateLegacyLocalDeviceToPin({
+      scope:f.scope,verifiedPackage:f.pkg,appPin:'1234',emergencyPin:'4321',
+    })
+    const outcomes=await Promise.all(
+      Array.from({length:5},()=>attemptSealedPinDevice(f.scope,'9999')),
+    )
+    const failures=outcomes.filter(x=>x.result.status==='invalid').map(x=>
+      x.result.status==='invalid'?x.result.attemptsRemaining:NaN)
+    expect(failures.sort()).toEqual([1,2,3,4])
+    expect(outcomes.filter(x=>x.result.status==='locked')).toHaveLength(1)
+    expect((await attemptSealedPinDevice(f.scope,'1234')).result.status)
+      .toBe('locked')
+    expect((await attemptSealedPinDevice(f.scope,'4321')).result.status)
+      .toBe('locked')
+    vi.setSystemTime(new Date('2026-11-14T09:30:00.000Z'))
+    expect((await attemptSealedPinDevice(f.scope,'1234')).result.status)
+      .toBe('app-unlocked')
+  },100_000)
+
+  it('detects direct co-located failure counter tamper before a correct PIN',async()=>{
+    const f=await createDevice()
+    await migrateLegacyLocalDeviceToPin({
+      scope:f.scope,verifiedPackage:f.pkg,appPin:'1234',emergencyPin:null,
+    })
+    expect((await attemptSealedPinDevice(f.scope,'9999')).result.status)
+      .toBe('invalid')
+    const row=await getDevice(f.scope.accountId,f.scope.deviceId) as
+      LocalDevice & {pinVerifier:{failures:number;lockedUntilMs:number}}
+    await putIdentityRow('devices',{
+      ...row,pinVerifier:{...row.pinVerifier,failures:0,lockedUntilMs:0},
+    })
+    await expect(attemptSealedPinDevice(f.scope,'1234'))
+      .rejects.toThrow('pin.integrity_failed')
   },75_000)
 
   it('does not accept a missing or changed account/device identifier',async()=>{
