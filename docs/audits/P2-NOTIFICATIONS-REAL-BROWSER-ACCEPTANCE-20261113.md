@@ -3,7 +3,7 @@
 **Repository:** `1troitsky/photobunker-v3`  
 **Draft PR:** [#296](https://github.com/1troitsky/photobunker-v3/pull/296)  
 **Working branch:** `feat/p2-198-notification-projection-20261113`  
-**Code HEAD of this audit:** `791827ecca405b075df8ecc0eb43a60672eb4e2d`  
+**Last fully validated code HEAD:** `a17cdb3003e6f49cd78c9293818a77852229f330`  
 **Base main:** `6565a0fe852882ea5fc26e493df81affed687eee`  
 **Integration:** NOT AUTHORIZED; no merge/deployment; main unchanged.
 
@@ -20,19 +20,25 @@
 
 | Scenario | Automated evidence | Acceptance at this snapshot |
 | --- | --- | --- |
-| Identity and account/device projection, revoke/ACL, lost ACK, gap admission | Real Laravel/PHPUnit on Postgres-compatible migrations; feature and unit coverage | PHP 8.4/8.5: PASS on previous CODE SHA `7cd98343`; latest code SHA needs its own PASS |
-| Local AES-GCM event save before client ACK, corrupted payload and session handoff | `apps/web/src/features/notifications/application/server-event-sync.test.ts` / `local-inbox.test.ts` | Vitest and TS/build: PASS on `7cd98343`; latest code SHA pending |
-| Offline UI, All/Unread, read and mark-all, target click ACL and identity swap | Mounted `apps/web/src/views/NotificationsView.test.ts` | PASS on `7cd98343`; latest code SHA pending |
-| **Real Chromium A→B** registered account, encrypted event ID at rest, lost ACK, durable local read, warm offline, second-device recovery, revoked-device 401, outsider-account separation | **New** `tests/e2e/p2-settings-notifications.spec.ts`, matched by existing `tests/playwright.config.ts` and picked up by PostgreSQL 18/Garage 2.5 storage workflow | **NOT TESTED on exact HEAD yet** until workflow has completed; source code in PR is not evidence of execution |
+| Identity and account/device projection, revoke/ACL, lost ACK, gap admission | Real Laravel/PHPUnit on Postgres-compatible migrations; feature and unit coverage | **PASS** on validated code HEAD `a17cdb30` (Laravel 8.4/8.5; Foundation workflow `43479184949`) |
+| Local AES-GCM event save before client ACK, corrupted payload and session handoff | `apps/web/src/features/notifications/application/server-event-sync.test.ts` / `local-inbox.test.ts` | **PASS** on validated code HEAD `a17cdb30` (Foundation `43479184949`) |
+| Offline UI, All/Unread, read and mark-all, target click ACL and identity swap | Mounted `apps/web/src/views/NotificationsView.test.ts` | **PASS** on validated code HEAD `a17cdb30` (mounted Vitest and TS/build) |
+| **Real Chromium A→B** registered account, encrypted event ID at rest, lost ACK, durable local read, warm offline, second-device recovery, revoked-device 401, outsider-account separation | **New** `tests/e2e/p2-settings-notifications.spec.ts`, matched by existing `tests/playwright.config.ts` and picked up by PostgreSQL 18/Garage 2.5 storage workflow | **PASS** on exact code SHA `a17cdb30`: real PostgreSQL/Garage workflow `43479184659`, job `132070889897` **85/85 Chromium PASS (4.8 min)**; includes this scenario |
 | iOS Safari / Android physical device | No physical hardware evidence | NOT TESTED |
 | Notification push, cross-device read state, remote encrypted inbox, push without metadata leaks | Not implemented | NOT IMPLEMENTED |
 | Verified backup success producer | No verified snapshot/restore proof (only admission and cooldown) | BLOCKED; never synthesize `BackupVerified` |
 | TTL deletion notice | Retryable outbox with retention-deadline semantics, not physical S3-deleted assertion | PHPUnit evidence exists; operator-gated cleanup remains OFF in production |
 
-## Required CI evidence
+## Exact-head automated acceptance evidence
 
-Latest code HEAD `791827ecca405b075df8ecc0eb43a60672eb4e2d`. All four workflows (Foundation, Security, UX, isolated PG/Garage) were **IN PROGRESS** on first check. Prior `7cd98343`: Foundation 3/3 jobs, Security and UX **PASS**; PG/Garage **IN PROGRESS**. Never reuse a previous commit's PASS for exact-head acceptance. Inspect `p2-settings-notifications.spec.ts` result and Playwright traces on any failure.
+- **Validated code HEAD:** `a17cdb3003e6f49cd78c9293818a77852229f330`.
+- Foundation / Laravel 8.4, 8.5 and Vue/Vitest/TypeScript/build: **PASS**, GitHub Actions run [43479184949](https://github.com/1troitsky/photobunker-v3/actions/runs/43479184949).
+- Security floor/contract: **PASS**, run [43479184686](https://github.com/1troitsky/photobunker-v3/actions/runs/43479184686).
+- UX lane scope guard: **PASS**, run [43479184704](https://github.com/1troitsky/photobunker-v3/actions/runs/43479184704).
+- Isolated PostgreSQL 18 + Garage 2.5 + **real Chromium 85/85 PASS (4.8m)**, run [43479184659](https://github.com/1troitsky/photobunker-v3/actions/runs/43479184659), job `132070889897`. This run includes the new real Key-Only A→B Notifications test.
+- Earlier failed run [43477663084](https://github.com/1troitsky/photobunker-v3/actions/runs/43477663084) had **84/85 PASS**; the one Notifications test attempted sync immediately after page reload while account was deliberately local/offline pending login proof. The test was corrected through the actual `reauthenticate()` flow; no production auth guard was weakened.
+- The exact-head browser acceptance covers the documented **automated** scope only. A green CI does not establish push, native Safari/Android, backup restore or remote E2EE inbox acceptance.
 
 ## Release and safety gate
 
-Do NOT merge PR #296 or mark issue #198 ready until the actual Playwright/PG/Garage run finishes and errors are resolved, and the product owner explicitly authorizes a merge. Local notification ACK is a device-scoped delivery cursor, **not a read receipt**; the UI marks read only in encrypted local storage. After a recipient invite is revoked or expired, server target validation rejects old cached local notification click attempts. No change to Matrix, Camera, or other PR branches.
+Do NOT merge PR #296 or mark issue #198 ready until all remaining P2 issue acceptance gates are resolved and the product owner explicitly authorizes a merge. Local notification ACK is a device-scoped delivery cursor, **not a read receipt**; the UI marks read only in encrypted local storage. After a recipient invite is revoked or expired, server target validation rejects old cached local notification click attempts. No change to Matrix, Camera, or other PR branches.
