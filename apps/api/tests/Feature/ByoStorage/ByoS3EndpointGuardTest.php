@@ -87,6 +87,7 @@ final class ByoS3EndpointGuardTest extends TestCase
         yield 'IP literal IPv6' => ['https://[2001:4860:4860::8888]'];
         yield 'encoded host' => ['https://s3%2eexample.com'];
         yield 'numeric TLD' => ['https://0x7f.0.0.1'];
+        yield 'overflow TLS port' => ['https://s3.example.com:99999'];
         yield 'uppercase scheme' => ['HTTPS://s3.example.com'];
         yield 'leading whitespace' => [" https://s3.example.com"];
         yield 'embedded newline' => ["https://s3.example.com\n"];
