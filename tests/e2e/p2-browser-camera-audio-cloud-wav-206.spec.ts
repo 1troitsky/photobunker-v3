@@ -1,5 +1,9 @@
 import {expect,test,type Browser,type Page} from '@playwright/test'
 
+// Disposable Recovery Keys must never enter Playwright failure traces,
+// screenshot/video artifacts or recorded fill-steps on a CI failure.
+test.use({trace:'off',screenshot:'off',video:'off'})
+
 /**
  * #206: no fabricated MediaRecorder, E2EE ciphertext, Garage ACK or WAV.
  * Device A and recovered device B have distinct cookie + IndexedDB stores.
