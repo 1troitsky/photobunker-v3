@@ -127,6 +127,22 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     expect(mocks.push).not.toHaveBeenCalled()
     expect(host.textContent).not.toContain(TARGET)
   })
+  it('does not lose new-account refresh while old sync is still in flight',async()=>{
+    activeSession.value=identity(true)
+    let finishOld:(()=>void)|undefined
+    mocks.sync.mockImplementationOnce(()=>new Promise<void>(resolve=>{finishOld=resolve}))
+    await mount()
+    expect(mocks.sync).toHaveBeenCalledTimes(1)
+    activeSession.value={...identity(true),
+      accountId:'33333333-3333-4333-8333-333333333333'}
+    await settle()
+    expect(mocks.sync).toHaveBeenCalledTimes(1)
+    mocks.sync.mockResolvedValueOnce({saved:0,pages:1})
+    finishOld?.()
+    await settle()
+    expect(mocks.sync).toHaveBeenCalledTimes(2)
+    expect(el('notifications-list').textContent).toContain('Новые материалы')
+  })
   it('does not offer a target action for a generic expired retention notification',async()=>{
     mocks.rows=[{...mocks.rows[0]!,kind:'file-expiry',targetId:null}]
     activeSession.value=identity(true)
