@@ -151,10 +151,25 @@ final class MediaV1Test extends TestCase
                 'id'=>$c['mediaId'],'state'=>'active',
                 'account_id'=>$this->account,'media_type'=>$type,
             ]);
+            // The real verified finalize, not a synthetic producer fixture,
+            // must atomically publish exactly one event even on lost ACK replay.
+            $this->assertDatabaseHas('notification_event_ledger_v1',[
+                'account_id'=>$this->account,
+                'subject_type'=>'media',
+                'subject_id'=>$c['mediaId'],
+                'revision'=>1,
+                'admission_state'=>'sequenced',
+            ]);
+            $this->assertSame($i+1,DB::table('notification_event_ledger_v1')
+                ->where('account_id',$this->account)->count());
         }
         $this->getJson('/media/v1')->assertOk()
             ->assertJsonCount(3,'items');
         $this->assertDatabaseCount('media_files_v1',3);
+        $this->getJson('/notifications/v1/events')->assertOk()
+            ->assertJsonCount(3,'items')
+            ->assertJsonPath('items.0.kind','new-file')
+            ->assertJsonPath('nextCursor','3');
     }
 
     public function test_fresh_chunk_upload_lease_is_retryable_and_stale_lease_resumes():void
