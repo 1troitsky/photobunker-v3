@@ -114,7 +114,14 @@ async function refreshLocalRecordingDrafts(pruneExpired=false):Promise<void>{
   const identity=cameraIdentity(activeSession.value)
   if(!identity){localDrafts.value=[];return}
   try{
-    if(pruneExpired)await purgeExpiredEncryptedRecordingDrafts()
+    if(pruneExpired){
+      // Bounded, local-only GC per activation: at most 100 expired drafts.
+      // Each batch rechecks the active account/key and never touches MediaFile.
+      for(let batch=0;batch<4;batch++){
+        const purged=await purgeExpiredEncryptedRecordingDrafts(25)
+        if(purged<25)break
+      }
+    }
     const found=await listEncryptedRecordingDrafts()
     if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value))){
       // Active drafts may belong to an open recorder in another tab. Never
