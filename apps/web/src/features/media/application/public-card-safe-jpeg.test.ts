@@ -105,7 +105,7 @@ describe('P2 #211 client-only safe JPEG prepublication gate',()=>{
       getContext:vi.fn(()=>({drawImage,fillRect,fillStyle:''}))}
     vi.stubGlobal('document',{createElement:vi.fn(()=>canvas)})
     vi.stubGlobal('createImageBitmap',decoder)
-    const digest=vi.fn(async()=>new Uint8Array(32).fill(0xaf).buffer)
+    const digest=vi.fn(async(_algorithm:string,_data:BufferSource)=>new Uint8Array(32).fill(0xaf).buffer)
     vi.stubGlobal('crypto',{subtle:{digest}})
     const r=await prepareSafePublicJpeg(input)
     expect(r).toEqual({
