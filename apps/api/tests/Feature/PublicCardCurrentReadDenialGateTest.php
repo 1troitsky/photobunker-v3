@@ -115,7 +115,7 @@ final class PublicCardCurrentReadDenialGateTest extends TestCase
         $this->gate = new CurrentReadDenialGate();
     }
 
-    private static function json(array $x): string
+    private static function canonicalJson(array $x): string
     {
         return json_encode($x, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     }
@@ -139,7 +139,7 @@ final class PublicCardCurrentReadDenialGateTest extends TestCase
     private function stage(?array $intent = null): array
     {
         $c = $intent ?? $this->intent;
-        $raw = self::json($c);
+        $raw = self::canonicalJson($c);
         return $this->ledger->stage(
             $raw, $this->sign(SignedPublicationIntent::DOMAIN, $raw),
             $this->trusted
@@ -156,7 +156,7 @@ final class PublicCardCurrentReadDenialGateTest extends TestCase
             'previousEventHash' => $staged['eventHash'],
             'action' => 'revoke',
         ];
-        $raw = self::json($contract);
+        $raw = self::canonicalJson($contract);
         return $this->ledger->revoke(
             $raw, $this->sign(PublicationLedger::REVOKE_DOMAIN, $raw)
         );
