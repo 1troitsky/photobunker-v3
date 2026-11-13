@@ -11,7 +11,7 @@ const m=vi.hoisted(()=>({
 vi.mock('./PublicCardConsentReview.vue',()=>({
   default:{
     props:['prepared','binding'],
-    template:'<div data-testid="public-card-real-panel-reviewer-stub">{{ prepared.sha256 }} · {{ binding.submissionId }}</div>',
+    template:'<div data-testid="media-contributor-public-card-review">{{ prepared.sha256 }} · {{ binding.submissionId }}</div>',
   },
 }))
 vi.mock('../application/public-card-contributor-source',()=>({
@@ -114,7 +114,7 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
     await mount()
     expect(button()).not.toBeNull()
     expect(m.prepare).not.toHaveBeenCalled()
-    expect(host.querySelector('[data-testid="public-card-real-panel-reviewer-stub"]'))
+    expect(host.querySelector('[data-testid="media-contributor-public-card-review"]'))
       .toBeNull()
   })
   it('opens bound, prepublication-only viewer from explicit safe-candidate click',async()=>{
@@ -124,9 +124,8 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
     expect(m.prepare).toHaveBeenCalledTimes(1)
     expect(m.prepare).toHaveBeenCalledWith(candidate)
     const reviewer=host.querySelector<HTMLElement>(
-      '[data-testid="public-card-real-panel-reviewer-stub"]'
+      '[data-testid="media-contributor-public-card-review"]'
     )
-    if(!reviewer)throw Error('public_card.panel_dom:'+host.innerHTML.slice(-3000))
     expect(reviewer).not.toBeNull()
     expect(reviewer!.textContent).toContain(privateReview.prepared.sha256)
     expect(reviewer!.textContent).toContain(privateReview.binding.submissionId)
@@ -143,7 +142,7 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
     await settle()
     resolve(privateReview)
     await settle()
-    expect(host.querySelector('[data-testid="public-card-real-panel-reviewer-stub"]'))
+    expect(host.querySelector('[data-testid="media-contributor-public-card-review"]'))
       .toBeNull()
   })
   it('reports fail-closed signed-binding error without showing any image',async()=>{
@@ -151,7 +150,7 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
     await mount()
     button()!.click()
     await settle()
-    expect(host.querySelector('[data-testid="public-card-real-panel-reviewer-stub"]'))
+    expect(host.querySelector('[data-testid="media-contributor-public-card-review"]'))
       .toBeNull()
     expect(host.textContent).toContain('public_card.source_submission_signature_invalid')
   })
