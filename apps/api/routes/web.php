@@ -258,3 +258,5 @@ Route::prefix('browser/v1/archive')->middleware('throttle:pb3-media')->group(fun
 // P2 #198: read-only trusted event feed. No client emission, no server read ACK.
 Route::get('/notifications/v1/events', [NotificationEventsController::class, 'index'])
     ->middleware('throttle:40,1');
+Route::get('/notifications/v1/events/{eventId}/target', [NotificationEventsController::class, 'target'])
+    ->whereUuid('eventId')->middleware('throttle:40,1');
