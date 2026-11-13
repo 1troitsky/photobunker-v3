@@ -41,7 +41,11 @@ final class ByoS3EndpointGuard
             throw new \DomainException('storage.byo_endpoint_invalid');
         }
 
-        $url = parse_url($endpoint);
+        try {
+            $url = parse_url($endpoint);
+        } catch (\ValueError) {
+            throw new \DomainException('storage.byo_endpoint_invalid');
+        }
         if (
             !is_array($url)
             || array_diff(array_keys($url), ['scheme', 'host', 'port', 'path']) !== []
