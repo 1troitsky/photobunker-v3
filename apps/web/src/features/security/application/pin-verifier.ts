@@ -20,7 +20,7 @@ type StoredVerifier = {
   tag: number[]
 }
 
-type StoredPinState = {
+export type StoredPinState = {
   id: string
   version: 1
   accountId: string
@@ -329,4 +329,115 @@ export async function attemptPinVerifier(
     if (committed) return result
   }
   throw new Error('pin.concurrent_state_changed')
+}
+
+
+/**
+ * Pure verifier construction for a future *co-located* Identity devices row.
+ * This does NOT write the legacy standalone verifier database. Identity
+ * migration is responsible for committing this record and encrypted package
+ * together in a single IndexedDB transaction.
+ */
+export async function buildPinVerifierSnapshot(
+  scope: PinScope,
+  secret: CryptoKey,
+  appPin: string,
+  emergencyPin: string | null,
+): Promise<StoredPinState> {
+  scopeId(scope)
+  requireDeviceSecret(secret)
+  validatePin(appPin)
+  if (emergencyPin !== null) {
+    validatePin(emergencyPin)
+    if (emergencyPin.length !== appPin.length || emergencyPin === appPin) {
+      throw new Error('pin.emergency_mismatch')
+    }
+  }
+  const app = await buildVerifier(appPin, 'app', secret, scope)
+  const emergency = emergencyPin === null ? null :
+    await buildVerifier(emergencyPin, 'emergency', secret, scope)
+  const now = Date.now()
+  if (!Number.isSafeInteger(now) || now < 0) {
+    throw new Error('pin.invalid_clock')
+  }
+  const row: StoredPinState = {
+    id: scopeId(scope), version: 1,
+    accountId: scope.accountId, deviceId: scope.deviceId,
+    revision: crypto.randomUUID(),
+    app, emergency, failures: 0, lockedUntilMs: 0,
+    lastObservedMs: now, integrityTag: [],
+  }
+  row.integrityTag = await calculateStateTag(row, secret)
+  return row
+}
+
+/**
+ * Compute an authenticated PIN decision entirely OUTSIDE an IndexedDB
+ * transaction. The caller must atomically CAS the exact source snapshot
+ * before accepting result (including successful normal PIN or emergency).
+ * No writable DB is accessed by this function.
+ */
+export async function evaluatePinVerifierSnapshot(
+  scope: PinScope,
+  secret: CryptoKey,
+  candidate: string,
+  snapshot: StoredPinState,
+): Promise<{next: StoredPinState | null; result: PinAttempt}> {
+  scopeId(scope)
+  requireDeviceSecret(secret)
+  await verifyStoredState(snapshot, scope, secret)
+  const now = Date.now()
+  if (!Number.isSafeInteger(now) || now < 0) {
+    throw new Error('pin.invalid_clock')
+  }
+  if (now < snapshot.lastObservedMs) {
+    return {next:null, result:{status:'clock-rollback'}}
+  }
+  if (snapshot.lockedUntilMs > now) {
+    return {
+      next:null,
+      result:{status:'locked',retryAfterMs:snapshot.lockedUntilMs-now},
+    }
+  }
+  const formatValid = /^[0-9]{4,8}$/.test(candidate)
+  const appTag = formatValid
+    ? await calculateTag(
+      candidate, 'app', new Uint8Array(snapshot.app.salt), secret, scope,
+    ) : null
+  const emergencyTag = formatValid && snapshot.emergency
+    ? await calculateTag(
+      candidate, 'emergency', new Uint8Array(snapshot.emergency.salt),
+      secret, scope,
+    ) : null
+  const appMatch=appTag!==null&&sameTag(appTag,snapshot.app.tag)
+  const emergencyMatch=emergencyTag!==null&&snapshot.emergency!==null&&
+    sameTag(emergencyTag,snapshot.emergency.tag)
+
+  const afterKdf=Date.now()
+  if(!Number.isSafeInteger(afterKdf)||afterKdf<now){
+    throw new Error('pin.invalid_clock')
+  }
+  const next:StoredPinState={
+    ...snapshot,revision:crypto.randomUUID(),
+    lastObservedMs:afterKdf,integrityTag:[],
+  }
+  let result:PinAttempt
+  if(appMatch||emergencyMatch){
+    next.failures=0
+    next.lockedUntilMs=0
+    result={status:appMatch?'app-unlocked':'emergency-intent'}
+  }else{
+    const priorFailures=snapshot.lockedUntilMs>0 &&
+      snapshot.lockedUntilMs<=afterKdf?0:snapshot.failures
+    next.failures=Math.min(MAX_FAILURES,priorFailures+1)
+    if(next.failures>=MAX_FAILURES){
+      next.lockedUntilMs=afterKdf+LOCKOUT_MS
+      result={status:'locked',retryAfterMs:LOCKOUT_MS}
+    }else{
+      next.lockedUntilMs=0
+      result={status:'invalid',attemptsRemaining:MAX_FAILURES-next.failures}
+    }
+  }
+  next.integrityTag=await calculateStateTag(next,secret)
+  return {next,result}
 }
