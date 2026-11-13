@@ -1,0 +1,118 @@
+name: "P3 #226 scoped grace lifecycle acceptance"
+
+# Existing P0 Foundation and PG/Garage workflows target main/p0/p1/p2/
+# integration PR bases only. This narrow workflow executes real PHP tests
+# on the separately reviewed security-branch stack, without modifying
+# other agents' shared workflows or bypassing composer audit.
+on:
+  push:
+    branches: ['feat/p3-226-grace-lifecycle-*']
+  pull_request:
+    branches: ['security/297-laravel-13-audit-20261113']
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: Full Laravel PHPUnit + audit (PHP ${{ matrix.php }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, dom, xml, openssl, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          tools: composer:v2
+          coverage: none
+      - run: php scripts/check-runtime.php
+      - name: Install locked dependencies
+        working-directory: apps/api
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Validate and audit entire locked dependency graph
+        run: |
+          composer validate --no-check-publish --strict --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+      - name: Lint new production and test PHP
+        run: |
+          php -l apps/api/app/Billing/GraceLifecycle.php
+          php -l apps/api/app/Http/Controllers/BillingV1Controller.php
+          php -l apps/api/tests/Feature/Billing/GraceLifecycleTest.php
+      - name: Complete existing Laravel Foundation suite
+        working-directory: apps/api
+        run: php vendor/bin/phpunit
+
+  pg18:
+    name: Real PostgreSQL 18 grace lifecycle (disposable)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_grace_ci
+          POSTGRES_USER: pb3_grace
+          POSTGRES_PASSWORD: pb3_grace_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb3_grace -d pb3_grace_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: https://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_grace_ci
+      DB_USERNAME: pb3_grace
+      DB_PASSWORD: pb3_grace_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, fileinfo, curl, zip
+          tools: composer:v2
+          coverage: none
+      - run: php scripts/check-runtime.php
+      - name: Composer lock audit
+        run: composer audit --locked --no-interaction --working-dir=apps/api
+      - name: Install Laravel
+        working-directory: apps/api
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Real PG18 migrations and grace HTTP/database tests
+        working-directory: apps/api
+        run: |
+          php artisan migrate --force
+          # Existing phpunit.xml forcibly selects SQLite. --no-configuration
+          # intentionally uses THIS job's pgsql environment, not fake SQLite.
+          php vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php \
+            tests/Feature/Billing/GraceLifecycleTest.php
+
+  frontend:
+    name: Frontend TypeScript/build/Vitest regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm test:web

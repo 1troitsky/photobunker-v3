@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import SettingsHub from '../ui/fieldwork/SettingsHub.vue'
+import GraceStatusPanel from '../features/billing/ui/GraceStatusPanel.vue'
 import {
   activeSession, beginRegistration, finishRegistration, logout,
   restoreAccount, reauthenticate,
@@ -87,6 +88,7 @@ async function copyKey():Promise<void> {
         <button type="button" :disabled="busy||!inputKey" @click="restore">Восстановить</button>
       </div>
     </template>
+    <GraceStatusPanel v-if="activeSession" :session="activeSession" />
     <p v-if="status" role="status" class="status-text">{{ status }}</p>
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>
     <p class="muted">PIN Shell, защищённый режим экрана и финальная страница профиля появятся на следующих этапах.</p>
