@@ -3,7 +3,7 @@ import Dexie from 'dexie'
 import {afterEach, describe, expect, it, vi} from 'vitest'
 import {activeSession} from '../../identity/application/session'
 import {
-  freshPackage, newDeviceEncryptionKey, openDevice, sealDevice,
+  freshPackage, openDevice, sealDevice,
 } from '../../identity/infrastructure/crypto'
 import type {PackageV2} from '../../identity/infrastructure/crypto'
 import {
