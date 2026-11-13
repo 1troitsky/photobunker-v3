@@ -39,6 +39,8 @@ final class NotificationProjection
             'GrantRevoked' => 'security',
             'PanicIntentCreated' => 'security',
             'BackupVerified' => 'backup',
+            // Retention deadline was reached; never expose a deleted media target.
+            'MediaRetentionExpired' => 'file-expiry',
             'SubscriptionEntitlementChanged' => 'subscription',
         ];
         $kind = $nonNavigable[$event->eventType] ?? null;
