@@ -36,7 +36,8 @@ if(getenv('PB3_ENABLE_PHOTO_CLEANUP')==='true')
     throw new RuntimeException('Refusing paid-fixture with cleanup enabled');
 if($argc!==3
     ||!in_array($argv[2],['go','pro'],true)
-    ||!Str::isUuid($argv[1]))
+    ||preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/D',
+        $argv[1])!==1)
     throw new RuntimeException('Use: fixture.php <actual enrolled UUID> go|pro');
 
 require dirname(__DIR__,2).'/vendor/autoload.php';
