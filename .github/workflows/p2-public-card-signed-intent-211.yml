@@ -9,6 +9,9 @@ on:
       - "apps/api/tests/Feature/PublicCardSignedPreviewCeilingAuditTest.php"
       - "apps/api/tests/Feature/PublicCardSignedEditorialBindingAuditTest.php"
       - "apps/api/tests/Feature/PublicCardSignedContributorReceiptAuditTest.php"
+      - "apps/api/tests/Feature/PublicCardSignedContributorPublicConsentTest.php"
+      - "apps/web/src/features/media/application/public-card-safe-jpeg.ts"
+      - "apps/web/src/features/media/application/public-card-safe-jpeg.test.ts"
       - "apps/api/database/migrations/2026_11_14_000211_create_public_card_publication_ledger_v1.php"
       - "apps/api/composer.lock"
       - ".github/workflows/p2-public-card-signed-intent-211.yml"
@@ -22,6 +25,9 @@ on:
       - "apps/api/tests/Feature/PublicCardSignedPreviewCeilingAuditTest.php"
       - "apps/api/tests/Feature/PublicCardSignedEditorialBindingAuditTest.php"
       - "apps/api/tests/Feature/PublicCardSignedContributorReceiptAuditTest.php"
+      - "apps/api/tests/Feature/PublicCardSignedContributorPublicConsentTest.php"
+      - "apps/web/src/features/media/application/public-card-safe-jpeg.ts"
+      - "apps/web/src/features/media/application/public-card-safe-jpeg.test.ts"
       - "apps/api/database/migrations/2026_11_14_000211_create_public_card_publication_ledger_v1.php"
       - "apps/api/composer.lock"
       - ".github/workflows/p2-public-card-signed-intent-211.yml"
@@ -134,7 +140,8 @@ jobs:
             tests/Feature/PublicCardGrantLedgerTest.php \
             tests/Feature/PublicCardSignedPreviewCeilingAuditTest.php \
             tests/Feature/PublicCardSignedEditorialBindingAuditTest.php \
-            tests/Feature/PublicCardSignedContributorReceiptAuditTest.php; do
+            tests/Feature/PublicCardSignedContributorReceiptAuditTest.php \
+            tests/Feature/PublicCardSignedContributorPublicConsentTest.php; do
             php vendor/bin/phpunit --configuration phpunit-pg18-public-card-ci.xml --no-progress "$test"
           done
           rm -f phpunit-pg18-public-card-ci.xml
@@ -167,3 +174,23 @@ jobs:
           }
           echo "PG18 migration and immutable unique token hash fence PASS\n";
           '
+
+  client-jpeg-prepublication:
+    name: Local JPEG sanitizer Vitest and TypeScript
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install frozen web dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Full web Vitest regression suite
+        run: pnpm --filter @pb3/web test:unit
+      - name: Web strict TS and production Vite build
+        run: pnpm --filter @pb3/web build
