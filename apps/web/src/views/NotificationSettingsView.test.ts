@@ -4,8 +4,8 @@ import { createApp,nextTick,type App } from 'vue'
 import { activeSession,type Session } from '../features/identity/application/session'
 const mock=vi.hoisted(()=>({
   load:vi.fn(),save:vi.fn(),push:vi.fn(),
-  defaults:{version:1 as const,invitations:true,deadlines:true,
-    expiry:true,system:true,badges:true},
+  defaults:{version:2 as const,invitations:true,deadlines:true,
+    expiry:true,system:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480},
 }))
 const defaults=mock.defaults
 vi.mock('vue-router',()=>({useRouter:()=>({push:mock.push})}))
@@ -54,6 +54,27 @@ describe('Encrypted device-local notification display settings',()=>{
     await settle()
     expect(mock.save).toHaveBeenCalledWith({...defaults,invitations:false})
     expect(host.textContent).toContain('Сохранено в зашифрованном')
+  })
+  it('persists overnight quiet hours without hiding security controls',async()=>{
+    await mount()
+    const toggle=el('notification-setting-quiet-enabled')
+    toggle.checked=true
+    toggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const start=el('notification-setting-quiet-start')
+    start.value='23:30'
+    start.dispatchEvent(new Event('change',{bubbles:true}))
+    const end=el('notification-setting-quiet-end')
+    end.value='07:15'
+    end.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    el('notification-settings-save').click()
+    await settle()
+    expect(mock.save).toHaveBeenCalledWith({
+      ...defaults,quietEnabled:true,quietStart:1410,quietEnd:435,
+    })
+    expect(host.textContent).toContain('Всегда включены')
+    expect(el('notification-setting-push').disabled).toBe(true)
   })
   it('does not claim save on storage failure and retains a dirty draft',async()=>{
     mock.save.mockRejectedValueOnce(new Error('quota'))
