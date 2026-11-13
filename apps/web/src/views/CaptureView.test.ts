@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   mediaEnqueue: vi.fn(), mediaIntent: vi.fn(),
   draftCreate:vi.fn(),draftAppend:vi.fn(),draftSeal:vi.fn(),
   draftRead:vi.fn(),draftDelete:vi.fn(),draftInterrupt:vi.fn(),
+  draftList:vi.fn(),draftPurge:vi.fn(),draftPrivateReview:vi.fn(),
   requiredGps:false,
   privateCache: vi.fn(), verifyPolicy: vi.fn(), privateScope: vi.fn(),
   allowedMedia: ['photo'] as string[],
@@ -27,6 +28,9 @@ vi.mock('../features/media/application/recording-encrypted-journal',()=>({
   readCompletedEncryptedRecording:mocks.draftRead,
   deleteEncryptedRecordingDraft:mocks.draftDelete,
   interruptEncryptedRecordingDraft:mocks.draftInterrupt,
+  listEncryptedRecordingDrafts:mocks.draftList,
+  purgeExpiredEncryptedRecordingDrafts:mocks.draftPurge,
+  readEncryptedRecordingForPrivateReview:mocks.draftPrivateReview,
 }))
 vi.mock('../features/assignments/application/assignment-outbox', () => ({
   listServerAssignments: mocks.server, listAllServerAssignments: mocks.server,
@@ -104,6 +108,9 @@ beforeEach(() => {
   mocks.draftRead.mockResolvedValue(new Blob([new Uint8Array(512)],{type:'audio/webm'}))
   mocks.draftDelete.mockResolvedValue(undefined)
   mocks.draftInterrupt.mockResolvedValue(undefined)
+  mocks.draftList.mockResolvedValue([])
+  mocks.draftPurge.mockResolvedValue(0)
+  mocks.draftPrivateReview.mockResolvedValue(new Blob([new Uint8Array(201)],{type:'audio/webm'}))
   requests = []
   getUserMedia = vi.fn(() => {
     const request = deferred<MediaStream>(); requests.push(request); return request.promise
@@ -940,5 +947,76 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     await vi.advanceTimersByTimeAsync(20_000)
     await settle()
     expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+  })
+})
+
+
+describe('P2 #206 private encrypted recording recovery UI',()=>{
+  const id='12345678-1234-4123-8123-123456789abc'
+  const draft={recordingId:id,kind:'audio',createdAt:Date.now(),
+    expiresAt:Date.now()+300000,chunkCount:2,plainBytes:450,
+    state:'interrupted'}
+
+  it('loads only local ciphertext metadata, decrypts only on explicit preview click, revokes at logout',async()=>{
+    mocks.draftList.mockResolvedValue([draft])
+    const opened=vi.fn(()=> 'blob:private-ephemeral')
+    const revoked=vi.fn()
+    Object.defineProperty(URL,'createObjectURL',{configurable:true,value:opened})
+    Object.defineProperty(URL,'revokeObjectURL',{configurable:true,value:revoked})
+    await mount()
+    await settle()
+    expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).not.toBeNull()
+    expect(host.textContent).toContain('Прервана')
+    expect(mocks.draftPrivateReview).not.toHaveBeenCalled()
+    const btn=[...host.querySelectorAll('button')].find(x=>x.textContent?.trim()==='Просмотреть локально')!
+    btn.click();await settle()
+    expect(mocks.draftPrivateReview).toHaveBeenCalledWith(id)
+    expect(opened).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('[data-testid="camera-private-draft-preview"]')).not.toBeNull()
+    activeSession.value=null;await settle()
+    expect(revoked).toHaveBeenCalledWith('blob:private-ephemeral')
+    expect(host.querySelector('[data-testid="camera-private-draft-preview"]')).toBeNull()
+  })
+
+  it('never shows reviewed data if identity changes during slow AEAD read',async()=>{
+    const pending=deferred<Blob>()
+    mocks.draftList.mockResolvedValue([draft])
+    mocks.draftPrivateReview.mockReturnValue(pending.promise)
+    const opened=vi.fn(()=>'blob:should-not-exist')
+    Object.defineProperty(URL,'createObjectURL',{configurable:true,value:opened})
+    Object.defineProperty(URL,'revokeObjectURL',{configurable:true,value:vi.fn()})
+    await mount()
+    await settle()
+    ;[...host.querySelectorAll('button')]
+      .find(x=>x.textContent?.trim()==='Просмотреть локально')!.click()
+    await settle()
+    activeSession.value=null
+    pending.resolve(new Blob([new Uint8Array(450)],{type:'audio/webm'}))
+    await settle()
+    expect(opened).not.toHaveBeenCalled()
+    expect(host.querySelector('[data-testid="camera-private-draft-preview"]')).toBeNull()
+  })
+
+  it('requires confirmation before deleting local encrypted scratch and refreshes list',async()=>{
+    mocks.draftList.mockResolvedValueOnce([draft]).mockResolvedValue([])
+    Object.defineProperty(window,'confirm',{configurable:true,value:vi.fn(()=>false)})
+    await mount()
+    await settle()
+    let button=[...host.querySelectorAll('button')]
+      .find(x=>x.textContent?.trim()==='Удалить фрагменты')!
+    button.click();await settle()
+    expect(mocks.draftDelete).not.toHaveBeenCalled()
+    Object.defineProperty(window,'confirm',{configurable:true,value:vi.fn(()=>true)})
+    button.click();await settle()
+    expect(mocks.draftDelete).toHaveBeenCalledWith(id)
+    expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).toBeNull()
+  })
+
+  it('never makes a writing draft eligible for review or confirmed deletion',async()=>{
+    mocks.draftList.mockResolvedValue([{...draft,state:'writing'}])
+    await mount();await settle()
+    expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).toBeNull()
+    expect(mocks.draftPrivateReview).not.toHaveBeenCalled()
+    expect(mocks.draftDelete).not.toHaveBeenCalled()
   })
 })
