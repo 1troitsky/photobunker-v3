@@ -98,7 +98,7 @@ describe('Codex protocol v2 executable deterministic vectors',()=>{
       .rejects.toThrow()
     const privateKey=await importSigner(pkg.accountPkcs8)
     const publicKey=await importSpki(pkg.accountSpki)
-    const message='photobunker.identity.v2\\nlogin\\naccount-proof'
+    const message='photobunker.identity.v2\nlogin\naccount-proof'
     const signature=await sign(privateKey,message)
     expect(await verify(publicKey,message,signature)).toBe(true)
     expect(await verify(publicKey,message+'!',signature)).toBe(false)
