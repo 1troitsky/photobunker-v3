@@ -1,6 +1,6 @@
 import {afterEach,describe,expect,it,vi} from 'vitest'
 import {
-  inspectFlattenedSafeJpeg,prepareSafePublicJpeg,
+  inspectFlattenedSafeJpeg,stripCanvasIccProfile,prepareSafePublicJpeg,
   PUBLIC_JPEG_MAX_SOURCE_BYTES,PUBLIC_JPEG_MAX_EDGE,
 } from './public-card-safe-jpeg'
 
@@ -18,14 +18,18 @@ const frame=(width=3,height=2):number[]=>seg(0xc0,[
 const dqt=seg(0xdb,[0,1])
 const dht=seg(0xc4,[0,0])
 const sos=seg(0xda,[1,1,0,0,63,0])
-function jpeg(opts:{before?:number[];after?:number[];width?:number;height?:number;end?:number[]}={}):Uint8Array{
+function jpeg(opts:{app?:number[];before?:number[];after?:number[];width?:number;height?:number;end?:number[]}={}):Uint8Array{
   return new Uint8Array([
     0xff,0xd8,
-    ...jfif,...dqt,...dht,...frame(opts.width,opts.height),
+    ...jfif,...(opts.app??[]),...dqt,...dht,...frame(opts.width,opts.height),
     ...(opts.before??[]),...sos,0x35,0x46,0xff,0x00,0x67,
     0xff,0xd9,...(opts.end??[]),...(opts.after??[]),
   ])
 }
+const icc=seg(0xe2,[
+  0x49,0x43,0x43,0x5f,0x50,0x52,0x4f,0x46,
+  0x49,0x4c,0x45,0,1,1,0x12,0x34,0x56,
+])
 const jpegBlob=(bytes:Uint8Array,type='image/jpeg'):Blob=>{
   const copy=new Uint8Array(bytes.byteLength)
   copy.set(bytes)
@@ -41,6 +45,22 @@ describe('P2 #211 client-only safe JPEG prepublication gate',()=>{
     expect(inspectFlattenedSafeJpeg(jpeg())).toEqual({
       width:3,height:2,scanCount:1,hasMetadata:false,
     })
+  })
+  it('strips only exact Chromium ICC APP2 header and still rejects all unknown APP2',()=>{
+    const withIcc=jpeg({app:icc})
+    expect(()=>inspectFlattenedSafeJpeg(withIcc))
+      .toThrow('public_card.unsafe_jpeg')
+    const cleaned=stripCanvasIccProfile(withIcc)
+    expect(cleaned).toEqual(jpeg())
+    expect(inspectFlattenedSafeJpeg(cleaned)).toMatchObject({
+      width:3,height:2,hasMetadata:false,
+    })
+    expect(()=>stripCanvasIccProfile(jpeg({app:seg(0xe2,[1,2,3,4])})))
+      .toThrow('public_card.unsafe_jpeg')
+    const multipart=[...icc]
+    multipart[17]=2
+    expect(()=>stripCanvasIccProfile(jpeg({app:multipart})))
+      .toThrow('public_card.unsafe_jpeg')
   })
   it('rejects EXIF, XMP, ICC, Photoshop, COM and hidden data appended to EOI',()=>{
     const forbidden=[
@@ -113,10 +133,12 @@ describe('P2 #211 client-only safe JPEG prepublication gate',()=>{
     const digest=vi.fn(async(_algorithm:string,_data:BufferSource)=>new Uint8Array(32).fill(0xaf).buffer)
     vi.stubGlobal('crypto',{subtle:{digest}})
     const r=await prepareSafePublicJpeg(input)
-    expect(r).toEqual({
-      blob:out,width:3,height:2,
-      sha256:'af'.repeat(32),published:false,humanReviewRequired:true,
+    expect(r).toMatchObject({
+      width:3,height:2,sha256:'af'.repeat(32),
+      published:false,humanReviewRequired:true,
     })
+    expect(r.blob).toBeInstanceOf(Blob)
+    expect(new Uint8Array(await r.blob.arrayBuffer())).toEqual(jpeg())
     expect(decoder).toHaveBeenCalledTimes(2)
     expect(drawImage).toHaveBeenCalledTimes(1)
     expect(toBlob).toHaveBeenCalledTimes(1)
@@ -126,6 +148,24 @@ describe('P2 #211 client-only safe JPEG prepublication gate',()=>{
     expect(close).toHaveBeenCalledTimes(2)
     expect(canvas.width).toBe(0)
     expect(canvas.height).toBe(0)
+  })
+  it('removes an exact ICC chunk from real-style Canvas bytes before hashing',async()=>{
+    const source=jpegBlob(jpeg())
+    const canvasOutput=jpegBlob(jpeg({app:icc}))
+    const close=vi.fn()
+    vi.stubGlobal('createImageBitmap',async()=>({width:3,height:2,close}))
+    vi.stubGlobal('document',{createElement:()=>({
+      width:0,height:0,
+      getContext:()=>({drawImage:vi.fn(),fillRect:vi.fn(),fillStyle:''}),
+      toBlob:(cb:(b:Blob|null)=>void)=>cb(canvasOutput),
+    })})
+    vi.stubGlobal('crypto',{subtle:{digest:async()=>
+      new Uint8Array(32).fill(0x7b).buffer}})
+    const prepared=await prepareSafePublicJpeg(source)
+    expect(new Uint8Array(await prepared.blob.arrayBuffer())).toEqual(jpeg())
+    expect(prepared.sha256).toBe('7b'.repeat(32))
+    expect(close).toHaveBeenCalledTimes(2)
+    expect(prepared.published).toBe(false)
   })
   it('never returns a JPEG if Canvas inserts metadata or changes dimensions',async()=>{
     const src=jpegBlob(jpeg())
