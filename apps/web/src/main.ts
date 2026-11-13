@@ -8,6 +8,7 @@ import { attachShareLifecycle, flushRecipientGrants } from './features/sharing/g
 import { attachAssignmentLifecycle, flushAssignmentOutbox } from './features/assignments/application/assignment-outbox'
 import { activeSession, resumeExistingDevice } from './features/identity/application/session'
 import { attachOutboxLifecycle, flushOutbox } from './features/photo-sync/application/p1-photo'
+import { refreshRetentionHint } from './features/media/application/retention-hint'
 
 document.title = brand.name
 // P0 deliberately does NOT register a Service Worker pending signed-release design.
@@ -16,5 +17,5 @@ createApp(App).use(router).mount('#app')
 attachOutboxLifecycle()
 attachShareLifecycle()
 attachAssignmentLifecycle()
-watch(activeSession, s => { if(s?.online) { void flushOutbox(); void flushRecipientGrants(); void flushAssignmentOutbox(); void ensureOwnExchangeKey().catch(() => { /* explicit UI retry */ }) } })
+watch(activeSession, s => { if(s?.online) { void refreshRetentionHint(s); void flushOutbox(); void flushRecipientGrants(); void flushAssignmentOutbox(); void ensureOwnExchangeKey().catch(() => { /* explicit UI retry */ }) } })
 void resumeExistingDevice().catch(() => { /* no persisted or valid account yet */ })
