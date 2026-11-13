@@ -210,7 +210,7 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
         }
       }
       if(url==='/identity/v2/proof'){
-        const last=mocks.jsonApi.mock.calls.findLast(
+        const last=[...mocks.jsonApi.mock.calls].reverse().find(
           (call:unknown[])=>call[0]==='/identity/v2/challenges'
         )
         const payload=last?.[2]?.payload as Record<string,string>|undefined
