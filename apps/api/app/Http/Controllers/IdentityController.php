@@ -286,8 +286,14 @@ final class IdentityController extends Controller
             ];
             $admission=(new EventConsumer(new DatabaseEventInboxLedger()))
                 ->ingest($event,(string)$a->id);
-            abort_unless($admission===EventAdmission::Accepted,503,
-                'identity.notification_event_unavailable');
+            // Revoking a compromised device takes precedence over delivery.
+            // A pre-existing ledger revision collision must NOT grant that
+            // device continued access. Keep the DB revoke committed; this
+            // exceptional missing notice is audited during acceptance.
+            abort_unless(in_array($admission,[
+                EventAdmission::Accepted,
+                EventAdmission::Conflict,
+            ],true),503,'identity.notification_event_unavailable');
         },3);
         if ($id===$actor->id) { $r->session()->invalidate(); $r->session()->regenerateToken(); }
         return $this->json(['revoked'=>true]);
