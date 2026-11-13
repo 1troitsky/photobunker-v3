@@ -145,8 +145,8 @@ onUnmounted(()=>{
           </button>
         </template>
       </div>
-      <button type="button" class="pin-recovery-toggle"
-        :disabled="busy" @click="toggleRecovery">
+      <button v-if="!identityBootstrapError" type="button"
+        class="pin-recovery-toggle" :disabled="busy" @click="toggleRecovery">
         {{ mode==='pin'?'Восстановить через Recovery Key':'Вернуться к PIN' }}
       </button>
     </section>
