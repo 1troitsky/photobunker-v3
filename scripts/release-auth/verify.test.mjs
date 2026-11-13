@@ -128,3 +128,62 @@ test('validly re-signed HTML masquerading as Service Worker rejected',()=>{
  m.service_worker='index.html';m.assets[0].type='service-worker'
  s.manifestBytes=encode(m);s.resign();rejects(s,'INVALID_MANIFEST')
 })
+
+test('trusted checkpoint allows matching signed release at equal sequence',()=>{
+  const s=fixture()
+  s.trustedCheckpoint={releaseSequence:12,manifestSha256:sha(s.manifestBytes)}
+  assert.equal(verifyRelease(s).releaseSequence,12)
+})
+test('trusted checkpoint detects same-sequence signed equivocation',()=>{
+  const s=fixture()
+  s.trustedCheckpoint={releaseSequence:12,manifestSha256:sha(s.manifestBytes)}
+  const m=JSON.parse(s.manifestBytes)
+  m.release_id='rewritten'
+  s.manifestBytes=encode(m);s.resign()
+  rejects(s,'RELEASE_EQUIVOCATION')
+})
+test('trusted checkpoint rejects earlier signed version despite lower minimum floor',()=>{
+  const s=fixture()
+  s.minimumSequence=1
+  s.trustedCheckpoint={releaseSequence:13,manifestSha256:'b'.repeat(64)}
+  rejects(s,'ROLLBACK')
+})
+test('trusted checkpoint permits independently authorized higher release sequence',()=>{
+  const s=fixture(13)
+  s.trustedCheckpoint={releaseSequence:12,manifestSha256:'a'.repeat(64)}
+  assert.equal(verifyRelease(s).releaseSequence,13)
+})
+test('untrusted malformed checkpoint rejected before signature verification',()=>{
+  const invalid=[null,{}, {releaseSequence:12},{releaseSequence:12,manifestSha256:'bad'},
+    {releaseSequence:0,manifestSha256:'a'.repeat(64)},
+    {releaseSequence:12,manifestSha256:'a'.repeat(64),extra:true}]
+  for(const trustedCheckpoint of invalid){
+    const s=fixture();s.trustedCheckpoint=trustedCheckpoint
+    rejects(s,'UNTRUSTED_CHECKPOINT')
+  }
+})
+test('CLI accepts externally provided matching checkpoint and rejects re-signed equivocation',async()=>{
+  const {mkdtemp,writeFile,rm}=await import('node:fs/promises')
+  const {tmpdir}=await import('node:os')
+  const {join}=await import('node:path')
+  const {fileURLToPath}=await import('node:url')
+  const {spawnSync}=await import('node:child_process')
+  const dir=await mkdtemp(join(tmpdir(),'pb3-release-auth-checkpoint-'))
+  try {
+    const s=fixture(),checkpoint=sha(s.manifestBytes)
+    const manifest=join(dir,'manifest.json'),signature=join(dir,'signature.json'),key=join(dir,'key.pem')
+    await Promise.all([writeFile(manifest,s.manifestBytes),writeFile(signature,s.envelopeBytes),writeFile(key,s.trustedPublicKeyPem)])
+    const script=fileURLToPath(new URL('./verify.mjs',import.meta.url))
+    const args=['verify','--manifest',manifest,'--signature',signature,'--trusted-key',key,
+      '--trusted-key-sha256',s.trustedKeySha256,'--minimum-sequence','12',
+      '--trusted-checkpoint-sequence','12','--trusted-checkpoint-sha256',checkpoint]
+    const ok=spawnSync(process.execPath,[script,...args],{encoding:'utf8',timeout:10000})
+    assert.equal(ok.status,0,ok.stderr)
+    const m=JSON.parse(s.manifestBytes);m.release_id='same-sequence-attack'
+    s.manifestBytes=encode(m);s.resign()
+    await Promise.all([writeFile(manifest,s.manifestBytes),writeFile(signature,s.envelopeBytes)])
+    const bad=spawnSync(process.execPath,[script,...args],{encoding:'utf8',timeout:10000})
+    assert.equal(bad.status,1)
+    assert.match(bad.stderr,/RELEASE_EQUIVOCATION/)
+  } finally {await rm(dir,{recursive:true,force:true})}
+})
