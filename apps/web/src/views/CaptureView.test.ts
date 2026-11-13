@@ -694,6 +694,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     input.value=mode
     input.dispatchEvent(new Event('change',{bubbles:true}))
     await settle()
+    expect(button(mode==='audio'?'Включить микрофон':'Включить камеру')).toBeDefined()
     const opened=media()
     requests[1]!.resolve(opened.stream);await settle()
     if(mode==='audio'&&bitrate!==undefined){
