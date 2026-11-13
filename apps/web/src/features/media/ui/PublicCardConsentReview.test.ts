@@ -80,8 +80,8 @@ const checkbox=(host:HTMLElement,testid:string)=>host.querySelector<HTMLInputEle
 let app:App|undefined
 let host:HTMLDivElement
 let props:{prepared:PreparedSafePublicJpeg|null;binding:ConsentBinding|null}
-let preparedEvent:ReturnType<typeof vi.fn>
-let withdrawnEvent:ReturnType<typeof vi.fn>
+let preparedEvent=vi.fn<(id:string)=>void>()
+let withdrawnEvent=vi.fn<(id:string)=>void>()
 let createObjectURL:ReturnType<typeof vi.fn>
 let revokeObjectURL:ReturnType<typeof vi.fn>
 let originalCreate:PropertyDescriptor|undefined
@@ -92,7 +92,8 @@ async function mount():Promise<void>{
   props=shallowReactive({prepared:await safe(),binding:binding()})
   host=document.createElement('div')
   document.body.append(host)
-  preparedEvent=vi.fn();withdrawnEvent=vi.fn()
+  preparedEvent=vi.fn<(id:string)=>void>()
+  withdrawnEvent=vi.fn<(id:string)=>void>()
   app=createApp({
     render:()=>h(PublicCardConsentReview,{
       prepared:props.prepared,binding:props.binding,
