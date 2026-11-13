@@ -720,7 +720,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     expect(opened.track.stop).toHaveBeenCalledTimes(1)
   })
 
-  it('uses the user's stop instant, not a delayed browser onstop callback',async()=>{
+  it("uses the user stop instant, not a delayed browser onstop callback",async()=>{
     await openMode('audio')
     const recorder=BoundedRecorder.latest!
     recorder.stop=()=>{
