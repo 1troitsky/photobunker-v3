@@ -22,6 +22,23 @@ test('real Chromium strips source JPEG APP1 EXIF while preserving safe pixels',a
         'image/jpeg',0.9)
     })
     const originalBytes=new Uint8Array(await original.arrayBuffer())
+    // Diagnostic: report the exact Chromium JFIF marker headers before
+    // any modified input is decoded. This is NOT a bypass or a weakened test.
+    const headers:Array<{marker:string;length:number;prefix:number[]}>= []
+    let cursor=2
+    for(let n=0;n<30&&cursor+4<originalBytes.length;n++){
+      if(originalBytes[cursor]!==0xff)break
+      const marker=originalBytes[cursor+1]!
+      const length=(originalBytes[cursor+2]!<<8)|originalBytes[cursor+3]!
+      headers.push({
+        marker:marker.toString(16),length,
+        prefix:Array.from(originalBytes.slice(cursor+4,cursor+12)),
+      })
+      if(marker===0xda||length<2)break
+      cursor+=length+2
+    }
+    try{safe.inspectFlattenedSafeJpeg(originalBytes)}
+    catch(e){throw Error('chromium_original_jpeg_headers='+JSON.stringify(headers)+':'+String(e))}
 
     // Exif APP1 header with a minimal TIFF IFD + a hidden GPS-like comment;
     // no GPS text is drawn into the image's actual pixels.
