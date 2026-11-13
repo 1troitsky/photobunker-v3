@@ -121,6 +121,22 @@ final class NotificationEventsHttpTest extends TestCase
             $this->accounts['bob'][0])->assertStatus(422);
     }
 
+    public function test_click_target_denies_foreign_non_navigable_and_untrusted_queries(): void
+    {
+        [$alice] = $this->publish('alice', 1);
+        [$bob] = $this->publish('bob', 1);
+        $base = '/notifications/v1/events/';
+        $this->getJson($base.$alice['eventId'].'/target')->assertUnauthorized();
+        $this->login('alice');
+        // A generic security notice is never a navigation capability.
+        $this->getJson($base.$alice['eventId'].'/target')->assertNotFound();
+        // No existence oracle for event IDs belonging to another account.
+        $this->getJson($base.$bob['eventId'].'/target')->assertNotFound();
+        $this->getJson($base.$alice['eventId'].'/target?targetId='.
+            $bob['subjectId'])->assertStatus(422);
+        $this->postJson($base.$alice['eventId'].'/target', [])->assertStatus(405);
+    }
+
     public function test_revoked_device_loses_access_to_feed(): void
     {
         $this->publish('alice', 1);
