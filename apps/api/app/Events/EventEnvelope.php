@@ -29,6 +29,7 @@ final readonly class EventEnvelope implements JsonSerializable
         'TeamInitialInvitationCreated' => 'team_invite_v1',
         'MediaCommitted' => 'media',
         'MediaExpired' => 'media',
+        'MediaRetentionExpired' => 'media',
         'GrantRevoked' => 'grant',
         'BackupVerified' => 'backup',
         'PanicIntentCreated' => 'panic_intent',
