@@ -144,6 +144,22 @@ describe('P3 #220 — protected offline dual-PIN verifier (not active PIN Shell)
     }
   }, 30_000)
 
+  it('rejects a corrupted local verifier without treating it as an unprotected session', async () => {
+    const owner=scope()
+    const secret=await hmacSecret()
+    await enrollPinVerifier(owner,secret,'1234',null)
+    const db=new Dexie('pb3_pin_verifier_v1')
+    db.version(1).stores({records:'id'})
+    try {
+      const key=owner.accountId+':'+owner.deviceId
+      await db.table('records').update(key,{app:null})
+      await expect(attemptPinVerifier(owner,secret,'1234'))
+        .rejects.toThrow('pin.corrupt_record')
+    } finally {
+      db.close()
+    }
+  }, 30_000)
+
   it('cannot reset an enrolled verifier by repeating enroll, even after invalid PIN', async () => {
     const owner=scope()
     const secret=await hmacSecret()
