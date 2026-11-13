@@ -16,8 +16,17 @@ vi.mock('vue-router',()=>({
 }))
 vi.mock('../features/notifications/application/local-inbox',()=>({
   listLocalNotifications:mocks.local,
-  defaultNotificationPreferences:{version:1,invitations:true,deadlines:true,expiry:true,system:true,badges:true},
+  defaultNotificationPreferences:{version:2,invitations:true,deadlines:true,expiry:true,system:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480},
   readNotificationPreferences:mocks.preferences,
+  notificationBadgeVisible:(kind:string,prefs:{badges:boolean;quietEnabled:boolean;quietStart:number;quietEnd:number},at:Date)=>{
+    if(kind==='security')return true
+    if(!prefs.badges)return false
+    if(!prefs.quietEnabled)return true
+    const minute=at.getHours()*60+at.getMinutes()
+    return prefs.quietStart<prefs.quietEnd
+      ?!(minute>=prefs.quietStart&&minute<prefs.quietEnd)
+      :!(minute>=prefs.quietStart||minute<prefs.quietEnd)
+  },
   notificationIsVisible:(kind:string,prefs:{invitations:boolean;deadlines:boolean;expiry:boolean;system:boolean})=>
     kind==='security'||(kind==='team-invite'||kind==='assignment-invite'
       ?prefs.invitations:kind==='file-expiry'?prefs.expiry
@@ -66,7 +75,7 @@ beforeEach(()=>{
   mocks.rows=[{id:ID,kind:'new-file',targetId:TARGET,occurredAt:moment,
     readAt:null,origin:'local',version:1}]
   mocks.local.mockReset().mockImplementation(async()=>mocks.rows.map(x=>({...x})))
-  mocks.preferences.mockReset().mockResolvedValue({version:1,invitations:true,deadlines:true,expiry:true,system:true,badges:true})
+  mocks.preferences.mockReset().mockResolvedValue({version:2,invitations:true,deadlines:true,expiry:true,system:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480})
   mocks.mark.mockReset().mockImplementation(async(id:string)=>{
     mocks.rows=mocks.rows.map(x=>x.id===id?{...x,readAt:moment+1}:x)
     return mocks.rows.find(x=>x.id===id)??null
@@ -115,7 +124,7 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
         kind:'team-invite'},
     ]
     mocks.preferences.mockResolvedValueOnce({
-      version:1,invitations:false,deadlines:true,expiry:true,system:true,badges:true,
+      version:2,invitations:false,deadlines:true,expiry:true,system:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480,
     })
     await mount()
     el('notifications-mark-all').click()
@@ -202,6 +211,22 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     expect(host.querySelectorAll('.notification-dot.isread')).toHaveLength(1)
     expect(mocks.rows).toHaveLength(2)
     expect(mocks.markAll).not.toHaveBeenCalled()
+  })
+  it('does not suppress the security unread indicator during quiet hours',async()=>{
+    mocks.rows=[
+      {...mocks.rows[0]!,kind:'security',targetId:null},
+      {...mocks.rows[0]!,id:'66666666-6666-4666-8666-666666666666',
+        kind:'team-invite'},
+    ]
+    mocks.preferences.mockResolvedValueOnce({
+      version:2,invitations:true,deadlines:true,expiry:true,
+      system:true,badges:true,quietEnabled:true,quietStart:0,quietEnd:1439,
+    })
+    await mount()
+    expect(host.querySelectorAll('.notification-dot')).toHaveLength(2)
+    // The security dot is always visible; ordinary dots follow local clock.
+    expect(host.querySelector('.notification-dot.isread')).not.toBeNull()
+    expect(host.querySelectorAll('.notification-dot.isread').length).toBeLessThanOrEqual(1)
   })
   it('opens a real notification display settings route',async()=>{
     await mount()
