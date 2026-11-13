@@ -47,6 +47,7 @@ final class NotificationProjection
         }
 
         $navigable = [
+            'AssignmentInvitationCreated' => 'assignment-invite',
             'MediaCommitted' => 'new-file',
             'MediaExpired' => 'file-expiry',
         ];
