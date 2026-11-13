@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import Dexie from 'dexie'
 import {afterEach, describe, expect, it, vi} from 'vitest'
 import {activeSession} from '../../identity/application/session'
 import {
@@ -260,6 +261,44 @@ describe('P3 #220 actual Identity v2 local PIN envelope migration acceptance (UN
     expect((await attemptSealedPinDevice(f.scope,'1234')).result.status)
       .toBe('app-unlocked')
   },100_000)
+
+  it('never creates an orphan record in the former separate verifier database',async()=>{
+    const f=await createDevice()
+    await migrateLegacyLocalDeviceToPin({
+      scope:f.scope,verifiedPackage:f.pkg,appPin:'1234',emergencyPin:'4321',
+    })
+    const oldDb=new Dexie('pb3_pin_verifier_v1')
+    oldDb.version(1).stores({records:'id'})
+    try{
+      expect(await oldDb.table('records').get(
+        f.scope.accountId+':'+f.scope.deviceId,
+      )).toBeUndefined()
+      const saved=await getDevice(f.scope.accountId,f.scope.deviceId)
+      const sameRow=saved as LocalDevice & {
+        pinVerifier:{accountId:string;deviceId:string;integrityTag:number[]}
+      }
+      expect(sameRow.pinVerifier.accountId).toBe(f.scope.accountId)
+      expect(sameRow.pinVerifier.deviceId).toBe(f.scope.deviceId)
+      expect(sameRow.pinVerifier.integrityTag).toHaveLength(32)
+    }finally{oldDb.close()}
+  },65_000)
+
+  it('keeps the co-located lockout ledger fail-closed on device clock rollback',async()=>{
+    vi.useFakeTimers({toFake:['Date']})
+    vi.setSystemTime(new Date('2026-11-14T12:00:00.000Z'))
+    const f=await createDevice()
+    await migrateLegacyLocalDeviceToPin({
+      scope:f.scope,verifiedPackage:f.pkg,appPin:'1234',emergencyPin:null,
+    })
+    expect((await attemptSealedPinDevice(f.scope,'9999')).result)
+      .toEqual({status:'invalid',attemptsRemaining:4})
+    vi.setSystemTime(new Date('2026-11-14T11:00:00.000Z'))
+    expect((await attemptSealedPinDevice(f.scope,'1234')).result)
+      .toEqual({status:'clock-rollback'})
+    vi.setSystemTime(new Date('2026-11-14T12:00:00.000Z'))
+    expect((await attemptSealedPinDevice(f.scope,'9999')).result)
+      .toEqual({status:'invalid',attemptsRemaining:3})
+  },75_000)
 
   it('detects direct co-located failure counter tamper before a correct PIN',async()=>{
     const f=await createDevice()
