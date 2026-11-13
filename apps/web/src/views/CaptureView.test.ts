@@ -653,7 +653,11 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
   class BoundedRecorder {
     static latest:BoundedRecorder|null=null
     static isTypeSupported() {return true}
-    constructor() {BoundedRecorder.latest=this}
+    options:MediaRecorderOptions
+    constructor(_stream:MediaStream,options:MediaRecorderOptions) {
+      BoundedRecorder.latest=this
+      this.options=options
+    }
     state: 'recording'|'inactive' = 'inactive'
     ondataavailable: ((event: {data: Blob}) => void)|null = null
     onstop: (() => void)|null = null
@@ -666,7 +670,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     }
   }
 
-  async function openMode(mode:'video'|'audio') {
+  async function openMode(mode:'video'|'audio',bitrate?:number) {
     vi.stubGlobal('MediaRecorder',BoundedRecorder)
     mocks.mediaEnqueue.mockResolvedValue('media-enqueued-after-encryption')
     await mount()
@@ -677,12 +681,34 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     await settle()
     const opened=media()
     requests[1]!.resolve(opened.stream);await settle()
+    if(mode==='audio'&&bitrate!==undefined){
+      const input=host.querySelector<HTMLSelectElement>('#camera-audio-bitrate')!
+      input.value=String(bitrate)
+      input.dispatchEvent(new Event('change',{bubbles:true}))
+      await settle()
+    }
     vi.useFakeTimers()
     button('Начать запись '+(mode==='video'?'видео':'аудио')).click()
     await settle()
     expect(host.querySelector('[data-testid="camera-recording-status"]')).not.toBeNull()
     return opened
   }
+
+  it.each([64000,128000,192000,256000] as const)(
+    'supplies chosen audio target %i to native MediaRecorder without claiming output bitrate',async rate=>{
+      await openMode('audio',rate)
+      expect(BoundedRecorder.latest!.options).toEqual({
+        mimeType:'audio/webm',audioBitsPerSecond:rate,
+      })
+      expect(host.querySelector<HTMLSelectElement>('#camera-audio-bitrate')!.disabled).toBe(true)
+      expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    },
+  )
+
+  it('does not apply audio-only target setting to video recorder',async()=>{
+    await openMode('video')
+    expect(BoundedRecorder.latest!.options).toEqual({mimeType:'video/webm'})
+  })
 
   it.each(['video','audio'] as const)('rejects a premature %s Stop before encrypted enqueue', async mode => {
     const opened=await openMode(mode)
