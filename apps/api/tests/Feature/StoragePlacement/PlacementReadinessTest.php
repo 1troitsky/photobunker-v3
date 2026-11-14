@@ -378,6 +378,39 @@ final class PlacementReadinessTest extends TestCase
         'placement.provider_not_configured');
     }
 
+    public function test_deletion_tombstone_during_remote_read_is_denied(): void
+    {
+        $f = $this->photoFixture();
+        $this->byoStore->onRead = function()use($f):void {
+            DB::table('photo_tombstones')->insert([
+                'photo_id'=>$f['parent'],'account_id'=>$f['account'],
+                'operation_id'=>(string)Str::uuid(),'reason'=>'owner',
+                'object_keys'=>'[]','cleanup_until'=>$this->clock()->addDay(),
+                'created_at'=>$this->clock(),
+            ]);
+        };
+        $this->denies(fn()=>$this->photo($f),'placement.changed_during_preflight');
+        $this->assertDatabaseHas('photo_tombstones',['photo_id'=>$f['parent']]);
+    }
+
+    public function test_parent_expiry_or_account_revocation_during_read_is_denied(): void
+    {
+        $f = $this->photoFixture();
+        $this->byoStore->onRead = function()use($f):void {
+            DB::table('photo_records')->where('id',$f['parent'])
+                ->update(['expires_at'=>$this->clock()->getTimestampMs()]);
+        };
+        $this->denies(fn()=>$this->photo($f),'placement.changed_during_preflight');
+
+        $this->byoStore->onRead = function()use($f):void {
+            DB::table('photo_records')->where('id',$f['parent'])
+                ->update(['expires_at'=>$this->clock()->addDay()->getTimestampMs()]);
+            DB::table('identity_accounts')->where('id',$f['account'])
+                ->update(['status'=>'retired']);
+        };
+        $this->denies(fn()=>$this->photo($f),'placement.changed_during_preflight');
+    }
+
     public function test_changed_db_location_during_physical_read_is_denied(): void
     {
         $f = $this->photoFixture();
