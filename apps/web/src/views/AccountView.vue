@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import SettingsHub from '../ui/fieldwork/SettingsHub.vue'
 import GraceStatusPanel from '../features/billing/ui/GraceStatusPanel.vue'
+import { saveRecoveryKeyToDevice } from '../features/identity/application/recovery-key-export'
 import {
   activeSession, beginRegistration, finishRegistration, logout,
   restoreAccount, reauthenticate,
@@ -11,6 +12,7 @@ const generatedKey=ref('')
 const inputKey=ref('')
 const acknowledged=ref(false)
 const busy=ref(false)
+const savingKey=ref(false)
 const status=ref('')
 const error=ref('')
 
@@ -50,6 +52,20 @@ function signOut():void {
 async function copyKey():Promise<void> {
   if(generatedKey.value)await navigator.clipboard.writeText(generatedKey.value)
 }
+async function saveKey():Promise<void> {
+  if(busy.value||savingKey.value||!generatedKey.value)return
+  const currentKey=generatedKey.value
+  savingKey.value=true;error.value=''
+  try {
+    const outcome=await saveRecoveryKeyToDevice(currentKey)
+    if(generatedKey.value!==currentKey)return
+    if(outcome==='saved')status.value='Ключ сохранён в выбранный файл.'
+    else if(outcome==='downloaded')status.value='Загрузка файла запрошена. Проверьте, что ключ сохранён.'
+    else status.value='Сохранение отменено. Ключ остаётся доступен здесь.'
+  }catch {
+    if(generatedKey.value===currentKey)error.value='Не удалось сохранить ключ. Попробуйте ещё раз.'
+  }finally { savingKey.value=false }
+}
 </script>
 
 <template>
@@ -75,9 +91,11 @@ async function copyKey():Promise<void> {
         <div v-if="generatedKey" class="key-area">
           <label for="generated-key">Account Recovery Key — сохраните вне устройства</label>
           <textarea id="generated-key" :value="generatedKey" readonly spellcheck="false" rows="3"/>
-          <button type="button" @click="copyKey">Скопировать</button>
+          <p class="muted" data-testid="recovery-key-save-warning">Сохранённый файл содержит ключ в открытом виде вне защищённого хранилища. Храните его отдельно от устройства и не передавайте другим людям.</p>
+          <button type="button" :disabled="busy||savingKey" data-testid="recovery-key-save" @click="saveKey">Сохранить на устройство</button>
+          <button type="button" :disabled="savingKey" @click="copyKey">Скопировать</button>
           <label class="checkline"><input v-model="acknowledged" type="checkbox"> Я сохранил ключ восстановления</label>
-          <button type="button" :disabled="busy||!acknowledged" @click="finish">Завершить регистрацию</button>
+          <button type="button" :disabled="busy||savingKey||!acknowledged" @click="finish">Завершить регистрацию</button>
         </div>
       </div>
       <div class="foundation-card">
