@@ -512,6 +512,20 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     expect(pendingPinUnlock.value!.sessionNonce).not.toBe(oldNonce)
     await expect(inFlight).rejects.toThrow('identity.pin_session_changed')
     expect(activeSession.value).toBeNull()
-  },95_000)
+
+    expect(await unlockPinnedDevice('4826')).toEqual({status:'app-unlocked'})
+    fakeDocument.visibilityState='hidden'
+    fakeDocument.dispatchEvent(new Event('visibilitychange'))
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value).not.toBeNull()
+    fakeDocument.visibilityState='visible'
+    fakeDocument.dispatchEvent(new Event('visibilitychange'))
+    expect(activeSession.value).toBeNull()
+
+    expect(await unlockPinnedDevice('4826')).toEqual({status:'app-unlocked'})
+    fakeWindow.dispatchEvent(new Event('pagehide'))
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value).not.toBeNull()
+  },120_000)
 
 })
