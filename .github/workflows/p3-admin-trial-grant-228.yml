@@ -3,8 +3,11 @@ on:
   pull_request:
     paths:
       - 'apps/api/app/Administration/Grants/**'
+      - 'apps/api/app/Administration/Restrictions/**'
       - 'apps/api/tests/Feature/Administration/Grants/**'
+      - 'apps/api/tests/Feature/Administration/Restrictions/**'
       - 'apps/api/database/migrations/2026_11_14_000228_create_admin_trial_grant_operations_v1.php'
+      - 'apps/api/database/migrations/2026_11_14_000229_create_admin_temporary_restrictions_v1.php'
       - '.github/workflows/p3-admin-trial-grant-228.yml'
       - 'docs/audits/P3-ADMIN-TRIAL-GRANTS-228-20261114.md'
   workflow_dispatch:
@@ -35,9 +38,12 @@ jobs:
           php -l apps/api/app/Administration/Grants/AdminTrialGrantExecutor.php
           php -l apps/api/database/migrations/2026_11_14_000228_create_admin_trial_grant_operations_v1.php
           php -l apps/api/tests/Feature/Administration/Grants/AdminTrialGrantExecutorTest.php
+          php -l apps/api/app/Administration/Restrictions/TemporaryRestrictionLedger.php
+          php -l apps/api/database/migrations/2026_11_14_000229_create_admin_temporary_restrictions_v1.php
+          php -l apps/api/tests/Feature/Administration/Restrictions/TemporaryRestrictionLedgerTest.php
       - name: Own true database-backed negative tests
         working-directory: apps/api
-        run: php vendor/bin/phpunit tests/Feature/Administration/Grants
+        run: php vendor/bin/phpunit tests/Feature/Administration/Grants tests/Feature/Administration/Restrictions
       - name: Full PHP regression including #227 inherited audit and entitlement paths
         working-directory: apps/api
         run: php vendor/bin/phpunit
@@ -118,6 +124,9 @@ jobs:
       - name: Migrate disposable PostgreSQL 18 only
         working-directory: apps/api
         run: php artisan migrate --force --no-interaction
+      - name: Real PostgreSQL18 temporary account/device restriction integration
+        working-directory: apps/api
+        run: php vendor/bin/phpunit tests/Feature/Administration/Restrictions/TemporaryRestrictionLedgerTest.php
       - name: Run REAL 4 independent-PHP concurrent PG18 billing+admin races
         working-directory: apps/api
         run: |
