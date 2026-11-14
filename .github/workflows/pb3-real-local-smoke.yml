@@ -54,3 +54,24 @@ jobs:
       - name: Inspect container states (failure only)
         if: failure()
         run: docker compose --project-directory "$PWD" -f local-runner/compose.yml --env-file local-runner/ci-secrets.env ps || true
+
+  mac-source-package:
+    name: Full original PB3 source with tested Mac launcher
+    needs: real-stack
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build full original-source ZIP (not launcher-only)
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output=PhotoBunker_PB3_Real_Mac.zip HEAD
+          unzip -Z -1 PhotoBunker_PB3_Real_Mac.zip | grep -qx 'apps/api/artisan'
+          unzip -Z -1 PhotoBunker_PB3_Real_Mac.zip | grep -qx 'apps/web/src/main.ts'
+          unzip -Z -1 PhotoBunker_PB3_Real_Mac.zip | grep -qx 'local-runner/Start-PhotoBunker.command'
+          git ls-tree HEAD local-runner/Start-PhotoBunker.command | grep -q '^100755'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhotoBunker-PB3-Real-Mac
+          path: PhotoBunker_PB3_Real_Mac.zip
+          retention-days: 14
+          if-no-files-found: error
