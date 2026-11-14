@@ -7,6 +7,8 @@ declare(strict_types=1);
  */
 use App\Backup\RecoveryVaultGenerationLedger;
 use App\Backup\VaultManifestWriteOnceUploader;
+use Aws\S3\S3Client;
+use Aws\Exception\AwsException;
 use App\Storage\StorageAdapter;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +26,13 @@ if (getenv('PB3_ISOLATED_STORAGE_SMOKE') !== '1'
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
+set_exception_handler(static function (Throwable $e): void {
+    fwrite(STDERR, 'P3 Vault physical fixture FAIL: '.$e->getMessage()."\n");
+    exit(1);
+});
+if (($argv[1] ?? null) === '--verify-failure-exit') {
+    throw new RuntimeException('vault.intentional_failure_exit_probe');
+}
 $disk = config('filesystems.disks.ciphertext');
 if (config('database.default') !== 'pgsql'
     || config('app.env') !== 'testing'
@@ -139,25 +148,77 @@ try {
         'vault.publisher_not_authorized');
     requireVault(!$storage->exists($first['key']),
         'wrong hash cannot publish an object');
-    requireVault(
-        $conditionalWriter->publishStagedTrusted(
-            $a['account'], $a['operation'], $a['lease'], $first['generation'],
-            $firstBytes) === $first['key'],
-        'native S3 If-None-Match first writer succeeded');
-    $written[] = $first['key'];
     requireVaultFailure(
         static fn() => $conditionalWriter->publishStagedTrusted(
             $a['account'], $a['operation'], $a['lease'], $first['generation'],
             $firstBytes),
-        'vault.write_once_conflict');
-    requireVault(vaultBytes($storage, $first['key']) === $firstBytes,
-        'duplicate conditional PUT did not overwrite first object');
+        'vault.conditional_write_not_certified');
+    requireVault(!$storage->exists($first['key']),
+        'uncertified Garage publisher must not mutate a staged object');
+    // The unmounted publisher is denied. Ordinary putStream below is allowed
+    // ONLY for disposable TEST FIXTURE setup to exercise legacy readback.
+    vaultPut($storage, $first['key'], $firstBytes);
+    $written[] = $first['key'];
     requireVault(vaultActivate($vault, $a, $first) === $first['generation'],
         'real physical Garage readback accepted');
     requireVault(vaultActivate($vault, $a, $first) === $first['generation'],
         'lost ACK replay');
     requireVault($vault->currentActive($account)->id === $first['generation'],
         'first verified active');
+    // Measure the actual Garage S3 conditional-PUT behavior on a SEPARATE
+    // synthetic disposable object, not on any backup/user key.
+    // Do not treat an HTTP 200 as proof that If-None-Match was honored.
+    $probeKey = 'p3-vault-218/conditional-probe/'.bin2hex(random_bytes(16));
+    $probeFirst = random_bytes(128);
+    $probeSecond = random_bytes(128);
+    $client = new S3Client([
+        'version' => 'latest',
+        'region' => $disk['region'],
+        'endpoint' => $disk['endpoint'],
+        'credentials' => ['key' => $disk['key'], 'secret' => $disk['secret']],
+        'signature_version' => 'v4',
+        'use_path_style_endpoint' => true,
+    ]);
+    try {
+        $client->putObject([
+            'Bucket' => $disk['bucket'],
+            'Key' => $probeKey,
+            'Body' => $probeFirst,
+            'IfNoneMatch' => '*',
+        ]);
+        $secondAccepted = false;
+        try {
+            $client->putObject([
+                'Bucket' => $disk['bucket'],
+                'Key' => $probeKey,
+                'Body' => $probeSecond,
+                'IfNoneMatch' => '*',
+            ]);
+            $secondAccepted = true;
+        } catch (AwsException $e) {
+            if (!in_array($e->getStatusCode(), [409, 412], true)) {
+                throw $e;
+            }
+        }
+        $actuallyStored = vaultBytes($storage, $probeKey);
+        if ($secondAccepted) {
+            requireVault($actuallyStored === $probeSecond,
+                'native condition returned success but remote bytes mismatch');
+            fwrite(STDOUT, "P3 #218 Garage conditional PUT: duplicate accepted, ".
+                "first bytes overwritten; UNTRUSTED PROVIDER, writer BLOCKED\n");
+        } else {
+            requireVault($actuallyStored === $probeFirst,
+                'conditional rejection changed the original remote object');
+            fwrite(STDOUT, "P3 #218 Garage conditional PUT: duplicate refused; ".
+                "provider still UNCERTIFIED without immutability/versioning\n");
+        }
+    } finally {
+        if ($storage->exists($probeKey)) {
+            requireVault($storage->delete($probeKey),
+                'synthetic isolated S3 conditional probe cleanup');
+        }
+    }
+
     requireVault(
         $vault->readVerifiedActiveCiphertextTrusted($account) === $firstBytes,
         'trusted active read returns exact ciphertext from actual Garage');
@@ -225,7 +286,7 @@ try {
     requireVault($fourth['generation'] !== $stale['generation'],
         'new generation can start after failed worker without reviving stale');
     fwrite(STDOUT,
-        "P3 #218 REAL PG18/Garage: create-only conditional PUT, missing/valid/corrupt/retry, lost-ACK, ".
+        "P3 #218 REAL PG18/Garage: uncertified conditional writer blocked, missing/valid/corrupt/retry, lost-ACK, ".
         "verified replacement, post-activation tamper denial, retired bytes, ".
         "stale lease and release PASS\n");
 } finally {
