@@ -6,6 +6,25 @@ import { b64, createPB2, descriptor, digest, freshPackage, hex, importSigner, im
 const accountId='00000000-0000-4000-8000-000000000001'
 const fixed='PB2.AAECAwQFBgcICQoLDA0ODw.AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8.DfSeedbBq6Y'
 
+/**
+ * Ciphertext corruption in security-negative tests must change the DECODED
+ * bytes, not merely a Base64URL suffix (which could be identical/no-op).
+ * Flip exactly one bit of a genuine ciphertext byte and round-trip through
+ * the canonical wire codec that production openRecovery() consumes.
+ */
+function tamperEncodedByte(encoded:string):string {
+  const original=unb64(encoded)
+  expect(original.length).toBeGreaterThan(0) // IV or ciphertext
+  const altered=new Uint8Array(original)
+  const index=Math.floor(altered.length/2)
+  altered[index]=altered[index]! ^ 0x01
+  expect(altered[index]).not.toBe(original[index])
+  const tampered=b64(altered)
+  expect(unb64(tampered)).toEqual(altered)
+  expect(tampered).not.toBe(encoded)
+  return tampered
+}
+
 describe('Codex protocol v2 executable deterministic vectors',()=>{
   it('parses canonical fixed PB2, checks exact checksum and rejects PB1, alias and corruption',async()=>{
     const key=await parsePB2(fixed)
@@ -41,13 +60,52 @@ describe('Codex protocol v2 executable deterministic vectors',()=>{
       {...env,purpose:'device'},
       {...env,v:1},
       {...env,locator:b64(new Uint8Array(16))},
-      {...env,ciphertext:env.ciphertext.slice(0,-2)+'AA'},
+      {...env,ciphertext:tamperEncodedByte(env.ciphertext)},
       {...env,additional:'unexpected'},
     ])await expect(openRecovery(broken,kit,accountId)).rejects.toThrow()
     const priv=await importSigner(pkg.accountPkcs8),pub=await importSpki(pkg.accountSpki)
     const message='photobunker.identity.v2\nlogin\nchallenge\nnonce\nexpiry\nhash'
     expect(await verify(pub,message,await sign(priv,message))).toBe(true)
     expect(await verify(pub,message+'!',await sign(priv,message))).toBe(false)
+  })
+  it('rejects 256 independent, byte-changed AES-GCM recovery envelopes without a flaky suffix',async()=>{
+    const kit=await parsePB2(fixed)
+    const {pkg}=await freshPackage(accountId)
+    const seenIvs=new Set<string>()
+    // Fresh random IV and ciphertext every iteration. Never reuse a fixed
+    // envelope and claim 256 independent encryptions.
+    for(let i=0;i<256;i++){
+      const env=await sealRecovery(pkg,kit)
+      expect(seenIvs.has(env.iv)).toBe(false)
+      seenIvs.add(env.iv)
+      expect(await openRecovery(env,kit,accountId)).toEqual(pkg)
+      const corrupted={...env,ciphertext:tamperEncodedByte(env.ciphertext)}
+      await expect(openRecovery(corrupted,kit,accountId)).rejects.toThrow()
+    }
+    expect(seenIvs.size).toBe(256)
+  },60_000)
+  it('rejects real nonce, key and signed-message changes independent of envelope text',async()=>{
+    const kit=await parsePB2(fixed)
+    const {pkg}=await freshPackage(accountId)
+    const env=await sealRecovery(pkg,kit)
+    const wrongKit={...kit,secret:new Uint8Array(kit.secret)}
+    wrongKit.secret[0]=wrongKit.secret[0]! ^ 0x01
+    expect(wrongKit.secret[0]).not.toBe(kit.secret[0])
+    await expect(openRecovery(env,wrongKit,accountId)).rejects.toThrow()
+    await expect(openRecovery(env,kit,'00000000-0000-4000-8000-000000000003'))
+      .rejects.toThrow()
+    await expect(openRecovery({...env,iv:tamperEncodedByte(env.iv)},kit,accountId))
+      .rejects.toThrow()
+    await expect(openRecovery({...env,revision:env.revision+1},kit,accountId))
+      .rejects.toThrow()
+    const privateKey=await importSigner(pkg.accountPkcs8)
+    const publicKey=await importSpki(pkg.accountSpki)
+    const message='photobunker.identity.v2\nlogin\naccount-proof'
+    const signature=await sign(privateKey,message)
+    expect(await verify(publicKey,message,signature)).toBe(true)
+    expect(await verify(publicKey,message+'!',signature)).toBe(false)
+    const corruptedSignature=tamperEncodedByte(signature)
+    expect(await verify(publicKey,message,corruptedSignature)).toBe(false)
   })
   it('non-extractable device envelope separates device and recovery purposes',async()=>{
     const {pkg}=await freshPackage(accountId)
