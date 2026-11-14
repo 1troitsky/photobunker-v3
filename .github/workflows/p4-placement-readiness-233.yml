@@ -1,4 +1,4 @@
-name: P4 #233 placement preflight SHA256 + account isolation (NOT live S3 switch)
+name: 'P4 #233 placement preflight SHA256 and account isolation (NOT live S3 switch)'
 
 on:
   pull_request:
@@ -60,7 +60,7 @@ jobs:
           php vendor/bin/phpunit --do-not-cache-result
 
   postgres-placement:
-    name: PostgreSQL 18: real ownership DB + synthetic physical ciphertext transport
+    name: 'PostgreSQL 18 real ownership DB and synthetic physical ciphertext transport'
     runs-on: ubuntu-24.04
     services:
       postgres:
