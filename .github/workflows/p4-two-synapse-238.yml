@@ -1,0 +1,64 @@
+name: P4 #381 REAL disposable two-Synapse federation (NOT PB3 E2EE)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/integration/p4-matrix-two-synapse/**'
+      - '.github/workflows/p4-two-synapse-238.yml'
+      - 'docs/audits/P4-238-REAL-TWO-SYNAPSE-CHAT-Z-20261114.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-two-synapse:
+    name: Two actual Matrix homeservers / federation (NO SDK E2EE)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout PB3 candidate
+        uses: actions/checkout@v4
+
+      - name: Setup pinned Go runtime
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.0'
+          cache: false
+
+      - name: Pin official Complement framework and install PB3 test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet --filter=blob:none https://github.com/matrix-org/complement.git "$RUNNER_TEMP/pb3-complement"
+          git -C "$RUNNER_TEMP/pb3-complement" checkout --quiet --detach 7cd072c1d405398aa8d3221c92a7c74509f9801e
+          test "$(git -C "$RUNNER_TEMP/pb3-complement" rev-parse HEAD)" = '7cd072c1d405398aa8d3221c92a7c74509f9801e'
+          cp tests/integration/p4-matrix-two-synapse/pb3_real_federation_test.go "$RUNNER_TEMP/pb3-complement/tests/pb3_real_federation_test.go"
+          test -f "$RUNNER_TEMP/pb3-complement/tests/pb3_real_federation_test.go"
+          test "$(grep -c 'func TestPB3TwoSynapseFederationReadOnly(' "$RUNNER_TEMP/pb3-complement/tests/pb3_real_federation_test.go")" -eq 1
+          echo 'Pinned upstream test framework and own real two-homeserver acceptance file verified.'
+
+      - name: Pull fixed disposable Synapse service image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/matrix-org/synapse-service:v1.117.0
+          docker image inspect ghcr.io/matrix-org/synapse-service:v1.117.0 --format '{{index .RepoDigests 0}}'
+          docker info --format 'Docker server {{.ServerVersion}}'
+
+      - name: Run REAL server-to-server federation and ACL test (no skips)
+        shell: bash
+        env:
+          COMPLEMENT_BASE_IMAGE: ghcr.io/matrix-org/synapse-service:v1.117.0
+          COMPLEMENT_DEBUG: '0'
+          COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS: '0'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/pb3-complement"
+          go test -count=1 -v -timeout 12m -run '^TestPB3TwoSynapseFederationReadOnly$' ./tests
+
+      - name: Record bounded success only after real test
+        run: |
+          echo 'PASS: two REAL disposable Matrix homeserver containers/federation/API ACL.'
+          echo 'NOT TESTED: genuine PB3 Matrix SDK E2EE encrypt/decrypt, key recovery, voice/media, mobile, production BYO and outage isolation.'
