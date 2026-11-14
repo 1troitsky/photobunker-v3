@@ -43,6 +43,8 @@ jobs:
           php -l apps/api/app/Administration/Restrictions/TemporaryRestrictionLedger.php
           php -l apps/api/database/migrations/2026_11_14_000229_create_admin_temporary_restrictions_v1.php
           php -l apps/api/tests/Feature/Administration/Restrictions/TemporaryRestrictionLedgerTest.php
+          php -l apps/api/app/Administration/Restrictions/AuditedAccountRestrictionExecutor.php
+          php -l apps/api/tests/Feature/Administration/Restrictions/AuditedAccountRestrictionExecutorTest.php
       - name: Own true database-backed negative tests
         working-directory: apps/api
         run: php vendor/bin/phpunit tests/Feature/Administration/Grants tests/Feature/Administration/Restrictions
