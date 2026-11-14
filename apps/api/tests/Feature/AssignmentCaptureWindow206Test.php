@@ -67,7 +67,18 @@ final class AssignmentCaptureWindow206Test extends TestCase
         } catch(HttpException $e){
             $this->assertSame(422,$e->getStatusCode());
         }
-        $valid['finishedAt']=PhotoSync::nowMs()+120001;
+        // The capture timestamp and validator clock are sampled at
+        // different instants. Exactly 1ms past the +120s window may
+        // legitimately ENTER the window before validation runs. Prove
+        // allowed near-future timestamps still work, then use a timestamp
+        // safely outside the unchanged policy to test denial deterministically.
+        $nearFuture=$this->capture('audio',5000);
+        $nearFuture['finishedAt']=PhotoSync::nowMs()+60000;
+        $nearFuture['startedAt']=$nearFuture['finishedAt']-5000;
+        AssignmentContract::mediaCapture($nearFuture,
+            $nearFuture['contributorAccountId'],$nearFuture['assignmentId']);
+
+        $valid['finishedAt']=PhotoSync::nowMs()+180000;
         $valid['startedAt']=$valid['finishedAt']-5000;
         try {
             AssignmentContract::mediaCapture($valid,
