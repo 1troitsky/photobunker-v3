@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/api/app/Matrix/Byo/**'
       - 'apps/api/tests/Feature/MatrixByo/**'
+      - 'scripts/p4-matrix-byo-237/**'
       - '.github/workflows/p4-matrix-homeserver-237.yml'
       - 'docs/audits/P4-MATRIX-HOMESERVER-237-20261114-CHAT-N.md'
   workflow_dispatch:
@@ -40,3 +41,33 @@ jobs:
       - name: Matrix BYO feature negative tests
         working-directory: apps/api
         run: php vendor/bin/phpunit tests/Feature/MatrixByo
+
+  disposable-real-tls:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, dom, xml, openssl, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+      - name: Verify PHP security floor
+        run: php scripts/check-runtime.php
+      - name: Install pinned audited dependencies
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          composer audit --locked --no-interaction
+      - name: Syntax-check isolated real-TLS scripts
+        run: |
+          php -l scripts/p4-matrix-byo-237/tls-client.php
+          python3 -m py_compile scripts/p4-matrix-byo-237/tls-server.py
+          bash -n scripts/p4-matrix-byo-237/run-disposable-tls.sh
+      - name: Actual ephemeral pinned TLS positive and negative acceptance
+        run: |
+          sudo php scripts/check-runtime.php
+          sudo bash scripts/p4-matrix-byo-237/run-disposable-tls.sh
