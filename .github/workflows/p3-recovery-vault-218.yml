@@ -7,6 +7,7 @@ on:
       - 'apps/api/database/migrations/2026_11_14_000001_create_recovery_vault_generations_v1.php'
       - 'apps/api/tests/Feature/Backup/**'
       - 'apps/api/tests/integration/p3-vault-garage-postgres-218.php'
+      - 'apps/api/tests/integration/p3-vault-postgres-race-218.php'
       - '.github/workflows/p3-recovery-vault-218.yml'
 permissions:
   contents: read
@@ -109,10 +110,14 @@ jobs:
           composer audit --locked --no-interaction
           php -l app/Backup/RecoveryVaultGenerationLedger.php
           php -l tests/integration/p3-vault-garage-postgres-218.php
+          php -l tests/integration/p3-vault-postgres-race-218.php
           php vendor/bin/phpunit tests/Feature/Backup/RecoveryVaultGenerationLedgerTest.php
       - name: Actual Garage S3 ciphertext readback, corruption and stale generation recovery
         working-directory: apps/api
         run: php tests/integration/p3-vault-garage-postgres-218.php
+      - name: Two independent PHP processes contend on actual PostgreSQL row lock
+        working-directory: apps/api
+        run: php tests/integration/p3-vault-postgres-race-218.php
       - name: Stop isolated disposable Garage
         if: always()
         run: docker rm -f pb3-vault-218-garage >/dev/null 2>&1 || true
