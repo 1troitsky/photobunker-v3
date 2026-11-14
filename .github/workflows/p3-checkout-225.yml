@@ -5,6 +5,7 @@ on:
     paths:
       - 'apps/api/app/Billing/Checkout/**'
       - 'apps/api/tests/Feature/Billing/*Checkout*'
+      - 'apps/api/tests/Feature/Billing/DurableQuoteAdmissionTest.php'
       - 'apps/api/database/migrations/*checkout*'
       - '.github/workflows/p3-checkout-225.yml'
       - 'docs/audits/P3-CHECKOUT-INVOICE-225-20261114.md'
@@ -127,4 +128,11 @@ jobs:
         run: |
           set -euo pipefail
           php artisan migrate --force
-          php vendor/bin/phpunit --filter 'CheckoutInvoiceLifecycleTest|DurableQuoteAdmissionTest' --do-not-cache-result
+          # The root phpunit.xml forces SQLite for ordinary unit jobs.
+          # A disposable copy is required so THIS job truly tests PG18.
+          cp phpunit.xml phpunit.postgres.checkout.xml
+          sed -i 's/name="DB_CONNECTION" value="sqlite"/name="DB_CONNECTION" value="pgsql"/' phpunit.postgres.checkout.xml
+          sed -i 's/name="DB_DATABASE" value=":memory:"/name="DB_DATABASE" value="pb3_checkout_225"/' phpunit.postgres.checkout.xml
+          grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.postgres.checkout.xml
+          grep -q 'name="DB_DATABASE" value="pb3_checkout_225"' phpunit.postgres.checkout.xml
+          php vendor/bin/phpunit --configuration phpunit.postgres.checkout.xml --filter 'CheckoutInvoiceLifecycleTest|DurableQuoteAdmissionTest' --do-not-cache-result
