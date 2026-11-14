@@ -384,4 +384,67 @@ final class RecoveryVaultGenerationLedgerTest extends TestCase
             'id' => $candidate['generation'], 'state' => 'staged',
         ]);
     }
+
+    public function test_active_ciphertext_read_is_pinned_to_manifest_digest_and_rejects_post_activation_overwrite(): void
+    {
+        $auth = $this->start();
+        $original = random_bytes(512);
+        $candidate = $this->stage($auth, $original);
+        $ledger = app(RecoveryVaultGenerationLedger::class);
+        try {
+            $ledger->readVerifiedActiveCiphertextTrusted($auth['account']);
+            $this->fail('unverified generation returned ciphertext');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('vault.no_verified_generation', $e->getMessage());
+        }
+        Storage::disk('ciphertext')->put($candidate['key'], $original);
+        $this->activate($auth, $candidate);
+        $this->assertSame($original,
+            $ledger->readVerifiedActiveCiphertextTrusted($auth['account']));
+        // Object key reuse / direct provider overwrite AFTER a successful
+        // activation must never return garbage as a trusted active backup.
+        Storage::disk('ciphertext')->put($candidate['key'], random_bytes(512));
+        try {
+            $ledger->readVerifiedActiveCiphertextTrusted($auth['account']);
+            $this->fail('same-length overwritten ciphertext accepted');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('vault.manifest_not_verified', $e->getMessage());
+        }
+        Storage::disk('ciphertext')->put($candidate['key'], random_bytes(520));
+        try {
+            $ledger->readVerifiedActiveCiphertextTrusted($auth['account']);
+            $this->fail('oversized overwritten ciphertext accepted');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('vault.manifest_not_verified', $e->getMessage());
+        }
+        Storage::disk('ciphertext')->delete($candidate['key']);
+        try {
+            $ledger->readVerifiedActiveCiphertextTrusted($auth['account']);
+            $this->fail('missing active ciphertext accepted');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('vault.manifest_not_verified', $e->getMessage());
+        }
+        Storage::disk('ciphertext')->put($candidate['key'], $original);
+        $this->assertSame($original,
+            $ledger->readVerifiedActiveCiphertextTrusted($auth['account']));
+    }
+
+    public function test_active_manifest_read_never_adopts_another_account_head(): void
+    {
+        $firstAccount = $this->start();
+        $otherAccount = $this->start();
+        $opaque = random_bytes(400);
+        $first = $this->stage($firstAccount, $opaque);
+        Storage::disk('ciphertext')->put($first['key'], $opaque);
+        $this->activate($firstAccount, $first);
+        $ledger = app(RecoveryVaultGenerationLedger::class);
+        $this->assertSame($opaque,
+            $ledger->readVerifiedActiveCiphertextTrusted($firstAccount['account']));
+        try {
+            $ledger->readVerifiedActiveCiphertextTrusted($otherAccount['account']);
+            $this->fail('cross-account active ciphertext returned');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('vault.no_verified_generation', $e->getMessage());
+        }
+    }
 }
