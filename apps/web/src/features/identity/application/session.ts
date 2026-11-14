@@ -1,7 +1,9 @@
-import { shallowRef } from 'vue'
+import { shallowRef, watch } from 'vue'
 import type { PinAttempt } from '../../security/application/pin-verifier'
 import type { SealedPinDevice } from '../../security/application/pin-device-migration'
 import {watchPinDeviceSealed} from '../../security/application/pin-tab-fence'
+import {acquirePinSessionLease} from '../../security/application/pin-session-lease'
+import type {PinSessionLease} from '../../security/application/pin-session-lease'
 import { jsonApi, resetCsrf } from '../infrastructure/api'
 import {
   b64, canonical, createPB2, digest, freshPackage, hex,
@@ -25,6 +27,41 @@ export interface Session {
 }
 
 export const activeSession = shallowRef<Session | null>(null)
+
+/**
+ * A cooperating same-origin tab holds a browser SHARED lock for as long as
+ * it can expose PackageV2. PIN migration needs EXCLUSIVE Web Lock and MUST
+ * refuse while any such tab has a live lease.
+ *
+ * Older tabs/workers/copied keys are NOT covered. This is not a revocation
+ * or proof of all-device quiescence.
+ */
+let activeDeviceLease:PinSessionLease|null=null
+function sameDeviceLease(
+  lease:PinSessionLease,
+  device:Readonly<{accountId:string;deviceId:string}>,
+):boolean{
+  return lease.scope.accountId===device.accountId &&
+    lease.scope.deviceId===device.deviceId
+}
+function releaseDeviceLease():void{
+  activeDeviceLease?.release()
+  activeDeviceLease=null
+}
+watch(activeSession,next=>{
+  if(activeDeviceLease && (!next||!sameDeviceLease(activeDeviceLease,next)))
+    releaseDeviceLease()
+},{flush:'sync'})
+async function ensureDeviceLease(
+  device:Readonly<{accountId:string;deviceId:string}>,
+):Promise<void>{
+  if(activeDeviceLease&&sameDeviceLease(activeDeviceLease,device))return
+  const acquired=await acquirePinSessionLease(device)
+  if(activeDeviceLease&&!sameDeviceLease(activeDeviceLease,device))
+    releaseDeviceLease()
+  activeDeviceLease=acquired
+}
+
 
 /** In-memory discovery only: NEVER contains a decrypted package or PIN. */
 export type PendingPinUnlock = Readonly<{
@@ -130,6 +167,7 @@ export async function finishRegistration(recoveryKey:string):Promise<Session> {
   await markSignedOut(device.accountId,device.deviceId,false)
   identityBootstrapError.value=null
   identityBootstrapReady.value=true
+  await ensureDeviceLease(device)
   return activate(pkg,device,true)
 }
 
@@ -174,6 +212,7 @@ export async function restoreAccount(recoveryKey:string):Promise<Session> {
   pendingPinUnlock.value=null
   identityBootstrapError.value=null
   identityBootstrapReady.value=true
+  await ensureDeviceLease(device)
   return activate(pkg,device,true)
 }
 
@@ -327,6 +366,12 @@ async function resumeLocalDevice():Promise<Session|null> {
   if(devices.some(other=>other.accountId===saved.accountId &&
       other.deviceId!==saved.deviceId && isSealedCandidate(other)))
     throw new Error('identity.mixed_sealed_devices')
+  // Do not even open the legacy DeviceEnvelope until this tab holds
+  // a SHARED Web Lock. An exclusive migration in a different tab must
+  // finish before we can publish/capture the old PackageV2.
+  await ensureDeviceLease(saved)
+  let activated=false
+  try {
   const pkg=await openDevice(saved.envelope,saved.encryptionKey,saved.accountId,saved.deviceId)
   // A second tab may have sealed/replaced this device WHILE our legacy
   // AES-GCM decrypt was in progress. Never activate a stale DB snapshot.
@@ -344,6 +389,7 @@ async function resumeLocalDevice():Promise<Session|null> {
   // Unprotected legacy devices preserve their prior behavior.
   pendingPinUnlock.value=null
   const local=activate(pkg,saved,false)
+  activated=true
   // Local-First: cached content is available as soon as the local envelope
   // has been opened, not after a potentially stalled offline server proof.
   // PIN-protected rows NEVER reach this legacy path.
@@ -355,6 +401,9 @@ async function resumeLocalDevice():Promise<Session|null> {
     // Offline or revoked: only locally available encrypted media remains.
   }
   return activeSession.value
+  }finally{
+    if(!activated && activeSession.value===null)releaseDeviceLease()
+  }
 }
 
 let pendingPinAttempt:Promise<PinAttempt>|null=null
@@ -401,6 +450,14 @@ async function unlockPinnedDeviceInternal(candidate:string):Promise<PinAttempt> 
      await isSignedOut(scope.accountId,scope.deviceId)||
      pendingPinUnlock.value!==context||activeSession.value)
     throw new Error('identity.pin_device_changed')
+  // Do not publish the decrypted PackageV2 until our tab holds its
+  // SHARED device lifetime lease. A stale row change is still checked by
+  // the existing preunlock HMAC receipt and IDB scope/revision guards.
+  await ensureDeviceLease(device)
+  if(pendingPinUnlock.value!==context || activeSession.value){
+    releaseDeviceLease()
+    throw new Error('identity.pin_session_changed')
+  }
   // Keep sealed envelope: never generate/write a legacy device-only fallback.
   pendingPinUnlock.value=null
   identityBootstrapError.value=null
