@@ -11,6 +11,7 @@ on:
       - 'apps/api/database/migrations/2026_11_14_000229_create_admin_temporary_restrictions_v1.php'
       - '.github/workflows/p3-admin-trial-grant-228.yml'
       - 'docs/audits/P3-ADMIN-TRIAL-GRANTS-228-20261114.md'
+      - 'docs/audits/P3-ADMIN-228-AUTH-AUDIT-INTEGRATION-GATES-20261114.md'
   workflow_dispatch:
 jobs:
   grants:
