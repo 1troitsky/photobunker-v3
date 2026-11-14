@@ -77,7 +77,20 @@ export async function verifyVideoClipContainer(
     throw Error('viewer.video_clip_invalid_bytes')
   const mime=blob.type.split(';')[0]?.trim().toLowerCase()
   if(mime!==expectedMime)throw Error('viewer.video_clip_invalid_format')
-  const bytes=new Uint8Array(await blob.slice(0,16).arrayBuffer())
+  const header=blob.slice(0,16)
+  const bytes=typeof header.arrayBuffer==='function'
+    ?new Uint8Array(await header.arrayBuffer())
+    :await new Promise<Uint8Array>((resolve,reject)=>{
+      // Also supports older Safari/jsdom Blob implementations.
+      const reader=new FileReader()
+      reader.onerror=()=>reject(Error('viewer.video_clip_invalid_bytes'))
+      reader.onload=()=>{
+        if(reader.result instanceof ArrayBuffer)
+          resolve(new Uint8Array(reader.result))
+        else reject(Error('viewer.video_clip_invalid_bytes'))
+      }
+      reader.readAsArrayBuffer(header)
+    })
   const valid=expectedMime==='video/mp4'
     ?bytes[4]===0x66&&bytes[5]===0x74&&bytes[6]===0x79&&bytes[7]===0x70
     :bytes[0]===0x1a&&bytes[1]===0x45
