@@ -39,4 +39,4 @@ jobs:
           find apps/api/app/Matrix/Byo apps/api/tests/Feature/MatrixByo -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Matrix BYO feature negative tests
         working-directory: apps/api
-        run: php vendor/bin/phpunit tests/Feature/MatrixByo/HomeserverAdmissionTest.php
+        run: php vendor/bin/phpunit tests/Feature/MatrixByo
