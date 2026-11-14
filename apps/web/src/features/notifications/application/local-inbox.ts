@@ -45,11 +45,14 @@ type CipherRow={
   iv:string
   ciphertext:string
 }
+type EncryptedPreferences={key:string;iv:string;ciphertext:string}
 class NotificationDB extends Dexie{
   rows!:Table<CipherRow,string>
+  preferences!:Table<EncryptedPreferences,string>
   constructor(){
     super('pb3-encrypted-notifications-v1')
     this.version(1).stores({rows:'&key,ownerScope'})
+    this.version(2).stores({rows:'&key,ownerScope',preferences:'&key'})
   }
 }
 const db=new NotificationDB()
@@ -67,7 +70,7 @@ const messages:Record<NotificationKind,readonly [string,string]>={
 }
 const requireTarget=new Set<NotificationKind>([
   'assignment-invite','team-invite','assignment-deadline',
-  'new-file','media-review','file-expiry',
+  'new-file','media-review',
 ])
 
 function isKind(value:unknown):value is NotificationKind{
@@ -97,7 +100,9 @@ function validateInput(value:unknown):asserts value is LocalNotificationInput{
     ||(v.targetId!==null &&
       (typeof v.targetId!=='string'||!UUID.test(v.targetId)))
     ||requireTarget.has(v.kind)&&v.targetId===null
-    ||!requireTarget.has(v.kind)&&v.targetId!==null)
+    // Historical file-expiry events can have an opaque old target; a newly
+    // expired/deleting file notice has NO clickable target and cannot grant.
+    ||!requireTarget.has(v.kind)&&v.kind!=='file-expiry'&&v.targetId!==null)
     throw Error('notifications.invalid_event')
 }
 function validateRecord(value:unknown):asserts value is LocalNotification{
@@ -204,6 +209,133 @@ async function modify(
   throw Error('notifications.concurrent_update')
 }
 
+
+/**
+ * Device-local display controls only: they cannot suppress server delivery,
+ * delete encrypted records or prevent security notices from being displayed.
+ * Defaults are safe if the device has never saved preferences.
+ */
+export type NotificationPreferences=Readonly<{
+  version:2
+  invitations:boolean
+  deadlines:boolean
+  expiry:boolean
+  system:boolean
+  badges:boolean
+  quietEnabled:boolean
+  quietStart:number
+  quietEnd:number
+}>
+export const defaultNotificationPreferences:NotificationPreferences=Object.freeze({
+  version:2,invitations:true,deadlines:true,expiry:true,system:true,badges:true,
+  quietEnabled:false,quietStart:22*60,quietEnd:8*60,
+})
+const PREFERENCE_KEYS=[
+  'badges','deadlines','expiry','invitations','quietEnabled','quietEnd',
+  'quietStart','system','version',
+] as const
+const OLD_PREFERENCE_KEYS=['badges','deadlines','expiry','invitations','system','version'] as const
+function minute(value:unknown):value is number{
+  return typeof value==='number'&&Number.isInteger(value)&&value>=0&&value<1440
+}
+function validatePreferences(value:unknown):asserts value is NotificationPreferences{
+  if(!value||typeof value!=='object'||Array.isArray(value))
+    throw Error('notifications.invalid_preferences')
+  const v=value as Record<string,unknown>
+  if(Object.keys(v).sort().join('|')!==PREFERENCE_KEYS.join('|')
+    ||v.version!==2
+    ||['badges','deadlines','expiry','invitations','system','quietEnabled']
+      .some(key=>typeof v[key]!=='boolean')
+    ||!minute(v.quietStart)||!minute(v.quietEnd)
+    ||v.quietStart===v.quietEnd)
+    throw Error('notifications.invalid_preferences')
+}
+function normalizedPreferences(value:unknown):NotificationPreferences{
+  if(value&&typeof value==='object'&&!Array.isArray(value)){
+    const v=value as Record<string,unknown>
+    if(v.version===1&&Object.keys(v).sort().join('|')===OLD_PREFERENCE_KEYS.join('|')
+      &&['badges','deadlines','expiry','invitations','system']
+        .every(key=>typeof v[key]==='boolean')){
+      const upgraded={...defaultNotificationPreferences,
+        invitations:v.invitations as boolean,
+        deadlines:v.deadlines as boolean,
+        expiry:v.expiry as boolean,
+        system:v.system as boolean,
+        badges:v.badges as boolean,
+      }
+      return upgraded
+    }
+  }
+  validatePreferences(value)
+  return value
+}
+/**
+ * Quiet hours are local badge presentation only, not notification delivery,
+ * unread state, encrypted history, server cursor or future OS push permission.
+ * Uses the device's CURRENT local clock, including its timezone/DST rules.
+ */
+export function notificationBadgeVisible(
+  kind:NotificationKind,preferences:NotificationPreferences,at=new Date(),
+):boolean{
+  // Security warnings are never hidden by display preferences or quiet hours.
+  if(kind==='security')return true
+  if(!preferences.badges)return false
+  if(!preferences.quietEnabled)return true
+  const now=at.getHours()*60+at.getMinutes()
+  const {quietStart:start,quietEnd:end}=preferences
+  const quiet=start<end
+    ?now>=start&&now<end
+    :now>=start||now<end
+  return !quiet
+}
+function preferencesAAD(ownerScope:string):Uint8Array<ArrayBuffer>{
+  return encoder.encode('pb3.notification-preferences.v1\\n'+ownerScope)
+}
+export function notificationIsVisible(
+  kind:NotificationKind,preferences:NotificationPreferences,
+):boolean{
+  // No user toggle may hide security-critical notices.
+  if(kind==='security')return true
+  if(kind==='assignment-invite'||kind==='team-invite')
+    return preferences.invitations
+  if(kind==='assignment-deadline')return preferences.deadlines
+  if(kind==='file-expiry')return preferences.expiry
+  return preferences.system
+}
+export async function readNotificationPreferences():Promise<NotificationPreferences>{
+  const session=requireSession()
+  const {ownerScope}=await keys(session)
+  sameIdentity(session)
+  const stored=await db.preferences.get(ownerScope)
+  if(!stored)return {...defaultNotificationPreferences}
+  if(stored.key!==ownerScope)throw Error('notifications.invalid_preferences')
+  let plain:ArrayBuffer
+  try{
+    plain=await crypto.subtle.decrypt({
+      name:'AES-GCM',iv:unb64(stored.iv,12),
+      additionalData:preferencesAAD(ownerScope),tagLength:128,
+    },await cryptoKey(session,'decrypt'),unb64(stored.ciphertext))
+  }catch{throw Error('notifications.encrypted_preferences_unreadable')}
+  let settings:unknown
+  try{settings=normalizedPreferences(JSON.parse(decoder.decode(plain)))}
+  catch{throw Error('notifications.invalid_preferences')}
+  sameIdentity(session)
+  return settings as NotificationPreferences
+}
+export async function saveNotificationPreferences(value:NotificationPreferences):Promise<void>{
+  validatePreferences(value)
+  const session=requireSession()
+  const {ownerScope}=await keys(session)
+  sameIdentity(session)
+  const iv=random(12)
+  const encrypted=await crypto.subtle.encrypt({
+    name:'AES-GCM',iv,additionalData:preferencesAAD(ownerScope),tagLength:128,
+  },await cryptoKey(session,'encrypt'),encoder.encode(JSON.stringify(value)))
+  sameIdentity(session)
+  await db.preferences.put({key:ownerScope,iv:b64(iv),ciphertext:b64(encrypted)})
+  sameIdentity(session)
+}
+
 /** Locally observed events only; callers must not infer remote approval. */
 export async function recordLocalNotification(input:LocalNotificationInput):Promise<LocalNotification>{
   validateInput(input)
@@ -249,13 +381,21 @@ export async function markNotificationRead(id:string,at=Date.now()):Promise<Loca
     return {...event,readAt:Math.max(event.occurredAt,at)}
   })
 }
-export async function markAllLocalNotificationsRead(at=Date.now()):Promise<number>{
+export async function markAllLocalNotificationsRead(
+  at=Date.now(),onlyIds?:readonly string[],
+):Promise<number>{
   if(!Number.isSafeInteger(at)||at<0)throw Error('notifications.invalid_read')
+  // Display filters must not silently read hidden events. The optional
+  // snapshot is selected by the UI; the original all-items API is preserved.
+  if(onlyIds && (onlyIds.length>MAX_ROWS||onlyIds.some(id=>!UUID.test(id))))
+    throw Error('notifications.invalid_read')
+  const allowed=onlyIds?new Set(onlyIds):null
   const session=requireSession()
   const events=await listLocalNotifications({unreadOnly:true})
   let changed=0
   for(const event of events){
     sameIdentity(session)
+    if(allowed&&!allowed.has(event.id))continue
     const result=await markNotificationRead(event.id,at)
     if(result&&result.readAt!==null)changed++
   }

@@ -1,0 +1,200 @@
+import 'fake-indexeddb/auto'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { activeSession, type Session } from '../../identity/application/session'
+import { freshPackage } from '../../identity/infrastructure/crypto'
+import { listLocalNotifications, markNotificationRead } from './local-inbox'
+
+const mockApi=vi.hoisted(()=>({jsonApi:vi.fn()}))
+vi.mock('../../identity/infrastructure/api',()=>mockApi)
+import { syncServerNotifications, resolveNotificationTarget, requestNotificationSync } from './server-event-sync'
+
+const EVENT='44444444-4444-4444-8444-444444444444'
+let session:Session
+beforeEach(async()=>{
+  mockApi.jsonApi.mockReset()
+  const accountId=crypto.randomUUID()
+  const {pkg}=await freshPackage(accountId)
+  session={accountId,deviceId:crypto.randomUUID(),pkg,online:true} as Session
+  activeSession.value=session
+})
+afterEach(()=>{activeSession.value=null})
+
+describe('#198 trusted event replay → encrypted IndexedDB',()=>{
+  it('persists before advancing, dedupes reload and preserves read state',async()=>{
+    const item={id:EVENT,kind:'security',targetId:null,occurredAt:1800000000000}
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[item],nextCursor:'1',hasMore:true})
+      .mockResolvedValueOnce({schemaVersion:1,acknowledgedCursor:'1',advanced:true})
+      .mockResolvedValueOnce({schemaVersion:1,items:[],nextCursor:'2',hasMore:false})
+      .mockResolvedValueOnce({schemaVersion:1,acknowledgedCursor:'2',advanced:true})
+    expect(await syncServerNotifications()).toEqual({saved:1,pages:2})
+    expect(mockApi.jsonApi.mock.calls.map(c=>c[0]))
+      .toEqual(['/notifications/v1/events?after=0','/notifications/v1/ack',
+        '/notifications/v1/events?after=1','/notifications/v1/ack'])
+    expect((await listLocalNotifications())[0]).toMatchObject(item)
+    await markNotificationRead(EVENT,1800000000001)
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[item],nextCursor:'1',hasMore:false})
+      .mockResolvedValueOnce({schemaVersion:1,acknowledgedCursor:'2',advanced:false})
+    await syncServerNotifications() // replay from 0, encrypted dedupe
+    expect((await listLocalNotifications())[0]?.readAt).toBe(1800000000001)
+    expect((await listLocalNotifications())).toHaveLength(1)
+  })
+  it('persists non-navigable expired-retention notice before ACK',async()=>{
+    const item={id:EVENT,kind:'file-expiry',targetId:null,occurredAt:1800000000000}
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[item],nextCursor:'1',hasMore:false})
+      .mockImplementationOnce(async()=>{
+        expect((await listLocalNotifications())[0]).toMatchObject(item)
+        return {schemaVersion:1,acknowledgedCursor:'1',advanced:true}
+      })
+    expect(await syncServerNotifications()).toEqual({saved:1,pages:1})
+    expect(mockApi.jsonApi.mock.calls.at(-1))
+      .toEqual(['/notifications/v1/ack','POST',{cursor:'1'}])
+    expect((await listLocalNotifications())[0]?.targetId).toBeNull()
+  })
+  it('does not fetch the next page after corrupt/forged local event',async()=>{
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,
+      items:[{id:EVENT,kind:'security',targetId:null,
+        occurredAt:1800000000000,filename:'PRIVATE'}],
+      nextCursor:'1',hasMore:true,
+    })
+    await expect(syncServerNotifications()).rejects.toThrow('notifications.invalid_event')
+    expect(mockApi.jsonApi).toHaveBeenCalledTimes(1)
+    expect(await listLocalNotifications()).toEqual([])
+  })
+  it('sends no server ACK before encrypted persistence and retries after lost ACK',async()=>{
+    const item={id:EVENT,kind:'security',targetId:null,occurredAt:1800000000000}
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[item],nextCursor:'1',hasMore:false})
+      .mockRejectedValueOnce(new Error('api.http_503'))
+    await expect(syncServerNotifications()).rejects.toThrow('api.http_503')
+    expect(mockApi.jsonApi.mock.calls.map(c=>c[0])).toEqual([
+      '/notifications/v1/events?after=0','/notifications/v1/ack',
+    ])
+    expect((await listLocalNotifications())).toHaveLength(1)
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[item],nextCursor:'1',hasMore:false})
+      .mockResolvedValueOnce({schemaVersion:1,acknowledgedCursor:'1',advanced:true})
+    await expect(syncServerNotifications()).resolves.toEqual({saved:1,pages:1})
+    expect((await listLocalNotifications())).toHaveLength(1)
+    const calls=mockApi.jsonApi.mock.calls
+    expect(calls.at(-1)).toEqual(['/notifications/v1/ack','POST',{cursor:'1'}])
+  })
+  it('rejects forged or regressed ACK response',async()=>{
+    mockApi.jsonApi
+      .mockResolvedValueOnce({schemaVersion:1,items:[],nextCursor:'2',hasMore:false})
+      .mockResolvedValueOnce({schemaVersion:1,acknowledgedCursor:'1',advanced:true})
+    await expect(syncServerNotifications()).rejects.toThrow('notifications.invalid_ack')
+  })
+  it('refuses cursor rollback, missing keys and frozen pagination',async()=>{
+    for(const bad of [
+      {schemaVersion:1,items:[],nextCursor:'0',hasMore:true},
+      {schemaVersion:1,items:[],nextCursor:'01',hasMore:false},
+      {schemaVersion:1,items:[],nextCursor:'9007199254740992',hasMore:false},
+      {schemaVersion:1,items:[],nextCursor:'0',hasMore:false,private:'leak'},
+    ]){
+      mockApi.jsonApi.mockResolvedValueOnce(bad)
+      await expect(syncServerNotifications()).rejects.toThrow()
+    }
+  })
+  it('replays pending online sync for replacement account after first flight settles',async()=>{
+    let release:((value:unknown)=>void)|undefined
+    mockApi.jsonApi.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve}))
+    const first=requestNotificationSync()
+    expect(mockApi.jsonApi.mock.calls[0]?.[0])
+      .toBe('/notifications/v1/events?after=0')
+    const previous=activeSession.value!
+    activeSession.value={...previous,accountId:crypto.randomUUID()}
+    const second=requestNotificationSync()
+    expect(mockApi.jsonApi).toHaveBeenCalledTimes(1)
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,items:[],nextCursor:'0',hasMore:false,
+    }).mockResolvedValueOnce({
+      schemaVersion:1,acknowledgedCursor:'0',advanced:false,
+    })
+    release?.({schemaVersion:1,items:[],nextCursor:'0',hasMore:false})
+    await Promise.all([first,second])
+    expect(mockApi.jsonApi.mock.calls.map(c=>c[0])).toEqual([
+      '/notifications/v1/events?after=0',
+      '/notifications/v1/events?after=0',
+      '/notifications/v1/ack',
+    ])
+    expect((await listLocalNotifications())).toHaveLength(0)
+  })
+  it('does not restart previous device after logout while request is in flight',async()=>{
+    let release:((value:unknown)=>void)|undefined
+    mockApi.jsonApi.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve}))
+    const first=requestNotificationSync()
+    activeSession.value=null
+    await requestNotificationSync()
+    release?.({schemaVersion:1,items:[],nextCursor:'0',hasMore:false})
+    await first
+    expect(mockApi.jsonApi).toHaveBeenCalledTimes(1)
+  })
+  it('rejects device/account switch before writing server payload',async()=>{
+    mockApi.jsonApi.mockImplementationOnce(async()=>{
+      activeSession.value={...session,deviceId:crypto.randomUUID()}
+      return {schemaVersion:1,items:[{
+        id:EVENT,kind:'security',targetId:null,occurredAt:1800000000000,
+      }],nextCursor:'1',hasMore:false}
+    })
+    await expect(syncServerNotifications()).rejects.toThrow('notifications.session_changed')
+    activeSession.value=session
+    expect(await listLocalNotifications()).toEqual([])
+  })
+  it('resolves a target only through fresh server ACL and exact envelope',async()=>{
+    const targetId='55555555-5555-4555-8555-555555555555'
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,kind:'new-file',targetId,
+    })
+    await expect(resolveNotificationTarget(EVENT)).resolves
+      .toEqual({kind:'new-file',targetId})
+    expect(mockApi.jsonApi).toHaveBeenCalledWith(
+      '/notifications/v1/events/'+EVENT+'/target',
+    )
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,kind:'new-file',targetId,caption:'SECRET',
+    })
+    await expect(resolveNotificationTarget(EVENT)).rejects
+      .toThrow('notifications.invalid_target')
+    await expect(resolveNotificationTarget('invalid')).rejects
+      .toThrow('notifications.invalid_target')
+  })
+  it('preserves only the server-authorized assignment invite target kind',async()=>{
+    const targetId='66666666-6666-4666-8666-666666666666'
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,kind:'assignment-invite',targetId,
+    })
+    await expect(resolveNotificationTarget(EVENT)).resolves.toEqual({
+      kind:'assignment-invite',targetId,
+    })
+    expect(mockApi.jsonApi).toHaveBeenCalledWith(
+      '/notifications/v1/events/'+EVENT+'/target',
+    )
+  })
+  it('does not rewrite a server-authorized team invite as file access',async()=>{
+    const targetId='77777777-7777-4777-8777-777777777777'
+    mockApi.jsonApi.mockResolvedValueOnce({
+      schemaVersion:1,kind:'team-invite',targetId,
+    })
+    await expect(resolveNotificationTarget(EVENT)).resolves.toEqual({
+      kind:'team-invite',targetId,
+    })
+  })
+  it('rejects stale notification target after session switch',async()=>{
+    mockApi.jsonApi.mockImplementationOnce(async()=>{
+      activeSession.value={...session,deviceId:crypto.randomUUID()}
+      return {schemaVersion:1,kind:'new-file',
+        targetId:'55555555-5555-4555-8555-555555555555'}
+    })
+    await expect(resolveNotificationTarget(EVENT)).rejects
+      .toThrow('notifications.session_changed')
+  })
+  it('never tries network when session is offline',async()=>{
+    activeSession.value={...session,online:false}
+    await expect(syncServerNotifications()).rejects.toThrow('notifications.offline')
+    expect(mockApi.jsonApi).not.toHaveBeenCalled()
+  })
+})
