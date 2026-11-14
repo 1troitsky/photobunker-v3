@@ -306,7 +306,7 @@ function failoverLoadFixture():array
  */
 function failoverConcurrentPgMutation(string $action,array $fixture):void
 {
-    failoverAssert(in_array($action,['account-revision','parent-deletion','replica-location-aba','parent-state-aba'],true),
+    failoverAssert(in_array($action,['account-revision','parent-deletion','replica-location-aba','parent-state-aba','photo-tombstone'],true),
         'unsupported_race_mutation');
     $parentOs=(int)getmypid();
     $parentPg=(int)DB::selectOne('SELECT pg_backend_pid() as pid')->pid;
@@ -339,7 +339,7 @@ function failoverConcurrentPgMutation(string $action,array $fixture):void
 
 $mode=$argv[1]??'';
 failoverAssert(in_array($mode,[
-    'healthy','race','race-worker','primary-offline','secondary-offline','recovered'
+    'healthy','race','race-worker','ttl','primary-offline','secondary-offline','recovered'
 ],true),'unknown_test_mode');
 
 // Child process must pass all disposable-GitHub-Action guards above.
@@ -347,7 +347,7 @@ failoverAssert(in_array($mode,[
 if ($mode==='race-worker') {
     failoverAssert(count($argv)===7,'unexpected_worker_argument_count');
     [$script,$run,$action,$account,$parent,$parentOs,$parentPg]=$argv;
-    failoverAssert(in_array($action,['account-revision','parent-deletion','replica-location-aba','parent-state-aba'],true)
+    failoverAssert(in_array($action,['account-revision','parent-deletion','replica-location-aba','parent-state-aba','photo-tombstone'],true)
         && Str::isUuid($account) && Str::isUuid($parent)
         && ctype_digit($parentOs) && ctype_digit($parentPg),
         'invalid_race_worker_identity');
@@ -368,6 +368,16 @@ if ($mode==='race-worker') {
             ->where('id',$parent)->where('account_id',$account)
             ->where('state','active')
             ->update(['state'=>'deleting','updated_at'=>CarbonImmutable::now('UTC')]);
+    } elseif ($action==='photo-tombstone') {
+        // Only the freshly seeded isolated Photo fixture may be tombstoned.
+        failoverAssert(DB::table('photo_records')->where('id',$parent)
+            ->where('account_id',$account)->where('state','active')->exists(),
+            'tombstone_worker_parent_not_owned');
+        $affected=DB::table('photo_tombstones')->insert([
+            'photo_id'=>$parent,'account_id'=>$account,
+            'operation_id'=>(string)Str::uuid(),'reason'=>'user',
+            'created_at'=>CarbonImmutable::now('UTC'),
+        ]) ? 1 : 0;
     } else {
         // Two independent COMMITTED statements: final semantic state and
         // updated_at are identical to the first snapshot. Old value-only
@@ -554,7 +564,57 @@ if ($mode==='race') {
     }
     echo "P4 #235 REAL PG18 ABA COMPLETE 2/2: same visible values/timestamps, different committed tuple version, NO authorized failover\n";
 
+    // The committed tombstone is created by an INDEPENDENT PG18 backend after
+    // a real physical Garage-B GET, before the final metadata check.
+    $secondary->onRead=static fn()=>failoverConcurrentPgMutation(
+        'photo-tombstone',$f);
+    failoverDeny(fn()=>failoverTest($preflight,$f),'failover.deleted');
+    failoverAssert(DB::table('photo_tombstones')->where('photo_id',$f['parent'])
+        ->where('account_id',$f['account'])->exists(),
+        'post_get_tombstone_not_persisted');
+    // Only this disposable synthetic fixture is cleaned for downstream
+    // outage/recovery tests; NEVER a real user tombstone or production data.
+    $cleaned=DB::table('photo_tombstones')->where('photo_id',$f['parent'])
+        ->where('account_id',$f['account'])->delete();
+    failoverAssert($cleaned===1,'synthetic_tombstone_cleanup_failed');
+    failoverTest($preflight,$f);
+    echo "P4 #235 REAL PG18 TOMBSTONE 1/1 PASS: committed synthetic Photo tombstone from independent PHP/PG backend after physical Garage B GET rejected\n";
+
     echo "P4 #235 REAL PG18 RACE COMPLETE 2/2: distinct PHP PIDs and PG18 backend IDs, NO placement switching\n";
+    exit(0);
+}
+
+if ($mode==='ttl') {
+    foreach (['photo','media_chunk'] as $kind) {
+        $f=$fixtures[$kind];
+        $parentTable=$kind==='photo'?'photo_records':'media_files_v1';
+        // Real wall-clock crossing: the FIRST snapshot is live while this
+        // disposable fixture expires during a deliberately slowed S3 GET.
+        // Garage B performs real physical GET before our synthetic delay.
+        $firstNow=CarbonImmutable::now('UTC');
+        $expires=$firstNow->addMilliseconds(2500)->getTimestampMs();
+        $changed=DB::table($parentTable)->where('id',$f['parent'])
+            ->where('account_id',$f['account'])
+            ->update(['expires_at'=>$expires]);
+        failoverAssert($changed===1,'ttl_fixture_update_failed');
+        $secondary->onRead=static function():void {
+            usleep(2900000);
+        };
+        failoverDeny(fn()=>failoverTest($preflight,$f),'failover.expired');
+        failoverAssert(CarbonImmutable::now('UTC')->getTimestampMs()>=$expires,
+            'wall_clock_did_not_cross_expiry');
+        // Restore only the synthetic TTL fixture: later real primary/
+        // replica outages and recovery tests use these same fake objects.
+        $restored=DB::table($parentTable)->where('id',$f['parent'])
+            ->where('account_id',$f['account'])
+            ->update(['expires_at'=>CarbonImmutable::now('UTC')
+                ->addDay()->getTimestampMs()]);
+        failoverAssert($restored===1,'ttl_fixture_restore_failed');
+        failoverTest($preflight,$f);
+        failoverVerifyOriginal($primary,$f);
+        echo "P4 #235 REAL GARAGE TTL ".($kind==='photo'?'1':'2')."/2 PASS: $kind actual Garage B GET with advancing UTC beyond signed parent TTL denied; synthetic TTL restored\n";
+    }
+    echo "P4 #235 REAL GARAGE TTL COMPLETE 2/2: physical B transport still intact, no client GET or failover permission\n";
     exit(0);
 }
 
