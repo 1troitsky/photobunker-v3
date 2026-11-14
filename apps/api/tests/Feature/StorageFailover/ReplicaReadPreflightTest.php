@@ -292,6 +292,33 @@ final class ReplicaReadPreflightTest extends TestCase
         $this->deny(fn()=>$this->inspect($g),'failover.deleted');
     }
 
+
+    public function test_account_revision_rotation_during_physical_replica_read_fails_closed():void
+    {
+        foreach (['photo','media_chunk'] as $kind) {
+            $f=$this->fixture($kind);
+            $before=(int)DB::table('identity_accounts')
+                ->where('id',$f['account'])->value('revision');
+            // Simulate rotation that keeps account READY, with unchanged
+            // parent/location timestamps. Earlier preflight missed this.
+            $this->replica->onRead=static function()use($f):void {
+                DB::table('identity_accounts')->where('id',$f['account'])
+                    ->increment('revision');
+            };
+            $this->deny(fn()=>$this->inspect($f),
+                'failover.changed_during_read');
+            $this->assertSame($before+1,(int)DB::table('identity_accounts')
+                ->where('id',$f['account'])->value('revision'));
+            $this->assertSame('ready',DB::table('identity_accounts')
+                ->where('id',$f['account'])->value('status'));
+            // A fresh non-atomic observation may pass, but must not be
+            // mistaken for an authorized client GET or durable receipt.
+            $this->replica->onRead=null;
+            $result=$this->inspect($f);
+            $this->assertFalse($result['failoverAuthorized']);
+        }
+    }
+
     public function test_no_valid_registry_or_identifiers_can_trigger_transport_access():void
     {
         $f=$this->fixture();
