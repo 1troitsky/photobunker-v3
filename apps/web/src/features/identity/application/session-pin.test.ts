@@ -168,6 +168,44 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     await pending
   },60_000)
 
+  it('keeps a native shared lease while legacy keys are active; migration requires full closure',async()=>{
+    const f=await account()
+    const resumed=await resumeExistingDevice()
+    expect(resumed?.pkg).toEqual(f.pkg)
+    const locks=navigator.locks as unknown as TestPinLockManager
+    expect(locks.heldNames()).toHaveLength(1)
+    await expect(migrateLegacyLocalDeviceToPin({
+      scope:f.scope,verifiedPackage:f.pkg,
+      appPin:'4826',emergencyPin:'6284',
+    })).rejects.toThrow('pin.other_tab_active')
+    const unchanged=await getDevice(f.scope.accountId,f.scope.deviceId)
+    expect((unchanged?.envelope as {purpose:string}|undefined)?.purpose)
+      .toBe('device')
+    // Disposable-test cooperative shutdown, NOT production logout or
+    // a guarantee that an old tab has erased all copies of PackageV2.
+    activeSession.value=null
+    await vi.waitFor(()=>expect(locks.heldNames()).toHaveLength(0))
+    await migrateLegacyLocalDeviceToPin({
+      scope:f.scope,verifiedPackage:f.pkg,
+      appPin:'4826',emergencyPin:'6284',
+    })
+    const sealed=await getDevice(f.scope.accountId,f.scope.deviceId)
+    expect((sealed?.envelope as {purpose:string}|undefined)?.purpose)
+      .toBe('preunlock-package')
+  },105_000)
+
+  it('refuses to migrate where Web Locks is unavailable while legacy offline remains usable',async()=>{
+    const f=await account()
+    vi.stubGlobal('navigator',{})
+    await expect(migrateLegacyLocalDeviceToPin({
+      scope:f.scope,verifiedPackage:f.pkg,
+      appPin:'4826',emergencyPin:'6284',
+    })).rejects.toThrow('pin.web_locks_required')
+    expect((await getDevice(f.scope.accountId,f.scope.deviceId))?.envelope)
+      .toEqual(f.device.envelope)
+    expect((await resumeExistingDevice())?.pkg).toEqual(f.pkg)
+  },90_000)
+
   it('refuses malformed sealed metadata and never falls back to app shell data',async()=>{
     const f=await protectedAccount()
     await corruptDevice(f.device.deviceId,row=>{row.pinLength=3})
