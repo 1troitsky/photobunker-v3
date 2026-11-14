@@ -372,7 +372,20 @@ export function lockActivePinSession():boolean {
 let pinLastBackgroundAtMs:number|null=null
 function onPinAppBackground():void{
   const current=activeSession.value
-  if(!current||!isSealedCandidate(current.device))return
+  // A PIN verification can still be in PBKDF2/AES-GCM while the user
+  // switches tabs. Rotate the volatile admission nonce on background so
+  // that the pending asynchronous attempt can NEVER publish PackageV2
+  // while the app is hidden, even if it had begun before this event.
+  if(!current){
+    const pending=pendingPinUnlock.value
+    if(pending){
+      pendingPinUnlock.value=Object.freeze({
+        ...pending,sessionNonce:crypto.randomUUID(),
+      })
+    }
+    return
+  }
+  if(!isSealedCandidate(current.device))return
   pinLastBackgroundAtMs=Date.now()
   if(mustRelockPinAfterBackground(
     pinLastBackgroundAtMs,Date.now(),PIN_RELOCK_DEFAULT_MS,
