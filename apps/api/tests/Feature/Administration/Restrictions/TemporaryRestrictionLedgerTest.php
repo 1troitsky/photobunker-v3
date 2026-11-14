@@ -193,17 +193,32 @@ final class TemporaryRestrictionLedgerTest extends TestCase
     {
         $old = $this->expiry(1);
         $this->change('device', 'restrict', 0, $this->deviceId, null, $old);
-        $now = CarbonImmutable::now('UTC');
+        $future = $old->addSecond();
         $this->ledger()->assertNotRestrictedForTrustedSession(
-            $this->accountId, $this->deviceId, $old->addSecond());
+            $this->accountId, $this->deviceId, $future);
 
-        // A truly expired restriction cannot be manually "released" in place;
-        // new restrictions are separate versions with their own operation ID.
-        $this->deny(
-            fn() => $this->change('device', 'restrict', 1, $this->deviceId),
-            'admin.restriction_already_active',
-        );
-        self::assertLessThan($old, $now->addDays(2));
+        // An expired restriction is not silently "released": a new action
+        // acquires a new durable revision. Test uses controlled server clock.
+        CarbonImmutable::setTestNow($future);
+        try {
+            $actor = new AdminPrincipal(
+                $this->actorId, 'operator',
+                $future->getTimestampMs() + 600_000,
+                $future->getTimestampMs() - 1_000,
+            );
+            $new = $this->change('device', 'restrict', 1, $this->deviceId,
+                null, $future->addDay()->startOfSecond(), $actor);
+            self::assertSame(2, $new['revision']);
+            self::assertFalse($new['replay']);
+            $this->deny(
+                fn() => $this->ledger()->assertNotRestrictedForTrustedSession(
+                    $this->accountId, $this->deviceId),
+                'admin.restriction_access_denied',
+            );
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+        $this->assertDatabaseCount('admin_temporary_restriction_events_v1', 2);
     }
 
     public function test_same_operation_replay_returns_historical_revision_only_and_changes_deny(): void
