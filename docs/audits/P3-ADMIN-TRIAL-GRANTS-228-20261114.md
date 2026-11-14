@@ -23,3 +23,13 @@
 ## No-go
 
 Do not mount public route while independent trusted principal service and real MFA/CSRF/RBAC not accepted. Do not reclassify an AdminPrincipal DTO as actual authorization. Do not widen trial validity, suppress locked Composer Audit, or count draft code as final P3 acceptance. Original code+CI proof SHA `bda7a91b6c803875d4e20e516a2c4a90d12d764b`. Final documentation-only HEAD and its scoped CI are recorded with Issue/PR comments. #228 remains OPEN/in-progress.
+
+## Two-process PostgreSQL18 acceptance extension — 2026-11-14
+
+New exclusively owned `apps/api/tests/integration/p3-admin-trial-postgres-race.php` and scoped own workflow PG18 job. Each of four negative/positive races launches **two independent OS PHP processes and PDO PostgreSQL18 backends**; owner holds global audit head FOR UPDATE inside real transaction until contender attempts same DB; parent checks `pg_stat_activity.wait_event_type = Lock`, distinct PIDs and observed blocking time before accepting outcomes. Disposable-only guard checks GitHub Actions/testing/PDO pgsql, fixed DB hostname/user/schema and migration presence **before any test account creation**.
+
+Scenarios: (1) exact Lost ACK replay same op: one audited grant and one billing snapshot, one receipt; (2) same operation ID changed plan denied (no upgrade); (3) distinct operations same expected account revision: second 409, its speculative audit rolled back; (4) different accounts receive distinct serialized audited grants. Final independent query validates verified global chain, 5 committed audit events, 5 durable receipts and immutable Free→paid billing heads with no duplicates/orphans. All IDs synthetic and data is disposable CI only.
+
+PG job independently stages [pinned #297 security fix](https://github.com/1troitsky/photobunker-v3/pull/298) `60407676c7cb9bdb649f5017cf9450aff25eedab` Composer lock blob `c4bcae0458bd390b797186c3e2ccf536469588ef` only **inside runner**, verifies exact git blob SHA, requires `composer audit --locked` clean, migrates test PG18. Stacked PR branch and main's composer.lock stay unchanged; original PHP matrix will continue reporting inherited Composer CVE as explicit FAIL until #297 is approved. No mutation to parent #227's audit fixture or workflow, no merge/deploy and no HTTP admin routes.
+
+**State:** code+CI added; real PG18 test outcome **NOT TESTED until exact SHA workflow finishes**. Do not claim acceptance from scripts alone.
