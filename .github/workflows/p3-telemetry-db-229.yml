@@ -71,6 +71,7 @@ jobs:
           php vendor/bin/phpunit --filter AssignmentCoverageAuditTest
           php vendor/bin/phpunit --filter AssignmentReceiptLineageAuditTest
           php vendor/bin/phpunit --filter TelemetryRotationPreflightTest
+          php vendor/bin/phpunit --filter TelemetryShadowKeyBridgeTest
           php vendor/bin/phpunit
       - name: Migrate disposable PG18 and initialize clock
         working-directory: apps/api
@@ -178,3 +179,17 @@ jobs:
         run: |
           set -euo pipefail
           php tests/integration/p3-telemetry-postgres.php rotation-preflight
+
+      - name: True two-PHP PG18 legacy OLD vs SHADOW key bridge receipt and distinct race
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php shadow-init
+          php tests/integration/p3-telemetry-postgres.php shadow-old-worker &
+          p1=$!
+          php tests/integration/p3-telemetry-postgres.php shadow-bridge-worker &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          php tests/integration/p3-telemetry-postgres.php shadow-verify

@@ -13,6 +13,7 @@ use App\Telemetry\AssignmentCreationReplay;
 use App\Telemetry\AssignmentCoverageAudit;
 use App\Telemetry\AssignmentReceiptLineageAudit;
 use App\Telemetry\TelemetryRotationPreflight;
+use App\Telemetry\TelemetryShadowKeyBridge;
 use App\Telemetry\TelemetryEvent;
 use App\Telemetry\TelemetryRecord;
 use App\Telemetry\InternalAggregateReader;
@@ -36,6 +37,12 @@ const SECRET = 'PB3 TEST ONLY TELEMETRY HMAC SECRET, NO REAL KEY';
 const SOURCE_ACCOUNT_OPERATION = '99999999-9999-4999-8999-999999999999';
 const SOURCE_ASSIGNMENT = '88888888-8888-4888-8888-888888888888';
 const SOURCE_OPERATION = '77777777-7777-4777-8777-777777777777';
+const SHADOW_ACCOUNT = 'abababab-abab-4aba-8aba-abababababab';
+const SHADOW_OPERATION = 'cdcdcdcd-cdcd-4cdc-8cdc-cdcdcdcdcdcd';
+const SHADOW_EVENT = 'edededed-eded-4ede-8ede-edededededed';
+const SHADOW_SECOND = 'edededed-eded-4ede-8ede-edededededec';
+const SHADOW_UNBRIDGED = 'edededed-eded-4ede-8ede-edededededeb';
+const SHADOW_NEW_KEY = 'PB3 disposable shadow candidate HMAC key, NO production';
 $collector = new TelemetryCollector(new DatabaseTelemetrySink($db), SECRET);
 $event = static function (string $type = 'session.active') use ($nowMs): array {
     return [
@@ -257,6 +264,101 @@ if ($stage === 'init') {
         && $aged['rotationApproved'] === false,
         'PG18 UTC retention preview does not detect expired receipts/actors');
     echo "Telemetry PG18 HMAC rotation preflight old/new/both and 8-day UTC retention: PASS; no rotation\n";
+} elseif ($stage === 'shadow-init') {
+    $db->table('identity_accounts')->insert([
+        'id' => SHADOW_ACCOUNT, 'operation_id' => SHADOW_OPERATION,
+        'prepare_hash' => str_repeat('a', 64), 'status' => 'ready',
+        'reserved_until' => now()->addDay(),
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $assert($db->table('identity_accounts')->where('id', SHADOW_ACCOUNT)->exists(),
+        'trusted shadow source account missing');
+    echo "Telemetry PG18 verified server identity for shadow race\n";
+} elseif ($stage === 'shadow-old-worker' || $stage === 'shadow-bridge-worker') {
+    $assert($db->table('identity_accounts')->where('id', SHADOW_ACCOUNT)->exists(),
+        'actor not trusted from real server identity source');
+    $raw = [
+        'schemaVersion' => 1, 'eventId' => SHADOW_EVENT,
+        'eventType' => 'session.active', 'occurredAtMs' => $nowMs,
+    ];
+    $result = $stage === 'shadow-old-worker'
+        ? $collector->ingest($raw, SHADOW_ACCOUNT, $nowMs)
+        : (new TelemetryShadowKeyBridge($db, SECRET, SHADOW_NEW_KEY))
+            ->admit($raw, SHADOW_ACCOUNT, $nowMs);
+    $assert(in_array($result, [TelemetryDecision::Accepted, TelemetryDecision::Duplicate], true),
+        'real two-PHP old-vs-shadow race returned unsafe decision');
+    echo "Shadow race worker: ".$result->value."\n";
+} elseif ($stage === 'shadow-verify') {
+    $raw = [
+        'schemaVersion' => 1, 'eventId' => SHADOW_EVENT,
+        'eventType' => 'session.active', 'occurredAtMs' => $nowMs,
+    ];
+    $event = TelemetryEvent::fromArray($raw);
+    $old = TelemetryRecord::fromTrusted($event, SHADOW_ACCOUNT, SECRET);
+    $shadow = TelemetryRecord::fromTrusted($event, SHADOW_ACCOUNT, SHADOW_NEW_KEY);
+    foreach ([$old, $shadow] as $record) {
+        $saved = $db->table('telemetry_event_receipts')
+            ->where('event_token', $record->eventToken)->value('fingerprint');
+        $assert(is_string($saved) && hash_equals($record->fingerprint(), $saved),
+            'PG18 shadow/canonical receipt missing or corrupt after true two-worker race');
+    }
+    foreach (['day', 'week', 'month'] as $kind) {
+        $active = $db->table('telemetry_counters')->where('metric', 'session.active')
+            ->where('period_kind', $kind)->sum('total');
+        $distinct = $db->table('telemetry_counters')
+            ->where('metric', 'session.active.distinct')
+            ->where('period_kind', $kind)->sum('total');
+        $assert((int) $active === 2 && (int) $distinct === 2,
+            'PG18 shadow race double counted active or distinct');
+    }
+    // Candidate-key replay of already-shadowed event must be DUPLICATE,
+    // never add another counter or actor token.
+    $candidateCollector = new TelemetryCollector(
+        new DatabaseTelemetrySink($db), SHADOW_NEW_KEY,
+    );
+    $assert($candidateCollector->ingest($raw, SHADOW_ACCOUNT, $nowMs)
+        === TelemetryDecision::Duplicate,
+        'candidate replay accepted previously bridged event a second time');
+    $assert((new TelemetryShadowKeyBridge($db, SECRET, SHADOW_NEW_KEY))
+        ->admit($raw, SHADOW_ACCOUNT, $nowMs) === TelemetryDecision::Duplicate,
+        'shadow bridge replay was not duplicate');
+    // Two independent authenticated events in the SAME UTC period MUST share
+    // the OLD distinct actor domain while bridge is in control.
+    $next = $raw;
+    $next['eventId'] = SHADOW_SECOND;
+    $assert((new TelemetryShadowKeyBridge($db, SECRET, SHADOW_NEW_KEY))
+        ->admit($next, SHADOW_ACCOUNT, $nowMs) === TelemetryDecision::Accepted,
+        'new bridged session event rejected');
+    foreach (['day', 'week', 'month'] as $kind) {
+        $distinct = $db->table('telemetry_counters')
+            ->where('metric', 'session.active.distinct')
+            ->where('period_kind', $kind)->sum('total');
+        $assert((int) $distinct === 2,
+            'bridge introduced duplicate DAU/WAU/MAU membership');
+    }
+    foreach ([
+        $shadow->dailyActorToken, $shadow->weeklyActorToken, $shadow->monthlyActorToken,
+    ] as $actorToken) {
+        $assert(!$db->table('telemetry_active_tokens')
+            ->where('actor_token', $actorToken)->exists(),
+            'candidate HMAC actor token should not be written by old-only shadow bridge');
+    }
+    echo "Telemetry PG18 TRUE two-PHP legacy-old vs uncounted shadow receipt race and distinct PASS\n";
+
+    // NEGATIVE acceptance: a NEW candidate-only event in the same actor
+    // period inflates distinct; production candidate-only cutover is BLOCKED.
+    $unbridged = $raw;
+    $unbridged['eventId'] = SHADOW_UNBRIDGED;
+    $assert($candidateCollector->ingest($unbridged, SHADOW_ACCOUNT, $nowMs)
+        === TelemetryDecision::Accepted, 'disposable candidate-only fixture not accepted');
+    foreach (['day', 'week', 'month'] as $kind) {
+        $distinct = $db->table('telemetry_counters')
+            ->where('metric', 'session.active.distinct')
+            ->where('period_kind', $kind)->sum('total');
+        $assert((int) $distinct === 3,
+            'unsafe fresh candidate-only event must visibly inflate distinct membership');
+    }
+    echo "Telemetry PG18 UNSAFE candidate-only fresh-session DAU/WAU/MAU overcount CONFIRMED; cutover BLOCKED\n";
 } else {
-    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify|coverage|lineage|rotation-preflight');
+    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify|coverage|lineage|rotation-preflight|shadow-init|shadow-old-worker|shadow-bridge-worker|shadow-verify');
 }
