@@ -5,6 +5,8 @@ on:
     paths:
       - 'apps/api/app/Storage/Placement/**'
       - 'apps/api/tests/Feature/StoragePlacement/**'
+      - 'apps/api/tests/integration/p4-placement-real-two-garage-233.php'
+      - 'scripts/p4-placement-provision-two-garage-233.sh'
       - '.github/workflows/p4-placement-readiness-233.yml'
       - 'docs/audits/P4-PLACEMENT-READINESS-233-20261114.md'
   push:
@@ -84,6 +86,12 @@ jobs:
       DB_DATABASE: pb3_placement_233
       DB_USERNAME: pb3_placement
       DB_PASSWORD: pb3_placement_disposable
+      PB3_PLACEMENT_REAL_GARAGE_CI: '1'
+      S3_REGION: garage
+      S3_ENDPOINT: http://127.0.0.1:3900
+      S3_BUCKET: pb3-placement-233-a
+      PB3_PLACEMENT_B_ENDPOINT: http://127.0.0.1:4900
+      PB3_PLACEMENT_B_BUCKET: pb3-placement-233-b
       SESSION_DRIVER: array
       CACHE_STORE: array
     steps:
@@ -114,6 +122,12 @@ jobs:
           composer validate --strict --no-check-publish --working-dir=apps/api
           composer audit --locked --no-interaction --working-dir=apps/api
           composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Provision two real independent, disposable Garage 2.5 instances
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/p4-placement-provision-two-garage-233.sh
+          echo "PB3_PLACEMENT_FIXTURE_PATH=$RUNNER_TEMP/pb3-placement-233-fixture.json" >> "$GITHUB_ENV"
       - name: Genuine PostgreSQL-owned location DB contract
         working-directory: apps/api
         run: |
@@ -126,3 +140,35 @@ jobs:
           grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.placement.pg.xml
           grep -q 'name="DB_DATABASE" value="pb3_placement_233"' phpunit.placement.pg.xml
           php vendor/bin/phpunit --configuration phpunit.placement.pg.xml --filter PlacementReadinessTest --do-not-cache-result
+      - name: Validate real Garage A/B physical ciphertext, corruption and missing target
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p4-placement-real-two-garage-233.php
+          php tests/integration/p4-placement-real-two-garage-233.php healthy
+      - name: Stop ONLY disposable Garage B, verify genuine outage with live Garage A
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker stop pb3-p4-233-garage-b >/dev/null
+          (cd apps/api && php tests/integration/p4-placement-real-two-garage-233.php offline)
+      - name: Restart Garage B, recover physical SHA-256 readback without switching
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker start pb3-p4-233-garage-b >/dev/null
+          ready=0
+          for attempt in $(seq 1 30); do
+            if docker exec pb3-p4-233-garage-b /garage status >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = 1
+          (cd apps/api && php tests/integration/p4-placement-real-two-garage-233.php recovered)
+      - name: Cleanup ONLY disposable Garage test instances
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f pb3-p4-233-garage-a pb3-p4-233-garage-b >/dev/null 2>&1 || true
