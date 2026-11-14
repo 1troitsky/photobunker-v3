@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Branding\ValidatedBrand;
 use App\Storage\AppS3Adapter;
 use App\Storage\StorageAdapter;
 use Illuminate\Http\Request;
@@ -19,6 +20,11 @@ final class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Fail closed on unsafe brand configuration before any HTTP routes, jobs
+        // or customer-facing responses can use unsanitized environment values.
+        // Does not enable signed-PWA releases or authorize production deployment.
+        ValidatedBrand::fromConfig();
+
         // A shared office/hotel NAT must never cause one legitimate account
         // to consume another account's technical request budget. The account
         // ID comes only from authenticated server-side Laravel session state,
