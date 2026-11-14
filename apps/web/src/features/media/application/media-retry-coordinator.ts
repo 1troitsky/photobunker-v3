@@ -55,6 +55,16 @@ export function attachMediaRetryCoordinator(): () => void {
         consecutivePending = 0
         return
       }
+      // Browser already mounts its own MediaFile lifecycle and exposes a
+      // manual upload/retry action. A second global trigger can turn a
+      // single injected lost ACK into an immediate second PUT, masking a
+      // genuine retry state and racing signed fault boundaries. Yield there;
+      // Camera and all other routes have no MediaImportPanel owner.
+      const path = typeof window === 'undefined' ? '' : window.location?.pathname ?? ''
+      if (path === '/browser' || path.startsWith('/browser/')) {
+        consecutivePending = 0
+        return
+      }
       const before = await listLocalMedia()
       if (disposed || activeSession.value !== session) return
       if (before.some(row => row.state === 'queued' || row.state === 'retry')) {
