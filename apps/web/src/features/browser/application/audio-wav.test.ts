@@ -1,5 +1,6 @@
-import {describe,it,expect} from 'vitest'
-import {audioClipName,encodePcm16Wav} from './audio-wav'
+import {afterEach,describe,it,expect,vi} from 'vitest'
+import {audioClipName,encodePcm16Wav,probeBoundedAudioDuration,MAX_AUDIO_DECODE_BYTES} from './audio-wav'
+afterEach(()=>vi.unstubAllGlobals())
 
 function pcm(samples:Float32Array[],rate=8000){
   const size=samples[0]?.length??0
@@ -62,4 +63,56 @@ describe('Viewer on-device WAV trim safety',()=>{
       expect(()=>audioClipName('recording.wav',a,b))
         .toThrow('viewer.audio_range_invalid')
   })
+
+  it('measures native WebM unknown/infinite metadata via bounded transient WebAudio decode',async()=>{
+    const close=vi.fn().mockResolvedValue(undefined)
+    const decode=vi.fn().mockResolvedValue(
+      pcm([new Float32Array(48_000*6)],48_000))
+    vi.stubGlobal('AudioContext',class {
+      decodeAudioData=decode
+      close=close
+    })
+    const data=new Blob([new Uint8Array(512)],{type:'audio/webm'})
+    expect(await probeBoundedAudioDuration(data)).toBe(6)
+    expect(decode).toHaveBeenCalledTimes(1)
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(data.type).toBe('audio/webm') // decoder never mutates source
+  })
+  it('rejects under/oversize audio input without constructing an AudioContext',async()=>{
+    const context=vi.fn()
+    vi.stubGlobal('AudioContext',context)
+    await expect(probeBoundedAudioDuration(new Blob([new Uint8Array(100)])))
+      .rejects.toThrow('viewer.audio_source_limit')
+    const fakeLarge=new Blob([new Uint8Array(128)])
+    Object.defineProperty(fakeLarge,'size',{value:MAX_AUDIO_DECODE_BYTES+1})
+    await expect(probeBoundedAudioDuration(fakeLarge))
+      .rejects.toThrow('viewer.audio_source_limit')
+    expect(context).not.toHaveBeenCalled()
+  })
+  it('refuses decoder overflow or unsupported PCM and closes audio resources',async()=>{
+    const close=vi.fn().mockResolvedValue(undefined)
+    const decode=vi.fn().mockResolvedValue({
+      sampleRate:48_000,numberOfChannels:2,length:24_000_001,
+    })
+    vi.stubGlobal('AudioContext',class {
+      decodeAudioData=decode
+      close=close
+    })
+    await expect(probeBoundedAudioDuration(
+      new Blob([new Uint8Array(512)])))
+      .rejects.toThrow('viewer.audio_decode_limit')
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+  it('closes AudioContext when browser codec decode throws, never returns invented duration',async()=>{
+    const close=vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('AudioContext',class {
+      decodeAudioData=vi.fn().mockRejectedValue(Error('test unsupported codec'))
+      close=close
+    })
+    await expect(probeBoundedAudioDuration(
+      new Blob([new Uint8Array(512)])))
+      .rejects.toThrow('test unsupported codec')
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
 })

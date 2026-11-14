@@ -4,8 +4,19 @@ import { RouterLink, useRoute } from 'vue-router'
 import { activeSession, type Session } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
 import { enqueueEncryptedMedia } from '../features/media/application/media-outbox'
+import {
+  appendEncryptedRecordingSegment,createEncryptedRecordingDraft,
+  deleteEncryptedRecordingDraft,interruptEncryptedRecordingDraft,
+  listEncryptedRecordingDrafts,purgeExpiredEncryptedRecordingDrafts,
+  readEncryptedRecordingForPrivateReview,recoverAbandonedEncryptedRecordingDraft,
+  readCompletedEncryptedRecording,sealEncryptedRecordingDraft,
+} from '../features/media/application/recording-encrypted-journal'
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
+import {acquireCameraWriterLease,type CameraWriterLease} from '../features/media/application/recording-writer-lease'
 import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
+import {assertRecordingDuration, recordingBounds, signedRecordingBudget} from '../features/media/domain/recording-limits'
+import {AUDIO_TARGET_BITRATES, DEFAULT_AUDIO_TARGET_BITRATE, recordingOptions} from '../features/media/domain/recording-options'
+import type {AudioTargetBitrate} from '../features/media/domain/recording-options'
 import { normalizeGPS, type GPSFix } from '../features/photo-sync/domain/capture-metadata'
 import { parseRulesCsv } from '../features/assignments/domain/advanced-rules'
 import {
@@ -43,6 +54,8 @@ const captureMode=ref<'photo'|'video'|'audio'>('photo')
 // Explicit migration path; legacy P1 photo remains the default until P2
 // camera/photo cross-account release is accepted by the product owner.
 const photoStorage=ref<'p1'|'p2'>('p1')
+// Device encoder target: the browser may choose a different effective bitrate.
+const audioTargetBitrate=ref<AudioTargetBitrate>(DEFAULT_AUDIO_TARGET_BITRATE)
 const currentMediaInstruction=computed(()=>{
   const value=visiblePrivateInstructions.value
   if(!canCaptureType.value||value?.version!==2)return ''
@@ -83,14 +96,127 @@ async function loadPrivateInstructions():Promise<void>{
     }
   }
 }
+type LocalRecordingDraft=Awaited<ReturnType<typeof listEncryptedRecordingDrafts>>[number]
+const localDrafts=ref<LocalRecordingDraft[]>([])
+const privateReviewUrl=ref<string|null>(null)
+const privateReviewKind=ref<'audio'|'video'|null>(null)
+const privateReviewId=ref<string|null>(null)
+const localDraftError=ref('')
+let privateReviewEpoch=0
+function closePrivateRecordingReview():void {
+  privateReviewEpoch++
+  const url=privateReviewUrl.value
+  privateReviewUrl.value=null
+  privateReviewKind.value=null
+  privateReviewId.value=null
+  if(url)URL.revokeObjectURL(url)
+}
+async function refreshLocalRecordingDrafts(pruneExpired=false):Promise<void>{
+  const identity=cameraIdentity(activeSession.value)
+  if(!identity){localDrafts.value=[];return}
+  try{
+    if(pruneExpired){
+      // Bounded, local-only GC per activation: at most 100 expired drafts.
+      // Each batch rechecks the active account/key and never touches MediaFile.
+      for(let batch=0;batch<4;batch++){
+        const purged=await purgeExpiredEncryptedRecordingDrafts(25)
+        if(purged<25)break
+      }
+    }
+    const found=await listEncryptedRecordingDrafts()
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value))){
+      // Active drafts may belong to an open recorder in another tab. Never
+      // expose an in-progress plaintext preview or provide a destructive UI.
+      localDrafts.value=found.filter(r=>r.state==='interrupted'||r.state==='complete'
+        ||(r.state==='writing'&&r.recoveryAvailable))
+      localDraftError.value=''
+    }
+  }catch{
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value))){
+      localDrafts.value=[]
+      localDraftError.value='camera.recording_draft_unavailable'
+    }
+  }
+}
+async function reviewPrivateRecordingDraft(id:string):Promise<void>{
+  if(recording.value||busy.value||!localDrafts.value.some(
+    row=>row.recordingId===id&&row.state!=='writing'))return
+  closePrivateRecordingReview()
+  const reviewEpoch=privateReviewEpoch
+  const identity=cameraIdentity(activeSession.value)
+  localDraftError.value=''
+  try{
+    const blob=await readEncryptedRecordingForPrivateReview(id)
+    if(disposed||reviewEpoch!==privateReviewEpoch
+      ||!sameIdentity(identity,cameraIdentity(activeSession.value)))return
+    const entry=localDrafts.value.find(row=>row.recordingId===id)
+    if(!entry||entry.state==='writing')return
+    const url=URL.createObjectURL(blob)
+    if(disposed||reviewEpoch!==privateReviewEpoch
+      ||!sameIdentity(identity,cameraIdentity(activeSession.value))){
+      URL.revokeObjectURL(url)
+      return
+    }
+    privateReviewKind.value=entry.kind
+    privateReviewUrl.value=url
+    privateReviewId.value=id
+  }catch{
+    if(!disposed&&reviewEpoch===privateReviewEpoch
+      &&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      localDraftError.value='camera.recording_review_unavailable'
+  }
+}
+async function checkAbandonedPrivateRecordingDraft(id:string):Promise<void>{
+  if(recording.value||busy.value||!localDrafts.value.some(
+    row=>row.recordingId===id&&row.state==='writing'&&row.recoveryAvailable))return
+  const identity=cameraIdentity(activeSession.value)
+  localDraftError.value=''
+  try{
+    await recoverAbandonedEncryptedRecordingDraft(id)
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      await refreshLocalRecordingDrafts()
+  }catch(e){
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      localDraftError.value=e instanceof Error?e.message:'camera.recording_recovery_unavailable'
+  }
+}
+async function removePrivateRecordingDraft(id:string):Promise<void>{
+  if(recording.value||busy.value||!localDrafts.value.some(
+    row=>row.recordingId===id&&row.state!=='writing'))return
+  if(!window.confirm('Удалить зашифрованные фрагменты этой записи с устройства?'))return
+  const identity=cameraIdentity(activeSession.value)
+  if(privateReviewId.value===id)closePrivateRecordingReview()
+  try{
+    await deleteEncryptedRecordingDraft(id)
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      await refreshLocalRecordingDrafts()
+  }catch{
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      localDraftError.value='camera.recording_delete_failed'
+  }
+}
 const recording=ref(false)
-const recordLimitMs=175000
+const recordingMaxSeconds=computed(()=>captureMode.value==='photo'?0
+  :recordingBounds(captureMode.value).maxMs/1000)
 const recorder=shallowRef<MediaRecorder|null>(null)
 const recordingStartedAt=ref<number|null>(null)
 let recordingTimer:ReturnType<typeof setTimeout>|null=null
-let recordingParts:Blob[]=[]
+// Keep only bounded, queued native chunks in RAM. All durable draft parts
+// are AEAD ciphertext before IndexedDB writes; never persist raw MediaRecorder blobs.
+const MAX_PENDING_CLEAR_BYTES=16*1024*1024
 let recordedSize=0
-let activeRecording:{saveOnStop:boolean}|null=null
+type RecordingTicket={
+  saveOnStop:boolean;startedMono:number;stoppedMono:number|null
+  finishedAt:number|null;draftId:string;writeTail:Promise<void>
+  nextIndex:number;pendingBytes:number;writeError:Error|null
+  writerLease:CameraWriterLease|null
+}
+let activeRecording:RecordingTicket|null=null
+let releaseRecordingTrackListeners:(()=>void)|null=null
+function detachRecordingTrackListeners():void {
+  releaseRecordingTrackListeners?.()
+  releaseRecordingTrackListeners=null
+}
 const canCaptureType=computed(()=>{
   const required=route.query.assignmentId
   if(typeof required==='string'&&required
@@ -184,13 +310,24 @@ function ownsCamera(identity:CameraIdentity,generation:number):boolean {
     &&sameIdentity(identity,cameraIdentity(activeSession.value))
 }
 function discardRecording():void {
+  detachRecordingTrackListeners()
+  const ticket=activeRecording
   const old=recorder.value
   recorder.value=null
   activeRecording=null
   recording.value=false
   recordingStartedAt.value=null
-  recordingParts=[]
   recordedSize=0
+  // Cancellation/revocation can never become an authorized signed MediaFile.
+  // Only already encrypted, successfully written parts remain as interrupted
+  // private scratch for later EXPLICIT salvage policy, not automatic playback.
+  if(ticket)void ticket.writeTail.then(async()=>{
+    try{await interruptEncryptedRecordingDraft(ticket.draftId)}catch{
+      // Lost identity/key/expiry must fail closed. Scratch is not published.
+    }
+    void refreshLocalRecordingDrafts()
+    ticket.writerLease?.release()
+  }).catch(()=>ticket.writerLease?.release())
   if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
   if(old&&old.state!=='inactive'){
     old.ondataavailable=null
@@ -217,18 +354,24 @@ async function startCamera():Promise<void> {
   if(starting.value||stream.value||disposed||!cameraWanted)return
   error.value=''
   if(!activeSession.value){error.value='Сначала создайте или восстановите аккаунт';return}
-  if(!navigator.mediaDevices?.getUserMedia){error.value='Браузер не поддерживает камеру';return}
+  if(!navigator.mediaDevices?.getUserMedia){
+    error.value=captureMode.value==='audio'
+      ?'Браузер не поддерживает доступ к микрофону':'Браузер не поддерживает камеру'
+    return
+  }
   starting.value=true
   const identity=cameraIdentity(activeSession.value),generation=cameraGeneration
+  const mode=captureMode.value
   let opened:MediaStream|null=null
   try{
-    const mode=captureMode.value
     opened=await navigator.mediaDevices.getUserMedia({
       audio:mode!=='photo',
       video:mode!=='audio'
         ?{facingMode:{ideal:'environment'},width:{ideal:1280}}:false,
     })
     await nextTick()
+    if(!opened.getTracks().length||opened.getTracks().some(track=>track.readyState!=='live'))
+      throw Error('camera.stream_ended')
     if(!cameraWanted||!ownsCamera(identity,generation)||!video.value){
       stopTracks(opened)
       return
@@ -248,7 +391,12 @@ async function startCamera():Promise<void> {
     if(stream.value===opened)releaseStream()
     if(ownsCamera(identity,generation)){
       cameraWanted=false // Denial/play errors require an explicit retry.
-      error.value=e instanceof Error?e.message:'camera.unavailable'
+      const errorName=e instanceof Error?e.name:''
+      if(mode==='audio'&&['NotAllowedError','PermissionDeniedError','SecurityError'].includes(errorName))
+        error.value='camera.microphone_permission_denied'
+      else if(mode==='audio'&&['NotFoundError','DevicesNotFoundError'].includes(errorName))
+        error.value='camera.microphone_unavailable'
+      else error.value=e instanceof Error?e.message:'camera.unavailable'
     }
   }finally{
     starting.value=false
@@ -385,6 +533,7 @@ async function beginRecording():Promise<void>{
       ||captureMode.value!==mode)throw Error('camera.identity_changed')
   }
   busy.value=true;error.value='';message.value=''
+  let acquiringLease:CameraWriterLease|null=null
   try{
     const required=route.query.assignmentId
     if(typeof required==='string'&&required&&selectedAssignment.value!==required)
@@ -413,23 +562,77 @@ async function beginRecording():Promise<void>{
     const mime=mediaMime(mode)
     const streamRef=stream.value
     if(!streamRef)throw Error('camera.stream_unavailable')
-    const worker=new MediaRecorder(streamRef,{mimeType:mime})
+    const tracks=streamRef.getTracks()
+    if(!tracks.length||tracks.some(track=>track.readyState!=='live'))
+      throw Error('camera.stream_ended')
+    const worker=new MediaRecorder(streamRef,recordingOptions(
+      mode,mime,audioTargetBitrate.value))
+    // Create account-key-wrapped journal BEFORE accepting media bytes. Any
+    // database/crypto failure refuses to start recording instead of leaving
+    // a long-running plaintext-only recording in volatile memory.
+    acquiringLease=await acquireCameraWriterLease(activeSession.value!.accountId)
+    assertOwner()
+    const draftId=await createEncryptedRecordingDraft(mode,mime,acquiringLease)
+    assertOwner()
     const token={identity,generation,mode,intent,startedAt,mime,
-      privateFields,saveOnStop:false}
+      privateFields,saveOnStop:false,startedMono:performance.now(),
+      stoppedMono:null as number|null,finishedAt:null as number|null,
+      draftId,writeTail:Promise.resolve(),nextIndex:0,pendingBytes:0,
+      writeError:null as Error|null,writerLease:acquiringLease}
     activeRecording=token
-    recordingParts=[]
+    // Transfer lock lifetime to the recording ticket. Always release only
+    // after pending AEAD writes and final E2EE enqueue or interrupt.
+    acquiringLease=null
     recordedSize=0
     recorder.value=worker
+    // Hardware revoke/interruption can end a track without a MediaRecorder.stop
+    // event. Fail closed immediately, never grant upload permission by timeout.
+    const onTrackEnded=()=>{
+      if(activeRecording!==token)return
+      error.value='camera.recording_interrupted'
+      closeCamera()
+    }
+    const listened:MediaStreamTrack[]=[]
+    for(const track of tracks){
+      if(typeof track.addEventListener==='function'){
+        track.addEventListener('ended',onTrackEnded)
+        listened.push(track)
+      }
+    }
+    releaseRecordingTrackListeners=()=>{
+      for(const track of listened)track.removeEventListener('ended',onTrackEnded)
+    }
+    if(tracks.some(track=>track.readyState!=='live')){
+      onTrackEnded()
+      return
+    }
     recording.value=true
     recordingStartedAt.value=startedAt
     worker.ondataavailable=event=>{
       if(activeRecording!==token||!event.data.size)return
-      recordingParts.push(event.data)
-      recordedSize+=event.data.size
-      if(recordedSize>MAX_MEDIA_BYTES){
+      const piece=event.data
+      recordedSize+=piece.size
+      if(recordedSize>MAX_MEDIA_BYTES||piece.size>8*1024*1024
+        ||token.pendingBytes+piece.size>MAX_PENDING_CLEAR_BYTES){
         error.value='media.invalid_size'
         closeCamera()
+        return
       }
+      const index=token.nextIndex++
+      token.pendingBytes+=piece.size
+      // Explicit single-writer ordering: MediaRecorder callbacks are sync
+      // but AES-GCM/IndexedDB are async. A failed commit must not skip an
+      // index or allow Stop to publish a partially encrypted recording.
+      token.writeTail=token.writeTail.then(async()=>{
+        if(token.writeError)return
+        await appendEncryptedRecordingSegment(token.draftId,index,piece)
+      }).catch(e=>{
+        token.writeError=e instanceof Error?e:Error('camera.recording_storage_failed')
+        if(activeRecording===token){
+          error.value='camera.recording_storage_failed'
+          closeCamera()
+        }
+      }).finally(()=>{token.pendingBytes-=piece.size})
     }
     worker.onerror=()=>{error.value='camera.recording_failed';closeCamera()}
     worker.onstop=()=>{
@@ -437,13 +640,18 @@ async function beginRecording():Promise<void>{
       // Automatic browser/permission interruption is never permission to
       // persist a partial recording. Only user Stop or the bounded timer
       // may turn this ephemeral MediaRecorder buffer into a new MediaFile.
-      if(!token.saveOnStop){closeCamera();return}
+      if(!token.saveOnStop||token.stoppedMono===null||token.finishedAt===null
+        ||tracks.some(track=>track.readyState!=='live')){
+        error.value='camera.recording_interrupted'
+        closeCamera();return
+      }
+      detachRecordingTrackListeners()
       if(recordingTimer!==null){clearTimeout(recordingTimer);recordingTimer=null}
-      const parts=recordingParts
-      recordingParts=[]
       recorder.value=null;recording.value=false;recordingStartedAt.value=null
       activeRecording=null
       const bytes=recordedSize;recordedSize=0
+      const finishedAt=token.finishedAt
+      const durationMs=token.stoppedMono-token.startedMono
       // MediaRecorder.stop() by itself does NOT release the hardware.
       // Release microphone and camera immediately before encryption; a
       // second recording requires the explicit "Включить камеру" action.
@@ -454,11 +662,13 @@ async function beginRecording():Promise<void>{
         cameraWanted=false
       }
       void (async()=>{
-        if(!ownsCamera(identity,generation)||contextGeneration!==captureContextGeneration
-          ||captureMode.value!==mode
-          ||(intent&&selectedAssignment.value!==intent.assignmentId))return
         busy.value=true
         try{
+          // Native final dataavailable may be encrypted AFTER onstop fires;
+          // await every ordered ciphertext commit before any signed enqueue.
+          await token.writeTail
+          if(token.writeError)throw token.writeError
+          assertOwner()
           if(bytes<128||bytes>MAX_MEDIA_BYTES)
             throw Error('media.invalid_size')
           // A formerly valid signed recording claim must not outlive a
@@ -466,19 +676,27 @@ async function beginRecording():Promise<void>{
           if(token.intent)
             await assertNoVerifiedAssignmentRemoval(token.intent.assignmentId)
           if(!ownsCamera(identity,generation))return
-          const finishedAt=Date.now()
-          if(finishedAt<=startedAt||finishedAt-startedAt>recordLimitMs+2000)
-            throw Error('camera.recording_duration_invalid')
+          if(finishedAt<=startedAt)throw Error('camera.recording_duration_invalid')
+          // Recheck sensitive consent before generic duration failures. A
+          // revoked GPS permission must remain a distinct fail-closed reason.
+          if(token.privateFields.gps&&await consentedGPS(
+            token.privateFields.gps,gpsAtStart,startedAt)!==token.privateFields.gps)
+            throw Error('camera.gps_consent_changed')
+          assertRecordingDuration(mode,durationMs)
+          await sealEncryptedRecordingDraft(token.draftId,durationMs)
+          assertOwner()
+          // Decrypted bytes only exist in RAM at explicit finalization.
+          // Existing MediaFile E2EE encrypts again before durable outbox.
+          const recorded=await readCompletedEncryptedRecording(token.draftId)
+          assertOwner()
+          if(recorded.size!==bytes)throw Error('camera.recording_size_mismatch')
           const suffix=mime.includes('webm')?'webm'
             :mime.includes('ogg')?'ogg':'mp4'
-          const file=new File(parts,
+          const file=new File([recorded],
             'recording-'+new Date(startedAt).toISOString()+'.'+suffix,
             {type:mime,lastModified:startedAt})
           const capture:MediaCaptureIntent|undefined=intent
             ?{...intent,finishedAt}:undefined
-          if(token.privateFields.gps&&await consentedGPS(
-            token.privateFields.gps,gpsAtStart,startedAt)!==token.privateFields.gps)
-            throw Error('camera.gps_consent_changed')
           const assertCurrent=()=>{
             assertOwner()
             if(intent&&selectedAssignment.value!==intent.assignmentId)
@@ -487,22 +705,39 @@ async function beginRecording():Promise<void>{
           }
           assertCurrent()
           const id=await enqueueEncryptedMedia(file,capture,token.privateFields,assertCurrent)
+          // Only after durable signed encrypted MediaFile exists may we GC
+          // the scratch ciphertext. A failed GC cannot invalidate success.
+          try{await deleteEncryptedRecordingDraft(token.draftId)}catch{}
+          void refreshLocalRecordingDrafts()
           if(!ownsCamera(identity,generation))return
           message.value='Запись зашифрована и сохранена локально: '+id.slice(0,8)
         }catch(e){
+          // No implicit publication of invalid or interrupted drafts.
+          try{await interruptEncryptedRecordingDraft(token.draftId)}catch{}
+          void refreshLocalRecordingDrafts()
           if(ownsCamera(identity,generation))
             error.value=e instanceof Error?e.message:'camera.media_failed'
-        }finally{busy.value=false}
+        }finally{
+          token.writerLease?.release()
+          busy.value=false
+        }
       })()
     }
+    // Signed intent was captured before async policy/GPS preflight. Reserve
+    // enough of its server-visible wall-clock window for both clocks to stay
+    // under the same 300s/3000s ceiling when the native max timer fires.
+    const stopBudgetMs=signedRecordingBudget(mode,startedAt,Date.now())
     worker.start(1000)
     recordingTimer=setTimeout(()=>{
       if(activeRecording===token&&worker.state==='recording'){
         token.saveOnStop=true
+        token.stoppedMono=performance.now()
+        token.finishedAt=Date.now()
         worker.stop()
       }
-    },recordLimitMs)
+    },stopBudgetMs)
   }catch(e){
+    acquiringLease?.release()
     discardRecording()
     if(ownsCamera(identity,generation))
       error.value=e instanceof Error?e.message:'camera.recording_failed'
@@ -511,7 +746,11 @@ async function beginRecording():Promise<void>{
 function endRecording():void{
   const worker=recorder.value
   if(worker&&worker.state==='recording'){
-    if(activeRecording)activeRecording.saveOnStop=true
+    if(activeRecording){
+      activeRecording.saveOnStop=true
+      activeRecording.stoppedMono=performance.now()
+      activeRecording.finishedAt=Date.now()
+    }
     worker.stop()
   }
 }
@@ -615,6 +854,8 @@ async function capture():Promise<void> {
 watch(activeSession,session=>{
   const identity=cameraIdentity(session)
   if(!sameIdentity(observedIdentity,identity)){
+    closePrivateRecordingReview()
+    localDrafts.value=[];localDraftError.value=''
     observedIdentity=identity;cameraGeneration++
     releaseStream()
     policies.value=[];selectedAssignment.value='';policyNotice.value=''
@@ -625,11 +866,16 @@ watch(activeSession,session=>{
     message.value='';error.value=''
   }
   if(!session)return
+  void refreshLocalRecordingDrafts(true)
   void refreshPolicies()
   void nextTick().then(startCamera)
 },{flush:'sync'})
 onMounted(()=>{
-  if(activeSession.value){void refreshPolicies();void nextTick().then(startCamera)}
+  if(activeSession.value){
+    void refreshLocalRecordingDrafts(true)
+    void refreshPolicies()
+    void nextTick().then(startCamera)
+  }
 })
 watch(selectedAssignment,()=>{
   captureContextGeneration++
@@ -644,6 +890,7 @@ watch(()=>route.query.assignmentId,()=>{
   void refreshPolicies()
 },{flush:'sync'})
 watch(captureMode,()=>{
+  closePrivateRecordingReview()
   closeCamera()
   if(!disposed&&activeSession.value){
     cameraWanted=true
@@ -651,6 +898,7 @@ watch(captureMode,()=>{
   }
 })
 onUnmounted(()=>{
+  closePrivateRecordingReview()
   disposed=true;++instructionGeneration;assignmentPrivate.value=null
   assignmentPrivateScope.value=''
   privateInstructionState.value='none';closeCamera()
@@ -674,6 +922,16 @@ onUnmounted(()=>{
           <option value="video">Видео</option>
           <option value="audio">Аудио</option>
         </select>
+        <template v-if="captureMode==='audio'">
+          <label for="camera-audio-bitrate">Целевой битрейт аудио</label>
+          <select id="camera-audio-bitrate" v-model.number="audioTargetBitrate"
+            :disabled="recording||busy" data-testid="camera-audio-bitrate">
+            <option v-for="rate in AUDIO_TARGET_BITRATES" :key="rate" :value="rate">
+              {{ rate/1000 }} кбит/с
+            </option>
+          </select>
+          <p class="muted">Это настройка кодировщика. Фактические качество и формат зависят от браузера.</p>
+        </template>
         <div v-if="captureMode==='photo'">
           <label for="camera-photo-storage">Сохранить фото в</label>
           <select id="camera-photo-storage" v-model="photoStorage"
@@ -771,7 +1029,9 @@ onUnmounted(()=>{
         Аудиозапись использует только микрофон. Видеопоток не запрашивается.
       </p>
       <div class="action-row">
-        <button type="button" :disabled="!!stream||starting" @click="openCamera">Включить камеру</button>
+        <button type="button" :disabled="!!stream||starting" @click="openCamera">
+          {{ captureMode==='audio'?'Включить микрофон':'Включить камеру' }}
+        </button>
         <button v-if="captureMode==='photo'" type="button"
           :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
           @click="capture">
@@ -789,9 +1049,46 @@ onUnmounted(()=>{
         </button>
       </div>
       <p v-if="recording" role="status" class="status-text" data-testid="camera-recording-status">
-        Идёт запись с {{ recordingStartedAt?new Date(recordingStartedAt).toLocaleTimeString():'' }}. Максимум 175 секунд и 128 MiB.
+        Идёт запись с {{ recordingStartedAt?new Date(recordingStartedAt).toLocaleTimeString():'' }}. От 5 до {{ recordingMaxSeconds }} секунд, не более 128 MiB.
       </p>
-      <p class="muted">В системную медиатеку запись не сохраняется. Сначала создаётся только зашифрованный файл в локальном хранилище. Во время MediaRecorder исходные части находятся в оперативной памяти браузера; закрытие страницы до шифрования приведёт к потере несохранённой записи.</p>
+      <p class="muted">В системную медиатеку запись не сохраняется. Полученные фрагменты последовательно шифруются в локальном хранилище. Ещё не зашифрованные части остаются только в оперативной памяти; закрытие страницы может привести к потере последних фрагментов.</p>
+      <section v-if="localDrafts.length" class="foundation-card"
+        data-testid="camera-encrypted-draft-recovery">
+        <h2>Сохранённые зашифрованные фрагменты</h2>
+        <p class="muted">После прерывания доступны только для приватного просмотра на этом устройстве. Частичный файл может не воспроизводиться из-за формата браузера. Ничего не отправляется в облако автоматически.</p>
+        <ul>
+          <li v-for="draft in localDrafts" :key="draft.recordingId"
+            :data-testid="'camera-encrypted-draft-'+draft.recordingId">
+            {{ draft.kind==='audio'?'Аудио':'Видео' }} ·
+            {{ draft.chunkCount }} фрагментов ·
+            {{ Math.ceil(draft.plainBytes/1024) }} КиБ ·
+            {{ draft.state==='writing'?'Возможна незавершённая запись в другой вкладке':draft.state==='interrupted'?'Прервана':'Не отправлена' }}
+            <div class="action-row">
+              <button v-if="draft.state==='writing'" type="button"
+                :disabled="recording||busy" @click="checkAbandonedPrivateRecordingDraft(draft.recordingId)">
+                Проверить прерванную запись
+              </button>
+              <button v-if="draft.state!=='writing'" type="button" :disabled="recording||busy"
+                @click="reviewPrivateRecordingDraft(draft.recordingId)">
+                Просмотреть локально
+              </button>
+              <button v-if="draft.state!=='writing'" type="button" :disabled="recording||busy"
+                @click="removePrivateRecordingDraft(draft.recordingId)">
+                Удалить фрагменты
+              </button>
+            </div>
+          </li>
+        </ul>
+        <div v-if="privateReviewUrl" data-testid="camera-private-draft-preview">
+          <audio v-if="privateReviewKind==='audio'" controls :src="privateReviewUrl"
+            aria-label="Приватный предпросмотр аудиофрагментов"/>
+          <video v-else controls playsinline :src="privateReviewUrl"
+            aria-label="Приватный предпросмотр видеофрагментов"/>
+          <button type="button" @click="closePrivateRecordingReview">Закрыть предпросмотр</button>
+        </div>
+      </section>
+      <p v-if="localDraftError" role="alert" class="error-text"
+        data-testid="camera-draft-error">{{ localDraftError }}</p>
     </template>
     <p v-if="message" role="status" class="status-text">{{ message }}</p>
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>

@@ -25,7 +25,8 @@ import {
 } from '../features/browser/application/personal-media-copy'
 import type {PersonalMediaCopyDraft} from '../features/browser/application/personal-media-copy'
 import {captureVideoStill,stillName} from '../features/browser/application/video-still'
-import {audioClipName,makeWavClip} from '../features/browser/application/audio-wav'
+import {exportRealVideoClip} from '../features/browser/application/video-clip-export'
+import {audioClipName,makeWavClip,probeBoundedAudioDuration} from '../features/browser/application/audio-wav'
 import {cropFileName,cropPhoto} from '../features/browser/application/photo-crop'
 import {describePhotoExportError}
   from '../features/browser/application/photo-export-budget'
@@ -205,6 +206,12 @@ const videoTrimHistory=ref<VideoTrimRange[]>([])
 const videoHistoryIndex=ref(0)
 const videoPreviewActive=ref(false)
 const videoTrimNotice=ref('')
+const videoClipBusy=ref(false)
+const videoClipError=ref('')
+const videoClipNotice=ref('')
+const videoClipSavedId=ref<string|null>(null)
+let videoClipEpoch=0
+let videoClipAbort:AbortController|null=null
 const videoSelectedLength=computed(()=>Math.max(0,videoTrimEnd.value-videoTrimStart.value))
 const videoRangeValid=computed(()=>videoDuration.value>0
   &&videoSelectedLength.value>=0.1
@@ -987,17 +994,53 @@ function clearAudioClip():void{
   audioClipNotice.value=''
   audioClipSavedId.value=null
 }
-function onAudioMetadata():void{
-  const duration=audioElement.value?.duration
-  if(!duration||!Number.isFinite(duration)||duration<=0)return
+let audioDurationProbeEpoch=0
+let audioDurationProbeSource:Blob|null=null
+let audioDurationProbeTask:Promise<number>|null=null
+function setAudioDuration(duration:number):void{
+  if(!Number.isFinite(duration)||duration<=0)return
   if(audioDuration.value>0){
-    // A repeated metadata event must not reset a range the user has edited.
+    // Repeated metadata events must not overwrite user-edited trim bounds.
     audioDuration.value=duration
     return
   }
   audioDuration.value=duration
   trimStart.value=0
   trimEnd.value=Math.min(duration,60)
+  audioClipError.value=''
+}
+function onAudioMetadata():void{
+  const duration=audioElement.value?.duration
+  if(duration&&Number.isFinite(duration)&&duration>0){
+    setAudioDuration(duration)
+    return
+  }
+  // Native MediaRecorder WebM/Opus commonly omits duration in the segment
+  // header; HTMLAudioElement reports Infinity although the samples are valid.
+  // Only a previously AUTHENTICATED, decrypted and bounded local Blob can be
+  // decoded in memory to establish editing duration. This does NOT change
+  // the source media, persist PCM, export to OS or bypass MediaFile ACL.
+  const session=activeSession.value,source=fileBlob.value,url=fileUrl.value
+  const epoch=fileEpoch
+  if(!session||!source||!url||preview.value?.type!=='audio'
+    ||audioDuration.value>0)return
+  const request=++audioDurationProbeEpoch
+  if(audioDurationProbeSource!==source||!audioDurationProbeTask){
+    audioDurationProbeSource=source
+    audioDurationProbeTask=probeBoundedAudioDuration(source)
+  }
+  void audioDurationProbeTask.then(decodedDuration=>{
+    if(request!==audioDurationProbeEpoch||!sameSession(session,epoch)
+      ||fileUrl.value!==url||fileBlob.value!==source
+      ||preview.value?.type!=='audio')return
+    setAudioDuration(decodedDuration)
+  }).catch(()=>{
+    if(request!==audioDurationProbeEpoch||!sameSession(session,epoch)
+      ||fileUrl.value!==url||fileBlob.value!==source
+      ||preview.value?.type!=='audio')return
+    audioClipError.value='Не удалось определить длительность аудио. '
+      +'Для локальной обрезки поддерживаются файлы до 32 МиБ с доступным кодеком.'
+  })
 }
 // Video Editor 1.1: in-memory edit decision list only. This never creates
 // MP4 ciphertext, replaces the source asset or asserts a server ACK.
@@ -1082,7 +1125,92 @@ function resetVideoSelection():void{
   videoApplied.value=null
   videoTrimNotice.value='Выбрано исходное видео без обрезки. Оригинал не изменён.'
 }
+/** Revokes transient encoder work on file/account/selection/editor changes. */
+function clearVideoClip():void{
+  ++videoClipEpoch
+  videoClipAbort?.abort()
+  videoClipAbort=null
+  videoClipBusy.value=false
+  videoClipError.value=''
+  videoClipNotice.value=''
+  videoClipSavedId.value=null
+}
+/**
+ * Generates a real new video derivative. This is a PERSONAL E2EE media file,
+ * never an in-place edit or inherited assignment grant/ACL/GPS/TTL.
+ * The original verified blob source and every trust/route boundary are
+ * rechecked before encryption, after encode, and during outbox persistence.
+ */
+async function saveVideoClipToBrowser():Promise<void>{
+  const session=activeSession.value,source=videoElement.value
+  const target=current.value,origin=fileUrl.value
+  const sourceName=preview.value?.name,originalEpoch=fileEpoch
+  if(!session||!source||!target||!origin||!sourceName
+    ||preview.value?.type!=='video'||!editorMode.value
+    ||!videoRangeValid.value||videoClipBusy.value
+    ||source.currentSrc!==origin)return
+  stopVideoPreview()
+  clearVideoClip()
+  const clipEpoch=videoClipEpoch
+  const controller=new AbortController()
+  videoClipAbort=controller
+  videoClipBusy.value=true
+  const startMs=Math.round(videoTrimStart.value*1000)
+  const endMs=Math.round(videoTrimEnd.value*1000)
+  const targetKey=viewerKey(target)
+  const assertAuthorized=()=>{
+    if(controller.signal.aborted||!sameSession(session,originalEpoch)
+      ||!editorMode.value||fileUrl.value!==origin
+      ||preview.value?.type!=='video'
+      ||!current.value||viewerKey(current.value)!==targetKey
+      ||source.currentSrc!==origin
+      ||Math.round(videoTrimStart.value*1000)!==startMs
+      ||Math.round(videoTrimEnd.value*1000)!==endMs)
+      throw Error('viewer.video_clip_auth_changed')
+  }
+  videoClipError.value=''
+  videoClipNotice.value='Создаём видеофрагмент локально…'
+  try{
+    const clip=await exportRealVideoClip({
+      source,sourceName,startMs,endMs,
+      signal:controller.signal,assertAuthorized,
+    })
+    assertAuthorized()
+    // Only the signed Local-First AES-GCM MediaFile outbox can persist it.
+    // No plaintext gallery/cache, OS download or automatic public share.
+    const id=await enqueueEncryptedMedia(
+      clip.file,undefined,{},assertAuthorized)
+    if(clipEpoch===videoClipEpoch&&sameSession(session,originalEpoch)){
+      videoClipSavedId.value=id
+      videoClipNotice.value='Видеофрагмент '+clip.mime
+        +' зашифрован и сохранён в локальной очереди Browser. '
+        +'Подтверждение облачной синхронизации отдельно.'
+      void refreshIndex()
+    }
+  }catch(error){
+    if(clipEpoch===videoClipEpoch&&sameSession(session,originalEpoch)){
+      const code=explain(error)
+      videoClipError.value=code==='viewer.video_clip_unsupported'
+        ?'Этот браузер не поддерживает создание клипа из видео. Оригинал не изменён.'
+        :code==='viewer.video_clip_timeout'
+        ?'Время создания клипа истекло. Оригинал не изменён.'
+        :code==='viewer.video_clip_too_large'
+        ?'Клип превышает допустимый размер 128 МиБ.'
+        :code==='viewer.video_clip_invalid_range'
+        ?'Выбран некорректный диапазон видео (не более 300 секунд).'
+        :'Не удалось создать видеоклип ('+code+'). Оригинал не изменён.'
+      videoClipNotice.value=''
+    }
+  }finally{
+    if(clipEpoch===videoClipEpoch&&sameSession(session,originalEpoch)){
+      videoClipBusy.value=false
+      videoClipAbort=null
+    }
+  }
+}
+
 function clearVideoTrim():void{
+  clearVideoClip()
   stopVideoPreview()
   videoDuration.value=0
   videoTrimStart.value=0;videoTrimEnd.value=0
@@ -1118,6 +1246,10 @@ function clearBlob():void{
   clearStill()
   clearVideoTrim()
   clearAudioClip()
+  // Invalidate in-flight local audio PCM decode on file/account/route change.
+  ++audioDurationProbeEpoch
+  audioDurationProbeSource=null
+  audioDurationProbeTask=null
   audioDuration.value=0
   trimStart.value=0
   trimEnd.value=0
@@ -1753,9 +1885,10 @@ const editorMediaUnsaved=computed(()=>{
       ||(audioDuration.value>0
         &&Math.abs(trimEnd.value-Math.min(audioDuration.value,60))>0.051))
   return (!stillSavedId.value&&(!!still.value||stillBusy.value))
-    ||!!videoApplied.value
-    ||(videoDuration.value>0&&(videoTrimStart.value>0.001
-      ||Math.abs(videoTrimEnd.value-videoDuration.value)>0.051))
+    ||videoClipBusy.value
+    ||(!videoClipSavedId.value&&(!!videoApplied.value
+      ||(videoDuration.value>0&&(videoTrimStart.value>0.001
+        ||Math.abs(videoTrimEnd.value-videoDuration.value)>0.051))))
 })
 // Never silently lose an edited metadata tab or save one half of a mixed
 // draft. Separate derivative save and metadata-copy save are intentional
@@ -1867,6 +2000,10 @@ watch([cropLeft,cropTop,cropWidth,cropHeight,cropTurns,cropAspectPreset,
 watch([trimStart,trimEnd],()=>{clearAudioClip()})
 watch([videoTrimStart,videoTrimEnd],()=>{
   if(videoPreviewActive.value)stopVideoPreview()
+  if(videoClipBusy.value||videoClipSavedId.value)clearVideoClip()
+})
+watch(editorMode,opened=>{
+  if(!opened&&videoClipBusy.value)clearVideoClip()
 })
 // The shared Shell exposes only a callable action. All media content,
 // filenames and permissions remain inside FileViewerView. The callback
@@ -2689,7 +2826,7 @@ onUnmounted(()=>{
         class="file-editor-video-trim" data-testid="file-editor-video-trim">
         <h2>Обрезка видео</h2>
         <p class="muted">Выберите начало и конец, затем просмотрите диапазон.
-          Границы сохраняются только в черновике: новый MP4 не создаётся.</p>
+          Границы в черновике сами не создают видео. По кнопке ниже браузер кодирует отдельный MP4 или WebM, затем шифрует его в локальном Browser.</p>
         <template v-if="videoDuration>0">
           <div class="file-editor-video-trim-controls">
             <label>Начало · {{ videoTrimStart.toFixed(1) }} с
@@ -2712,8 +2849,13 @@ onUnmounted(()=>{
               :disabled="!videoRangeValid||videoPreviewActive"
               @click="previewVideoSelection">Просмотреть фрагмент</button>
             <button type="button" data-testid="file-editor-video-apply"
-              :disabled="!videoRangeValid"
+              :disabled="!videoRangeValid||videoClipBusy"
               @click="applyVideoSelection">Применить обрезку</button>
+            <button type="button" data-testid="file-editor-video-save-clip"
+              :disabled="!videoRangeValid||videoClipBusy||videoPreviewActive||!activeSession"
+              @click="saveVideoClipToBrowser">
+              {{ videoClipBusy?'Кодируем и шифруем клип…':'Сохранить новый E2EE-клип в Browser' }}
+            </button>
             <button type="button" data-testid="file-editor-video-undo"
               :disabled="videoHistoryIndex===0"
               @click="travelVideoSelection(-1)">Undo</button>
@@ -2736,6 +2878,10 @@ onUnmounted(()=>{
         </p>
         <p v-if="videoTrimNotice" role="status"
           data-testid="file-editor-video-status">{{ videoTrimNotice }}</p>
+        <p v-if="videoClipNotice" role="status"
+          data-testid="file-editor-video-clip-status">{{ videoClipNotice }}</p>
+        <p v-if="videoClipError" role="alert"
+          data-testid="file-editor-video-clip-error">{{ videoClipError }}</p>
       </section>
       <section v-if="preview?.type==='video'&&fileUrl"
         class="file-viewer-still" data-testid="file-viewer-still">
