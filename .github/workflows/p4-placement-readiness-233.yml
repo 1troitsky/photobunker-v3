@@ -7,6 +7,7 @@ on:
       - 'apps/api/database/migrations/*placement*'
       - 'apps/api/tests/Feature/StoragePlacement/**'
       - 'apps/api/tests/integration/p4-placement-real-two-garage-233.php'
+      - 'apps/api/tests/integration/p4-placement-generation-pg-race-233.php'
       - 'scripts/p4-placement-provision-two-garage-233.sh'
       - '.github/workflows/p4-placement-readiness-233.yml'
       - 'docs/audits/P4-PLACEMENT-READINESS-233-20261114.md'
@@ -150,6 +151,12 @@ jobs:
           set -euo pipefail
           php -l tests/integration/p4-placement-real-two-garage-233.php
           php tests/integration/p4-placement-real-two-garage-233.php healthy
+      - name: Two actual PHP processes collide on PostgreSQL 18 candidate generation with real S3 readback
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p4-placement-generation-pg-race-233.php
+          php tests/integration/p4-placement-generation-pg-race-233.php
       - name: Stop ONLY disposable Garage B, verify genuine outage with live Garage A
         shell: bash
         run: |
