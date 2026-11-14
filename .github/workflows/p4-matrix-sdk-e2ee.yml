@@ -1,0 +1,95 @@
+name: P4 #388 REAL Matrix JS SDK E2EE two-Synapse (NOT PB3 product crypto)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/integration/p4-matrix-sdk-e2ee/**'
+      - '.github/workflows/p4-matrix-sdk-e2ee.yml'
+      - 'docs/audits/P4-MATRIX-SDK-E2EE-20261114-CHAT-Z.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-js-sdk-e2ee:
+    name: Actual two-Synapse JS SDK Megolm decrypt / outsider ACL
+    # Complement Crypto upstream pins ubuntu-22.04: Chromium's native sandbox
+    # fails on Ubuntu 26.04 AppArmor unprivileged user-namespace restrictions.
+    # Keep Chromium's sandbox ON; do NOT add --no-sandbox or weaken E2EE checks.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    env:
+      COMPLEMENT_BASE_IMAGE: homeserver
+      COMPLEMENT_ENABLE_DIRTY_RUNS: '1'
+      COMPLEMENT_CRYPTO_MITMDUMP: mitm.dump
+      COMPLEMENT_CRYPTO_TEST_CLIENT_MATRIX: jj
+      COMPLEMENT_SHARE_ENV_PREFIX: PASS_
+      PASS_SYNAPSE_COMPLEMENT_DATABASE: sqlite
+      TESTCONTAINERS_RYUK_DISABLED: 'true'
+      DOCKER_BUILDKIT: '1'
+    steps:
+      - name: Checkout PB3 acceptance source
+        uses: actions/checkout@v4
+
+      - name: Setup pinned Go toolchain
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.0'
+          cache: false
+
+      - name: Setup Node for official JS SDK
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Pin official Complement Crypto source and inject single PB3 test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet --filter=blob:none https://github.com/matrix-org/complement-crypto.git "$RUNNER_TEMP/pb3-complement-crypto"
+          git -C "$RUNNER_TEMP/pb3-complement-crypto" checkout --quiet --detach 38a76041346f64a384f569e090248ff947a1ecd3
+          test "$(git -C "$RUNNER_TEMP/pb3-complement-crypto" rev-parse HEAD)" = '38a76041346f64a384f569e090248ff947a1ecd3'
+          cp tests/integration/p4-matrix-sdk-e2ee/pb3_sdk_roundtrip_test.go "$RUNNER_TEMP/pb3-complement-crypto/tests/pb3_sdk_roundtrip_test.go"
+          test "$(grep -c 'func TestPB3RealFederatedJSDecryptRoundTrip(' "$RUNNER_TEMP/pb3-complement-crypto/tests/pb3_sdk_roundtrip_test.go")" -eq 1
+          echo 'Pinned Complement Crypto source; only new PB3 real SDK test added.'
+
+      - name: Pull real Synapse and network fault proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull ghcr.io/matrix-org/synapse-service:v1.117.0
+          docker pull mitmproxy/mitmproxy:10.1.5
+          docker tag ghcr.io/matrix-org/synapse-service:v1.117.0 homeserver:latest
+          docker image inspect ghcr.io/matrix-org/synapse-service:v1.117.0 --format '{{index .RepoDigests 0}}'
+          docker info --format 'Docker {{.ServerVersion}}'
+
+      - name: Install exact published Matrix JS SDK 41.0.0 and crypto runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/pb3-complement-crypto"
+          ./rebuild_js_sdk.sh matrix-js-sdk@41.0.0
+          test -f internal/api/js/chrome/dist/index.html
+
+      - name: Build actual JS RPC client
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/pb3-complement-crypto"
+          go build -tags=jssdk -o ./rpc ./cmd/rpc
+          test -x ./rpc
+
+      - name: Execute real two-Synapse SDK encryption/decryption (NO fake PASS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/pb3-complement-crypto"
+          export COMPLEMENT_CRYPTO_RPC_BINARY="$PWD/rpc"
+          go test -v -count=1 -p 2 -tags=jssdk -timeout 15m -run '^TestPB3RealFederatedJSDecryptRoundTrip$' ./tests
+
+      - name: Explicit bounded scope after real green test only
+        run: |
+          echo 'PASS: real disposable Synapse federation + JS SDK Megolm encrypt/decrypt canary both ways + authenticated outsider denial.'
+          echo 'NOT TESTED: actual PB3 Messenger/Key-Only Recovery, device trust, media E2EE, mobile, Panic, production BYO.'
