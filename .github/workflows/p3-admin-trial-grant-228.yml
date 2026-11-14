@@ -1,0 +1,155 @@
+name: P3 228 audited admin temporary grants
+on:
+  pull_request:
+    paths:
+      - 'apps/api/app/Administration/Grants/**'
+      - 'apps/api/app/Administration/Restrictions/**'
+      - 'apps/api/tests/Feature/Administration/Grants/**'
+      - 'apps/api/tests/Feature/Administration/Restrictions/**'
+      - 'apps/api/tests/integration/p3-admin-restriction-postgres-race.php'
+      - 'apps/api/tests/integration/p3-admin-audited-account-restriction-postgres-race.php'
+      - 'apps/api/tests/integration/p3-admin-restriction-admission-postgres-race.php'
+      - 'apps/api/database/migrations/2026_11_14_000228_create_admin_trial_grant_operations_v1.php'
+      - 'apps/api/database/migrations/2026_11_14_000229_create_admin_temporary_restrictions_v1.php'
+      - '.github/workflows/p3-admin-trial-grant-228.yml'
+      - 'docs/audits/P3-ADMIN-TRIAL-GRANTS-228-20261114.md'
+      - 'docs/audits/P3-ADMIN-228-AUTH-AUDIT-INTEGRATION-GATES-20261114.md'
+  workflow_dispatch:
+jobs:
+  grants:
+    name: Admin audited grants PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4','8.5']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, openssl, pdo_sqlite
+          coverage: none
+          tools: composer:v2
+      - name: Patch-version security floor
+        run: |
+          php -r 'if (!((PHP_VERSION_ID >= 80427 && PHP_VERSION_ID < 80500) || (PHP_VERSION_ID >= 80512 && PHP_VERSION_ID < 80600))) {fwrite(STDERR,"Unsafe PHP patch\n"); exit(1);}'
+      - name: Locked dependencies
+        working-directory: apps/api
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Narrow PHP lint
+        run: |
+          php -l apps/api/app/Administration/Grants/AdminTrialGrantExecutor.php
+          php -l apps/api/database/migrations/2026_11_14_000228_create_admin_trial_grant_operations_v1.php
+          php -l apps/api/tests/Feature/Administration/Grants/AdminTrialGrantExecutorTest.php
+          php -l apps/api/app/Administration/Restrictions/TemporaryRestrictionLedger.php
+          php -l apps/api/database/migrations/2026_11_14_000229_create_admin_temporary_restrictions_v1.php
+          php -l apps/api/tests/Feature/Administration/Restrictions/TemporaryRestrictionLedgerTest.php
+          php -l apps/api/app/Administration/Restrictions/AuditedAccountRestrictionExecutor.php
+          php -l apps/api/tests/Feature/Administration/Restrictions/AuditedAccountRestrictionExecutorTest.php
+          php -l apps/api/app/Administration/Restrictions/TransactionBoundRestrictionAdmission.php
+          php -l apps/api/tests/Feature/Administration/Restrictions/TransactionBoundRestrictionAdmissionTest.php
+      - name: Own true database-backed negative tests
+        working-directory: apps/api
+        run: php vendor/bin/phpunit tests/Feature/Administration/Grants tests/Feature/Administration/Restrictions
+      - name: Full PHP regression including #227 inherited audit and entitlement paths
+        working-directory: apps/api
+        run: php vendor/bin/phpunit
+      - name: Composer security audit (do not suppress inherited CVE)
+        working-directory: apps/api
+        run: composer audit --locked
+
+  postgres-real-races:
+    name: "PostgreSQL 18 real two-PHP-process audited grants"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_admin_trial_228_ci
+          POSTGRES_USER: pb3_admin_228_ci
+          POSTGRES_PASSWORD: pb3_admin_228_disposable_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb3_admin_228_ci -d pb3_admin_trial_228_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      APP_URL: https://localhost
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_admin_trial_228_ci
+      DB_USERNAME: pb3_admin_228_ci
+      DB_PASSWORD: pb3_admin_228_disposable_only
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      PB3_ADMIN_228_PG_RACE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          tools: composer:v2
+          coverage: none
+      - name: Refuse any environment other than isolated PostgreSQL18 in GitHub Actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          test "$GITHUB_ACTIONS" = "true"
+          test "$PB3_ADMIN_228_PG_RACE" = "1"
+          test "$APP_ENV" = "testing"
+          test "$DB_CONNECTION" = "pgsql"
+          test "$DB_HOST" = "127.0.0.1"
+          test "$DB_DATABASE" = "pb3_admin_trial_228_ci"
+          test "$DB_USERNAME" = "pb3_admin_228_ci"
+      - name: Assert current main's reviewed Composer lock, WITHOUT patching runner source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object apps/api/composer.lock)" = "c4bcae0458bd390b797186c3e2ccf536469588ef"
+          test -z "$(git status --porcelain)"
+      - name: Install securely patched dependencies and audit zero vulnerabilities
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          composer validate --no-check-publish --strict
+          composer audit --locked --no-interaction
+      - name: Migrate disposable PostgreSQL 18 only
+        working-directory: apps/api
+        run: php artisan migrate --force --no-interaction
+      - name: Real PostgreSQL18 temporary account/device restriction integration
+        working-directory: apps/api
+        run: php vendor/bin/phpunit tests/Feature/Administration/Restrictions/TemporaryRestrictionLedgerTest.php
+      - name: Run REAL 4 independent-PHP concurrent PG18 billing+admin races
+        working-directory: apps/api
+        run: |
+          php -l tests/integration/p3-admin-trial-postgres-race.php
+          php tests/integration/p3-admin-trial-postgres-race.php
+      - name: Run REAL 7 two-PHP-process restriction, release, MFA and CAS races
+        working-directory: apps/api
+        run: |
+          php -l tests/integration/p3-admin-restriction-postgres-race.php
+          php tests/integration/p3-admin-restriction-postgres-race.php
+      - name: Run REAL five globally audited cross-action two-PHP PG18 races
+        working-directory: apps/api
+        run: |
+          php -l tests/integration/p3-admin-audited-account-restriction-postgres-race.php
+          php tests/integration/p3-admin-audited-account-restriction-postgres-race.php
+      - name: Run REAL two-PHP PG18 transaction-bound admission vs admin restriction races
+        working-directory: apps/api
+        run: |
+          php -l tests/integration/p3-admin-restriction-admission-postgres-race.php
+          php tests/integration/p3-admin-restriction-admission-postgres-race.php
+      - name: Declare narrow scope only
+        run: |
+          echo "Real PG18 two-process internal grant and restriction races, NOT public admin auth, MFA identity/session, mounted bans, cryptographic device revoke or deployment"
+
