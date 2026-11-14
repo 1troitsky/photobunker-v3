@@ -76,3 +76,24 @@ Keep #229 `in-progress`, PR Draft, CLAIM active. On owner continuation: reread #
 
 ### Important: activation is not policy approval
 The environment gate is merely an operator acknowledgement; **it is NOT real per-user consent management, actual legal approval, or proof of privacy-policy compliance**. Owner approval for retention, consent/sampling, secret rotation and authenticated admin access #227 is still **OPEN**. Do not enable on production user data just because the CLI supports execution. There is no cron/schedule binding, event hook, public endpoint or dashboard. Unbounded high-volume automated ingestion, persistent progress under sustained backlog, monitoring, source integrity and complete analytics remain NOT TESTED/NOT IMPLEMENTED. No deployment/merge/main changes permitted.
+
+
+---
+
+## 2026-11-14 fourth acceptance — internal real UTC aggregate reader (no admin API)
+
+**Product code SHA** `8a3b78ee87efb021c625cc519e0972b480a57de3`. Own [#229 source/reader CLAIM addendum #6869732931](https://github.com/1troitsky/photobunker-v3/issues/229#issuecomment-6869732931), shared coordination [START #6869726332](https://github.com/1troitsky/photobunker-v3/issues/302#issuecomment-6869726332). This only adds two NEW owner files and modifies two existing owner test/CI files; no foreign #227 Admin, #198 Notifications, auth/bootstrap/routes, existing durable telemetry writer or production schedule changes.
+
+### Internal implementation and privacy boundaries
+- NEW `apps/api/app/Telemetry/InternalAggregateReader.php` verifies *real* persisted `telemetry_counters` with one bounded read-only SQL query per metric/window. Only strict allowlisted aggregate metric names, `day`/ISO `week`/`month`, exact canonical UTC `YYYY-MM-DD` / `YYYY-Www` / `YYYY-MM`, inclusive bounded windows (31 days / 13 weeks / 12 months). ISO rollover correctly treats 2025-12-31 as 2026-W01. Reject malformed periods, wildcard/injection attempts, incorrect ISO week 53, inverted/overwide windows and corrupt/negative/overflowed numeric aggregates.
+- Output is only `metric`, `periodKind`, `from`, `to`, `sourceCoverage: not_proven`, `points: [{period,count}]`. **Missing periods remain absent, not invented as zero**. This read is NOT proof of complete source ingestion; no fake completeness claim.
+- Does not access or return pseudonymous `telemetry_active_tokens`, `telemetry_event_receipts`, identity ledgers, metadata, plaintext, raw source operation/user IDs, HMAC key or GPS. The aggregate totals themselves can expose small-cohort activity: **not authorized for end-user exposure or admin export** until actual MFA/RBAC and privacy policy, k/outlier protection and retention decisions are approved.
+- No controller, route, Blade/Vue/dashboard, session/permission handling, command or background task mounts this class. It is an inert internal reader intended for security-reviewed downstream Admin wiring. Existing default-OFF operator replay remains default OFF.
+
+### Exact code SHA CI and real PostgreSQL evidence
+- [PG18 workflow #43543449622](https://github.com/1troitsky/photobunker-v3/actions/runs/43543449622): 2/2 matrix PHP jobs PASS. PHP **8.4.27** full PHPUnit **258/258 tests, 3,795 assertions**; PHP **8.5.12** full PHPUnit **258/258 tests, 3,795 assertions**. New focused reader **3/3, 33 assertions** each; earlier sink focused **3/3, 37 assertions** each. Composer locked Audit **0 advisories**.
+- Each PHP job on disposable PostgreSQL 18: independent two-PHP-process HMAC receipt race **PASS**; independent two-PHP-process genuine assignment ledger replay **PASS**; new explicit real database reads on actual `assignment.created` UTC day and ISO week counters **PASS**; unknown `backup.verified` empty source remains `[]`, reader marks `sourceCoverage: not_proven`; denied/explicitly enabled operator-only CLI **PASS**.
+- [Security floor #43543449684](https://github.com/1troitsky/photobunker-v3/actions/runs/43543449684) PASS. [UX guard #43543449630](https://github.com/1troitsky/photobunker-v3/actions/runs/43543449630) PASS. **3/3 workflows, 4/4 jobs PASS on exact source SHA**. No failures to conceal at this phase.
+
+### Product acceptance remains OPEN
+`#229` is OPEN / in-progress, Draft [PR #317](https://github.com/1troitsky/photobunker-v3/pull/317) NOT merged. This is a DB-backed reader with genuine tested counters, **not an accepted/admin-authorized analytics API or live Dashboard**. No activation or production export. Blockers: owner-approved consent/opt-in/sampling/outlier policy, source coverage proofs, counter retention/key rotation, #227 real MFA/RBAC auth and access audit, stable secured API/UI, multi-metric production provenance, actual devices and operational review. No main or foreign work changed.
