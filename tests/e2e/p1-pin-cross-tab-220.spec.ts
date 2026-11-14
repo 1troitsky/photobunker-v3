@@ -144,6 +144,22 @@ test('P3-220: live tab blocks PIN seal; cooperative closure allows guarded PIN +
     },accountId)
     expect(legacyBypass).toBe(false)
 
+    // Real browser tab background/foreground: an already PIN-unlocked
+    // account must immediately clear local activeSession and show the
+    // fullscreen PIN Shell (default Immediately). No server logout/wipe.
+    await second.bringToFront()
+    await first.bringToFront()
+    await expect(first.getByRole('heading',{name:'Введите PIN'}))
+      .toBeVisible({timeout:15_000})
+    await expect(first.locator('.shell-header')).toHaveCount(0)
+    await expect(first.locator('.shell-main')).toHaveCount(0)
+    await expect(first.locator('.shell-dock')).toHaveCount(0)
+    expect(await first.evaluate(async()=>{
+      const session=await import('/src/features/identity/application/session.ts')
+      return session.activeSession.value===null &&
+        session.pendingPinUnlock.value!==null
+    })).toBe(true)
+
     await first.reload()
     await expect(first.getByRole('heading',{name:'Введите PIN'}))
       .toBeVisible({timeout:25_000})
