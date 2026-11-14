@@ -104,6 +104,7 @@ final class ReplicaReadPreflight
                 ->where('a.status','ready')->first([
                     'p.id as parent_id','p.state as parent_state',
                     'p.expires_at','p.updated_at as parent_updated_at',
+                    'a.revision as account_revision',
                     'o.state as asset_state','o.sha256','o.bytes',
                     'o.updated_at as asset_updated_at',
                 ])
@@ -114,6 +115,7 @@ final class ReplicaReadPreflight
                 ->where('a.status','ready')->first([
                     'm.id as parent_id','m.state as parent_state',
                     'm.expires_at','m.updated_at as parent_updated_at',
+                    'a.revision as account_revision',
                     'c.state as asset_state','c.sha256','c.bytes',
                     'c.updated_at as asset_updated_at',
                 ]);
@@ -162,6 +164,9 @@ final class ReplicaReadPreflight
         $parts=[
             (string)$row->parent_id,(string)$row->parent_state,
             (string)$row->expires_at,(string)$row->parent_updated_at,
+            // Rotation/recovery may preserve READY yet increment the identity revision.
+            // Bypass by changing account revision mid-S3 read is forbidden.
+            (string)$row->account_revision,
             (string)$row->asset_state,(string)$row->asset_updated_at,
             $sha,(string)$bytes,
         ];
