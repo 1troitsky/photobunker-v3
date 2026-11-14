@@ -123,7 +123,7 @@ final class MediaIndexRealPostgres382Test extends TestCase
     }
 
     /** Bounded SQL batches: the fixture is on real PostgreSQL, not memory mocks. */
-    private function seed(): void
+    private function seedIndexRows(): void
     {
         $batch = [];
         for ($n = 1; $n <= 10_055; $n++) {
@@ -152,7 +152,7 @@ final class MediaIndexRealPostgres382Test extends TestCase
 
     public function test_real_pg18_large_owner_index_and_interpage_mutations(): void
     {
-        $this->seed();
+        $this->seedIndexRows();
         self::assertSame(10_134, DB::table('media_files_v1')->count());
         $this->login($this->owner, $this->ownerDevice);
 
