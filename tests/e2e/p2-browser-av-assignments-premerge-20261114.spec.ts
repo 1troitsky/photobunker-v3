@@ -11,24 +11,41 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
   const contributorCtx=await browser.newContext()
   const A=await ownerCtx.newPage()
   const B=await contributorCtx.newPage()
-  async function enroll(page:typeof A):Promise<string>{
+  // Hard navigation remounts the app before asynchronous device unseal and
+  // the genuine signed login proof finish. Never treat page.goto as proof.
+  async function waitForVerifiedResume(
+    page:typeof A,expected:{accountId:string;deviceId:string},
+  ):Promise<void>{
+    await expect.poll(()=>page.evaluate(async wanted=>{
+      const {activeSession}=await import('/src/features/identity/application/session.ts')
+      const current=activeSession.value
+      if(current&&(current.accountId!==wanted.accountId
+        ||current.deviceId!==wanted.deviceId))throw Error('qa.unexpected_identity')
+      return current?.online===true
+    },expected),{timeout:30_000}).toBe(true)
+  }
+  async function enroll(page:typeof A):Promise<{accountId:string;deviceId:string}>{
     await page.goto('/settings')
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
-    const accountId=await page.evaluate(async()=>{
+    const device=await page.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
-      return identity.requireSession().accountId
+      const session=identity.requireSession()
+      return {accountId:session.accountId,deviceId:session.deviceId}
     })
     await page.goto('/browser')
+    await waitForVerifiedResume(page,device)
     await expect(page.getByText('Ключ обмена подготовлен'))
       .toBeVisible({timeout:20_000})
-    return accountId
+    return device
   }
   try{
-    const ownerId=await enroll(A)
-    const recipientId=await enroll(B)
+    const owner=await enroll(A)
+    const contributor=await enroll(B)
+    const ownerId=owner.accountId
+    const recipientId=contributor.accountId
     // The contributor starts with two genuinely encrypted, server-synced
     // private MediaFiles. No team role grants access to either DEK.
     const uploader=B.locator('.media-import-p1')
@@ -53,6 +70,7 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
     }),{timeout:30_000}).toBe(2)
 
     await A.goto('/assignments')
+    await waitForVerifiedResume(A,owner)
     await A.getByRole('button',{name:'Создать задание'}).click()
     await A.locator('#assignment-title').fill('P2 integrated signed AV handoff')
     await A.locator('#assignment-instructions').fill('Private encrypted owner briefing')
