@@ -149,8 +149,14 @@ jobs:
           php vendor/bin/phpunit --configuration phpunit.pg-222.xml tests/Feature/RemoteWipe/SignedDeferredCommandTest.php
       - name: Prove 3 real two-independent-PHP-process PostgreSQL18 lock races
         working-directory: apps/api
+        shell: bash
         run: |
+          set -euo pipefail
           php -l tests/integration/p3-remote-wipe-postgres-race.php
-          php tests/integration/p3-remote-wipe-postgres-race.php
+          php tests/integration/p3-remote-wipe-postgres-race.php 2>&1 | tee /tmp/pb3-remote-222-race-proof.log
+          # Laravel may swallow an uncaught CLI exception after logging it.
+          # Exit code alone was a FALSE PASS in prior #43544178410; require
+          # a precise final sentinel emitted only after all three races.
+          grep -Fqx '#222 PG18 COMPLETE: 3/3 proven two-process races, 3 pending commands, no live wipe' /tmp/pb3-remote-222-race-proof.log
       - name: Explicit scope
         run: echo "Real disposable PostgreSQL18 single-process features and independently observed two-PHP-process lock races only; NO physical wipe."
