@@ -26,3 +26,9 @@ NARROW owned descendant modifications to `apps/web/src/router.ts`, `apps/web/src
 4. Original upstream/current-main unchanged. No merge/deploy without explicit owner authorization.
 
 **Pending exact-head CI:** do not label review until all checks PASS. Real OS Safari/iPhone/Android, cold-offline PWA, actual Recovery Vault, BYO Multi-S3, payment and push remain BLOCKED/NOT TESTED.
+
+## Initial exact-head CI failure and narrow test-contract correction
+
+Initial exact code HEAD `670aaa33ebfb3c678cf7309739eaba5d17ed2175`: Foundation, Security, UX, checkout, Grace, Backup limits **6/7 SUCCESS**; real PostgreSQL18/Garage2.5/Chromium [run #43612084620](https://github.com/1troitsky/photobunker-v3/actions/runs/43612084620) **FAIL 96/97**. Full decoded original Playwright output: ONLY `tests/e2e/p2-settings-hub-identity-safe.spec.ts:26` expected the old **disabled** `settings-pending-data-storage` label; that no longer exists because this PR correctly enables the actual Data & Storage route. The genuinely new `p2-settings-data-storage-chat-ad.spec.ts` passed in 96. No camera, storage, identity, crypto or server failure found in this run; PG18 quota races and Garage real stop/restart/recovery also PASS.
+
+Under amended exclusive [#165 CLAIM #6880168892](https://github.com/1troitsky/photobunker-v3/issues/165#issuecomment-6880168892), preserve the full original UX Key-Only/Contacts assertions; replace ONLY this obsolete disabled-entry assertion with a stricter requirement that `settings-nav-data-storage` points to the live `/settings/storage` route. All existing E2E assertions remain. Require **entire exact-head full CI rerun**, no skips/retry-for-green.
