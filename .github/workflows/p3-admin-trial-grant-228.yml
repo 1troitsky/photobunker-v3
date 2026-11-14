@@ -181,12 +181,12 @@ jobs:
           # than copying the lock into the old branch and claiming security.
           git -c user.name='PB3 Compatibility CI' -c user.email='ci-only@localhost' \
             merge --no-commit --no-ff "$MAIN_PIN"
-          EXPECTED="$(printf '%s\\n' \
+          EXPECTED="$(printf '%s\n' \
             'apps/api/composer.lock' \
             'docs/audits/P0-LARAVEL-CVE-2026-128083-297.md')"
           ACTUAL="$(git diff --cached --name-only)"
           test "$ACTUAL" = "$EXPECTED" || {
-            printf 'Unexpected merged paths:\\n%s\\n' "$ACTUAL" >&2
+            printf 'Unexpected merged paths:\n%s\n' "$ACTUAL" >&2
             exit 1
           }
           test "$(git hash-object apps/api/composer.lock)" = "$PATCHED_LOCK_BLOB"
