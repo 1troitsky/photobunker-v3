@@ -50,6 +50,7 @@ final class CiphertextReplicaCoordinator
     ): array {
         self::validateRequest($trustedAccountId,$kind,$logicalId,
             $sourceLocationId,$targetLocationId,$idempotencyKey);
+        $serverNow=self::freshNow($serverNow);
         $keyHash = hash('sha256',$idempotencyKey);
         return DB::transaction(function () use (
             $trustedAccountId,$kind,$logicalId,$sourceLocationId,
@@ -122,6 +123,7 @@ final class CiphertextReplicaCoordinator
         if (!Str::isUuid($jobId)) {
             throw new RuntimeException('replication.invalid_job_id');
         }
+        $now=self::freshNow($now);
         $lease=$this->claim($jobId,$now);
         if ($lease===null) {
             return $this->jobStatus($jobId);
@@ -164,12 +166,13 @@ final class CiphertextReplicaCoordinator
             // source/target object keys under the trusted account lock.
             // The existing StorageManager does NOT acquire this lock yet:
             // full live write fencing remains a later, blocked integration.
-            return $this->confirm($jobId,$lease['token'],$ctx,$now);
+            return $this->confirm($jobId,$lease['token'],$ctx,
+                self::freshNow($now));
         } catch (Throwable) {
             // Do not log S3 endpoint, object key, provider error or secret.
             // A remote PUT may have succeeded; the next attempt will
             // independently hash the destination and skip a repeated PUT.
-            return $this->retry($jobId,$lease['token'],$now);
+            return $this->retry($jobId,$lease['token'],self::freshNow($now));
         } finally {
             if (is_resource($tmp)) fclose($tmp);
         }
@@ -468,13 +471,27 @@ final class CiphertextReplicaCoordinator
         return DB::transaction(function () use ($id,$token,$now): array {
             $initial=DB::table(self::TABLE)->where('id',$id)->first();
             if ($initial===null) throw new RuntimeException('replication.not_found');
-            $this->lockReadyAccount((string)$initial->account_id);
+            // An account can be revoked WHILE ciphertext is being streamed.
+            // A stale worker must never leave a permanent positive ACK.
+            // We still hold the account mutex to persist a safe terminal
+            // sidecar cancellation, never to authorize further uploads.
+            $account=DB::table('identity_accounts')
+                ->where('id',(string)$initial->account_id)
+                ->lockForUpdate()->first();
             $job=DB::table(self::TABLE)->where('id',$id)
                 ->lockForUpdate()->first();
             if ($job===null || $job->state!=='leased'
                 || !hash_equals((string)$job->lease_sha256,hash('sha256',$token))) {
                 // Late failure from an old worker MUST NOT roll back a
                 // newer successful ACK or another worker's lease.
+                return $this->jobStatus($id);
+            }
+            if ($account===null || $account->status!=='ready') {
+                DB::table(self::TABLE)->where('id',$id)->update([
+                    'state'=>'cancelled','lease_sha256'=>null,
+                    'lease_until'=>null,'failure_class'=>'account_revoked',
+                    'updated_at'=>$now->utc(),
+                ]);
                 return $this->jobStatus($id);
             }
             $delay=min(self::RETRY_MAX_SECONDS,
@@ -487,6 +504,18 @@ final class CiphertextReplicaCoordinator
             ]);
             return $this->jobStatus($id);
         },3);
+    }
+
+    /**
+     * Prevent a slow S3 transfer from using the timestamp at which it
+     * STARTED as proof that TTL/lease is still valid after the remote IO.
+     * Callers already supply trusted server time; real UTC may only move
+     * this check forward, never back in time.
+     */
+    private static function freshNow(CarbonImmutable $requested): CarbonImmutable
+    {
+        $actual=CarbonImmutable::now('UTC');
+        return $actual->greaterThan($requested)?$actual:$requested;
     }
 
     private static function locationFingerprint(object $loc): string
