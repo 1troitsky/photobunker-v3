@@ -217,6 +217,12 @@ final class PlacementReadiness
             'targetLocationId' => $targetId,
             'sourceProvider' => (string)$source->provider,
             'targetProvider' => (string)$target->provider,
+            // Internal non-authenticating metadata witnesses. The candidate
+            // ledger must compare these AGAIN after its account row lock.
+            // A SHA-256 fingerprint is not an HMAC or signed provider receipt.
+            'sourceLocationFingerprint' => self::locationFingerprint($source),
+            'targetLocationFingerprint' => self::locationFingerprint($target),
+            'assetUpdatedAt' => (string)$record->asset_updated_at,
             'sourceCredentialRevision' => $sourceTransport['credentialRevision'],
             'targetCredentialRevision' => $targetTransport['credentialRevision'],
             'ciphertextBytes' => $expectedBytes,
@@ -342,6 +348,27 @@ final class PlacementReadiness
                 fclose($stream);
             }
         }
+    }
+
+    /**
+     * Canonical location metadata witness. Does not sign or authorize.
+     *
+     * Only useful for detecting a database location/object-key swap between
+     * a physical ciphertext readback and an account-locked candidate write.
+     * In particular, do not treat the SHA as a provider receipt, MAC,
+     * independent trust anchor or durable switching permit.
+     */
+    public static function locationFingerprint(object $location): string
+    {
+        return hash('sha256',json_encode([
+            'id'=>(string)$location->id,
+            'provider'=>(string)$location->provider,
+            'objectKey'=>(string)$location->object_key,
+            'sha256'=>(string)$location->sha256,
+            'bytes'=>(int)$location->bytes,
+            'state'=>(string)$location->state,
+            'updatedAt'=>(string)$location->updated_at,
+        ],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR));
     }
 
     private static function uuid(string $value): void
