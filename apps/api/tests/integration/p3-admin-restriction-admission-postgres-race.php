@@ -274,9 +274,10 @@ mustPass($r1['owner']['state']==='internal_trusted_database_write'
     && $r1['contender']['outcome']==='allowed'
     && $r1['contender']['state']==='internal_audited_account_restriction_recorded',
     'user SQL commits before queued admin restriction');
-mustPass(DB::table('identity_devices')->where('id',$d1)
-    ->value('updated_at')===CarbonImmutable::parse($f1['writeAt'],'UTC')->format('Y-m-d H:i:s'),
-    'protected DB mutation persisted prior to restriction');
+$storedWrite = DB::table('identity_devices')->where('id',$d1)->value('updated_at');
+mustPass($storedWrite !== null && CarbonImmutable::parse((string)$storedWrite,'UTC')
+    ->getTimestamp()===CarbonImmutable::parse($f1['writeAt'],'UTC')->getTimestamp(),
+    'protected DB mutation persisted prior to restriction (instant, not timezone rendering)');
 mustPass(DB::table('admin_audit_records_v1')->where('operation_id',$f1['operationId'])
     ->count()===1 && DB::table('admin_temporary_restriction_events_v1')
     ->where('operation_id',$f1['operationId'])->count()===1,
