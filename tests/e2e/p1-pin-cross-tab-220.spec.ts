@@ -148,7 +148,17 @@ test('P3-220: live tab blocks PIN seal; cooperative closure allows guarded PIN +
     // account must immediately clear local activeSession and show the
     // fullscreen PIN Shell (default Immediately). No server logout/wipe.
     await second.bringToFront()
+    const actuallyHidden=await first.evaluate(
+      ()=>document.visibilityState==='hidden',
+    )
     await first.bringToFront()
+    // Headless Chromium can keep both pages visible when bringToFront()
+    // changes activation rather than visibility. In that case exercise
+    // the real pagehide listener explicitly in the real browser context.
+    // The synthetic event is NOT a native iOS/Android background test.
+    if(!actuallyHidden){
+      await first.evaluate(()=>window.dispatchEvent(new Event('pagehide')))
+    }
     await expect(first.getByRole('heading',{name:'Введите PIN'}))
       .toBeVisible({timeout:15_000})
     await expect(first.locator('.shell-header')).toHaveCount(0)
