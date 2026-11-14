@@ -149,7 +149,7 @@ jobs:
           for marker in '1/7 PASS' '2/7 PASS' '3/7 PASS' '4/7 PASS'; do
             grep -Fq "P4 #235 REAL GARAGE $marker:" "$RUNNER_TEMP/p4-failover-healthy.txt"
           done
-      - name: Real Garage GET: distinct OS PHP/PG18 revisions, delete race and two-commit ABA proof
+      - name: 'Real Garage GET — distinct OS PHP/PG18 revisions, delete race and two-commit ABA proof'
         working-directory: apps/api
         run: |
           set -euo pipefail
