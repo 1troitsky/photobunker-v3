@@ -503,6 +503,15 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     fakeWindow.dispatchEvent(new Event('focus'))
     expect(activeSession.value).toBeNull()
     expect(pendingPinUnlock.value).not.toBeNull()
+
+    // An asynchronous PIN/PBKDF2 admission started BEFORE background must
+    // not activate an account when it finishes AFTER the blur event.
+    const oldNonce=pendingPinUnlock.value!.sessionNonce
+    const inFlight=unlockPinnedDevice('4826')
+    fakeWindow.dispatchEvent(new Event('blur'))
+    expect(pendingPinUnlock.value!.sessionNonce).not.toBe(oldNonce)
+    await expect(inFlight).rejects.toThrow('identity.pin_session_changed')
+    expect(activeSession.value).toBeNull()
   },95_000)
 
 })
