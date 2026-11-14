@@ -122,7 +122,7 @@ describe('P2 #215 real browser video clip encoder gating',()=>{
   it('uses authenticated private filenames and real container extension',()=>{
     const range=validateVideoClipRange(10_000,1000,6000)
     const webmName=videoClipName('../../private\\\\family.mov',range,'video/webm')
-    expect(webmName).toMatch(/^private_family-clip-1000-6000\.webm$/)
+    expect(webmName).toMatch(/^private__family-clip-1000-6000\.webm$/)
     expect(videoClipName('a.mp4',range,'video/mp4')).toBe('a-clip-1000-6000.mp4')
     expect(()=>videoClipName('a.mp4',range,'video/wav' as 'video/webm'))
       .toThrow('viewer.video_clip_invalid_format')
