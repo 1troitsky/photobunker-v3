@@ -1,0 +1,42 @@
+name: "P2 #215 genuine in-memory Video Clip encoder"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/src/features/browser/application/video-clip-export*'
+      - 'tests/e2e/p2-browser-video-clip-215.spec.ts'
+      - 'tests/e2e/fixtures/p2-video-clip-215-vp8.base64'
+      - '.github/workflows/p2-video-clip-215.yml'
+      - 'docs/audits/P2-VIDEO-CLIP-EXPORT-215-CHAT-N-20261114.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  video-clip-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify deterministic real WebM fixture integrity
+        run: |
+          printf '%s  %s\n' '6e7cfe019443bb5b108d75119704b3009d91a3b54082e86864634e13e3a9131b' 'tests/e2e/fixtures/p2-video-clip-215-vp8.webm' > /tmp/pb3-215-fixture.sha256
+          base64 --decode tests/e2e/fixtures/p2-video-clip-215-vp8.base64 > tests/e2e/fixtures/p2-video-clip-215-vp8.webm
+          sha256sum --check /tmp/pb3-215-fixture.sha256
+          rm tests/e2e/fixtures/p2-video-clip-215-vp8.webm /tmp/pb3-215-fixture.sha256
+      - name: Real container, MIME, and abort Vitest cases
+        run: pnpm --dir apps/web exec vitest run src/features/browser/application/video-clip-export.test.ts
+      - name: Strict TS types
+        run: pnpm typecheck
+      - name: Production bundle
+        run: pnpm build
