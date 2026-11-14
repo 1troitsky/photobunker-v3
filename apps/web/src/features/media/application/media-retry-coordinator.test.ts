@@ -93,11 +93,15 @@ describe('P1 #390 Camera MediaFile bounded retry coordination', () => {
     detach = attachMediaRetryCoordinator()
     await vi.advanceTimersByTimeAsync(50_000)
     expect(fake.flushes).toBe(0)
+    // Once back on Camera, the first real flush reaches a verified ACK;
+    // the coordinator must not create a second PUT on the next idle tick.
+    fake.recover = true
     Object.defineProperty(window, 'location', {
       value: { pathname: '/camera' }, configurable: true,
     })
     await vi.advanceTimersByTimeAsync(MEDIA_RETRY_IDLE_MS)
     expect(fake.flushes).toBe(1)
+    expect(fake.rows).toEqual([{ state: 'synced' }])
   })
 
   it('requires real navigator connectivity before flushing queued media', async () => {
