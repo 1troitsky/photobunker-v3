@@ -91,6 +91,23 @@ export async function beginRegistration():Promise<string> {
   return kit.encoded
 }
 
+async function admitExplicitDeviceAfterProof(device: LocalDevice): Promise<void> {
+  // A failed/crash-interrupted logout can leave the previous device IDB row
+  // unsigned-out, even though the origin-wide synchronous fence is present.
+  // Before explicit Key-Only admission clears that fence, durably block all
+  // OTHER devices retained in this browser. Never drop their encrypted keys.
+  // Other physical devices and server grants are outside this local action.
+  if (isLogoutFenced()) {
+    for (const previous of await listDevices()) {
+      if (previous.deviceId !== device.deviceId) {
+        await markSignedOut(previous.accountId, previous.deviceId, true)
+      }
+    }
+  }
+  await markSignedOut(device.accountId,device.deviceId,false)
+  clearLogoutFenceAfterExplicitProof()
+}
+
 export async function finishRegistration(recoveryKey:string):Promise<Session> {
   await probeCapabilities()
   const kit=await parsePB2(recoveryKey), pending=await getPending()
@@ -128,9 +145,7 @@ export async function finishRegistration(recoveryKey:string):Promise<Session> {
   }
   await saveDevice(device)
   await dropPending(pending.operationId)
-  await markSignedOut(device.accountId,device.deviceId,false)
-  // Only an explicit signed register/recovery proof may clear this fence.
-  clearLogoutFenceAfterExplicitProof()
+  await admitExplicitDeviceAfterProof(device)
   return activate(pkg,device,true)
 }
 
@@ -158,9 +173,7 @@ export async function restoreAccount(recoveryKey:string):Promise<Session> {
   await prove('recover',payload,await importSigner(pkg.accountPkcs8),device.deviceKey)
   await saveDevice(device)
   await dropRecoveryPending(kit.locator)
-  await markSignedOut(device.accountId,device.deviceId,false)
-  // Only an explicit signed register/recovery proof may clear this fence.
-  clearLogoutFenceAfterExplicitProof()
+  await admitExplicitDeviceAfterProof(device)
   return activate(pkg,device,true)
 }
 
