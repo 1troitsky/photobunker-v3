@@ -72,6 +72,7 @@ jobs:
           php vendor/bin/phpunit --filter AssignmentReceiptLineageAuditTest
           php vendor/bin/phpunit --filter TelemetryRotationPreflightTest
           php vendor/bin/phpunit --filter TelemetryShadowKeyBridgeTest
+          php vendor/bin/phpunit --filter TelemetryActorEpochPreflightTest
           php vendor/bin/phpunit
       - name: Migrate disposable PG18 and initialize clock
         working-directory: apps/api
@@ -193,3 +194,10 @@ jobs:
           wait "$p1"
           wait "$p2"
           php tests/integration/p3-telemetry-postgres.php shadow-verify
+
+      - name: Real PG18 non-UTC ISO week vs day/month actor HMAC epoch risk (read-only)
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php epoch-preflight

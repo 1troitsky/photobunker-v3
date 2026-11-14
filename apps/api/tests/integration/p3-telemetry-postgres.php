@@ -14,6 +14,7 @@ use App\Telemetry\AssignmentCoverageAudit;
 use App\Telemetry\AssignmentReceiptLineageAudit;
 use App\Telemetry\TelemetryRotationPreflight;
 use App\Telemetry\TelemetryShadowKeyBridge;
+use App\Telemetry\TelemetryActorEpochPreflight;
 use App\Telemetry\TelemetryEvent;
 use App\Telemetry\TelemetryRecord;
 use App\Telemetry\InternalAggregateReader;
@@ -359,6 +360,52 @@ if ($stage === 'init') {
             'unsafe fresh candidate-only event must visibly inflate distinct membership');
     }
     echo "Telemetry PG18 UNSAFE candidate-only fresh-session DAU/WAU/MAU overcount CONFIRMED; cutover BLOCKED\n";
+} elseif ($stage === 'epoch-preflight') {
+    // READ-ONLY inspection on an existing disposable PostgreSQL18 store
+    // after old-key/shadow race and candidate-only unsafe negative fixture.
+    // A changed PG session TZ must never change UTC day / ISO week / month.
+    $db->statement("SET TIME ZONE 'Pacific/Honolulu'");
+    $cutover = CarbonImmutable::createFromTimestampMs($nowMs, 'UTC')
+        ->startOfDay()->getTimestampMs();
+    $epoch = new TelemetryActorEpochPreflight($db);
+    $before = $db->table('telemetry_active_tokens')->count();
+    $checks = $epoch->inspect(
+        $nowMs, $nowMs, $cutover, SHADOW_ACCOUNT, SECRET, SHADOW_NEW_KEY,
+    );
+    $assert($checks['cutoverApproved'] === false
+        && $checks['anyCrossDomainRisk'] === true,
+        'PG18 epoch preflight must not greenlight live key cutover');
+    foreach (['day', 'week', 'month'] as $kind) {
+        $period = $checks['periods'][$kind];
+        $assert($period['membership'] === 'both'
+            && $period['crossDomainRisk'] === true,
+            "real PG18 two-key actor membership not detected for $kind");
+        $expect = $kind === 'day' ? 'candidate' : (
+            CarbonImmutable::createFromTimestampMs($nowMs, 'UTC')
+                ->startOfDay()->equalTo(
+                    $kind === 'week'
+                        ? CarbonImmutable::createFromTimestampMs($nowMs, 'UTC')
+                            ->startOfWeek(\Carbon\CarbonInterface::MONDAY)
+                        : CarbonImmutable::createFromTimestampMs($nowMs, 'UTC')
+                            ->startOfMonth()
+                ) ? 'candidate' : 'old'
+        );
+        $assert($period['domain'] === $expect,
+            "UTC $kind start epoch derived from wrong timestamp");
+    }
+    $assert($db->table('telemetry_active_tokens')->count() === $before,
+        'read-only PG18 epoch preflight must not mutate memberships');
+
+    // Fixed calendar and ISO year boundary, independent of current date.
+    $at = CarbonImmutable::parse('2027-01-01T12:00:00Z')->getTimestampMs();
+    $cut = CarbonImmutable::parse('2027-01-01T00:00:00Z')->getTimestampMs();
+    $plan = TelemetryActorEpochPreflight::periodPlan($at, $cut);
+    $assert($plan['day']['domain'] === 'candidate'
+        && $plan['week']['domain'] === 'old'
+        && $plan['week']['period'] === '2026-W53'
+        && $plan['month']['domain'] === 'candidate',
+        'ISO year boundary misassigned activity HMAC epoch');
+    echo "Telemetry PG18 non-UTC session actor day/week/month epoch risk and ISO rollover PASS; NO cutover\n";
 } else {
-    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify|coverage|lineage|rotation-preflight|shadow-init|shadow-old-worker|shadow-bridge-worker|shadow-verify');
+    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify|coverage|lineage|rotation-preflight|shadow-init|shadow-old-worker|shadow-bridge-worker|shadow-verify|epoch-preflight');
 }
