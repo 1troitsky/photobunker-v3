@@ -4,7 +4,7 @@ import {
   activeSession,beginRegistration,identityBootstrapError,
   identityBootstrapReady,pendingPinUnlock,restoreAccount,
   resumeExistingDevice,unlockPinnedDevice,refreshPinSessionFence,
-  signPhotoContract,
+  signPhotoContract,lockActivePinSession,
 } from './session'
 import {
   b64,canonical,createPB2,digest,freshPackage,hex,random,
@@ -431,4 +431,78 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     expect((await getDevice(f.scope.accountId,f.scope.deviceId))!.envelope)
       .toEqual(expect.objectContaining({purpose:'preunlock-package'}))
   },120_000)
+
+  it('relocks only PIN-sealed local account synchronously without durable signout',async()=>{
+    const f=await protectedAccount()
+    await resumeExistingDevice()
+    expect(await unlockPinnedDevice('4826')).toEqual({status:'app-unlocked'})
+    const locks=navigator.locks as unknown as TestPinLockManager
+    expect(locks.heldNames()).toHaveLength(1)
+    expect(lockActivePinSession()).toBe(true)
+    expect(activeSession.value).toBeNull()
+    expect(identityBootstrapReady.value).toBe(true)
+    expect(identityBootstrapError.value).toBeNull()
+    expect(pendingPinUnlock.value).toEqual({
+      ...f.scope,packageRevision:f.pkg.revision,
+      pinLength:4,sessionNonce:expect.any(String),
+    })
+    expect(await isSignedOut(f.scope.accountId,f.scope.deviceId)).toBe(false)
+    await vi.waitFor(()=>expect(locks.heldNames()).toHaveLength(0))
+    await expect(signPhotoContract('must never sign without PIN'))
+      .rejects.toThrow('identity.account_locked')
+    expect(lockActivePinSession()).toBe(false)
+    expect(await unlockPinnedDevice('4826')).toEqual({status:'app-unlocked'})
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+  },105_000)
+
+  it('never blocks old Local-First account that has no configured PIN',async()=>{
+    const f=await account()
+    await resumeExistingDevice()
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+    expect(lockActivePinSession()).toBe(false)
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+    expect(pendingPinUnlock.value).toBeNull()
+  },65_000)
+
+  it('does not resurrect a PIN-locked Session after a delayed server proof',async()=>{
+    await protectedAccount()
+    await resumeExistingDevice()
+    let rejectProof!: (reason:Error)=>void
+    const proofStarted=new Promise<void>(resolve=>{
+      mocks.jsonApi.mockImplementationOnce(()=>new Promise((_done,reject)=>{
+        rejectProof=(reason:Error)=>reject(reason)
+        resolve()
+      }))
+    })
+    const unlocking=unlockPinnedDevice('4826')
+    await proofStarted
+    expect(activeSession.value?.online).toBe(false)
+    expect(lockActivePinSession()).toBe(true)
+    rejectProof(new Error('test.server_unreachable'))
+    expect(await unlocking).toEqual({status:'app-unlocked'})
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value).not.toBeNull()
+  },105_000)
+
+  it('reacts immediately to a real blur event without mounting unlocked content',async()=>{
+    const fakeWindow=new EventTarget()
+    const fakeDocument=Object.assign(new EventTarget(),{
+      visibilityState:'visible',
+    })
+    vi.stubGlobal('window',fakeWindow)
+    vi.stubGlobal('document',fakeDocument)
+    vi.stubGlobal('BroadcastChannel',undefined)
+    const f=await protectedAccount()
+    await resumeExistingDevice() // installs actual lifecycle listeners
+    expect(await unlockPinnedDevice('4826')).toEqual({status:'app-unlocked'})
+    expect(activeSession.value?.accountId).toBe(f.scope.accountId)
+    fakeWindow.dispatchEvent(new Event('blur'))
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value?.deviceId).toBe(f.scope.deviceId)
+    expect(await isSignedOut(f.scope.accountId,f.scope.deviceId)).toBe(false)
+    fakeWindow.dispatchEvent(new Event('focus'))
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value).not.toBeNull()
+  },95_000)
+
 })
