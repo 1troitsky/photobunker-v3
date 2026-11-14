@@ -345,6 +345,25 @@ final class PlacementPreparationLedgerTest extends TestCase
         $this->assertSame($f['cipher'],$this->a->ciphertext[$f['sourceKey']]);
     }
 
+    public function test_existing_candidate_cannot_be_replayed_after_registered_object_key_is_swapped():void
+    {
+        $f=$this->fixture();
+        $first=$this->prepare($f);
+        $this->assertSame(1,$first['generation']);
+
+        // Change only the database object locator, NOT the bytes/hash.
+        // The new key does not exist in the synthetic physical store.
+        DB::table($f['table'])->where('id',$f['target'])
+            ->update([
+                'object_key'=>'cipher/placement-candidate/'.(string)Str::uuid(),
+                'updated_at'=>$this->at()->addMinute(),
+            ]);
+        $this->denied(fn()=>$this->prepare($f),
+            'placement.ciphertext_not_verified');
+        $this->assertSame(1,$this->countRows());
+        $this->assertSame($f['cipher'],$this->a->ciphertext[$f['sourceKey']]);
+    }
+
     public function test_tombstones_expiry_and_pending_asset_never_create_candidate(): void
     {
         $f=$this->fixture();
