@@ -1,4 +1,5 @@
 import { shallowRef, watch } from 'vue'
+import {readVerifiedPinRelockDelay} from '../../security/application/pin-verifier'
 import type { PinAttempt } from '../../security/application/pin-verifier'
 import type { SealedPinDevice } from '../../security/application/pin-device-migration'
 import {watchPinDeviceSealed} from '../../security/application/pin-tab-fence'
@@ -38,6 +39,15 @@ export const activeSession = shallowRef<Session | null>(null)
  * or proof of all-device quiescence.
  */
 let activeDeviceLease:PinSessionLease|null=null
+/** Volatile and HMAC-verified ONLY after a successful app PIN. */
+let activePinRelockDelayMs=PIN_RELOCK_DEFAULT_MS
+let pinRelockTimer:ReturnType<typeof setTimeout>|null=null
+function clearPinRelockTimer():void{
+  if(pinRelockTimer!==null){
+    clearTimeout(pinRelockTimer)
+    pinRelockTimer=null
+  }
+}
 function sameDeviceLease(
   lease:PinSessionLease,
   device:Readonly<{accountId:string;deviceId:string}>,
@@ -52,6 +62,10 @@ function releaseDeviceLease():void{
 watch(activeSession,next=>{
   if(activeDeviceLease && (!next||!sameDeviceLease(activeDeviceLease,next)))
     releaseDeviceLease()
+  if(!next){
+    clearPinRelockTimer()
+    activePinRelockDelayMs=PIN_RELOCK_DEFAULT_MS
+  }
 },{flush:'sync'})
 let acquiringDeviceLease:{
   device:Readonly<{accountId:string;deviceId:string}>
@@ -361,6 +375,8 @@ export function lockActivePinSession():boolean {
   try{context=pendingPinContext(current.device)}
   catch{error='identity.invalid_sealed_device'}
   // The synchronous Session watcher also releases the shared Web Lock.
+  clearPinRelockTimer()
+  pinLastBackgroundAtMs=null
   activeSession.value=null
   pendingPinUnlock.value=context
   identityBootstrapError.value=error
@@ -386,20 +402,34 @@ function onPinAppBackground():void{
     return
   }
   if(!isSealedCandidate(current.device))return
-  pinLastBackgroundAtMs=Date.now()
+  // blur + pagehide + hidden events can arrive for ONE suspension.
+  // Never restart the grace deadline on repeated background events.
+  if(pinLastBackgroundAtMs===null)pinLastBackgroundAtMs=Date.now()
   if(mustRelockPinAfterBackground(
-    pinLastBackgroundAtMs,Date.now(),PIN_RELOCK_DEFAULT_MS,
+    pinLastBackgroundAtMs,Date.now(),activePinRelockDelayMs,
   )){
     lockActivePinSession()
-    pinLastBackgroundAtMs=null
+    return
+  }
+  if(pinRelockTimer===null){
+    const elapsed=Math.max(0,Date.now()-pinLastBackgroundAtMs)
+    pinRelockTimer=setTimeout(()=>{
+      pinRelockTimer=null
+      if(pinLastBackgroundAtMs!==null && activeSession.value &&
+         isSealedCandidate(activeSession.value.device) &&
+         mustRelockPinAfterBackground(
+           pinLastBackgroundAtMs,Date.now(),activePinRelockDelayMs,
+         ))lockActivePinSession()
+    },Math.max(0,activePinRelockDelayMs-elapsed))
   }
 }
 function onPinAppForeground():void{
+  clearPinRelockTimer()
   if(pinLastBackgroundAtMs!==null){
     const current=activeSession.value
     if(current&&isSealedCandidate(current.device)&&
        mustRelockPinAfterBackground(
-         pinLastBackgroundAtMs,Date.now(),PIN_RELOCK_DEFAULT_MS,
+         pinLastBackgroundAtMs,Date.now(),activePinRelockDelayMs,
        )){
       lockActivePinSession()
     }
@@ -543,6 +573,16 @@ async function unlockPinnedDeviceInternal(candidate:string):Promise<PinAttempt> 
      await isSignedOut(scope.accountId,scope.deviceId)||
      pendingPinUnlock.value!==context||activeSession.value)
     throw new Error('identity.pin_device_changed')
+  // Re-verify the persisted HMAC ledger (including optional 0..5min
+  // relock policy) after successful app-PIN crypto. Missing old v1 policy
+  // is authenticated as Immediate; invalid or altered policy fails closed.
+  // This value is IN-MEMORY ONLY and has no unauthenticated settings UI.
+  const sealed=device as unknown as SealedPinDevice
+  const relockDelay=await readVerifiedPinRelockDelay(
+    scope,sealed.pinHmacKey,sealed.pinVerifier,
+  )
+  if(pendingPinUnlock.value!==context||activeSession.value)
+    throw new Error('identity.pin_session_changed')
   // Do not publish the decrypted PackageV2 until our tab holds its
   // SHARED device lifetime lease. A stale row change is still checked by
   // the existing preunlock HMAC receipt and IDB scope/revision guards.
@@ -554,6 +594,9 @@ async function unlockPinnedDeviceInternal(candidate:string):Promise<PinAttempt> 
   // Keep sealed envelope: never generate/write a legacy device-only fallback.
   pendingPinUnlock.value=null
   identityBootstrapError.value=null
+  activePinRelockDelayMs=relockDelay
+  pinLastBackgroundAtMs=null
+  clearPinRelockTimer()
   const local=activate(attempt.pkg,device,false)
   try{
     await prove('login',{
