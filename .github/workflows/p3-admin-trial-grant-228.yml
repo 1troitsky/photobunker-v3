@@ -8,6 +8,7 @@ on:
       - 'apps/api/tests/Feature/Administration/Restrictions/**'
       - 'apps/api/tests/integration/p3-admin-restriction-postgres-race.php'
       - 'apps/api/tests/integration/p3-admin-audited-account-restriction-postgres-race.php'
+      - 'apps/api/tests/integration/p3-admin-restriction-admission-postgres-race.php'
       - 'apps/api/database/migrations/2026_11_14_000228_create_admin_trial_grant_operations_v1.php'
       - 'apps/api/database/migrations/2026_11_14_000229_create_admin_temporary_restrictions_v1.php'
       - '.github/workflows/p3-admin-trial-grant-228.yml'
@@ -46,6 +47,8 @@ jobs:
           php -l apps/api/tests/Feature/Administration/Restrictions/TemporaryRestrictionLedgerTest.php
           php -l apps/api/app/Administration/Restrictions/AuditedAccountRestrictionExecutor.php
           php -l apps/api/tests/Feature/Administration/Restrictions/AuditedAccountRestrictionExecutorTest.php
+          php -l apps/api/app/Administration/Restrictions/TransactionBoundRestrictionAdmission.php
+          php -l apps/api/tests/Feature/Administration/Restrictions/TransactionBoundRestrictionAdmissionTest.php
       - name: Own true database-backed negative tests
         working-directory: apps/api
         run: php vendor/bin/phpunit tests/Feature/Administration/Grants tests/Feature/Administration/Restrictions
@@ -147,6 +150,11 @@ jobs:
         run: |
           php -l tests/integration/p3-admin-audited-account-restriction-postgres-race.php
           php tests/integration/p3-admin-audited-account-restriction-postgres-race.php
+      - name: Run REAL two-PHP PG18 transaction-bound admission vs admin restriction races
+        working-directory: apps/api
+        run: |
+          php -l tests/integration/p3-admin-restriction-admission-postgres-race.php
+          php tests/integration/p3-admin-restriction-admission-postgres-race.php
       - name: Declare narrow scope only
         run: |
           echo "Real PG18 two-process internal grant and restriction races, NOT public admin auth, MFA identity/session, mounted bans, cryptographic device revoke or deployment"
