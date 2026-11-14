@@ -182,7 +182,10 @@ final class TemporaryRestrictionLedger
         string $targetType, string $targetId, string $action,
         int $expectedRevision, string $reasonCode, ?CarbonImmutable $expiresAt,
     ): array {
-        $now = CarbonImmutable::now('UTC')->startOfSecond();
+        // Never round authorization time: an actor expiring mid-second must
+        // not gain up to another second of privileged access.
+        $now = CarbonImmutable::now('UTC');
+        $recordedAt = $now->startOfSecond();
         $permission = match ($targetType) {
             'account' => 'accounts.suspend',
             'device' => 'devices.revoke',
@@ -222,7 +225,7 @@ final class TemporaryRestrictionLedger
         return DB::transaction(function () use (
             $trustedActor, $operationId, $accountId, $targetType, $targetId,
             $action, $expectedRevision, $reasonCode, $expiresAt, $expires,
-            $requestHash, $now,
+            $requestHash, $now, $recordedAt,
         ): array {
             // Locks an EXISTING account row, even when the per-target head
             // has not been created yet. Two first writers cannot both insert.
@@ -271,7 +274,7 @@ final class TemporaryRestrictionLedger
                 $operationId, $trustedActor->accountId, $accountId,
                 $targetType, $targetId, $action, $expectedRevision, $nextRevision,
                 $reasonCode, $expires, $requestHash, $previousHash,
-                self::utc($now),
+                self::utc($recordedAt),
             );
             DB::table(self::EVENTS)->insert([
                 'operation_id' => $operationId,
@@ -287,7 +290,7 @@ final class TemporaryRestrictionLedger
                 'request_hash' => $requestHash,
                 'previous_hash' => $previousHash,
                 'event_hash' => $eventHash,
-                'recorded_at' => $now,
+                'recorded_at' => $recordedAt,
             ]);
             if ($head === null) {
                 DB::table(self::HEAD)->insert([
