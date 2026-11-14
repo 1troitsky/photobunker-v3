@@ -26,8 +26,9 @@ import type {
   EpochTeamInvite, EpochRosterMember,
 } from '../features/people/application/team-epoch-invitations'
 import {pinnedPeer} from '../features/sharing/key-directory'
+import {listLocallyBlockedPeers} from '../features/people/application/contact-blocklist'
 
-defineProps<{ ownedTeams:TeamView[]; contacts:ConfirmedContact[] }>()
+const props=defineProps<{ ownedTeams:TeamView[]; contacts:ConfirmedContact[] }>()
 const emit=defineEmits<{ refresh:[] }>()
 const selectedTeam=ref('')
 const selectedContact=ref('')
@@ -238,15 +239,33 @@ async function memberAction(
       error.value=e instanceof Error?e.message:'teams.membership_change_failed'
   }finally{busy.value=false}
 }
+// A contact hidden by local Blacklist may still be selected in a stale form.
+// Never create a new signed invite from an out-of-date visible selection.
+watch(()=>props.contacts.map(x=>x.peerAccountId).join('|'),()=>{
+  if(selectedContact.value
+    &&!props.contacts.some(x=>x.peerAccountId===selectedContact.value))
+    selectedContact.value=''
+})
 async function sendInvite():Promise<void>{
   if(busy.value||rotationRequired.value
     ||!selectedTeam.value||!selectedContact.value)return
+  if(!props.contacts.some(x=>x.peerAccountId===selectedContact.value)){
+    selectedContact.value=''
+    error.value='teams.invite_contact_not_available'
+    return
+  }
   busy.value=true;notice.value='';error.value=''
-  const scope=identity()
+  const scope=identity(),contact=selectedContact.value
   try{
+    // Recheck durable local block storage at signing time. Another tab can block
+    // a peer after an invitation form was opened but before its submit event.
+    const blocked=await listLocallyBlockedPeers()
+    if(identity()!==scope || !props.contacts.some(x=>x.peerAccountId===contact)
+      || blocked.some(x=>x.peerAccountId===contact))
+      throw Error('teams.invite_contact_not_available')
     if(keyEpoch.value>1)
-      await queueEpochInvitation(selectedTeam.value,selectedContact.value,selectedRole.value)
-    else await queueTeamInvitation(selectedTeam.value,selectedContact.value,selectedRole.value)
+      await queueEpochInvitation(selectedTeam.value,contact,selectedRole.value)
+    else await queueTeamInvitation(selectedTeam.value,contact,selectedRole.value)
     if(identity()!==scope)return
     notice.value='Приглашение сохранено в зашифрованной очереди.'
     showInvite.value=false
@@ -384,7 +403,7 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
             <option value="viewer">Наблюдатель</option>
           </select>
           <p class="muted">Участие в команде не выдаёт права на задания или файлы.</p>
-          <button type="submit" :disabled="busy||!selectedContact"
+          <button type="submit" :disabled="busy||!selectedContact||!contacts.some(x=>x.peerAccountId===selectedContact)"
             data-testid="team-invite-submit">Подписать и пригласить</button>
         </form>
       </template>
