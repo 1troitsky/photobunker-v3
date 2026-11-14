@@ -1,0 +1,71 @@
+name: P2 QA 382 real PostgreSQL 18 large MediaFile index
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - apps/api/tests/Integration/MediaIndexRealPostgres382Test.php
+      - .github/workflows/p2-real-media-index-382.yml
+      - docs/audits/P2-382-REAL-PG-MEDIA-PAGINATION-CHAT-AA.md
+
+permissions:
+  contents: read
+
+jobs:
+  real-media-index-382:
+    name: Disposable PG18 >10k Laravel MediaFile index (no S3/E2EE claim)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_ci_p2_382
+          POSTGRES_USER: pb3_ci_382
+          POSTGRES_PASSWORD: pb3_ci_382_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb3_ci_382 -d pb3_ci_p2_382"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      PB3_PG_INDEX_STRESS: '1'
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: https://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_ci_p2_382
+      DB_USERNAME: pb3_ci_382
+      DB_PASSWORD: pb3_ci_382_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, fileinfo, curl, zip
+          coverage: none
+      - name: Enforce patched runtime and PHP syntax of exclusive test
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          php -l apps/api/tests/Integration/MediaIndexRealPostgres382Test.php
+      - name: Locked Composer install + no vulnerability suppressions
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          composer install --no-interaction --no-progress --prefer-dist
+          composer audit --locked --no-interaction
+      - name: Real PG18 10k+ HTTP cursor traversal, mutation and owner isolation
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          # phpunit.xml hard-forces SQLite for standard Foundation.
+          # This named PG18-only integration suite intentionally bypasses
+          # that configuration but uses the real Laravel TestCase/RefreshDatabase.
+          php vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php \
+            tests/Integration/MediaIndexRealPostgres382Test.php --colors=never
