@@ -82,7 +82,7 @@ final class IsolatedSecondGarage implements StorageAdapter
 {
     private S3Client $s3;
     private string $bucket;
-    /** Inject a second independent PHP/PG18 process after the initial DB snapshot. */
+    /** Inject a second independent PHP/PG18 process after physical readback before final DB snapshot. */
     public ?\Closure $onRead=null;
 
     public function __construct(string $endpoint,string $bucket,string $key,string $secret)
@@ -105,13 +105,15 @@ final class IsolatedSecondGarage implements StorageAdapter
 
     public function readStream(string $objectKey):mixed
     {
+        $result=$this->s3->getObject(['Bucket'=>$this->bucket,'Key'=>$objectKey]);
+        $body=(string)$result['Body']; // Small synthetic fixture only.
+        // Inject the independent COMMITTED PG mutation after real S3 GET
+        // but before inspect() performs its second DB snapshot.
         if ($this->onRead!==null) {
             $hook=$this->onRead;
             $this->onRead=null;
             $hook();
         }
-        $result=$this->s3->getObject(['Bucket'=>$this->bucket,'Key'=>$objectKey]);
-        $body=(string)$result['Body']; // Small synthetic fixture only.
         $stream=fopen('php://temp','w+b');
         if (!is_resource($stream) || fwrite($stream,$body)!==strlen($body)) {
             throw new RuntimeException('p4.failover.synthetic_stream_failed');
@@ -464,7 +466,7 @@ if ($mode==='race') {
     $initialRevision=(int)DB::table('identity_accounts')
         ->where('id',$f['account'])->value('revision');
     // Second OS process commits a READY->READY identity revision bump
-    // after preflight's first DB snapshot, before Garage B GET.
+    // after preflight's first DB snapshot and real Garage B GET.
     $secondary->onRead=static fn()=>failoverConcurrentPgMutation(
         'account-revision',$f);
     failoverDeny(fn()=>failoverTest($preflight,$f),
@@ -475,9 +477,9 @@ if ($mode==='race') {
             ->value('status')==='ready',
         'account_revision_not_really_committed');
     failoverTest($preflight,$f);
-    echo "P4 #235 REAL PG18 RACE 1/2 PASS: separate OS-PHP+PG18 rotation during actual Garage B GET fails closed while account remains READY\n";
+    echo "P4 #235 REAL PG18 RACE 1/2 PASS: separate OS-PHP+PG18 rotation between real Garage B GET and DB recheck fails closed while account remains READY\n";
 
-    // Other process transitions Photo active->deleting mid-GET. Restore only
+    // Other process transitions Photo active->deleting after physical GET. Restore only
     // synthetic fixture metadata so subsequent outage/recovery QA stays valid.
     $secondary->onRead=static fn()=>failoverConcurrentPgMutation(
         'parent-deletion',$f);
@@ -491,7 +493,7 @@ if ($mode==='race') {
     failoverAssert($changed===1,'fixture_restore_not_confirmed');
     failoverTest($preflight,$f);
     failoverVerifyOriginal($primary,$f);
-    echo "P4 #235 REAL PG18 RACE 2/2 PASS: separate OS-PHP+PG18 mid-GET delete rejected; only synthetic fixture restored; Garage A intact\n";
+    echo "P4 #235 REAL PG18 RACE 2/2 PASS: separate OS-PHP+PG18 post-GET delete rejected; only synthetic fixture restored; Garage A intact\n";
     echo "P4 #235 REAL PG18 RACE COMPLETE 2/2: distinct PHP PIDs and PG18 backend IDs, NO placement switching\n";
     exit(0);
 }
