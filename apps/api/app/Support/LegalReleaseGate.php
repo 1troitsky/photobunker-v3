@@ -25,13 +25,16 @@ final class LegalReleaseGate
         }
         $regions = $manifest['processing_regions'] ?? null;
         if (!is_array($regions) || !array_is_list($regions) || count($regions) < 1 || count($regions) > 16
-            || count(array_unique($regions)) !== count($regions)) {
+            ) {
             return self::reject('processing_regions');
         }
         foreach ($regions as $region) {
             if (!is_string($region) || preg_match('/\A[A-Z]{2}\z/D', $region) !== 1) {
                 return self::reject('processing_regions');
             }
+        }
+        if (count(array_unique($regions)) !== count($regions)) {
+            return self::reject('processing_regions');
         }
         $effective = $manifest['effective_at'] ?? null;
         $utc = new DateTimeZone('UTC');
@@ -57,6 +60,7 @@ final class LegalReleaseGate
                 }
                 $body = $item['body'];
                 if (strlen($body) < 250 || strlen($body) > 200000 || str_contains($body, "\0")
+                    || preg_match('//u', $body) !== 1
                     || preg_match('/(?:\{\{[^}]+\}\}|\[TODO\]|\bLOREM IPSUM\b|\bDRAFT ONLY\b|НЕ ЮРИДИЧЕСКИЙ ДОКУМЕНТ)/iu', $body) === 1) {
                     return self::reject('placeholder_or_size');
                 }
