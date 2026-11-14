@@ -267,6 +267,11 @@ function race233WaitLocked(int $pidA,int $pidB):array
     $start=microtime(true);
     $lastStates=[];
     do {
+        // PostgreSQL caches pg_stat_activity snapshots within the parent's
+        // open transaction. Without explicit refresh, 'state' can remain
+        // stale ('idle') even while wait_event_type reports a live 'Lock'.
+        // Refresh the stats snapshot on EACH observation.
+        DB::select('SELECT pg_stat_clear_snapshot()');
         $rows=DB::select(
             'SELECT pid, state, wait_event_type, wait_event FROM pg_stat_activity WHERE pid IN (?, ?)',
             [$pidA,$pidB]
