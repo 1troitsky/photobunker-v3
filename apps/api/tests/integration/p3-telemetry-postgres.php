@@ -1,0 +1,411 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Dedicated disposable PG18 CI test: two INDEPENDENT PHP processes race the
+ * same trusted idempotency token. Never run with production credentials.
+ */
+require dirname(__DIR__, 2) . '/vendor/autoload.php';
+$app = require dirname(__DIR__, 2) . '/bootstrap/app.php';
+$app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+use App\Telemetry\AssignmentCreationReplay;
+use App\Telemetry\AssignmentCoverageAudit;
+use App\Telemetry\AssignmentReceiptLineageAudit;
+use App\Telemetry\TelemetryRotationPreflight;
+use App\Telemetry\TelemetryShadowKeyBridge;
+use App\Telemetry\TelemetryActorEpochPreflight;
+use App\Telemetry\TelemetryEvent;
+use App\Telemetry\TelemetryRecord;
+use App\Telemetry\InternalAggregateReader;
+use App\Telemetry\DatabaseTelemetrySink;
+use Carbon\CarbonImmutable;
+use App\Telemetry\TelemetryCollector;
+use App\Telemetry\TelemetryDecision;
+use Illuminate\Support\Facades\DB;
+
+$db = DB::connection();
+if ($db->getDriverName() !== 'pgsql' || getenv('PB3_ISOLATED_TELEMETRY_CI') !== '1') {
+    throw new RuntimeException('Disposable PostgreSQL telemetry test ONLY');
+}
+$nowMs = filter_var(getenv('PB3_TEST_NOW_MS'), FILTER_VALIDATE_INT);
+if (!is_int($nowMs) || $nowMs < 1) {
+    throw new RuntimeException('No shared test clock');
+}
+const ACCOUNT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const EVENT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const SECRET = 'PB3 TEST ONLY TELEMETRY HMAC SECRET, NO REAL KEY';
+const SOURCE_ACCOUNT_OPERATION = '99999999-9999-4999-8999-999999999999';
+const SOURCE_ASSIGNMENT = '88888888-8888-4888-8888-888888888888';
+const SOURCE_OPERATION = '77777777-7777-4777-8777-777777777777';
+const SHADOW_ACCOUNT = 'abababab-abab-4aba-8aba-abababababab';
+const SHADOW_OPERATION = 'cdcdcdcd-cdcd-4cdc-8cdc-cdcdcdcdcdcd';
+const SHADOW_EVENT = 'edededed-eded-4ede-8ede-edededededed';
+const SHADOW_SECOND = 'edededed-eded-4ede-8ede-edededededec';
+const SHADOW_UNBRIDGED = 'edededed-eded-4ede-8ede-edededededeb';
+const SHADOW_NEW_KEY = 'PB3 disposable shadow candidate HMAC key, NO production';
+$collector = new TelemetryCollector(new DatabaseTelemetrySink($db), SECRET);
+$event = static function (string $type = 'session.active') use ($nowMs): array {
+    return [
+        'schemaVersion' => 1,
+        'eventId' => EVENT_ID,
+        'eventType' => $type,
+        'occurredAtMs' => $nowMs,
+    ];
+};
+$assert = static function (bool $value, string $message): void {
+    if (!$value) {
+        throw new RuntimeException($message);
+    }
+};
+$stage = $argv[1] ?? '';
+if ($stage === 'init') {
+    $assert($db->table('telemetry_event_receipts')->count() === 0, 'expected fresh DB');
+    echo "Telemetry PG18 disposable DB ready\n";
+} elseif ($stage === 'worker') {
+    $result = $collector->ingest($event(), ACCOUNT, $nowMs);
+    $assert(in_array($result, [TelemetryDecision::Accepted, TelemetryDecision::Duplicate], true), 'invalid race decision');
+    echo "Race worker: {$result->value}\n";
+} elseif ($stage === 'verify') {
+    $assert($db->table('telemetry_event_receipts')->count() === 1, 'receipt duplication');
+    $assert($collector->ingest($event(), ACCOUNT, $nowMs) === TelemetryDecision::Duplicate, 'replay');
+    $assert($collector->ingest($event('media.photo.committed'), ACCOUNT, $nowMs) === TelemetryDecision::Conflict, 'same-ID mutation');
+    foreach (['day', 'week', 'month'] as $kind) {
+        $query = $db->table('telemetry_counters')->where('period_kind', $kind);
+        $assert((int) (clone $query)->where('metric', 'session.active')->value('total') === 1, "event count $kind");
+        $assert((int) (clone $query)->where('metric', 'session.active.distinct')->value('total') === 1, "distinct count $kind");
+    }
+    $assert($db->table('telemetry_active_tokens')->count() === 3, 'distinct token count');
+    echo "Telemetry PG18 true two-process duplicate/atomic counts PASS\n";
+} elseif ($stage === 'source-init') {
+    // Append-only source row with an actual FK to the trusted identity ledger.
+    // Never feed browser JSON or a synthetic user event into telemetry here.
+    $db->table('identity_accounts')->insert([
+        'id' => ACCOUNT, 'operation_id' => SOURCE_ACCOUNT_OPERATION,
+        'prepare_hash' => str_repeat('a', 64), 'status' => 'ready',
+        'reserved_until' => now()->addDay(),
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $sourceTime = CarbonImmutable::createFromTimestampMs($nowMs, 'UTC')
+        ->subMinute()->format('Y-m-d H:i:s.u');
+    $db->table('assignment_creation_meter_v1')->insert([
+        'assignment_id' => SOURCE_ASSIGNMENT,
+        'owner_account_id' => ACCOUNT,
+        'operation_id' => SOURCE_OPERATION,
+        'created_at' => $sourceTime,
+    ]);
+    $assert($db->table('assignment_creation_meter_v1')->count() === 1, 'source row missing');
+    echo "Telemetry PG18 server-owned assignment source created\n";
+} elseif ($stage === 'source-worker') {
+    $result = (new AssignmentCreationReplay($db, $collector))->replayPage($nowMs, 5);
+    $assert($result['accepted'] + $result['duplicate'] === 1
+        && !$result['hasMore'], 'source race admission or pagination failure');
+    echo "Source worker: ".$result['accepted']." accepted, ".$result['duplicate']." duplicate\n";
+} elseif ($stage === 'source-verify') {
+    $result = (new AssignmentCreationReplay($db, $collector))->replayPage($nowMs, 5);
+    $assert($result['accepted'] === 0 && $result['duplicate'] === 1, 'source replay not idempotent');
+    $assert($db->table('telemetry_event_receipts')->count() === 2, 'source count mismatch');
+    foreach (['day', 'week', 'month'] as $kind) {
+        $total = $db->table('telemetry_counters')
+            ->where('period_kind', $kind)
+            ->where('metric', 'assignment.created')->value('total');
+        $assert((int) $total === 1, "source event $kind doubled");
+    }
+    $assert($db->table('telemetry_active_tokens')->count() === 3,
+        'assignment source should not mint activity actor tokens');
+    $day = gmdate('Y-m-d', intdiv($nowMs, 1000));
+    $week = gmdate('o-\WW', intdiv($nowMs, 1000));
+    $reader = new InternalAggregateReader($db);
+    $daily = $reader->read('assignment.created', 'day', $day, $day);
+    $assert($daily['sourceCoverage'] === 'not_proven'
+        && $daily['points'] === [['period' => $day, 'count' => 1]],
+        'real PG18 daily aggregate read is not precise or sparse');
+    $weekly = $reader->read('assignment.created', 'week', $week, $week);
+    $assert($weekly['points'] === [['period' => $week, 'count' => 1]],
+        'real PG18 ISO weekly aggregate read failed');
+    $missing = $reader->read('backup.verified', 'day', $day, $day);
+    $assert($missing['points'] === [], 'missing source must not fabricate zero');
+    echo "Telemetry PG18 real aggregate read, ISO periods, honest coverage PASS\n";
+    echo "Telemetry PG18 two-process REAL ledger-source reconciliation PASS\n";
+} elseif ($stage === 'coverage') {
+    // This stage runs AFTER opt-in CLI smoke, on disposable CI PG18 only.
+    // New previous UTC day source is initially not admitted into counters.
+    $now = CarbonImmutable::createFromTimestampMs($nowMs, 'UTC');
+    $previous = $now->startOfDay()->subDay()->addHours(12);
+    $day = $previous->format('Y-m-d');
+    $db->table('assignment_creation_meter_v1')->insert([
+        'assignment_id' => '66666666-6666-4666-8666-666666666666',
+        'owner_account_id' => ACCOUNT,
+        'operation_id' => '55555555-5555-4555-8555-555555555555',
+        'created_at' => $previous->format('Y-m-d H:i:s.u+00:00'),
+    ]);
+    // A connection timezone different from UTC must NOT reclassify source
+    // creation timestamps into a different calendar day.
+    $db->statement("SET TIME ZONE 'Pacific/Honolulu'");
+    $audit = new AssignmentCoverageAudit($db, new InternalAggregateReader($db));
+    $before = $audit->compare($nowMs, $day, $day);
+    $assert($before['coverageProven'] === false
+        && $before['days'][0]['sourceCount'] === 1
+        && $before['days'][0]['observedCount'] === null
+        && $before['days'][0]['status'] === 'missing_ingestion',
+        'real PG UTC source discrepancy not detected');
+    $ingest = static function (string $id) use ($collector, $previous, $nowMs): void {
+        $decision = $collector->ingest([
+            'schemaVersion' => 1,
+            'eventId' => $id,
+            'eventType' => 'assignment.created',
+            'occurredAtMs' => $previous->getTimestampMs(),
+        ], ACCOUNT, $nowMs);
+        if ($decision !== TelemetryDecision::Accepted) {
+            throw new RuntimeException('PG source comparison event not accepted');
+        }
+    };
+    $ingest('55555555-5555-4555-8555-555555555555');
+    $equal = $audit->compare($nowMs, $day, $day);
+    $assert($equal['coverageProven'] === false
+        && $equal['days'][0]['status'] === 'counts_match_unverified',
+        'equal PG count incorrectly promoted to coverage proof');
+    $ingest('44444444-4444-4444-8444-444444444444');
+    $excess = $audit->compare($nowMs, $day, $day);
+    $assert($excess['days'][0]['status'] === 'excess_untrusted',
+        'unauthorized-looking extra aggregate not flagged');
+    echo "Telemetry real PG18 non-UTC session source-count discrepancy and unproven matching PASS\n";
+} elseif ($stage === 'lineage') {
+    // This is a FRESH PHP process after the trusted PG18 source, op replay
+    // and discrepancy test. PG session UTC offset must not change source day.
+    $now = CarbonImmutable::createFromTimestampMs($nowMs, 'UTC');
+    $previous = $now->startOfDay()->subDay()->addHours(12);
+    $day = $previous->format('Y-m-d');
+    $db->statement("SET TIME ZONE 'Pacific/Honolulu'");
+    $audit = new AssignmentReceiptLineageAudit($db, SECRET);
+    $matched = $audit->inspect($nowMs, $day);
+    $assert($matched === [
+        'scanned' => 1, 'matched' => 1, 'missing' => 0, 'conflicting' => 0,
+        'scanComplete' => true, 'coverageProven' => false,
+        'consistency' => 'receipt_lineage_provisional',
+    ], 'PG18 source-to-specific HMAC receipt did not match');
+    $wrong = (new AssignmentReceiptLineageAudit($db, str_repeat('z', 40)))
+        ->inspect($nowMs, $day);
+    $assert($wrong['matched'] === 0 && $wrong['missing'] === 1
+        && $wrong['coverageProven'] === false,
+        'incorrect operator key misleadingly matches source receipt');
+
+    // Existing v1 digest is re-derived from REAL meter operation/account/time.
+    // Deliberate tamper on disposable DB must produce a conflict, never match.
+    $expected = TelemetryRecord::fromTrusted(TelemetryEvent::fromArray([
+        'schemaVersion' => 1,
+        'eventId' => '55555555-5555-4555-8555-555555555555',
+        'eventType' => 'assignment.created',
+        'occurredAtMs' => $previous->getTimestampMs(),
+    ]), ACCOUNT, SECRET);
+    $db->table('telemetry_event_receipts')->where('event_token', $expected->eventToken)
+        ->update(['fingerprint' => str_repeat('f', 64)]);
+    $tampered = $audit->inspect($nowMs, $day);
+    $assert($tampered['conflicting'] === 1 && $tampered['matched'] === 0,
+        'tampered source receipt was not rejected');
+    $db->table('telemetry_event_receipts')->where('event_token', $expected->eventToken)
+        ->update(['fingerprint' => $expected->fingerprint()]);
+    $assert($audit->inspect($nowMs, $day)['matched'] === 1,
+        'restored disposable receipt was not accepted');
+    echo "Telemetry PG18 lineage exact HMAC receipt / wrong key / corruption / Honolulu PASS\n";
+} elseif ($stage === 'rotation-preflight') {
+    // READ-ONLY preflight on disposable real PG18 after the source lineage
+    // diagnostic. New candidate receipt is written only to test fixture DB
+    // to expose the double-counting risk of a key swap.
+    $now = CarbonImmutable::createFromTimestampMs($nowMs, 'UTC');
+    $previous = $now->startOfDay()->subDay()->addHours(12);
+    $day = $previous->format('Y-m-d');
+    $candidate = str_repeat('Q', 40);
+    $db->statement("SET TIME ZONE 'Pacific/Honolulu'");
+    $guard = new TelemetryRotationPreflight($db);
+    $startCount = $db->table('telemetry_event_receipts')->count();
+    $initial = $guard->assess($nowMs, $day, SECRET, $candidate);
+    $assert($initial['inspected'] === 1
+        && $initial['oldOnly'] === 1
+        && $initial['candidateOnly'] === 0
+        && $initial['both'] === 0
+        && $initial['missing'] === 0
+        && $initial['conflicting'] === 0
+        && $initial['scanComplete'] === true
+        && $initial['rotationApproved'] === false,
+        'PG18 old-only source receipt should prohibit automatic rotation');
+    $assert($initial['retainedState']['activeReceiptsPresent']
+        && $initial['retainedState']['actorMembershipsPresent']
+        && $initial['retainedState']['recentTrustedSourcePresent'],
+        'PG18 active receipts/actor/source should block key change');
+    $assert($db->table('telemetry_event_receipts')->count() === $startCount,
+        'PG18 read-only preflight wrote to receipt store');
+
+    $new = (new TelemetryCollector(new DatabaseTelemetrySink($db), $candidate))
+        ->ingest([
+            'schemaVersion' => 1,
+            'eventId' => '55555555-5555-4555-8555-555555555555',
+            'eventType' => 'assignment.created',
+            'occurredAtMs' => $previous->getTimestampMs(),
+        ], ACCOUNT, $nowMs);
+    $assert($new === TelemetryDecision::Accepted,
+        'disposable PG18 fixture should demonstrate cross-key duplicate risk');
+    $both = $guard->assess($nowMs, $day, SECRET, $candidate);
+    $assert($both['both'] === 1 && $both['oldOnly'] === 0
+        && $both['rotationApproved'] === false,
+        'PG18 cross-key duplicate event not recognized');
+
+    $db->table('telemetry_event_receipts')->insert([
+        'event_token' => str_repeat('a', 64),
+        'fingerprint' => str_repeat('b', 64),
+        'received_at' => $now->subDays(9)->format('Y-m-d\TH:i:s+00:00'),
+    ]);
+    $db->table('telemetry_active_tokens')->insert([
+        'period_kind' => 'day', 'period_key' => '2020-01-01',
+        'actor_token' => str_repeat('c', 64),
+    ]);
+    $aged = $guard->assess($nowMs, $day, SECRET, $candidate);
+    $assert($aged['retainedState']['expiredReceiptsPresent'] === true
+        && $aged['retainedState']['expiredActorMembershipsPresent'] === true
+        && $aged['rotationApproved'] === false,
+        'PG18 UTC retention preview does not detect expired receipts/actors');
+    echo "Telemetry PG18 HMAC rotation preflight old/new/both and 8-day UTC retention: PASS; no rotation\n";
+} elseif ($stage === 'shadow-init') {
+    $db->table('identity_accounts')->insert([
+        'id' => SHADOW_ACCOUNT, 'operation_id' => SHADOW_OPERATION,
+        'prepare_hash' => str_repeat('a', 64), 'status' => 'ready',
+        'reserved_until' => now()->addDay(),
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $assert($db->table('identity_accounts')->where('id', SHADOW_ACCOUNT)->exists(),
+        'trusted shadow source account missing');
+    echo "Telemetry PG18 verified server identity for shadow race\n";
+} elseif ($stage === 'shadow-old-worker' || $stage === 'shadow-bridge-worker') {
+    $assert($db->table('identity_accounts')->where('id', SHADOW_ACCOUNT)->exists(),
+        'actor not trusted from real server identity source');
+    $raw = [
+        'schemaVersion' => 1, 'eventId' => SHADOW_EVENT,
+        'eventType' => 'session.active', 'occurredAtMs' => $nowMs,
+    ];
+    $result = $stage === 'shadow-old-worker'
+        ? $collector->ingest($raw, SHADOW_ACCOUNT, $nowMs)
+        : (new TelemetryShadowKeyBridge($db, SECRET, SHADOW_NEW_KEY))
+            ->admit($raw, SHADOW_ACCOUNT, $nowMs);
+    $assert(in_array($result, [TelemetryDecision::Accepted, TelemetryDecision::Duplicate], true),
+        'real two-PHP old-vs-shadow race returned unsafe decision');
+    echo "Shadow race worker: ".$result->value."\n";
+} elseif ($stage === 'shadow-verify') {
+    $raw = [
+        'schemaVersion' => 1, 'eventId' => SHADOW_EVENT,
+        'eventType' => 'session.active', 'occurredAtMs' => $nowMs,
+    ];
+    $event = TelemetryEvent::fromArray($raw);
+    $old = TelemetryRecord::fromTrusted($event, SHADOW_ACCOUNT, SECRET);
+    $shadow = TelemetryRecord::fromTrusted($event, SHADOW_ACCOUNT, SHADOW_NEW_KEY);
+    foreach ([$old, $shadow] as $record) {
+        $saved = $db->table('telemetry_event_receipts')
+            ->where('event_token', $record->eventToken)->value('fingerprint');
+        $assert(is_string($saved) && hash_equals($record->fingerprint(), $saved),
+            'PG18 shadow/canonical receipt missing or corrupt after true two-worker race');
+    }
+    foreach (['day', 'week', 'month'] as $kind) {
+        $active = $db->table('telemetry_counters')->where('metric', 'session.active')
+            ->where('period_kind', $kind)->sum('total');
+        $distinct = $db->table('telemetry_counters')
+            ->where('metric', 'session.active.distinct')
+            ->where('period_kind', $kind)->sum('total');
+        $assert((int) $active === 2 && (int) $distinct === 2,
+            'PG18 shadow race double counted active or distinct');
+    }
+    // Candidate-key replay of already-shadowed event must be DUPLICATE,
+    // never add another counter or actor token.
+    $candidateCollector = new TelemetryCollector(
+        new DatabaseTelemetrySink($db), SHADOW_NEW_KEY,
+    );
+    $assert($candidateCollector->ingest($raw, SHADOW_ACCOUNT, $nowMs)
+        === TelemetryDecision::Duplicate,
+        'candidate replay accepted previously bridged event a second time');
+    $assert((new TelemetryShadowKeyBridge($db, SECRET, SHADOW_NEW_KEY))
+        ->admit($raw, SHADOW_ACCOUNT, $nowMs) === TelemetryDecision::Duplicate,
+        'shadow bridge replay was not duplicate');
+    // Two independent authenticated events in the SAME UTC period MUST share
+    // the OLD distinct actor domain while bridge is in control.
+    $next = $raw;
+    $next['eventId'] = SHADOW_SECOND;
+    $assert((new TelemetryShadowKeyBridge($db, SECRET, SHADOW_NEW_KEY))
+        ->admit($next, SHADOW_ACCOUNT, $nowMs) === TelemetryDecision::Accepted,
+        'new bridged session event rejected');
+    foreach (['day', 'week', 'month'] as $kind) {
+        $distinct = $db->table('telemetry_counters')
+            ->where('metric', 'session.active.distinct')
+            ->where('period_kind', $kind)->sum('total');
+        $assert((int) $distinct === 2,
+            'bridge introduced duplicate DAU/WAU/MAU membership');
+    }
+    foreach ([
+        $shadow->dailyActorToken, $shadow->weeklyActorToken, $shadow->monthlyActorToken,
+    ] as $actorToken) {
+        $assert(!$db->table('telemetry_active_tokens')
+            ->where('actor_token', $actorToken)->exists(),
+            'candidate HMAC actor token should not be written by old-only shadow bridge');
+    }
+    echo "Telemetry PG18 TRUE two-PHP legacy-old vs uncounted shadow receipt race and distinct PASS\n";
+
+    // NEGATIVE acceptance: a NEW candidate-only event in the same actor
+    // period inflates distinct; production candidate-only cutover is BLOCKED.
+    $unbridged = $raw;
+    $unbridged['eventId'] = SHADOW_UNBRIDGED;
+    $assert($candidateCollector->ingest($unbridged, SHADOW_ACCOUNT, $nowMs)
+        === TelemetryDecision::Accepted, 'disposable candidate-only fixture not accepted');
+    foreach (['day', 'week', 'month'] as $kind) {
+        $distinct = $db->table('telemetry_counters')
+            ->where('metric', 'session.active.distinct')
+            ->where('period_kind', $kind)->sum('total');
+        $assert((int) $distinct === 3,
+            'unsafe fresh candidate-only event must visibly inflate distinct membership');
+    }
+    echo "Telemetry PG18 UNSAFE candidate-only fresh-session DAU/WAU/MAU overcount CONFIRMED; cutover BLOCKED\n";
+} elseif ($stage === 'epoch-preflight') {
+    // READ-ONLY inspection on an existing disposable PostgreSQL18 store
+    // after old-key/shadow race and candidate-only unsafe negative fixture.
+    // A changed PG session TZ must never change UTC day / ISO week / month.
+    $db->statement("SET TIME ZONE 'Pacific/Honolulu'");
+    $cutover = CarbonImmutable::createFromTimestampMs($nowMs, 'UTC')
+        ->startOfDay()->getTimestampMs();
+    $epoch = new TelemetryActorEpochPreflight($db);
+    $before = $db->table('telemetry_active_tokens')->count();
+    $checks = $epoch->inspect(
+        $nowMs, $nowMs, $cutover, SHADOW_ACCOUNT, SECRET, SHADOW_NEW_KEY,
+    );
+    $assert($checks['cutoverApproved'] === false
+        && $checks['anyCrossDomainRisk'] === true,
+        'PG18 epoch preflight must not greenlight live key cutover');
+    foreach (['day', 'week', 'month'] as $kind) {
+        $period = $checks['periods'][$kind];
+        $assert($period['membership'] === 'both'
+            && $period['crossDomainRisk'] === true,
+            "real PG18 two-key actor membership not detected for $kind");
+        $expect = $kind === 'day' ? 'candidate' : (
+            CarbonImmutable::createFromTimestampMs($nowMs, 'UTC')
+                ->startOfDay()->equalTo(
+                    $kind === 'week'
+                        ? CarbonImmutable::createFromTimestampMs($nowMs, 'UTC')
+                            ->startOfWeek(\Carbon\CarbonInterface::MONDAY)
+                        : CarbonImmutable::createFromTimestampMs($nowMs, 'UTC')
+                            ->startOfMonth()
+                ) ? 'candidate' : 'old'
+        );
+        $assert($period['domain'] === $expect,
+            "UTC $kind start epoch derived from wrong timestamp");
+    }
+    $assert($db->table('telemetry_active_tokens')->count() === $before,
+        'read-only PG18 epoch preflight must not mutate memberships');
+
+    // Fixed calendar and ISO year boundary, independent of current date.
+    $at = CarbonImmutable::parse('2027-01-01T12:00:00Z')->getTimestampMs();
+    $cut = CarbonImmutable::parse('2027-01-01T00:00:00Z')->getTimestampMs();
+    $plan = TelemetryActorEpochPreflight::periodPlan($at, $cut);
+    $assert($plan['day']['domain'] === 'candidate'
+        && $plan['week']['domain'] === 'old'
+        && $plan['week']['period'] === '2026-W53'
+        && $plan['month']['domain'] === 'candidate',
+        'ISO year boundary misassigned activity HMAC epoch');
+    echo "Telemetry PG18 non-UTC session actor day/week/month epoch risk and ISO rollover PASS; NO cutover\n";
+} else {
+    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify|coverage|lineage|rotation-preflight|shadow-init|shadow-old-worker|shadow-bridge-worker|shadow-verify|epoch-preflight');
+}
