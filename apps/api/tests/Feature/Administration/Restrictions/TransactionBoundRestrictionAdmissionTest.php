@@ -95,24 +95,34 @@ final class TransactionBoundRestrictionAdmissionTest extends TestCase
 
     public function test_autocommit_cannot_check_and_then_mutate_after_lock_release(): void
     {
-        self::assertSame(0, DB::transactionLevel());
-        $this->deny(
-            fn() => $this->admission()->assertForTrustedDatabaseTransaction(
-                $this->accountId, $this->deviceId),
-            'admin.restriction_transaction_required',
-        );
-        self::assertSame(0, DB::transactionLevel());
+        // RefreshDatabase itself owns a transaction (depth >= 1), so stub
+        // only the current-depth read and restore the actual DB facade
+        // manager before teardown; otherwise this test would be false.
+        $actualDb = DB::getFacadeRoot();
+        $unbound = \Mockery::mock();
+        $unbound->shouldReceive('transactionLevel')->once()->andReturn(0);
+        DB::swap($unbound);
+        try {
+            $this->deny(
+                fn() => $this->admission()->assertForTrustedDatabaseTransaction(
+                    $this->accountId, $this->deviceId),
+                'admin.restriction_transaction_required',
+            );
+        } finally {
+            DB::swap($actualDb);
+        }
         $this->assertDatabaseCount('admin_temporary_restriction_events_v1', 0);
     }
 
     public function test_pre_authenticated_identity_checks_before_protected_db_write(): void
     {
         $newTime = now()->addMinute();
-        DB::transaction(function () use ($newTime): void {
-            self::assertSame(1, DB::transactionLevel());
+        $outerDepth = DB::transactionLevel();
+        DB::transaction(function () use ($newTime, $outerDepth): void {
+            self::assertSame($outerDepth + 1, DB::transactionLevel());
             $this->admission()->assertForTrustedDatabaseTransaction(
                 $this->accountId, $this->deviceId);
-            self::assertSame(1, DB::transactionLevel());
+            self::assertSame($outerDepth + 1, DB::transactionLevel());
             $changed = DB::table('identity_devices')->where('id', $this->deviceId)
                 ->update(['updated_at' => $newTime]);
             self::assertSame(1, $changed);
@@ -121,7 +131,7 @@ final class TransactionBoundRestrictionAdmissionTest extends TestCase
             'id' => $this->deviceId, 'updated_at' => $newTime,
             'revoked_at' => null,
         ]);
-        self::assertSame(0, DB::transactionLevel());
+        self::assertSame($outerDepth, DB::transactionLevel());
     }
 
     public function test_account_restriction_denies_before_any_user_db_mutation(): void
