@@ -1,4 +1,4 @@
-name: P3 #218 isolated Recovery Vault PostgreSQL18 + real Garage
+name: "P3 #218 isolated Recovery Vault PostgreSQL18 + real Garage"
 on:
   pull_request:
     branches: [main]
@@ -76,22 +76,22 @@ jobs:
             -v "$RUNNER_TEMP/garage/meta:/var/lib/garage/meta" \
             -v "$RUNNER_TEMP/garage/data:/var/lib/garage/data" dxflrs/garage:v2.5.0
           for attempt in $(seq 1 30); do
-            if docker exec pb3-p0-garage /garage status >/dev/null 2>&1; then break; fi
+            if docker exec pb3-vault-218-garage /garage status >/dev/null 2>&1; then break; fi
             sleep 1
           done
-          node="$(docker exec pb3-p0-garage /garage node id -q | tr -d '\r\n')"
+          node="$(docker exec pb3-vault-218-garage /garage node id -q | tr -d '\r\n')"
           node="${node%%@*}"
           test -n "$node"
-          docker exec pb3-p0-garage /garage layout assign -z ci -c 1G "$node"
-          docker exec pb3-p0-garage /garage layout apply --version 1
-          docker exec pb3-p0-garage /garage bucket create pb3-ci-p0
-          docker exec pb3-p0-garage /garage key create pb3-ci-key > "$RUNNER_TEMP/garage/key.txt"
+          docker exec pb3-vault-218-garage /garage layout assign -z ci -c 1G "$node"
+          docker exec pb3-vault-218-garage /garage layout apply --version 1
+          docker exec pb3-vault-218-garage /garage bucket create pb3-ci-p0
+          docker exec pb3-vault-218-garage /garage key create pb3-ci-key > "$RUNNER_TEMP/garage/key.txt"
           key="$(sed -n 's/^[[:space:]]*Key ID:[[:space:]]*//p' "$RUNNER_TEMP/garage/key.txt" | head -1)"
           password="$(sed -n 's/^[[:space:]]*Secret key:[[:space:]]*//p' "$RUNNER_TEMP/garage/key.txt" | head -1)"
           test -n "$key" && test -n "$password"
           echo "::add-mask::$key"
           echo "::add-mask::$password"
-          docker exec pb3-p0-garage /garage bucket allow --read --write --owner pb3-ci-p0 --key pb3-ci-key
+          docker exec pb3-vault-218-garage /garage bucket allow --read --write --owner pb3-ci-p0 --key pb3-ci-key
           {
             echo "S3_ACCESS_KEY=$key"
             echo "S3_SECRET_KEY=$password"
