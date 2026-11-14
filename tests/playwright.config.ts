@@ -6,7 +6,9 @@ export default defineConfig({
   // exclude newly added Browser tests behind the P1-only allowlist.
   // Settings integration has its own explicit P2 gate; unrelated tracks (e.g. Matrix)
   // still have separate fixtures.
-  testMatch: ['p1-*.spec.ts','p2-browser-*.spec.ts','p2-settings-*.spec.ts'],
+  testMatch: ['p1-*.spec.ts','p2-browser-*.spec.ts','p2-settings-*.spec.ts',
+    // Approved Beta: actual encrypted draft on two real browsers, not Matrix.
+    'p2-messages-drafts.spec.ts'],
   workers: 1,
   retries: 0,
   timeout: 90_000,

@@ -27,10 +27,10 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
     await page.getByTestId('settings-nav-appearance').click()
     await expect(page.getByTestId('appearance-page')).toBeVisible()
 
-    // Seven UX choices exist, but only FIVE implemented destinations.
-    // Never simulate a sixth working link or approve missing Matrix routes.
+    // Messages Beta is a real sixth optional route for LOCAL encrypted
+    // drafts only; Notifications stays disabled. No Matrix send/rooms.
     await expect(page.getByTestId('dock-add-notifications')).toBeDisabled()
-    await expect(page.getByTestId('dock-add-messages')).toBeDisabled()
+    await expect(page.getByTestId('dock-add-messages')).toBeEnabled()
     await expect(page.getByTestId('dock-remove-settings')).toHaveCount(0)
 
     await page.getByTestId('dock-remove-contacts').click()
@@ -110,6 +110,39 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
       }
     })
     expect(geometry).toEqual({count:5,equal:true,inside:true,bottom:true})
+
+    // Explicitly exercise the *new* 6th destination on the narrowest viewport
+    // instead of merely weakening the old disabled assertion.
+    await page.getByTestId('dock-add-messages').click()
+    await expect(page.getByTestId('dock-count')).toHaveText('6 / 6')
+    await expect(dock(page).getByRole('link')).toHaveCount(6)
+    await expect(dock(page).getByRole('link',{name:'Сообщения'})).toBeVisible()
+    const sixthGeometry=await dock(page).evaluate(element=>{
+      const nav=element.getBoundingClientRect()
+      const rects=[...element.querySelectorAll('a')]
+        .map(item=>item.getBoundingClientRect())
+      return {
+        count:rects.length,
+        equal:Math.max(...rects.map(x=>x.width))-
+          Math.min(...rects.map(x=>x.width))<1.1,
+        inside:rects.every(rect=>rect.left>=-1
+          &&rect.right<=window.innerWidth+1),
+        bottom:Math.abs(nav.bottom-window.innerHeight)<5,
+      }
+    })
+    expect(sixthGeometry).toEqual({count:6,equal:true,inside:true,bottom:true})
+    await page.getByRole('button',{name:'Сохранить',exact:true}).click()
+    await expect(page.getByText('Сохранено на этом устройстве.')).toBeVisible()
+    await page.reload()
+    await expect(dock(page).getByRole('link')).toHaveCount(6)
+    await dock(page).getByRole('link',{name:'Сообщения'}).click()
+    await expect(page).toHaveURL(/\/messages$/)
+    await expect(page.getByTestId('messages-page')).toBeVisible()
+    await expect(page.getByText('Matrix пока не подключён',{exact:false}))
+      .toBeVisible()
+    await expect(page.getByTestId('messages-compose')).toBeEnabled()
+    await expect(page.getByTestId('messages-thread')).toHaveCount(0)
+
   }finally{await context.close()}
 })
 
