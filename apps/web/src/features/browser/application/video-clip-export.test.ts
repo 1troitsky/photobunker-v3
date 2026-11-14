@@ -61,7 +61,7 @@ class FakeMediaRecorder{
   onerror:(()=>void)|null=null
   onstop:(()=>void)|null=null
   constructor(
-    readonly stream:MediaStream,
+    _stream:MediaStream,
     options:{mimeType:string},
   ){
     this.mimeType=options.mimeType
@@ -116,7 +116,7 @@ describe('P2 #215 real browser video clip encoder gating',()=>{
       [10_000,0,Infinity],[10_000,1.1,5000],
       [10_000,1000,5000.5],
     ] as const)
-      expect(()=>validateVideoClipRange(...bad))
+      expect(()=>validateVideoClipRange(bad[0],bad[1],bad[2]))
         .toThrow('viewer.video_clip_invalid_range')
   })
   it('uses authenticated private filenames and real container extension',()=>{
