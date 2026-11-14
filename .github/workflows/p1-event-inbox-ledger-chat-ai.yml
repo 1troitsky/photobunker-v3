@@ -1,0 +1,74 @@
+name: P1 QA 406 durable metadata-only domain event inbox (real PG18)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - apps/api/app/Events/PostgresEventInboxLedger.php
+      - apps/api/database/migrations/2026_11_14_190001_create_event_inbox_receipts_v1.php
+      - apps/api/tests/Integration/PostgresEventInboxLedgerChatAITest.php
+      - .github/workflows/p1-event-inbox-ledger-chat-ai.yml
+      - docs/audits/P1-EVENT-INBOX-LEDGER-CHAT-AI-20261114.md
+
+permissions:
+  contents: read
+
+jobs:
+  p1-event-inbox-real-postgres:
+    name: Real PG18 event ledger duplicate/gap/account isolation (no delivery claim)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_ci_p1_events_406
+          POSTGRES_USER: pb3_ci_406
+          POSTGRES_PASSWORD: pb3_ci_406_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb3_ci_406 -d pb3_ci_p1_events_406"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      PB3_EVENT_INBOX_QA: '1'
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: https://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_ci_p1_events_406
+      DB_USERNAME: pb3_ci_406
+      DB_PASSWORD: pb3_ci_406_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, fileinfo, curl, zip
+          coverage: none
+      - name: Enforce patched PHP runtime and owned source syntax
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          php -l apps/api/app/Events/PostgresEventInboxLedger.php
+          php -l apps/api/database/migrations/2026_11_14_190001_create_event_inbox_receipts_v1.php
+          php -l apps/api/tests/Integration/PostgresEventInboxLedgerChatAITest.php
+      - name: Locked Composer and security audit
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          composer install --no-interaction --no-progress --prefer-dist
+          composer audit --locked --no-interaction
+      - name: PostgreSQL 18 durable receipts, two sockets, replay and bounded deferral
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          # The default phpunit.xml deliberately forces SQLite; bypass it
+          # ONLY in this disposable, guarded PostgreSQL CI job.
+          php vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php \
+            tests/Integration/PostgresEventInboxLedgerChatAITest.php --colors=never
