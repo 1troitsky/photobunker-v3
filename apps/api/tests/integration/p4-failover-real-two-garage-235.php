@@ -82,6 +82,8 @@ final class IsolatedSecondGarage implements StorageAdapter
 {
     private S3Client $s3;
     private string $bucket;
+    /** Inject a second independent PHP/PG18 process after the initial DB snapshot. */
+    public ?\Closure $onRead=null;
 
     public function __construct(string $endpoint,string $bucket,string $key,string $secret)
     {
@@ -103,6 +105,11 @@ final class IsolatedSecondGarage implements StorageAdapter
 
     public function readStream(string $objectKey):mixed
     {
+        if ($this->onRead!==null) {
+            $hook=$this->onRead;
+            $this->onRead=null;
+            $hook();
+        }
         $result=$this->s3->getObject(['Bucket'=>$this->bucket,'Key'=>$objectKey]);
         $body=(string)$result['Body']; // Small synthetic fixture only.
         $stream=fopen('php://temp','w+b');
@@ -287,9 +294,84 @@ function failoverLoadFixture():array
     return $data;
 }
 
+
+/**
+ * Invariant: independent PostgreSQL backends AND independent Linux PHP PIDs.
+ * Worker mutates only disposable fixture metadata, never production rows/S3.
+ * This is a deterministic between-read race, not a proof of a writer lock.
+ *
+ * @param array<string,mixed> $fixture
+ */
+function failoverConcurrentPgMutation(string $action,array $fixture):void
+{
+    failoverAssert(in_array($action,['account-revision','parent-deletion'],true),
+        'unsupported_race_mutation');
+    $parentOs=(int)getmypid();
+    $parentPg=(int)DB::selectOne('SELECT pg_backend_pid() as pid')->pid;
+    $cmd=[PHP_BINARY,__FILE__,'race-worker',$action,
+        $fixture['account'],$fixture['parent'],
+        (string)$parentOs,(string)$parentPg];
+    $pipes=[];
+    $process=proc_open($cmd,[
+        0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w'],
+    ],$pipes);
+    failoverAssert(is_resource($process),'cannot_spawn_separate_php_worker');
+    fclose($pipes[0]);
+    $stdout=(string)stream_get_contents($pipes[1]);
+    $stderr=(string)stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $status=proc_close($process);
+    // Do not echo STDERR; it could contain connection/config context.
+    failoverAssert($status===0 && $stderr==='',
+        'separate_php_worker_unexpected_failure');
+    failoverAssert(preg_match(
+        '/^RACE_WORKER_ACK:([a-z-]+):([0-9]+):([0-9]+)\n$/D',
+        $stdout,$m)===1,
+        'worker_ack_unconfirmed');
+    failoverAssert($m[1]===$action
+        && (int)$m[2]>0 && (int)$m[2]!==$parentOs
+        && (int)$m[3]>0 && (int)$m[3]!==$parentPg,
+        'worker_not_independent_os_and_pg_process');
+}
+
 $mode=$argv[1]??'';
-failoverAssert(in_array($mode,['healthy','primary-offline','secondary-offline','recovered'],true)
-    && count($argv)===2,'unknown_test_mode');
+failoverAssert(in_array($mode,[
+    'healthy','race','race-worker','primary-offline','secondary-offline','recovered'
+],true),'unknown_test_mode');
+
+// Child process must pass all disposable-GitHub-Action guards above.
+// It can only alter two exact rows from the already seeded fixture file.
+if ($mode==='race-worker') {
+    failoverAssert(count($argv)===7,'unexpected_worker_argument_count');
+    [$script,$run,$action,$account,$parent,$parentOs,$parentPg]=$argv;
+    failoverAssert(in_array($action,['account-revision','parent-deletion'],true)
+        && Str::isUuid($account) && Str::isUuid($parent)
+        && ctype_digit($parentOs) && ctype_digit($parentPg),
+        'invalid_race_worker_identity');
+    $fixtures=failoverLoadFixture();
+    $f=$fixtures['photo'];
+    failoverAssert($f['account']===$account && $f['parent']===$parent,
+        'race_worker_not_fixture_owned');
+    $pid=(int)getmypid();
+    $pgpid=(int)DB::selectOne('SELECT pg_backend_pid() as pid')->pid;
+    failoverAssert($pid!==(int)$parentOs && $pgpid!==(int)$parentPg,
+        'worker_not_independent_process');
+    if ($action==='account-revision') {
+        $affected=DB::table('identity_accounts')
+            ->where('id',$account)->where('status','ready')
+            ->increment('revision');
+    } else {
+        $affected=DB::table('photo_records')
+            ->where('id',$parent)->where('account_id',$account)
+            ->where('state','active')
+            ->update(['state'=>'deleting','updated_at'=>CarbonImmutable::now('UTC')]);
+    }
+    failoverAssert($affected===1,'expected_one_fixture_row_changed');
+    echo "RACE_WORKER_ACK:$action:$pid:$pgpid\n";
+    exit(0);
+}
+failoverAssert(count($argv)===2,'unexpected_test_mode_arguments');
 [$primary,$secondary,$preflight]=failoverTransports();
 
 if ($mode==='healthy') {
@@ -376,6 +458,43 @@ if ($mode==='healthy') {
 }
 
 $fixtures=failoverLoadFixture();
+
+if ($mode==='race') {
+    $f=$fixtures['photo'];
+    $initialRevision=(int)DB::table('identity_accounts')
+        ->where('id',$f['account'])->value('revision');
+    // Second OS process commits a READY->READY identity revision bump
+    // after preflight's first DB snapshot, before Garage B GET.
+    $secondary->onRead=static fn()=>failoverConcurrentPgMutation(
+        'account-revision',$f);
+    failoverDeny(fn()=>failoverTest($preflight,$f),
+        'failover.changed_during_read');
+    failoverAssert((int)DB::table('identity_accounts')
+            ->where('id',$f['account'])->value('revision')===$initialRevision+1
+        && DB::table('identity_accounts')->where('id',$f['account'])
+            ->value('status')==='ready',
+        'account_revision_not_really_committed');
+    failoverTest($preflight,$f);
+    echo "P4 #235 REAL PG18 RACE 1/2 PASS: separate OS-PHP+PG18 rotation during actual Garage B GET fails closed while account remains READY\n";
+
+    // Other process transitions Photo active->deleting mid-GET. Restore only
+    // synthetic fixture metadata so subsequent outage/recovery QA stays valid.
+    $secondary->onRead=static fn()=>failoverConcurrentPgMutation(
+        'parent-deletion',$f);
+    failoverDeny(fn()=>failoverTest($preflight,$f),
+        'failover.asset_unavailable');
+    failoverAssert(DB::table('photo_records')->where('id',$f['parent'])
+        ->value('state')==='deleting','delete_not_committed');
+    $changed=DB::table('photo_records')->where('id',$f['parent'])
+        ->where('account_id',$f['account'])->where('state','deleting')
+        ->update(['state'=>'active','updated_at'=>CarbonImmutable::now('UTC')]);
+    failoverAssert($changed===1,'fixture_restore_not_confirmed');
+    failoverTest($preflight,$f);
+    failoverVerifyOriginal($primary,$f);
+    echo "P4 #235 REAL PG18 RACE 2/2 PASS: separate OS-PHP+PG18 mid-GET delete rejected; only synthetic fixture restored; Garage A intact\n";
+    echo "P4 #235 REAL PG18 RACE COMPLETE 2/2: distinct PHP PIDs and PG18 backend IDs, NO placement switching\n";
+    exit(0);
+}
 
 if ($mode==='primary-offline') {
     // CI stopped ONLY the disposable Garage A Docker container.
