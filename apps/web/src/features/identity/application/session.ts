@@ -197,12 +197,23 @@ async function resumeLocalDevice():Promise<Session|null> {
   }
   if (!saved || isLogoutFenced()) return null
   const pkg=await openDevice(saved.envelope,saved.encryptionKey,saved.accountId,saved.deviceId)
-  if (isLogoutFenced()) return null
+  // A logout may complete and B may be explicitly admitted while A's key
+  // unsealing was in flight. Re-verify A's durable device-specific revocation;
+  // the origin-wide marker might already have been cleared for B by then.
+  if (isLogoutFenced() || await isSignedOut(saved.accountId,saved.deviceId)) return null
   // Open cached state immediately. A remote claim is never made until proof passes.
   const local=activate(pkg,saved,false)
   try {
     await prove('login',{accountId:saved.accountId,deviceId:saved.deviceId,purpose:'login'},saved.deviceKey)
-    if (activeSession.value===local && !isLogoutFenced()) activate(pkg,saved,true)
+    if (activeSession.value===local) {
+      const revoked=await isSignedOut(saved.accountId,saved.deviceId)
+      if (activeSession.value===local) {
+        if (revoked || isLogoutFenced()) {
+          activeSession.value=null
+          resetCsrf()
+        } else activate(pkg,saved,true)
+      }
+    }
   } catch {
     // Offline or revoked: only locally available encrypted media remains.
   }
@@ -232,13 +243,19 @@ export async function logout():Promise<void> {
   if (!state) { resetCsrf(); return }
   // Never publish a signed-out UI before a synchronous origin-wide fence;
   // IndexedDB writes can be aborted by a hard reload before oncomplete.
-  establishLogoutFence()
+  let fenceFailure:unknown=null
+  try { establishLogoutFence() } catch(error) { fenceFailure=error }
+  // Even if origin Web Storage is blocked, immediately close the volatile UI
+  // and attempt the independent durable device IDB marker. Never claim
+  // success if either safety guard was unavailable.
   activeSession.value=null
   resetCsrf()
-  // IDB failure leaves the fence in place. No auto-resume until explicit
-  // Recovery Key proof, and no fabricated network or durable logout ACK.
-  await markSignedOut(state.accountId,state.deviceId,true)
+  let durableFailure:unknown=null
+  try { await markSignedOut(state.accountId,state.deviceId,true) }
+  catch(error) { durableFailure=error }
   if(state.online) {
-    try { await jsonApi('/identity/v2/logout','POST',{}) } catch { /* locally denied; no fake server ACK */ }
+    try { await jsonApi('/identity/v2/logout','POST',{}) } catch { /* best effort; no fake ACK */ }
   }
+  if (durableFailure) throw durableFailure
+  if (fenceFailure) throw fenceFailure
 }
