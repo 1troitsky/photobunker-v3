@@ -1,0 +1,33 @@
+{
+  "productSha": "2c1406586dd819357bd3fcc933985f616ce72d39",
+  "baselineSha": "f13ad76929916ecfbb2ef0d5fd7a5a284f680e02",
+  "securitySourceSha": "3a5f5cf1d5f96c5e903e0099261081919b3236e1",
+  "integrationVerdict": "PASS",
+  "mergeReviewReadyInTestedScope": true,
+  "ownerMergeAuthorization": false,
+  "p1Accepted": false,
+  "productDefectsConfirmed": [],
+  "matrix": [
+    {"scenario": "dependency graph and exact PR45 patch transport", "status": "PASS", "evidence": "STATIC-EVIDENCE.json"},
+    {"scenario": "old-schema v1 photo/video/audio grants, migration preservation and post-upgrade decrypt", "status": "PASS", "evidence": "INTEGRATED-EVIDENCE.json"},
+    {"scenario": "same-owner sibling assignment, pending member and wrong-owner denial", "status": "PASS", "evidence": "INTEGRATED-EVIDENCE.json"},
+    {"scenario": "fingerprint, signature domain and valid-signature/wrong-AAD rejection", "status": "PASS", "evidence": "INTEGRATED-EVIDENCE.json"},
+    {"scenario": "account switch, real Recovery proof and unchanged originals", "status": "PASS", "evidence": "INTEGRATED-EVIDENCE.json"},
+    {"scenario": "grant, schedule and retention expiry; v1 independence and no-delete", "status": "PASS", "evidence": "INTEGRATED-EVIDENCE.json"},
+    {"scenario": "Contacts UI to explicit invite and accepted roster", "status": "PASS", "evidence": "JOURNEY-VERIFIED-EVIDENCE.json"},
+    {"scenario": "verified private instructions offline and encrypted three-kind capture", "status": "PASS", "evidence": "JOURNEY-VERIFIED-EVIDENCE.json"},
+    {"scenario": "committed lost grant/submission ACK, reload and exact replay without duplicates", "status": "PASS", "evidence": "JOURNEY-VERIFIED-EVIDENCE.json"},
+    {"scenario": "recipient/contributor cloud plaintext hash equality and stable ciphertext identifiers", "status": "PASS", "evidence": "JOURNEY-VERIFIED-EVIDENCE.json"},
+    {"scenario": "private canary absence from IndexedDB, wire, disposable database and logs", "status": "PASS", "evidence": "JOURNEY-VERIFIED-EVIDENCE.json"},
+    {"scenario": "trusted cold-offline PWA bootstrap", "status": "BLOCKED", "reason": "Independent trust anchor unavailable; no SW enabled or readiness claim"},
+    {"scenario": "native Safari and physical iPhone/Android camera/GPS/gallery", "status": "NOT TESTED", "reason": "No physical testing performed"},
+    {"scenario": "production-scale migration locks and downgrade after issuing v2 grants", "status": "NOT TESTED"}
+  ],
+  "qaDiagnoses": [
+    {"id": "QA-H1", "kind": "harness assertion", "reason": "Roster API helper returns an array", "initialEvidence": "INTEGRATED-EVIDENCE.json", "fixedInQaSha": "39967b940843ca44a30ff5f1aa6a5cee1ef63a0e"},
+    {"id": "QA-H2", "kind": "missing warm-cache precondition", "reason": "Offline started before online private cache hydration", "initialEvidence": "WARM-CACHE-DIAGNOSTIC-EVIDENCE.json", "fixedInQaSha": "c91c2a64583400dcbdbc62a321e95f60d342d435"},
+    {"id": "QA-H3", "kind": "recorder fixture MIME", "reason": "Adapter used codec-qualified reported MIME instead of CaptureView chosen canonical MIME", "initialEvidence": "MIME-DIAGNOSTIC-EVIDENCE.json", "fixedInQaSha": "5d4f08f691ea4b74a33ac2c51d7401c77db3298c"}
+  ],
+  "documentationFinding": "Canonical CURRENT and integration checkpoint still say CI/local audit pending at the audited SHA; no product status page changed",
+  "executionPolicy": "One integrated run, three focused corrections of distinct harness causes, no repeat of successful full CI or migration/adversarial/expiry suites"
+}
