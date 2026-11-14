@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { assignmentMonthlyPlanLabel } from '../features/assignments/application/monthly-usage'
+import {optionalMixedGoal} from '../features/assignments/domain/mixed-creation'
+import type {MixedCreationIntent,MixedCreationStage} from '../features/assignments/domain/mixed-creation'
 import { RouterLink } from 'vue-router'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
-  queueAssignmentCreation, listLocalAssignmentDrafts, listServerAssignmentUsage,
+  queueAssignmentCreation, listLocalAssignmentDrafts, listPendingMixedCreations,
+  listServerAssignmentUsage,
   listAllServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
   listAssignmentRemovalNotices, listLocallyRevokedAssignmentIds,
   listCachedVerifiedAssignmentRemovals,
@@ -89,6 +92,11 @@ const selectedId=ref('')
 const title=ref('')
 const instructions=ref('')
 const goal=ref<string|number>('')
+const createVideo=ref(false)
+const createAudio=ref(false)
+const createVideoGoal=ref<string|number>('')
+const createAudioGoal=ref<string|number>('')
+const pendingMixed=ref<Record<string,{stage:MixedCreationStage;intent:MixedCreationIntent;error?:string}>>({})
 const editedGoal=ref<string|number>('')
 const editedVideoGoal=ref<string|number>('')
 const editedAudioGoal=ref<string|number>('')
@@ -204,7 +212,7 @@ function resetSensitive():void {
   removalNoticesError.value='';operations.value=[];photos.value=[]
   mediaFiles.value=[];mediaSubmissions.value=[];verifiedMediaReceipts.value={}
   mediaNextCursor.value=null
-  monthlyUsage.value=null
+  monthlyUsage.value=null;pendingMixed.value={}
   submissions.value=[];photoNextCursor.value=null;verifiedPhotoReceipts.value={}
   selectedId.value='';ownerCheck.value=null
   contributorCheck.value=null;showingOfflineSnapshot.value=false;cleanPreview()
@@ -222,12 +230,15 @@ async function hydrate():Promise<void>{
   const identity=activeSession.value
   if(!identity){resetSensitive();return}
   // Render durable local drafts and signed queued operations BEFORE any HTTP.
-  const [local,ops,localPhotos,localMedia]=await Promise.all([
+  const [local,ops,localPhotos,localMedia,mixed]=await Promise.all([
     listLocalAssignmentDrafts(),listAssignmentOperations(),listLocalPhotos(),
-    listLocalMedia(),
+    listLocalMedia(),listPendingMixedCreations(),
   ])
   if(activeSession.value!==identity)return
   operations.value=ops;photos.value=localPhotos;mediaFiles.value=localMedia
+  pendingMixed.value=Object.fromEntries(mixed.map(x=>[x.assignmentId,{
+    stage:x.stage,intent:x.intent,...(x.error?{error:x.error}:{})
+  }]))
   // Once a create is ACKed, its signed, independently verified snapshot
   // (not a stale local plaintext summary) is the ONLY render authority.
   const localRows:VisibleAssignment[]=await Promise.all(
@@ -447,13 +458,31 @@ async function create():Promise<void>{
     const trimmed=title.value.trim()
     if(!trimmed)throw Error('Введите название задания')
     const parsed=String(goal.value).trim()?Number(goal.value):null
+    const allowedMedia:Array<'photo'|'video'|'audio'>=['photo']
+    if(createVideo.value)allowedMedia.push('video')
+    if(createAudio.value)allowedMedia.push('audio')
+    const mixedCreation:MixedCreationIntent|undefined=allowedMedia.length>1
+      ?{allowedMedia,
+        videoGoal:createVideo.value?optionalMixedGoal(createVideoGoal.value):null,
+        audioGoal:createAudio.value?optionalMixedGoal(createAudioGoal.value):null}
+      :undefined
     const id=await queueAssignmentCreation({
       title:trimmed,instructions:instructions.value,photoGoal:parsed,
+      ...(mixedCreation?{mixedCreation}:{}),
     })
     showCreate.value=false;title.value='';instructions.value='';goal.value=''
+    createVideo.value=false;createAudio.value=false
+    createVideoGoal.value='';createAudioGoal.value=''
+    // Local-first render cannot block on network. Durable signed outbox
+    // will perform root ACK -> v6 owner policy -> independent server ACK.
     await hydrate()
     selectedId.value=id
-    notice.value='Задание зашифровано и принято локально. Синхронизация — в очереди.'
+    notice.value=mixedCreation
+      ?'Смешанное задание сохранено локально. Видео и аудио появятся только после двух подтверждений сервера. Синхронизация выполняется отдельно.'
+      :'Задание зашифровано и принято локально. Синхронизация — в очереди.'
+    if(mixedCreation&&activeSession.value?.online&&navigator.onLine)
+      void flushAssignmentOutbox().then(()=>refresh()).catch(()=>{})
+
   })
 }
 function populateOwnerPolicyForm(chosen:VisibleAssignment|undefined):void{
@@ -912,14 +941,28 @@ onUnmounted(cleanPreview)
       </div>
 
       <form v-if="showCreate" class="foundation-card" @submit.prevent="create">
-        <h2>Создать задание · P1 (фото)</h2>
-        <p class="muted">Временная функциональная форма. Полный редактор: Основное / Файлы / Участники / Правила — по утверждённому Fieldwork 2.2.</p>
+        <h2>Создать задание · фото, видео и аудио</h2>
+        <p class="muted">Сначала подписывается базовое задание. После ответа сервера отдельная подписанная политика разрешит видео и аудио. До её подтверждения действует только фото. Полный редактор: Основное / Файлы / Участники / Правила.</p>
         <label for="assignment-title">Название</label>
         <input id="assignment-title" v-model="title" maxlength="120" autocomplete="off" required>
         <label for="assignment-instructions">Инструкции</label>
         <textarea id="assignment-instructions" v-model="instructions" rows="4" maxlength="4000"/>
         <label for="assignment-goal">Нужно фотографий (необязательная цель)</label>
         <input id="assignment-goal" v-model="goal" type="number" min="1" max="9999" step="1" placeholder="Например, 30">
+        <label class="checkline" for="assignment-create-video">
+          <input id="assignment-create-video" v-model="createVideo" type="checkbox">
+          Добавить видео в подписанные правила
+        </label>
+        <label v-if="createVideo" for="assignment-create-video-goal">Цель по видео (1–999, необязательно)</label>
+        <input v-if="createVideo" id="assignment-create-video-goal" v-model="createVideoGoal"
+          type="number" min="1" max="999" step="1" placeholder="Без цели">
+        <label class="checkline" for="assignment-create-audio">
+          <input id="assignment-create-audio" v-model="createAudio" type="checkbox">
+          Добавить аудио в подписанные правила
+        </label>
+        <label v-if="createAudio" for="assignment-create-audio-goal">Цель по аудио (1–999, необязательно)</label>
+        <input v-if="createAudio" id="assignment-create-audio-goal" v-model="createAudioGoal"
+          type="number" min="1" max="999" step="1" placeholder="Без цели">
         <p class="muted">Название и инструкции шифруются до сохранения. Цель нужна только для прогресса, не ограничивает число файлов. Офлайн-черновик сохраняется независимо от квоты; сервер проверяет право создания по текущему тарифу при синхронизации.</p>
         <button type="submit" :disabled="busy">Создать зашифрованное задание</button>
       </form>
@@ -938,6 +981,14 @@ onUnmounted(cleanPreview)
       </div>
       <div class="assignments-cards">
         <article v-for="assignment in visible" :key="assignment.id" class="assignment-card">
+          <p v-if="pendingMixed[assignment.id]" class="muted" role="status"
+            :data-testid="'assignment-mixed-pending-'+assignment.id">
+            {{ pendingMixed[assignment.id]?.stage==='conflict'
+              ?'Видео/аудио не разрешены: есть конфликт подписанных изменений. Проверьте политику задания.'
+              :pendingMixed[assignment.id]?.stage==='pending-root'
+                ?'Смешанное задание в очереди: базовая подпись ещё не подтверждена сервером.'
+                :'Видео/аудио ещё не подтверждены подписанной политикой сервера. Нажмите «Синхронизировать».' }}
+          </p>
           <div class="assignment-card-top">
             <span class="assignment-icon" aria-hidden="true">▤</span>
             <div class="assignment-card-name">
