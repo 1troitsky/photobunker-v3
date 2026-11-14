@@ -68,7 +68,15 @@ final class PlacementPreparationLedger
             || !is_int($evidence['sourceCredentialRevision'] ?? null)
             || $evidence['sourceCredentialRevision'] < 1
             || !is_int($evidence['targetCredentialRevision'] ?? null)
-            || $evidence['targetCredentialRevision'] < 1) {
+            || $evidence['targetCredentialRevision'] < 1
+            || !is_string($evidence['assetUpdatedAt'] ?? null)
+            || $evidence['assetUpdatedAt'] === ''
+            || !is_string($evidence['sourceLocationFingerprint'] ?? null)
+            || preg_match('/^[0-9a-f]{64}$/D',
+                $evidence['sourceLocationFingerprint'])!==1
+            || !is_string($evidence['targetLocationFingerprint'] ?? null)
+            || preg_match('/^[0-9a-f]{64}$/D',
+                $evidence['targetLocationFingerprint'])!==1) {
             throw new RuntimeException('placement.invalid_physical_preflight');
         }
 
@@ -231,7 +239,8 @@ final class PlacementPreparationLedger
                 ->join('photo_records as p','p.id','=','o.photo_id')
                 ->where('o.id',$logical)->where('p.account_id',$account)
                 ->first(['p.id as parent_id','p.state as parent_state',
-                    'p.expires_at','o.state as asset_state','o.bytes','o.sha256']);
+                    'p.expires_at','o.state as asset_state','o.bytes','o.sha256',
+                    'o.updated_at as asset_updated_at']);
             $table='storage_locations';$fk='asset_id';
             $deleted=$row!==null && DB::table('photo_tombstones')
                 ->where('photo_id',$row->parent_id)->exists();
@@ -240,7 +249,8 @@ final class PlacementPreparationLedger
                 ->join('media_files_v1 as m','m.id','=','c.media_id')
                 ->where('c.id',$logical)->where('m.account_id',$account)
                 ->first(['m.id as parent_id','m.state as parent_state',
-                    'm.expires_at','c.state as asset_state','c.bytes','c.sha256']);
+                    'm.expires_at','c.state as asset_state','c.bytes','c.sha256',
+                    'c.updated_at as asset_updated_at']);
             $table='media_chunk_locations_v1';$fk='chunk_id';
             $deleted=$row!==null && DB::table('media_tombstones_v1')
                 ->where('media_id',$row->parent_id)->exists();
@@ -251,7 +261,8 @@ final class PlacementPreparationLedger
             || !is_numeric($row->expires_at)
             || (int)$row->expires_at <= $now->utc()->getTimestampMs()
             || (int)$row->bytes!==$evidence['ciphertextBytes']
-            || !hash_equals((string)$row->sha256,$evidence['ciphertextSha256'])) {
+            || !hash_equals((string)$row->sha256,$evidence['ciphertextSha256'])
+            || (string)$row->asset_updated_at!==$evidence['assetUpdatedAt']) {
             throw new RuntimeException('placement.candidate_stale_after_read');
         }
         $locations=DB::table($table)->where($fk,$logical)
@@ -267,6 +278,19 @@ final class PlacementPreparationLedger
                 || !hash_equals((string)$location->sha256,$evidence['ciphertextSha256'])) {
                 throw new RuntimeException('placement.candidate_stale_after_read');
             }
+        }
+        // The previous check only compared SHA/size/provider, allowing an
+        // object_key swap to a not-yet-read target with identical metadata.
+        // Refuse ANY post-preflight locator/status/revision mutation.
+        if (!hash_equals(
+                $evidence['sourceLocationFingerprint'],
+                PlacementReadiness::locationFingerprint($locations->get($sourceId))
+            )
+            || !hash_equals(
+                $evidence['targetLocationFingerprint'],
+                PlacementReadiness::locationFingerprint($locations->get($targetId))
+            )) {
+            throw new RuntimeException('placement.candidate_stale_after_read');
         }
         if ($locations->get($sourceId)->provider!==$evidence['sourceProvider']
             || $locations->get($targetId)->provider!==$evidence['targetProvider']
