@@ -21,6 +21,12 @@ test('P2 #215: real decoded video → NEW encoded clip → encrypted local Media
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
+    // Preload previously unmounted editor module while online. Native
+    // encoding and the encrypted outbox then run entirely offline.
+    await page.evaluate(async()=>{
+      await import('/src/features/browser/application/video-clip-export.ts')
+      await import('/src/features/media/application/media-outbox.ts')
+    })
     await context.setOffline(true)
 
     const verified=await page.evaluate(async(base64)=>{
