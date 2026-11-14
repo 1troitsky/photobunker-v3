@@ -23,12 +23,18 @@
 
 **Isolation:** two ADD-only paths in this PR; no production, existing tests, shared workflows, secrets, foreign branches or `main` modified. **No fabricated Garage or authentication ACK.** Existing real PostgreSQL18/Garage/Chromium workflow and Foundation/Security/UX must be checked on the *new PR HEAD*.
 
+## First exact-head failure and repair
+
+- Initial exact HEAD `b287c50ad50b1fb2fbf65d3633d72cca50b5669f`: Foundation/Security/UX PASS, real PG18/Garage/Chromium workflow [#43586449142](https://github.com/1troitsky/photobunker-v3/actions/runs/43586449142) **FAIL (93/94 Chromium)**. New test line 207 demanded the locale-dependent Browser empty-state label `Нет импортированных файлов.`, but the element was not found after real logout. Earlier assert that the decrypted preview disappeared **passed**. No persistent plaintext failure was demonstrated by this run; the subsequent blob URL/reload checks were not reached.
+- Own QA-only repair removes this **non-security visual copy dependency** and replaces it with negative assertions on the actual private filename/description remaining in the DOM after logout and reload. It also explicitly awaits `resumeExistingDevice()` after reload to prevent a false PASS caused by transient null session state. **No original security, IndexedDB, blob revoke or ciphertext-preservation assertion was removed or weakened.** No production code changed.
+- Every new commit changes the exact HEAD and requires a fresh **4/4 CI**, including the mandatory genuine browser E2E. Final gate is not inherited from the failed or earlier green HEAD.
+
 ## Evidence ledger
 
 | Gate | Status | Evidence/qualification |
 | --- | --- | --- |
 | Exact-source static preflight | PASS | Inspected source at immutable base `8ed66c43`; own new test included by `p1-*.spec.ts` pattern |
-| New Chromium origin-storage/logout test | PENDING CI | Must inspect actual exact-head PG18/Garage job and test count |
+| New Chromium origin-storage/logout test | PENDING NEW HEAD CI | Must inspect actual exact-head PG18/Garage job and test count |
 | Full Foundation / security audit / UX | PENDING CI | No PASS until workflows complete |
 | Private OS media gallery, true HTTP disk cache, OPFS eviction, heap remnants | NOT TESTED | Browser JS APIs cannot establish a device-level anti-forensics guarantee |
 | Physical iPhone Safari and Android PWA | NOT TESTED | No physical hardware evidence |
