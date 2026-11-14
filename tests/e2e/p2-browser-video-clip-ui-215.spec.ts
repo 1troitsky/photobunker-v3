@@ -22,8 +22,23 @@ test('P2 #215 UI: Video Editor trim → genuine E2EE clip offline; original and 
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    const expectedDevice=await page.evaluate(async()=>{
+      const {requireSession}=await import('/src/features/identity/application/session.ts')
+      const current=requireSession()
+      return {accountId:current.accountId,deviceId:current.deviceId}
+    })
 
     await page.goto('/browser')
+    // The SPA mounts before asynchronous signed device resume completes.
+    // Wait for the REAL proof on this exact account/device, not for a timer,
+    // artificial online state or a retried encrypted write.
+    await expect.poll(()=>page.evaluate(async wanted=>{
+      const {activeSession}=await import('/src/features/identity/application/session.ts')
+      const current=activeSession.value
+      if(current&&(current.accountId!==wanted.accountId
+        ||current.deviceId!==wanted.deviceId))throw Error('qa.unexpected_identity')
+      return current?.online===true
+    },expectedDevice),{timeout:30_000}).toBe(true)
     const mediaId=await page.evaluate(async base64=>{
       const data=Uint8Array.from(atob(base64),c=>c.charCodeAt(0))
       const source=new File([data],'PRIVATE-SOURCE-VIDEO.webm',{type:'video/webm'})
