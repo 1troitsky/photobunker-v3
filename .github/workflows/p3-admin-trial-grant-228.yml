@@ -141,3 +141,79 @@ jobs:
       - name: Declare narrow scope only
         run: |
           echo "Real PG18 two-process internal grant and restriction races, NOT public admin auth, MFA identity/session, mounted bans, cryptographic device revoke or deployment"
+
+  main-patched-compat:
+    name: "CI-ONLY original #228/#227 + current patched main / PHP ${{ matrix.php }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - name: Checkout EXACT PR head, not GitHub's synthetic test merge
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Assert exact current main and merge in disposable runner ONLY
+        shell: bash
+        env:
+          MAIN_PIN: 5aaba8b0509c354f8abb00806180f4ce6cb6ad18
+          OLD_MAIN: 6565a0fe852882ea5fc26e493df81affed687eee
+          PATCHED_LOCK_BLOB: c4bcae0458bd390b797186c3e2ccf536469588ef
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = "true"
+          test "$(git status --porcelain)" = ""
+          CURRENT="$(git ls-remote --heads origin main | awk '{print $1}')"
+          test "$CURRENT" = "$MAIN_PIN" || {
+            echo "main advanced: re-review candidate before compatibility verification" >&2
+            exit 1
+          }
+          git fetch --no-tags origin main
+          test "$(git rev-parse FETCH_HEAD)" = "$MAIN_PIN"
+          test "$(git merge-base HEAD "$MAIN_PIN")" = "$OLD_MAIN"
+          # The checkout is disposable; merge is never committed, pushed or
+          # run against main. This proves real three-way integration rather
+          # than copying the lock into the old branch and claiming security.
+          git -c user.name='PB3 Compatibility CI' -c user.email='ci-only@localhost' \
+            merge --no-commit --no-ff "$MAIN_PIN"
+          EXPECTED="$(printf '%s\\n' \
+            'apps/api/composer.lock' \
+            'docs/audits/P0-LARAVEL-CVE-2026-128083-297.md')"
+          ACTUAL="$(git diff --cached --name-only)"
+          test "$ACTUAL" = "$EXPECTED" || {
+            printf 'Unexpected merged paths:\\n%s\\n' "$ACTUAL" >&2
+            exit 1
+          }
+          test "$(git hash-object apps/api/composer.lock)" = "$PATCHED_LOCK_BLOB"
+          git diff --cached --check
+          echo "Verified actual ephemeral merge: precisely two security/doc paths, no code changes"
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, dom, xml, openssl, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          tools: composer:v2
+          coverage: none
+      - name: Enforce PHP secure patch floor
+        run: php scripts/check-runtime.php
+      - name: Install exact merged lock and demand ZERO Composer advisories
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          composer validate --no-check-publish --strict
+          composer audit --locked --no-interaction
+      - name: Run #227 + #228 targeted database cases on ACTUAL patched merge
+        working-directory: apps/api
+        run: |
+          php vendor/bin/phpunit tests/Feature/Administration
+      - name: Run ALL Foundation PHPUnit on ACTUAL patched merge
+        working-directory: apps/api
+        run: php vendor/bin/phpunit
+      - name: No repository merge, branch, tag, commit or push
+        run: |
+          echo "This test merges a PINNED main commit into a disposable GitHub runner only."
+          echo "PR #324 remains based on read-only #227 and still has an old, unaudited Composer.lock."
