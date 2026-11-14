@@ -67,6 +67,7 @@ jobs:
           DB_DATABASE: ':memory:'
         run: |
           php vendor/bin/phpunit --filter TelemetryDatabaseSinkTest
+          php vendor/bin/phpunit --filter InternalAggregateReaderTest
           php vendor/bin/phpunit
       - name: Migrate disposable PG18 and initialize clock
         working-directory: apps/api

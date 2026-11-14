@@ -10,6 +10,7 @@ $app = require dirname(__DIR__, 2) . '/bootstrap/app.php';
 $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Telemetry\AssignmentCreationReplay;
+use App\Telemetry\InternalAggregateReader;
 use App\Telemetry\DatabaseTelemetrySink;
 use Carbon\CarbonImmutable;
 use App\Telemetry\TelemetryCollector;
@@ -99,6 +100,19 @@ if ($stage === 'init') {
     }
     $assert($db->table('telemetry_active_tokens')->count() === 3,
         'assignment source should not mint activity actor tokens');
+    $day = gmdate('Y-m-d', intdiv($nowMs, 1000));
+    $week = gmdate('o-\WW', intdiv($nowMs, 1000));
+    $reader = new InternalAggregateReader($db);
+    $daily = $reader->read('assignment.created', 'day', $day, $day);
+    $assert($daily['sourceCoverage'] === 'not_proven'
+        && $daily['points'] === [['period' => $day, 'count' => 1]],
+        'real PG18 daily aggregate read is not precise or sparse');
+    $weekly = $reader->read('assignment.created', 'week', $week, $week);
+    $assert($weekly['points'] === [['period' => $week, 'count' => 1]],
+        'real PG18 ISO weekly aggregate read failed');
+    $missing = $reader->read('backup.verified', 'day', $day, $day);
+    $assert($missing['points'] === [], 'missing source must not fabricate zero');
+    echo "Telemetry PG18 real aggregate read, ISO periods, honest coverage PASS\n";
     echo "Telemetry PG18 two-process REAL ledger-source reconciliation PASS\n";
 } else {
     throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify');
