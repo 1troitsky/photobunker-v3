@@ -23,9 +23,11 @@ describe('Appearance 1.3 dock with fail-safe Local-First persistence', () => {
   it('uses the accepted five-point default and rejects hidden routes', () => {
     expect(defaultDock).toEqual(['assignments','browser','camera','contacts','settings'])
     expect(dockDefinitions.messages.to).toBeNull()
-    expect(dockDefinitions.notifications.to).toBeNull()
+    expect(dockDefinitions.notifications.to).toBe('/notifications')
     expect(validateDock(['assignments','messages','settings'])).toBeNull()
-    expect(validateDock(['assignments','notifications','settings'])).toBeNull()
+    expect(validateDock(['assignments','notifications','settings'])).toEqual([
+      'assignments','notifications','settings',
+    ])
   })
   it('enforces mandatory Settings, uniqueness and 3–6 navigation entries', () => {
     expect(validateDock(['assignments','camera','settings'])).toEqual([

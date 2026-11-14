@@ -6,12 +6,13 @@ describe('Appearance 1.3 active Dock retap: one safe logical level',()=>{
   const R=(path:string)=>({kind:'replace',path} as const)
 
   it('does not add history entries at any Dock section root',()=>{
-    for(const path of ['/assignments','/browser','/camera','/contacts','/settings'])
+    for(const path of ['/assignments','/browser','/camera','/contacts','/settings','/notifications'])
       expect(resolveDockRetap(path,path,'/outside')).toEqual({kind:'none'})
   })
   it('does not capture adjacent lookalike routes or inactive Dock links',()=>{
     expect(isDockSectionActive('/browser-other','/browser')).toBe(false)
     expect(isDockSectionActive('/settings-other','/settings')).toBe(false)
+    expect(isDockSectionActive('/notifications-other','/notifications')).toBe(false)
     expect(resolveDockRetap('/settings/appearance','/browser','/settings')).toBeNull()
     expect(resolveDockRetap('/camera','/settings','/browser')).toBeNull()
   })
@@ -41,6 +42,13 @@ describe('Appearance 1.3 active Dock retap: one safe logical level',()=>{
     expect(resolveDockRetap('/settings/appearance','/settings','/contacts')).toEqual(R('/settings'))
     expect(resolveDockRetap('/settings/appearance','/settings','/settings/appearance')).toEqual(R('/settings'))
     expect(resolveDockRetap('/settings/search','/settings',null)).toEqual(R('/settings'))
+  })
+  it('returns Notification Settings to trusted inbox, never to arbitrary history',()=>{
+    expect(isDockSectionActive('/notifications/settings','/notifications')).toBe(true)
+    expect(resolveDockRetap('/notifications/settings','/notifications','/notifications')).toEqual(B)
+    expect(resolveDockRetap('/notifications/settings','/notifications','/contacts')).toEqual(R('/notifications'))
+    expect(resolveDockRetap('/notifications/settings','/notifications',null)).toEqual(R('/notifications'))
+    expect(resolveDockRetap('/notifications/unknown','/notifications','//outside')).toEqual(R('/notifications'))
   })
   it('never allows unknown nested paths or untrusted previous path as a target',()=>{
     expect(resolveDockRetap('/browser/unknown','/browser','/settings')).toEqual(R('/browser'))

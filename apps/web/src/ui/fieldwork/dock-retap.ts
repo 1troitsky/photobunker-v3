@@ -15,9 +15,10 @@ const none: DockRetapAction = {kind:'none'}
 
 export function isDockSectionActive(currentPath:string,root:string):boolean {
   if (currentPath === root) return true
-  // Current PB3 routes have nested views only for these three sections.
+  // Only explicitly supported sections have nested routes.
   // Never treat '/browsers' or '/settings-other' as descendants.
-  return (root === '/assignments' || root === '/browser' || root === '/settings')
+  return (root === '/assignments' || root === '/browser'
+    || root === '/settings' || root === '/notifications')
     && currentPath.startsWith(root+'/')
 }
 
@@ -64,6 +65,13 @@ export function resolveDockRetap(
     // No external account or arbitrary history target is trusted.
     return previous==='/assignments'
       ? {kind:'back'} : {kind:'replace',path:'/assignments'}
+  }
+  if (root==='/notifications') {
+    // Notifications Settings has exactly one trusted logical parent.
+    // Never follow arbitrary cross-section history or untrusted deep links.
+    if (currentPath==='/notifications/settings' && previous==='/notifications')
+      return {kind:'back'}
+    return {kind:'replace',path:'/notifications'}
   }
   if (root==='/settings') {
     // Search -> Appearance -> Search is one legitimate step backward, and
