@@ -1,0 +1,232 @@
+name: P2 Public Card owner signature and scope #211
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/app/PublicCard/**"
+      - "apps/api/tests/Feature/PublicCardSignedPublicationIntentTest.php"
+      - "apps/api/tests/Feature/PublicCardGrantLedgerTest.php"
+      - "apps/api/tests/Feature/PublicCardCurrentReadDenialGateTest.php"
+      - "apps/api/tests/Feature/PublicCardSignedPreviewCeilingAuditTest.php"
+      - "apps/api/tests/Feature/PublicCardSignedEditorialBindingAuditTest.php"
+      - "apps/api/tests/Feature/PublicCardSignedContributorReceiptAuditTest.php"
+      - "apps/api/tests/Feature/PublicCardSignedContributorPublicConsentTest.php"
+      - "apps/web/src/features/media/application/public-card-safe-jpeg.ts"
+      - "apps/web/src/features/media/application/public-card-safe-jpeg.test.ts"
+      - "apps/web/src/features/media/application/public-card-consent-outbox.ts"
+      - "apps/web/src/features/media/application/public-card-consent-outbox.test.ts"
+      - "apps/web/src/features/media/ui/PublicCardConsentReview.vue"
+      - "apps/web/src/features/media/ui/PublicCardConsentReview.test.ts"
+      - "apps/web/src/features/media/application/public-card-contributor-source.ts"
+      - "apps/web/src/features/media/application/public-card-contributor-source.test.ts"
+      - "apps/web/src/features/media/ui/MediaSharePanel.vue"
+      - "apps/web/src/features/media/ui/MediaSharePanel.public-card.test.ts"
+      - "tests/e2e/p2-browser-public-card-safe-jpeg.spec.ts"
+      - "apps/api/database/migrations/2026_11_14_000211_create_public_card_publication_ledger_v1.php"
+      - "apps/api/composer.lock"
+      - ".github/workflows/p2-public-card-signed-intent-211.yml"
+  push:
+    branches:
+      - "p2/211-public-card-policy-preflight-20261113"
+    paths:
+      - "apps/api/app/PublicCard/**"
+      - "apps/api/tests/Feature/PublicCardSignedPublicationIntentTest.php"
+      - "apps/api/tests/Feature/PublicCardGrantLedgerTest.php"
+      - "apps/api/tests/Feature/PublicCardCurrentReadDenialGateTest.php"
+      - "apps/api/tests/Feature/PublicCardSignedPreviewCeilingAuditTest.php"
+      - "apps/api/tests/Feature/PublicCardSignedEditorialBindingAuditTest.php"
+      - "apps/api/tests/Feature/PublicCardSignedContributorReceiptAuditTest.php"
+      - "apps/api/tests/Feature/PublicCardSignedContributorPublicConsentTest.php"
+      - "apps/web/src/features/media/application/public-card-safe-jpeg.ts"
+      - "apps/web/src/features/media/application/public-card-safe-jpeg.test.ts"
+      - "apps/web/src/features/media/application/public-card-consent-outbox.ts"
+      - "apps/web/src/features/media/application/public-card-consent-outbox.test.ts"
+      - "apps/web/src/features/media/ui/PublicCardConsentReview.vue"
+      - "apps/web/src/features/media/ui/PublicCardConsentReview.test.ts"
+      - "apps/web/src/features/media/application/public-card-contributor-source.ts"
+      - "apps/web/src/features/media/application/public-card-contributor-source.test.ts"
+      - "apps/web/src/features/media/ui/MediaSharePanel.vue"
+      - "apps/web/src/features/media/ui/MediaSharePanel.public-card.test.ts"
+      - "tests/e2e/p2-browser-public-card-safe-jpeg.spec.ts"
+      - "apps/api/database/migrations/2026_11_14_000211_create_public_card_publication_ledger_v1.php"
+      - "apps/api/composer.lock"
+      - ".github/workflows/p2-public-card-signed-intent-211.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  signed-intent-contract:
+    name: PHP ${{ matrix.php }} signed intent
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.4", "8.5"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+          extensions: mbstring, xml, curl, zip, pdo_sqlite
+          coverage: none
+      - name: Enforce supported security-floor runtimes
+        run: |
+          php -r 'if (!((PHP_VERSION_ID >= 80427 && PHP_VERSION_ID < 80500) || (PHP_VERSION_ID >= 80512 && PHP_VERSION_ID < 80600))) { fwrite(STDERR,"unsupported PHP security version\n"); exit(1); }'
+      - name: Install audited locked dependencies
+        working-directory: apps/api
+        run: |
+          composer validate --strict --no-check-publish --no-interaction
+          composer audit --locked --no-interaction
+          composer install --no-interaction --prefer-dist --no-progress
+      - name: Full Laravel Foundation and Public Card tests
+        working-directory: apps/api
+        run: |
+          php vendor/bin/phpunit --no-progress
+          php vendor/bin/phpunit tests/Unit/PublicCard/SafeCardProjectionTest.php --no-progress
+
+  postgres18-ledger-schema:
+    name: PostgreSQL 18 public intent audit schema
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_public_card_ci
+          POSTGRES_USER: pb3_public_card_ci
+          POSTGRES_PASSWORD: pb3_disposable_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb3_public_card_ci -d pb3_public_card_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_public_card_ci
+      DB_USERNAME: pb3_public_card_ci
+      DB_PASSWORD: pb3_disposable_ci
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, fileinfo, curl, zip
+          coverage: none
+      - name: Confirm patched PHP runtime
+        run: php -r 'if (PHP_VERSION_ID < 80512 || PHP_VERSION_ID >= 80600) exit(1);'
+      - name: Install locked packages and migrate ONLY disposable PostgreSQL 18
+        working-directory: apps/api
+        run: |
+          composer validate --strict --no-check-publish --no-interaction
+          composer audit --locked --no-interaction
+          composer install --no-interaction --no-progress --prefer-dist
+          php artisan migrate --force
+      - name: Verify real owner-signed Public Card feature flows against disposable PostgreSQL 18
+        working-directory: apps/api
+        run: |
+          # phpunit.xml forcibly selects SQLite. This CI-only copy switches
+          # ONLY the fully disposable test DB to the PG18 service; never
+          # modify shared project phpunit.xml or product DB credentials.
+          cp phpunit.xml phpunit-pg18-public-card-ci.xml
+          php -r '
+          $file = "phpunit-pg18-public-card-ci.xml";
+          $raw = file_get_contents($file);
+          $from = [
+              "<env name=\"DB_CONNECTION\" value=\"sqlite\" force=\"true\"/>",
+              "<env name=\"DB_DATABASE\" value=\":memory:\" force=\"true\"/>",
+          ];
+          $to = [
+              "<env name=\"DB_CONNECTION\" value=\"pgsql\" force=\"true\"/>",
+              "<env name=\"DB_DATABASE\" value=\"pb3_public_card_ci\" force=\"true\"/>",
+          ];
+          foreach ($from as $entry) {
+              if (substr_count($raw, $entry) !== 1) exit(20);
+          }
+          file_put_contents($file, str_replace($from, $to, $raw));
+          '
+          for test in \
+            tests/Feature/PublicCardSignedPublicationIntentTest.php \
+            tests/Feature/PublicCardGrantLedgerTest.php \
+            tests/Feature/PublicCardCurrentReadDenialGateTest.php \
+            tests/Feature/PublicCardSignedPreviewCeilingAuditTest.php \
+            tests/Feature/PublicCardSignedEditorialBindingAuditTest.php \
+            tests/Feature/PublicCardSignedContributorReceiptAuditTest.php \
+            tests/Feature/PublicCardSignedContributorPublicConsentTest.php; do
+            php vendor/bin/phpunit --configuration phpunit-pg18-public-card-ci.xml --no-progress "$test"
+          done
+          rm -f phpunit-pg18-public-card-ci.xml
+      - name: Confirm PostgreSQL 18 ledger schema and unique token-hash fence
+        working-directory: apps/api
+        run: |
+          php -r '
+          require "vendor/autoload.php";
+          $app = require "bootstrap/app.php";
+          $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+          $db = \Illuminate\Support\Facades\DB::connection();
+          if ($db->getDriverName() !== "pgsql") exit(7);
+          $version = $db->getPdo()->getAttribute(PDO::ATTR_SERVER_VERSION);
+          if (!str_starts_with((string)$version, "18")) exit(8);
+          foreach (["public_card_intent_heads_v1", "public_card_intent_events_v1", "public_card_token_reservations_v1"] as $table) {
+              if (!\Illuminate\Support\Facades\Schema::hasTable($table)) exit(9);
+          }
+          $row = ["token_hash" => str_repeat("a", 64),
+              "account_id" => "11111111-1111-4111-8111-111111111111",
+              "safe_media_id" => "22222222-2222-4222-8222-222222222222",
+              "stage_operation_id" => "33333333-3333-4333-8333-333333333333",
+              "created_at" => now()];
+          $db->table("public_card_token_reservations_v1")->insert($row);
+          $row["stage_operation_id"] = "44444444-4444-4444-8444-444444444444";
+          try {
+              $db->table("public_card_token_reservations_v1")->insert($row);
+              exit(10);
+          } catch (\Illuminate\Database\QueryException $e) {
+              if ((string)$e->getCode() !== "23505") throw $e;
+          }
+          echo "PG18 migration and immutable unique token hash fence PASS\n";
+          '
+
+  client-jpeg-prepublication:
+    name: Local JPEG sanitizer Vitest TypeScript and real Chromium
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install frozen web dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Full web Vitest regression suite
+        run: pnpm --filter @pb3/web test:unit
+      - name: Web strict TS and production Vite build
+        run: pnpm --filter @pb3/web build
+      - name: Install real Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Start isolated Vite dev server
+        run: |
+          pnpm --filter @pb3/web dev --host 127.0.0.1 --port 5173 --strictPort > /tmp/pb3-p2-211-vite.log 2>&1 &
+          for n in $(seq 1 60); do
+            if curl --fail --silent --output /dev/null http://127.0.0.1:5173; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/pb3-p2-211-vite.log
+          exit 1
+      - name: Real Chromium source EXIF to flattened safe JPEG, no publication
+        run: pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/p2-browser-public-card-safe-jpeg.spec.ts
