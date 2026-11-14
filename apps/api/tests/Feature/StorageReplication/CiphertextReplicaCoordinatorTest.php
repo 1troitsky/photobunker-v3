@@ -305,6 +305,61 @@ final class CiphertextReplicaCoordinatorTest extends TestCase
         $this->assertSame($f['cipher'],$this->b->objects[$f['targetKey']]);
     }
 
+    public function test_revoked_account_mid_transfer_cancels_ticket_without_verified_ack():void
+    {
+        $f=$this->fixture();
+        $job=$this->enqueue($f);
+        $this->b->onPut=function()use($f):void {
+            DB::table('identity_accounts')->where('id',$f['account'])
+                ->update(['status'=>'retired']);
+        };
+        $result=$this->service->process($job['jobId'],$this->clock());
+        $this->assertSame('cancelled',$result['state']);
+        $this->assertFalse($result['transferVerified']);
+        $this->assertSame('reserved',DB::table($f['table'])
+            ->where('id',$f['target'])->value('state'));
+        $this->assertSame('account_revoked',DB::table('ciphertext_replication_jobs_v1')
+            ->where('id',$job['jobId'])->value('failure_class'));
+        $this->assertSame($f['cipher'],$this->a->objects[$f['sourceKey']]);
+    }
+
+    public function test_remote_put_can_finish_after_lease_expiry_without_claiming_verified():void
+    {
+        $f=$this->fixture();
+        $job=$this->enqueue($f);
+        $this->b->onPut=function()use($job):void {
+            DB::table('ciphertext_replication_jobs_v1')->where('id',$job['jobId'])
+                ->update(['lease_until'=>$this->clock()->subSecond()]);
+        };
+        $result=$this->service->process($job['jobId'],$this->clock());
+        $this->assertSame('retry',$result['state']);
+        $this->assertFalse($result['transferVerified']);
+        $this->assertSame('reserved',DB::table($f['table'])
+            ->where('id',$f['target'])->value('state'));
+        // Physical PUT was completed, then ACK was lost/rejected. The
+        // next fresh GET+SHA is enough; it must NOT issue another PUT.
+        $this->b->onPut=null;
+        $next=$this->service->process($job['jobId'],
+            $this->clock()->addSeconds(11));
+        $this->assertSame('verified',$next['state']);
+        $this->assertSame(1,$this->b->puts);
+    }
+
+    public function test_parent_expiring_during_remote_put_never_promotes_replica():void
+    {
+        $f=$this->fixture();
+        $job=$this->enqueue($f);
+        $this->b->onPut=function()use($f):void {
+            DB::table('photo_records')->where('id',$f['parent'])
+                ->update(['expires_at'=>$this->clock()->getTimestampMs()]);
+        };
+        $result=$this->service->process($job['jobId'],$this->clock());
+        $this->assertSame('retry',$result['state']);
+        $this->assertSame('reserved',DB::table($f['table'])
+            ->where('id',$f['target'])->value('state'));
+        $this->assertSame($f['cipher'],$this->a->objects[$f['sourceKey']]);
+    }
+
     public function test_mid_put_object_key_swap_denies_verified_ack():void
     {
         $f=$this->fixture();
