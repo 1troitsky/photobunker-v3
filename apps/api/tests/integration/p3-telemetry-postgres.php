@@ -12,6 +12,7 @@ $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 use App\Telemetry\AssignmentCreationReplay;
 use App\Telemetry\AssignmentCoverageAudit;
 use App\Telemetry\AssignmentReceiptLineageAudit;
+use App\Telemetry\TelemetryRotationPreflight;
 use App\Telemetry\TelemetryEvent;
 use App\Telemetry\TelemetryRecord;
 use App\Telemetry\InternalAggregateReader;
@@ -199,6 +200,63 @@ if ($stage === 'init') {
     $assert($audit->inspect($nowMs, $day)['matched'] === 1,
         'restored disposable receipt was not accepted');
     echo "Telemetry PG18 lineage exact HMAC receipt / wrong key / corruption / Honolulu PASS\n";
+} elseif ($stage === 'rotation-preflight') {
+    // READ-ONLY preflight on disposable real PG18 after the source lineage
+    // diagnostic. New candidate receipt is written only to test fixture DB
+    // to expose the double-counting risk of a key swap.
+    $now = CarbonImmutable::createFromTimestampMs($nowMs, 'UTC');
+    $previous = $now->startOfDay()->subDay()->addHours(12);
+    $day = $previous->format('Y-m-d');
+    $candidate = str_repeat('Q', 40);
+    $db->statement("SET TIME ZONE 'Pacific/Honolulu'");
+    $guard = new TelemetryRotationPreflight($db);
+    $startCount = $db->table('telemetry_event_receipts')->count();
+    $initial = $guard->assess($nowMs, $day, SECRET, $candidate);
+    $assert($initial['inspected'] === 1
+        && $initial['oldOnly'] === 1
+        && $initial['candidateOnly'] === 0
+        && $initial['both'] === 0
+        && $initial['missing'] === 0
+        && $initial['conflicting'] === 0
+        && $initial['scanComplete'] === true
+        && $initial['rotationApproved'] === false,
+        'PG18 old-only source receipt should prohibit automatic rotation');
+    $assert($initial['retainedState']['activeReceiptsPresent']
+        && $initial['retainedState']['actorMembershipsPresent']
+        && $initial['retainedState']['recentTrustedSourcePresent'],
+        'PG18 active receipts/actor/source should block key change');
+    $assert($db->table('telemetry_event_receipts')->count() === $startCount,
+        'PG18 read-only preflight wrote to receipt store');
+
+    $new = (new TelemetryCollector(new DatabaseTelemetrySink($db), $candidate))
+        ->ingest([
+            'schemaVersion' => 1,
+            'eventId' => '55555555-5555-4555-8555-555555555555',
+            'eventType' => 'assignment.created',
+            'occurredAtMs' => $previous->getTimestampMs(),
+        ], ACCOUNT, $nowMs);
+    $assert($new === TelemetryDecision::Accepted,
+        'disposable PG18 fixture should demonstrate cross-key duplicate risk');
+    $both = $guard->assess($nowMs, $day, SECRET, $candidate);
+    $assert($both['both'] === 1 && $both['oldOnly'] === 0
+        && $both['rotationApproved'] === false,
+        'PG18 cross-key duplicate event not recognized');
+
+    $db->table('telemetry_event_receipts')->insert([
+        'event_token' => str_repeat('a', 64),
+        'fingerprint' => str_repeat('b', 64),
+        'received_at' => $now->subDays(9)->format('Y-m-d\TH:i:s+00:00'),
+    ]);
+    $db->table('telemetry_active_tokens')->insert([
+        'period_kind' => 'day', 'period_key' => '2020-01-01',
+        'actor_token' => str_repeat('c', 64),
+    ]);
+    $aged = $guard->assess($nowMs, $day, SECRET, $candidate);
+    $assert($aged['retainedState']['expiredReceiptsPresent'] === true
+        && $aged['retainedState']['expiredActorMembershipsPresent'] === true
+        && $aged['rotationApproved'] === false,
+        'PG18 UTC retention preview does not detect expired receipts/actors');
+    echo "Telemetry PG18 HMAC rotation preflight old/new/both and 8-day UTC retention: PASS; no rotation\n";
 } else {
-    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify|coverage|lineage');
+    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify|coverage|lineage|rotation-preflight');
 }

@@ -70,6 +70,7 @@ jobs:
           php vendor/bin/phpunit --filter InternalAggregateReaderTest
           php vendor/bin/phpunit --filter AssignmentCoverageAuditTest
           php vendor/bin/phpunit --filter AssignmentReceiptLineageAuditTest
+          php vendor/bin/phpunit --filter TelemetryRotationPreflightTest
           php vendor/bin/phpunit
       - name: Migrate disposable PG18 and initialize clock
         working-directory: apps/api
@@ -170,3 +171,10 @@ jobs:
           test "$wrong_status" -eq 75
           test "$wrong" = 'telemetry.lineage scanned=1 matched=0 missing=1 conflicting=0 scan_complete=yes coverage_proven=no'
           echo 'CLI lineage explicit-only, true HMAC receipt and wrong-key fail-closed PASS'
+
+      - name: Real PG18 HMAC old-vs-candidate rotation + eight-day receipt retention read-only preflight
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php rotation-preflight
