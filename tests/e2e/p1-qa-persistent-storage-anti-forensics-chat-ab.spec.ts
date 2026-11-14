@@ -225,9 +225,12 @@ test('P1 #378 genuine encrypted offline media stays private in persistent browse
     await expect(page.locator('body')).not.toContainText(description)
     const signedOut = await page.evaluate(async () => {
       const identity = await import('/src/features/identity/application/session.ts')
-      return identity.activeSession.value === null
+      // Explicitly wait for any bootstrap/resume, instead of observing a
+      // transient null activeSession before auto-login has been attempted.
+      const resumed = await identity.resumeExistingDevice()
+      return { resumed: resumed !== null, active: identity.activeSession.value !== null }
     })
-    expect(signedOut).toBe(true)
+    expect(signedOut).toEqual({ resumed: false, active: false })
     const afterReload = await inspectOriginPersistence(page, markers)
     expect(afterReload.exposures).toEqual([])
     expect(afterReload.mediaRows).toBeGreaterThan(0)
