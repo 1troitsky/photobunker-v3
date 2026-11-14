@@ -2,10 +2,12 @@ import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { activeSession, type Session } from '../../identity/application/session'
-import { b64, random, freshPackage, digest, hex } from '../../identity/infrastructure/crypto'
+import { b64, unb64, random, freshPackage, digest, hex } from '../../identity/infrastructure/crypto'
 import {
   localUnreadCount, listLocalNotifications, markAllLocalNotificationsRead,
   markNotificationRead, previewNotification, recordLocalNotification,
+  readNotificationPreferences, saveNotificationPreferences, notificationIsVisible, notificationBadgeVisible,
+  defaultNotificationPreferences,
   type LocalNotificationInput,
 } from './local-inbox'
 
@@ -24,7 +26,7 @@ function input(id=eventId):LocalNotificationInput{
 }
 async function rows():Promise<RawRow[]>{
   const db=new Dexie('pb3-encrypted-notifications-v1')
-  db.version(1).stores({rows:'&key,ownerScope'})
+  db.version(2).stores({rows:'&key,ownerScope',preferences:'&key'})
   const ownerScope=hex(await digest(new TextEncoder().encode(
     'pb3.notification-index.v1\n'+ownerId)))
   const result=await db.table('rows').where('ownerScope').equals(ownerScope).toArray() as RawRow[]
@@ -35,6 +37,123 @@ beforeEach(()=>{ownerId=crypto.randomUUID()})
 afterEach(()=>{activeSession.value=null})
 
 describe('PB3 encrypted Local-First notifications',()=>{
+  it('encrypts display preferences with account isolation and persistence',async()=>{
+    const alice=await session()
+    expect(await readNotificationPreferences()).toEqual(defaultNotificationPreferences)
+    const preferences={...defaultNotificationPreferences,
+      invitations:false,expiry:false,badges:false}
+    await saveNotificationPreferences(preferences)
+    expect(await readNotificationPreferences()).toEqual(preferences)
+    expect(notificationIsVisible('team-invite',preferences)).toBe(false)
+    expect(notificationIsVisible('new-file',preferences)).toBe(true)
+    expect(notificationIsVisible('file-expiry',preferences)).toBe(false)
+    expect(notificationIsVisible('security',preferences)).toBe(true)
+
+    const raw=new Dexie('pb3-encrypted-notifications-v1')
+    raw.version(2).stores({rows:'&key,ownerScope',preferences:'&key'})
+    const stored=await raw.table('preferences').toArray()
+    expect(stored).toHaveLength(1)
+    const serialized=JSON.stringify(stored)
+    expect(serialized).not.toContain(alice.accountId)
+    expect(serialized).not.toContain('invitations')
+    expect(serialized).not.toContain('badges')
+    raw.close()
+    const bob=await session(crypto.randomUUID())
+    expect(await readNotificationPreferences()).toEqual(defaultNotificationPreferences)
+    activeSession.value=alice
+    expect(await readNotificationPreferences()).toEqual(preferences)
+    expect(bob.accountId).not.toBe(alice.accountId)
+  })
+  it('migrates authenticated encrypted legacy v1 preferences without erasing switches',async()=>{
+    const alice=await session()
+    const key=hex(await digest(new TextEncoder().encode(
+      'pb3.notification-index.v1\n'+alice.accountId,
+    )))
+    const legacy={
+      version:1,invitations:false,deadlines:true,expiry:false,
+      system:true,badges:false,
+    }
+    const iv=random(12)
+    const aes=await crypto.subtle.importKey(
+      'raw',unb64(alice.pkg.akek,32),{name:'AES-GCM'},false,['encrypt'],
+    )
+    const encrypted=await crypto.subtle.encrypt({
+      name:'AES-GCM',iv,
+      additionalData:new TextEncoder().encode(
+        'pb3.notification-preferences.v1\\n'+key,
+      ),tagLength:128,
+    },aes,new TextEncoder().encode(JSON.stringify(legacy)))
+    const raw=new Dexie('pb3-encrypted-notifications-v1')
+    raw.version(2).stores({rows:'&key,ownerScope',preferences:'&key'})
+    await raw.table('preferences').put({
+      key,iv:b64(iv),ciphertext:b64(encrypted),
+    })
+    raw.close()
+    expect(await readNotificationPreferences()).toEqual({
+      ...defaultNotificationPreferences,
+      invitations:false,expiry:false,badges:false,
+    })
+    await saveNotificationPreferences(await readNotificationPreferences())
+    expect(await readNotificationPreferences()).toEqual({
+      ...defaultNotificationPreferences,
+      invitations:false,expiry:false,badges:false,
+    })
+  })
+  it('quiet hours cover midnight and boundaries without suppressing security indicators',async()=>{
+    const settings={...defaultNotificationPreferences,
+      quietEnabled:true,quietStart:22*60,quietEnd:8*60}
+    const at=(hour:number,minute=0):Date=>{
+      const date=new Date(2026,10,13,hour,minute)
+      return date
+    }
+    expect(notificationBadgeVisible('new-file',settings,at(21,59))).toBe(true)
+    expect(notificationBadgeVisible('new-file',settings,at(22))).toBe(false)
+    expect(notificationBadgeVisible('new-file',settings,at(0))).toBe(false)
+    expect(notificationBadgeVisible('team-invite',settings,at(7,59))).toBe(false)
+    expect(notificationBadgeVisible('team-invite',settings,at(8))).toBe(true)
+    expect(notificationBadgeVisible('security',settings,at(23))).toBe(true)
+    expect(notificationIsVisible('team-invite',settings)).toBe(true)
+    expect(notificationBadgeVisible('new-file',
+      {...settings,quietEnabled:false},at(23))).toBe(true)
+    expect(notificationBadgeVisible('security',
+      {...settings,badges:false},at(23))).toBe(true)
+  })
+  it('rejects zero duration, invalid minutes and untrusted quiet hour fields',async()=>{
+    await session()
+    for(const value of [
+      {...defaultNotificationPreferences,quietStart:1440},
+      {...defaultNotificationPreferences,quietEnd:-1},
+      {...defaultNotificationPreferences,quietStart:480,quietEnd:480},
+      {...defaultNotificationPreferences,quietEnabled:'true'},
+      {...defaultNotificationPreferences,quietTimeZone:'private'},
+    ]){
+      await expect(saveNotificationPreferences(
+        value as unknown as typeof defaultNotificationPreferences,
+      )).rejects.toThrow('notifications.invalid_preferences')
+    }
+  })
+  it('rejects invalid preference shape and tampered ciphertext without applying it',async()=>{
+    await session()
+    await expect(saveNotificationPreferences({
+      ...defaultNotificationPreferences,security:false,
+    } as unknown as typeof defaultNotificationPreferences))
+      .rejects.toThrow('notifications.invalid_preferences')
+    const original={...defaultNotificationPreferences,deadlines:false}
+    await saveNotificationPreferences(original)
+    const raw=new Dexie('pb3-encrypted-notifications-v1')
+    raw.version(2).stores({rows:'&key,ownerScope',preferences:'&key'})
+    // The shared fake IndexedDB contains rows from earlier test accounts.
+    // Corrupt THIS authenticated account, never an arbitrary first record.
+    const scopedKey=hex(await digest(new TextEncoder().encode(
+      'pb3.notification-index.v1\n'+ownerId,
+    )))
+    const row=await raw.table('preferences').get(scopedKey)
+    expect(row).toBeDefined()
+    await raw.table('preferences').put({...row,iv:b64(random(12))})
+    await expect(readNotificationPreferences())
+      .rejects.toThrow('notifications.encrypted_preferences_unreadable')
+    raw.close()
+  })
   it('encrypts event contents, targets, timestamps and read state at rest',async()=>{
     const alice=await session()
     const item=await recordLocalNotification(input())
@@ -93,6 +212,33 @@ describe('PB3 encrypted Local-First notifications',()=>{
     expect(await listLocalNotifications({unreadOnly:true})).toEqual([])
     expect(await localUnreadCount()).toBe(0)
     expect(await listLocalNotifications()).toHaveLength(2)
+  })
+  it('mark-all visibility snapshot never marks hidden unread notifications',async()=>{
+    await session()
+    const a=input()
+    const b={...input('66666666-6666-4666-8666-666666666666'),
+      kind:'team-invite' as const}
+    await recordLocalNotification(a)
+    await recordLocalNotification(b)
+    expect(await markAllLocalNotificationsRead(1_760_000_000_000,[a.id])).toBe(1)
+    const items=await listLocalNotifications()
+    expect(items.find(row=>row.id===a.id)?.readAt).not.toBeNull()
+    expect(items.find(row=>row.id===b.id)?.readAt).toBeNull()
+    expect(await localUnreadCount()).toBe(1)
+    await expect(markAllLocalNotificationsRead(Date.now(),['bad-id']))
+      .rejects.toThrow('notifications.invalid_read')
+  })
+  it('encrypts non-clickable retention deadline notice without old media target',async()=>{
+    await session()
+    const event={id:eventId,kind:'file-expiry' as const,
+      targetId:null,occurredAt:1_750_000_000_000}
+    await recordLocalNotification(event)
+    expect((await listLocalNotifications())[0]).toMatchObject(event)
+    expect((await rows())[0]).toBeDefined()
+    expect(JSON.stringify(await rows())).not.toContain(eventId)
+    const preview=previewNotification((await listLocalNotifications())[0]!)
+    expect(preview.title).toBe('Удаление файла')
+    expect(preview.description).toBe('Проверьте срок хранения файла.')
   })
   it('resolves concurrent marking and event dedup without losing read state',async()=>{
     await session()

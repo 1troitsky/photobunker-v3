@@ -25,13 +25,13 @@ export const settingsGroups: readonly SettingsGroup[] = [
   {
     id: 'application', title: 'Приложение', entries: [
       {id:'appearance',label:'Оформление',description:'Порядок и состав нижней панели',to:'/settings/appearance'},
-      {id:'notifications',label:'Уведомления',description:'События и параметры уведомлений',to:null},
+      {id:'notifications',label:'Уведомления',description:'Зашифрованный локальный список и настройки отображения',to:'/notifications'},
     ],
   },
   {
     id: 'security', title: 'Безопасность и данные', entries: [
       {id:'security-privacy',label:'Безопасность и приватность',description:'PIN, устройства и Recovery Key',to:null},
-      {id:'data-storage',label:'Данные и хранилище',description:'Очередь, кэш и резервные копии',to:null},
+      {id:'data-storage',label:'Данные и хранилище',description:'Зашифрованная очередь и серверный учёт',to:'/settings/storage'},
     ],
   },
   {
