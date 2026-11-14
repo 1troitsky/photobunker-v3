@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { activeSession } from '../features/identity/application/session'
 import {
   filteredEncryptedQueue, readEncryptedLocalQueueDetails, readServerStorageUsage,
+  retryPendingEncryptedQueue,
   type EncryptedQueueEntry, type QueueDisplayFilter,
   type LocalStorageSummary, type ServerStorageUsage,
 } from '../features/storage/application/storage-status'
@@ -40,6 +41,14 @@ function opaqueSuffix(key: string): string {
 const server = shallowRef<ServerStorageUsage | null>(null)
 const localPhase = ref<Phase>('locked')
 const serverPhase = ref<Phase>('locked')
+const onlineNow = ref(typeof navigator !== 'undefined' && navigator.onLine)
+const retryBusy = ref(false)
+const retryNotice = ref('')
+const retryError = ref('')
+const canRetry = computed(() => !!activeSession.value?.online && onlineNow.value
+  && localPhase.value === 'ready' && (local.value?.pendingCount ?? 0) > 0
+  && !retryBusy.value)
+let retryToken = 0
 let requestId = 0
 
 function formatBytes(value: number): string {
@@ -58,6 +67,8 @@ function refresh(): void {
   if (!session) {
     queueOpen.value = false
     queueFilter.value = 'all'
+    retryNotice.value = ''
+    retryError.value = ''
     localPhase.value = 'locked'
     serverPhase.value = 'locked'
     return
@@ -100,11 +111,49 @@ function refresh(): void {
     })
 }
 
-function onNetworkChange(): void { refresh() }
+async function retryQueue(): Promise<void> {
+  const session = activeSession.value
+  if (!session || !canRetry.value) return
+  const token = ++retryToken
+  retryBusy.value = true
+  retryNotice.value = ''
+  retryError.value = ''
+  try {
+    const result = await retryPendingEncryptedQueue(session)
+    if (token !== retryToken || activeSession.value !== session) return
+    if (result.blockedPhoto) {
+      retryError.value = 'Есть просроченные фото. Повтор для фото не запускался: старый загрузчик не умеет исключать отдельные записи. Остальные допустимые файлы обработаны.'
+    } else if (!result.attempted) {
+      retryNotice.value = 'Нет допустимых файлов для повтора.'
+    } else if (result.failed || result.details.summary.pendingCount > 0) {
+      retryNotice.value = 'Повтор завершён, но часть файлов ещё ожидает отправки. Данные остались зашифрованными на устройстве.'
+    } else {
+      retryNotice.value = 'Повтор завершён. В локальной очереди больше нет ожидающих файлов. Серверный учёт проверяется отдельно.'
+    }
+  } catch {
+    if (token === retryToken && activeSession.value === session)
+      retryError.value = 'Не удалось завершить повтор. Зашифрованные файлы не удалены.'
+  } finally {
+    if (token === retryToken && activeSession.value === session) {
+      retryBusy.value = false
+      refresh()
+    }
+  }
+}
+function onNetworkChange(): void {
+  onlineNow.value = typeof navigator !== 'undefined' && navigator.onLine
+  refresh()
+}
 function onVisibilityChange(): void {
   if (!document.hidden) refresh()
 }
-watch(activeSession, () => refresh(), { immediate: true })
+watch(activeSession, () => {
+  ++retryToken
+  retryBusy.value = false
+  retryNotice.value = ''
+  retryError.value = ''
+  refresh()
+}, { immediate: true })
 onMounted(() => {
   window.addEventListener('online', onNetworkChange)
   window.addEventListener('offline', onNetworkChange)
@@ -112,6 +161,10 @@ onMounted(() => {
 })
 onUnmounted(() => {
   ++requestId
+  ++retryToken
+  retryBusy.value = false
+  retryNotice.value = ''
+  retryError.value = ''
   local.value = null
   queueEntries.value = []
   queueOpen.value = false
@@ -181,6 +234,18 @@ onUnmounted(() => {
         <section v-if="queueOpen && localPhase==='ready'" id="storage-queue-detail"
           class="storage-queue-detail" data-testid="storage-queue-detail"
           aria-label="Очередь зашифрованных файлов">
+          <div class="storage-row storage-retry-row">
+            <button type="button" data-testid="storage-retry-queue"
+              :disabled="!canRetry" @click="retryQueue">
+              {{ retryBusy ? 'Повторяем отправку…' : 'Повторить отправку ожидающих' }}
+            </button>
+          </div>
+          <p v-if="retryNotice" role="status" data-testid="storage-retry-notice" class="muted">
+            {{ retryNotice }}
+          </p>
+          <p v-if="retryError" role="alert" data-testid="storage-retry-error">
+            {{ retryError }}
+          </p>
           <div class="storage-queue-filters" role="group" aria-label="Фильтр очереди">
             <button v-for="filter in queueFilters" :key="filter.id" type="button"
               :data-testid="'storage-queue-filter-'+filter.id"
@@ -269,6 +334,9 @@ onUnmounted(() => {
 .storage-back:hover,.storage-link:hover{text-decoration:underline}
 .storage-section{display:grid;gap:13px}
 .storage-section h2{margin:0;font-size:17px}
+.storage-retry-row button{background:#293c2d;border:1px solid #477852;border-radius:7px;
+  color:#d6f1dc;padding:9px 12px;cursor:pointer}
+.storage-retry-row button:disabled{opacity:.45;cursor:not-allowed}
 .storage-section p{margin:0;line-height:1.55}
 .storage-section .muted,.storage-heading .muted{color:#aab2ab;font-size:12px}
 .storage-row{display:flex;justify-content:space-between;align-items:center;gap:12px}

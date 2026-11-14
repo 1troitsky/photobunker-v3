@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildEncryptedQueueEntries, filteredEncryptedQueue,
+  planManualEncryptedRetry,
   parseServerStorageUsage, summarizeEncryptedQueue,
 } from './storage-status'
 
@@ -141,5 +142,34 @@ describe('real read-only encrypted queue file list', () => {
   it('never surfaces locally synced files as outstanding queue rows', () => {
     expect(buildEncryptedQueueEntries([photo('7', 'synced')], [media('synced')], now))
       .toEqual([])
+  })
+})
+
+describe('manual encrypted queue retry planning (no competing uploader)', () => {
+  const base = { kind: 'photo' as const, createdAt: 1000,
+    expiresAt: 3000, ciphertextBytes: 64 }
+  it('plans only pending Photo/Media, never conflict or expired', () => {
+    const entries = [
+      { ...base, key: 'photo:00000000-0000-4000-8000-000000000001', status: 'queued' as const },
+      { ...base, key: 'media:00000000-0000-4000-8000-000000000002', kind: 'audio' as const, status: 'retry' as const },
+      { ...base, key: 'media:00000000-0000-4000-8000-000000000003', status: 'conflict' as const },
+    ]
+    expect(planManualEncryptedRetry(entries)).toEqual({
+      photo: true, media: true, blockedPhoto: false,
+    })
+    expect(planManualEncryptedRetry([
+      { ...base, key: 'photo:00000000-0000-4000-8000-000000000004', status: 'conflict' },
+    ])).toEqual({ photo: false, media: false, blockedPhoto: false })
+  })
+
+  it('fences global Photo flush when any Photo expiry is past; Media may replay', () => {
+    const entries = [
+      { ...base, key: 'photo:00000000-0000-4000-8000-000000000001', status: 'retry' as const },
+      { ...base, key: 'photo:00000000-0000-4000-8000-000000000002', status: 'expired' as const },
+      { ...base, key: 'media:00000000-0000-4000-8000-000000000003', status: 'queued' as const },
+    ]
+    expect(planManualEncryptedRetry(entries)).toEqual({
+      photo: false, media: true, blockedPhoto: true,
+    })
   })
 })

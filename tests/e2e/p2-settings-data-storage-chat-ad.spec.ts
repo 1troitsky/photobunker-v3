@@ -44,6 +44,7 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
       })
       const stored = await captureEncrypted(jpeg)
       return {
+        photoId: stored.photoId,
         state: stored.state,
         bytes: stored.assets.reduce((sum, a) => sum + a.blob.size, 0),
       }
@@ -69,9 +70,42 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await page.getByTestId('storage-queue-filter-pending').click()
     await expect(page.getByTestId('storage-queue-item')).toHaveCount(1)
     await expect(page.getByTestId('storage-server-ready')).toHaveCount(0)
+    // Offline manual retry is disabled: no false success or lost ciphertext.
+    await expect(page.getByTestId('storage-retry-queue')).toBeDisabled()
 
+    // Force a genuine transient transport error during automatic reconnect.
+    // All later successful requests MUST reach the real API / PG18 / Garage.
+    await page.route('**/photos/v1/reserve', route => route.abort('failed'))
     await context.setOffline(false)
+    await page.evaluate(async () => {
+      const { flushOutbox } = await import('/src/features/photo-sync/application/p1-photo.ts')
+      await flushOutbox()
+    })
+    await expect.poll(async () => page.evaluate(async () => {
+      const { listLocalPhotos } = await import('/src/features/photo-sync/application/p1-photo.ts')
+      return (await listLocalPhotos())[0]?.state
+    }), { timeout: 20000 }).toBe('retry')
+    await page.unroute('**/photos/v1/reserve')
     await page.getByTestId('storage-refresh').click()
+    await expect(page.getByTestId('storage-local-pending-count')).toHaveText('1')
+    await expect(page.getByTestId('storage-retry-queue')).toBeEnabled()
+    await page.getByTestId('storage-retry-queue').click()
+    await expect(page.getByTestId('storage-retry-notice')).toContainText(
+      'больше нет ожидающих файлов', { timeout: 45000 })
+    await expect(page.getByTestId('storage-local-pending-count')).toHaveText('0')
+    await expect(page.getByTestId('storage-queue-item')).toHaveCount(0)
+    // Server authorization, real S3 ciphertext readback and local AEAD
+    // decryption prove this was not a fake UI ACK.
+    const verified = await page.evaluate(async photoId => {
+      const { listCloudPhotos, readCloudPhoto } =
+        await import('/src/features/photo-sync/application/p1-photo.ts')
+      const list = await listCloudPhotos()
+      const blob = await readCloudPhoto(photoId)
+      return { listed: list.items.some(x => x.photoId === photoId), bytes: blob.size }
+    }, result.photoId)
+    expect(verified.listed).toBe(true)
+    expect(verified.bytes).toBeGreaterThan(128)
+
     await expect(page.getByTestId('storage-server-ready')).toBeVisible({ timeout: 30000 })
     await expect(page.getByTestId('storage-effective-plan')).toHaveText('free')
 

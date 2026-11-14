@@ -1,8 +1,8 @@
 import { activeSession, requireSession, type Session } from '../../identity/application/session'
 import { jsonApi } from '../../identity/infrastructure/api'
 import { parseGraceStatus } from '../../billing/application/grace-client'
-import { listLocalPhotos, type StoredPhoto } from '../../photo-sync/application/p1-photo'
-import { listLocalMedia, type StoredMedia } from '../../media/application/media-outbox'
+import { flushOutbox, listLocalPhotos, type StoredPhoto } from '../../photo-sync/application/p1-photo'
+import { flushMediaOutbox, listLocalMedia, type StoredMedia } from '../../media/application/media-outbox'
 
 type State = 'queued' | 'retry' | 'synced' | 'conflict'
 type BlobPart = { blob: Blob }
@@ -170,6 +170,70 @@ export async function readEncryptedLocalQueueDetails(): Promise<EncryptedQueueDe
 
 export async function readEncryptedLocalQueue(): Promise<LocalStorageSummary> {
   return (await readEncryptedLocalQueueDetails()).summary
+}
+
+/**
+ * Only invokes the EXISTING idempotent outboxes. The legacy Photo flush
+ * scans every non-conflict row; while any Photo is expired, do not invoke
+ * that global flush (it cannot target just live Photo rows). MediaFile's
+ * own core already fences expiry before issuing network requests.
+ */
+export interface ManualEncryptedRetryPlan {
+  readonly photo: boolean
+  readonly media: boolean
+  readonly blockedPhoto: boolean
+}
+export function planManualEncryptedRetry(
+  entries: readonly EncryptedQueueEntry[],
+): ManualEncryptedRetryPlan {
+  const pending = entries.filter(e => e.status === 'queued' || e.status === 'retry')
+  const hasLivePhoto = pending.some(e => e.key.startsWith('photo:'))
+  const hasExpiredPhoto = entries.some(e =>
+    e.key.startsWith('photo:') && e.status === 'expired')
+  return {
+    photo: hasLivePhoto && !hasExpiredPhoto,
+    media: pending.some(e => e.key.startsWith('media:')),
+    blockedPhoto: hasLivePhoto && hasExpiredPhoto,
+  }
+}
+
+export interface ManualEncryptedRetryResult {
+  readonly attempted: boolean
+  readonly failed: boolean
+  readonly blockedPhoto: boolean
+  readonly details: EncryptedQueueDetails
+}
+
+/**
+ * User-triggered replay, never a second uploader/worker or a status
+ * fabrication. Underlying outboxes own idempotence, encrypted transport,
+ * server ACK, expiry and conflict handling. No blob is deleted.
+ */
+export async function retryPendingEncryptedQueue(
+  session: Session,
+): Promise<ManualEncryptedRetryResult> {
+  if (activeSession.value !== session || !session.online
+    || (typeof navigator !== 'undefined' && !navigator.onLine))
+    throw Error('storage.retry_requires_online_session')
+
+  const before = await readEncryptedLocalQueueDetails()
+  sameSession(session)
+  const plan = planManualEncryptedRetry(before.entries)
+  const attempts: Promise<void>[] = []
+  if (plan.photo) attempts.push(flushOutbox())
+  if (plan.media) attempts.push(flushMediaOutbox())
+  const outcomes = await Promise.allSettled(attempts)
+  sameSession(session)
+  // Re-read the durable IndexedDB states; never infer cloud success merely
+  // from completion of a function (the original outboxes may have caught 503).
+  const details = await readEncryptedLocalQueueDetails()
+  sameSession(session)
+  return {
+    attempted: attempts.length > 0,
+    failed: outcomes.some(result => result.status === 'rejected'),
+    blockedPhoto: plan.blockedPhoto,
+    details,
+  }
 }
 
 export interface ServerStorageUsage {
