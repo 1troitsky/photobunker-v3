@@ -1,0 +1,12 @@
+.git
+**/.env
+**/.env.*
+!**/.env.example
+local-runner/secrets.env
+local-runner/ci-secrets.env
+local-runner/garage.toml
+infra/garage/.local
+**/node_modules
+**/vendor
+**/dist
+**/test-results
