@@ -81,5 +81,7 @@ final class LegalReleaseGateTest extends TestCase
         self::assertSame('processing_regions',LegalReleaseGate::preflight($docs,$manifest,$this->now())['reason']);
         $manifest['processing_regions'] = ['unknown'];
         self::assertSame('processing_regions',LegalReleaseGate::preflight($docs,$manifest,$this->now())['reason']);
+        $manifest['processing_regions'] = [['GE']];
+        self::assertSame('processing_regions',LegalReleaseGate::preflight($docs,$manifest,$this->now())['reason']);
     }
 }
