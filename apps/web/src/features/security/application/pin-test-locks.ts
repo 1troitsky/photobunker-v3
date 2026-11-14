@@ -33,7 +33,7 @@ export class TestPinLockManager{
     })
   }
 
-  private available(entry:Pending<unknown>):boolean{
+  private available(entry:Pick<Pending<unknown>,'name'|'mode'>):boolean{
     const state=this.held.get(entry.name)
     return !state||(!state.exclusive && entry.mode==='shared')
   }
