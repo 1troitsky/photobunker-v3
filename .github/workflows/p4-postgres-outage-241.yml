@@ -1,0 +1,66 @@
+name: "P4 #241 real PostgreSQL 18 outage (disposable QA)"
+
+on:
+  pull_request:
+    branches: [main, 'integration/**']
+    paths:
+      - '.github/workflows/p4-postgres-outage-241.yml'
+      - 'tests/integration/p4-fault-matrix/run-postgres-outage.sh'
+      - 'apps/api/tests/integration/p4-fault-matrix/postgres-state.php'
+      - 'docs/audits/P4-241-REAL-POSTGRES-OUTAGE-20261114-CHAT-W.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  real-postgres-outage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_ci_pg_outage
+          POSTGRES_USER: pb3_ci
+          POSTGRES_PASSWORD: pb3_ci_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb3_ci -d pb3_ci_pg_outage"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      CI: 'true'
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: http://127.0.0.1:8099
+      APP_KEY: 'base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_ci_pg_outage
+      DB_USERNAME: pb3_ci
+      DB_PASSWORD: pb3_ci_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      LOG_CHANNEL: stderr
+      QUEUE_CONNECTION: sync
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pgsql, pdo_pgsql, pdo_sqlite, sqlite3, curl, zip
+          coverage: none
+      - name: Enforce patched PHP security floor
+        run: php scripts/check-runtime.php
+      - name: Lockfile install and Composer vulnerability audit
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          composer audit --locked --no-interaction
+      - name: Verify real PostgreSQL outage and durable recovery
+        working-directory: apps/api
+        env:
+          PG_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: bash ../../tests/integration/p4-fault-matrix/run-postgres-outage.sh
