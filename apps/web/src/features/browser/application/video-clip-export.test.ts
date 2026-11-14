@@ -124,8 +124,8 @@ describe('P2 #215 real browser video clip encoder gating',()=>{
     const webmName=videoClipName('../../private\\\\family.mov',range,'video/webm')
     expect(webmName).toMatch(/^private_family-clip-1000-6000\.webm$/)
     expect(videoClipName('a.mp4',range,'video/mp4')).toBe('a-clip-1000-6000.mp4')
-    expect(videoClipName('a.mp4',range,'video/wav' as 'video/webm'))
-      .toThrowError
+    expect(()=>videoClipName('a.mp4',range,'video/wav' as 'video/webm'))
+      .toThrow('viewer.video_clip_invalid_format')
   })
   it('sniffs actual EBML/ftyp magic and refuses fake MIME or huge output',async()=>{
     await expect(verifyVideoClipContainer(
@@ -159,7 +159,7 @@ describe('P2 #215 real browser video clip encoder gating',()=>{
     expect(clip.blob.size).toBe(webm.byteLength)
     expect(clip.durationMs).toBe(5000)
     expect(assertAuthorized).toHaveBeenCalled()
-    expect(source.currentSrc).toStartWith
+    expect(source.currentSrc).toContain('blob:')
     expect(created).toHaveLength(1)
     expect(created[0]?.src).toBe('')
     expect(created[0]?.paused).toBe(true)
