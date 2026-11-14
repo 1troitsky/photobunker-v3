@@ -124,9 +124,20 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
       await a.flushAssignmentOutbox()
     })
-    // Recipient B may see only independently signed/verified owner policy,
-    // not an optimistic pending media permission from A's local selection.
-    const verifiedB=await B.evaluate(async({id,owner})=>{
+    // Acceptance is a separate contributor-signed durable operation.
+    // The click may return before its live server ACK; do not treat an
+    // optimistic local state as confirmed membership or policy authority.
+    await expect.poll(()=>B.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      await a.flushAssignmentOutbox()
+      const matches=(await a.listAssignmentOperations()).filter(x=>
+        x.kind==='accept'&&JSON.parse(x.contract).assignmentId===id)
+      return matches.at(-1)?.state??'not-queued'
+    },assignmentId),{timeout:45_000}).toBe('sent')
+    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    // Recipient B may see only a *fresh* independently verified owner
+    // policy once the acceptance is actually acknowledged by the server.
+    await expect.poll(()=>B.evaluate(async({id,owner})=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
       const row=(await a.listAllServerAssignments())
         .find(x=>x.assignmentId===id&&x.ownerAccountId===owner)
@@ -136,8 +147,7 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
         media:a.signedAllowedAssignmentMedia(row),
         version:row.policyRevision,video:goals.videoGoal,audio:goals.audioGoal,
       }
-    },{id:assignmentId,owner:ownerId})
-    expect(verifiedB).toEqual({
+    },{id:assignmentId,owner:ownerId}),{timeout:45_000}).toEqual({
       media:['photo','video','audio'],version:2,video:2,audio:1,
     })
 
