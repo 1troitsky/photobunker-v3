@@ -11,6 +11,9 @@ $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Telemetry\AssignmentCreationReplay;
 use App\Telemetry\AssignmentCoverageAudit;
+use App\Telemetry\AssignmentReceiptLineageAudit;
+use App\Telemetry\TelemetryEvent;
+use App\Telemetry\TelemetryRecord;
 use App\Telemetry\InternalAggregateReader;
 use App\Telemetry\DatabaseTelemetrySink;
 use Carbon\CarbonImmutable;
@@ -158,6 +161,44 @@ if ($stage === 'init') {
     $assert($excess['days'][0]['status'] === 'excess_untrusted',
         'unauthorized-looking extra aggregate not flagged');
     echo "Telemetry real PG18 non-UTC session source-count discrepancy and unproven matching PASS\n";
+} elseif ($stage === 'lineage') {
+    // This is a FRESH PHP process after the trusted PG18 source, op replay
+    // and discrepancy test. PG session UTC offset must not change source day.
+    $now = CarbonImmutable::createFromTimestampMs($nowMs, 'UTC');
+    $previous = $now->startOfDay()->subDay()->addHours(12);
+    $day = $previous->format('Y-m-d');
+    $db->statement("SET TIME ZONE 'Pacific/Honolulu'");
+    $audit = new AssignmentReceiptLineageAudit($db, SECRET);
+    $matched = $audit->inspect($nowMs, $day);
+    $assert($matched === [
+        'scanned' => 1, 'matched' => 1, 'missing' => 0, 'conflicting' => 0,
+        'scanComplete' => true, 'coverageProven' => false,
+        'consistency' => 'receipt_lineage_provisional',
+    ], 'PG18 source-to-specific HMAC receipt did not match');
+    $wrong = (new AssignmentReceiptLineageAudit($db, str_repeat('z', 40)))
+        ->inspect($nowMs, $day);
+    $assert($wrong['matched'] === 0 && $wrong['missing'] === 1
+        && $wrong['coverageProven'] === false,
+        'incorrect operator key misleadingly matches source receipt');
+
+    // Existing v1 digest is re-derived from REAL meter operation/account/time.
+    // Deliberate tamper on disposable DB must produce a conflict, never match.
+    $expected = TelemetryRecord::fromTrusted(TelemetryEvent::fromArray([
+        'schemaVersion' => 1,
+        'eventId' => '55555555-5555-4555-8555-555555555555',
+        'eventType' => 'assignment.created',
+        'occurredAtMs' => $previous->getTimestampMs(),
+    ]), ACCOUNT, SECRET);
+    $db->table('telemetry_event_receipts')->where('event_token', $expected->eventToken)
+        ->update(['fingerprint' => str_repeat('f', 64)]);
+    $tampered = $audit->inspect($nowMs, $day);
+    $assert($tampered['conflicting'] === 1 && $tampered['matched'] === 0,
+        'tampered source receipt was not rejected');
+    $db->table('telemetry_event_receipts')->where('event_token', $expected->eventToken)
+        ->update(['fingerprint' => $expected->fingerprint()]);
+    $assert($audit->inspect($nowMs, $day)['matched'] === 1,
+        'restored disposable receipt was not accepted');
+    echo "Telemetry PG18 lineage exact HMAC receipt / wrong key / corruption / Honolulu PASS\n";
 } else {
-    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify|coverage');
+    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify|coverage|lineage');
 }

@@ -69,6 +69,7 @@ jobs:
           php vendor/bin/phpunit --filter TelemetryDatabaseSinkTest
           php vendor/bin/phpunit --filter InternalAggregateReaderTest
           php vendor/bin/phpunit --filter AssignmentCoverageAuditTest
+          php vendor/bin/phpunit --filter AssignmentReceiptLineageAuditTest
           php vendor/bin/phpunit
       - name: Migrate disposable PG18 and initialize clock
         working-directory: apps/api
@@ -131,3 +132,41 @@ jobs:
         run: |
           set -euo pipefail
           php tests/integration/p3-telemetry-postgres.php coverage
+
+      - name: Real PG18 exact source receipt HMAC lineage and non-UTC timezone
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php lineage
+      - name: Operator-only lineage CLI default-DENY and actual disposable PG18 proof
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          day="$(php -r 'echo (new DateTimeImmutable("@".intdiv((int)getenv("PB3_TEST_NOW_MS"), 1000)))->setTimezone(new DateTimeZone("UTC"))->modify("-1 day")->format("Y-m-d");')"
+          set +e
+          denied="$(php bin/telemetry-audit-lineage.php --execute "--day=$day" 2>&1)"
+          denied_status=$?
+          set -e
+          test "$denied_status" -eq 78
+          test "$denied" = 'telemetry.operator_disabled'
+          output="$(
+            PB3_TELEMETRY_REPLAY_ENABLED=1 \
+            PB3_TELEMETRY_POLICY_APPROVED=1 \
+            PB3_TELEMETRY_HMAC_SECRET='PB3 TEST ONLY TELEMETRY HMAC SECRET, NO REAL KEY' \
+            php bin/telemetry-audit-lineage.php --execute "--day=$day"
+          )"
+          test "$output" = 'telemetry.lineage scanned=1 matched=1 missing=0 conflicting=0 scan_complete=yes coverage_proven=no'
+          set +e
+          wrong="$(
+            PB3_TELEMETRY_REPLAY_ENABLED=1 \
+            PB3_TELEMETRY_POLICY_APPROVED=1 \
+            PB3_TELEMETRY_HMAC_SECRET='DISPOSABLE QA WRONG KEY 000000000000000000' \
+            php bin/telemetry-audit-lineage.php --execute "--day=$day"
+          )"
+          wrong_status=$?
+          set -e
+          test "$wrong_status" -eq 75
+          test "$wrong" = 'telemetry.lineage scanned=1 matched=0 missing=1 conflicting=0 scan_complete=yes coverage_proven=no'
+          echo 'CLI lineage explicit-only, true HMAC receipt and wrong-key fail-closed PASS'
