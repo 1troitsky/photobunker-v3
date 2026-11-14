@@ -85,7 +85,8 @@ final class ReplicaReadPreflightTest extends TestCase
 
     private function preflight(
         string $primaryDomain='primary-domain',
-        string $replicaDomain='independent-replica-domain'
+        string $replicaDomain='independent-replica-domain',
+        ?\Closure $trustedObservationClock=null
     ):ReplicaReadPreflight {
         return new ReplicaReadPreflight([
             'app_s3'=>[
@@ -98,7 +99,7 @@ final class ReplicaReadPreflightTest extends TestCase
                 'failureDomain'=>$replicaDomain,
                 'credentialRevision'=>2,
             ],
-        ]);
+        ],$trustedObservationClock);
     }
 
     private function account():array
@@ -316,6 +317,40 @@ final class ReplicaReadPreflightTest extends TestCase
             $this->replica->onRead=null;
             $result=$this->inspect($f);
             $this->assertFalse($result['failoverAuthorized']);
+        }
+    }
+
+
+    public function test_ttl_crossing_during_replica_stream_denied_for_photo_and_media():void
+    {
+        foreach (['photo','media_chunk'] as $kind) {
+            $f=$this->fixture($kind);
+            $now=$this->clock();
+            $parentTable=$kind==='photo'?'photo_records':'media_files_v1';
+            DB::table($parentTable)->where('id',$f['parent'])
+                ->update(['expires_at'=>$now->addSecond()->getTimestampMs()]);
+
+            // The first snapshot sees valid TTL. Reading the replica advances
+            // a TEST-ONLY trusted clock past its exact millisecond deadline.
+            $observed=$now;
+            $gate=$this->preflight(
+                'primary-domain','independent-replica-domain',
+                static function()use(&$observed):CarbonImmutable {
+                    return $observed;
+                }
+            );
+            $this->replica->onRead=static function()use(&$observed,$now):void {
+                $observed=$now->addSeconds(2);
+            };
+            $this->deny(fn()=>$gate->inspect(
+                $f['account'],$f['kind'],$f['asset'],
+                $f['source'],$f['target'],$now),
+                'failover.expired');
+            $this->assertSame($now->addSeconds(2)->getTimestampMs(),
+                $observed->getTimestampMs());
+            $this->assertSame(0,$this->primary->reads);
+            $this->assertSame(0,$this->primary->otherCalls);
+            $this->replica->onRead=null;
         }
     }
 
