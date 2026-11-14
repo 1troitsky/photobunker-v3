@@ -86,8 +86,28 @@ async function fetchJson(fetchImpl, base, token, path, allowDenied = false) {
   if (response.status !== 200) fail('MATRIX_HTTP_STATUS_REJECTED');
   let body;
   try {
-    const rawBody = await response.text();
-    if (rawBody.length > 262_144) fail('MATRIX_RESPONSE_TOO_LARGE');
+    // A malicious homeserver can send an unbounded chunked body with no Content-Length.
+    // Enforce the cap *while streaming*, before allocating the entire response.
+    const declaredLength = response.headers.get('content-length');
+    if (declaredLength && Number(declaredLength) > 262_144) {
+      fail('MATRIX_RESPONSE_TOO_LARGE');
+    }
+    if (!response.body) fail('MATRIX_INVALID_RESPONSE');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8', { fatal: true });
+    let bytes = 0;
+    let rawBody = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > 262_144) {
+        await reader.cancel();
+        fail('MATRIX_RESPONSE_TOO_LARGE');
+      }
+      rawBody += decoder.decode(value, { stream: true });
+    }
+    rawBody += decoder.decode();
     body = JSON.parse(rawBody);
   } catch (error) {
     if (error instanceof ProbeFailure) throw error;
