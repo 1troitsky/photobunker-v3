@@ -1,0 +1,26 @@
+name: P3 release signature verifier (#230 + #347 integration)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/p3-release-auth-230.yml'
+      - 'scripts/release-auth/**'
+      - 'scripts/release-integrity/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-auth-verifier:
+    name: Ed25519 candidate + real manifest/asset contract (no PWA activation)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run deterministic unsigned manifest baseline
+        run: node --test scripts/release-integrity/integrity.test.mjs
+      - name: Run standalone signed manifest + real asset cross-module attack tests
+        run: node --test scripts/release-auth/*.test.mjs
