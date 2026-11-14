@@ -79,6 +79,16 @@ final class VaultManifestWriteOnceUploader
             || !is_string($disk['region'] ?? null) || $disk['region'] === '') {
             throw new RuntimeException('vault.s3_configuration_unavailable');
         }
+        // Stage 4 FAIL-CLOSED capability gate. The real Garage 2.5 fixture
+        // accepted a duplicate conditional PutObject instead of returning
+        // PreconditionFailed. Its versioning/object-lock APIs are unavailable.
+        // Never attempt an unproven create-only write on customer data.
+        // A future compatible provider must be separately verified and the
+        // operator must explicitly certify it; this is not a user toggle.
+        if ($disk['region'] === 'garage'
+            || config('backup_vault.s3_conditional_writes_certified', false) !== true) {
+            throw new RuntimeException('vault.conditional_write_not_certified');
+        }
         $options = [
             'version' => 'latest',
             'region' => $disk['region'],
