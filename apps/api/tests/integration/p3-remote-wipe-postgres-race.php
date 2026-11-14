@@ -18,7 +18,11 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 function race222Must(bool $ok, string $why): void
 {
     if (!$ok) {
-        throw new RuntimeException('Remote Wipe #222 PG18 RACE FAIL: '.$why);
+        // Laravel's registered exception handler can log an uncaught CLI
+        // exception without a nonzero process status. Always force a
+        // nonzero OS exit; a logged FAIL can NEVER become a CI PASS.
+        fwrite(STDERR, "Remote Wipe #222 PG18 RACE FAIL: {$why}\n");
+        exit(1);
     }
 }
 function race222Guard(): void
