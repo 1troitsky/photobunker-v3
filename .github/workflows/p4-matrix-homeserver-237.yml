@@ -1,4 +1,4 @@
-name: P4 #237 Matrix BYO homeserver admission
+name: "P4 #237 Matrix BYO homeserver admission"
 
 on:
   pull_request:
