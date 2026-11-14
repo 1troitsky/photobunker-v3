@@ -22,7 +22,10 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 function must(bool $ok, string $description): void
 {
     if (!$ok) {
-        throw new RuntimeException('P3 #228 PG18 REAL race FAIL: '.$description);
+        // Laravel's global CLI exception handler may log an ERROR yet exit 0.
+        // An integration assertion failure MUST fail the GitHub Actions job.
+        fwrite(STDERR, 'P3 #228 PG18 REAL race FAIL: '.$description."\n");
+        exit(70);
     }
 }
 
