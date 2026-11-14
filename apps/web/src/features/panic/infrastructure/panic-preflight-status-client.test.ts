@@ -243,4 +243,98 @@ describe('P3 #221 GET-only original-signed intent preflight observation — NEVE
       f.original, SCOPE, f.publicSpki, {...options(async () => json(f.response)), nowMs: Infinity}))
       .toEqual({kind: 'unconfirmed', reason: 'invalid_local_intent'})
   })
+
+  it('rejects duplicate JSON keys and whitespace even if parsed last value falsely looks prepared', async () => {
+    const f = await fixture()
+    const raw = JSON.stringify(f.response)
+    const tricks = [
+      raw.replace('"phase":"preflight_only"', '"phase":"cloud_deleted","phase":"preflight_only"'),
+      raw.replace('"operationId":', '"operationId":"'+UUID(9)+'","operationId":'),
+      ' ' + raw,
+      raw + '\\n',
+      JSON.stringify(Object.fromEntries(Object.entries(f.response).reverse())),
+    ]
+    for (const forged of tricks) {
+      const request = vi.fn(async () => new Response(forged, {
+        status: 200, headers: {'Content-Type': 'application/json'},
+      }))
+      expect(await observePreparedPanicStatus(
+        f.original, SCOPE, f.publicSpki, options(request)))
+        .toEqual({kind: 'unconfirmed', reason: 'invalid_response'})
+      expect(request).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('bounds ACTUAL streamed bytes without trusting missing or fabricated Content-Length', async () => {
+    const f = await fixture()
+    for (const header of [undefined, '2']) {
+      let canceled = false
+      const response = new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          // A single chunk already exceeds 512 bytes. Do not collect all
+          // chunks, or allow a dishonest tiny Content-Length to bypass cap.
+          controller.enqueue(new Uint8Array(2_000).fill(65))
+        },
+        cancel() { canceled = true },
+      }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(header === undefined ? {} : {'Content-Length': header}),
+        },
+      })
+      expect(await observePreparedPanicStatus(
+        f.original, SCOPE, f.publicSpki, options(async () => response)))
+        .toEqual({kind: 'unconfirmed', reason: 'invalid_response'})
+      expect(canceled).toBe(true)
+    }
+  })
+
+  it('supports bounded streaming chunks and rejects an endless sequence of empty chunks', async () => {
+    const f = await fixture()
+    const bytes = new TextEncoder().encode(JSON.stringify(f.response))
+    let offset = 0
+    const normal = new Response(new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (offset >= bytes.length) { controller.close(); return }
+        controller.enqueue(bytes.slice(offset, offset + 16))
+        offset += 16
+      },
+    }), {status: 200, headers: {'Content-Type': 'application/json'}})
+    expect(await observePreparedPanicStatus(
+      f.original, SCOPE, f.publicSpki, options(async () => normal)))
+      .toMatchObject({kind: 'observed_preflight_only_unconfirmed'})
+
+    let cancelled = false
+    const looping = new Response(new ReadableStream<Uint8Array>({
+      pull(controller) {controller.enqueue(new Uint8Array(0))},
+      cancel() {cancelled = true},
+    }), {status: 200, headers: {'Content-Type': 'application/json'}})
+    expect(await observePreparedPanicStatus(
+      f.original, SCOPE, f.publicSpki, options(async () => looping)))
+      .toEqual({kind: 'unconfirmed', reason: 'invalid_response'})
+    expect(cancelled).toBe(true)
+  })
+
+  it('rejects invalid UTF-8 bytes and missing response stream without false confirmation', async () => {
+    const f = await fixture()
+    const original = new TextEncoder().encode(JSON.stringify(f.response))
+    const poisoned = new Uint8Array(original.length + 1)
+    poisoned.set(original.slice(0, 15))
+    poisoned[15] = 0xff
+    poisoned.set(original.slice(15), 16)
+    const bad = new Response(poisoned, {
+      status: 200, headers: {'Content-Type': 'application/json'},
+    })
+    expect(await observePreparedPanicStatus(
+      f.original, SCOPE, f.publicSpki, options(async () => bad)))
+      .toEqual({kind: 'unconfirmed', reason: 'invalid_response'})
+    const missingBody = new Response(null, {
+      status: 200, headers: {'Content-Type': 'application/json'},
+    })
+    expect(await observePreparedPanicStatus(
+      f.original, SCOPE, f.publicSpki, options(async () => missingBody)))
+      .toEqual({kind: 'unconfirmed', reason: 'invalid_response'})
+  })
+
 })
