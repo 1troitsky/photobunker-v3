@@ -1,0 +1,171 @@
+name: 'P4 #346 durable encrypted S3 replication and verified ACK (internal, NOT live)'
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/app/Storage/Replication/**'
+      - 'apps/api/database/migrations/*replication*'
+      - 'apps/api/tests/Feature/StorageReplication/**'
+      - 'apps/api/tests/integration/p4-replication-real-two-garage-234.php'
+      - 'apps/api/tests/integration/p4-replication-pg-two-worker-race-234.php'
+      - 'scripts/p4-replication-provision-two-garage-234.sh'
+      - '.github/workflows/p4-replication-234.yml'
+      - 'docs/audits/P4-REPLICATION-234-20261114.md'
+      - 'docs/audits/P4-MULTI-S3-346-REPLICATION-RECONCILE-20261114-CHAT-T.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  laravel:
+    name: Audited PHP ${{ matrix.php }} replication contracts
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, dom, xml, openssl, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Strict runtime and Composer Audit (NO security suppression)
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Production class syntax + focused and FULL Laravel suite
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l app/Storage/Replication/CiphertextReplicaCoordinator.php
+          php -l app/Storage/Replication/BoundedReplicaDispatcher.php
+          php -l database/migrations/2026_11_14_000234_create_replication_jobs_v1.php
+          php -l tests/Feature/StorageReplication/CiphertextReplicaCoordinatorTest.php
+          php -l tests/Feature/StorageReplication/BoundedReplicaDispatcherTest.php
+          php vendor/bin/phpunit --filter 'CiphertextReplicaCoordinatorTest|BoundedReplicaDispatcherTest' --do-not-cache-result
+          php vendor/bin/phpunit --do-not-cache-result
+
+  postgres-replication:
+    name: True PostgreSQL 18 account/lease/ACK and ciphertext tests
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_replication_234
+          POSTGRES_USER: pb3_replication
+          POSTGRES_PASSWORD: pb3_replication_disposable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pb3_replication -d pb3_replication_234"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: http://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_replication_234
+      DB_USERNAME: pb3_replication
+      DB_PASSWORD: pb3_replication_disposable
+      PB3_REPLICATION_REAL_GARAGE_CI: '1'
+      PB3_REPLICATION_PG_RACE_CI: '1'
+      S3_REGION: garage
+      S3_ENDPOINT: http://127.0.0.1:3900
+      S3_BUCKET: pb3-replication-234-a
+      PB3_REPLICATION_B_ENDPOINT: http://127.0.0.1:4900
+      PB3_REPLICATION_B_BUCKET: pb3-replication-234-b
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Strict PHP floor, Composer audit and install
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Start two genuinely separate disposable Garage 2.5 S3 processes
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/p4-replication-provision-two-garage-234.sh
+          echo "PB3_REPLICATION_FIXTURE_PATH=$RUNNER_TEMP/pb3-replication-234-evidence.json" >> "$GITHUB_ENV"
+      - name: Genuine migrated PostgreSQL 18; no silent SQLite fallback
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php artisan migrate --force
+          cp phpunit.xml phpunit.replication.pg.xml
+          sed -i 's/name="DB_CONNECTION" value="sqlite"/name="DB_CONNECTION" value="pgsql"/' phpunit.replication.pg.xml
+          sed -i 's/name="DB_DATABASE" value=":memory:"/name="DB_DATABASE" value="pb3_replication_234"/' phpunit.replication.pg.xml
+          grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.replication.pg.xml
+          grep -q 'name="DB_DATABASE" value="pb3_replication_234"' phpunit.replication.pg.xml
+          php vendor/bin/phpunit --configuration phpunit.replication.pg.xml --filter 'CiphertextReplicaCoordinatorTest|BoundedReplicaDispatcherTest' --do-not-cache-result
+      - name: Real two-S3 photo and media transfer, same-size corruption repair and lost ACK
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p4-replication-real-two-garage-234.php
+          php tests/integration/p4-replication-real-two-garage-234.php healthy | tee "$RUNNER_TEMP/p4-replication-234-e2e-healthy.log"
+          grep -Fq 'P4 #234 REAL GARAGE 1/5 PASS:' "$RUNNER_TEMP/p4-replication-234-e2e-healthy.log"
+          grep -Fq 'P4 #234 REAL GARAGE 2/5 PASS:' "$RUNNER_TEMP/p4-replication-234-e2e-healthy.log"
+          grep -Fq 'P4 #234 REAL GARAGE 3/5 PASS:' "$RUNNER_TEMP/p4-replication-234-e2e-healthy.log"
+      - name: Stop ONLY synthetic Garage B, ensure durable retry and original preservation
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker stop pb3-p4-234-garage-b >/dev/null
+          (cd apps/api && php tests/integration/p4-replication-real-two-garage-234.php outage) | tee "$RUNNER_TEMP/p4-replication-234-e2e-outage.log"
+          grep -Fq 'P4 #234 REAL GARAGE 4/5 PASS:' "$RUNNER_TEMP/p4-replication-234-e2e-outage.log"
+      - name: Restart synthetic Garage B, verify real retry and every physical byte
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker start pb3-p4-234-garage-b >/dev/null
+          ready=0
+          for attempt in $(seq 1 30); do
+            if docker exec pb3-p4-234-garage-b /garage status >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = 1
+          (cd apps/api && php tests/integration/p4-replication-real-two-garage-234.php recovered) | tee "$RUNNER_TEMP/p4-replication-234-e2e-recovered.log"
+          grep -Fq 'P4 #234 REAL GARAGE 5/5 PASS:' "$RUNNER_TEMP/p4-replication-234-e2e-recovered.log"
+          grep -Fq 'P4 #234 REAL GARAGE COMPLETE 5/5:' "$RUNNER_TEMP/p4-replication-234-e2e-recovered.log"
+      - name: Verify real two-process PG18 replica lease and lost ACK
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p4-replication-pg-two-worker-race-234.php
+          php tests/integration/p4-replication-pg-two-worker-race-234.php | tee "$RUNNER_TEMP/p4-234-race.log"
+          grep -Fq 'P4 #234 REAL PG18 TWO-PHP RACE 1/2 PASS:' "$RUNNER_TEMP/p4-234-race.log"
+          grep -Fq 'P4 #234 REAL PG18 TWO-PHP RACE 2/2 PASS:' "$RUNNER_TEMP/p4-234-race.log"
+          grep -Fq 'P4 #234 REAL PG18 TWO-PHP RACE COMPLETE 2/2:' "$RUNNER_TEMP/p4-234-race.log"
+      - name: Cleanup ONLY disposable Garage S3 test containers
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f pb3-p4-234-garage-a pb3-p4-234-garage-b >/dev/null 2>&1 || true
