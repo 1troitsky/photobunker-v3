@@ -6,6 +6,7 @@ on:
     paths:
       - "apps/api/app/RemoteWipe/**"
       - "apps/api/database/migrations/2026_11_14_000222_create_remote_wipe_commands_v1.php"
+      - "apps/api/database/migrations/2026_11_14_000321_create_remote_wipe_delivery_proofs_v1.php"
       - "apps/api/tests/Feature/RemoteWipe/**"
       - "apps/api/tests/integration/p3-remote-wipe-postgres-race.php"
       - ".github/workflows/p3-remote-wipe-222.yml"
@@ -53,14 +54,17 @@ jobs:
         working-directory: apps/api
         run: |
           php -l app/RemoteWipe/SignedDeferredCommand.php
+          php -l app/RemoteWipe/SignedRevokedDelivery.php
           php -l database/migrations/2026_11_14_000222_create_remote_wipe_commands_v1.php
+          php -l database/migrations/2026_11_14_000321_create_remote_wipe_delivery_proofs_v1.php
           php -l tests/Feature/RemoteWipe/SignedDeferredCommandTest.php
-          php vendor/bin/phpunit tests/Feature/RemoteWipe/SignedDeferredCommandTest.php
+          php -l tests/Feature/RemoteWipe/SignedRevokedDeliveryTest.php
+          php vendor/bin/phpunit tests/Feature/RemoteWipe
       - name: Full existing PHP Foundation regression (audited dependencies)
         working-directory: apps/api
         run: php vendor/bin/phpunit --testsuite Foundation
       - name: No destructive-wipe claim
-        run: echo "Only signed already-revoked-device deferred ledger tested; no revoke, S3, Matrix, browser wipe or device ACK proof."
+        run: echo "Signed already-revoked-device pending ledger + original device-key authenticated narrow read-only delivery are UNMOUNTED; no PB3 login, public route, real revoke, S3, Matrix, browser wipe or device ACK proof."
 
   postgres-18-signed-ledger:
     runs-on: ubuntu-24.04
@@ -146,7 +150,7 @@ jobs:
         working-directory: apps/api
         run: |
           DB_CONNECTION=pgsql DB_DATABASE=pb3_remote_222_ci php artisan migrate --force --no-interaction
-          php vendor/bin/phpunit --configuration phpunit.pg-222.xml tests/Feature/RemoteWipe/SignedDeferredCommandTest.php
+          php vendor/bin/phpunit --configuration phpunit.pg-222.xml tests/Feature/RemoteWipe
       - name: Prove 5 real two-independent-PHP-process PostgreSQL18 lock races
         working-directory: apps/api
         shell: bash
