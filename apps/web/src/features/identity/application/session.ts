@@ -52,14 +52,34 @@ watch(activeSession,next=>{
   if(activeDeviceLease && (!next||!sameDeviceLease(activeDeviceLease,next)))
     releaseDeviceLease()
 },{flush:'sync'})
+let acquiringDeviceLease:{
+  device:Readonly<{accountId:string;deviceId:string}>
+  task:Promise<void>
+}|null=null
 async function ensureDeviceLease(
   device:Readonly<{accountId:string;deviceId:string}>,
 ):Promise<void>{
   if(activeDeviceLease&&sameDeviceLease(activeDeviceLease,device))return
-  const acquired=await acquirePinSessionLease(device)
-  if(activeDeviceLease&&!sameDeviceLease(activeDeviceLease,device))
-    releaseDeviceLease()
-  activeDeviceLease=acquired
+  // Two overlapping local starts for the same device MUST share one SHARED
+  // lock rather than leak an untracked second lock after one is replaced.
+  if(acquiringDeviceLease){
+    const pending=acquiringDeviceLease
+    if(pending.device.accountId!==device.accountId||
+       pending.device.deviceId!==device.deviceId)
+      throw new Error('identity.concurrent_device_activation')
+    return pending.task
+  }
+  let task!:Promise<void>
+  task=(async()=>{
+    const acquired=await acquirePinSessionLease(device)
+    if(activeDeviceLease&&!sameDeviceLease(activeDeviceLease,device))
+      releaseDeviceLease()
+    activeDeviceLease=acquired
+  })().finally(()=>{
+    if(acquiringDeviceLease?.task===task)acquiringDeviceLease=null
+  })
+  acquiringDeviceLease={device:{...device},task}
+  return task
 }
 
 
