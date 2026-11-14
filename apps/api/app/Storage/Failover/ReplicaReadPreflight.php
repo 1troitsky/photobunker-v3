@@ -26,7 +26,12 @@ final class ReplicaReadPreflight
     /**
      * @param array<string,array{adapter:StorageAdapter,failureDomain:string,credentialRevision:int}> $trustedProviders
      */
-    public function __construct(private readonly array $trustedProviders) {}
+    public function __construct(
+        private readonly array $trustedProviders,
+        // Optional only for controlled test time injection. Production uses
+        // fresh server-side UTC after the physical replica stream finishes.
+        private readonly ?\Closure $trustedObservationClock=null,
+    ) {}
 
     /** @return array<string,mixed> */
     public function inspect(
@@ -67,11 +72,22 @@ final class ReplicaReadPreflight
             (string)$replica->object_key,
             $before['bytes'],$before['sha256']);
 
+        // TTL may lapse while the physical GET is in flight even if no DB
+        // field changes. Reusing initial serverNow would silently accept it.
+        // Never move backwards relative to the caller's first trusted time.
+        $observedNow=$this->trustedObservationClock!==null
+            ? ($this->trustedObservationClock)()
+            : CarbonImmutable::now('UTC');
+        if (!$observedNow instanceof CarbonImmutable) {
+            throw new RuntimeException('failover.invalid_trusted_clock');
+        }
+        $afterNow=$observedNow->greaterThan($serverNow)
+            ? $observedNow : $serverNow;
         // A deletion/revoke/expiry or metadata update can occur during S3 IO.
-        // This is a second observation only; an actual read gate must adopt
-        // account-scoped versioned locking / signed generation fencing.
+        // This is still only a second observation; it cannot authorize a
+        // live client read without locking + signed generation fences.
         $after=$this->snapshot($trustedAccountId,$kind,$logicalId,
-            $primaryLocationId,$replicaLocationId,$serverNow);
+            $primaryLocationId,$replicaLocationId,$afterNow);
         if (!hash_equals($before['fingerprint'],$after['fingerprint'])) {
             throw new RuntimeException('failover.changed_during_read');
         }
