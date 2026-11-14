@@ -273,6 +273,20 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     }
   },100_000)
 
+  it('locks an online-promoted Session of the same device during in-flight IDB recheck',async()=>{
+    const f=await account()
+    await resumeExistingDevice()
+    await simulateForeignPinSeal(f)
+    const original=activeSession.value
+    expect(original?.online).toBe(false)
+    const checking=refreshPinSessionFence()
+    // Simulate a valid online proof completing while the recheck awaits IDB.
+    activeSession.value={...original!,online:true}
+    expect(await checking).toBe(true)
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value?.deviceId).toBe(f.scope.deviceId)
+  },95_000)
+
   it('rechecks the saved device before signing, even if the BroadcastChannel hint was missed',async()=>{
     const f=await account()
     await resumeExistingDevice()
