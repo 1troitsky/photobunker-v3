@@ -59,6 +59,12 @@ jobs:
           composer audit --locked --no-interaction
       - name: Isolated Laravel PHPUnit SQLite integration and privacy negatives
         working-directory: apps/api
+        # Whole suite uses the SAME secure PHPunit bootstrap as foundation;
+        # do not leak this job's disposable PG/HTTP variables into it.
+        env:
+          APP_URL: https://localhost
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
         run: |
           php vendor/bin/phpunit --filter TelemetryDatabaseSinkTest
           php vendor/bin/phpunit
