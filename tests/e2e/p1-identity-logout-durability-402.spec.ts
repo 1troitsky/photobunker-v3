@@ -42,6 +42,29 @@ test('P1 #402: logout survives aborted IndexedDB transaction and immediate hard 
       catch { return activeSession.value === null }
     })
     expect(accessDenied).toBe(true)
+
+    // NEW account B is registered explicitly after interrupted logout of A.
+    // Lifting the global fence MUST first durably block A's old browser device,
+    // otherwise a subsequent reload might silently auto-select A again.
+    await registerDevice(page)
+    expect(await page.evaluate(() =>
+      localStorage.getItem('pb3.identity.logout-fence.v1') === null)).toBe(true)
+    const previousDevicesBlocked = await page.evaluate(async () => {
+      const { activeSession } = await import('/src/features/identity/application/session.ts')
+      const { isSignedOut, listDevices } =
+        await import('/src/features/identity/infrastructure/storage.ts')
+      const current = activeSession.value
+      if (!current) return false
+      const devices = await listDevices()
+      if (devices.length < 2) return false
+      return (await Promise.all(devices
+        .filter(device => device.deviceId !== current.deviceId)
+        .map(device => isSignedOut(device.accountId, device.deviceId))))
+        .every(Boolean)
+    })
+    expect(previousDevicesBlocked).toBe(true)
+    await page.reload()
+    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
   } finally { await context.close() }
 })
 
