@@ -82,6 +82,7 @@ jobs:
       DB_PASSWORD: pb3_admin_ci_disposable
       CACHE_STORE: array
       SESSION_DRIVER: array
+      PB3_ADMIN_227_PG_RACE: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
@@ -124,6 +125,11 @@ jobs:
         working-directory: apps/api
         run: |
           php vendor/bin/phpunit --no-configuration --bootstrap vendor/autoload.php             tests/Feature/Administration/AdminAuditLedgerTest.php
+      - name: Verify REAL two-process PostgreSQL 18 lock and append collision races
+        working-directory: apps/api
+        run: |
+          php -l tests/integration/admin-audit-postgres-race.php
+          php tests/integration/admin-audit-postgres-race.php
       - name: Explicitly forbid privilege-activation claims
         run: |
           echo "Durable, inert audit records only; NOT an admin session, MFA admission, grant, ban, revoke, user data read or tamper-evident external anchor."
