@@ -315,10 +315,14 @@ function race234PutCount(string $dir):int
 }
 function race234JsonFile(string $file,array $value):void
 {
+    // Publishing the ready marker only AFTER the entire JSON is written
+    // avoids racing the parent reader against a partially written file.
+    $temporary=$file.'.tmp.'.bin2hex(random_bytes(8));
     race234Must(file_put_contents(
-        $file,json_encode($value,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES),
+        $temporary,json_encode($value,JSON_THROW_ON_ERROR|JSON_UNESCAPED_SLASHES),
         LOCK_EX)!==false,'cannot_write_private_worker_result');
-    @chmod($file,0600);
+    @chmod($temporary,0600);
+    race234Must(rename($temporary,$file),'cannot_publish_complete_worker_result');
 }
 function race234WaitFile(string $file,int $maxMs=18000):void
 {
