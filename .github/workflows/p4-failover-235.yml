@@ -149,6 +149,14 @@ jobs:
           for marker in '1/7 PASS' '2/7 PASS' '3/7 PASS' '4/7 PASS'; do
             grep -Fq "P4 #235 REAL GARAGE $marker:" "$RUNNER_TEMP/p4-failover-healthy.txt"
           done
+      - name: Two independent OS PHP processes and PostgreSQL18 backends race with actual Garage GET
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php tests/integration/p4-failover-real-two-garage-235.php race | tee "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 RACE 1/2 PASS:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 RACE 2/2 PASS:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 RACE COMPLETE 2/2:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
       - name: Physically stop primary Garage A; verify secondary ciphertext while A is down
         shell: bash
         run: |
