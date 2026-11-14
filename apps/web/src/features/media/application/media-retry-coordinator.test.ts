@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { activeSession } from '../../identity/application/session'
 import type { Session } from '../../identity/application/session'
-import { attachMediaRetryCoordinator, mediaRetryDelayMs } from './media-retry-coordinator'
+import { attachMediaRetryCoordinator, mediaRetryDelayMs, MEDIA_RETRY_IDLE_MS } from './media-retry-coordinator'
 
 const fake = vi.hoisted(() => ({
   rows: [] as Array<{ state: 'queued' | 'retry' | 'synced' }>,
@@ -81,6 +81,22 @@ describe('P1 #390 Camera MediaFile bounded retry coordination', () => {
     detach = undefined
     account('B', true)
     await vi.advanceTimersByTimeAsync(60_000)
+    expect(fake.flushes).toBe(1)
+  })
+
+  it('yields Browser to its own MediaImportPanel lifecycle, resumes on Camera', async () => {
+    account('A')
+    fake.rows = [{ state: 'retry' }]
+    Object.defineProperty(window, 'location', {
+      value: { pathname: '/browser' }, configurable: true,
+    })
+    detach = attachMediaRetryCoordinator()
+    await vi.advanceTimersByTimeAsync(50_000)
+    expect(fake.flushes).toBe(0)
+    Object.defineProperty(window, 'location', {
+      value: { pathname: '/camera' }, configurable: true,
+    })
+    await vi.advanceTimersByTimeAsync(MEDIA_RETRY_IDLE_MS)
     expect(fake.flushes).toBe(1)
   })
 
