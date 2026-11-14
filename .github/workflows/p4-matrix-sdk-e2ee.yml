@@ -15,7 +15,10 @@ permissions:
 jobs:
   real-js-sdk-e2ee:
     name: Actual two-Synapse JS SDK Megolm decrypt / outsider ACL
-    runs-on: ubuntu-latest
+    # Complement Crypto upstream pins ubuntu-22.04: Chromium's native sandbox
+    # fails on Ubuntu 26.04 AppArmor unprivileged user-namespace restrictions.
+    # Keep Chromium's sandbox ON; do NOT add --no-sandbox or weaken E2EE checks.
+    runs-on: ubuntu-22.04
     timeout-minutes: 40
     env:
       COMPLEMENT_BASE_IMAGE: homeserver
