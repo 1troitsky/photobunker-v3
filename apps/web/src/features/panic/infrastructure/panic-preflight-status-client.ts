@@ -89,7 +89,13 @@ async function readBoundedStatusJson(response: Response): Promise<unknown> {
     throw new Error('panic.invalid_response')
   }
   const parsed: unknown = JSON.parse(raw)
-  if (JSON.stringify(parsed) !== raw) {
+  // The server emits EXACTLY these four fields in this order. A generic
+  // JSON.stringify round-trip would still accept reordered JSON; binding
+  // to the server's order also rejects duplicate keys and whitespace.
+  if (!equalKeys(parsed)
+    || JSON.stringify(Object.fromEntries(
+      FIELDS.map(key => [key, parsed[key]]),
+    )) !== raw) {
     throw new Error('panic.invalid_response')
   }
   return parsed
