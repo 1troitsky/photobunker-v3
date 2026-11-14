@@ -1,0 +1,130 @@
+name: P3 checkout #225 verified pre-settlement QA (patched security parent)
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/app/Billing/Checkout/**'
+      - 'apps/api/tests/Feature/Billing/*Checkout*'
+      - 'apps/api/database/migrations/*checkout*'
+      - '.github/workflows/p3-checkout-225.yml'
+      - 'docs/audits/P3-CHECKOUT-INVOICE-225-20261114.md'
+  push:
+    branches: ['feat/p3-225-invoice-state-20261114']
+
+permissions:
+  contents: read
+
+jobs:
+  php-checkout:
+    name: Audited patched PHP ${{ matrix.php }} checkout contracts
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - name: Checkout exact candidate source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read-only pinned #297 secure Composer lock
+        uses: actions/checkout@v4
+        with:
+          ref: 60407676c7cb9bdb649f5017cf9450aff25eedab
+          path: _verified_patched_security
+          persist-credentials: false
+      - name: Use audited #297 dependency lock solely in disposable CI workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp _verified_patched_security/apps/api/composer.lock apps/api/composer.lock
+          rm -rf _verified_patched_security
+          # The actual PR does not change or merge composer.lock.
+          grep -q '"version": "v13.42.0"' apps/api/composer.lock
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, dom, xml, openssl, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Enforce security floor; strict audited dependency install
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --no-check-publish --strict --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Lint exact Checkout source and run all Laravel tests
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l app/Billing/Checkout/InvoiceLifecycle.php
+          php -l app/Billing/Checkout/DurableQuoteAdmission.php
+          php -l tests/Feature/Billing/CheckoutInvoiceLifecycleTest.php
+          php -l tests/Feature/Billing/DurableQuoteAdmissionTest.php
+          php -l database/migrations/2026_11_14_000225_create_checkout_quotes_v1.php
+          php vendor/bin/phpunit --filter 'CheckoutInvoiceLifecycleTest|DurableQuoteAdmissionTest'
+          php vendor/bin/phpunit
+
+  postgres-checkout:
+    name: Real PostgreSQL 18 checkout idempotency (not simulated settlement)
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_checkout_225
+          POSTGRES_USER: pb3_checkout
+          POSTGRES_PASSWORD: pb3_checkout_disposable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pb3_checkout -d pb3_checkout_225"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: http://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_checkout_225
+      DB_USERNAME: pb3_checkout
+      DB_PASSWORD: pb3_checkout_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 60407676c7cb9bdb649f5017cf9450aff25eedab
+          path: _verified_patched_security
+          persist-credentials: false
+      - name: Copy only audited immutable lock (never update repository)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp _verified_patched_security/apps/api/composer.lock apps/api/composer.lock
+          rm -rf _verified_patched_security
+          grep -q '"version": "v13.42.0"' apps/api/composer.lock
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Install and explicitly audit pinned patched dependencies
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Real database migration and checkout focused tests
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php artisan migrate --force
+          php vendor/bin/phpunit --filter 'CheckoutInvoiceLifecycleTest|DurableQuoteAdmissionTest' --do-not-cache-result
