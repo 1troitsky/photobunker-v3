@@ -23,6 +23,10 @@ function safeStorage(): Storage {
 }
 
 export function isLogoutFenced(): boolean {
+  // This module is browser-only. Node unit fixtures create synthetic sessions
+  // without a window, IDB or a browser auto-resume surface; they cannot
+  // represent an origin-scoped logout. NEVER bypass for a real Window.
+  if (typeof window === 'undefined') return false
   try {
     // Any unexpected value is treated as fenced, not as a false boolean.
     return safeStorage().getItem(KEY) !== null
