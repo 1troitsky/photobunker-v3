@@ -134,6 +134,7 @@ final class MediaIndexRealPostgres382Test extends TestCase
             }
         }
         if ($batch !== []) DB::table('media_files_v1')->insert($batch);
+        $batch = [];
         for ($n = 1; $n <= 77; $n++) {
             $batch[] = $this->row(
                 self::id($n, '9000'), $this->outsider, $this->outsiderDevice
