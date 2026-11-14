@@ -1,4 +1,5 @@
 import Dexie from 'dexie'
+import {validPinRelockDelayMs} from './pin-relock-policy'
 
 /**
  * Offline PIN check only. This is NOT session authorization and must never directly
@@ -35,6 +36,8 @@ export type StoredPinState = {
   failures: number
   lockedUntilMs: number
   lastObservedMs: number
+  /** Present only in HMAC-v2 policy records. Missing older v1 = Immediate. */
+  relockDelayMs?: number
   integrityTag: number[]
 }
 
@@ -98,10 +101,17 @@ function validateState(row: StoredPinState, scope: PinScope): void {
   const keys = [
     'accountId', 'app', 'deviceId', 'emergency', 'failures', 'id',
     'integrityTag', 'lastObservedMs', 'lockedUntilMs', 'revision', 'version',
-  ].sort()
+  ]
+  const hasRelock = row !== null && typeof row === 'object' &&
+    Object.prototype.hasOwnProperty.call(row, 'relockDelayMs')
+  if (hasRelock) keys.push('relockDelayMs')
   if (!row || typeof row !== 'object' ||
-      Object.keys(row).sort().join('|') !== keys.join('|')) {
+      Object.keys(row).sort().join('|') !== keys.sort().join('|')) {
     throw new Error('pin.corrupt_record')
+  }
+  if (hasRelock) {
+    try { validPinRelockDelayMs(row.relockDelayMs) }
+    catch { throw new Error('pin.corrupt_record') }
   }
   if (!Array.isArray(row.integrityTag) || row.integrityTag.length !== TAG_BYTES ||
       !row.integrityTag.every(n =>
@@ -129,12 +139,17 @@ function validateState(row: StoredPinState, scope: PinScope): void {
  * an independent monotonic counter; do not advertise rollback resistance.
  */
 function stateFrame(row: StoredPinState): Uint8Array<ArrayBuffer> {
+  const hasRelock=Object.prototype.hasOwnProperty.call(row,'relockDelayMs')
+  // Legacy verifier rows retain their ORIGINAL v1 HMAC frame. A real 0–5min
+  // setting uses a different domain and includes the exact delay in the MAC.
+  // Removing relockDelayMs from a v2 row changes the domain -> HMAC mismatch.
   return encoder.encode(JSON.stringify([
-    'PB3/PIN/ledger/v1',
+    hasRelock?'PB3/PIN/ledger/v2':'PB3/PIN/ledger/v1',
     row.id, row.version, row.accountId, row.deviceId, row.revision,
     row.app.salt, row.app.tag,
     row.emergency?.salt ?? null, row.emergency?.tag ?? null,
     row.failures, row.lockedUntilMs, row.lastObservedMs,
+    ...(hasRelock?[row.relockDelayMs]:[]),
   ]))
 }
 
@@ -236,7 +251,7 @@ export async function enrollPinVerifier(
     revision: crypto.randomUUID(),
     app, emergency,
     failures: 0, lockedUntilMs: 0, lastObservedMs: timestamp,
-    integrityTag: [],
+    relockDelayMs:0, integrityTag: [],
   }
   row.integrityTag = await calculateStateTag(row, secret)
   await records.add(row)
@@ -370,7 +385,7 @@ export async function buildPinVerifierSnapshot(
     accountId: scope.accountId, deviceId: scope.deviceId,
     revision: crypto.randomUUID(),
     app, emergency, failures: 0, lockedUntilMs: 0,
-    lastObservedMs: now, integrityTag: [],
+    lastObservedMs: now, relockDelayMs:0, integrityTag: [],
   }
   row.integrityTag = await calculateStateTag(row, secret)
   return row
@@ -445,4 +460,50 @@ export async function evaluatePinVerifierSnapshot(
   }
   next.integrityTag=await calculateStateTag(next,secret)
   return {next,result}
+}
+
+
+/**
+ * VERIFY-ONLY read for an HMAC-protected timing policy.
+ * The old v1 MAC has no such field and can only mean "Immediately" (0ms).
+ * Does not change the active Session or authenticate user interaction.
+ */
+export async function readVerifiedPinRelockDelay(
+  scope:PinScope,
+  secret:CryptoKey,
+  snapshot:StoredPinState,
+):Promise<number>{
+  scopeId(scope)
+  requireDeviceSecret(secret)
+  await verifyStoredState(snapshot,scope,secret)
+  return snapshot.relockDelayMs ?? 0
+}
+
+/**
+ * PURE PREPARATION only: produce a new MACed record for a future caller
+ * that MUST separately establish current app-PIN reauthentication, server
+ * device authority and an atomic single-row CAS with this exact snapshot.
+ *
+ * This function DOES NOT write a DB row or enable a settings UI. It must
+ * never reset the failed-attempt/lockout ledger or accept an emergency PIN
+ * as user authorization. On clock rollback or during lockout, fail closed.
+ */
+export async function prepareVerifiedPinRelockPolicy(
+  scope:PinScope,
+  secret:CryptoKey,
+  snapshot:StoredPinState,
+  delayMs:unknown,
+):Promise<StoredPinState>{
+  const desired=validPinRelockDelayMs(delayMs)
+  await verifyStoredState(snapshot,scope,secret)
+  const now=Date.now()
+  if(!Number.isSafeInteger(now) || now<snapshot.lastObservedMs ||
+     now<snapshot.lockedUntilMs)
+    throw new Error('pin.policy_clock_or_lockout')
+  const next:StoredPinState={
+    ...snapshot,revision:crypto.randomUUID(),
+    relockDelayMs:desired,lastObservedMs:now,integrityTag:[],
+  }
+  next.integrityTag=await calculateStateTag(next,secret)
+  return next
 }
