@@ -204,7 +204,11 @@ test('P1 #378 genuine encrypted offline media stays private in persistent browse
       await identity.logout()
     })
     await expect(decoded).toHaveCount(0)
-    await expect(importPanel.getByText('Нет импортированных файлов.')).toBeVisible()
+    // Logout may unmount Browser entirely; a localized empty-state message
+    // is not a security invariant. Assert the former PRIVATE preview is
+    // invisible regardless of the router's post-logout destination.
+    await expect(page.locator('body')).not.toContainText(filename)
+    await expect(page.locator('body')).not.toContainText(description)
     expect(await page.evaluate(async url => {
       try { return (await fetch(url)).ok } catch { return false }
     }, blobUrl!)).toBe(false)
@@ -216,7 +220,9 @@ test('P1 #378 genuine encrypted offline media stays private in persistent browse
 
     await context.setOffline(false)
     await page.reload()
-    await expect(importPanel.getByText('Нет импортированных файлов.')).toBeVisible()
+    await expect(page.getByTestId('media-decrypted-preview')).toHaveCount(0)
+    await expect(page.locator('body')).not.toContainText(filename)
+    await expect(page.locator('body')).not.toContainText(description)
     const signedOut = await page.evaluate(async () => {
       const identity = await import('/src/features/identity/application/session.ts')
       return identity.activeSession.value === null
