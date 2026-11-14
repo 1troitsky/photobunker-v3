@@ -248,3 +248,32 @@ test('CLI defaults to NOT TESTED; never probes the network implicitly', () => {
   assert.match(p.stderr, /NOT TESTED/u);
   assert.equal(p.stdout, '');
 });
+
+
+test('streaming byte cap rejects deceptively small declared Content-Length', async () => {
+  let calls = 0;
+  const bigStream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new Uint8Array(160_000));
+      controller.enqueue(new Uint8Array(160_000));
+      controller.close();
+    },
+  });
+  const fakeFetch = async () => {
+    calls++;
+    return new Response(bigStream, {
+      status: 200,
+      headers: { 'content-length': '1' },
+    });
+  };
+  await fails(config(), fakeFetch, 'MATRIX_RESPONSE_TOO_LARGE');
+  assert.equal(calls, 1);
+});
+
+test('declared oversize response fails closed without reading its content', async () => {
+  const fakeFetch = async () => new Response('{}', {
+    status: 200,
+    headers: { 'content-length': '500000' },
+  });
+  await fails(config(), fakeFetch, 'MATRIX_RESPONSE_TOO_LARGE');
+});
