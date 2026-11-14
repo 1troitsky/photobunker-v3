@@ -6,6 +6,7 @@ declare(strict_types=1);
  * never use real accounts, keys, buckets, or production object references.
  */
 use App\Backup\RecoveryVaultGenerationLedger;
+use App\Backup\VaultManifestWriteOnceUploader;
 use App\Storage\StorageAdapter;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
@@ -120,6 +121,7 @@ DB::table('identity_accounts')->insert([
 ]);
 $storage = app(StorageAdapter::class); // actual Garage, not Storage::fake
 $vault = app(RecoveryVaultGenerationLedger::class);
+$conditionalWriter = app(VaultManifestWriteOnceUploader::class);
 $written = [];
 try {
     $a = vaultStart($account);
@@ -130,8 +132,26 @@ try {
         'vault.manifest_not_verified');
     requireVault($vault->currentActive($account) === null,
         'missing manifest never creates a head');
-    vaultPut($storage, $first['key'], $firstBytes);
+    requireVaultFailure(
+        static fn() => $conditionalWriter->publishStagedTrusted(
+            $a['account'], $a['operation'], $a['lease'], $first['generation'],
+            random_bytes(strlen($firstBytes))),
+        'vault.publisher_not_authorized');
+    requireVault(!$storage->exists($first['key']),
+        'wrong hash cannot publish an object');
+    requireVault(
+        $conditionalWriter->publishStagedTrusted(
+            $a['account'], $a['operation'], $a['lease'], $first['generation'],
+            $firstBytes) === $first['key'],
+        'native S3 If-None-Match first writer succeeded');
     $written[] = $first['key'];
+    requireVaultFailure(
+        static fn() => $conditionalWriter->publishStagedTrusted(
+            $a['account'], $a['operation'], $a['lease'], $first['generation'],
+            $firstBytes),
+        'vault.write_once_conflict');
+    requireVault(vaultBytes($storage, $first['key']) === $firstBytes,
+        'duplicate conditional PUT did not overwrite first object');
     requireVault(vaultActivate($vault, $a, $first) === $first['generation'],
         'real physical Garage readback accepted');
     requireVault(vaultActivate($vault, $a, $first) === $first['generation'],
@@ -205,7 +225,7 @@ try {
     requireVault($fourth['generation'] !== $stale['generation'],
         'new generation can start after failed worker without reviving stale');
     fwrite(STDOUT,
-        "P3 #218 REAL PG18/Garage: missing/valid/corrupt/retry, lost-ACK, ".
+        "P3 #218 REAL PG18/Garage: create-only conditional PUT, missing/valid/corrupt/retry, lost-ACK, ".
         "verified replacement, post-activation tamper denial, retired bytes, ".
         "stale lease and release PASS\n");
 } finally {
