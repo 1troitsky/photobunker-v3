@@ -241,7 +241,9 @@ export async function refreshPinSessionFence():Promise<boolean>{
       isSignedOut(before.accountId,before.deviceId),
     ])
   }catch{
-    if(activeSession.value!==before)return false
+    const now=activeSession.value
+    if(!now||now.accountId!==before.accountId||
+       now.deviceId!==before.deviceId)return false
     activeSession.value=null
     pendingPinUnlock.value=null
     identityBootstrapError.value='identity.storage_unavailable'
