@@ -4,6 +4,7 @@ import { jsonApi, putCiphertext, readCiphertext } from '../../identity/infrastru
 import { importSigner, sign } from '../../identity/infrastructure/crypto'
 import { sha } from '../../local-storage/infrastructure/cipher'
 import { newSignedExpiry } from './retention-hint'
+import { recordingBounds } from '../domain/recording-limits'
 import {
   encryptMediaFile,decryptMediaChunks,decryptMediaMetadataOnly,validateMediaContract,
 } from '../domain/media-crypto'
@@ -105,7 +106,13 @@ export async function enqueueEncryptedMedia(
       ||capture.startedAt<1500000000000
       ||!Number.isSafeInteger(capture.finishedAt)
       ||capture.finishedAt<=capture.startedAt
-      ||capture.finishedAt-capture.startedAt>3*60*1000
+      // A capture's signed duration is client-declared (not hardware proof).
+      // Enforce the agreed per-kind ceiling at the same boundary as the API:
+      // photo 180s (legacy), video 300s, audio 3000s.
+      ||capture.finishedAt-capture.startedAt>(
+        capture.mediaType==='photo'?180_000:
+        recordingBounds(capture.mediaType).maxMs
+      )
       ||capture.finishedAt>Date.now()+120000)
       throw Error('media.invalid_capture_intent')
     const contractHash=await sha(new TextEncoder().encode(signed))

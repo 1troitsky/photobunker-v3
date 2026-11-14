@@ -466,7 +466,9 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await B.locator('#camera-tags').fill('evidence')
     await B.getByTestId('camera-start-recording').click()
     await expect(B.getByTestId('camera-recording-status')).toBeVisible()
-    await B.waitForTimeout(1600) // actual microphone media data, not debounce
+    // P2 #206: real microphone recording must satisfy the 5s minimum.
+    // Do not bypass the production duration gate to make the encrypted E2E pass.
+    await B.waitForTimeout(5500)
     await B.getByTestId('camera-stop-recording').click()
     await expect(B.getByText(/Запись зашифрована и сохранена локально/))
       .toBeVisible({timeout:30000})
@@ -575,7 +577,9 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       const msg=await alert.count()?await alert.textContent():null
       return msg?'REJECTED: '+msg:'preflight_pending'
     },{timeout:20000}).toBe('recording')
-    await B.waitForTimeout(1800) // actual camera+microphone recording
+    // P2 #206 requires real camera+microphone recording >=5s before
+    // a signed, encrypted video MediaFile can be persisted.
+    await B.waitForTimeout(5500)
     await B.getByTestId('camera-stop-recording').click()
     await expect(B.getByText(/Запись зашифрована и сохранена локально/))
       .toBeVisible({timeout:30000})
@@ -748,6 +752,15 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     // the original invitation. The same old ECDH invitation decrypts the
     // new, independently signed AEAD envelope with the original shared DEK.
     await A.goto('/assignments/'+assignmentId+'/edit')
+    // Cold navigation may first restore a valid signed *offline* snapshot.
+    // Re-establish real server session authority before requiring a live ACK;
+    // keep the unchanged signed policy, E2EE and server receipt assertions.
+    await A.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+      if(!identity.requireSession().online)
+        throw Error('qa.owner_session_unverified_after_cold_navigation')
+    })
     await expect(A.locator('#editor-private-title'))
       .toHaveValue('Media v3 opt-in assignment',{timeout:20000})
     await A.locator('#editor-private-title').fill('PRIVATE UPDATED TITLE 1')
