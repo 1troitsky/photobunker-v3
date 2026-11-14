@@ -206,6 +206,8 @@ final class PlacementReadiness
             }
         }
 
+        $this->assertLogicalUnchanged($kind, $account, $logicalId, $record, $at);
+
         return [
             'schemaVersion' => 1,
             'kind' => $kind,
@@ -225,12 +227,71 @@ final class PlacementReadiness
         ];
     }
 
+
+    /**
+     * A user may delete, revoke, retire or expire ciphertext WHILE two
+     * remote readbacks are happening. Such a racing preflight must reject,
+     * even though it never authorizes a switch.
+     */
+    private function assertLogicalUnchanged(
+        string $kind,
+        string $account,
+        string $logicalId,
+        object $before,
+        CarbonImmutable $at,
+    ): void {
+        if ($kind === 'photo') {
+            $after = DB::table('photo_objects as o')
+                ->join('photo_records as p', 'p.id', '=', 'o.photo_id')
+                ->join('identity_accounts as a', 'a.id', '=', 'p.account_id')
+                ->where('o.id', $logicalId)->where('p.account_id', $account)
+                ->where('a.status', 'ready')
+                ->first([
+                    'p.id as parent_id','p.state as parent_state',
+                    'p.expires_at','o.state as asset_state',
+                    'o.sha256','o.bytes','o.updated_at as asset_updated_at',
+                ]);
+            $deleted = DB::table('photo_tombstones')
+                ->where('photo_id', $before->parent_id)->exists();
+        } elseif ($kind === 'media_chunk') {
+            $after = DB::table('media_chunks_v1 as c')
+                ->join('media_files_v1 as m', 'm.id', '=', 'c.media_id')
+                ->join('identity_accounts as a', 'a.id', '=', 'm.account_id')
+                ->where('c.id', $logicalId)->where('m.account_id', $account)
+                ->where('a.status', 'ready')
+                ->first([
+                    'm.id as parent_id','m.state as parent_state',
+                    'm.expires_at','c.state as asset_state',
+                    'c.sha256','c.bytes','c.updated_at as asset_updated_at',
+                ]);
+            $deleted = DB::table('media_tombstones_v1')
+                ->where('media_id', $before->parent_id)->exists();
+        } else {
+            throw new RuntimeException('placement.invalid_kind');
+        }
+        if ($deleted || $after === null
+            || $after->parent_id !== $before->parent_id
+            || $after->parent_state !== $before->parent_state
+            || $after->asset_state !== $before->asset_state
+            || (int)$after->expires_at !== (int)$before->expires_at
+            || $after->sha256 !== $before->sha256
+            || (int)$after->bytes !== (int)$before->bytes
+            || (string)$after->asset_updated_at !== (string)$before->asset_updated_at) {
+            throw new RuntimeException('placement.changed_during_preflight');
+        }
+        try {
+            $this->activeAsset($after, $at);
+        } catch (RuntimeException) {
+            throw new RuntimeException('placement.changed_during_preflight');
+        }
+    }
+
     /** @return array{adapter:StorageAdapter,failureDomain:string,credentialRevision:int} */
     private function transport(string $provider): array
     {
         $binding = $this->registeredTransports[$provider] ?? null;
         if (!is_array($binding)
-            || !($binding['adapter'] ?? null) instanceof StorageAdapter
+            || !(($binding['adapter'] ?? null) instanceof StorageAdapter)
             || !is_string($binding['failureDomain'] ?? null)
             || !preg_match('/^[A-Za-z0-9_.:-]{8,128}$/D', $binding['failureDomain'])
             || !is_int($binding['credentialRevision'] ?? null)
