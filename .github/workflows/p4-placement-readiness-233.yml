@@ -1,0 +1,167 @@
+name: 'P4 #346 placement preflight SHA256 and account isolation (NOT live S3 switch)'
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/app/Storage/Placement/**'
+      - 'apps/api/database/migrations/*placement*'
+      - 'apps/api/tests/Feature/StoragePlacement/**'
+      - 'apps/api/tests/integration/p4-placement-real-two-garage-233.php'
+      - 'apps/api/tests/integration/p4-placement-generation-pg-race-233.php'
+      - 'scripts/p4-placement-provision-two-garage-233.sh'
+      - '.github/workflows/p4-placement-readiness-233.yml'
+      - 'docs/audits/P4-PLACEMENT-READINESS-233-20261114.md'
+      - 'docs/audits/P4-MULTI-S3-346-PLACEMENT-RECONCILE-20261114-CHAT-T.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  laravel:
+    name: Audited PHP ${{ matrix.php }} placement contracts
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, dom, xml, openssl, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Enforce PHP floor and Composer security with no suppression
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Syntax, focused placement negatives and entire Laravel suite
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l app/Storage/Placement/PlacementReadiness.php
+          php -l app/Storage/Placement/PlacementPreparationLedger.php
+          php -l database/migrations/2026_11_14_000233_create_placement_preparations_v1.php
+          php -l tests/Feature/StoragePlacement/PlacementPreparationLedgerTest.php
+          php -l tests/Feature/StoragePlacement/PlacementReadinessTest.php
+          php vendor/bin/phpunit --filter 'Placement(Readiness|PreparationLedger)Test' --do-not-cache-result
+          php vendor/bin/phpunit --do-not-cache-result
+
+  postgres-placement:
+    name: 'PostgreSQL 18 real ownership DB and synthetic physical ciphertext transport'
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_placement_233
+          POSTGRES_USER: pb3_placement
+          POSTGRES_PASSWORD: pb3_placement_disposable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pb3_placement -d pb3_placement_233"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: http://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_placement_233
+      DB_USERNAME: pb3_placement
+      DB_PASSWORD: pb3_placement_disposable
+      PB3_PLACEMENT_REAL_GARAGE_CI: '1'
+      S3_REGION: garage
+      S3_ENDPOINT: http://127.0.0.1:3900
+      S3_BUCKET: pb3-placement-233-a
+      PB3_PLACEMENT_B_ENDPOINT: http://127.0.0.1:4900
+      PB3_PLACEMENT_B_BUCKET: pb3-placement-233-b
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Strict patched runtime/audit and vendor install
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Provision two real independent, disposable Garage 2.5 instances
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/p4-placement-provision-two-garage-233.sh
+          echo "PB3_PLACEMENT_FIXTURE_PATH=$RUNNER_TEMP/pb3-placement-233-fixture.json" >> "$GITHUB_ENV"
+      - name: Genuine PostgreSQL-owned location DB contract
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php artisan migrate --force
+          # Shared phpunit.xml forces sqlite; disposable exact-PG configuration.
+          cp phpunit.xml phpunit.placement.pg.xml
+          sed -i 's/name="DB_CONNECTION" value="sqlite"/name="DB_CONNECTION" value="pgsql"/' phpunit.placement.pg.xml
+          sed -i 's/name="DB_DATABASE" value=":memory:"/name="DB_DATABASE" value="pb3_placement_233"/' phpunit.placement.pg.xml
+          grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.placement.pg.xml
+          grep -q 'name="DB_DATABASE" value="pb3_placement_233"' phpunit.placement.pg.xml
+          php vendor/bin/phpunit --configuration phpunit.placement.pg.xml --filter 'Placement(Readiness|PreparationLedger)Test' --do-not-cache-result
+      - name: Validate real Garage A/B physical ciphertext, corruption and missing target
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p4-placement-real-two-garage-233.php
+          php tests/integration/p4-placement-real-two-garage-233.php healthy
+      - name: Two actual PHP processes collide on PostgreSQL 18 candidate generation with real S3 readback
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p4-placement-generation-pg-race-233.php
+          # Require BOTH explicit evidence markers, not merely a process
+          # status: Laravel CLI once reported an exception with exit 0.
+          php tests/integration/p4-placement-generation-pg-race-233.php | tee "$RUNNER_TEMP/p4-placement-race-233.stdout"
+          grep -Fq 'P4 #233 REAL PG18 CAS 1/2 PASS:' "$RUNNER_TEMP/p4-placement-race-233.stdout"
+          grep -Fq 'P4 #233 REAL PG18 CAS 2/2 PASS:' "$RUNNER_TEMP/p4-placement-race-233.stdout"
+          grep -Fq 'P4 #233 REAL PG18 CAS COMPLETE 2/2:' "$RUNNER_TEMP/p4-placement-race-233.stdout"
+      - name: Stop ONLY disposable Garage B, verify genuine outage with live Garage A
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker stop pb3-p4-233-garage-b >/dev/null
+          (cd apps/api && php tests/integration/p4-placement-real-two-garage-233.php offline)
+      - name: Restart Garage B, recover physical SHA-256 readback without switching
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker start pb3-p4-233-garage-b >/dev/null
+          ready=0
+          for attempt in $(seq 1 30); do
+            if docker exec pb3-p4-233-garage-b /garage status >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = 1
+          (cd apps/api && php tests/integration/p4-placement-real-two-garage-233.php recovered)
+      - name: Cleanup ONLY disposable Garage test instances
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f pb3-p4-233-garage-a pb3-p4-233-garage-b >/dev/null 2>&1 || true
