@@ -1,0 +1,208 @@
+name: 'P4 #235 verified replica read preflight (NOT live failover)'
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/app/Storage/Failover/**'
+      - 'apps/api/tests/Feature/StorageFailover/**'
+      - '.github/workflows/p4-failover-235.yml'
+      - 'docs/audits/P4-FAILOVER-235-20261114.md'
+      - 'apps/api/tests/integration/p4-failover-real-two-garage-235.php'
+      - 'scripts/p4-failover-provision-two-garage-235.sh'
+  push:
+    branches: ['feat/p4-235-verified-replica-read-20261114']
+
+permissions:
+  contents: read
+
+jobs:
+  php:
+    name: 'PHP ${{ matrix.php }} focused + full tests, no live switch'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # CVE-2026-128083 remains in unmerged base main. Use ONLY reviewed
+      # security PR #298 lockfile in disposable CI worktree; never suppress it.
+      - uses: actions/checkout@v4
+        with:
+          ref: 60407676c7cb9bdb649f5017cf9450aff25eedab
+          path: _reviewed_security_patch
+          persist-credentials: false
+      - name: Use independently reviewed patched lock in temporary test checkout
+        run: |
+          set -euo pipefail
+          cp _reviewed_security_patch/apps/api/composer.lock apps/api/composer.lock
+          rm -rf _reviewed_security_patch
+          grep -q '"version": "v13.42.0"' apps/api/composer.lock
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, dom, xml, openssl, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Strict runtime, Composer audit and install (no exceptions)
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Syntax, fail-closed replica tests, full Laravel suite
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l app/Storage/Failover/ReplicaReadPreflight.php
+          php -l tests/Feature/StorageFailover/ReplicaReadPreflightTest.php
+          php vendor/bin/phpunit --filter ReplicaReadPreflightTest --do-not-cache-result
+          php vendor/bin/phpunit --do-not-cache-result
+
+  postgres:
+    name: 'PostgreSQL 18 real metadata and synthetic replica transport'
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_failover_235
+          POSTGRES_USER: pb3_failover
+          POSTGRES_PASSWORD: pb3_failover_disposable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pb3_failover -d pb3_failover_235"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: http://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_failover_235
+      DB_USERNAME: pb3_failover
+      DB_PASSWORD: pb3_failover_disposable
+      PB3_FAILOVER_REAL_GARAGE_CI: '1'
+      S3_REGION: garage
+      S3_ENDPOINT: http://127.0.0.1:3900
+      S3_BUCKET: pb3-failover-235-a
+      PB3_FAILOVER_B_ENDPOINT: http://127.0.0.1:4900
+      PB3_FAILOVER_B_BUCKET: pb3-failover-235-b
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 60407676c7cb9bdb649f5017cf9450aff25eedab
+          path: _reviewed_security_patch
+          persist-credentials: false
+      - name: Test with independently reviewed patched lock, without changing branch
+        run: |
+          set -euo pipefail
+          cp _reviewed_security_patch/apps/api/composer.lock apps/api/composer.lock
+          rm -rf _reviewed_security_patch
+          grep -q '"version": "v13.42.0"' apps/api/composer.lock
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Strict PHP floor, Composer audit, vendor install
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Run real PG18 metadata negative and physical stream contract
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php artisan migrate --force
+          cp phpunit.xml phpunit.failover.pg.xml
+          sed -i 's/name="DB_CONNECTION" value="sqlite"/name="DB_CONNECTION" value="pgsql"/' phpunit.failover.pg.xml
+          sed -i 's/name="DB_DATABASE" value=":memory:"/name="DB_DATABASE" value="pb3_failover_235"/' phpunit.failover.pg.xml
+          grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.failover.pg.xml
+          php vendor/bin/phpunit --configuration phpunit.failover.pg.xml --filter ReplicaReadPreflightTest --do-not-cache-result
+
+      - name: Provision two physically distinct disposable Garage 2.5 S3 instances
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/p4-failover-provision-two-garage-235.sh
+          echo "PB3_FAILOVER_FIXTURE_PATH=$RUNNER_TEMP/pb3-failover-235-fixture.json" >> "$GITHUB_ENV"
+      - name: Physically verify both copies, same-size corruption, missing and stale replica
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p4-failover-real-two-garage-235.php
+          php tests/integration/p4-failover-real-two-garage-235.php healthy | tee "$RUNNER_TEMP/p4-failover-healthy.txt"
+          for marker in '1/7 PASS' '2/7 PASS' '3/7 PASS' '4/7 PASS'; do
+            grep -Fq "P4 #235 REAL GARAGE $marker:" "$RUNNER_TEMP/p4-failover-healthy.txt"
+          done
+      - name: 'Real Garage GET — distinct OS PHP/PG18 revisions, delete race and two-commit ABA proof'
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php tests/integration/p4-failover-real-two-garage-235.php race | tee "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 RACE 1/2 PASS:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 RACE 2/2 PASS:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 RACE COMPLETE 2/2:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 ABA 1/2 PASS:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 ABA 2/2 PASS:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 ABA COMPLETE 2/2:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 TOMBSTONE 1/1 PASS:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+      - name: Photo and media TTL elapses after physical secondary S3 GET
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php tests/integration/p4-failover-real-two-garage-235.php ttl | tee "$RUNNER_TEMP/p4-failover-live-ttl.txt"
+          grep -Fq 'P4 #235 REAL GARAGE TTL 1/2 PASS:' "$RUNNER_TEMP/p4-failover-live-ttl.txt"
+          grep -Fq 'P4 #235 REAL GARAGE TTL 2/2 PASS:' "$RUNNER_TEMP/p4-failover-live-ttl.txt"
+          grep -Fq 'P4 #235 REAL GARAGE TTL COMPLETE 2/2:' "$RUNNER_TEMP/p4-failover-live-ttl.txt"
+      - name: Physically stop primary Garage A; verify secondary ciphertext while A is down
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker stop pb3-p4-235-garage-a >/dev/null
+          test "$(docker inspect -f '{{.State.Running}}' pb3-p4-235-garage-a)" = false
+          (cd apps/api && php tests/integration/p4-failover-real-two-garage-235.php primary-offline) | tee "$RUNNER_TEMP/p4-failover-primary-offline.txt"
+          grep -Fq 'P4 #235 REAL GARAGE 5/7 PASS:' "$RUNNER_TEMP/p4-failover-primary-offline.txt"
+      - name: Restart A; physically stop secondary B; reject unavailable replica
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker start pb3-p4-235-garage-a >/dev/null
+          for attempt in $(seq 1 30); do
+            if docker exec pb3-p4-235-garage-a /garage status >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec pb3-p4-235-garage-a /garage status >/dev/null
+          sleep 2
+          docker stop pb3-p4-235-garage-b >/dev/null
+          test "$(docker inspect -f '{{.State.Running}}' pb3-p4-235-garage-b)" = false
+          (cd apps/api && php tests/integration/p4-failover-real-two-garage-235.php secondary-offline) | tee "$RUNNER_TEMP/p4-failover-secondary-offline.txt"
+          grep -Fq 'P4 #235 REAL GARAGE 6/7 PASS:' "$RUNNER_TEMP/p4-failover-secondary-offline.txt"
+      - name: Restart B; prove complete ciphertext recovery and no pointer mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker start pb3-p4-235-garage-b >/dev/null
+          for attempt in $(seq 1 30); do
+            if docker exec pb3-p4-235-garage-b /garage status >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec pb3-p4-235-garage-b /garage status >/dev/null
+          sleep 2
+          (cd apps/api && php tests/integration/p4-failover-real-two-garage-235.php recovered) | tee "$RUNNER_TEMP/p4-failover-recovered.txt"
+          grep -Fq 'P4 #235 REAL GARAGE 7/7 PASS:' "$RUNNER_TEMP/p4-failover-recovered.txt"
+          grep -Fq 'P4 #235 REAL GARAGE COMPLETE 7/7:' "$RUNNER_TEMP/p4-failover-recovered.txt"
