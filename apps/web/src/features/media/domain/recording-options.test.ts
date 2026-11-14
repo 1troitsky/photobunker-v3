@@ -1,6 +1,8 @@
 import {describe, expect, it} from 'vitest'
+import {MAX_MEDIA_BYTES} from './media-crypto'
 import {
   AUDIO_TARGET_BITRATES, DEFAULT_AUDIO_TARGET_BITRATE, recordingOptions,
+  VIDEO_TARGET_BITRATE_BPS, VIDEO_AUDIO_TARGET_BITRATE_BPS,
 } from './recording-options'
 
 describe('native audio encoder target config', () => {
@@ -18,8 +20,26 @@ describe('native audio encoder target config', () => {
         .toThrow('camera.audio_target_bitrate_invalid')
     },
   )
-  it('never attaches microphone-only encoder quality setting to video mode', () => {
-    expect(recordingOptions('video','video/webm',256000))
-      .toEqual({mimeType:'video/webm'})
+  it('uses conservative #205 video codec hints without inheriting audio-only selector', () => {
+    expect(recordingOptions('video','video/webm',256000)).toEqual({
+      mimeType:'video/webm',
+      videoBitsPerSecond:2_400_000,
+      audioBitsPerSecond:96_000,
+    })
+    expect(recordingOptions('audio','audio/webm',256000)).toEqual({
+      mimeType:'audio/webm',
+      audioBitsPerSecond:256000,
+    })
+  })
+  it('keeps a 300s video bitrate target under the independent 128MiB hard cap', () => {
+    const target=Math.ceil(
+      (VIDEO_TARGET_BITRATE_BPS+VIDEO_AUDIO_TARGET_BITRATE_BPS)*300_000/8_000,
+    )
+    expect(target).toBe(93_600_000)
+    expect(target).toBeLessThan(MAX_MEDIA_BYTES)
+    const first=recordingOptions('video','video/webm',128000)
+    first.videoBitsPerSecond=1
+    expect(recordingOptions('video','video/webm',128000).videoBitsPerSecond)
+      .toBe(VIDEO_TARGET_BITRATE_BPS)
   })
 })

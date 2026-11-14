@@ -880,9 +880,13 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     expect(opened.track.stop).not.toHaveBeenCalled()
   })
 
-  it('does not apply audio-only target setting to video recorder',async()=>{
+  it('requests #205 video bitrate budget without copying audio-only target or 175s limit',async()=>{
     await openMode('video')
-    expect(BoundedRecorder.latest!.options).toEqual({mimeType:'video/webm'})
+    expect(BoundedRecorder.latest!.options).toEqual({
+      mimeType:'video/webm',
+      videoBitsPerSecond:2_400_000,
+      audioBitsPerSecond:96_000,
+    })
   })
 
   it.each(['video','audio'] as const)('rejects a premature %s Stop before encrypted enqueue', async mode => {
