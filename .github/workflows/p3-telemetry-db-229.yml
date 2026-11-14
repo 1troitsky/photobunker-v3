@@ -68,6 +68,7 @@ jobs:
         run: |
           php vendor/bin/phpunit --filter TelemetryDatabaseSinkTest
           php vendor/bin/phpunit --filter InternalAggregateReaderTest
+          php vendor/bin/phpunit --filter AssignmentCoverageAuditTest
           php vendor/bin/phpunit
       - name: Migrate disposable PG18 and initialize clock
         working-directory: apps/api
@@ -124,3 +125,9 @@ jobs:
           test "$output" = 'telemetry.operator pages=1 accepted=0 duplicate=1 complete=yes'
           echo 'Operator CLI default-OFF and enabled disposable PG18 replay PASS'
 
+      - name: Real PG18 UTC source coverage discrepancy with non-UTC database timezone
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php coverage

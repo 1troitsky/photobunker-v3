@@ -10,6 +10,7 @@ $app = require dirname(__DIR__, 2) . '/bootstrap/app.php';
 $app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Telemetry\AssignmentCreationReplay;
+use App\Telemetry\AssignmentCoverageAudit;
 use App\Telemetry\InternalAggregateReader;
 use App\Telemetry\DatabaseTelemetrySink;
 use Carbon\CarbonImmutable;
@@ -114,6 +115,49 @@ if ($stage === 'init') {
     $assert($missing['points'] === [], 'missing source must not fabricate zero');
     echo "Telemetry PG18 real aggregate read, ISO periods, honest coverage PASS\n";
     echo "Telemetry PG18 two-process REAL ledger-source reconciliation PASS\n";
+} elseif ($stage === 'coverage') {
+    // This stage runs AFTER opt-in CLI smoke, on disposable CI PG18 only.
+    // New previous UTC day source is initially not admitted into counters.
+    $now = CarbonImmutable::createFromTimestampMs($nowMs, 'UTC');
+    $previous = $now->startOfDay()->subDay()->addHours(12);
+    $day = $previous->format('Y-m-d');
+    $db->table('assignment_creation_meter_v1')->insert([
+        'assignment_id' => '66666666-6666-4666-8666-666666666666',
+        'owner_account_id' => ACCOUNT,
+        'operation_id' => '55555555-5555-4555-8555-555555555555',
+        'created_at' => $previous->format('Y-m-d H:i:s.u+00:00'),
+    ]);
+    // A connection timezone different from UTC must NOT reclassify source
+    // creation timestamps into a different calendar day.
+    $db->statement("SET TIME ZONE 'Pacific/Honolulu'");
+    $audit = new AssignmentCoverageAudit($db, new InternalAggregateReader($db));
+    $before = $audit->compare($nowMs, $day, $day);
+    $assert($before['coverageProven'] === false
+        && $before['days'][0]['sourceCount'] === 1
+        && $before['days'][0]['observedCount'] === null
+        && $before['days'][0]['status'] === 'missing_ingestion',
+        'real PG UTC source discrepancy not detected');
+    $ingest = static function (string $id) use ($collector, $previous, $nowMs): void {
+        $decision = $collector->ingest([
+            'schemaVersion' => 1,
+            'eventId' => $id,
+            'eventType' => 'assignment.created',
+            'occurredAtMs' => $previous->getTimestampMs(),
+        ], ACCOUNT, $nowMs);
+        if ($decision !== TelemetryDecision::Accepted) {
+            throw new RuntimeException('PG source comparison event not accepted');
+        }
+    };
+    $ingest('55555555-5555-4555-8555-555555555555');
+    $equal = $audit->compare($nowMs, $day, $day);
+    $assert($equal['coverageProven'] === false
+        && $equal['days'][0]['status'] === 'counts_match_unverified',
+        'equal PG count incorrectly promoted to coverage proof');
+    $ingest('44444444-4444-4444-8444-444444444444');
+    $excess = $audit->compare($nowMs, $day, $day);
+    $assert($excess['days'][0]['status'] === 'excess_untrusted',
+        'unauthorized-looking extra aggregate not flagged');
+    echo "Telemetry real PG18 non-UTC session source-count discrepancy and unproven matching PASS\n";
 } else {
-    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify');
+    throw new RuntimeException('Expected init|worker|verify|source-init|source-worker|source-verify|coverage');
 }
