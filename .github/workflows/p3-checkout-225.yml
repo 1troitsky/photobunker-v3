@@ -7,6 +7,7 @@ on:
       - 'apps/api/tests/Feature/Billing/*Checkout*'
       - 'apps/api/tests/Feature/Billing/DurableQuoteAdmissionTest.php'
       - 'apps/api/database/migrations/*checkout*'
+      - 'apps/api/tests/integration/p3-checkout-postgres-race.php'
       - '.github/workflows/p3-checkout-225.yml'
       - 'docs/audits/P3-CHECKOUT-INVOICE-225-20261114.md'
   push:
@@ -90,6 +91,7 @@ jobs:
       DB_HOST: 127.0.0.1
       DB_PORT: '5432'
       DB_DATABASE: pb3_checkout_225
+      PB3_CHECKOUT_RACE_CI: '1'
       DB_USERNAME: pb3_checkout
       DB_PASSWORD: pb3_checkout_disposable
       SESSION_DRIVER: array
@@ -136,3 +138,9 @@ jobs:
           grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.postgres.checkout.xml
           grep -q 'name="DB_DATABASE" value="pb3_checkout_225"' phpunit.postgres.checkout.xml
           php vendor/bin/phpunit --configuration phpunit.postgres.checkout.xml --filter 'CheckoutInvoiceLifecycleTest|DurableQuoteAdmissionTest' --do-not-cache-result
+      - name: Real independent two-PHP-process PG18 account Lock races (3 scenarios)
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p3-checkout-postgres-race.php
+          php tests/integration/p3-checkout-postgres-race.php
