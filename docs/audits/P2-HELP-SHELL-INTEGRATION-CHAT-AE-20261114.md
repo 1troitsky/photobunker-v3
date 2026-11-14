@@ -23,3 +23,7 @@
 - No support destination/transmission; manual draft is never sent. Security screening is heuristic, not proof that arbitrary secrets are impossible.
 - No physical iOS Safari/Android acceptance, no cold-offline verified Signed PWA/SW, no claim of finished Matrix/Backup/DePay or all 25 release journeys.
 - No merge, deployment, production distribution or main mutation without explicit owner approval. This is a pre-main **reviewable Help/FAQ route** only when full exact-head CI completes.
+
+## New own E2E navigation contract checked before final acceptance
+
+Static read of unchanged source `HelpCenter.vue` confirmed Back operates on its own stack before emitting the Shell exit event; after opening Privacy from Help home, the FIRST Back returns to Help home and SECOND Back returns to `/settings`. Original new E2E had assumed one Back from nested Privacy; adjusted ONLY new own test to verify BOTH steps, not weakened/hid any app behavior. First original CI run on `1e124a9c...` was in progress at discovery, so final acceptance must use new exact HEAD after this correction. Original CI run remains available as evidence (any final result reported, not misrepresented as app defect).

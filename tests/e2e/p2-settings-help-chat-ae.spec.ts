@@ -22,6 +22,8 @@ test('P2 Help: signed-out RU/EN FAQ and legal drafts are honest and navigable', 
     await expect(page.locator('[data-legal-status="draft"]'))
       .toContainText('DRAFT · NOT A LEGAL DOCUMENT')
     await page.getByRole('button', { name: 'Back' }).click()
+    await expect(page.locator('.help-center h1')).toHaveText('Help and information')
+    await page.getByRole('button', { name: 'Back' }).click()
     await expect(page).toHaveURL(/\/settings$/)
     await expect(page.getByRole('button', { name: 'Создать ключ' })).toBeVisible()
   } finally {
