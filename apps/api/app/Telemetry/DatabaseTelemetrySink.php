@@ -91,6 +91,10 @@ final class DatabaseTelemetrySink implements TelemetrySink
     public function prune(DateTimeImmutable $now): array
     {
         $utc = $now->setTimezone(new DateTimeZone('UTC'));
+        // A caller-supplied future clock must not prematurely erase retry receipts.
+        if ($utc->getTimestamp() > time() + 300) {
+            throw new \InvalidArgumentException('telemetry.prune_future_clock');
+        }
         $cutoff = $utc->sub(new DateInterval('P8D'));
         return $this->db->transaction(function () use ($cutoff): array {
             $receipts = $this->db->table('telemetry_event_receipts')

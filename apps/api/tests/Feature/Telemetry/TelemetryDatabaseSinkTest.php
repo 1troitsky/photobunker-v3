@@ -98,14 +98,21 @@ final class TelemetryDatabaseSinkTest extends TestCase
         $sink = new DatabaseTelemetrySink(DB::connection());
         $now = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         self::assertSame(['receipts' => 0, 'actors' => 0], $sink->prune($now));
-        $future = $now->add(new DateInterval('P90D'));
-        $deleted = $sink->prune($future);
+        $past = $now->sub(new DateInterval('P30D'));
+        DB::table('telemetry_event_receipts')->update([
+            'received_at' => $past->format('Y-m-d\\TH:i:s+00:00'),
+        ]);
+        foreach (['day' => '2020-01-01', 'week' => '2020-W01', 'month' => '2020-01'] as $kind => $old) {
+            DB::table('telemetry_active_tokens')->where('period_kind', $kind)
+                ->update(['period_key' => $old]);
+        }
+        $deleted = $sink->prune($now);
         self::assertSame(1, $deleted['receipts']);
         self::assertSame(3, $deleted['actors']);
         self::assertSame(0, DB::table('telemetry_active_tokens')->count());
         self::assertSame(3, DB::table('telemetry_counters')
             ->where('metric', 'session.active.distinct')->count());
-        self::assertSame(TelemetryDecision::Accepted, $this->send(),
-            'After receipt retention, only a newly verified event can re-enter');
+        $this->expectException(\InvalidArgumentException::class);
+        $sink->prune($now->add(new DateInterval('P90D')));
     }
 }
