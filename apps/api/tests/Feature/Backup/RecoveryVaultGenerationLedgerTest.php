@@ -298,4 +298,90 @@ final class RecoveryVaultGenerationLedgerTest extends TestCase
             'account_id' => $a['account'], 'generation_id' => $first['generation'],
         ]);
     }
+
+    public function test_live_started_stage_cannot_be_abandoned(): void
+    {
+        $auth = $this->start();
+        $candidate = $this->stage($auth, random_bytes(300));
+        try {
+            app(RecoveryVaultGenerationLedger::class)
+                ->abandonStaleTrusted($auth['account']);
+            $this->fail('live stage was abandoned');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('vault.stage_lease_still_live', $e->getMessage());
+        }
+        $this->assertDatabaseHas('backup_generations_v1', [
+            'id' => $candidate['generation'], 'state' => 'staged',
+        ]);
+    }
+
+    public function test_expired_stage_is_abandoned_without_touching_last_active_or_remote_bytes(): void
+    {
+        $one = $this->start();
+        $firstBytes = random_bytes(360);
+        $first = $this->stage($one, $firstBytes);
+        Storage::disk('ciphertext')->put($first['key'], $firstBytes);
+        $this->activate($one, $first);
+        DB::table('backup_start_operations_v1')
+            ->where('operation_id', $one['operation'])
+            ->update(['state' => 'completed', 'lease_expires_at' => null,
+                'finished_at' => now()]);
+
+        $two = $this->start($one['account']);
+        $secondBytes = random_bytes(380);
+        $second = $this->stage($two, $secondBytes);
+        Storage::disk('ciphertext')->put($second['key'], $secondBytes);
+        // A crashed worker loses its lease; a new producer can later proceed.
+        DB::table('backup_start_operations_v1')
+            ->where('operation_id', $two['operation'])
+            ->update(['lease_expires_at' => now()->subMinute()]);
+        $ledger = app(RecoveryVaultGenerationLedger::class);
+        $this->assertSame($second['generation'],
+            $ledger->abandonStaleTrusted($one['account']));
+        $this->assertNull($ledger->abandonStaleTrusted($one['account']));
+        $this->assertDatabaseHas('backup_generations_v1', [
+            'id' => $second['generation'], 'state' => 'abandoned',
+        ]);
+        $this->assertSame($first['generation'],
+            $ledger->currentActive($one['account'])->id);
+        $this->assertSame($firstBytes,
+            Storage::disk('ciphertext')->get($first['key']));
+        $this->assertSame($secondBytes,
+            Storage::disk('ciphertext')->get($second['key']));
+        try {
+            $this->activate($two, $second);
+            $this->fail('abandoned candidate accepted');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('vault.not_staged', $e->getMessage());
+        }
+        DB::table('backup_start_operations_v1')
+            ->where('operation_id', $two['operation'])
+            ->update(['state' => 'expired', 'lease_expires_at' => null,
+                'finished_at' => now()]);
+        $three = $this->start($one['account']);
+        $next = $this->stage($three, random_bytes(300));
+        $this->assertDatabaseHas('backup_generations_v1', [
+            'id' => $next['generation'], 'state' => 'staged',
+        ]);
+    }
+
+    public function test_orphaned_stage_with_mismatched_lease_refuses_unsafe_release(): void
+    {
+        $auth = $this->start();
+        $candidate = $this->stage($auth, random_bytes(300));
+        DB::table('backup_generations_v1')
+            ->where('id', $candidate['generation'])
+            ->update(['lease_id' => (string) Str::uuid()]);
+        try {
+            app(RecoveryVaultGenerationLedger::class)
+                ->abandonStaleTrusted($auth['account']);
+            $this->fail('corrupted lease mapping released');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('vault.backup_lease_integrity_failed',
+                $e->getMessage());
+        }
+        $this->assertDatabaseHas('backup_generations_v1', [
+            'id' => $candidate['generation'], 'state' => 'staged',
+        ]);
+    }
 }
