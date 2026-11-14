@@ -109,10 +109,11 @@ jobs:
         run: |
           composer audit --locked --no-interaction
           php -l app/Backup/RecoveryVaultGenerationLedger.php
+          php -l app/Backup/VaultManifestWriteOnceUploader.php
           php -l tests/integration/p3-vault-garage-postgres-218.php
           php -l tests/integration/p3-vault-postgres-race-218.php
           php vendor/bin/phpunit tests/Feature/Backup/RecoveryVaultGenerationLedgerTest.php
-      - name: Actual Garage S3 ciphertext readback, corruption and stale generation recovery
+      - name: Real Garage conditional PUT create-only, physical digest, corruption and stale generation recovery
         working-directory: apps/api
         run: php tests/integration/p3-vault-garage-postgres-218.php
       - name: Two independent PHP processes contend on actual PostgreSQL row lock
