@@ -1,0 +1,46 @@
+name: P3 228 audited admin temporary grants
+on:
+  pull_request:
+    paths:
+      - 'apps/api/app/Administration/Grants/**'
+      - 'apps/api/tests/Feature/Administration/Grants/**'
+      - 'apps/api/database/migrations/2026_11_14_000228_create_admin_trial_grant_operations_v1.php'
+      - '.github/workflows/p3-admin-trial-grant-228.yml'
+      - 'docs/audits/P3-ADMIN-TRIAL-GRANTS-228-20261114.md'
+  workflow_dispatch:
+jobs:
+  grants:
+    name: Admin audited grants PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4','8.5']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, openssl, pdo_sqlite
+          coverage: none
+          tools: composer:v2
+      - name: Patch-version security floor
+        run: |
+          php -r 'if (!((PHP_VERSION_ID >= 80427 && PHP_VERSION_ID < 80500) || (PHP_VERSION_ID >= 80512 && PHP_VERSION_ID < 80600))) {fwrite(STDERR,"Unsafe PHP patch\n"); exit(1);}'
+      - name: Locked dependencies
+        working-directory: apps/api
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Narrow PHP lint
+        run: |
+          php -l apps/api/app/Administration/Grants/AdminTrialGrantExecutor.php
+          php -l apps/api/database/migrations/2026_11_14_000228_create_admin_trial_grant_operations_v1.php
+          php -l apps/api/tests/Feature/Administration/Grants/AdminTrialGrantExecutorTest.php
+      - name: Own true database-backed negative tests
+        working-directory: apps/api
+        run: php vendor/bin/phpunit tests/Feature/Administration/Grants
+      - name: Full PHP regression including #227 inherited audit and entitlement paths
+        working-directory: apps/api
+        run: php vendor/bin/phpunit
+      - name: Composer security audit (do not suppress inherited CVE)
+        working-directory: apps/api
+        run: composer audit --locked
