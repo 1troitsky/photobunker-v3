@@ -92,3 +92,49 @@ test('P1 #402: committed local logout remains fenced across tabs and reload desp
       localStorage.getItem('pb3.identity.logout-fence.v1') === '1')).toBe(true)
   } finally { await context.close() }
 })
+
+test('P1 #402: denied synchronous Web Storage still closes volatile session and commits IDB signout', async ({ browser }) => {
+  test.setTimeout(120000)
+  const context = await browser.newContext()
+  const page = await context.newPage()
+  try {
+    await registerDevice(page)
+    // Simulate storage permissions changing while a real Key-Only session is
+    // active. The synchronous fence fails; durable IndexedDB is still working.
+    // No credential or server receipt is fabricated.
+    await page.evaluate(() => {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get: () => { throw new Error('test.injected_localstorage_denied') },
+      })
+    })
+    await page.getByRole('button', { name: 'Выйти' }).click()
+    // Never keep decrypted session active just because the fence write failed.
+    await expect(page.getByRole('button', { name: 'Создать ключ' })).toBeVisible()
+    await expect(page.getByTestId('fieldwork-settings')).toHaveCount(0)
+    await expect(page.getByRole('alert')).toContainText('identity.logout_fence_unavailable')
+    const deniedBeforeReload = await page.evaluate(async () => {
+      const { activeSession, requireSession } =
+        await import('/src/features/identity/application/session.ts')
+      try { requireSession(); return false }
+      catch { return activeSession.value === null }
+    })
+    expect(deniedBeforeReload).toBe(true)
+
+    await page.reload() // Real browser storage is available again.
+    await expect(page.getByRole('button', { name: 'Создать ключ' })).toBeVisible()
+    await expect(page.getByTestId('fieldwork-settings')).toHaveCount(0)
+    const durableRevocation = await page.evaluate(async () => {
+      const { listDevices, isSignedOut } =
+        await import('/src/features/identity/infrastructure/storage.ts')
+      const { activeSession, resumeExistingDevice } =
+        await import('/src/features/identity/application/session.ts')
+      const devices = await listDevices()
+      await resumeExistingDevice()
+      return devices.length === 1 &&
+        (await isSignedOut(devices[0].accountId, devices[0].deviceId)) &&
+        activeSession.value === null
+    })
+    expect(durableRevocation).toBe(true)
+  } finally { await context.close() }
+})
