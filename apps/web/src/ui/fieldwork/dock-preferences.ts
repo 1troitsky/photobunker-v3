@@ -11,9 +11,8 @@ export interface DockDefinition {
   icon: string
 }
 
-// Appearance 1.3 permits seven choices. The encrypted notifications inbox
-// has a real local route, while Messages still has none. Never allow a saved
-// Dock button to link to a missing or unimplemented messenger route.
+// Seven implemented destinations; users choose three to six Dock entries.
+// Messages contains encrypted local drafts; Matrix delivery remains gated.
 export const dockDefinitions: Readonly<Record<DockId, DockDefinition>> = {
   assignments: {id:'assignments',name:'Задания',to:'/assignments',icon:'tasks'},
   browser: {id:'browser',name:'Browser',to:'/browser',icon:'folder'},
@@ -21,7 +20,7 @@ export const dockDefinitions: Readonly<Record<DockId, DockDefinition>> = {
   contacts: {id:'contacts',name:'Контакты',to:'/contacts',icon:'users'},
   settings: {id:'settings',name:'Настройки',to:'/settings',icon:'settings'},
   notifications: {id:'notifications',name:'Уведомления',to:'/notifications',icon:'bell'},
-  messages: {id:'messages',name:'Сообщения',to:null,icon:'message'},
+  messages: {id:'messages',name:'Сообщения',to:'/messages',icon:'message'},
 }
 
 export const dockChoices: readonly DockDefinition[] = [

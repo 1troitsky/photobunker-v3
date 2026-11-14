@@ -13,6 +13,7 @@ import FileViewerView from './views/FileViewerView.vue'
 import ContactsTeamsView from './views/ContactsTeamsView.vue'
 import NotificationsView from './views/NotificationsView.vue'
 import NotificationSettingsView from './views/NotificationSettingsView.vue'
+import MessagesView from './views/MessagesView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -31,6 +32,9 @@ export const router = createRouter({
       component: FileViewerView, meta: { title: 'Редактирование файла' } },
     { path: '/camera', component: CaptureView, meta: { title: 'Камера' } },
     { path: '/contacts', component: ContactsTeamsView, meta: { title: 'Контакты и Команды' } },
+    // Beta inbox under the real Fieldwork Shell; conversation stays a modal
+    // overlay, NEVER a separate route or an unaudited Matrix room.
+    { path: '/messages', component: MessagesView, meta: { title: 'Сообщения (Beta)' } },
     { path: '/settings', component: AccountView, meta: { title: 'Настройки' } },
     { path: '/settings/appearance', component: AppearanceView,
       meta: { title: 'Оформление' } },
