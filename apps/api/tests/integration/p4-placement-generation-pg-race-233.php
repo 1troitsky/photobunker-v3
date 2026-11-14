@@ -73,6 +73,18 @@ require dirname(__DIR__,2).'/vendor/autoload.php';
 $app=require dirname(__DIR__,2).'/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
 
+// Laravel's CLI exception renderer may report uncaught script errors while
+// returning process exit 0. A SECURITY QA harness MUST fail the OS process
+// and must not allow the CI job to count a printed exception as PASS.
+set_exception_handler(static function (Throwable $failure): void {
+    $message=$failure->getMessage();
+    $safe=str_starts_with($message,'placement.')
+        || str_starts_with($message,'p4.placement.')
+        ? $message : get_class($failure);
+    fwrite(STDERR,"P4 #233 CAS RACE FAILURE: ".$safe."\n");
+    exit(2);
+});
+
 race233Must(config('database.default')==='pgsql'
     && config('database.connections.pgsql.database')==='pb3_placement_233'
     && config('filesystems.disks.ciphertext.endpoint')==='http://127.0.0.1:3900',
@@ -253,13 +265,18 @@ function race233Start(
 function race233WaitLocked(int $pidA,int $pidB):array
 {
     $start=microtime(true);
+    $lastStates=[];
     do {
         $rows=DB::select(
             'SELECT pid, state, wait_event_type, wait_event FROM pg_stat_activity WHERE pid IN (?, ?)',
             [$pidA,$pidB]
         );
         $waiting=[];
+        $lastStates=[];
         foreach ($rows as $row) {
+            $lastStates[]=(string)$row->state.'/'.
+                (string)($row->wait_event_type??'none').'/'.
+                (string)($row->wait_event??'none');
             if ($row->state==='active' && $row->wait_event_type==='Lock') {
                 $waiting[(int)$row->pid]=(string)$row->wait_event;
             }
@@ -272,7 +289,10 @@ function race233WaitLocked(int $pidA,int $pidB):array
         }
         usleep(35000);
     } while ((microtime(true)-$start)*1000 < 14000);
-    throw new RuntimeException('p4.placement.race_failed: both_real_pg_lock_waits_not_observed');
+    throw new RuntimeException(
+        'p4.placement.race_failed: both_real_pg_lock_waits_not_observed; '
+        .'observed='.implode('|',$lastStates)
+    );
 }
 
 /** @return array<string,mixed> */
@@ -306,7 +326,21 @@ function race233Contend(
             && ($a['phpPid']??null)!==getmypid(),
             'workers_share_php_or_pg_backend');
 
-        $evidence=race233WaitLocked($a['pgPid'],$b['pgPid']);
+        try {
+            $evidence=race233WaitLocked($a['pgPid'],$b['pgPid']);
+        } catch (RuntimeException $error) {
+            // The only diagnostics allowed are process liveness, exit code,
+            // and PostgreSQL wait state. Never print SQL text or S3 errors.
+            $processes=[];
+            foreach ($children as $child) {
+                $p=proc_get_status($child['proc']);
+                $processes[]=($p['running']?'running':'exited')
+                    .':'.(string)$p['exitcode'];
+            }
+            fwrite(STDERR,'P4 #233 RACE SANITIZED WORKER STATES: '
+                .implode('|',$processes)."\n");
+            throw $error;
+        }
         // Both real independent workers are waiting on PostgreSQL account
         // row lock before the owner is released.
         DB::commit();
