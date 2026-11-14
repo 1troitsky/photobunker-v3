@@ -43,12 +43,15 @@ test('P2 #209: mixed photo/video/audio creation is durable offline, two owner si
         operations:ops.filter(op=>op.kind==='create'
           &&JSON.parse(op.contract).assignmentId===local.id).map(op=>op.state),
         noPrivateTitleInLocal:!JSON.stringify(local).includes('P2-209 real signed mixed assignment'),
+        localIntentSigned:typeof local.mixedCreationContract==='string'
+          &&typeof local.mixedCreationSignature==='string',
       }
     })
     expect(queued.id).toMatch(/^[0-9a-f-]{36}$/)
     expect(queued.types).toEqual(['photo','video','audio'])
     expect([queued.videoGoal,queued.audioGoal]).toEqual([3,4])
     expect(queued.noPrivateTitleInLocal).toBe(true)
+    expect(queued.localIntentSigned).toBe(true)
     expect(queued.operations).toEqual(['queued'])
     expect(queued.localState).toBe('queued')
     await expect(page.getByTestId('assignment-mixed-pending-'+queued.id))
@@ -131,6 +134,71 @@ test('P2 #209: mixed photo/video/audio creation is durable offline, two owner si
     },queued.id)
     expect(persisted).toEqual({
       revision:2,allowed:['photo','video','audio'],pending:false,extraOps:1,
+    })
+
+    // A tampered PUBLIC intent in IndexedDB must NEVER be automatically
+    // signed into an additional, stronger owner v6 server permission.
+    await page.goto('/assignments')
+    await page.getByRole('button',{name:'Создать задание'}).click()
+    await page.locator('#assignment-title').fill('P2-209 tamper rejection')
+    await page.locator('#assignment-create-video').check()
+    await page.locator('#assignment-create-video-goal').fill('1')
+    await ctx.setOffline(true)
+    await page.getByRole('button',{name:'Создать зашифрованное задание'}).click()
+    const rejectedId=await page.evaluate(async()=>{
+      const outbox=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const row=(await outbox.listLocalAssignmentDrafts())
+        .find(x=>x.mixedCreation?.videoGoal===1)
+      if(!row)throw Error('qa.expected_second_local_mixed_intent')
+      // An adversary can edit local public policy flags, but cannot forge
+      // the account signature bound to the immutable root SHA-256.
+      await new Promise<void>((resolve,reject)=>{
+        const req=indexedDB.open('pb3-assignment-operation-outbox-v1')
+        req.onerror=()=>reject(req.error)
+        req.onsuccess=()=>{
+          const db=req.result
+          const tx=db.transaction('assignments','readwrite')
+          const store=tx.objectStore('assignments')
+          const get=store.get(row.id)
+          get.onerror=()=>reject(get.error)
+          get.onsuccess=()=>{
+            const stored=get.result
+            stored.mixedCreation.videoGoal=7
+            store.put(stored)
+          }
+          tx.oncomplete=()=>{db.close();resolve()}
+          tx.onerror=()=>reject(tx.error)
+          tx.onabort=()=>reject(tx.error)
+        }
+      })
+      return row.id
+    })
+    await ctx.setOffline(false)
+    await page.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+    })
+    await expect.poll(async()=>page.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      await a.flushAssignmentOutbox()
+      const row=(await a.listLocalAssignmentDrafts()).find(x=>x.id===id)
+      return row?.mixedCreationError??'pending'
+    },rejectedId),{timeout:60_000}).toBe('assignment.mixed_intent_signature_invalid')
+    const denied=await page.evaluate(async id=>{
+      const a=await import('/src/features/assignments/application/assignment-outbox.ts')
+      const server=(await a.listAllServerAssignments()).find(x=>x.assignmentId===id)!
+      const policyOps=(await a.listAssignmentOperations()).filter(op=>
+        op.kind==='policy'&&JSON.parse(op.contract).assignmentId===id)
+      return {
+        revision:server.policyRevision,
+        allowed:a.signedAllowedAssignmentMedia(server),
+        goals:a.signedPolicyGoals(server),
+        policyOpCount:policyOps.length,
+      }
+    },rejectedId)
+    expect(denied).toEqual({
+      revision:1,allowed:['photo'],
+      goals:{photoGoal:null,videoGoal:null,audioGoal:null},policyOpCount:0,
     })
   }finally{await ctx.close()}
 })

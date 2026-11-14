@@ -30,3 +30,11 @@ This slice implements **one user-visible creation intent, TWO independently acce
 ## Exact-HEAD CI status at initial commit
 
 **PENDING until independent workflow verification.** Require complete real Foundation (Composer Audit 0, PHP8.4/8.5 PHPUnit, Vitest, TS/build), real PostgreSQL 18 + Garage + Chromium including the new #209 offline → root ACK → v6 → second ACK/reload E2E, security and UX. Preserve any initial failed run/traces; do not replace failures with unverified PASS. Native iOS/Android marked NOT TESTED.
+
+## Security addendum — offline public-intent anti-tamper (new candidate)
+
+The persisted public media selection is now additionally protected by the owner's own P-256 account signature with independent domain `pb3.assignment-mixed-intent.v1\\n`. The canonical signed JSON binds `version=1`, exact `assignmentId`, exact `ownerAccountId`, SHA-256 of the **immutable original signed v1 ROOT contract**, requested canonical allowed media, and exact optional video/audio goals. The root+intent signature+intent JSON are stored atomically in the existing account-scoped Dexie transaction. Before automatic policy promotion the real app verifies all fields, original root hash, exact canonical serialization, and an imported trusted account public key. If this is absent, tampered or replayed from a different root, it writes an explicit local conflict error and **does not issue any v6 signing operation**. Only a verified intent can be promoted. Intent/signature/error are cleared only after verified, matching independent remote policy ACK.
+
+The new actual-browser E2E includes a second malicious case: create a second valid signed root while offline, change only its `mixedCreation.videoGoal` in IndexedDB without the secret signing key, reconnect and verify **root v1 only**, zero owner policy operations, and persisted `assignment.mixed_intent_signature_invalid` instead of auto-signing a changed goal. This is not an E2E fake server or a crypto mock. No user private text, Recovery Key, or ciphertext is committed to QA evidence.
+
+CI result must be checked on a NEW exact commit after this security gate; prior initial HEAD is not accepted as proof of this addition.

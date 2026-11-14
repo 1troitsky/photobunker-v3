@@ -55,6 +55,10 @@ export interface LocalAssignment {
   // Public media flags/goals only; private title/instructions remain AEAD.
   // Never infer server capture permission from this local intent.
   mixedCreation?:MixedCreationIntent
+  // Signed account/assignment/root-hash binding prevents IndexedDB tampering
+  // from silently authorizing a stronger future v6 media policy.
+  mixedCreationContract?:string
+  mixedCreationSignature?:string
   mixedCreationError?:string
 }
 export type AssignmentListing={
@@ -823,7 +827,13 @@ export async function queueAssignmentCreation(input:{
   mixedCreation?:MixedCreationIntent
 }):Promise<string>{
   const s=requireSession()
-  if(input.mixedCreation!==undefined&&!validMixedCreationIntent(input.mixedCreation))
+  // Freeze what the user explicitly chose *before* asynchronous encryption.
+  const intent=input.mixedCreation?{
+    allowedMedia:[...input.mixedCreation.allowedMedia],
+    videoGoal:input.mixedCreation.videoGoal,
+    audioGoal:input.mixedCreation.audioGoal,
+  }:undefined
+  if(intent!==undefined&&!validMixedCreationIntent(intent))
     throw Error('assignment.invalid_mixed_intent')
   if(input.photoGoal!==null&&(!Number.isInteger(input.photoGoal)
     ||input.photoGoal<1||input.photoGoal>9999))throw Error('assignment.invalid_goal')
@@ -840,13 +850,28 @@ export async function queueAssignmentCreation(input:{
     allowedMedia:['photo'],privateEnvelope,
   }
   const op=await signedOperation('create','/assignments/v1',payload)
+  // Account-sign the durable public *intent* against this exact immutable
+  // root contract. Without this, tampering with IndexedDB could make the
+  // unlocked client sign an unrequested video/audio policy after reconnect.
+  const mixedContract=intent?JSON.stringify({
+    version:1,assignmentId:id,ownerAccountId:s.accountId,
+    rootHash:hex(await digest(new TextEncoder().encode(op.contract))),
+    allowedMedia:intent.allowedMedia,
+    videoGoal:intent.videoGoal,audioGoal:intent.audioGoal,
+  }):undefined
+  const mixedSignature=mixedContract
+    ?await sign(await importSigner(s.pkg.accountPkcs8),
+      'pb3.assignment-mixed-intent.v1\n'+mixedContract)
+    :undefined
   assertSame(s)
   await db.transaction('rw',db.assignments,db.operations,async()=>{
     await db.assignments.put({
       id,ownerAccountId:s.accountId,createdAt:startsAt,
       state:'queued',privateEnvelope,photoGoal:input.photoGoal,
       startsAt,endsAt,
-      ...(input.mixedCreation?{mixedCreation:input.mixedCreation}:{}),
+      ...(intent?{mixedCreation:intent,
+        mixedCreationContract:mixedContract,
+        mixedCreationSignature:mixedSignature}:{}),
     })
     await db.operations.put(op)
   })
@@ -2255,6 +2280,32 @@ async function advanceMixedCreations():Promise<void>{
       continue
     }
     if(item.mixedCreationError)continue
+    // Verify immutable consent before automatic key signing. Local browser
+    // storage may be corrupted, modified or restored across account changes.
+    const rootOp=ops.find(op=>op.kind==='create'&&op.accountId===s.accountId
+      &&operationAssignmentId(op)===item.id)
+    let signedIntentValid=false
+    if(rootOp&&typeof item.mixedCreationContract==='string'
+      &&typeof item.mixedCreationSignature==='string'){
+      try{
+        const expected=JSON.stringify({
+          version:1,assignmentId:item.id,ownerAccountId:s.accountId,
+          rootHash:hex(await digest(new TextEncoder().encode(rootOp.contract))),
+          allowedMedia:intent.allowedMedia,
+          videoGoal:intent.videoGoal,audioGoal:intent.audioGoal,
+        })
+        signedIntentValid=expected===item.mixedCreationContract
+          &&await verify(await importSpki(s.pkg.accountSpki),
+            'pb3.assignment-mixed-intent.v1\n'+expected,
+            item.mixedCreationSignature)
+      }catch{signedIntentValid=false}
+    }
+    if(!signedIntentValid){
+      await db.assignments.update(item.id,{
+        mixedCreationError:'assignment.mixed_intent_signature_invalid',
+      })
+      continue
+    }
     const listing=server.find(row=>row.assignmentId===item.id
       &&row.ownerAccountId===s.accountId)??null
     if(listing&&listing.photoGoal!==item.photoGoal){
@@ -2274,7 +2325,8 @@ async function advanceMixedCreations():Promise<void>{
     if(stage==='accepted'){
       // Only verified owner-signed server v6 removes the durable intent.
       await db.assignments.update(item.id,{
-        mixedCreation:undefined,mixedCreationError:undefined,
+        mixedCreation:undefined,mixedCreationContract:undefined,
+        mixedCreationSignature:undefined,mixedCreationError:undefined,
       })
       continue
     }
