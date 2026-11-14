@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Real Chromium: registration, encrypted photo/media recovery, mixed Assignment
+      - name: Real Chromium registration, encrypted photo media recovery and mixed Assignment
         run: |
           corepack enable
           corepack pnpm install --frozen-lockfile
