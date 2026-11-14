@@ -1,0 +1,128 @@
+name: P4 #233 placement preflight SHA256 + account isolation (NOT live S3 switch)
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/app/Storage/Placement/**'
+      - 'apps/api/tests/Feature/StoragePlacement/**'
+      - '.github/workflows/p4-placement-readiness-233.yml'
+      - 'docs/audits/P4-PLACEMENT-READINESS-233-20261114.md'
+  push:
+    branches: ['feat/p4-233-placement-readiness-20261114']
+
+permissions:
+  contents: read
+
+jobs:
+  laravel:
+    name: Audited PHP ${{ matrix.php }} placement contracts
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read-only audited patch parent #297 (dependency lock only)
+        uses: actions/checkout@v4
+        with:
+          ref: 60407676c7cb9bdb649f5017cf9450aff25eedab
+          path: _reviewed_security_patch
+          persist-credentials: false
+      - name: Pin audited patched Laravel in disposable test working copy
+        run: |
+          set -euo pipefail
+          cp _reviewed_security_patch/apps/api/composer.lock apps/api/composer.lock
+          rm -rf _reviewed_security_patch
+          grep -q '"version": "v13.42.0"' apps/api/composer.lock
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, dom, xml, openssl, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Enforce PHP floor and Composer security with no suppression
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Syntax, focused placement negatives and entire Laravel suite
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l app/Storage/Placement/PlacementReadiness.php
+          php -l tests/Feature/StoragePlacement/PlacementReadinessTest.php
+          php vendor/bin/phpunit --filter PlacementReadinessTest --do-not-cache-result
+          php vendor/bin/phpunit --do-not-cache-result
+
+  postgres-placement:
+    name: PostgreSQL 18: real ownership DB + synthetic physical ciphertext transport
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_placement_233
+          POSTGRES_USER: pb3_placement
+          POSTGRES_PASSWORD: pb3_placement_disposable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pb3_placement -d pb3_placement_233"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: http://localhost
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_placement_233
+      DB_USERNAME: pb3_placement
+      DB_PASSWORD: pb3_placement_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 60407676c7cb9bdb649f5017cf9450aff25eedab
+          path: _reviewed_security_patch
+          persist-credentials: false
+      - name: Pin audited dependency lock only in disposable CI copy
+        run: |
+          set -euo pipefail
+          cp _reviewed_security_patch/apps/api/composer.lock apps/api/composer.lock
+          rm -rf _reviewed_security_patch
+          grep -q '"version": "v13.42.0"' apps/api/composer.lock
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Strict patched runtime/audit and vendor install
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Genuine PostgreSQL-owned location DB contract
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php artisan migrate --force
+          # Shared phpunit.xml forces sqlite; disposable exact-PG configuration.
+          cp phpunit.xml phpunit.placement.pg.xml
+          sed -i 's/name="DB_CONNECTION" value="sqlite"/name="DB_CONNECTION" value="pgsql"/' phpunit.placement.pg.xml
+          sed -i 's/name="DB_DATABASE" value=":memory:"/name="DB_DATABASE" value="pb3_placement_233"/' phpunit.placement.pg.xml
+          grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.placement.pg.xml
+          grep -q 'name="DB_DATABASE" value="pb3_placement_233"' phpunit.placement.pg.xml
+          php vendor/bin/phpunit --configuration phpunit.placement.pg.xml --filter PlacementReadinessTest --do-not-cache-result
