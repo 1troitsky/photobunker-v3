@@ -612,7 +612,7 @@ if ($mode==='ttl') {
         failoverAssert($restored===1,'ttl_fixture_restore_failed');
         failoverTest($preflight,$f);
         failoverVerifyOriginal($primary,$f);
-        echo "P4 #235 REAL GARAGE TTL ".($kind==='photo'?'1':'2')."/2 PASS: $kind actual Garage B GET with advancing UTC beyond signed parent TTL denied; synthetic TTL restored\n";
+        echo "P4 #235 REAL GARAGE TTL ".($kind==='photo'?'1':'2')."/2 PASS: $kind actual Garage B GET with advancing UTC beyond synthetic canonical parent TTL denied; synthetic TTL restored\n";
     }
     echo "P4 #235 REAL GARAGE TTL COMPLETE 2/2: physical B transport still intact, no client GET or failover permission\n";
     exit(0);
