@@ -5,6 +5,7 @@ on:
       - 'apps/api/app/Support/**'
       - 'apps/api/tests/Feature/Support/**'
       - '.github/workflows/p4-legal-support-244.yml'
+      - 'docs/audits/P4-LEGAL-SUPPORT-244-20261114.md'
   workflow_dispatch:
 jobs:
   legal-support-php:
