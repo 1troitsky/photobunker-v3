@@ -96,6 +96,15 @@ final class ReplicaReadPreflight
         string $primaryId,string $replicaId,CarbonImmutable $now
     ): array {
         $photo=$kind==='photo';
+        // PostgreSQL's MVCC tuple ID detects same-row value ABA committed
+        // during this single physical read (e.g. verified -> reserved -> verified
+        // with unchanged updated_at). This is NOT an immutable signed receipt,
+        // durable generation or atomic access-control barrier; xid can wrap/freeze.
+        // SQLite exercises metadata-contract tests only, NOT ABA guarantees.
+        $pg=DB::connection()->getDriverName()==='pgsql';
+        $accountWitness=DB::raw($pg
+            ? 'a.xmin::text as account_tuple_xmin'
+            : 'NULL as account_tuple_xmin');
         $row=$photo
             ? DB::table('photo_objects as o')
                 ->join('photo_records as p','p.id','=','o.photo_id')
@@ -105,6 +114,11 @@ final class ReplicaReadPreflight
                     'p.id as parent_id','p.state as parent_state',
                     'p.expires_at','p.updated_at as parent_updated_at',
                     'a.revision as account_revision',
+                    $accountWitness,
+                    DB::raw($pg ? 'p.xmin::text as parent_tuple_xmin'
+                        : 'NULL as parent_tuple_xmin'),
+                    DB::raw($pg ? 'o.xmin::text as asset_tuple_xmin'
+                        : 'NULL as asset_tuple_xmin'),
                     'o.state as asset_state','o.sha256','o.bytes',
                     'o.updated_at as asset_updated_at',
                 ])
@@ -116,6 +130,11 @@ final class ReplicaReadPreflight
                     'm.id as parent_id','m.state as parent_state',
                     'm.expires_at','m.updated_at as parent_updated_at',
                     'a.revision as account_revision',
+                    $accountWitness,
+                    DB::raw($pg ? 'm.xmin::text as parent_tuple_xmin'
+                        : 'NULL as parent_tuple_xmin'),
+                    DB::raw($pg ? 'c.xmin::text as asset_tuple_xmin'
+                        : 'NULL as asset_tuple_xmin'),
                     'c.state as asset_state','c.sha256','c.bytes',
                     'c.updated_at as asset_updated_at',
                 ]);
@@ -140,7 +159,10 @@ final class ReplicaReadPreflight
 
         $locations=DB::table($photo?'storage_locations':'media_chunk_locations_v1')
             ->where($photo?'asset_id':'chunk_id',$logical)
-            ->whereIn('id',[$primaryId,$replicaId])->get()->keyBy('id');
+            ->whereIn('id',[$primaryId,$replicaId])
+            ->get(['*',DB::raw($pg
+                ? 'xmin::text as location_tuple_xmin'
+                : 'NULL as location_tuple_xmin')])->keyBy('id');
         if ($locations->count()!==2) {
             throw new RuntimeException('failover.location_unavailable');
         }
@@ -161,12 +183,30 @@ final class ReplicaReadPreflight
             }
         }
 
+        if ($pg) {
+            foreach ([
+                $row->account_tuple_xmin,
+                $row->parent_tuple_xmin,
+                $row->asset_tuple_xmin,
+                $primary->location_tuple_xmin,
+                $replica->location_tuple_xmin,
+            ] as $version) {
+                if (!is_string($version) || preg_match('/^[0-9]+$/D',$version)!==1) {
+                    throw new RuntimeException('failover.missing_pg_tuple_witness');
+                }
+            }
+        }
         $parts=[
             (string)$row->parent_id,(string)$row->parent_state,
             (string)$row->expires_at,(string)$row->parent_updated_at,
             // Rotation/recovery may preserve READY yet increment the identity revision.
             // Bypass by changing account revision mid-S3 read is forbidden.
             (string)$row->account_revision,
+            // PG MVCC witnesses refuse silent same-value ABA on account,
+            // parent or asset while the remote ciphertext is being read.
+            (string)$row->account_tuple_xmin,
+            (string)$row->parent_tuple_xmin,
+            (string)$row->asset_tuple_xmin,
             (string)$row->asset_state,(string)$row->asset_updated_at,
             $sha,(string)$bytes,
         ];
@@ -174,6 +214,7 @@ final class ReplicaReadPreflight
             foreach (['id','provider','object_key','sha256','bytes','state','updated_at'] as $column) {
                 $parts[]=(string)$loc->{$column};
             }
+            $parts[]=(string)$loc->location_tuple_xmin;
         }
         return [
             'primary'=>$primary,'replica'=>$replica,'sha256'=>$sha,
