@@ -25,7 +25,7 @@ test('P1-25: verified peer → encrypted Contacts & Teams → offline persistenc
     await A.goto('/contacts')
     await expect(A.getByTestId('contacts-teams')).toBeVisible()
     await expect(A.getByRole('heading',{name:'Контакты и Команды'})).toBeVisible()
-    await expect(A.getByRole('button',{name:/Blacklist/})).toBeEnabled()
+    await expect(A.getByTestId('contacts-blacklist-toggle')).toBeEnabled()
     await A.getByRole('button',{name:/^Команды \(/}).click()
     await expect(A.getByRole('button',{name:'Создать команду'})).toBeEnabled()
     await A.getByRole('button',{name:/Контакты \(/}).click()
