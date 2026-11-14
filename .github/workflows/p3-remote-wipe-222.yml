@@ -7,6 +7,7 @@ on:
       - "apps/api/app/RemoteWipe/**"
       - "apps/api/database/migrations/2026_11_14_000222_create_remote_wipe_commands_v1.php"
       - "apps/api/tests/Feature/RemoteWipe/**"
+      - "apps/api/tests/integration/p3-remote-wipe-postgres-race.php"
       - ".github/workflows/p3-remote-wipe-222.yml"
 
 permissions:
@@ -81,6 +82,9 @@ jobs:
       APP_DEBUG: "false"
       APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       APP_URL: https://localhost
+      DB_CONNECTION: pgsql
+      DB_DATABASE: pb3_remote_222_ci
+      PB3_REMOTE_WIPE_PG_RACE: "1"
       DB_HOST: 127.0.0.1
       DB_PORT: "5432"
       DB_USERNAME: pb3_remote_ci
@@ -101,6 +105,9 @@ jobs:
           test "$GITHUB_ACTIONS" = true
           test "$DB_HOST" = 127.0.0.1
           test "$DB_USERNAME" = pb3_remote_ci
+          test "$DB_CONNECTION" = pgsql
+          test "$DB_DATABASE" = pb3_remote_222_ci
+          test "$PB3_REMOTE_WIPE_PG_RACE" = 1
       - name: Pin verified #297 Composer lock in disposable CI only
         shell: bash
         run: |
@@ -140,5 +147,10 @@ jobs:
         run: |
           DB_CONNECTION=pgsql DB_DATABASE=pb3_remote_222_ci php artisan migrate --force --no-interaction
           php vendor/bin/phpunit --configuration phpunit.pg-222.xml tests/Feature/RemoteWipe/SignedDeferredCommandTest.php
+      - name: Prove 3 real two-independent-PHP-process PostgreSQL18 lock races
+        working-directory: apps/api
+        run: |
+          php -l tests/integration/p3-remote-wipe-postgres-race.php
+          php tests/integration/p3-remote-wipe-postgres-race.php
       - name: Explicit scope
-        run: echo "Real disposable PostgreSQL18 migration and signed-ledger feature tests ONLY, not two-process contention or physical wipe."
+        run: echo "Real disposable PostgreSQL18 single-process features and independently observed two-PHP-process lock races only; NO physical wipe."
