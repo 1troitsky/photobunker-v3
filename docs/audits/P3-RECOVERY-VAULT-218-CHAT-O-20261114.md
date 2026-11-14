@@ -4,7 +4,7 @@
 
 - Source/main baseline: 5aaba8b0509c354f8abb00806180f4ce6cb6ad18 (security-patched Laravel).
 - New branch: feat/p3-218-vault-generation-chat-o-20261114.
-- New isolated code: app/Backup/RecoveryVaultGenerationLedger.php, one DB migration, one PHPUnit feature test, a disposable PG18/Garage acceptance runner and a scoped GitHub Actions workflow.
+- New isolated code: app/Backup/RecoveryVaultGenerationLedger.php, one DB migration, one PHPUnit feature test, a disposable PG18/Garage acceptance runner, a separate real two-process PG18 race runner and a scoped GitHub Actions workflow.
 - No existing Identity/StorageManager/BackupAdmission/routing/retention/S3 cleanup code changed. No main merge, deploy, destructive operations or access to user keys.
 
 ## Trust and atomicity boundaries
@@ -15,7 +15,9 @@
 4. An account-locked transaction rechecks live lease/generation/replay, retires the previous row, marks the new generation active, and switches the unique account head. SQL failures roll back all changes.
 5. The old ciphertext object is not physically deleted by any ledger method. The old metadata remains for separately gated retention/GC. An already activated generation supports lost-ACK replay.
 6. A dead/stale stage can be moved to audited 'abandoned' state only after its linked worker lease is no longer live; an active lease refuses release. Account row locking prevents concurrent stage/release switching. No physical deletion of stale candidate bytes occurs (future GC gate).
-7. Restore MUST physically reverify manifest hashes; no restore route is implemented here.
+7. Internal trusted active-manifest readback checks current physical ciphertext size/SHA-256 and rechecks account head after I/O; a same-size overwrite after activation is DENIED. No public HTTP route, Recovery Key or plaintext is involved.
+8. The S3 transport permits mutable object keys. The pre-activation SHA-256 check is not atomic with the SQL commit, so a provider overwrite between them remains an OPEN security blocker requiring versioned immutable keys or conditional writes plus verified version binding; this slice does NOT claim to have eliminated that TOCTOU gap.
+9. Restore MUST physically reverify manifest hashes; no restore route is implemented here.
 
 ## Evidence and limitations
 
@@ -24,7 +26,9 @@
 - Stage2 code/workflow HEAD `fac31ceb5330b56b86ad990965aaa50f1b7da63e`: dedicated real PG18/Garage [Actions 43564182238](https://github.com/1troitsky/photobunker-v3/actions/runs/43564182238) PASS. **12/12 Laravel PHP8.4 PostgreSQL feature tests (49 assertions) PASS**, real production AppS3Adapter / Garage2.5 physical readback integration PASS for missing/valid/corrupt/retry/lost ACK/stale lease/old retained bytes, synthetic fixture only, no keys or real customer files.
 - Main-target Foundation [43564182245](https://github.com/1troitsky/photobunker-v3/actions/runs/43564182245) PASS (PHP8.4 and 8.5, TS/Vitest/build); Security [43564182235](https://github.com/1troitsky/photobunker-v3/actions/runs/43564182235) PASS; UX [43564182361](https://github.com/1troitsky/photobunker-v3/actions/runs/43564182361) PASS. Main-target Chromium/PG18/Garage [43564182296](https://github.com/1troitsky/photobunker-v3/actions/runs/43564182296) was still IN PROGRESS during this audit edit; do not claim 5/5 full suite until separately confirmed.
 - First new workflow run [43564076275](https://github.com/1troitsky/photobunker-v3/actions/runs/43564076275) failed BEFORE tests due test-only Garage container alias mismatch (launch used new name, later docker exec old name); corrected across all instances. Source failure retained.
-- **NOT TESTED**: physical two-independent-PHP-process PostgreSQL lock races, actual Garage stop/restart network outage during Vault activation, immutable manifest object-version/TOCTOU defense, all server-verified signed complete E2EE manifest graphs, real recovery after Panic or mobile devices. Real physical S3 GET/PUT/sha is now VERIFIED but not a complete backup.
+- **Stage3 CODE HEAD** `79d2c231e90751f31114d9108f98abbdba8fdbdf` (not final docs-only head): dedicated disposable PG18/Garage [Actions #43565268071](https://github.com/1troitsky/photobunker-v3/actions/runs/43565268071) **PASS**, **14/14 PHPUnit feature tests / 57 assertions** on real PG18 plus actual AppS3Adapter/Garage physical overwrite and restored-ciphertext acceptance PASS, and separate REAL two-independent-OS-PHP-process row-lock test PASS with explicitly observed `pg_stat_activity.wait_event_type='Lock'`. Concurrently only one stage inserted, losing producer rejected, no false active head. This is genuine DB contention; NOT a simulated promise.
+- Full [Foundation #43565268050](https://github.com/1troitsky/photobunker-v3/actions/runs/43565268050) **PASS** on PHP8.4.27 and 8.5.12 (each **259/259 PHPUnit, 3718 assertions**, TS/build/Vitest PASS, Composer audit ZERO advisories). [Security #43565268055](https://github.com/1troitsky/photobunker-v3/actions/runs/43565268055) PASS and [UX #43565268041](https://github.com/1troitsky/photobunker-v3/actions/runs/43565268041) PASS. General cross-product PG18/Garage/Chromium [#43565268099](https://github.com/1troitsky/photobunker-v3/actions/runs/43565268099) IN PROGRESS at this checkpoint, no full 5/5 PASS claim.
+- **NOT TESTED / BLOCKED**: physical Garage stop/restart during Vault activation, S3 immutable manifest object-version/conditional PUT / preactivation-to-commit TOCTOU defense, complete authenticated E2EE signed manifest graph & reference accounting, real recovery after Panic or physical iOS/Android devices. Real S3 GET/PUT, SHA/size, and post-activation tamper refusal now verified; this is STILL NOT a recoverable user backup.
 - Full client E2EE backup, signed/complete manifest and references, incremental dedup/quota, restore, recovery on a second device, actual native Safari/Android: NOT TESTED.
 
 ## Mandatory production gates
@@ -32,7 +36,7 @@
 - Real authenticated owner/worker integration, device signatures, server-trusted paid entitlements, backup admission limits and quota accounting.
 - Signed versioned E2EE manifest and COMPLETE snapshot: media/folders/assignments/key envelopes/reference graph; verify every referenced ciphertext and TTL/tombstone (a manifest checksum alone is insufficient).
 - Incremental/dedup blob reference counting, reserved-byte accounting, completed-generation GC without resurrection.
-- Real multi-provider/immutable object version or equivalent TOCTOU defense, true physical Garage outage/restart and independent-process PostgreSQL race evidence. Current single-process genuine Garage lost-ACK retry is NOT crash/restart proof.
+- Real multi-provider/immutable object version binding (or conditional-write protocol) to close pre-activation S3 TOCTOU; true physical Garage outage/restart remains NOT TESTED. Independent-process PostgreSQL stage lock contention now PASS, but activation vs abandon cross-process and crash/restart remain untested. Single-process lost-ACK retry does not establish real process-crash recovery.
 - Full Recovery Vault restore, Recovery Key client-side decryption, Panic preservation and physical mobile acceptance.
 - There is NO public HTTP/UI route and no auto-deletion of old generations in this slice.
 
