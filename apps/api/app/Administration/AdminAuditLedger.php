@@ -66,6 +66,9 @@ final class AdminAuditLedger
             // Detect a missing/deleted latest row and a silently rewritten
             // head without scanning the whole stream per write.
             $last = DB::table(self::EVENT_TABLE)->orderByDesc('sequence')->first();
+            if ($last !== null) {
+                self::assertValidRecord($last);
+            }
             self::require(
                 ((int) $head->revision === 0 && $last === null
                     && $head->last_digest === self::ZERO_DIGEST)
