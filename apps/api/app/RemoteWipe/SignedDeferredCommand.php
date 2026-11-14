@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\RemoteWipe;
 
 use App\Identity\Protocol as IdentityProtocol;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -120,9 +121,10 @@ final class SignedDeferredCommand
             && hash_equals($authenticatedActorDeviceId, $payload['actorDeviceId']), 401);
         $hash = hash('sha256', $message);
 
-        return DB::transaction(function () use (
-            $payload, $message, $hash, $accountSignature, $actorSignature
-        ): array {
+        try {
+            return DB::transaction(function () use (
+                $payload, $message, $hash, $accountSignature, $actorSignature
+            ): array {
             // Global lock order is account -> actor -> target -> command.
             // This serializes different operation IDs racing for one target.
             $account = DB::table('identity_accounts')
@@ -178,7 +180,28 @@ final class SignedDeferredCommand
                 ->where('operation_id', $payload['operationId'])->first();
             abort_unless($created !== null, 500);
             return self::status($created, false);
-        });
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            // A second, genuinely concurrent actor/account may have passed
+            // preflight while another transaction's UNIQUE insert was still
+            // invisible. PostgreSQL then reports 23505 after waiting for the
+            // winning transaction to commit. Do not expose an SQL/HTTP 500
+            // or adopt another account's operationId: this is an intentional
+            // fail-closed, never-successful command collision.
+            //
+            // Only command-table operation/target UNIQUE constraints map to
+            // conflict. All unrelated DB failures still surface as errors.
+            $sqlstate = (string) ($exception->errorInfo[0] ?? '');
+            $details = $exception->getMessage();
+            if (in_array($sqlstate, ['23505', '23000'], true)
+                && (str_contains($details, 'remote_wipe_commands_pkey')
+                    || str_contains($details, 'remote_wipe_commands_target_device_id_unique')
+                    || str_contains($details, 'remote_wipe_commands.operation_id')
+                    || str_contains($details, 'remote_wipe_commands.target_device_id'))) {
+                abort(409);
+            }
+            throw $exception;
+        }
     }
 
     /**
