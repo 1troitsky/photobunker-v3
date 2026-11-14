@@ -1,10 +1,36 @@
 import { test, expect } from '@playwright/test'
 
+// Each hard navigation starts asynchronous device unseal + signed reproof.
+// Protect real Contacts / Assignment operations with an account+device
+// handshake on the actual server, not optimistic Vue mounting or a sleep.
+async function awaitVerifiedPickerSession(
+  page:import('@playwright/test').Page,
+  expected:{accountId:string;deviceId:string},
+):Promise<void>{
+  await expect.poll(()=>page.evaluate(async expected=>{
+    const identity=await import('/src/features/identity/application/session.ts')
+    const session=identity.activeSession.value
+    if(!session)return 'device-unsealing'
+    if(session.accountId!==expected.accountId
+      ||session.deviceId!==expected.deviceId)
+      throw Error('qa385.wrong_local_account_or_device')
+    if(!session.online)return 'signed-login-pending'
+    const response=await fetch('/identity/v2/me',{
+      credentials:'same-origin',cache:'no-store',
+    })
+    if(!response.ok)return 'server-session-'+response.status
+    const proof=await response.json() as {accountId:string;deviceId:string}
+    if(proof.accountId!==expected.accountId||proof.deviceId!==expected.deviceId)
+      throw Error('qa385.wrong_server_account_or_device')
+    return 'verified'
+  },expected),{timeout:30_000}).toBe('verified')
+}
+
 test('P1-26: confirmed contact → explicit owner-signed assignment invitation, no implicit access',async({browser})=>{
   test.setTimeout(190000)
   const ctxA=await browser.newContext(),ctxB=await browser.newContext()
   const A=await ctxA.newPage(),B=await ctxB.newPage()
-  async function enroll(page:typeof A):Promise<string>{
+  async function enroll(page:typeof A):Promise<{accountId:string;deviceId:string}>{
     await page.goto('/settings')
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
@@ -12,18 +38,22 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     return page.evaluate(async()=>{
       const s=await import('/src/features/identity/application/session.ts')
-      return s.requireSession().accountId
+      const current=s.requireSession()
+      return {accountId:current.accountId,deviceId:current.deviceId}
     })
   }
   try{
-    await enroll(A)
-    const recipientId=await enroll(B)
+    const ownerSession=await enroll(A)
+    const recipientSession=await enroll(B)
+    const recipientId=recipientSession.accountId
     await B.goto('/browser')
+    await awaitVerifiedPickerSession(B,recipientSession)
     await expect(B.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
 
     // Independently fingerprint-confirm a real recipient in the local
     // account-scoped encrypted Contacts book before using the picker.
     await A.goto('/contacts')
+    await awaitVerifiedPickerSession(A,ownerSession)
     await A.getByTestId('contacts-lookup-id').fill(recipientId)
     await A.getByRole('button',{name:'Проверить ключ'}).click()
     await expect(A.getByTestId('contacts-fingerprint')).toBeVisible()
@@ -35,14 +65,40 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
       .toContainText('Trusted photographer')
 
     await A.goto('/assignments')
+    await awaitVerifiedPickerSession(A,ownerSession)
     await A.getByRole('button',{name:'Создать задание'}).click()
     await A.locator('#assignment-title').fill('CONTACT PICKER E2EE ASSIGNMENT')
     await A.locator('#assignment-instructions').fill('Photo assignment')
     await A.getByRole('button',{name:'Создать зашифрованное задание'}).click()
+    // First prove the encrypted draft is durable on the correct owner.
+    // Never infer a successful save from the modal closing.
+    await expect.poll(()=>A.evaluate(async owner=>{
+      const outbox=await import(
+        '/src/features/assignments/application/assignment-outbox.ts')
+      return (await outbox.listLocalAssignmentDrafts())
+        .filter(item=>item.ownerAccountId===owner).length
+    },ownerSession.accountId),{timeout:25_000}).toBe(1)
+    const localAssignmentId=await A.evaluate(async owner=>{
+      const outbox=await import(
+        '/src/features/assignments/application/assignment-outbox.ts')
+      const drafts=(await outbox.listLocalAssignmentDrafts())
+        .filter(item=>item.ownerAccountId===owner)
+      if(drafts.length!==1)throw Error('qa385.owner_draft_not_unique')
+      return drafts[0]!.id
+    },ownerSession.accountId)
     await A.getByRole('button',{name:'Синхронизировать'}).click()
+    // The real signed ACK is distinct from the optimistic local E2EE row.
+    await expect.poll(()=>A.evaluate(async id=>{
+      const outbox=await import(
+        '/src/features/assignments/application/assignment-outbox.ts')
+      const verified=await outbox.listAllServerAssignments()
+      return verified.some(row=>row.assignmentId===id)
+    },localAssignmentId),{timeout:45_000}).toBe(true)
+    // A persisted ACK is not sufficient if Vue loses the selected detail.
     await expect(A.locator('.assignment-detail code').first()).toBeVisible()
     const assignmentId=(await A.locator('.assignment-detail code').first()
       .textContent())?.trim()??''
+    expect(assignmentId).toBe(localAssignmentId)
     expect(assignmentId).toMatch(/^[0-9a-f-]{36}$/)
     await A.getByTestId('open-fieldwork-editor').click()
     await expect(A.getByTestId('fieldwork-assignment-editor')).toBeVisible()
@@ -72,6 +128,7 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
       .toContainText('Ожидает принятия',{timeout:20000})
 
     await B.goto('/assignments')
+    await awaitVerifiedPickerSession(B,recipientSession)
     await B.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(B.getByText('Приглашения',{exact:true})).toBeVisible({timeout:20000})
     await B.getByRole('button',{name:'Ключ владельца'}).click()
