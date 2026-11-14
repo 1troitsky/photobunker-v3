@@ -107,7 +107,11 @@ for mode in success redirect oversize malformed wrong_hostname; do
   # with CA trust set ONLY for this subprocess. No token, no external IP.
   CURL_CA_BUNDLE="$TMP/cert.pem" \
     SSL_CERT_FILE="$TMP/cert.pem" \
-    php "$FIXTURE/tls-client.php" "$mode"
+    php -d curl.cainfo="$TMP/cert.pem" "$FIXTURE/tls-client.php" "$mode" || {
+      echo "FAIL: test case $mode; disposable TLS server diagnostics:" >&2
+      cat "$TMP/server.log" >&2
+      exit 1
+    }
 
   kill "$SERVER_PID" 2>/dev/null || true
   wait "$SERVER_PID" 2>/dev/null || true
