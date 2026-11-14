@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed,onMounted,onUnmounted,ref} from 'vue'
+import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {
   identityBootstrapError,pendingPinUnlock,restoreAccount,unlockPinnedDevice,
 } from '../../identity/application/session'
@@ -11,6 +11,15 @@ const busy=ref(false)
 const feedback=ref('')
 const length=computed(()=>pendingPinUnlock.value?.pinLength??4)
 const numbers=['1','2','3','4','5','6','7','8','9','','0','delete'] as const
+
+// A tab blur rotates pendingPinUnlock.sessionNonce and rejects any in-flight
+// PBKDF2 admission. Discard partially entered digits and stale feedback so
+// they cannot be reused across independently validated PIN contexts.
+watch(pendingPinUnlock,()=>{
+  entered.value=''
+  feedback.value=''
+  recoveryKey.value=''
+},{flush:'sync'})
 
 function clear():void{
   entered.value=''
@@ -36,18 +45,21 @@ function erase():void {
 async function submitPin():Promise<void>{
   if(busy.value||entered.value.length!==length.value)return
   const candidate=entered.value
+  const attemptNonce=pendingPinUnlock.value?.sessionNonce
   entered.value='' // no PIN survives in reactive UI state across awaits
   busy.value=true
   feedback.value=''
   try{
     const result=await unlockPinnedDevice(candidate)
+    if(pendingPinUnlock.value?.sessionNonce!==attemptNonce)return
     if(result.status==='invalid')feedback.value='Неверный PIN'
     else if(result.status==='locked')feedback.value='Вход временно заблокирован'
     else if(result.status==='clock-rollback')feedback.value='Проверка времени не пройдена'
     else if(result.status==='emergency-intent')
       feedback.value='Доступ не предоставлен'
   }catch{
-    feedback.value='Проверка недоступна. Используйте ключ восстановления.'
+    if(pendingPinUnlock.value?.sessionNonce===attemptNonce)
+      feedback.value='Проверка недоступна. Используйте ключ восстановления.'
   }finally{
     busy.value=false
   }
