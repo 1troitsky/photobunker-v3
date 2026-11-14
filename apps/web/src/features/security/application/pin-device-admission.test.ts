@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import {afterEach,describe,expect,it,vi} from 'vitest'
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {activeSession} from '../../identity/application/session'
 import {
   freshPackage,openDevice,sealDevice,
@@ -9,8 +9,11 @@ import {
 } from '../../identity/infrastructure/storage'
 import {migrateLegacyLocalDeviceToPin} from './pin-device-migration'
 import {admitCoLocatedPinDevice} from './pin-device-admission'
+import {TestPinLockManager} from './pin-test-locks'
 
+beforeEach(()=>vi.stubGlobal('navigator',{locks:new TestPinLockManager()}))
 afterEach(()=>{
+  vi.unstubAllGlobals()
   activeSession.value=null
   vi.useRealTimers()
 })
