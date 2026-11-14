@@ -1,0 +1,75 @@
+name: P3 229 isolated real PostgreSQL telemetry race
+on:
+  pull_request:
+    branches: [main, 'security/**']
+    paths:
+      - 'apps/api/app/Telemetry/**'
+      - 'apps/api/database/migrations/**'
+      - 'apps/api/tests/Feature/Telemetry/**'
+      - 'apps/api/tests/integration/p3-telemetry-postgres.php'
+      - '.github/workflows/p3-telemetry-db-229.yml'
+permissions:
+  contents: read
+jobs:
+  real-pg-telemetry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_telemetry_ci
+          POSTGRES_USER: pb3_ci
+          POSTGRES_PASSWORD: pb3_ci_disposable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pb3_ci -d pb3_telemetry_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      APP_URL: http://127.0.0.1
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_telemetry_ci
+      DB_USERNAME: pb3_ci
+      DB_PASSWORD: pb3_ci_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      PB3_ISOLATED_TELEMETRY_CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, fileinfo
+          coverage: none
+      - name: Enforce security floor and locked dependencies
+        run: php scripts/check-runtime.php
+      - name: Install locked dependencies and audit
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          composer audit --locked --no-interaction
+      - name: Migrate disposable PG18 and initialize clock
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php artisan migrate --force
+          echo "PB3_TEST_NOW_MS=$(date +%s%3N)" >> "$GITHUB_ENV"
+      - name: Real PG18 two-process receipt collision and count verification
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php init
+          php tests/integration/p3-telemetry-postgres.php worker &
+          p1=$!
+          php tests/integration/p3-telemetry-postgres.php worker &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          php tests/integration/p3-telemetry-postgres.php verify
