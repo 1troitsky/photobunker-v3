@@ -58,7 +58,7 @@ export async function acquirePinSessionLease(
     rejectReady=reject
   })
   const gate=new Promise<void>(resolve=>{releaseGate=resolve})
-  let running:Promise<void>
+  let running:Promise<unknown>
   try{
     running=locks.request(name,{mode:'shared'},async granted=>{
       if(!granted)throw new Error('pin.shared_lock_unavailable')
