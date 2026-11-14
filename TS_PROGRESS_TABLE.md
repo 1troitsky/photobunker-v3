@@ -1,6 +1,6 @@
 # PB3 — единственная таблица прогресса
 
-**Срез 13.11.2026.** Проценты не используются: реализация, тестирование и приёмка — разные состояния. `main` проверен по удалённому SHA: **`da7327b8c9c440dae3dc864b3245b9f9f4ad14eb`**. Ошибочный merge #290 (`9160cbf1…`) в нём **не достижим**, несмотря на GitHub `merged`.
+**Срез 13.11.2026; дополнение Security #297 в отдельной Draft-ветке.** Проценты не используются: реализация, тестирование и приёмка — разные состояния. `main` проверен по удалённому SHA: **`da7327b8c9c440dae3dc864b3245b9f9f4ad14eb`**. Ошибочный merge #290 (`9160cbf1…`) в нём **не достижим**, несмотря на GitHub `merged`.
 
 Одна изолированная ветка `integration/global-acceptance-20261113` сохраняет #290 **`f4bce2e1…`** и его историю, переносит только clock-margin #63 с новыми Safe/ACL ceilings и обновляет 5 уязвимых Symfony patch-версий. #292 / Matrix / альтернативный GPS #262 не добавлены. Отдельного разрешения на merge main нет.
 
@@ -18,6 +18,7 @@
 | Notifications / Help | Есть isolated local-inbox / Help contracts и unit tests | Нет подключённых Notifications/delivery/push; Help component не означает готовый маршрут |
 | Backup / Panic / DMS | Только backup admission/cooldown primitives | Snapshot restore, Emergency, Panic / DMS / remote wipe BLOCKED |
 | Admin / Analytics / Events | Проверенные чистые RBAC/MFA / metadata / telemetry contracts | Production MFA, маршруты, аудит операций и доставка не реализованы полностью |
+| Laravel dependency security #297 | `main` Laravel v13.39.0 и Composer Audit FAIL; изолированная ветка `security/297-laravel-13-audit-20261113` с Composer-generated Laravel **v13.42.0**: strict validate PASS, audit **0 advisories**, PHP8.4/8.5 **245/245** each, Vitest **449/449**, Security PHP8.4/8.5 PASS | Draft [#298](https://github.com/1troitsky/photobunker-v3/pull/298) — не merged; PostgreSQL/Garage/Chromium final run на документированном HEAD проверяется отдельно; downstream #296 остаётся со старым lock до разрешённой интеграции |
 | PWA / release security | 32/32 unsigned integrity tests; Composer 8 matches → 0 после 5 patch updates; pnpm production audit 0 | Independent trust anchor / signed activation / cold offline bootstrap BLOCKED; Safari automation disabled |
 
 **Локальные проверки:** PHP8.4.27 и PHP8.5.12 — 245/245 каждая; Vitest449/449, TS/build, PostgreSQL18.6/Garage2.5 и 5 quota races PASS. Финальный Chromium/CI и точный commit фиксируются в [едином QA-отчёте](docs/audits/PB3-GLOBAL-INTEGRATION-20261113.md) и в [Final validation PR #293](https://github.com/1troitsky/photobunker-v3/pull/293).
