@@ -138,6 +138,19 @@ try {
         'lost ACK replay');
     requireVault($vault->currentActive($account)->id === $first['generation'],
         'first verified active');
+    requireVault(
+        $vault->readVerifiedActiveCiphertextTrusted($account) === $firstBytes,
+        'trusted active read returns exact ciphertext from actual Garage');
+    // Post-activation overwrite with same-length ciphertext is a physical
+    // negative: an active DB receipt alone must NOT approve altered S3 data.
+    vaultPut($storage, $first['key'], random_bytes(strlen($firstBytes)));
+    requireVaultFailure(
+        static fn() => $vault->readVerifiedActiveCiphertextTrusted($account),
+        'vault.manifest_not_verified');
+    vaultPut($storage, $first['key'], $firstBytes);
+    requireVault(
+        $vault->readVerifiedActiveCiphertextTrusted($account) === $firstBytes,
+        'restored physically verified ciphertext can be read again');
     vaultComplete($a);
 
     $b = vaultStart($account);
@@ -193,7 +206,8 @@ try {
         'new generation can start after failed worker without reviving stale');
     fwrite(STDOUT,
         "P3 #218 REAL PG18/Garage: missing/valid/corrupt/retry, lost-ACK, ".
-        "verified replacement, retired bytes, stale lease and release PASS\n");
+        "verified replacement, post-activation tamper denial, retired bytes, ".
+        "stale lease and release PASS\n");
 } finally {
     // The initial hard guards above ensure this can only touch synthetic
     // keys in the disposable test bucket. No production deletion.
