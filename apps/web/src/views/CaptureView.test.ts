@@ -7,6 +7,10 @@ import CaptureView from './CaptureView.vue'
 const mocks = vi.hoisted(() => ({
   capture: vi.fn(), policies: vi.fn(), server: vi.fn(), binding: vi.fn(),
   mediaEnqueue: vi.fn(), mediaIntent: vi.fn(),
+  draftCreate:vi.fn(),draftAppend:vi.fn(),draftSeal:vi.fn(),
+  draftRead:vi.fn(),draftDelete:vi.fn(),draftInterrupt:vi.fn(),
+  draftList:vi.fn(),draftPurge:vi.fn(),draftPrivateReview:vi.fn(),
+  draftRecover:vi.fn(),leaseAcquire:vi.fn(),
   requiredGps:false,
   privateCache: vi.fn(), verifyPolicy: vi.fn(), privateScope: vi.fn(),
   allowedMedia: ['photo'] as string[],
@@ -18,6 +22,21 @@ vi.mock('vue-router', () => ({
 }))
 vi.mock('../features/photo-sync/application/p1-photo', () => ({captureEncrypted: mocks.capture}))
 vi.mock('../features/media/application/media-outbox', () => ({enqueueEncryptedMedia: mocks.mediaEnqueue}))
+vi.mock('../features/media/application/recording-writer-lease',()=>({
+  acquireCameraWriterLease:mocks.leaseAcquire,
+}))
+vi.mock('../features/media/application/recording-encrypted-journal',()=>({
+  createEncryptedRecordingDraft:mocks.draftCreate,
+  appendEncryptedRecordingSegment:mocks.draftAppend,
+  sealEncryptedRecordingDraft:mocks.draftSeal,
+  readCompletedEncryptedRecording:mocks.draftRead,
+  deleteEncryptedRecordingDraft:mocks.draftDelete,
+  interruptEncryptedRecordingDraft:mocks.draftInterrupt,
+  listEncryptedRecordingDrafts:mocks.draftList,
+  purgeExpiredEncryptedRecordingDrafts:mocks.draftPurge,
+  readEncryptedRecordingForPrivateReview:mocks.draftPrivateReview,
+  recoverAbandonedEncryptedRecordingDraft:mocks.draftRecover,
+}))
 vi.mock('../features/assignments/application/assignment-outbox', () => ({
   listServerAssignments: mocks.server, listAllServerAssignments: mocks.server,
   listVerifiedCapturePolicies: mocks.policies,
@@ -51,8 +70,23 @@ function identity(): Session {
   } as Session
 }
 function media() {
-  const track = {readyState: 'live', stop: vi.fn(() => {track.readyState = 'ended'})}
-  return {stream: markRaw({getTracks: () => [track]}) as unknown as MediaStream, track}
+  const listeners = new Set<() => void>()
+  const track = {
+    readyState: 'live',
+    stop: vi.fn(() => {track.readyState = 'ended'}),
+    addEventListener: vi.fn((type: string, listener: () => void) => {
+      if(type==='ended')listeners.add(listener)
+    }),
+    removeEventListener: vi.fn((type: string, listener: () => void) => {
+      if(type==='ended')listeners.delete(listener)
+    }),
+  }
+  const emitEnded = () => {
+    track.readyState='ended'
+    for(const listener of [...listeners])listener()
+  }
+  return {stream: markRaw({getTracks: () => [track]}) as unknown as MediaStream,
+    track,emitEnded}
 }
 async function settle() { for (let i = 0; i < 8; i++) {await Promise.resolve(); await nextTick()} }
 let app: App | undefined
@@ -73,6 +107,17 @@ async function mount(session = identity()) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.draftCreate.mockResolvedValue('00000000-0000-4000-8000-000000000001')
+  mocks.draftAppend.mockResolvedValue(undefined)
+  mocks.draftSeal.mockResolvedValue(undefined)
+  mocks.draftRead.mockResolvedValue(new Blob([new Uint8Array(512)],{type:'audio/webm'}))
+  mocks.draftDelete.mockResolvedValue(undefined)
+  mocks.draftInterrupt.mockResolvedValue(undefined)
+  mocks.draftList.mockResolvedValue([])
+  mocks.draftPurge.mockResolvedValue(0)
+  mocks.draftPrivateReview.mockResolvedValue(new Blob([new Uint8Array(201)],{type:'audio/webm'}))
+  mocks.draftRecover.mockResolvedValue(undefined)
+  mocks.leaseAcquire.mockResolvedValue(null)
   requests = []
   getUserMedia = vi.fn(() => {
     const request = deferred<MediaStream>(); requests.push(request); return request.promise
@@ -646,4 +691,426 @@ describe('Issue #260 GPS consent and capture races',()=>{
     expect(host.textContent).toContain('camera.gps_permission_required')
   })
 
+})
+
+
+describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
+  class BoundedRecorder {
+    static latest:BoundedRecorder|null=null
+    static isTypeSupported() {return true}
+    options:MediaRecorderOptions
+    constructor(_stream:MediaStream,options:MediaRecorderOptions) {
+      BoundedRecorder.latest=this
+      this.options=options
+    }
+    state: 'recording'|'inactive' = 'inactive'
+    ondataavailable: ((event: {data: Blob}) => void)|null = null
+    onstop: (() => void)|null = null
+    onerror: (() => void)|null = null
+    start() {this.state='recording'}
+    stop() {
+      this.state='inactive'
+      this.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+      this.onstop?.()
+    }
+  }
+
+  async function openMode(mode:'video'|'audio',bitrate?:number) {
+    vi.stubGlobal('MediaRecorder',BoundedRecorder)
+    mocks.mediaEnqueue.mockResolvedValue('media-enqueued-after-encryption')
+    await mount()
+    requests[0]!.resolve(media().stream);await settle()
+    const input=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    input.value=mode
+    input.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(button(mode==='audio'?'Включить микрофон':'Включить камеру')).toBeDefined()
+    const opened=media()
+    requests[1]!.resolve(opened.stream);await settle()
+    if(mode==='audio'&&bitrate!==undefined){
+      const input=host.querySelector<HTMLSelectElement>('#camera-audio-bitrate')!
+      input.value=String(bitrate)
+      input.dispatchEvent(new Event('change',{bubbles:true}))
+      await settle()
+    }
+    vi.useFakeTimers()
+    button('Начать запись '+(mode==='video'?'видео':'аудио')).click()
+    await settle()
+    expect(host.querySelector('[data-testid="camera-recording-status"]')).not.toBeNull()
+    return opened
+  }
+
+  it.each([64000,128000,192000,256000] as const)(
+    'supplies chosen audio target %i to native MediaRecorder without claiming output bitrate',async rate=>{
+      await openMode('audio',rate)
+      expect(BoundedRecorder.latest!.options).toEqual({
+        mimeType:'audio/webm',audioBitsPerSecond:rate,
+      })
+      expect(host.querySelector<HTMLSelectElement>('#camera-audio-bitrate')!.disabled).toBe(true)
+      expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    },
+  )
+
+  it('drains ordered ciphertext writes before sealing, decrypting and signed E2EE enqueue',async()=>{
+    await openMode('audio')
+    mocks.draftRead.mockResolvedValueOnce(new Blob([new Uint8Array(1024)],
+      {type:'audio/webm'}))
+    const recorder=BoundedRecorder.latest!
+    recorder.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+    await settle()
+    expect(mocks.draftAppend).toHaveBeenCalledWith(
+      expect.any(String),0,expect.any(Blob))
+    expect(mocks.draftSeal).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click()
+    await settle()
+    expect(mocks.draftAppend).toHaveBeenCalledTimes(2)
+    expect(mocks.draftAppend).toHaveBeenLastCalledWith(
+      expect.any(String),1,expect.any(Blob))
+    expect(mocks.draftSeal).toHaveBeenCalledWith(expect.any(String),5_000)
+    expect(mocks.draftRead).toHaveBeenCalledTimes(1)
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+    expect(mocks.draftDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not sign or delete scratch while a native ciphertext commit is pending',async()=>{
+    await openMode('audio')
+    const hold=deferred<void>()
+    mocks.draftAppend.mockImplementationOnce(()=>hold.promise)
+    mocks.draftRead.mockResolvedValueOnce(new Blob([new Uint8Array(1024)],
+      {type:'audio/webm'}))
+    const recorder=BoundedRecorder.latest!
+    recorder.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click()
+    await settle()
+    expect(mocks.draftSeal).not.toHaveBeenCalled()
+    expect(mocks.draftRead).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    hold.resolve()
+    await settle();await settle()
+    expect(mocks.draftAppend).toHaveBeenCalledTimes(2)
+    expect(mocks.draftSeal).toHaveBeenCalledTimes(1)
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+    expect(mocks.draftDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails closed on IndexedDB/AEAD write failure and leaves no signed MediaFile',async()=>{
+    const opened=await openMode('audio')
+    mocks.draftAppend.mockRejectedValueOnce(Error('quota exceeded'))
+    BoundedRecorder.latest!.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+    await settle();await settle()
+    expect(host.textContent).toContain('camera.recording_storage_failed')
+    expect(mocks.draftSeal).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(mocks.draftInterrupt).toHaveBeenCalledWith(expect.any(String))
+    expect(opened.track.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not delete a sealed encrypted scratch if signed MediaFile enqueue fails',async()=>{
+    await openMode('audio')
+    mocks.mediaEnqueue.mockRejectedValueOnce(Error('media.local_outbox_full'))
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click()
+    await settle();await settle()
+    expect(host.textContent).toContain('media.local_outbox_full')
+    expect(mocks.draftSeal).toHaveBeenCalledTimes(1)
+    expect(mocks.draftDelete).not.toHaveBeenCalled()
+  })
+
+  it('refuses to start MediaRecorder if encrypted recording journal cannot initialize',async()=>{
+    BoundedRecorder.latest=null
+    vi.stubGlobal('MediaRecorder',BoundedRecorder)
+    await mount()
+    requests[0]!.resolve(media().stream);await settle()
+    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const opened=media()
+    requests[1]!.resolve(opened.stream);await settle()
+    mocks.draftCreate.mockRejectedValueOnce(Error('camera.recording_storage_unavailable'))
+    button('Начать запись аудио').click()
+    await settle();await settle()
+    expect(host.textContent).toContain('camera.recording_storage_unavailable')
+    expect((BoundedRecorder.latest as BoundedRecorder|null)?.state).toBe('inactive')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(mocks.draftSeal).not.toHaveBeenCalled()
+  })
+
+  it('retains origin-wide writer lease until valid native Stop is fully encrypted',async()=>{
+    const lease={accountId:'account-a',isHeld:()=>true,release:vi.fn()}
+    mocks.leaseAcquire.mockResolvedValueOnce(lease)
+    await openMode('audio')
+    expect(mocks.draftCreate).toHaveBeenCalledWith(
+      'audio','audio/webm',lease)
+    expect(lease.release).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click();await settle()
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+    expect(lease.release).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds origin-wide writer lock through interrupted ciphertext drain',async()=>{
+    const lease={accountId:'account-a',isHeld:()=>true,release:vi.fn()}
+    mocks.leaseAcquire.mockResolvedValueOnce(lease)
+    const opened=await openMode('audio')
+    opened.emitEnded()
+    await settle();await settle()
+    expect(mocks.draftInterrupt).toHaveBeenCalledTimes(1)
+    expect(lease.release).toHaveBeenCalledTimes(1)
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('refuses camera capture when another tab owns native recording lock',async()=>{
+    vi.stubGlobal('MediaRecorder',BoundedRecorder)
+    mocks.leaseAcquire.mockRejectedValueOnce(Error('camera.recording_writer_busy'))
+    await mount()
+    requests[0]!.resolve(media().stream);await settle()
+    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const opened=media()
+    requests[1]!.resolve(opened.stream);await settle()
+    button('Начать запись аудио').click()
+    await settle()
+    expect(host.textContent).toContain('camera.recording_writer_busy')
+    expect(host.querySelector('[data-testid="camera-recording-status"]')).toBeNull()
+    expect(mocks.draftCreate).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(opened.track.stop).not.toHaveBeenCalled()
+  })
+
+  it('does not apply audio-only target setting to video recorder',async()=>{
+    await openMode('video')
+    expect(BoundedRecorder.latest!.options).toEqual({mimeType:'video/webm'})
+  })
+
+  it.each(['video','audio'] as const)('rejects a premature %s Stop before encrypted enqueue', async mode => {
+    const opened=await openMode(mode)
+    await vi.advanceTimersByTimeAsync(4_999)
+    button('Остановить запись').click();await settle()
+    expect(host.textContent).toContain('camera.recording_duration_invalid')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(opened.track.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['video',300_000],['audio',3_000_000],
+  ] as const)('automatically finishes valid %s at exact bound %i ms',async(mode,maxMs)=>{
+    const opened=await openMode(mode)
+    expect(host.textContent).toContain('От 5 до '+(maxMs/1000)+' секунд')
+    await vi.advanceTimersByTimeAsync(maxMs)
+    await settle()
+    expect(opened.track.stop).toHaveBeenCalledTimes(1)
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+    expect(host.textContent).toContain('Запись зашифрована и сохранена локально')
+  })
+
+  it('accepts explicit audio Stop at the exact 5 second lower bound',async()=>{
+    await openMode('audio')
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click();await settle()
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+  })
+  it('stops and discards an audio capture on native microphone hardware interruption',async()=>{
+    const opened=await openMode('audio')
+    await vi.advanceTimersByTimeAsync(5_200)
+    opened.emitEnded()
+    await settle()
+    expect(host.textContent).toContain('camera.recording_interrupted')
+    expect(host.querySelector('[data-testid="camera-recording-status"]')).toBeNull()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(opened.track.removeEventListener).toHaveBeenCalledWith('ended',expect.any(Function))
+    await vi.advanceTimersByTimeAsync(3_000_000)
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('cancels pending explicit Stop when a microphone ends before the native onstop event',async()=>{
+    const opened=await openMode('audio')
+    const worker=BoundedRecorder.latest!
+    worker.stop=()=>{
+      worker.state='inactive'
+      worker.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+      setTimeout(()=>worker.onstop?.(),1_000)
+    }
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click()
+    opened.emitEnded()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await settle()
+    expect(host.textContent).toContain('camera.recording_interrupted')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('maps denied native audio permissions without retaining a microphone stream',async()=>{
+    await mount()
+    requests[0]!.resolve(media().stream)
+    await settle()
+    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    requests[1]!.reject(Object.assign(new Error('browser-specific private text'),{
+      name:'NotAllowedError',
+    }))
+    await settle()
+    expect(host.textContent).toContain('camera.microphone_permission_denied')
+    expect(host.textContent).not.toContain('browser-specific private text')
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="camera-start-recording"]')!.disabled)
+      .toBe(true)
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('rejects a permission result containing already-ended microphone hardware',async()=>{
+    await mount()
+    requests[0]!.resolve(media().stream)
+    await settle()
+    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const opened=media()
+    opened.track.stop()
+    requests[1]!.resolve(opened.stream)
+    await settle()
+    expect(host.textContent).toContain('camera.stream_ended')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+
+  it('ignores a spontaneous microphone stop even after five seconds of data',async()=>{
+    const opened=await openMode('audio')
+    await vi.advanceTimersByTimeAsync(5_000)
+    BoundedRecorder.latest!.stop() // no explicit Stop or max timer authorization
+    await settle()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(opened.track.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it("uses the user stop instant, not a delayed browser onstop callback",async()=>{
+    await openMode('audio')
+    const recorder=BoundedRecorder.latest!
+    recorder.stop=()=>{
+      recorder.state='inactive'
+      recorder.ondataavailable?.({data:new Blob([new Uint8Array(512)])})
+      setTimeout(()=>recorder.onstop?.(),20_000)
+    }
+    await vi.advanceTimersByTimeAsync(5_000)
+    button('Остановить запись').click()
+    await vi.advanceTimersByTimeAsync(20_000)
+    await settle()
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+  })
+})
+
+
+describe('P2 #206 private encrypted recording recovery UI',()=>{
+  const id='12345678-1234-4123-8123-123456789abc'
+  const draft={recordingId:id,kind:'audio',createdAt:Date.now(),
+    expiresAt:Date.now()+300000,chunkCount:2,plainBytes:450,
+    state:'interrupted'}
+
+  it('loads only local ciphertext metadata, decrypts only on explicit preview click, revokes at logout',async()=>{
+    mocks.draftList.mockResolvedValue([draft])
+    const opened=vi.fn(()=> 'blob:private-ephemeral')
+    const revoked=vi.fn()
+    Object.defineProperty(URL,'createObjectURL',{configurable:true,value:opened})
+    Object.defineProperty(URL,'revokeObjectURL',{configurable:true,value:revoked})
+    await mount()
+    await settle()
+    expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).not.toBeNull()
+    expect(host.textContent).toContain('Прервана')
+    expect(mocks.draftPrivateReview).not.toHaveBeenCalled()
+    const btn=[...host.querySelectorAll('button')].find(x=>x.textContent?.trim()==='Просмотреть локально')!
+    btn.click();await settle()
+    expect(mocks.draftPrivateReview).toHaveBeenCalledWith(id)
+    expect(opened).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('[data-testid="camera-private-draft-preview"]')).not.toBeNull()
+    activeSession.value=null;await settle()
+    expect(revoked).toHaveBeenCalledWith('blob:private-ephemeral')
+    expect(host.querySelector('[data-testid="camera-private-draft-preview"]')).toBeNull()
+  })
+
+  it('never shows reviewed data if identity changes during slow AEAD read',async()=>{
+    const pending=deferred<Blob>()
+    mocks.draftList.mockResolvedValue([draft])
+    mocks.draftPrivateReview.mockReturnValue(pending.promise)
+    const opened=vi.fn(()=>'blob:should-not-exist')
+    Object.defineProperty(URL,'createObjectURL',{configurable:true,value:opened})
+    Object.defineProperty(URL,'revokeObjectURL',{configurable:true,value:vi.fn()})
+    await mount()
+    await settle()
+    ;[...host.querySelectorAll('button')]
+      .find(x=>x.textContent?.trim()==='Просмотреть локально')!.click()
+    await settle()
+    activeSession.value=null
+    pending.resolve(new Blob([new Uint8Array(450)],{type:'audio/webm'}))
+    await settle()
+    expect(opened).not.toHaveBeenCalled()
+    expect(host.querySelector('[data-testid="camera-private-draft-preview"]')).toBeNull()
+  })
+
+  it('requires confirmation before deleting local encrypted scratch and refreshes list',async()=>{
+    mocks.draftList.mockResolvedValueOnce([draft]).mockResolvedValue([])
+    Object.defineProperty(window,'confirm',{configurable:true,value:vi.fn(()=>false)})
+    await mount()
+    await settle()
+    let button=[...host.querySelectorAll('button')]
+      .find(x=>x.textContent?.trim()==='Удалить фрагменты')!
+    button.click();await settle()
+    expect(mocks.draftDelete).not.toHaveBeenCalled()
+    Object.defineProperty(window,'confirm',{configurable:true,value:vi.fn(()=>true)})
+    button.click();await settle()
+    expect(mocks.draftDelete).toHaveBeenCalledWith(id)
+    expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).toBeNull()
+  })
+
+  it('runs bounded encrypted scratch expiry GC on mount and never crosses identity',async()=>{
+    mocks.draftPurge.mockResolvedValueOnce(25).mockResolvedValueOnce(25)
+      .mockResolvedValueOnce(7)
+    mocks.draftList.mockResolvedValue([])
+    await mount()
+    await settle()
+    expect(mocks.draftPurge).toHaveBeenCalledTimes(3)
+    expect(mocks.draftPurge).toHaveBeenNthCalledWith(1,25)
+    expect(mocks.draftPurge).toHaveBeenNthCalledWith(2,25)
+    expect(mocks.draftPurge).toHaveBeenNthCalledWith(3,25)
+    expect(mocks.draftList).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).toBeNull()
+  })
+
+  it('offers explicit abandoned check only for lease-backed writing drafts',async()=>{
+    const writing={...draft,state:'writing',recoveryAvailable:true}
+    mocks.draftList.mockResolvedValueOnce([writing]).mockResolvedValueOnce([
+      {...writing,state:'interrupted'},
+    ])
+    await mount();await settle()
+    expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).not.toBeNull()
+    expect(host.textContent).toContain('Возможна незавершённая запись')
+    expect([...host.querySelectorAll('button')].some(b=>
+      b.textContent?.trim()==='Просмотреть локально')).toBe(false)
+    expect([...host.querySelectorAll('button')].some(b=>
+      b.textContent?.trim()==='Удалить фрагменты')).toBe(false)
+    button('Проверить прерванную запись').click();await settle()
+    expect(mocks.draftRecover).toHaveBeenCalledWith(id)
+    expect(host.textContent).toContain('Прервана')
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(mocks.draftPrivateReview).not.toHaveBeenCalled()
+  })
+
+  it('does not classify a live-other-tab writer as abandoned on BUSY Web Lock',async()=>{
+    mocks.draftList.mockResolvedValue([{...draft,state:'writing',recoveryAvailable:true}])
+    mocks.draftRecover.mockRejectedValueOnce(Error('camera.recording_writer_busy'))
+    await mount();await settle()
+    button('Проверить прерванную запись').click();await settle()
+    expect(host.textContent).toContain('camera.recording_writer_busy')
+    expect(host.textContent).toContain('Возможна незавершённая запись')
+    expect(mocks.draftPrivateReview).not.toHaveBeenCalled()
+    expect(mocks.draftDelete).not.toHaveBeenCalled()
+  })
+
+  it('never makes a writing draft eligible for review or confirmed deletion',async()=>{
+    mocks.draftList.mockResolvedValue([{...draft,state:'writing'}])
+    await mount();await settle()
+    expect(host.querySelector('[data-testid="camera-encrypted-draft-recovery"]')).toBeNull()
+    expect(mocks.draftPrivateReview).not.toHaveBeenCalled()
+    expect(mocks.draftDelete).not.toHaveBeenCalled()
+  })
 })
