@@ -16,9 +16,10 @@ use Illuminate\Support\Facades\Route;
  * Never place this in routes/api.php or behind a bearer token.
  * There is deliberately NO POST route for Panic, revoke, purge, GC or ACK.
  */
-Route::middleware('web')
+// Combine middleware in ONE declaration; a second RouteRegistrar::middleware()
+// call overwrites the first group and would silently drop StartSession.
+Route::middleware(['web', 'throttle:40,1'])
     ->prefix('panic/v1')
-    ->middleware('throttle:40,1')
     ->group(static function (): void {
         Route::get('/preflight/{operationId}', [PanicPreflightStatusController::class, 'show'])
             ->whereUuid('operationId');
