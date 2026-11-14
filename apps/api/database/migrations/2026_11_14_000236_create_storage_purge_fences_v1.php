@@ -32,7 +32,7 @@ return new class extends Migration {
         // bypassing the PHP service, while keeping this migration SQLite-testable.
         if (DB::getDriverName()==='pgsql') {
             DB::unprepared(<<<'SQL'
-CREATE FUNCTION pb3_purge_fence_236_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION pb3_purge_fence_236_immutable() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     RAISE EXCEPTION 'storage.purge_fence_immutable' USING ERRCODE = '55000';
 END;
