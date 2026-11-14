@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'apps/api/app/Storage/Placement/**'
+      - 'apps/api/database/migrations/*placement*'
       - 'apps/api/tests/Feature/StoragePlacement/**'
       - 'apps/api/tests/integration/p4-placement-real-two-garage-233.php'
       - 'scripts/p4-placement-provision-two-garage-233.sh'
@@ -57,8 +58,11 @@ jobs:
         run: |
           set -euo pipefail
           php -l app/Storage/Placement/PlacementReadiness.php
+          php -l app/Storage/Placement/PlacementPreparationLedger.php
+          php -l database/migrations/2026_11_14_000233_create_placement_preparations_v1.php
+          php -l tests/Feature/StoragePlacement/PlacementPreparationLedgerTest.php
           php -l tests/Feature/StoragePlacement/PlacementReadinessTest.php
-          php vendor/bin/phpunit --filter PlacementReadinessTest --do-not-cache-result
+          php vendor/bin/phpunit --filter 'Placement(Readiness|PreparationLedger)Test' --do-not-cache-result
           php vendor/bin/phpunit --do-not-cache-result
 
   postgres-placement:
@@ -139,7 +143,7 @@ jobs:
           sed -i 's/name="DB_DATABASE" value=":memory:"/name="DB_DATABASE" value="pb3_placement_233"/' phpunit.placement.pg.xml
           grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.placement.pg.xml
           grep -q 'name="DB_DATABASE" value="pb3_placement_233"' phpunit.placement.pg.xml
-          php vendor/bin/phpunit --configuration phpunit.placement.pg.xml --filter PlacementReadinessTest --do-not-cache-result
+          php vendor/bin/phpunit --configuration phpunit.placement.pg.xml --filter 'Placement(Readiness|PreparationLedger)Test' --do-not-cache-result
       - name: Validate real Garage A/B physical ciphertext, corruption and missing target
         working-directory: apps/api
         run: |
