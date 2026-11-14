@@ -2,8 +2,10 @@
 
 - Agent: CHAT-AA; 2026-11-14 Asia/Tbilisi.
 - Source: accepted `main@8ed66c438d090efd218efa80b027f0b2f854db4b` (contains #335 via #336).
-- Unique test: `tests/e2e/p2-video-clip-recovered-cloud-qa-chat-aa.spec.ts`.
+- Unique test: `tests/e2e/p2-browser-video-clip-recovered-cloud-qa-chat-aa.spec.ts`.
 - Scope: QA-only. No app source, cryptography, ACL or workflow mutations.
+
+- Test collection: path `p2-browser-*.spec.ts` is explicitly included in `tests/playwright.config.ts`. The first attempted test name was not collected; no CI PASS on that earlier HEAD can count as acceptance.
 
 ## Why this test is necessary
 
