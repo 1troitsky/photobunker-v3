@@ -752,6 +752,15 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     // the original invitation. The same old ECDH invitation decrypts the
     // new, independently signed AEAD envelope with the original shared DEK.
     await A.goto('/assignments/'+assignmentId+'/edit')
+    // Cold navigation may first restore a valid signed *offline* snapshot.
+    // Re-establish real server session authority before requiring a live ACK;
+    // keep the unchanged signed policy, E2EE and server receipt assertions.
+    await A.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+      if(!identity.requireSession().online)
+        throw Error('qa.owner_session_unverified_after_cold_navigation')
+    })
     await expect(A.locator('#editor-private-title'))
       .toHaveValue('Media v3 opt-in assignment',{timeout:20000})
     await A.locator('#editor-private-title').fill('PRIVATE UPDATED TITLE 1')
