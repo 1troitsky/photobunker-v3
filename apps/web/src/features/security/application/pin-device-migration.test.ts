@@ -12,6 +12,7 @@ import {
 import type {LocalDevice} from '../../identity/infrastructure/storage'
 import {admitCoLocatedPinDevice} from './pin-device-admission'
 import {TestPinLockManager} from './pin-test-locks'
+import {readVerifiedPinRelockDelay} from './pin-verifier'
 import {
   inspectPinDeviceMigration, migrateLegacyLocalDeviceToPin,
   readSealedPinDevice, attemptSealedPinDevice,
@@ -331,4 +332,31 @@ describe('P3 #220 actual Identity v2 local PIN envelope migration acceptance (UN
       accountId:'invalid',deviceId:f.scope.deviceId,
     })).rejects.toThrow('pin.invalid_scope')
   },45_000)
+
+  it('durably MAC-binds Immediate relock default in the same sealed Identity row',async()=>{
+    const f=await createDevice()
+    await migrateLegacyLocalDeviceToPin({
+      scope:f.scope,verifiedPackage:f.pkg,
+      appPin:'1234',emergencyPin:'4321',
+    })
+    const row=await getDevice(f.scope.accountId,f.scope.deviceId) as
+      LocalDevice & {
+        pinHmacKey:CryptoKey
+        pinVerifier:import('./pin-verifier').StoredPinState
+      }
+    expect(row.pinVerifier.relockDelayMs).toBe(0)
+    expect(await readVerifiedPinRelockDelay(
+      f.scope,row.pinHmacKey,row.pinVerifier,
+    )).toBe(0)
+    const changed={
+      ...row,pinVerifier:{...row.pinVerifier,relockDelayMs:300_000},
+    }
+    await putIdentityRow('devices',changed)
+    await expect(readVerifiedPinRelockDelay(
+      f.scope,row.pinHmacKey,changed.pinVerifier,
+    )).rejects.toThrow('pin.integrity_failed')
+    await expect(attemptSealedPinDevice(f.scope,'1234'))
+      .rejects.toThrow('pin.integrity_failed')
+  },95_000)
+
 })
