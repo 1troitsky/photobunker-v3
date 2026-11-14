@@ -1,0 +1,203 @@
+name: P3 229 isolated real PostgreSQL telemetry race
+on:
+  pull_request:
+    branches: [main, 'security/**']
+    paths:
+      - 'apps/api/app/Telemetry/**'
+      - 'apps/api/database/migrations/**'
+      - 'apps/api/tests/Feature/Telemetry/**'
+      - 'apps/api/tests/integration/p3-telemetry-postgres.php'
+      - '.github/workflows/p3-telemetry-db-229.yml'
+permissions:
+  contents: read
+jobs:
+  real-pg-telemetry:
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_telemetry_ci
+          POSTGRES_USER: pb3_ci
+          POSTGRES_PASSWORD: pb3_ci_disposable
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pb3_ci -d pb3_telemetry_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      APP_URL: http://127.0.0.1
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_telemetry_ci
+      DB_USERNAME: pb3_ci
+      DB_PASSWORD: pb3_ci_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      PB3_ISOLATED_TELEMETRY_CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, fileinfo
+          coverage: none
+      - name: Enforce security floor and locked dependencies
+        run: php scripts/check-runtime.php
+      - name: Install locked dependencies and audit
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          composer audit --locked --no-interaction
+      - name: Isolated Laravel PHPUnit SQLite integration and privacy negatives
+        working-directory: apps/api
+        # Whole suite uses the SAME secure PHPunit bootstrap as foundation;
+        # do not leak this job's disposable PG/HTTP variables into it.
+        env:
+          APP_URL: https://localhost
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          php vendor/bin/phpunit --filter TelemetryDatabaseSinkTest
+          php vendor/bin/phpunit --filter InternalAggregateReaderTest
+          php vendor/bin/phpunit --filter AssignmentCoverageAuditTest
+          php vendor/bin/phpunit --filter AssignmentReceiptLineageAuditTest
+          php vendor/bin/phpunit --filter TelemetryRotationPreflightTest
+          php vendor/bin/phpunit --filter TelemetryShadowKeyBridgeTest
+          php vendor/bin/phpunit --filter TelemetryActorEpochPreflightTest
+          php vendor/bin/phpunit
+      - name: Migrate disposable PG18 and initialize clock
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php artisan migrate --force
+          echo "PB3_TEST_NOW_MS=$(date +%s%3N)" >> "$GITHUB_ENV"
+      - name: Real PG18 two-process receipt collision and count verification
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php init
+          php tests/integration/p3-telemetry-postgres.php worker &
+          p1=$!
+          php tests/integration/p3-telemetry-postgres.php worker &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          php tests/integration/p3-telemetry-postgres.php verify
+      - name: Real PG18 two-process trusted assignment meter replay race
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php source-init
+          php tests/integration/p3-telemetry-postgres.php source-worker &
+          p1=$!
+          php tests/integration/p3-telemetry-postgres.php source-worker &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          php tests/integration/p3-telemetry-postgres.php source-verify
+      - name: Fail-closed opt-in operator CLI and real PostgreSQL replay smoke
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          disabled_output="$(php bin/telemetry-replay-assignments.php --execute 2>&1)"
+          disabled_status=$?
+          set -e
+          test "$disabled_status" -eq 78
+          test "$disabled_output" = 'telemetry.operator_disabled'
+          output="$(
+            PB3_TELEMETRY_REPLAY_ENABLED=1 \
+            PB3_TELEMETRY_POLICY_APPROVED=1 \
+            PB3_TELEMETRY_HMAC_SECRET='PB3 TEST ONLY TELEMETRY HMAC SECRET, NO REAL KEY' \
+            PB3_TELEMETRY_PAGE_SIZE=1 \
+            PB3_TELEMETRY_MAX_PAGES=2 \
+            php bin/telemetry-replay-assignments.php --execute
+          )"
+          test "$output" = 'telemetry.operator pages=1 accepted=0 duplicate=1 complete=yes'
+          echo 'Operator CLI default-OFF and enabled disposable PG18 replay PASS'
+
+      - name: Real PG18 UTC source coverage discrepancy with non-UTC database timezone
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php coverage
+
+      - name: Real PG18 exact source receipt HMAC lineage and non-UTC timezone
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php lineage
+      - name: Operator-only lineage CLI default-DENY and actual disposable PG18 proof
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          day="$(php -r 'echo (new DateTimeImmutable("@".intdiv((int)getenv("PB3_TEST_NOW_MS"), 1000)))->setTimezone(new DateTimeZone("UTC"))->modify("-1 day")->format("Y-m-d");')"
+          set +e
+          denied="$(php bin/telemetry-audit-lineage.php --execute "--day=$day" 2>&1)"
+          denied_status=$?
+          set -e
+          test "$denied_status" -eq 78
+          test "$denied" = 'telemetry.operator_disabled'
+          output="$(
+            PB3_TELEMETRY_REPLAY_ENABLED=1 \
+            PB3_TELEMETRY_POLICY_APPROVED=1 \
+            PB3_TELEMETRY_HMAC_SECRET='PB3 TEST ONLY TELEMETRY HMAC SECRET, NO REAL KEY' \
+            php bin/telemetry-audit-lineage.php --execute "--day=$day"
+          )"
+          test "$output" = 'telemetry.lineage scanned=1 matched=1 missing=0 conflicting=0 scan_complete=yes coverage_proven=no'
+          set +e
+          wrong="$(
+            PB3_TELEMETRY_REPLAY_ENABLED=1 \
+            PB3_TELEMETRY_POLICY_APPROVED=1 \
+            PB3_TELEMETRY_HMAC_SECRET='DISPOSABLE QA WRONG KEY 000000000000000000' \
+            php bin/telemetry-audit-lineage.php --execute "--day=$day"
+          )"
+          wrong_status=$?
+          set -e
+          test "$wrong_status" -eq 75
+          test "$wrong" = 'telemetry.lineage scanned=1 matched=0 missing=1 conflicting=0 scan_complete=yes coverage_proven=no'
+          echo 'CLI lineage explicit-only, true HMAC receipt and wrong-key fail-closed PASS'
+
+      - name: Real PG18 HMAC old-vs-candidate rotation + eight-day receipt retention read-only preflight
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php rotation-preflight
+
+      - name: True two-PHP PG18 legacy OLD vs SHADOW key bridge receipt and distinct race
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php shadow-init
+          php tests/integration/p3-telemetry-postgres.php shadow-old-worker &
+          p1=$!
+          php tests/integration/p3-telemetry-postgres.php shadow-bridge-worker &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          php tests/integration/p3-telemetry-postgres.php shadow-verify
+
+      - name: Real PG18 non-UTC ISO week vs day/month actor HMAC epoch risk (read-only)
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php epoch-preflight
