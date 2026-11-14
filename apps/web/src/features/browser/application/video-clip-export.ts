@@ -22,7 +22,6 @@ const MAX_EXPORT_MS=300_000
 const MIN_EXPORT_MS=100
 const SEEK_TIMEOUT_MS=8000
 const LOAD_TIMEOUT_MS=8000
-const STOP_TIMEOUT_MS=5000
 const MAX_EXPORT_LATENCY_MS=12_000
 
 /** Return an honest browser-reported encoder format, never fake MP4. */
