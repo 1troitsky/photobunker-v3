@@ -118,7 +118,8 @@ final class AdminAuditLedgerTest extends TestCase
         ], (new AdminAuditLedger())->verifyChain());
 
         $replay = $this->record($actor, $operation, 'grants.issue', $target, $deadline);
-        self::assertSame($result + ['replay' => true], $result);
+        self::assertSame('recorded_only', $replay['state']);
+        self::assertSame($operation, $replay['operationId']);
         self::assertSame($result['digest'], $replay['digest']);
         self::assertTrue($replay['replay']);
         $this->assertDatabaseCount(self::EVENTS, 1);
@@ -194,7 +195,7 @@ final class AdminAuditLedgerTest extends TestCase
             ['grants.issue','account',(string) Str::uuid(),'PIN 1234 recovery phrase'],
             ['analytics.read','system','private_files','safe_request'],
             ['ip.block','ip_digest','192.168.1.1','safe_request'],
-            ['ip.block','ip_digest','x'.repeat(64),'safe_request'],
+            ['ip.block','ip_digest',str_repeat('x', 64),'safe_request'],
         ] as [$action,$type,$target,$reason]) {
             $this->deny(fn() => $this->record(
                 $actor, (string) Str::uuid(), $action,
