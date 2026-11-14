@@ -13,6 +13,7 @@ import (
     "github.com/matrix-org/complement/client"
     "github.com/matrix-org/complement/helpers"
     "github.com/matrix-org/gomatrixserverlib/spec"
+    "github.com/tidwall/gjson"
 )
 
 func pb3AssertEvent(t *testing.T, u *client.CSAPI, roomID, eventID, sender string) {
@@ -20,7 +21,7 @@ func pb3AssertEvent(t *testing.T, u *client.CSAPI, roomID, eventID, sender strin
     res := u.MustDo(t, "GET", []string{
         "_matrix", "client", "v3", "rooms", roomID, "event", eventID,
     })
-    event := client.ParseJSON(t, res)
+    event := gjson.ParseBytes(client.ParseJSON(t, res))
     if event.Get("event_id").Str != eventID ||
         event.Get("room_id").Str != roomID ||
         event.Get("sender").Str != sender ||
@@ -38,7 +39,7 @@ func pb3AssertMembership(t *testing.T, u *client.CSAPI, roomID, alice, bob, outs
     res := u.MustDo(t, "GET", []string{
         "_matrix", "client", "v3", "rooms", roomID, "joined_members",
     })
-    members := client.ParseJSON(t, res).Get("joined")
+    members := gjson.ParseBytes(client.ParseJSON(t, res)).Get("joined")
     if !members.Get(client.GjsonEscape(alice)).Exists() ||
         !members.Get(client.GjsonEscape(bob)).Exists() ||
         members.Get(client.GjsonEscape(outsider)).Exists() {
