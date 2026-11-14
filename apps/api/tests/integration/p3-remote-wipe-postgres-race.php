@@ -154,6 +154,39 @@ function race222Invoke(array $wire): array
     );
 }
 
+/**
+ * CI SYNTHETIC actor revocation. NOT #80 signed-revoke service, HTTP,
+ * Matrix bearer revocation, or browser/device behavior. Does not simulate
+ * that signed permission was granted. Used solely to prove database lock
+ * ordering around SignedDeferredCommand::register() at a real PG18 backend.
+ */
+function race222QaAction(array $wire): array
+{
+    if (($wire['qaAction'] ?? 'register') !== 'synthetic_actor_revoke') {
+        return race222Invoke($wire);
+    }
+
+    return DB::transaction(static function () use ($wire): array {
+        $account = DB::table('identity_accounts')
+            ->where('id', $wire['accountId'])->lockForUpdate()->first();
+        race222Must($account !== null && $account->status === 'ready',
+            'synthetic actor-revoke must acquire synthetic ready account row');
+        $actor = DB::table('identity_devices')
+            ->where('id', $wire['actorId'])
+            ->where('account_id', $wire['accountId'])
+            ->lockForUpdate()->first();
+        race222Must($actor !== null && $actor->revoked_at === null,
+            'synthetic actor-revoke must lock active synthetic actor');
+        $rows = DB::table('identity_devices')
+            ->where('id', $wire['actorId'])
+            ->where('account_id', $wire['accountId'])
+            ->whereNull('revoked_at')
+            ->update(['revoked_at' => now(), 'updated_at' => now()]);
+        race222Must($rows === 1, 'synthetic actor-revoke must affect exactly one row');
+        return ['qaRevoked' => true];
+    }, 1);
+}
+
 /** Worker is genuinely forked into a new PHP process + PG connection. */
 function race222Worker(array $args): never
 {
@@ -169,7 +202,7 @@ function race222Worker(array $args): never
             $status = DB::transaction(function () use ($wire, $ownerReady, $challengerReady, $backend): array {
                 // Nested service transaction uses the EXACT production locking
                 // order; keep the outer transaction open after registering.
-                $status = race222Invoke($wire);
+                $status = race222QaAction($wire);
                 file_put_contents($ownerReady, (string) $backend, LOCK_EX);
                 race222Wait($challengerReady);
                 usleep(1900000);
@@ -177,15 +210,17 @@ function race222Worker(array $args): never
             }, 1);
         } else {
             file_put_contents($challengerReady, (string) $backend, LOCK_EX);
-            $status = race222Invoke($wire);
+            $status = race222QaAction($wire);
         }
-        $answer = [
-            'outcome' => 'accepted',
-            'unchanged' => $status['unchanged'],
-            'status' => $status['localWipeStatus'],
-            'cloudDeleted' => $status['cloudDeleted'],
-            'matrixRemoteRevoked' => $status['matrixRemoteRevoked'],
-        ];
+        $answer = ($status['qaRevoked'] ?? false) === true
+            ? ['outcome' => 'synthetic_actor_revoked', 'unchanged' => true]
+            : [
+                'outcome' => 'accepted',
+                'unchanged' => $status['unchanged'],
+                'status' => $status['localWipeStatus'],
+                'cloudDeleted' => $status['cloudDeleted'],
+                'matrixRemoteRevoked' => $status['matrixRemoteRevoked'],
+            ];
     } catch (HttpExceptionInterface $e) {
         $answer = ['outcome' => 'denied', 'httpStatus' => $e->getStatusCode()];
     } catch (Throwable $e) {
@@ -232,7 +267,8 @@ function race222ObserveLock(int $pid, int $timeoutMs = 1500): bool
     return false;
 }
 function race222Run(string $label, array $first, array $second,
-    string $challengerOutcome, ?int $denyStatus = null): void
+    string $challengerOutcome, ?int $denyStatus = null,
+    string $ownerOutcome = 'accepted'): void
 {
     $dir = sys_get_temp_dir().'/pb3-remote-222-'.bin2hex(random_bytes(8));
     race222Must(mkdir($dir, 0700), 'private test fixture directory');
@@ -271,17 +307,24 @@ function race222Run(string $label, array $first, array $second,
         race222Must($locked, $label.' no REAL PostgreSQL pg_stat_activity Lock wait');
         race222Must($a['osPid'] !== $b['osPid'] && $a['pgBackend'] !== $b['pgBackend'],
             $label.' workers did not use separate PHP/PG processes');
-        race222Must($a['outcome'] === 'accepted' && $a['unchanged'] === false
-            && $a['status'] === 'wipe_pending' && $a['cloudDeleted'] === false,
-            $label.' first signed command not safely accepted');
+        race222Must(
+            $ownerOutcome === 'synthetic_actor_revoked'
+                ? ($a['outcome'] === 'synthetic_actor_revoked')
+                : ($a['outcome'] === 'accepted' && $a['unchanged'] === false
+                    && $a['status'] === 'wipe_pending' && $a['cloudDeleted'] === false),
+            $label.' first side unexpected '.json_encode($a)
+        );
         race222Must($b['outcome'] === $challengerOutcome,
             $label.' wrong challenger outcome '.json_encode($b));
         if ($challengerOutcome === 'accepted') {
             race222Must($b['unchanged'] === true && $b['status'] === 'wipe_pending',
                 $label.' exact retry must remain pending and unchanged');
+        } elseif ($challengerOutcome === 'synthetic_actor_revoked') {
+            race222Must($b['unchanged'] === true,
+                $label.' synthetic actor revocation must not be a wipe ACK');
         } else {
             race222Must(($b['httpStatus'] ?? null) === $denyStatus,
-                $label.' expected fail-closed HTTP 409 '.json_encode($b));
+                $label.' expected fail-closed denial '.json_encode($b));
         }
         race222Must($b['elapsedMs'] >= 400, $label.' contender did not actually wait');
         fwrite(STDOUT, "#222 PG18 {$label} PASS: real lock, two PHP processes, honest result\n");
@@ -331,10 +374,63 @@ race222Must(DB::table('remote_wipe_commands')->where('operation_id', $globalOper
     && DB::table('remote_wipe_commands')->where('account_id', $b['accountId'])->count() === 0,
     'global opId collision adopted by unrelated account');
 
-race222Must(DB::table('remote_wipe_commands')->count() === 3, 'only three inert commands should exist');
+// The following 2 cases exercise opposite transaction commit orders across
+// an ACTIVE actor being revoked while attempting to register a command for a
+// separately ALREADY revoked target. The revoker is synthetic SQL only; this
+// is NOT a signed #80 revoke or a proof about bearer sessions/Matrix.
+$registerWins = race222Account();
+$wireRegisterFirst = race222Wire($registerWins);
+race222Run('REGISTER-BEFORE-ACTOR-REVOKE',
+    $wireRegisterFirst,
+    [
+        'qaAction' => 'synthetic_actor_revoke',
+        'accountId' => $registerWins['accountId'],
+        'actorId' => $registerWins['actorId'],
+    ],
+    'synthetic_actor_revoked'
+);
+race222Must(DB::table('remote_wipe_commands')
+    ->where('operation_id', $wireRegisterFirst['payload']['operationId'])
+    ->where('account_id', $registerWins['accountId'])->count() === 1,
+    'registered command must commit before synthetic actor revocation');
+race222Must(DB::table('identity_devices')
+    ->where('id', $registerWins['actorId'])->whereNotNull('revoked_at')->exists(),
+    'synthetic actor revoke must persist after signed command');
+
+try {
+    race222Invoke($wireRegisterFirst); // Exact retry must NOT override revoked actor.
+    race222Must(false, 'revoked actor replay unexpectedly accepted');
+} catch (HttpExceptionInterface $exception) {
+    race222Must($exception->getStatusCode() === 401,
+        'revoked actor must not replay an already committed signed operation');
+}
+race222Must(DB::table('remote_wipe_commands')
+    ->where('target_device_id', $registerWins['targetId'])->count() === 1,
+    'revoked actor replay must not create or mutate additional command');
+
+$revokeWins = race222Account();
+$wireRevokeSecond = race222Wire($revokeWins);
+race222Run('ACTOR-REVOKE-BEFORE-REGISTER',
+    [
+        'qaAction' => 'synthetic_actor_revoke',
+        'accountId' => $revokeWins['accountId'],
+        'actorId' => $revokeWins['actorId'],
+    ],
+    $wireRevokeSecond,
+    'denied', 401, 'synthetic_actor_revoked'
+);
+race222Must(DB::table('identity_devices')
+    ->where('id', $revokeWins['actorId'])->whereNotNull('revoked_at')->exists(),
+    'first synthetic actor revoke must persist');
+race222Must(DB::table('remote_wipe_commands')
+    ->where('account_id', $revokeWins['accountId'])->count() === 0,
+    'revoked actor must create ZERO commands despite waiting for account lock');
+
+race222Must(DB::table('remote_wipe_commands')->count() === 4,
+    'exactly four signed, inert pending commands expected after five races');
 race222Must(DB::table('remote_wipe_commands')->whereNotNull('target_reported_at')->count() === 0,
     'test generated false local wipe receipt');
 race222Must(DB::table('identity_devices')->whereIn('id',
     [$one['actorId'], $two['actorId'], $a['actorId'], $b['actorId']])
     ->whereNotNull('revoked_at')->count() === 0, 'actor device was unexpectedly revoked');
-fwrite(STDOUT, "#222 PG18 COMPLETE: 3/3 proven two-process races, 3 pending commands, no live wipe\n");
+fwrite(STDOUT, "#222 PG18 COMPLETE: 5/5 proven two-process races, 4 pending commands, no live wipe\n");
