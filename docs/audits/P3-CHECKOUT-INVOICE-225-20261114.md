@@ -1,38 +1,46 @@
-# PB3 #225 — Web3 Checkout isolated quote policy (2026-11-14)
+# PB3 #225 — isolated durable Web3 Checkout QUOTED state (2026-11-14)
 
-Status: **PARTIAL / PRE-SETTLEMENT ONLY**. No payment provider, live blockchain settlement, invoice database, endpoint, subscription activation, or UI is implemented here. This file is a QA boundary, NOT full payment acceptance.
+Status: **PARTIAL / IN PROGRESS — NO LIVE PAYMENT OR PROVIDER SETTLEMENT**. This is an internal protected server/DB primitive, not a public checkout route, working wallet, accepted customer payment or paid subscription.
 
-## Scope and source
+## Sources and exact scope
 
-- Base: main@6565a0fe852882ea5fc26e493df81affed687eee (PR #293 integrated).
-- Requirement: ts.md §§8–9, 21.1–21.4, 25.15. All five plans, 1/6/12-month periods, immutable quote, replay/idempotency, server authorization and independent proof of actual settlement.
-- Exclusive new module: apps/api/app/Billing/Checkout/InvoiceLifecycle.php. Exclusive new negative tests: apps/api/tests/Feature/Billing/CheckoutInvoiceLifecycleTest.php.
-- No modifications of entitlement or quota ledger, existing Billing routes/controllers, composer.lock, Identity, session, Storage, S3, Matrix, web app, or other agents' claimed files.
-- Cross-lane reads: #226 grace/downgrade Draft #310; #297 Laravel security Draft #298; active #220 PIN, #221 Panic, #231 Backup, #198 Notifications, #206 Camera, #232 S3, #230 PWA.
+- Normative: `ts.md` §§8–9, 21.1, 21.4, 25.15; `AGENTS.md`; main SHA `6565a0fe852882ea5fc26e493df81affed687eee`.
+- Own branch: `feat/p3-225-invoice-state-20261114`, Draft PR #316. Last tested **product + workflow HEAD** `1ef0224bf30063054cb3b9af666ea5a5184a2a00` (this report update is documentation-only).
+- Exclusive 7 changed paths:
+  - `apps/api/app/Billing/Checkout/InvoiceLifecycle.php`
+  - `apps/api/app/Billing/Checkout/DurableQuoteAdmission.php`
+  - `apps/api/database/migrations/2026_11_14_000225_create_checkout_quotes_v1.php`
+  - `apps/api/tests/Feature/Billing/CheckoutInvoiceLifecycleTest.php`
+  - `apps/api/tests/Feature/Billing/DurableQuoteAdmissionTest.php`
+  - `.github/workflows/p3-checkout-225.yml`
+  - `docs/audits/P3-CHECKOUT-INVOICE-225-20261114.md`
+- Other agents: #297 PR #298 Composer-only (READ-ONLY parent), #226 PR #310 Grace, #220 PIN, #221 Panic, #231 Backup, #229 Telemetry, #198 Notifications, #206 Camera, #230 Signed PWA and #232 BYO storage untouched. No shared Billing controller/route/entitlement changes and no merge/main/deploy.
 
-## Safety model of the implemented slice
+## Actual behavior
 
-1. Only server-side PlanCatalog calculates price in integer USD cents; quote contains copied plan ID/version and definition SHA-256, 1/6/12-month price, base price and discount. Free cannot be purchased.
-2. Quote binds caller-verified account UUID, server-issued invoice UUID and an account-scoped SHA-256 of an idempotency key. This hash is a correlation key, **not an atomic uniqueness guarantee**; durable enforcement must be added in PostgreSQL.
-3. Quote has explicit quoted / unverified state; validity is 15 minutes from authoritative server time, with exact UTC formatting.
-4. Canonical SHA-256 quoteDigest is **not** a signature or payment attestation. Comparing with a separately trusted server-stored digest detects modification. Never trust both quote and digest received from a browser.
-5. A pure verification guard rejects foreign account, mismatched stored digest, altered/extra keys, invalid amount, forged phase and proof markers, malformed expiry and expired quote. A pure decision guard permits only cancellation before expiry or expiration after the deadline. It explicitly rejects pending, confirmed and fake provider callbacks.
-6. **No database write, network call, provider wiring, wallet secrets, ledger advance or paid rights.** Neither returned quote nor a hash can activate payment. No commercial payment UI should expose this as functional.
+1. `InvoiceLifecycle` receives account identity from **trusted server caller only**. A new server-issued UUID and selected plan/1-6-12 month period produce a 15-minute canonical UTC quote with immutable published plan catalog version and definition SHA-256, integral USD cents and discount. Free cannot be invoiced.
+2. Scope and key: `idempotencyKeySha256` binds a nonsecret request token to the trusted account. Raw key never enters the quote JSON. In `checkout_quotes_v1`, unique(account_id, key hash) and an actual account `SELECT ... FOR UPDATE` serialize same-account PostgreSQL requests. **Simultaneous separate PHP OS-process contention has NOT yet been independently fault-tested.**
+3. Internal `DurableQuoteAdmission::reserve` rejects unready/absent accounts. Same account + same idempotency key + same plan/period gives the original persisted quote, even after expiry; plan/period change on same key is a conflict. Two accounts using same request token have different stored invoices and cannot fetch/close each other's records.
+4. Quote is permanently in the `quoted / unverified` pre-settlement phase; durable status is `quoted → cancelled | expired` only. Cancellation/expiry is locked and idempotent. Any `pending`, `confirmed`, `paid`, fake callback or refund action is rejected. The quote never invokes `EntitlementLedger::advanceTrusted`.
+5. On read/close/replay the service verifies the stored quote digest, exact JSON fields, account, invoice UUID, key digest, plan/period and immutable expiry against separate DB columns. The SHA-256 digest is **not an HMAC, independent external audit anchor or payment receipt**. A privileged database attacker who rewrites both hash and data could evade these consistency checks; future settlement MUST use separately verified provider transaction evidence, append-only audit and production DB permissions.
+6. No live API/controller, client-visible checkout state, payment provider credentials, order submission, payment callback, blockchain verification or subscription activation has been introduced.
 
-## Tests and evidence
+## Reproducible security-first validation
 
-- New test class exercises all 4 paid tariffs × 3 allowed periods against existing owner-approved catalog, snapshot binding, invalid Free/period/identity/idempotency, account-scoped fingerprints, changed amount/discount/currency/catalog/plan/phase/digest, injected wallet field, UTC boundary and blocked forged settlement.
-- Exact-head tests/CI: **NOT TESTED at file creation**; subsequent GitHub run links and PASS/FAIL belong in PR conversation. Do not claim any suite passed before evidence.
-- Local container reports PHP 8.4.24, **below required 8.4.27**. It is not a valid security-floor test environment. The remote workflow must enforce patched PHP.
-- Existing main locked Composer audit is reported failing on #297 Laravel CVE; this branch does not bypass Composer Audit or change a foreign security branch. The default foundation workflow is expected to fail before PHPUnit until the patched lock from #297 is integrated. Security floor's independent syntax/config checks may still provide evidence.
+- Because unmerged `main` still pins vulnerable Laravel v13.39.0 (#297, CVE-2026-128083), the ordinary Foundation jobs FAIL at strict Composer Audit **before PHPUnit**; that failure is retained and never suppressed. The branch never changes `apps/api/composer.lock`.
+- Dedicated `p3-checkout-225.yml` makes a *read-only* separate checkout of vetted #297 PR #298 exact commit `60407676c7cb9bdb649f5017cf9450aff25eedab`, copies ONLY its patched Laravel v13.42.0 lock into a **disposable CI working tree**, enforces PHP runtime floor, strict Composer validate and `composer audit --locked` (0 advisories). Neither that lock nor PR #298 is modified/merged. The product code is still checked out at the own SHA.
+- [Independent scoped workflow 43540911217](https://github.com/1troitsky/photobunker-v3/actions/runs/43540911217) on exact product SHA `1ef0224bf30063054cb3b9af666ea5a5184a2a00`: **3/3 jobs PASS**. Patched PHP8.4.27 PHPUnit **263/263** (3839 assertions); patched PHP8.5 PHPUnit **263/263** (3839 assertions); PostgreSQL18  **18/18 Checkout tests** (178 assertions), real schema migrated. No real wallet or provider involved.
+- Crucial PG test correction: repository `phpunit.xml` otherwise forces SQLite. This scoped workflow makes a disposable `phpunit.postgres.checkout.xml` forcing `pgsql` and `pb3_checkout_225`, without editing committed shared config. Job logs show PostgreSQL18 and the checkout migration, PHP8.4.27, 18 tests PASS; previous job before this correction was NOT counted as a PG PHPUnit acceptance.
+- Other exact SHA workflows: [Security 43540911088](https://github.com/1troitsky/photobunker-v3/actions/runs/43540911088) PASS; [UX guard 43540911081](https://github.com/1troitsky/photobunker-v3/actions/runs/43540911081) PASS; [Foundation 43540911102](https://github.com/1troitsky/photobunker-v3/actions/runs/43540911102) PHP **FAIL inherited #297**; [PG/Garage/Chromium 43540911187](https://github.com/1troitsky/photobunker-v3/actions/runs/43540911187) **IN PROGRESS** at last check, not claimed PASS.
+- Physical iOS/Android, production provider settlement, independent two-process invoice race, real webhook replay and real price-paid activation: **NOT TESTED**.
 
-## Blocked for real product acceptance
+## Blocking gates before real Checkout release
 
-- **OPEN:** provider/network/tokens/fees/tax/refunds/proration/renewal options per ts.md §9.
-- PostgreSQL immutable invoices with tenant-scoped unique idempotency, locked state transitions and verified historical price rows.
-- Provider adapter and server-signed/verified callback or chain confirmation, transaction identity, address/token/amount/chain validation; partial/overpayment, late settlement, retries, duplicate/cross-account and chargeback policies.
-- Only verified settlement may atomically advance EntitlementLedger and insert audited event.
-- Billing API, guarded history cursor and frontend checkout; real provider sandbox and paid E2E cross-device acceptance.
-- Because above is not implemented, Issue #225 remains **IN PROGRESS**, not review for full Web3 checkout; no release gate is accepted.
+1. Owner must settle the OPEN provider, network and tokens, provider address and callback verification, tax/refunds/fees/renewal/proration policy in `ts.md` §9.
+2. Real tenant-authenticated `billing/v1` invoice API + CSRF/origin/session/signed intent, bounded cursor history; evidence-backed provider adapter. No server APIs for paid status until this is secure.
+3. Durable provider invoice/settlement chain + token + address + amount + confirmation + replay verification, partial/overpay/late/cancel/reorg/refund safety, real independent provider attestation and incident handling.
+4. Atomic append-only verified event and revisioned entitlement advance only after actual verified settlement. No synthetic paid grants.
+5. Real two-process PostgreSQL conflict/lock observation and E2E callback, offline, repeat, delayed settlement and mobile checkout on a combined accepted candidate.
+6. Integrate audited #297 security patch through a separately authorized merge before declaring release.
 
-No merge or main changes are requested or performed.
+Issue #225 remains **IN PROGRESS**. This deliverable is a genuinely persisted but **unwired and unpaid** internal layer. No merge/deploy/main modification performed.
