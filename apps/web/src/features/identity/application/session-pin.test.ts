@@ -538,7 +538,8 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     const configured=await prepareVerifiedPinRelockPolicy(
       f.scope,stored.pinHmacKey,stored.pinVerifier,120_000,
     )
-    await saveDevice({...stored,pinVerifier:configured})
+    const updatedDevice={...stored,pinVerifier:configured}
+    await saveDevice(updatedDevice)
     expect(await unlockPinnedDevice('4826')).toEqual({status:'app-unlocked'})
     expect(activeSession.value?.pkg).toEqual(f.pkg)
 
