@@ -88,6 +88,11 @@ test('P2 #376: real video trim → offline E2EE clip → Garage → recovered-de
       const originalFile=await m.readLocalMedia(originalId)
       const hash=await crypto.subtle.digest('SHA-256',await clip.blob.arrayBuffer())
       const sourceHash=await crypto.subtle.digest('SHA-256',await originalFile.blob.arrayBuffer())
+      const header=new Uint8Array(await clip.blob.slice(0,8).arrayBuffer())
+      const containerHeaderOK=clip.blob.type==='video/mp4'
+        ?header[4]===0x66&&header[5]===0x74&&header[6]===0x79&&header[7]===0x70
+        :clip.blob.type==='video/webm'&&header[0]===0x1a
+          &&header[1]===0x45&&header[2]===0xdf&&header[3]===0xa3
       return {
         id:derived.mediaId,bytes:clip.blob.size,mime:clip.blob.type,
         name:clip.metadata.fileName,
@@ -101,18 +106,21 @@ test('P2 #376: real video trim → offline E2EE clip → Garage → recovered-de
         tags:clip.metadata.tags??[],
         gps:clip.metadata.gps??null,
         capture:derived.capture??null,
-        localState:derived.state,
+        localState:derived.state,containerHeaderOK,
         nameLeakedInContract:JSON.stringify(derived.contract)
           .includes('PRIVATE-CLIP-376-SOURCE'),
       }
     },sourceId)
     expect(local).toMatchObject({
-      localState:'queued',mime:'video/webm',
+      localState:'queued',containerHeaderOK:true,
       sourceName:'PRIVATE-CLIP-376-SOURCE.webm',
       sourceCategory:'SOURCE-PRIVATE-376',
       category:null,description:null,tags:[],gps:null,capture:null,
       nameLeakedInContract:false,
     })
+    expect(['video/mp4','video/webm']).toContain(local.mime)
+    expect(local.name).toBe('PRIVATE-CLIP-376-SOURCE-clip-500-2200.'
+      +(local.mime==='video/mp4'?'mp4':'webm'))
     expect(local.bytes).toBeGreaterThan(64)
     expect(local.digest).toMatch(/^[0-9a-f]{64}$/)
     expect(local.originalDigest)
