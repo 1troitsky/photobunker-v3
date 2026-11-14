@@ -156,7 +156,12 @@ jobs:
         run: |
           set -euo pipefail
           php -l tests/integration/p4-placement-generation-pg-race-233.php
-          php tests/integration/p4-placement-generation-pg-race-233.php
+          # Require BOTH explicit evidence markers, not merely a process
+          # status: Laravel CLI once reported an exception with exit 0.
+          php tests/integration/p4-placement-generation-pg-race-233.php | tee "$RUNNER_TEMP/p4-placement-race-233.stdout"
+          grep -Fq 'P4 #233 REAL PG18 CAS 1/2 PASS:' "$RUNNER_TEMP/p4-placement-race-233.stdout"
+          grep -Fq 'P4 #233 REAL PG18 CAS 2/2 PASS:' "$RUNNER_TEMP/p4-placement-race-233.stdout"
+          grep -Fq 'P4 #233 REAL PG18 CAS COMPLETE 2/2:' "$RUNNER_TEMP/p4-placement-race-233.stdout"
       - name: Stop ONLY disposable Garage B, verify genuine outage with live Garage A
         shell: bash
         run: |
