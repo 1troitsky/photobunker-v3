@@ -59,9 +59,11 @@ jobs:
         run: |
           set -euo pipefail
           php -l app/Storage/Replication/CiphertextReplicaCoordinator.php
+          php -l app/Storage/Replication/BoundedReplicaDispatcher.php
           php -l database/migrations/2026_11_14_000234_create_replication_jobs_v1.php
           php -l tests/Feature/StorageReplication/CiphertextReplicaCoordinatorTest.php
-          php vendor/bin/phpunit --filter CiphertextReplicaCoordinatorTest --do-not-cache-result
+          php -l tests/Feature/StorageReplication/BoundedReplicaDispatcherTest.php
+          php vendor/bin/phpunit --filter 'CiphertextReplicaCoordinatorTest|BoundedReplicaDispatcherTest' --do-not-cache-result
           php vendor/bin/phpunit --do-not-cache-result
 
   postgres-replication:
@@ -142,7 +144,7 @@ jobs:
           sed -i 's/name="DB_DATABASE" value=":memory:"/name="DB_DATABASE" value="pb3_replication_234"/' phpunit.replication.pg.xml
           grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.replication.pg.xml
           grep -q 'name="DB_DATABASE" value="pb3_replication_234"' phpunit.replication.pg.xml
-          php vendor/bin/phpunit --configuration phpunit.replication.pg.xml --filter CiphertextReplicaCoordinatorTest --do-not-cache-result
+          php vendor/bin/phpunit --configuration phpunit.replication.pg.xml --filter 'CiphertextReplicaCoordinatorTest|BoundedReplicaDispatcherTest' --do-not-cache-result
       - name: Real two-S3 photo and media transfer, same-size corruption repair and lost ACK
         working-directory: apps/api
         run: |
