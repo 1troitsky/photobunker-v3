@@ -44,7 +44,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: mbstring, dom, xml, openssl, pdo_pgsql, fileinfo
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, fileinfo
           coverage: none
       - name: Enforce security floor and locked dependencies
         run: php scripts/check-runtime.php
@@ -53,6 +53,9 @@ jobs:
         run: |
           composer install --no-interaction --no-progress --prefer-dist
           composer audit --locked --no-interaction
+      - name: Isolated Laravel PHPUnit SQLite integration and privacy negatives
+        working-directory: apps/api
+        run: php vendor/bin/phpunit --filter TelemetryDatabaseSinkTest
       - name: Migrate disposable PG18 and initialize clock
         working-directory: apps/api
         shell: bash
