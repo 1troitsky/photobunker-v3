@@ -137,7 +137,7 @@ final class BoundedReplicaDispatcher
                 // tombstones, expiry, stream bytes, destination GET+SHA
                 // and physical ACK. Never emulate a verified state here.
                 $result = $this->coordinator->process(
-                    (string)$candidate->id,CarbonImmutable::now('UTC')
+                    (string)$candidate->id,$now
                 );
                 switch ($result['state'] ?? null) {
                     case 'verified':
