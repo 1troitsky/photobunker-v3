@@ -246,6 +246,42 @@ final class PlacementReadinessTest extends TestCase
             ->where('asset_id',$f['asset'])->orderBy('id')->get()->toArray());
     }
 
+    public function test_physical_preflight_witness_binds_exact_object_key_status_and_updated_at():void
+    {
+        $f=$this->photoFixture();
+        $result=$this->photo($f);
+        $source=DB::table('storage_locations')
+            ->where('id',$f['source'])->first();
+        $target=DB::table('storage_locations')
+            ->where('id',$f['target'])->first();
+        $this->assertSame(
+            PlacementReadiness::locationFingerprint($source),
+            $result['sourceLocationFingerprint']);
+        $this->assertSame(
+            PlacementReadiness::locationFingerprint($target),
+            $result['targetLocationFingerprint']);
+        $this->assertSame(
+            (string)DB::table('photo_objects')
+                ->where('id',$f['asset'])->value('updated_at'),
+            $result['assetUpdatedAt']);
+
+        $changed=clone $target;
+        $changed->object_key=$target->object_key.'.another-object';
+        $this->assertNotSame(
+            PlacementReadiness::locationFingerprint($target),
+            PlacementReadiness::locationFingerprint($changed));
+        $changed=clone $target;
+        $changed->state='deleting';
+        $this->assertNotSame(
+            PlacementReadiness::locationFingerprint($target),
+            PlacementReadiness::locationFingerprint($changed));
+        $changed=clone $target;
+        $changed->updated_at='2026-11-14 12:00:01';
+        $this->assertNotSame(
+            PlacementReadiness::locationFingerprint($target),
+            PlacementReadiness::locationFingerprint($changed));
+    }
+
     public function test_media_chunk_uses_actual_media_ownership_and_verified_ciphertext(): void
     {
         $f = $this->mediaFixture();
