@@ -5,6 +5,8 @@ import { displayedDock, dockDefinitions } from './ui/fieldwork/dock-preferences'
 import type { DockDefinition } from './ui/fieldwork/dock-preferences'
 import { brand } from './config/brand'
 import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
+import {identityBootstrapReady,identityBootstrapError,pendingPinUnlock} from './features/identity/application/session'
+import PinShell from './features/security/ui/PinShell.vue'
 import {isDockSectionActive,resolveDockRetap} from './ui/fieldwork/dock-retap'
 const route = useRoute()
 const router = useRouter()
@@ -41,7 +43,13 @@ const dock = computed(() => displayedDock.value
 </script>
 
 <template>
-  <div class="shell">
+  <!-- No RouterView, media cache, Header or Dock mounts until Identity bootstrap
+       confirms that local content can be displayed. PIN mode is deliberately
+       a separate root, not a translucent overlay over unlocked content. -->
+  <div v-if="!identityBootstrapReady" class="pin-bootstrap"
+    role="status" aria-label="Проверка локального доступа">PhotoBunker</div>
+  <PinShell v-else-if="pendingPinUnlock || identityBootstrapError"/>
+  <div v-else class="shell">
     <header class="shell-header">
       <span class="brand-mark" aria-hidden="true">{{ brand.mark }}</span>
       <div class="brand-copy">
@@ -144,3 +152,8 @@ const dock = computed(() => displayedDock.value
     </nav>
   </div>
 </template>
+
+<style scoped>
+.pin-bootstrap{min-height:100dvh;display:grid;place-items:center;
+  background:#121212;color:#aeb7af;font-size:14px;font-weight:650}
+</style>
