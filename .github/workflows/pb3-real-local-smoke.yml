@@ -1,0 +1,24 @@
+name: PB3 actual local Docker startup
+on:
+  push:
+    branches:
+      - 'delivery/pb3-real-local-run-*'
+  pull_request:
+    paths:
+      - 'local-runner/**'
+      - '.dockerignore'
+      - '.github/workflows/pb3-real-local-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-stack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ACTUAL PB3 PHP Laravel + PG18 + Garage + Vue HTTP smoke
+        run: bash local-runner/ci-smoke.sh
+      - name: Inspect container states (failure only)
+        if: failure()
+        run: docker compose --project-directory "$PWD" -f local-runner/compose.yml --env-file local-runner/ci-secrets.env ps || true
