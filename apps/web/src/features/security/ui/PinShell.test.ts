@@ -103,6 +103,37 @@ describe('P3 owner-accepted full-screen PIN Shell 1.1',()=>{
     expect(root.querySelectorAll('.pin-indicators .filled')).toHaveLength(0)
   })
 
+  it('clears partial PIN digits when background changes the admission nonce',async()=>{
+    await mount()
+    await typeDigits('482')
+    expect(root.querySelectorAll('.pin-indicators .filled')).toHaveLength(3)
+    pendingPinUnlock.value={
+      ...pendingPinUnlock.value!,sessionNonce:'changed-after-browser-hidden',
+    }
+    await settle()
+    expect(root.querySelectorAll('.pin-indicators .filled')).toHaveLength(0)
+    expect(session.unlockPinnedDevice).not.toHaveBeenCalled()
+    await typeDigits('4826')
+    expect(session.unlockPinnedDevice).toHaveBeenCalledWith('4826')
+  })
+
+  it('does not show an obsolete PIN failure from an older background incarnation',async()=>{
+    let rejectOld!:(reason:Error)=>void
+    session.unlockPinnedDevice.mockImplementationOnce(
+      ()=>new Promise((_resolve,reject)=>{rejectOld=reject}),
+    )
+    await mount()
+    await typeDigits('4826')
+    expect(session.unlockPinnedDevice).toHaveBeenCalledOnce()
+    pendingPinUnlock.value={
+      ...pendingPinUnlock.value!,sessionNonce:'another-incarnation',
+    }
+    rejectOld(new Error('identity.pin_session_changed'))
+    await settle()
+    expect(root.textContent).not.toContain('Проверка недоступна')
+    expect(root.querySelectorAll('.pin-indicators .filled')).toHaveLength(0)
+  })
+
   it('uses the SAME keypad for emergency PIN and never claims delete/wipe',async()=>{
     session.unlockPinnedDevice.mockResolvedValue({status:'emergency-intent'})
     await mount()
