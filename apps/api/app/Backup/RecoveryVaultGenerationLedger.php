@@ -278,6 +278,64 @@ final class RecoveryVaultGenerationLedger
         }, 3);
     }
 
+    /**
+     * Read only already-verified active OPAQUE CIPHERTEXT, checking current
+     * remote bytes AGAIN before returning any of them to a trusted caller.
+     *
+     * StorageAdapter does not currently provide object version/conditional
+     * PUT, so this detects a later overwrite; it is NOT proof that the
+     * manifest was immutable at promotion time. Not mounted to HTTP/restore.
+     * All keys and authorization/entitlement proofs remain separate.
+     */
+    public function readVerifiedActiveCiphertextTrusted(string $accountId): string
+    {
+        $active = $this->currentActive($accountId);
+        if ($active === null) {
+            throw new RuntimeException('vault.no_verified_generation');
+        }
+        $expectedBytes = (int) $active->manifest_bytes;
+        $expectedHash = (string) $active->manifest_sha256;
+        self::assertManifest($expectedHash, $expectedBytes);
+        try {
+            $stream = $this->adapter->readStream((string) $active->object_key);
+            if (!is_resource($stream)) {
+                throw new RuntimeException('vault.manifest_not_verified');
+            }
+            $bytes = '';
+            $hash = hash_init('sha256');
+            try {
+                while (!feof($stream)) {
+                    $part = fread($stream, 65536);
+                    if ($part === false || ($part === '' && !feof($stream))) {
+                        throw new RuntimeException('vault.manifest_not_verified');
+                    }
+                    $size = strlen($part);
+                    if (strlen($bytes) + $size > $expectedBytes) {
+                        throw new RuntimeException('vault.manifest_not_verified');
+                    }
+                    $bytes .= $part;
+                    hash_update($hash, $part);
+                }
+                if (strlen($bytes) !== $expectedBytes
+                    || !hash_equals($expectedHash, hash_final($hash))) {
+                    throw new RuntimeException('vault.manifest_not_verified');
+                }
+            } finally {
+                fclose($stream);
+            }
+        } catch (\Throwable $e) {
+            throw new RuntimeException('vault.manifest_not_verified', 0, $e);
+        }
+        // Fail closed if a concurrent generation switch happened during I/O.
+        $latest = $this->currentActive($accountId);
+        if ($latest === null || $latest->id !== $active->id
+            || $latest->manifest_sha256 !== $expectedHash
+            || (int) $latest->manifest_bytes !== $expectedBytes) {
+            throw new RuntimeException('vault.head_changed_during_read');
+        }
+        return $bytes; // Encrypted bytes only; caller must not log them.
+    }
+
     /** Internal read only. Restore MUST physically re-verify the digest. */
     public function currentActive(string $accountId): ?object
     {
