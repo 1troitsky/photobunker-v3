@@ -14,11 +14,23 @@ permissions:
 jobs:
   real-stack:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - name: Run ACTUAL PB3 PHP Laravel + PG18 + Garage + Vue HTTP smoke
         run: bash local-runner/ci-smoke.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Real Chromium: registration, encrypted photo/media recovery, mixed Assignment
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm exec playwright install chromium
+          corepack pnpm exec playwright test --config tests/playwright.config.ts \
+            tests/e2e/p1-identity-photo.spec.ts \
+            tests/e2e/p1-media.spec.ts \
+            tests/e2e/p2-browser-assignment-mixed-creation-209.spec.ts
       - name: Inspect container states (failure only)
         if: failure()
         run: docker compose --project-directory "$PWD" -f local-runner/compose.yml --env-file local-runner/ci-secrets.env ps || true
