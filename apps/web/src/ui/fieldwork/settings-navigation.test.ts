@@ -13,8 +13,8 @@ describe('Fieldwork settings navigation against PB3 shipped routes', () => {
     ])
   })
 
-  it('routes only implemented settings features, including actual encrypted storage status', () => {
-    expect(availableSettingsRoutes).toEqual(['/contacts','/settings/appearance','/notifications','/settings/storage'])
+  it('routes only implemented settings features, including real Help/FAQ and encrypted storage status', () => {
+    expect(availableSettingsRoutes).toEqual(['/contacts','/settings/appearance','/notifications','/settings/storage','/settings/help'])
     const paths = settingsGroups.flatMap(group => group.entries)
     expect(new Set(paths.map(entry => entry.id)).size).toBe(paths.length)
     expect(paths.filter(entry => entry.to !== null)).toEqual([
@@ -22,8 +22,9 @@ describe('Fieldwork settings navigation against PB3 shipped routes', () => {
       expect.objectContaining({ id: 'appearance', to: '/settings/appearance' }),
       expect.objectContaining({ id: 'notifications', to: '/notifications' }),
       expect.objectContaining({ id: 'data-storage', to: '/settings/storage' }),
+      expect.objectContaining({ id: 'help', to: '/settings/help' }),
     ])
-    expect(paths.filter(entry => entry.to === null)).toHaveLength(5)
+    expect(paths.filter(entry => entry.to === null)).toHaveLength(4)
   })
 
   it('does not misrepresent Messages as a Contacts child or a shipped profile', () => {
