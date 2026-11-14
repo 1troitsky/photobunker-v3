@@ -29,6 +29,7 @@ final class SupportDestinationPolicy
         $host = strtolower($parts['host']);
         if (filter_var($host, FILTER_VALIDATE_IP) !== false
             || preg_match('/\A(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\z/D', $host) !== 1
+            || preg_match('/\.(?:local|localhost|internal|test|invalid|onion)\z/i', $host) === 1
             || (isset($parts['port']) && $parts['port'] !== 443)) {
             return self::reject('unsafe_host');
         }
