@@ -30,7 +30,8 @@ export type PanicPreflightObservation =
 
 const FIELDS = ['phase', 'operationId', 'contractHash', 'recordedAt']
 const SHA256 = /^[a-f0-9]{64}$/
-const MAX_BODY_CHARS = 512
+const MAX_BODY_BYTES = 512
+const MAX_STREAM_CHUNKS = 64
 const FUTURE_SKEW_MS = 120_000
 
 function unconfirmed(reason: Extract<PanicPreflightObservation,
@@ -49,6 +50,49 @@ function validDate(raw: unknown, nowMs: number): raw is string {
 function equalKeys(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     && Object.keys(value).sort().join('|') === FIELDS.slice().sort().join('|')
+}
+
+/**
+ * Bound bytes BEFORE buffering, even when Content-Length is absent or forged.
+ * Only real response streams are accepted: a missing/locked body fails closed.
+ * Fatal UTF-8 + raw JSON round-trip rejects duplicate keys, reordered aliases,
+ * whitespace/malleable serialization and ambiguous parser interpretations.
+ */
+async function readBoundedStatusJson(response: Response): Promise<unknown> {
+  if (!response.body) throw new Error('panic.invalid_response')
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder('utf-8', {fatal: true})
+  let bytes = 0
+  let chunks = 0
+  let raw = ''
+  try {
+    while (true) {
+      const piece = await reader.read()
+      if (piece.done) break
+      bytes += piece.value.byteLength
+      chunks += 1
+      if (bytes > MAX_BODY_BYTES || chunks > MAX_STREAM_CHUNKS) {
+        throw new Error('panic.invalid_response')
+      }
+      raw += decoder.decode(piece.value, {stream: true})
+    }
+    raw += decoder.decode()
+  } catch {
+    // Best-effort stream cancellation; never await an untrusted stream's
+    // cancellation promise and never turn the failure into an ACK.
+    void reader.cancel().catch(() => {})
+    throw new Error('panic.invalid_response')
+  } finally {
+    reader.releaseLock()
+  }
+  if (bytes < 100 || bytes > MAX_BODY_BYTES) {
+    throw new Error('panic.invalid_response')
+  }
+  const parsed: unknown = JSON.parse(raw)
+  if (JSON.stringify(parsed) !== raw) {
+    throw new Error('panic.invalid_response')
+  }
+  return parsed
 }
 
 /**
@@ -117,18 +161,13 @@ export async function observePreparedPanicStatus(
   const mime = response.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase()
   if (mime !== 'application/json') return unconfirmed('invalid_response')
   const size = response.headers.get('content-length')
-  if (size !== null && (/[^0-9]/.test(size) || Number(size) > MAX_BODY_CHARS)) {
+  if (size !== null && (/[^0-9]/.test(size) || Number(size) > MAX_BODY_BYTES)) {
     return unconfirmed('invalid_response')
   }
 
-  let raw: string
   let value: unknown
   try {
-    raw = await response.text()
-    if (raw.length < 100 || raw.length > MAX_BODY_CHARS) {
-      return unconfirmed('invalid_response')
-    }
-    value = JSON.parse(raw) as unknown
+    value = await readBoundedStatusJson(response)
   } catch {
     return unconfirmed('invalid_response')
   }
