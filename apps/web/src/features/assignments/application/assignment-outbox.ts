@@ -1,4 +1,6 @@
 import Dexie, { type Table } from 'dexie'
+import {mixedCreationStage,validMixedCreationIntent} from '../domain/mixed-creation'
+import type {MixedCreationIntent,MixedCreationStage} from '../domain/mixed-creation'
 import { activeSession, requireSession } from '../../identity/application/session'
 import { jsonApi } from '../../identity/infrastructure/api'
 import { importSigner, sign, verify, importSpki, digest, hex, b64, unb64 } from '../../identity/infrastructure/crypto'
@@ -50,6 +52,10 @@ export interface LocalAssignment {
   photoGoal:number|null
   startsAt:number
   endsAt:number|null
+  // Public media flags/goals only; private title/instructions remain AEAD.
+  // Never infer server capture permission from this local intent.
+  mixedCreation?:MixedCreationIntent
+  mixedCreationError?:string
 }
 export type AssignmentListing={
   assignmentId:string
@@ -814,8 +820,11 @@ async function persist(op:AssignmentOperation):Promise<void>{
 
 export async function queueAssignmentCreation(input:{
   title:string;instructions:string;photoGoal:number|null;endsAt?:number|null
+  mixedCreation?:MixedCreationIntent
 }):Promise<string>{
   const s=requireSession()
+  if(input.mixedCreation!==undefined&&!validMixedCreationIntent(input.mixedCreation))
+    throw Error('assignment.invalid_mixed_intent')
   if(input.photoGoal!==null&&(!Number.isInteger(input.photoGoal)
     ||input.photoGoal<1||input.photoGoal>9999))throw Error('assignment.invalid_goal')
   const id=crypto.randomUUID(),operationId=crypto.randomUUID()
@@ -837,6 +846,7 @@ export async function queueAssignmentCreation(input:{
       id,ownerAccountId:s.accountId,createdAt:startsAt,
       state:'queued',privateEnvelope,photoGoal:input.photoGoal,
       startsAt,endsAt,
+      ...(input.mixedCreation?{mixedCreation:input.mixedCreation}:{}),
     })
     await db.operations.put(op)
   })
@@ -2190,13 +2200,123 @@ export async function listAssignmentOperations():Promise<AssignmentOperation[]>{
   return db.operations.where('accountId').equals(s.accountId).sortBy('createdAt')
 }
 
+/** Client-recoverable pending public policy intent; NOT server authority. */
+export async function listPendingMixedCreations():Promise<Array<{
+  assignmentId:string;intent:MixedCreationIntent;stage:MixedCreationStage
+  error?:string
+}>>{
+  const s=requireSession()
+  const [local,ops]=await Promise.all([
+    db.assignments.where('ownerAccountId').equals(s.accountId).toArray(),
+    db.operations.where('accountId').equals(s.accountId).toArray(),
+  ])
+  assertSame(s)
+  return local.filter(x=>x.mixedCreation!==undefined).map(x=>{
+    const policy=ops.filter(op=>op.kind==='policy'
+      &&operationAssignmentId(op)===x.id).sort((a,b)=>b.createdAt-a.createdAt)[0]
+    const stage:MixedCreationStage=x.mixedCreationError||x.state==='conflict'
+      ||policy?.state==='conflict'?'conflict'
+      :x.state==='sent'?'pending-policy':'pending-root'
+    return {assignmentId:x.id,intent:x.mixedCreation!,stage,
+      ...(x.mixedCreationError?{error:x.mixedCreationError}:{})}
+  })
+}
+/** Avoid raw string contains: always parse the account-signed operation body. */
+function operationAssignmentId(op:AssignmentOperation):string|null{
+  try{
+    const body=JSON.parse(op.contract) as {assignmentId?:unknown}
+    return typeof body.assignmentId==='string'?body.assignmentId:null
+  }catch{return null}
+}
+/**
+ * Only a freshly authenticated, independently signature-verified server
+ * root may authorize the second v6 owner policy signature. Never accept
+ * outbox sent/optimistic state alone as a verified mixed-media permission.
+ *
+ * Called from the existing durable outbox loop; safe after app restart and
+ * online recovery. A failed/obsolete signed policy stays for explicit review.
+ */
+async function advanceMixedCreations():Promise<void>{
+  const s=activeSession.value
+  if(!s?.online||!navigator.onLine)return
+  const local=await db.assignments.where('ownerAccountId').equals(s.accountId).toArray()
+  const pending=local.filter(x=>x.mixedCreation)
+  if(!pending.length)return
+  // This fetch validates ROOT, policy signatures, revision and caches the
+  // authenticated policy for queueAssignmentPolicyChange's CAS.
+  const server=await listAllServerAssignments()
+  assertSame(s)
+  const ops=await db.operations.where('accountId').equals(s.accountId).toArray()
+  for(const item of pending){
+    if(activeSession.value!==s)return
+    const intent=item.mixedCreation
+    if(!validMixedCreationIntent(intent)){
+      await db.assignments.update(item.id,{mixedCreationError:'assignment.invalid_mixed_intent'})
+      continue
+    }
+    if(item.mixedCreationError)continue
+    const listing=server.find(row=>row.assignmentId===item.id
+      &&row.ownerAccountId===s.accountId)??null
+    if(listing&&listing.photoGoal!==item.photoGoal){
+      await db.assignments.update(item.id,{mixedCreationError:'assignment.mixed_root_mismatch'})
+      continue
+    }
+    const ownPolicy=ops.filter(op=>op.kind==='policy'
+      &&operationAssignmentId(op)===item.id)
+      .sort((a,b)=>b.createdAt-a.createdAt)[0]
+    const goals=listing?signedPolicyGoals(listing):null
+    const verified=listing&&goals?{
+      policyRevision:listing.policyRevision,
+      allowedMedia:signedAllowedAssignmentMedia(listing),
+      videoGoal:goals.videoGoal,audioGoal:goals.audioGoal,
+    }:null
+    const stage=mixedCreationStage(intent,item.state,ownPolicy?.state??null,verified)
+    if(stage==='accepted'){
+      // Only verified owner-signed server v6 removes the durable intent.
+      await db.assignments.update(item.id,{
+        mixedCreation:undefined,mixedCreationError:undefined,
+      })
+      continue
+    }
+    if(stage==='conflict'){
+      await db.assignments.update(item.id,{
+        mixedCreationError:'assignment.mixed_policy_conflict',
+      })
+      continue
+    }
+    if(stage!=='ready-to-sign'||!listing)continue
+    // Never reset/overwrite manual edits, private text, permissions or
+    // other queued policy revisions. Reuse existing owner-signed v6 CAS.
+    try{
+      await queueAssignmentPolicyChange(item.id,{
+        photoGoal:item.photoGoal,allowedMedia:intent.allowedMedia,
+        videoGoal:intent.videoGoal,audioGoal:intent.audioGoal,
+        requiredCategory:false,descriptionMinLength:0,requiredGps:false,
+      })
+    }catch(error){
+      const reason=error instanceof Error?error.message:'assignment.mixed_policy_failed'
+      if(reason==='assignment.policy_change_pending')continue
+      if(reason==='identity.changed'||!navigator.onLine)return
+      // Transient signing/storage/network errors remain retryable. A stale
+      // owner policy or rejected signature must never silently advance.
+      if(/revision|policy_not_owned|invalid_policy_change|conflict/.test(reason))
+        await db.assignments.update(item.id,{mixedCreationError:reason})
+    }
+  }
+}
+
 let running:Promise<void>|null=null
 let rerun=false
 export function flushAssignmentOutbox():Promise<void>{
   if(running){rerun=true;return running}
   running=(async()=>{
-    do{rerun=false;await flushPass()}
-    while(rerun&&activeSession.value?.online&&navigator.onLine)
+    do{
+      rerun=false
+      await flushPass()
+      // Root ACK => sign only a verified v6 owner policy, then rerun to
+      // send the policy and verify it separately before clearing intent.
+      try{await advanceMixedCreations()}catch{/* retain durable intent for retry */}
+    }while(rerun&&activeSession.value?.online&&navigator.onLine)
   })().finally(()=>{running=null})
   return running
 }
