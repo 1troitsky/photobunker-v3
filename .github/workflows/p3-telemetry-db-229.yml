@@ -101,3 +101,25 @@ jobs:
           wait "$p1"
           wait "$p2"
           php tests/integration/p3-telemetry-postgres.php source-verify
+      - name: Fail-closed opt-in operator CLI and real PostgreSQL replay smoke
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          disabled_output="$(php bin/telemetry-replay-assignments.php --execute 2>&1)"
+          disabled_status=$?
+          set -e
+          test "$disabled_status" -eq 78
+          test "$disabled_output" = 'telemetry.operator_disabled'
+          output="$(
+            PB3_TELEMETRY_REPLAY_ENABLED=1 \
+            PB3_TELEMETRY_POLICY_APPROVED=1 \
+            PB3_TELEMETRY_HMAC_SECRET='PB3 TEST ONLY TELEMETRY HMAC SECRET, NO REAL KEY' \
+            PB3_TELEMETRY_PAGE_SIZE=1 \
+            PB3_TELEMETRY_MAX_PAGES=2 \
+            php bin/telemetry-replay-assignments.php --execute
+          )"
+          test "$output" = 'telemetry.operator pages=1 accepted=0 duplicate=1 complete=yes'
+          echo 'Operator CLI default-OFF and enabled disposable PG18 replay PASS'
+
