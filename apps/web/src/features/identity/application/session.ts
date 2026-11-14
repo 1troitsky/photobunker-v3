@@ -248,11 +248,16 @@ export async function refreshPinSessionFence():Promise<boolean>{
     resetCsrf()
     return true
   }
-  if(activeSession.value!==before)return false
-  const hadPin=isSealedCandidate(before.device)
+  // Online proof may have promoted this SAME device to a new Session
+  // object while the IndexedDB read was pending. Do not skip revocation
+  // merely because Session object identity changed (offline -> online).
+  const current=activeSession.value
+  if(!current||current.accountId!==before.accountId||
+     current.deviceId!==before.deviceId)return false
+  const hadPin=isSealedCandidate(current.device)
   const hasPin=stored!==undefined && isSealedCandidate(stored)
   const oldRev=hadPin
-    ?(before.device as unknown as SealedPinDevice).pinVerifier?.revision:null
+    ?(current.device as unknown as SealedPinDevice).pinVerifier?.revision:null
   const newRev=hasPin
     ?(stored as unknown as SealedPinDevice).pinVerifier?.revision:null
   if(!signedOut && stored &&
