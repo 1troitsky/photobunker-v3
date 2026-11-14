@@ -306,7 +306,7 @@ function failoverLoadFixture():array
  */
 function failoverConcurrentPgMutation(string $action,array $fixture):void
 {
-    failoverAssert(in_array($action,['account-revision','parent-deletion'],true),
+    failoverAssert(in_array($action,['account-revision','parent-deletion','replica-location-aba','parent-state-aba'],true),
         'unsupported_race_mutation');
     $parentOs=(int)getmypid();
     $parentPg=(int)DB::selectOne('SELECT pg_backend_pid() as pid')->pid;
@@ -347,7 +347,7 @@ failoverAssert(in_array($mode,[
 if ($mode==='race-worker') {
     failoverAssert(count($argv)===7,'unexpected_worker_argument_count');
     [$script,$run,$action,$account,$parent,$parentOs,$parentPg]=$argv;
-    failoverAssert(in_array($action,['account-revision','parent-deletion'],true)
+    failoverAssert(in_array($action,['account-revision','parent-deletion','replica-location-aba','parent-state-aba'],true)
         && Str::isUuid($account) && Str::isUuid($parent)
         && ctype_digit($parentOs) && ctype_digit($parentPg),
         'invalid_race_worker_identity');
@@ -363,11 +363,37 @@ if ($mode==='race-worker') {
         $affected=DB::table('identity_accounts')
             ->where('id',$account)->where('status','ready')
             ->increment('revision');
-    } else {
+    } elseif ($action==='parent-deletion') {
         $affected=DB::table('photo_records')
             ->where('id',$parent)->where('account_id',$account)
             ->where('state','active')
             ->update(['state'=>'deleting','updated_at'=>CarbonImmutable::now('UTC')]);
+    } else {
+        // Two independent COMMITTED statements: final semantic state and
+        // updated_at are identical to the first snapshot. Old value-only
+        // fingerprint would accept this ABA; PG xmin must change.
+        $table=$action==='replica-location-aba'
+            ? 'storage_locations' : 'photo_records';
+        $key=$action==='replica-location-aba'
+            ? $f['target'] : $parent;
+        $before=DB::table($table)->where('id',$key)->first();
+        $expected=$action==='replica-location-aba' ? 'verified' : 'active';
+        failoverAssert($before!==null && $before->state===$expected,
+            'aba_worker_invalid_original_state');
+        $first=DB::table($table)->where('id',$key)
+            ->where('state',$expected)->update([
+                'state'=>$action==='replica-location-aba'?'reserved':'deleting',
+            ]);
+        failoverAssert($first===1,'aba_first_commit_failed');
+        $second=DB::table($table)->where('id',$key)
+            ->where('state',$action==='replica-location-aba'?'reserved':'deleting')
+            ->update(['state'=>$expected]);
+        $after=DB::table($table)->where('id',$key)->first();
+        failoverAssert($second===1 && $after!==null
+            && $after->state===$before->state
+            && (string)$after->updated_at===(string)$before->updated_at,
+            'aba_worker_failed_to_restore_semantic_snapshot');
+        $affected=1;
     }
     failoverAssert($affected===1,'expected_one_fixture_row_changed');
     echo "RACE_WORKER_ACK:$action:$pid:$pgpid\n";
@@ -494,6 +520,40 @@ if ($mode==='race') {
     failoverTest($preflight,$f);
     failoverVerifyOriginal($primary,$f);
     echo "P4 #235 REAL PG18 RACE 2/2 PASS: separate OS-PHP+PG18 post-GET delete rejected; only synthetic fixture restored; Garage A intact\n";
+
+    // A->B->A within the actual physical GET interval: no value/timestamp
+    // change, but PostgreSQL tuple xmin must differ after two commits.
+    foreach ([
+        ['replica-location-aba','storage_locations',$f['target']],
+        ['parent-state-aba','photo_records',$f['parent']],
+    ] as $caseIndex=>$case) {
+        [$action,$table,$rowId]=$case;
+        $before=DB::table($table)->where('id',$rowId)->first();
+        $oldTuple=DB::table($table)->where('id',$rowId)
+            ->first([DB::raw('xmin::text as version')])->version;
+        $secondary->onRead=static fn()=>failoverConcurrentPgMutation($action,$f);
+        failoverDeny(fn()=>failoverTest($preflight,$f),
+            'failover.changed_during_read');
+        $after=DB::table($table)->where('id',$rowId)->first();
+        $newTuple=DB::table($table)->where('id',$rowId)
+            ->first([DB::raw('xmin::text as version')])->version;
+        failoverAssert($after!==null
+            && $before->state===$after->state
+            && (string)$before->updated_at===(string)$after->updated_at
+            && (string)$oldTuple!==(string)$newTuple,
+            'aba_committed_tuple_mismatch_not_proven');
+        if ($action==='replica-location-aba') {
+            foreach (['provider','object_key','sha256','bytes'] as $field) {
+                failoverAssert((string)$before->{$field}===(string)$after->{$field},
+                    'replica_aba_changed_canonical_metadata');
+            }
+        }
+        failoverTest($preflight,$f);
+        failoverVerifyOriginal($primary,$f);
+        echo "P4 #235 REAL PG18 ABA ".($caseIndex+1)."/2 PASS: $action committed two semantic-equivalent versions in distinct PHP+PG18 backend; xmin denied stale preflight\n";
+    }
+    echo "P4 #235 REAL PG18 ABA COMPLETE 2/2: same visible values/timestamps, different committed tuple version, NO authorized failover\n";
+
     echo "P4 #235 REAL PG18 RACE COMPLETE 2/2: distinct PHP PIDs and PG18 backend IDs, NO placement switching\n";
     exit(0);
 }
