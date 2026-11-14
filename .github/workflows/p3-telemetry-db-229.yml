@@ -88,3 +88,16 @@ jobs:
           wait "$p1"
           wait "$p2"
           php tests/integration/p3-telemetry-postgres.php verify
+      - name: Real PG18 two-process trusted assignment meter replay race
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/integration/p3-telemetry-postgres.php source-init
+          php tests/integration/p3-telemetry-postgres.php source-worker &
+          p1=$!
+          php tests/integration/p3-telemetry-postgres.php source-worker &
+          p2=$!
+          wait "$p1"
+          wait "$p2"
+          php tests/integration/p3-telemetry-postgres.php source-verify
