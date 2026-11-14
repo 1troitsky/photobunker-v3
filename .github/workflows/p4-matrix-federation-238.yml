@@ -1,0 +1,38 @@
+name: P4 #238 Matrix two-homeserver metadata preflight (NOT E2EE acceptance)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/matrix-federation/**'
+      - '.github/workflows/p4-matrix-federation-238.yml'
+      - 'docs/audits/P4-238-MATRIX-FEDERATION-CHAT-Z-20261114.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-negative-contracts:
+    name: Node 22 read-only contract negatives (NO live servers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run bounded synthetic negative contract tests
+        run: node --test scripts/matrix-federation/verify.test.mjs
+      - name: Assert default invocation cannot fake live acceptance
+        shell: bash
+        run: |
+          set +e
+          output="$(node scripts/matrix-federation/verify.mjs 2>&1)"
+          status="$?"
+          set -e
+          test "$status" -eq 2
+          printf '%s\n' "$output" | grep -F 'NOT TESTED'
+      - name: Explicit evidence boundary
+        run: |
+          echo 'Synthetic contract tests only; NO Synapse, E2EE decrypt, cross-server delivery, token revoke, recovery, or outage ACCEPTANCE.'
