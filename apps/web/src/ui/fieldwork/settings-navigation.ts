@@ -41,7 +41,7 @@ export const settingsGroups: readonly SettingsGroup[] = [
   },
   {
     id: 'information', title: 'Информация', entries: [
-      {id:'help',label:'Помощь, FAQ и документы',description:'О приложении, помощь и правовые документы',to:null},
+      {id:'help',label:'Помощь, FAQ и документы',description:'FAQ офлайн; юридические тексты — черновики',to:'/settings/help'},
     ],
   },
 ]

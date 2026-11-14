@@ -6,6 +6,7 @@ import AccountView from './views/AccountView.vue'
 import AppearanceView from './views/AppearanceView.vue'
 import DataStorageView from './views/DataStorageView.vue'
 import SettingsSearchView from './views/SettingsSearchView.vue'
+import HelpView from './views/HelpView.vue'
 import CaptureView from './views/CaptureView.vue'
 import PhotoBrowserView from './views/PhotoBrowserView.vue'
 import FileViewerView from './views/FileViewerView.vue'
@@ -35,6 +36,8 @@ export const router = createRouter({
       meta: { title: 'Оформление' } },
     { path: '/settings/storage', component: DataStorageView,
       meta: { title: 'Данные и хранилище' } },
+    { path: '/settings/help', component: HelpView,
+      meta: { title: 'Помощь и информация' } },
     { path: '/settings/search', component: SettingsSearchView,
       meta: { title: 'Поиск по настройкам' } },
     // Encrypted local inbox; does not imply server delivery or push.
