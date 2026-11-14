@@ -231,6 +231,11 @@ final class TemporaryRestrictionLedger
             // has not been created yet. Two first writers cannot both insert.
             $account = DB::table('identity_accounts')->where('id', $accountId)
                 ->lockForUpdate()->first();
+            // Step-up/MFA may expire WHILE waiting for the row lock. Check at
+            // the actual current millisecond again inside the transaction.
+            AdminPolicy::requireAllowed($trustedActor,
+                $targetType === 'account' ? 'accounts.suspend' : 'devices.revoke',
+                CarbonImmutable::now('UTC')->getTimestampMs());
             self::require($account !== null && $account->status === 'ready', 'target_unavailable');
             if ($targetType === 'device') {
                 $device = DB::table('identity_devices')
@@ -335,16 +340,24 @@ final class TemporaryRestrictionLedger
             && preg_match(self::UUID, $deviceId) === 1, 'invalid');
         $at = ($at ?? CarbonImmutable::now('UTC'))->utc();
 
-        $account = DB::table('identity_accounts')->where('id', $accountId)->first();
-        self::require($account !== null && $account->status === 'ready',
-            'target_unavailable');
-        $device = DB::table('identity_devices')->where('id', $deviceId)->first();
-        self::require($device !== null && $device->account_id === $accountId
-            && $device->revoked_at === null, 'target_unavailable');
+        // Shared account lock prevents a concurrent admin writer from
+        // committing a restriction between the two policy reads. When this
+        // runs inside an outer protected operation transaction, that outer
+        // transaction keeps the lock until its own commit.
+        DB::transaction(static function () use ($accountId, $deviceId, $at): void {
+            $account = DB::table('identity_accounts')
+                ->where('id', $accountId)->sharedLock()->first();
+            self::require($account !== null && $account->status === 'ready',
+                'target_unavailable');
+            $device = DB::table('identity_devices')
+                ->where('id', $deviceId)->sharedLock()->first();
+            self::require($device !== null && $device->account_id === $accountId
+                && $device->revoked_at === null, 'target_unavailable');
 
-        $accountEvent = self::last($accountId, 'account', $accountId);
-        $deviceEvent = self::last($accountId, 'device', $deviceId);
-        self::require(!self::active($accountEvent, $at)
-            && !self::active($deviceEvent, $at), 'access_denied');
+            $accountEvent = self::last($accountId, 'account', $accountId);
+            $deviceEvent = self::last($accountId, 'device', $deviceId);
+            self::require(!self::active($accountEvent, $at)
+                && !self::active($deviceEvent, $at), 'access_denied');
+        }, 3);
     }
 }
