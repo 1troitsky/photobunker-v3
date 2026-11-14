@@ -6,12 +6,19 @@ import {
   listConfirmedContacts, saveConfirmedContact, removeConfirmedContact,
 } from '../features/people/application/contact-book'
 import type { ConfirmedContact } from '../features/people/application/contact-book'
+import {
+  listLocallyBlockedPeers, locallyBlockPeer, locallyUnblockPeer,
+  excludeLocallyBlockedContacts,
+} from '../features/people/application/contact-blocklist'
+import type { LocallyBlockedPeer } from '../features/people/application/contact-blocklist'
 import { listLocalTeams, queueTeam, refreshTeams } from '../features/people/application/team-book'
 import type { TeamView } from '../features/people/application/team-book'
 import TeamMembershipPanel from './TeamMembershipPanel.vue'
 
 const activeTab=ref<'contacts'|'teams'>('contacts')
 const contacts=ref<ConfirmedContact[]>([])
+const blocked=ref<LocallyBlockedPeer[]>([])
+const showBlacklist=ref(false)
 const teams=ref<TeamView[]>([])
 const teamForm=ref(false)
 const teamName=ref('')
@@ -92,15 +99,26 @@ function identity(){
 function sessionMatches(expected:string,token:number):boolean{
   return token===run&&identity()===expected
 }
+// Every mutation must re-read the encrypted blocklist before publishing a contact list.
+// An unreadable/corrupted blocklist is fail-closed: no hidden peer is flashed.
+async function refreshVisibleContacts():Promise<void>{
+  const owner=identity(),token=run
+  contacts.value=[]
+  const hidden=await listLocallyBlockedPeers()
+  if(!sessionMatches(owner,token))return
+  blocked.value=hidden
+  const rows=await listConfirmedContacts()
+  if(sessionMatches(owner,token))
+    contacts.value=excludeLocallyBlockedContacts(rows,hidden)
+}
 const uuidPattern=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
 async function reload():Promise<void>{
   const token=++run,owner=identity()
-  contacts.value=[];selected.value=null
+  contacts.value=[];blocked.value=[];selected.value=null
   error.value='';loading.value=true
   if(!owner){loading.value=false;return}
   try{
-    const rows=await listConfirmedContacts()
-    if(sessionMatches(owner,token))contacts.value=rows
+    await refreshVisibleContacts()
   }catch(e){
     if(sessionMatches(owner,token))
       error.value=e instanceof Error?e.message:'contacts.unavailable'
@@ -127,6 +145,8 @@ function lookup():void{
   void operate(async()=>{
     const id=query.value.trim().toLowerCase()
     if(!uuidPattern.test(id))throw Error('contacts.invalid_account_id')
+    if(blocked.value.some(x=>x.peerAccountId===id))
+      throw Error('contacts.peer_locally_blocked')
     if(!activeSession.value?.online)await reauthenticate()
     const {directory,confirmed}=await inspectPeer(id)
     candidate.value={
@@ -148,9 +168,10 @@ function add():void{
   void operate(async()=>{
     const person=candidate.value
     if(!person?.confirmed)throw Error('contacts.fingerprint_required')
+    if(blocked.value.some(x=>x.peerAccountId===person.id))
+      throw Error('contacts.peer_locally_blocked')
     await saveConfirmedContact(person.id,person.fingerprint,alias.value)
-    const rows=await listConfirmedContacts()
-    contacts.value=rows
+    await refreshVisibleContacts()
     resetSearch();query.value=''
     message.value='Контакт сохранён в зашифрованной локальной книге.'
   })
@@ -164,7 +185,7 @@ function saveAlias():void{
     const item=contacts.value.find(x=>x.peerAccountId===selected.value)
     if(!item)throw Error('contacts.not_found')
     await saveConfirmedContact(item.peerAccountId,item.safetyFingerprint,editAlias.value)
-    contacts.value=await listConfirmedContacts()
+    await refreshVisibleContacts()
     message.value='Локальное имя обновлено.'
   })
 }
@@ -175,9 +196,38 @@ function remove():void{
   ))return
   void operate(async()=>{
     await removeConfirmedContact(id)
-    contacts.value=await listConfirmedContacts()
+    await refreshVisibleContacts()
     selected.value=null
     message.value='Контакт удалён из локальной книги. Старые разрешения не изменены.'
+  })
+}
+function blockContact():void{
+  const id=selected.value
+  if(!id||busy.value||!contacts.value.some(x=>x.peerAccountId===id)
+    ||!window.confirm(
+      'Скрыть контакт на этом устройстве и исключить из списка новых приглашений? '+
+      'Это НЕ отзывает ранее выданные серверные разрешения, приглашения или ключи.'
+    ))return
+  void operate(async()=>{
+    const owner=identity()
+    await locallyBlockPeer(id)
+    if(identity()!==owner)return
+    await reload()
+    if(identity()===owner)
+      message.value='Контакт скрыт локально. Старые серверные разрешения НЕ отозваны.'
+  })
+}
+function unblockContact(id:string):void{
+  if(busy.value||!blocked.value.some(x=>x.peerAccountId===id)
+    ||!window.confirm('Убрать локальную блокировку? Это не выдаст новых прав или ключей.'))
+    return
+  void operate(async()=>{
+    const owner=identity()
+    await locallyUnblockPeer(id)
+    if(identity()!==owner)return
+    await reload()
+    if(identity()===owner)
+      message.value='Локальная блокировка снята. Никакие серверные права не изменены.'
   })
 }
 function matches(person:ConfirmedContact):boolean{
@@ -192,6 +242,7 @@ watch(activeSession,(_now,previous)=>{
   ].join('|'):''
   if(identity()!==prev){
     resetSearch();query.value='';selected.value=null;contacts.value=[]
+    blocked.value=[];showBlacklist.value=false
     teams.value=[];teamForm.value=false;teamName.value='';teamDescription.value=''
     ++teamRun
     void reload();void reloadTeams()
@@ -202,14 +253,31 @@ onMounted(()=>{
   window.addEventListener('online',handleTeamOnline)
 })
 onUnmounted(()=>{
-  ++run;++teamRun;candidate.value=null;contacts.value=[];teams.value=[]
+  ++run;++teamRun;candidate.value=null;contacts.value=[];blocked.value=[]
+  showBlacklist.value=false;teams.value=[]
   window.removeEventListener('online',handleTeamOnline)
 })
 </script>
 
 <template>
   <section class="foundation-content contacts-page" data-testid="contacts-teams">
-    <div class="contacts-heading"><h1>Контакты и Команды</h1></div>
+    <div class="contacts-heading">
+      <h1>Контакты и Команды</h1>
+      <button type="button" data-testid="contacts-blacklist-toggle"
+        :aria-expanded="showBlacklist" aria-controls="contacts-local-blacklist"
+        @click="showBlacklist=!showBlacklist">Blacklist</button>
+    </div>
+    <div v-if="showBlacklist&&activeSession" id="contacts-local-blacklist"
+      class="foundation-card" data-testid="contacts-local-blacklist">
+      <h2>Заблокированные локально ({{ blocked.length }})</h2>
+      <p class="muted">Это только локальный список скрытия. Ранее выданные серверные разрешения, приглашения и E2EE-ключи НЕ отозваны.</p>
+      <p v-if="!blocked.length" class="muted">Локальных блокировок нет.</p>
+      <div v-for="person in blocked" :key="person.peerAccountId"
+        class="contacts-list-row" :data-testid="'blocked-row-'+person.peerAccountId">
+        <code>{{ person.peerAccountId }}</code>
+        <button type="button" :disabled="busy" @click="unblockContact(person.peerAccountId)">Разблокировать локально</button>
+      </div>
+    </div>
     <nav class="contacts-tabs" aria-label="Контакты и команды">
       <button type="button" :class="{selected:activeTab==='teams'}"
         :aria-current="activeTab==='teams'?'page':undefined"
@@ -333,10 +401,12 @@ onUnmounted(()=>{
         <div class="action-row">
           <button type="button" :disabled="busy" @click="saveAlias">Сохранить имя</button>
           <button type="button" :disabled="busy" @click="remove">Удалить контакт</button>
+          <button type="button" :disabled="busy" data-testid="contacts-local-block"
+            @click="blockContact">Скрыть локально (Blacklist)</button>
           <button type="button" @click="selected=null">Закрыть</button>
         </div>
       </div>
-      <p class="muted">Контакты и локальные имена зашифрованы на устройстве. Удаление контакта не отзывает ранее выданные E2EE-ключи или серверные разрешения. Межустройственная синхронизация списка пока не реализована.</p>
+      <p class="muted">Контакты, локальные имена и Blacklist зашифрованы на устройстве. Удаление и локальная блокировка не отзывают E2EE-ключи или серверные разрешения. Межустройственная синхронизация пока не реализована.</p>
     </template>
     <p v-if="message" role="status" class="status-text">{{ message }}</p>
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>
