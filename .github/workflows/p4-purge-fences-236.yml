@@ -1,0 +1,142 @@
+name: P4 #236 immutable live-parent purge fence (NOT signed purge or S3 deletion)
+on:
+  push:
+    branches: ['feat/p4-236-durable-purge-fence-*']
+  pull_request:
+    paths:
+      - 'apps/api/app/Storage/Purge/LivePurgeFence.php'
+      - 'apps/api/database/migrations/2026_11_14_000236_create_storage_purge_fences_v1.php'
+      - 'apps/api/tests/Feature/StoragePurge/LivePurgeFenceTest.php'
+      - 'apps/api/tests/integration/p4-purge-fence-pg-race-236.php'
+      - '.github/workflows/p4-purge-fences-236.yml'
+      - 'docs/audits/P4-PURGE-FENCE-236-20261114.md'
+permissions:
+  contents: read
+jobs:
+  php84:
+    name: PHP 8.4 full Laravel + immutable-fence tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Enforce runtime, unsuppressed audit and syntax
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+          php -l apps/api/app/Storage/Purge/LivePurgeFence.php
+          php -l apps/api/database/migrations/2026_11_14_000236_create_storage_purge_fences_v1.php
+          php -l apps/api/tests/Feature/StoragePurge/LivePurgeFenceTest.php
+          php -l apps/api/tests/integration/p4-purge-fence-pg-race-236.php
+      - name: Run focused fence contract then full Laravel PHPUnit
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php vendor/bin/phpunit --filter LivePurgeFenceTest --do-not-cache-result
+          php vendor/bin/phpunit --do-not-cache-result
+  php85:
+    name: PHP 8.5 full Laravel + immutable-fence tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      APP_ENV: testing
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Enforce runtime, unsuppressed audit and syntax
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer validate --strict --no-check-publish --working-dir=apps/api
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+          php -l apps/api/app/Storage/Purge/LivePurgeFence.php
+          php -l apps/api/database/migrations/2026_11_14_000236_create_storage_purge_fences_v1.php
+          php -l apps/api/tests/Feature/StoragePurge/LivePurgeFenceTest.php
+          php -l apps/api/tests/integration/p4-purge-fence-pg-race-236.php
+      - name: Run focused fence contract then full Laravel PHPUnit
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php vendor/bin/phpunit --filter LivePurgeFenceTest --do-not-cache-result
+          php vendor/bin/phpunit --do-not-cache-result
+  postgres18:
+    name: Real PG18 trigger + two independent OS PHP concurrency
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_purge_236
+          POSTGRES_USER: pb3_purge
+          POSTGRES_PASSWORD: pb3_purge_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb3_purge -d pb3_purge_236"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      GITHUB_ACTIONS: 'true'
+      PB3_PURGE_FENCE_REAL_PG_CI: '1'
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_purge_236
+      DB_USERNAME: pb3_purge
+      DB_PASSWORD: pb3_purge_disposable
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          coverage: none
+          tools: composer:v2
+      - name: Strict runtime, unsuppressed Composer audit, install
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          composer audit --locked --no-interaction --working-dir=apps/api
+          composer install --no-interaction --no-progress --prefer-dist --working-dir=apps/api
+      - name: Migrate only disposable PG18 and run real SQL feature tests
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php artisan migrate --force
+          cp phpunit.xml phpunit.purge.pg.xml
+          sed -i 's/name="DB_CONNECTION" value="sqlite"/name="DB_CONNECTION" value="pgsql"/' phpunit.purge.pg.xml
+          sed -i 's/name="DB_DATABASE" value=":memory:"/name="DB_DATABASE" value="pb3_purge_236"/' phpunit.purge.pg.xml
+          grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.purge.pg.xml
+          php vendor/bin/phpunit --configuration phpunit.purge.pg.xml --filter LivePurgeFenceTest --do-not-cache-result
+      - name: Assert true independent PHP processes, PG backends and immutable fence
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p4-purge-fence-pg-race-236.php
+          php tests/integration/p4-purge-fence-pg-race-236.php verify | tee "$RUNNER_TEMP/p4-236-pg-races.txt"
+          for marker in '1/4 PASS:' '2/4 PASS:' '3/4 PASS:' '4/4 PASS:' 'COMPLETE 4/4:'; do
+            grep -Fq "P4 #236 REAL PG18 $marker" "$RUNNER_TEMP/p4-236-pg-races.txt"
+          done
