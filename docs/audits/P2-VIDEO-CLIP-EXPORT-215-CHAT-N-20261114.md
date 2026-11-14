@@ -34,3 +34,19 @@ The dedicated workflow runs focused Vitest, strict TypeScript and production bui
 NOT TESTED / BLOCKED: real source playback and encoding in Chromium/Firefox/native Safari/iOS/Android; frame/audio synchronization, actual codec bytes decodable and timing tolerance; signed E2EE MediaFile enqueue/sync/reload and verified remote readback; interrupted export; TTL/ACL and private metadata; integration into foreign FileViewerView code; explicit MP4-vs-EDL product decision. No supported-browser or final acceptance claims are made.
 
 Issue #215 stays PARTIAL / NOT MERGE READY.
+
+
+## Stage 2 — native Chromium media → Local-First E2EE regression
+
+Own exclusive new paths:
+- tests/e2e/fixtures/p2-video-clip-215.base64 — 1,724 decoded bytes of synthetic, locally generated 3-second H.264 MP4 red 32x32 video, no sensitive content or external dependencies
+- tests/e2e/p2-browser-video-clip-215.spec.ts — native Chromium media decode + production video clip export; verify that the produced clip decodes as real video, container MIME/extension is truthful and the original video remains unchanged; with browser offline, enqueue a new E2EE MediaFile, read/decrypt local result, ensure signed contract excludes private name and no OS download occurred
+- No source UI, media-outbox, CaptureView, FileViewerView, router, lockfile or foreign agent files changed; this E2E is included by the existing p2-browser-* Playwright matcher.
+
+CI chronology:
+- Initial unit run #43562976698 failed 4/8: one expected safe filename used wrong underscore count; jsdom legacy Blob lacked arrayBuffer, not a native production bug. Fixed with bounded FileReader fallback; corrected filename test.
+- Next run #43563054570: 8/8 Vitest passed but strict TS failed due one parameter-property with erasableSyntaxOnly, tuple spread and unused constant; all three corrected in own files.
+- Source-only head e24b4afbe1a6fe77065d1506b640ee88d3ca18ba: dedicated #43563112350 8/8 Vitest, TypeScript/build PASS; Foundation #43563112298 PASS; Security #43563112310 PASS; UX #43563112267 PASS; real Garage+Chromium #43563112282 was still running.
+- After adding native Chromium E2E, pre-audit head c7f73c933e969399c9ea4f04b3f15ce6a2700d33: dedicated #43563530562 PASS; Foundation #43563530558 PASS; Security #43563530583 PASS; UX #43563530566 PASS; real PG18/Garage/Chromium #43563530581 IN PROGRESS during last inspection. Do NOT count that run or the browser native test PASS until the exact job concludes.
+
+The new browser test is the first attempt at proving actual native encoder and encrypted outbox integration; all failure evidence must be preserved. It does NOT replace physical Safari/iOS/Android, audio retention, measured frame-accurate bounds, persistent signed cloud MediaFile readback, production authorization / ACL / TTL, or actual user-facing editor UX acceptance. Until those gates pass, #215 remains PARTIAL/NOT MERGE READY.
