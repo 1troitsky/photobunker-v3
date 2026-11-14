@@ -8,7 +8,7 @@ import {expect,test} from '@playwright/test'
  * invokes the existing unreleased migration helper on a disposable local
  * fake account only, with no server registration, no user data or wipe.
  */
-test('P3-220: second-tab PIN seal locks old tab and reload needs real PIN',async({browser})=>{
+test('P3-220: live tab blocks PIN seal; cooperative closure allows guarded PIN + reload',async({browser})=>{
   test.setTimeout(180_000)
   const ctx=await browser.newContext()
   const first=await ctx.newPage()
@@ -41,24 +41,66 @@ test('P3-220: second-tab PIN seal locks old tab and reload needs real PIN',async
     await second.goto('/settings')
     await expect(second.getByText('Локальный режим; сервер недоступен'))
       .toBeVisible()
-    await second.evaluate(async(expectedId)=>{
+    const blocked=await second.evaluate(async(expectedId)=>{
       const session=await import('/src/features/identity/application/session.ts')
       const {migrateLegacyLocalDeviceToPin}=
         await import('/src/features/security/application/pin-device-migration.ts')
       const s=session.activeSession.value
       if(!s||s.accountId!==expectedId)throw Error('test.other_tab_session_missing')
-      // A second cooperating tab closes its OWN memory, not the first tab's
-      // activeSession. Real migration is still unreleased to users.
       const verifiedPackage=s.pkg
       const scope={accountId:s.accountId,deviceId:s.deviceId}
+      // Tab B releases its own SHARED lock, but tab A stays active.
       session.activeSession.value=null
+      try{
+        await migrateLegacyLocalDeviceToPin({
+          scope,verifiedPackage,appPin:'4826',emergencyPin:'6284',
+        })
+        return 'UNSAFE_MIGRATION_SUCCEEDED'
+      }catch(error){
+        return error instanceof Error?error.message:'test.unknown_migration_error'
+      }
+    },accountId)
+    expect(blocked).toBe('pin.other_tab_active')
+    await expect(first.getByText('Локальный режим; сервер недоступен'))
+      .toBeVisible()
+
+    // Cooperating tab A explicitly closes its volatile local Session.
+    // No server signout, local wipe or data deletion occurs.
+    await first.evaluate(async()=>{
+      const session=await import('/src/features/identity/application/session.ts')
+      if(!session.activeSession.value)throw Error('test.first_tab_already_closed')
+      session.activeSession.value=null
+    })
+
+    await second.evaluate(async(expectedId)=>{
+      const session=await import('/src/features/identity/application/session.ts')
+      const {migrateLegacyLocalDeviceToPin}=
+        await import('/src/features/security/application/pin-device-migration.ts')
+      const saved=await session.resumeExistingDevice()
+      if(!saved||saved.accountId!==expectedId)
+        throw Error('test.second_tab_resume_missing')
+      const verifiedPackage=saved.pkg
+      const scope={accountId:saved.accountId,deviceId:saved.deviceId}
+      session.activeSession.value=null
+      const lockName='pb3:identity:pin-migration:v1:'+
+        scope.accountId+':'+scope.deviceId
+      let free=false
+      for(let i=0;i<100;i++){
+        const query=await navigator.locks.query()
+        if(!query.held?.some(lock=>lock.name===lockName)){
+          free=true;break
+        }
+        await new Promise(resolve=>setTimeout(resolve,10))
+      }
+      if(!free)throw Error('test.device_lease_not_released')
       await migrateLegacyLocalDeviceToPin({
         scope,verifiedPackage,appPin:'4826',emergencyPin:'6284',
       })
     },accountId)
 
-    // Exactly the BroadcastChannel/IndexedDB cross-tab boundary under test:
-    // tab A must never keep displaying its old decrypted account shell.
+    // A reload starts without an unlocked Session and must request PIN.
+    await first.reload()
+    // Older/unpatched windows and copied PackageV2 are OUTSIDE this test.
     await expect(first.getByRole('heading',{name:'Введите PIN'}))
       .toBeVisible({timeout:25_000})
     await expect(first.locator('.shell-header')).toHaveCount(0)
