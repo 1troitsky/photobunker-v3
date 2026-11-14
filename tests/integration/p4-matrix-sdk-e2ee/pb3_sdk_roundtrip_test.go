@@ -72,16 +72,16 @@ func TestPB3RealFederatedJSDecryptRoundTrip(t *testing.T) {
             waiterB.Waitf(t, 12*time.Second, "Bob SDK failed to decrypt Alice's federated Megolm event")
             // Both independent servers must expose encrypted bytes, never
             // the decrypted application canary, even to authorised accounts.
-            pb3VerifyWireEncrypted(t, tc.Alice, roomID, aliceEventID, aliceCanary)
-            pb3VerifyWireEncrypted(t, tc.Bob, roomID, aliceEventID, aliceCanary)
+            pb3VerifyWireEncrypted(t, tc.Alice.CSAPI, roomID, aliceEventID, aliceCanary)
+            pb3VerifyWireEncrypted(t, tc.Bob.CSAPI, roomID, aliceEventID, aliceCanary)
 
             const bobCanary = "PB3_DISPOSABLE_SDK_CRYPTO_BOB_TO_ALICE_388"
             waiterA := alice.WaitUntilEventInRoom(
                 t, roomID, api.CheckEventHasBody(bobCanary))
             bobEventID := bob.MustSendMessage(t, roomID, bobCanary)
             waiterA.Waitf(t, 12*time.Second, "Alice SDK failed to decrypt Bob's federated Megolm reply")
-            pb3VerifyWireEncrypted(t, tc.Alice, roomID, bobEventID, bobCanary)
-            pb3VerifyWireEncrypted(t, tc.Bob, roomID, bobEventID, bobCanary)
+            pb3VerifyWireEncrypted(t, tc.Alice.CSAPI, roomID, bobEventID, bobCanary)
+            pb3VerifyWireEncrypted(t, tc.Bob.CSAPI, roomID, bobEventID, bobCanary)
 
             // Charlie is a genuinely authenticated user at Bob's homeserver
             // but is not a room member. A 401 would only prove a bad token.
