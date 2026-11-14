@@ -16,7 +16,7 @@ import {
 } from '../infrastructure/storage'
 import {migrateLegacyLocalDeviceToPin} from '../../security/application/pin-device-migration'
 import {sealPinProtectedPackage} from '../../security/application/pin-sealed-package'
-import {buildPinVerifierSnapshot} from '../../security/application/pin-verifier'
+import {buildPinVerifierSnapshot,prepareVerifiedPinRelockPolicy} from '../../security/application/pin-verifier'
 import {TestPinLockManager} from '../../security/application/pin-test-locks'
 
 const mocks=vi.hoisted(()=>({jsonApi:vi.fn(),resetCsrf:vi.fn()}))
@@ -526,6 +526,39 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     fakeWindow.dispatchEvent(new Event('pagehide'))
     expect(activeSession.value).toBeNull()
     expect(pendingPinUnlock.value).not.toBeNull()
-  },120_000)
+
+    // Simulate an HMAC-authenticated future PIN preference: this is NOT
+    // a user settings write path. Only the authenticated verified row can
+    // supply the duration to an app-PIN-unlocked session.
+    const stored=await getDevice(f.scope.accountId,f.scope.deviceId) as
+      typeof f.device & {
+        pinHmacKey:CryptoKey,
+        pinVerifier:import('../../security/application/pin-verifier').StoredPinState,
+      }
+    const configured=await prepareVerifiedPinRelockPolicy(
+      f.scope,stored.pinHmacKey,stored.pinVerifier,120_000,
+    )
+    await saveDevice({...stored,pinVerifier:configured})
+    expect(await unlockPinnedDevice('4826')).toEqual({status:'app-unlocked'})
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+
+    vi.useFakeTimers({toFake:['Date','setTimeout','clearTimeout']})
+    const freshStart=Date.now()
+    vi.setSystemTime(freshStart)
+    fakeWindow.dispatchEvent(new Event('blur'))
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+    vi.advanceTimersByTime(119_000)
+    fakeWindow.dispatchEvent(new Event('focus'))
+    // A short background stay must cancel the queued lock; foreground
+    // timing is verified again even if the browser throttled all timers.
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+    vi.advanceTimersByTime(3_000)
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+    fakeWindow.dispatchEvent(new Event('blur'))
+    vi.advanceTimersByTime(120_000)
+    expect(activeSession.value).toBeNull()
+    expect(pendingPinUnlock.value?.deviceId).toBe(f.scope.deviceId)
+    vi.useRealTimers()
+  },145_000)
 
 })
