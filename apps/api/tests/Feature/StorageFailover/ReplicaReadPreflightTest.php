@@ -231,7 +231,9 @@ final class ReplicaReadPreflightTest extends TestCase
         DB::table('photo_records')->where('id',$f['parent'])
             ->update(['expires_at'=>$this->clock()->addDay()->getTimestampMs()]);
         DB::table('photo_tombstones')->insert([
-            'photo_id'=>$f['parent'],'created_at'=>$this->clock(),
+            'photo_id'=>$f['parent'],'account_id'=>$f['account'],
+            'operation_id'=>(string)Str::uuid(),'reason'=>'user',
+            'created_at'=>$this->clock(),
         ]);
         $this->deny(fn()=>$this->inspect($f),'failover.deleted');
         DB::table('photo_tombstones')->where('photo_id',$f['parent'])->delete();
@@ -281,7 +283,10 @@ final class ReplicaReadPreflightTest extends TestCase
         $g=$this->fixture('media_chunk');
         $this->replica->onRead=static function()use($g):void {
             DB::table('media_tombstones_v1')->insert([
-                'media_id'=>$g['parent'],'created_at'=>CarbonImmutable::parse('2026-11-14T12:00:00Z'),
+                'media_id'=>$g['parent'],'account_id'=>$g['account'],
+                'operation_id'=>(string)Str::uuid(),'object_keys'=>'[]',
+                'next_sweep_at'=>CarbonImmutable::parse('2026-11-14T12:00:00Z'),
+                'created_at'=>CarbonImmutable::parse('2026-11-14T12:00:00Z'),
             ]);
         };
         $this->deny(fn()=>$this->inspect($g),'failover.deleted');
