@@ -29,3 +29,31 @@
 
 ## Next safe step
 Keep #229 `in-progress`, PR Draft, CLAIM active. On owner continuation: reread #302 and competing PR/claims and then either isolate server-authenticated event-source ingestion with source-level tests (without public HTTP/forged events), or take an independent free Issue if #227/admin dependencies prevent safe progress. **Never merge/deploy/modify main without owner permission.**
+
+
+---
+
+## 2026-11-14 additional #229 acceptance — verified assignment creation ledger → real durable telemetry
+
+**Source/product SHA** `8d87f3010076821c7b1362dc51c2d9514fa599f9` (initial new source SHA `b6aec0d661d45d9304aeab4a070fdd8a04cc7788`).
+**Ownership:** SAME CHAT-I / Issue #229 exclusive CLAIM with [addendum #6869457397](https://github.com/1troitsky/photobunker-v3/issues/229#issuecomment-6869457397), same branch/Draft [#317](https://github.com/1troitsky/photobunker-v3/pull/317) stacked on READ-ONLY security #298. The previous six owned paths remain; this step adds **exactly two new** source/test paths and updates **two own** existing integration/CI paths, plus this own QA document. No `web.php`, `AssignmentV1Controller`, `TelemetryCollector`, Events, Notification #198 or shared config/progress modified.
+
+### Real source and privacy boundary
+- New `apps/api/app/Telemetry/AssignmentCreationReplay.php` reads existing `assignment_creation_meter_v1` — a server-created, append-only account-locked quota ledger committed in the **same authenticated signed create transaction** as assignments, retained across assignment deletion. This is an actual authoritative source table, not sample JSON or UI metrics.
+- Explicit opt-in **internal** `replayPage(serverNowMs, limit=1..200, after=private keyset)`: source account ID, server created-at, operationId and assignmentId are used transiently to construct only allowlisted `assignment.created` events, which existing `TelemetryCollector` HMACs before writing via the durable DB sink. No raw IDs or timestamps are persisted in telemetry.
+- Bounded UTC 7-day replay window, 5-minute future tolerance, order-stable keyset pagination, same-event dedupe across restarts and simultaneous workers; malformed cursor and unexpected Collector rejection/conflict fail closed. Cursor includes sensitive source identifiers and **must remain backend-internal, never logged/exposed/exported**.
+- Exact timestamp changes within the SAME UTC day produce `Duplicate` by deliberate coarse calendar fingerprint minimization; a cross-day alteration changes the fingerprint and produces a `Conflict`. This is not a tamper-evident ledger: full source-integrity verification remains out of scope.
+- No background registration, automatic scheduler, web endpoint, telemetry collector middleware, production admin dashboard, consumption opt-in or production analytics activated.
+
+### Exact-code CI evidence (both supported runtimes)
+[Final source HEAD isolated PostgreSQL job 43541780044](https://github.com/1troitsky/photobunker-v3/actions/runs/43541780044) — **2/2 PHP jobs PASS**:
+- PHP **8.4.27**: full PHPUnit **252/252 PASS, 3731 assertions**; isolated earlier DatabaseSink 3/3/37 PASS; Composer locked Audit **0 advisories**; migrations PASS.
+- PHP **8.5.12**: full PHPUnit **252/252 PASS, 3731 assertions**; isolated earlier DatabaseSink 3/3/37 PASS; Composer locked Audit **0 advisories**; migrations PASS.
+- Each ran BOTH true two-independent-PHP-process races over PostgreSQL 18: existing HMAC receipt insertion and NEW source-reconciliation on the actual `assignment_creation_meter_v1` row, with FK to `identity_accounts`; both **PASS**, resulting in exactly one aggregate each across UTC day/week/month and no extra actor tokens.
+- [Security floor run 43541780109](https://github.com/1troitsky/photobunker-v3/actions/runs/43541780109): **PASS**. [UX lane run 43541780129](https://github.com/1troitsky/photobunker-v3/actions/runs/43541780129): **PASS**. Total **3/3 workflows, 4/4 jobs PASS** on source HEAD `8d87f301...`.
+- Initial source SHA `b6aec0d...` [CI 43541668366](https://github.com/1troitsky/photobunker-v3/actions/runs/43541668366) **FAIL** a NEW negative test: it incorrectly expected a conflict when the source timestamp changed by one second in the same calendar day. Coarse `TelemetryRecord` intentionally omits exact timestamps, so its fingerprint is unchanged. Updated only our own negative test at `8d87f301...` to verify same-day Duplicate + cross-day Conflict. No weakening/changing foreign tests or application code; source replay itself unchanged.
+
+### Remaining acceptance
+`#229` **OPEN / IN PROGRESS**; [Draft #317](https://github.com/1troitsky/photobunker-v3/pull/317) unmerged. A verified SOURCE REPLAY is not automatic telemetry delivery, and it cannot replace **trusted authenticated producer hooks**, retry scheduler/durable producer outbox, event failure policies, high-cardinality/outlier protections, consent and sampling, approved retention of counters, HMAC key rotation, Admin MFA/RBAC #227, authorized read/export API, true dashboard, actual iOS/Android, product QA. No broad metric-coverage claims. Owner has not authorized any merge/deployment or destructive operation.
+
+**Next owner-triggered step:** reread live #302, PRs, claims, then consider independent strictly server-internal background wiring/safe producer outbox with consent gates and source replay cursor discipline; otherwise take another free independent Issue. No background work after report.
