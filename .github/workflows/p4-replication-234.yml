@@ -7,6 +7,7 @@ on:
       - 'apps/api/database/migrations/*replication*'
       - 'apps/api/tests/Feature/StorageReplication/**'
       - 'apps/api/tests/integration/p4-replication-real-two-garage-234.php'
+      - 'apps/api/tests/integration/p4-replication-pg-two-worker-race-234.php'
       - 'scripts/p4-replication-provision-two-garage-234.sh'
       - '.github/workflows/p4-replication-234.yml'
       - 'docs/audits/P4-REPLICATION-234-20261114.md'
@@ -89,6 +90,7 @@ jobs:
       DB_USERNAME: pb3_replication
       DB_PASSWORD: pb3_replication_disposable
       PB3_REPLICATION_REAL_GARAGE_CI: '1'
+      PB3_REPLICATION_PG_RACE_CI: '1'
       S3_REGION: garage
       S3_ENDPOINT: http://127.0.0.1:3900
       S3_BUCKET: pb3-replication-234-a
@@ -174,6 +176,15 @@ jobs:
           (cd apps/api && php tests/integration/p4-replication-real-two-garage-234.php recovered) | tee "$RUNNER_TEMP/p4-replication-234-e2e-recovered.log"
           grep -Fq 'P4 #234 REAL GARAGE 5/5 PASS:' "$RUNNER_TEMP/p4-replication-234-e2e-recovered.log"
           grep -Fq 'P4 #234 REAL GARAGE COMPLETE 5/5:' "$RUNNER_TEMP/p4-replication-234-e2e-recovered.log"
+      - name: Verify real two-process PG18 replica lease and lost ACK
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p4-replication-pg-two-worker-race-234.php
+          php tests/integration/p4-replication-pg-two-worker-race-234.php | tee "$RUNNER_TEMP/p4-234-race.log"
+          grep -Fq 'P4 #234 REAL PG18 TWO-PHP RACE 1/2 PASS:' "$RUNNER_TEMP/p4-234-race.log"
+          grep -Fq 'P4 #234 REAL PG18 TWO-PHP RACE 2/2 PASS:' "$RUNNER_TEMP/p4-234-race.log"
+          grep -Fq 'P4 #234 REAL PG18 TWO-PHP RACE COMPLETE 2/2:' "$RUNNER_TEMP/p4-234-race.log"
       - name: Cleanup ONLY disposable Garage S3 test containers
         if: always()
         shell: bash
