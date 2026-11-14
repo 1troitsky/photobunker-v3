@@ -19,7 +19,10 @@ use Illuminate\Support\Str;
 function chk(bool $condition, string $message): void
 {
     if (!$condition) {
-        throw new RuntimeException('P3 #228 audited CROSS-ACTION real PG18 FAIL: '.$message);
+        // Laravel's CLI exception handler can report RuntimeException while
+        // returning status 0. Test failure MUST be unambiguously nonzero.
+        fwrite(STDERR, 'P3 #228 audited CROSS-ACTION real PG18 FAIL: '.$message."\n");
+        exit(70);
     }
 }
 
@@ -282,6 +285,11 @@ chk(count($argv)===1,'unexpected CLI arguments');
 $actorId=account();
 $now=CarbonImmutable::now('UTC')->getTimestampMs();
 $actor=['id'=>$actorId,'expires'=>$now+3600000,'mfa'=>$now-1000];
+$baseGlobal = app(AdminAuditLedger::class)->verifyChain()['count'];
+$basePolicies = DB::table('admin_temporary_restriction_events_v1')->count();
+$baseGrants = DB::table('admin_trial_grant_operations_v1')->count();
+// Earlier separately scoped grant/restriction race scripts share this same
+// disposable PG18 service. Never assume their global tables are empty.
 
 // 1. Account restriction obtains GLOBAL audit lock before account row,
 // contender paid grant to SAME account must queue, then both commit.
@@ -292,7 +300,7 @@ app(EntitlementLedger::class)->current($t1);
 chk($b1['outcome']==='applied' && $b1['state']==='internal_trial_grant_recorded',
     'cross-action grant after restriction must commit');
 verifyTarget($t1,1,1);
-chk(app(AdminAuditLedger::class)->verifyChain()['count']===2,
+chk(app(AdminAuditLedger::class)->verifyChain()['count']===$baseGlobal+2,
     'first cross-action global audit chain');
 fwrite(STDOUT,"P3 #228 PG18 CROSS-ACTION RESTRICT->GRANT PASS: global lock before account, both durable\n");
 
@@ -306,7 +314,7 @@ chk($b2['outcome']==='applied'
     && $b2['state']==='internal_audited_account_restriction_recorded',
     'cross-action restrict after grant must commit');
 verifyTarget($t2,1,1);
-chk(app(AdminAuditLedger::class)->verifyChain()['count']===4,
+chk(app(AdminAuditLedger::class)->verifyChain()['count']===$baseGlobal+4,
     'second cross-action audit chain');
 fwrite(STDOUT,"P3 #228 PG18 CROSS-ACTION GRANT->RESTRICT PASS: no reversed lock deadlock\n");
 
@@ -319,7 +327,7 @@ chk($b3['outcome']==='denied'
     && $b3['reason']==='admin.restriction_revision_conflict',
     'stale policy expected revision must deny without global audit');
 verifyTarget($t3,0,1);
-chk(app(AdminAuditLedger::class)->verifyChain()['count']===5,
+chk(app(AdminAuditLedger::class)->verifyChain()['count']===$baseGlobal+5,
     'no speculative global audit orphan');
 fwrite(STDOUT,"P3 #228 PG18 CROSS-ACTION STALE RESTRICT ROLLBACK PASS\n");
 
@@ -335,7 +343,7 @@ chk($b4['outcome']==='denied'
     && $b4['reason']==='admin.audit_inconsistent',
     'global audit action collision must reject cross-action operation ID');
 verifyTarget($t4,1,0);
-chk(app(AdminAuditLedger::class)->verifyChain()['count']===6,
+chk(app(AdminAuditLedger::class)->verifyChain()['count']===$baseGlobal+6,
     'same op ID cannot create extra global audit');
 fwrite(STDOUT,"P3 #228 PG18 CROSS-ACTION SAME-ID REPLAY DENY PASS\n");
 
@@ -349,14 +357,14 @@ $expired['mfaAgeMs']=299000;
 chk($b5['outcome']==='denied' && $b5['reason']==='admin.access_denied',
     'fresh MFA must be rechecked AFTER the global audit lock wait');
 verifyTarget($t5,0,1);
-chk(app(AdminAuditLedger::class)->verifyChain()['count']===7,
+chk(app(AdminAuditLedger::class)->verifyChain()['count']===$baseGlobal+7,
     'MFA-expired contender left no audit or policy event');
 fwrite(STDOUT,"P3 #228 PG18 CROSS-ACTION MFA-EXPIRY-AFTER-GLOBAL-LOCK DENY PASS\n");
 
-chk(DB::table('admin_audit_records_v1')->count()===7,
-    'exact 7 durable global audit records, no orphan');
-chk(DB::table('admin_temporary_restriction_events_v1')->count()===4,
-    'exact 4 globally audited account restriction records');
-chk(DB::table('admin_trial_grant_operations_v1')->count()===3,
-    'exact 3 grants durable and globally audited');
+chk(DB::table('admin_audit_records_v1')->count()===$baseGlobal+7,
+    'exactly 7 new durable global audit records, no orphan');
+chk(DB::table('admin_temporary_restriction_events_v1')->count()===$basePolicies+4,
+    'exactly 4 new globally audited account restriction records');
+chk(DB::table('admin_trial_grant_operations_v1')->count()===$baseGrants+3,
+    'exactly 3 new grants durable and globally audited');
 fwrite(STDOUT,"P3 #228 PG18 CROSS-ACTION COMPLETE: 5/5 real 2-PHP independent PostgreSQL18 observed Lock races PASS, global head -> account lock ordered, 7 global audit records, 4 audited restrictions, 3 grants, zero orphans, NO public admin authentication or route\n");
