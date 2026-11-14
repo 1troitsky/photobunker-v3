@@ -24,6 +24,13 @@ if (getenv('PB3_ISOLATED_STORAGE_SMOKE') !== '1'
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
+set_exception_handler(static function (Throwable $e): void {
+    fwrite(STDERR, 'P3 Vault PG race fixture FAIL: '.$e->getMessage()."\n");
+    exit(1);
+});
+if (($argv[1] ?? null) === '--verify-failure-exit') {
+    throw new RuntimeException('vault.intentional_failure_exit_probe');
+}
 if (config('database.default') !== 'pgsql'
     || config('app.env') !== 'testing'
     || DB::connection()->getDriverName() !== 'pgsql'
