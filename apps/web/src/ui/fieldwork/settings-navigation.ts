@@ -31,7 +31,7 @@ export const settingsGroups: readonly SettingsGroup[] = [
   {
     id: 'security', title: 'Безопасность и данные', entries: [
       {id:'security-privacy',label:'Безопасность и приватность',description:'PIN, устройства и Recovery Key',to:null},
-      {id:'data-storage',label:'Данные и хранилище',description:'Очередь, кэш и резервные копии',to:null},
+      {id:'data-storage',label:'Данные и хранилище',description:'Зашифрованная очередь и серверный учёт',to:'/settings/storage'},
     ],
   },
   {

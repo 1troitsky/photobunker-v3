@@ -4,6 +4,7 @@ import AssignmentsView from './views/AssignmentsView.vue'
 import AssignmentEditorView from './views/AssignmentEditorView.vue'
 import AccountView from './views/AccountView.vue'
 import AppearanceView from './views/AppearanceView.vue'
+import DataStorageView from './views/DataStorageView.vue'
 import SettingsSearchView from './views/SettingsSearchView.vue'
 import CaptureView from './views/CaptureView.vue'
 import PhotoBrowserView from './views/PhotoBrowserView.vue'
@@ -32,6 +33,8 @@ export const router = createRouter({
     { path: '/settings', component: AccountView, meta: { title: 'Настройки' } },
     { path: '/settings/appearance', component: AppearanceView,
       meta: { title: 'Оформление' } },
+    { path: '/settings/storage', component: DataStorageView,
+      meta: { title: 'Данные и хранилище' } },
     { path: '/settings/search', component: SettingsSearchView,
       meta: { title: 'Поиск по настройкам' } },
     // Encrypted local inbox; does not imply server delivery or push.
