@@ -1,13 +1,20 @@
-# Actual PB3 local Docker runtime
+# Run the actual PB3 application on a Mac
 
-This package runs the **existing** `1troitsky/photobunker-v3` Laravel/Vue code, not substitute HTML. `Dockerfile.api` installs PHP 8.4 with the security floor, `Dockerfile.web` builds the real Vue workspace, and `compose.yml` runs PostgreSQL 18 + Garage 2.5 + PHP API + web with localhost-only published ports.
+The archive must contain **the full source tree** `apps/api/` and `apps/web/`, not only launcher files. This runs real Laravel 13, Vue 3, PostgreSQL 18 and Garage S3 with the original Identity/E2EE/Camera/Browser/Assignments code. It is a local development build, **not** proof of full PB3 production release.
 
-The launcher keeps `local-runner/garage.toml` and `local-runner/secrets.env` private and persistent. It does not wipe S3, databases, rotate user keys, enable destructive cleanup, deploy or merge anything.
+## Mac startup
 
-## Validation
+1. Install and **start** OrbStack or Docker Desktop (Docker Compose v2 required).
+2. Download the full `delivery/pb3-real-local-run-20261114` repository source ZIP and extract it.
+3. In the extracted repository, open `local-runner/Start-PhotoBunker.command`. On macOS Gatekeeper, use right-click → Open if required.
+4. Wait for readiness, then the launcher opens `http://127.0.0.1:5173`.
 
-`bash local-runner/ci-smoke.sh` provisions an **ephemeral** CI Garage/PostgreSQL environment, builds both application images, checks live `/api/readyz`, `/identity/v2/csrf`, `/billing/v1/plans` through the browser proxy and loads the real web shell. The dedicated CI workflow additionally runs real Chromium account/media/Assignment user journeys.
+The first startup builds both real application images, migrates a local PostgreSQL database, provisions a local Garage bucket, generates distinct private credentials and launches Vite/Laravel. **Keep the extracted directory**; `local-runner/secrets.env` is the Laravel encryption key and S3 credentials. It is excluded from Git and Docker image contexts. Never give this file to third parties.
 
-This is a reproducible local-development stack, not a production release claim. No full Matrix, payments, physical mobile, or signed PWA acceptance is claimed.
+To stop without deleting data, run `local-runner/Stop-PhotoBunker.command`. Docker named volumes hold local database and ciphertext. Do not use `docker compose down -v`, Docker volume prune, or delete local files as a way to restart: those actions can permanently destroy data. Recovery Keys are not backed up by this launcher. Preserve your own Recovery Key.
 
-Do not commit `local-runner/secrets.env` or `garage.toml`. Their contents are excluded from Git and Docker build context.
+## Independent verification
+
+`bash local-runner/ci-smoke.sh` provisions **disposable** test services and verifies genuine backend readiness, identity/plan HTTP endpoints and the actual Vue shell. Dedicated GitHub Actions run separate real Chromium **photo capture/recovery**, **E2EE audio/video cloud readback**, and **signed mixed assignments**, using live disposable PostgreSQL/Garage and server authorization.
+
+This runner does **not** claim production security accreditation, a signed PWA Service Worker, native iOS/Android validation, Matrix E2EE, paid settlement or cloud backup. The binding release gates in `ts.md` remain requirements.
