@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import {beforeEach,describe,expect,it,vi} from 'vitest'
+import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {
   activeSession,beginRegistration,identityBootstrapError,
   identityBootstrapReady,pendingPinUnlock,restoreAccount,
@@ -17,6 +17,7 @@ import {
 import {migrateLegacyLocalDeviceToPin} from '../../security/application/pin-device-migration'
 import {sealPinProtectedPackage} from '../../security/application/pin-sealed-package'
 import {buildPinVerifierSnapshot} from '../../security/application/pin-verifier'
+import {TestPinLockManager} from '../../security/application/pin-test-locks'
 
 const mocks=vi.hoisted(()=>({jsonApi:vi.fn(),resetCsrf:vi.fn()}))
 vi.mock('../infrastructure/api',()=>mocks)
@@ -39,6 +40,7 @@ async function resetStorage(){
 beforeEach(async()=>{
   vi.useRealTimers()
   activeSession.value=null
+  vi.stubGlobal('navigator',{locks:new TestPinLockManager()})
   pendingPinUnlock.value=null
   identityBootstrapReady.value=false
   identityBootstrapError.value=null
@@ -46,6 +48,8 @@ beforeEach(async()=>{
   mocks.jsonApi.mockRejectedValue(new Error('offline'))
   await resetStorage()
 })
+
+afterEach(()=>vi.unstubAllGlobals())
 
 async function account(){
   const accountId=crypto.randomUUID()
