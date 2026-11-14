@@ -1,14 +1,42 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { activeSession } from '../features/identity/application/session'
 import {
-  readEncryptedLocalQueue, readServerStorageUsage,
+  filteredEncryptedQueue, readEncryptedLocalQueueDetails, readServerStorageUsage,
+  type EncryptedQueueEntry, type QueueDisplayFilter,
   type LocalStorageSummary, type ServerStorageUsage,
 } from '../features/storage/application/storage-status'
 
 type Phase = 'locked' | 'loading' | 'ready' | 'error' | 'offline'
 const local = shallowRef<LocalStorageSummary | null>(null)
+const queueEntries = shallowRef<readonly EncryptedQueueEntry[]>([])
+const queueOpen = ref(false)
+const queueFilter = ref<QueueDisplayFilter>('all')
+const queueFilters: readonly { id: QueueDisplayFilter; label: string }[] = [
+  { id: 'all', label: 'Все' },
+  { id: 'pending', label: 'Ожидают' },
+  { id: 'conflict', label: 'Конфликты' },
+  { id: 'expired', label: 'Истекли' },
+]
+const matchingEntries = computed(() => filteredEncryptedQueue(queueEntries.value, queueFilter.value))
+const visibleEntries = computed(() => matchingEntries.value.slice(0, 50))
+const pendingQueueTotal = computed(() => local.value
+  ? local.value.pendingCount + local.value.conflictedCount + local.value.expiredPendingCount : 0)
+const fileKind = (kind: EncryptedQueueEntry['kind']): string => ({
+  photo: 'Фото', video: 'Видео', audio: 'Аудио',
+})[kind]
+const fileStatus = (status: EncryptedQueueEntry['status']): string => ({
+  queued: 'Ожидает отправки', retry: 'Ожидает повтора',
+  conflict: 'Требует внимания', expired: 'Срок истёк',
+  synced: 'Синхронизирован',
+})[status]
+function safeLocalDate(value: number): string {
+  return new Date(value).toLocaleString('ru-RU')
+}
+function opaqueSuffix(key: string): string {
+  return key.slice(-8)
+}
 const server = shallowRef<ServerStorageUsage | null>(null)
 const localPhase = ref<Phase>('locked')
 const serverPhase = ref<Phase>('locked')
@@ -25,24 +53,29 @@ function refresh(): void {
   const id = ++requestId
   const session = activeSession.value
   local.value = null
+  queueEntries.value = []
   server.value = null
   if (!session) {
+    queueOpen.value = false
+    queueFilter.value = 'all'
     localPhase.value = 'locked'
     serverPhase.value = 'locked'
     return
   }
   localPhase.value = 'loading'
   // The local encrypted queue remains visible without trusting the network.
-  void readEncryptedLocalQueue()
+  void readEncryptedLocalQueueDetails()
     .then(result => {
       if (requestId === id && activeSession.value === session) {
-        local.value = result
+        local.value = result.summary
+        queueEntries.value = result.entries
         localPhase.value = 'ready'
       }
     })
     .catch(() => {
       if (requestId === id && activeSession.value === session) {
         local.value = null
+        queueEntries.value = []
         localPhase.value = 'error'
       }
     })
@@ -80,6 +113,8 @@ onMounted(() => {
 onUnmounted(() => {
   ++requestId
   local.value = null
+  queueEntries.value = []
+  queueOpen.value = false
   server.value = null
   window.removeEventListener('online', onNetworkChange)
   window.removeEventListener('offline', onNetworkChange)
@@ -136,7 +171,47 @@ onUnmounted(() => {
         </div>
         <p class="muted">Локальное сохранение не означает проверенную загрузку в облако.
           Не очищайте данные приложения до завершения синхронизации.</p>
-        <RouterLink to="/browser" class="storage-link">Открыть Browser и очередь файлов</RouterLink>
+
+        <button v-if="localPhase==='ready'" type="button"
+          class="storage-queue-open" data-testid="storage-open-queue"
+          :aria-expanded="queueOpen" aria-controls="storage-queue-detail"
+          @click="queueOpen=!queueOpen">
+          {{ queueOpen ? 'Скрыть очередь' : 'Открыть очередь' }} ({{ pendingQueueTotal }})
+        </button>
+        <section v-if="queueOpen && localPhase==='ready'" id="storage-queue-detail"
+          class="storage-queue-detail" data-testid="storage-queue-detail"
+          aria-label="Очередь зашифрованных файлов">
+          <div class="storage-queue-filters" role="group" aria-label="Фильтр очереди">
+            <button v-for="filter in queueFilters" :key="filter.id" type="button"
+              :data-testid="'storage-queue-filter-'+filter.id"
+              :aria-pressed="queueFilter===filter.id"
+              @click="queueFilter=filter.id">{{ filter.label }}</button>
+          </div>
+          <p v-if="matchingEntries.length===0" data-testid="storage-queue-empty" class="muted">
+            В этом разделе нет ожидающих зашифрованных файлов.
+          </p>
+          <ul v-else class="storage-queue-list" data-testid="storage-queue-list">
+            <li v-for="entry in visibleEntries" :key="entry.key"
+              class="storage-queue-item" data-testid="storage-queue-item">
+              <div class="storage-queue-identity">
+                <strong>{{ fileKind(entry.kind) }} · {{ opaqueSuffix(entry.key) }}</strong>
+                <small>{{ safeLocalDate(entry.createdAt) }}</small>
+              </div>
+              <div class="storage-queue-state">
+                <strong data-testid="storage-queue-state">{{ fileStatus(entry.status) }}</strong>
+                <small>{{ formatBytes(entry.ciphertextBytes) }} шифротекста</small>
+              </div>
+            </li>
+          </ul>
+          <p v-if="matchingEntries.length>visibleEntries.length" class="muted"
+            data-testid="storage-queue-bounded">
+            Показаны 50 из {{ matchingEntries.length }} записей. Полный каталог доступен в Browser.
+          </p>
+          <p class="muted">В списке нет имён файлов, GPS, комментариев и других
+            приватных метаданных. Показаны только локальные зашифрованные записи;
+            состояние облака проверяется отдельно.</p>
+        </section>
+        <RouterLink to="/browser" class="storage-link">Открыть Browser</RouterLink>
       </section>
 
       <section class="foundation-card storage-section" aria-labelledby="storage-cloud-heading">
@@ -199,6 +274,21 @@ onUnmounted(() => {
 .storage-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .storage-row button{background:#293c2d;border:1px solid #477852;border-radius:7px;
   color:#d6f1dc;padding:9px 12px;cursor:pointer}
+.storage-queue-open{background:#293c2d;border:1px solid #477852;border-radius:7px;
+  color:#d6f1dc;padding:11px 13px;text-align:left;cursor:pointer}
+.storage-queue-detail{display:grid;gap:12px}
+.storage-queue-filters{display:flex;flex-wrap:wrap;gap:6px}
+.storage-queue-filters button{border:1px solid #434e44;border-radius:7px;
+  color:#d3ded4;background:transparent;padding:6px 10px;cursor:pointer}
+.storage-queue-filters button[aria-pressed='true']{background:#293c2d;
+  border-color:#477852;color:#e3f4e6}
+.storage-queue-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.storage-queue-item{display:flex;justify-content:space-between;align-items:center;gap:12px;
+  border:1px solid #343c35;border-radius:8px;padding:11px}
+.storage-queue-identity,.storage-queue-state{display:grid;gap:5px}
+.storage-queue-item strong{font-size:12px}
+.storage-queue-item small{font-size:11px;color:#aab7ab}
+.storage-queue-state{text-align:right}
 .storage-values{display:grid;gap:9px}
 .storage-values>div{display:flex;justify-content:space-between;gap:12px;
   border-bottom:1px solid #303a32;padding-bottom:9px;align-items:baseline}

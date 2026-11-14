@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildEncryptedQueueEntries, filteredEncryptedQueue,
   parseServerStorageUsage, summarizeEncryptedQueue,
 } from './storage-status'
 
@@ -83,5 +84,62 @@ describe('authenticated server storage usage is not a quota receipt', () => {
       { ...usage, assignmentsCreatedThisUtcMonth: -1 },
     ]) expect(() => parseServerStorageUsage(invalid, asOf, 'free'))
       .toThrow('storage.unverified_server_usage')
+  })
+})
+
+describe('real read-only encrypted queue file list', () => {
+  const now = 2_000_000
+  const blob = (bytes: number) => ({ blob: new Blob([new Uint8Array(bytes)]) })
+  const photo = (suffix: string, state: 'queued' | 'retry' | 'synced' | 'conflict',
+    expiresAt = now + 1) => ({
+    photoId: '00000000-0000-4000-8000-' + suffix.padStart(12, '0'),
+    state, createdAt: now - Number(suffix), expiresAt,
+    assets: [blob(20), blob(7)],
+  })
+  const media = (state: 'queued' | 'retry' | 'synced' | 'conflict',
+    expiresAt = now + 1) => ({
+    mediaId: '00000000-0000-4000-8000-000000000099',
+    mediaType: 'audio' as const, state,
+    createdAt: now - 3, expiresAt,
+    chunks: [blob(38), blob(2)],
+  })
+
+  it('shows only unsynced real Photo/Media opaque records with exact Blob sizes', () => {
+    const entries = buildEncryptedQueueEntries([
+      photo('1', 'queued'),
+      photo('2', 'synced'),
+      photo('4', 'retry', now),
+      photo('5', 'conflict'),
+    ], [media('retry')], now)
+    expect(entries.map(e => [e.kind, e.status, e.ciphertextBytes])).toEqual([
+      ['photo', 'queued', 27],
+      ['audio', 'retry', 40],
+      ['photo', 'expired', 27],
+      ['photo', 'conflict', 27],
+    ])
+    expect(entries.every(e => !Object.keys(e).includes('plaintext'))).toBe(true)
+    expect(filteredEncryptedQueue(entries, 'all')).toHaveLength(4)
+    expect(filteredEncryptedQueue(entries, 'pending').map(e => e.status))
+      .toEqual(['queued', 'retry'])
+    expect(filteredEncryptedQueue(entries, 'expired')).toHaveLength(1)
+    expect(filteredEncryptedQueue(entries, 'conflict')).toHaveLength(1)
+    expect(entries.every(e => e.key.startsWith('photo:') || e.key.startsWith('media:'))).toBe(true)
+  })
+
+  it('fails closed for corrupt or forged file IDs, creation times and ciphertext', () => {
+    const valid = photo('1', 'queued')
+    for (const invalid of [
+      { ...valid, photoId: 'not-a-uuid' },
+      { ...valid, createdAt: NaN },
+      { ...valid, expiresAt: -1 },
+      { ...valid, state: 'unknown' as 'queued' },
+      { ...valid, assets: [] },
+      { ...valid, assets: [{ blob: null as unknown as Blob }] },
+    ]) expect(() => buildEncryptedQueueEntries([invalid], [], now)).toThrow()
+  })
+
+  it('never surfaces locally synced files as outstanding queue rows', () => {
+    expect(buildEncryptedQueueEntries([photo('7', 'synced')], [media('synced')], now))
+      .toEqual([])
   })
 })

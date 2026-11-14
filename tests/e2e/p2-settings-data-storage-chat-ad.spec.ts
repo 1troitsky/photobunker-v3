@@ -56,6 +56,20 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await expect(page.getByTestId('storage-local-pending-bytes')).not.toHaveText('0 Б')
     await expect(page.getByTestId('storage-server-ready')).toHaveCount(0)
 
+    // Real ciphertext rows must be inspectable, not just a cosmetic counter.
+    await page.getByTestId('storage-open-queue').click()
+    await expect(page.getByTestId('storage-queue-detail')).toBeVisible()
+    await expect(page.getByTestId('storage-queue-item')).toHaveCount(1)
+    await expect(page.getByTestId('storage-queue-item')).toContainText('Фото')
+    await expect(page.getByTestId('storage-queue-state')).toContainText('Ожидает отправки')
+    await expect(page.getByTestId('storage-queue-item')).toContainText('шифротекста')
+    await page.getByTestId('storage-queue-filter-conflict').click()
+    await expect(page.getByTestId('storage-queue-item')).toHaveCount(0)
+    await expect(page.getByTestId('storage-queue-empty')).toBeVisible()
+    await page.getByTestId('storage-queue-filter-pending').click()
+    await expect(page.getByTestId('storage-queue-item')).toHaveCount(1)
+    await expect(page.getByTestId('storage-server-ready')).toHaveCount(0)
+
     await context.setOffline(false)
     await page.getByTestId('storage-refresh').click()
     await expect(page.getByTestId('storage-server-ready')).toBeVisible({ timeout: 30000 })
@@ -68,6 +82,7 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await page.goto('/settings/storage')
     await expect(page.getByTestId('storage-signed-out')).toBeVisible()
     await expect(page.getByTestId('storage-local-ready')).toHaveCount(0)
+    await expect(page.getByTestId('storage-queue-item')).toHaveCount(0)
     await expect(page.getByTestId('storage-server-ready')).toHaveCount(0)
   } finally {
     await context.close()

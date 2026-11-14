@@ -60,18 +60,116 @@ export function summarizeEncryptedQueue(
   return { pendingCount, pendingCipherBytes, conflictedCount, expiredPendingCount, syncedLocalCount }
 }
 
+
+export type QueueDisplayFilter = 'all' | 'pending' | 'conflict' | 'expired'
+export interface EncryptedQueueEntry {
+  readonly key: string
+  readonly kind: 'photo' | 'video' | 'audio'
+  readonly status: State | 'expired'
+  readonly createdAt: number
+  readonly expiresAt: number
+  readonly ciphertextBytes: number
+}
+type QueuePhotoRow = {
+  photoId: string; state: State; createdAt: number; expiresAt: number
+  assets: readonly BlobPart[]
+}
+type QueueMediaRow = {
+  mediaId: string; mediaType: 'photo' | 'video' | 'audio'
+  state: State; createdAt: number; expiresAt: number
+  chunks: readonly BlobPart[]
+}
+
+function ciphertextByteCount(blobs: readonly BlobPart[]): number {
+  if (!blobs.length) throw Error('storage.invalid_ciphertext_record')
+  let bytes = 0
+  for (const item of blobs) {
+    if (!(item.blob instanceof Blob) || !Number.isSafeInteger(item.blob.size))
+      throw Error('storage.invalid_ciphertext_record')
+    bytes += item.blob.size
+    if (!Number.isSafeInteger(bytes)) throw Error('storage.queue_overflow')
+  }
+  return bytes
+}
+
+/**
+ * Read-only, account-scoped detail derived from the same encrypted IndexedDB
+ * rows as the summary. No plaintext filename/description/GPS is decrypted.
+ * The ID is an opaque file reference displayed only inside an authenticated UI.
+ */
+export function buildEncryptedQueueEntries(
+  photos: readonly QueuePhotoRow[],
+  media: readonly QueueMediaRow[],
+  now = Date.now(),
+): EncryptedQueueEntry[] {
+  const rows = [
+    ...photos.map(p => ({
+      key: 'photo:' + p.photoId, kind: 'photo' as const,
+      state: p.state, createdAt: p.createdAt, expiresAt: p.expiresAt,
+      blobs: p.assets,
+    })),
+    ...media.map(m => ({
+      key: 'media:' + m.mediaId, kind: m.mediaType,
+      state: m.state, createdAt: m.createdAt, expiresAt: m.expiresAt,
+      blobs: m.chunks,
+    })),
+  ]
+  const result: EncryptedQueueEntry[] = []
+  for (const row of rows) {
+    if (row.state === 'synced') continue
+    if (typeof row.key !== 'string' || !/^(photo|media):[a-f0-9-]{20,}$/i.test(row.key)
+      || !['photo', 'video', 'audio'].includes(row.kind)
+      || !['queued', 'retry', 'conflict'].includes(row.state)
+      || !Number.isSafeInteger(row.createdAt) || row.createdAt <= 0
+      || !Number.isSafeInteger(row.expiresAt) || row.expiresAt <= 0)
+      throw Error('storage.invalid_queue_record')
+    const status = row.state === 'conflict' ? 'conflict'
+      : row.expiresAt <= now ? 'expired' : row.state
+    result.push({
+      key: row.key, kind: row.kind, status,
+      createdAt: row.createdAt, expiresAt: row.expiresAt,
+      ciphertextBytes: ciphertextByteCount(row.blobs),
+    })
+  }
+  return result.sort((a, b) => b.createdAt - a.createdAt || a.key.localeCompare(b.key))
+}
+
+export function filteredEncryptedQueue(
+  entries: readonly EncryptedQueueEntry[], filter: QueueDisplayFilter,
+): EncryptedQueueEntry[] {
+  switch (filter) {
+    case 'all': return [...entries]
+    case 'pending': return entries.filter(e => e.status === 'queued' || e.status === 'retry')
+    case 'conflict': return entries.filter(e => e.status === 'conflict')
+    case 'expired': return entries.filter(e => e.status === 'expired')
+  }
+}
+
 function sameSession(session: Session): void {
   if (activeSession.value !== session) throw Error('storage.session_changed')
 }
 
-export async function readEncryptedLocalQueue(): Promise<LocalStorageSummary> {
+export interface EncryptedQueueDetails {
+  readonly summary: LocalStorageSummary
+  readonly entries: readonly EncryptedQueueEntry[]
+}
+
+export async function readEncryptedLocalQueueDetails(): Promise<EncryptedQueueDetails> {
   const session = requireSession()
-  // Both repositories already enforce account-scoped IndexedDB queries.
+  // Both original repositories query only the current authenticated account.
   const [photos, media]: [StoredPhoto[], StoredMedia[]] = await Promise.all([
     listLocalPhotos(), listLocalMedia(),
   ])
-  sameSession(session) // No stale rows may render after sign-out/account switch.
-  return summarizeEncryptedQueue(photos, media)
+  sameSession(session)
+  const now = Date.now()
+  const summary = summarizeEncryptedQueue(photos, media, now)
+  const entries = buildEncryptedQueueEntries(photos, media, now)
+  sameSession(session) // No stale rows may render after logout/account change.
+  return { summary, entries }
+}
+
+export async function readEncryptedLocalQueue(): Promise<LocalStorageSummary> {
+  return (await readEncryptedLocalQueueDetails()).summary
 }
 
 export interface ServerStorageUsage {
