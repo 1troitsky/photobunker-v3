@@ -7,6 +7,8 @@ on:
       - 'apps/api/tests/Feature/StorageFailover/**'
       - '.github/workflows/p4-failover-235.yml'
       - 'docs/audits/P4-FAILOVER-235-20261114.md'
+      - 'apps/api/tests/integration/p4-failover-real-two-garage-235.php'
+      - 'scripts/p4-failover-provision-two-garage-235.sh'
   push:
     branches: ['feat/p4-235-verified-replica-read-20261114']
 
@@ -85,6 +87,12 @@ jobs:
       DB_DATABASE: pb3_failover_235
       DB_USERNAME: pb3_failover
       DB_PASSWORD: pb3_failover_disposable
+      PB3_FAILOVER_REAL_GARAGE_CI: '1'
+      S3_REGION: garage
+      S3_ENDPOINT: http://127.0.0.1:3900
+      S3_BUCKET: pb3-failover-235-a
+      PB3_FAILOVER_B_ENDPOINT: http://127.0.0.1:4900
+      PB3_FAILOVER_B_BUCKET: pb3-failover-235-b
       SESSION_DRIVER: array
       CACHE_STORE: array
     steps:
@@ -125,3 +133,56 @@ jobs:
           sed -i 's/name="DB_DATABASE" value=":memory:"/name="DB_DATABASE" value="pb3_failover_235"/' phpunit.failover.pg.xml
           grep -q 'name="DB_CONNECTION" value="pgsql"' phpunit.failover.pg.xml
           php vendor/bin/phpunit --configuration phpunit.failover.pg.xml --filter ReplicaReadPreflightTest --do-not-cache-result
+
+      - name: Provision two physically distinct disposable Garage 2.5 S3 instances
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/p4-failover-provision-two-garage-235.sh
+          echo "PB3_FAILOVER_FIXTURE_PATH=$RUNNER_TEMP/pb3-failover-235-fixture.json" >> "$GITHUB_ENV"
+      - name: Physically verify both copies, same-size corruption, missing and stale replica
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php -l tests/integration/p4-failover-real-two-garage-235.php
+          php tests/integration/p4-failover-real-two-garage-235.php healthy | tee "$RUNNER_TEMP/p4-failover-healthy.txt"
+          for marker in '1/7 PASS' '2/7 PASS' '3/7 PASS' '4/7 PASS'; do
+            grep -Fq "P4 #235 REAL GARAGE $marker:" "$RUNNER_TEMP/p4-failover-healthy.txt"
+          done
+      - name: Physically stop primary Garage A; verify secondary ciphertext while A is down
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker stop pb3-p4-235-garage-a >/dev/null
+          test "$(docker inspect -f '{{.State.Running}}' pb3-p4-235-garage-a)" = false
+          (cd apps/api && php tests/integration/p4-failover-real-two-garage-235.php primary-offline) | tee "$RUNNER_TEMP/p4-failover-primary-offline.txt"
+          grep -Fq 'P4 #235 REAL GARAGE 5/7 PASS:' "$RUNNER_TEMP/p4-failover-primary-offline.txt"
+      - name: Restart A; physically stop secondary B; reject unavailable replica
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker start pb3-p4-235-garage-a >/dev/null
+          for attempt in $(seq 1 30); do
+            if docker exec pb3-p4-235-garage-a /garage status >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec pb3-p4-235-garage-a /garage status >/dev/null
+          sleep 2
+          docker stop pb3-p4-235-garage-b >/dev/null
+          test "$(docker inspect -f '{{.State.Running}}' pb3-p4-235-garage-b)" = false
+          (cd apps/api && php tests/integration/p4-failover-real-two-garage-235.php secondary-offline) | tee "$RUNNER_TEMP/p4-failover-secondary-offline.txt"
+          grep -Fq 'P4 #235 REAL GARAGE 6/7 PASS:' "$RUNNER_TEMP/p4-failover-secondary-offline.txt"
+      - name: Restart B; prove complete ciphertext recovery and no pointer mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker start pb3-p4-235-garage-b >/dev/null
+          for attempt in $(seq 1 30); do
+            if docker exec pb3-p4-235-garage-b /garage status >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec pb3-p4-235-garage-b /garage status >/dev/null
+          sleep 2
+          (cd apps/api && php tests/integration/p4-failover-real-two-garage-235.php recovered) | tee "$RUNNER_TEMP/p4-failover-recovered.txt"
+          grep -Fq 'P4 #235 REAL GARAGE 7/7 PASS:' "$RUNNER_TEMP/p4-failover-recovered.txt"
+          grep -Fq 'P4 #235 REAL GARAGE COMPLETE 7/7:' "$RUNNER_TEMP/p4-failover-recovered.txt"
