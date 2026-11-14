@@ -3,6 +3,7 @@ import type { PinAttempt } from '../../security/application/pin-verifier'
 import type { SealedPinDevice } from '../../security/application/pin-device-migration'
 import {watchPinDeviceSealed} from '../../security/application/pin-tab-fence'
 import {acquirePinSessionLease} from '../../security/application/pin-session-lease'
+import {PIN_RELOCK_DEFAULT_MS,mustRelockPinAfterBackground} from '../../security/application/pin-relock-policy'
 import type {PinSessionLease} from '../../security/application/pin-session-lease'
 import { jsonApi, resetCsrf } from '../infrastructure/api'
 import {
@@ -342,6 +343,60 @@ export async function refreshPinSessionFence():Promise<boolean>{
   return true
 }
 
+/**
+ * Local-only PIN re-lock: synchronous so App.vue unmounts the normal router,
+ * media viewer, Header and Dock without awaiting IndexedDB or the network.
+ *
+ * Does not sign out a device, delete encrypted data, revoke server sessions,
+ * erase already-copied keys or trigger Emergency/Panic.
+ *
+ * The current accepted 0–5 minute selector is NOT wired to authenticated
+ * configuration; until then, protected sessions use Immediate (0 ms).
+ */
+export function lockActivePinSession():boolean {
+  const current=activeSession.value
+  if(!current||!isSealedCandidate(current.device))return false
+  let context:PendingPinUnlock|null=null
+  let error:string|null=null
+  try{context=pendingPinContext(current.device)}
+  catch{error='identity.invalid_sealed_device'}
+  // The synchronous Session watcher also releases the shared Web Lock.
+  activeSession.value=null
+  pendingPinUnlock.value=context
+  identityBootstrapError.value=error
+  identityBootstrapReady.value=true
+  resetCsrf()
+  return true
+}
+
+let pinLastBackgroundAtMs:number|null=null
+function onPinAppBackground():void{
+  const current=activeSession.value
+  if(!current||!isSealedCandidate(current.device))return
+  pinLastBackgroundAtMs=Date.now()
+  if(mustRelockPinAfterBackground(
+    pinLastBackgroundAtMs,Date.now(),PIN_RELOCK_DEFAULT_MS,
+  )){
+    lockActivePinSession()
+    pinLastBackgroundAtMs=null
+  }
+}
+function onPinAppForeground():void{
+  if(pinLastBackgroundAtMs!==null){
+    const current=activeSession.value
+    if(current&&isSealedCandidate(current.device)&&
+       mustRelockPinAfterBackground(
+         pinLastBackgroundAtMs,Date.now(),PIN_RELOCK_DEFAULT_MS,
+       )){
+      lockActivePinSession()
+    }
+  }
+  pinLastBackgroundAtMs=null
+  // A missed cross-tab hint must be verified against persistent state, not
+  // trusted as an ACK. This is independent from local background re-lock.
+  void refreshPinSessionFence()
+}
+
 let pinTabWatchInstalled=false
 function installPinTabReconciliation():void {
   if(pinTabWatchInstalled || typeof window==='undefined')return
@@ -356,10 +411,15 @@ function installPinTabReconciliation():void {
   })
   // A suspended tab may MISS messages entirely. At least ensure it
   // validates the IDB row as it returns to foreground.
-  const onFocus=()=>{void refreshPinSessionFence()}
-  window.addEventListener('focus',onFocus)
+  // A PIN-protected session cannot keep showing plaintext after the app
+  // loses focus or is sent to the background. Do not await any async proof.
+  window.addEventListener('blur',onPinAppBackground)
+  window.addEventListener('pagehide',onPinAppBackground)
+  window.addEventListener('focus',onPinAppForeground)
+  window.addEventListener('pageshow',onPinAppForeground)
   document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='visible')onFocus()
+    if(document.visibilityState==='hidden')onPinAppBackground()
+    else if(document.visibilityState==='visible')onPinAppForeground()
   })
 }
 
