@@ -9,6 +9,8 @@ import CaptureView from './views/CaptureView.vue'
 import PhotoBrowserView from './views/PhotoBrowserView.vue'
 import FileViewerView from './views/FileViewerView.vue'
 import ContactsTeamsView from './views/ContactsTeamsView.vue'
+import NotificationsView from './views/NotificationsView.vue'
+import NotificationSettingsView from './views/NotificationSettingsView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -32,6 +34,11 @@ export const router = createRouter({
       meta: { title: 'Оформление' } },
     { path: '/settings/search', component: SettingsSearchView,
       meta: { title: 'Поиск по настройкам' } },
+    // Encrypted local inbox; does not imply server delivery or push.
+    { path: '/notifications', component: NotificationsView,
+      meta: { title: 'Уведомления' } },
+    { path: '/notifications/settings', component: NotificationSettingsView,
+      meta: { title: 'Настройки уведомлений' } },
     { path: '/:pathMatch(.*)*', redirect: '/assignments' },
   ],
 })

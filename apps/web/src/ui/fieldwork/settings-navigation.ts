@@ -25,7 +25,7 @@ export const settingsGroups: readonly SettingsGroup[] = [
   {
     id: 'application', title: 'Приложение', entries: [
       {id:'appearance',label:'Оформление',description:'Порядок и состав нижней панели',to:'/settings/appearance'},
-      {id:'notifications',label:'Уведомления',description:'События и параметры уведомлений',to:null},
+      {id:'notifications',label:'Уведомления',description:'Зашифрованный локальный список и настройки отображения',to:'/notifications'},
     ],
   },
   {

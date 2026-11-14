@@ -1,0 +1,24 @@
+# P2 #216 · Notifications 1.5 user-facing Shell navigation · 2026-11-14
+
+## Immutable baseline / coordination
+- Owner-accepted `main@8ed66c438d090efd218efa80b027f0b2f854db4b` remains untouched.
+- Parent [Draft PR #353](https://github.com/1troitsky/photobunker-v3/pull/353) exact `88ddcccd0f73a7b219c08df49ea132f193447961`: previously verified latest 4/4 CI PASS including 93 real browser tests. Parent and CHAT-R original branch/read-only encrypted inbox, views, migrations, event projection, server push preflight are NOT modified. Original Chromium attempt1 91/93 FAIL on unchanged parent and later PASS attempt2 remain acknowledged and are tracked in Issue #358 (owned by CHAT-V).
+- This CHAT-U branch is a distinct child created at the exact #353 SHA. **The child Draft PR must target the #353 integration branch**, not `main`; no independent merge of child into main before explicit approval of the parent.
+- Exclusive [Issue #216 CLAIM](https://github.com/1troitsky/photobunker-v3/issues/216#issuecomment-6875116576), shared [#302 START](https://github.com/1troitsky/photobunker-v3/issues/302#issuecomment-6875106298). #344 Security (CHAT-S), #346 Multi-S3 (CHAT-T), #358 session race QA (CHAT-V), #342 Admin (CHAT-Q) excluded.
+
+## User-visible functionality — bounded scope
+1. `/notifications` and `/notifications/settings` now render the existing account-scoped AES-GCM Local-First Notifications views under the Fieldwork Shell, without enabling server notification delivery or OS push. Signed-out accounts see an explicit login prompt, not protected records. A cached target is never used as navigation authorization.
+2. Notifications is now a selectable sixth Dock destination (with bell icon) while mandatory Settings, default five-item Dock, max six, client-side optimistic preview and atomic device-local save remain intact. **Messages remains disabled** because Matrix is not accepted. No fabricated unread badge count.
+3. SettingsHub Notifications links to the real local inbox. Notifications nested settings preserve active Dock state, and re-tapping the section only returns to its known parent; arbitrary history is never trusted.
+4. Previous Dock/navigation unit and mobile browser tests are updated strictly for the new implemented route; full original behavior remains asserted. New `tests/e2e/p2-notifications-shell-216.spec.ts` uses actual Key-Only registration and real Chromium for unauthenticated barrier, optional sixth Dock, offline SPA navigation, local encrypted preferences, disabled push, nested return and logout privacy.
+
+## Security invariants and explicit exclusions
+- **No** server `/notifications/v1` feed/ACK/target route, notification producers, push permission requests, service workers, subscription activation, real OS notification delivery, plaintext payload, grants, ACL bypass, or cross-account authorization changes.
+- No cold offline bootstrap claim: navigating within an already loaded Shell works while offline, but HTTP reload/offline install needs the separately blocked signed PWA gate.
+- A working local UI does **not** mean full Issue #216, #198 or #338 product acceptance: true server event→projected notification→encrypted client receipt→fresh ACL/open and real privacy-safe push still BLOCKED/NOT TESTED. Native iOS/Android and full Matrix E2EE NOT TESTED.
+- No modification to `main`, parent #353 branch, other agent branches or production data. No merge or deployment authorized.
+
+## Exact-HEAD CI evidence
+This audit is created in the same commit as the functional code, **before** GitHub Actions run. Do not ascribe parent CI to the new child HEAD. Required: full Foundation PHP8.4/8.5+Composer audit zero+Vitest+strict TS/build; Security; UX; disposable PG18/Garage and genuine Chromium with new test discovered under `tests/e2e/*.spec.ts`; expected E2E count at least **94** (93 inherited plus 1 new). Capture exact new HEAD/job SHA, real PASS/FAIL, and any failure attempts in Issue #216 and PR comments. Browser QA is authoritative for actual user-facing navigation.
+
+**Disposition:** ready for exact-HEAD CI review; full P2 Notifications delivery/push intentionally incomplete, not safe to publish as operational push.
