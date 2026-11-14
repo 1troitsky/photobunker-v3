@@ -21,6 +21,8 @@ jobs:
         scenario: [photo, media, mixed-assignment]
     steps:
       - uses: actions/checkout@v4
+      - name: Validate real Mac launcher shell syntax
+        run: bash -n local-runner/Start-PhotoBunker.command local-runner/Stop-PhotoBunker.command local-runner/ci-smoke.sh
       - name: Run ACTUAL PB3 PHP Laravel + PG18 + Garage + Vue HTTP smoke
         run: bash local-runner/ci-smoke.sh
       - uses: actions/setup-node@v4
