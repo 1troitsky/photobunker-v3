@@ -11,6 +11,7 @@ function stubStorage() {
     setItem: (key: string, value: string) => { data.set(key, value) },
     removeItem: (key: string) => { data.delete(key) },
   }
+  vi.stubGlobal('window', {})
   vi.stubGlobal('localStorage', storage)
   return data
 }
@@ -35,6 +36,7 @@ describe('P1 #402 synchronous non-secret logout fence', () => {
   })
 
   it('does not silently authorize session resume when localStorage is unavailable', () => {
+    vi.stubGlobal('window', {})
     vi.stubGlobal('localStorage', undefined)
     expect(isLogoutFenced()).toBe(true)
     expect(() => establishLogoutFence()).toThrow('identity.logout_fence_unavailable')
@@ -42,6 +44,7 @@ describe('P1 #402 synchronous non-secret logout fence', () => {
   })
 
   it('treats failed or ignored storage writes as failure, never signed-out success', () => {
+    vi.stubGlobal('window', {})
     vi.stubGlobal('localStorage', {
       getItem: () => null,
       setItem: () => undefined,
