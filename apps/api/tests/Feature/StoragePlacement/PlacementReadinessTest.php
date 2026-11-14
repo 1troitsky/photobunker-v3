@@ -402,9 +402,12 @@ final class PlacementReadinessTest extends TestCase
         };
         $this->denies(fn()=>$this->photo($f),'placement.changed_during_preflight');
 
-        $this->byoStore->onRead = function()use($f):void {
-            DB::table('photo_records')->where('id',$f['parent'])
-                ->update(['expires_at'=>$this->clock()->addDay()->getTimestampMs()]);
+        // Reset the previous expiry fixture BEFORE the second read starts;
+        // otherwise the service correctly rejects at the initial TTL gate
+        // and never reaches the intended mid-read account-revoke scenario.
+        DB::table('photo_records')->where('id',$f['parent'])
+            ->update(['expires_at'=>$this->clock()->addDay()->getTimestampMs()]);
+        $this->byoStore->onRead = static function()use($f):void {
             DB::table('identity_accounts')->where('id',$f['account'])
                 ->update(['status'=>'retired']);
         };
