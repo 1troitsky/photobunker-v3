@@ -44,3 +44,85 @@ jobs:
       - name: Composer security audit (do not suppress inherited CVE)
         working-directory: apps/api
         run: composer audit --locked
+
+  postgres-real-races:
+    name: "PostgreSQL 18 real two-PHP-process audited grants"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_admin_trial_228_ci
+          POSTGRES_USER: pb3_admin_228_ci
+          POSTGRES_PASSWORD: pb3_admin_228_disposable_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb3_admin_228_ci -d pb3_admin_trial_228_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      APP_URL: https://localhost
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_admin_trial_228_ci
+      DB_USERNAME: pb3_admin_228_ci
+      DB_PASSWORD: pb3_admin_228_disposable_only
+      CACHE_STORE: array
+      SESSION_DRIVER: array
+      PB3_ADMIN_228_PG_RACE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, pdo_sqlite, sqlite3, fileinfo, curl, zip
+          tools: composer:v2
+          coverage: none
+      - name: Refuse any environment other than isolated PostgreSQL18 in GitHub Actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          test "$GITHUB_ACTIONS" = "true"
+          test "$PB3_ADMIN_228_PG_RACE" = "1"
+          test "$APP_ENV" = "testing"
+          test "$DB_CONNECTION" = "pgsql"
+          test "$DB_HOST" = "127.0.0.1"
+          test "$DB_DATABASE" = "pb3_admin_trial_228_ci"
+          test "$DB_USERNAME" = "pb3_admin_228_ci"
+      - name: Stage audited #297 pinned Laravel patch ONLY inside disposable CI runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          PATCHED_COMMIT=60407676c7cb9bdb649f5017cf9450aff25eedab
+          PATCHED_BLOB=c4bcae0458bd390b797186c3e2ccf536469588ef
+          curl --fail --location --silent --show-error --retry 3 --connect-timeout 15 --max-time 90 \
+            "https://raw.githubusercontent.com/1troitsky/photobunker-v3/${PATCHED_COMMIT}/apps/api/composer.lock" \
+            -o /tmp/pb3-admin-228-disposable-patched.lock
+          test "$(git hash-object /tmp/pb3-admin-228-disposable-patched.lock)" = "$PATCHED_BLOB"
+          cp /tmp/pb3-admin-228-disposable-patched.lock apps/api/composer.lock
+          test "$(git diff --name-only)" = "apps/api/composer.lock"
+      - name: Install securely patched dependencies and audit zero vulnerabilities
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          composer validate --no-check-publish --strict
+          composer audit --locked --no-interaction
+      - name: Migrate disposable PostgreSQL 18 only
+        working-directory: apps/api
+        run: php artisan migrate --force --no-interaction
+      - name: Run REAL 4 independent-PHP concurrent PG18 billing+admin races
+        working-directory: apps/api
+        run: |
+          php -l tests/integration/p3-admin-trial-postgres-race.php
+          php tests/integration/p3-admin-trial-postgres-race.php
+      - name: Declare narrow scope only
+        run: |
+          echo "Real PG18 two-process internal audited grant races, NOT public auth, real MFA session, device/IP ban, or deployment"
