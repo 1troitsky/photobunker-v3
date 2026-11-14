@@ -240,6 +240,44 @@ final class RecoveryVaultGenerationLedger
         }, 3);
     }
 
+    /**
+     * Recover from a dead/expired generation producer WITHOUT S3 deletion.
+     * This may only be invoked by a separately authenticated trusted worker.
+     * The account row lock serializes stage, release and activation.
+     *
+     * An active lease MUST never be discarded by another worker. The staged
+     * metadata remains as an audit trail; no old verified point is changed.
+     */
+    public function abandonStaleTrusted(string $accountId): ?string
+    {
+        self::assertUuid($accountId);
+        return DB::transaction(static function () use ($accountId): ?string {
+            self::lockAccount($accountId);
+            $row = DB::table(self::GENERATIONS)->where('account_id', $accountId)
+                ->where('state', 'staged')->lockForUpdate()->first();
+            if (!$row) {
+                return null;
+            }
+            $lease = DB::table('backup_start_operations_v1')
+                ->where('operation_id', $row->operation_id)->first();
+            if (!$lease || $lease->account_id !== $accountId
+                || $lease->lease_id !== $row->lease_id) {
+                throw new RuntimeException('vault.backup_lease_integrity_failed');
+            }
+            $live = in_array($lease->state, ['reserved', 'started'], true)
+                && $lease->lease_expires_at !== null
+                && CarbonImmutable::parse($lease->lease_expires_at)
+                    ->greaterThan(CarbonImmutable::now('UTC'));
+            if ($live) {
+                throw new RuntimeException('vault.stage_lease_still_live');
+            }
+            DB::table(self::GENERATIONS)->where('id', $row->id)
+                ->where('state', 'staged')
+                ->update(['state' => 'abandoned', 'updated_at' => now()]);
+            return (string) $row->id;
+        }, 3);
+    }
+
     /** Internal read only. Restore MUST physically re-verify the digest. */
     public function currentActive(string $accountId): ?object
     {
