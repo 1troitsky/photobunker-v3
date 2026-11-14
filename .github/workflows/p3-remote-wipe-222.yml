@@ -32,18 +32,13 @@ jobs:
           coverage: none
       - name: Reject PHP below patched runtime security floor
         run: php scripts/check-runtime.php
-      - name: Pin verified #297 Composer security lock in disposable CI only
+      - name: Verify checked-in patched Composer lock without replacing it
         shell: bash
         run: |
           set -euo pipefail
-          PATCHED_COMMIT=60407676c7cb9bdb649f5017cf9450aff25eedab
-          PATCHED_BLOB=c4bcae0458bd390b797186c3e2ccf536469588ef
-          curl --fail --location --silent --show-error --retry 3 --connect-timeout 15 --max-time 90 \
-            "https://raw.githubusercontent.com/1troitsky/photobunker-v3/$PATCHED_COMMIT/apps/api/composer.lock" \
-            -o /tmp/pb3-222-patched-composer.lock
-          test "$(git hash-object /tmp/pb3-222-patched-composer.lock)" = "$PATCHED_BLOB"
-          cp /tmp/pb3-222-patched-composer.lock apps/api/composer.lock
-          git diff --name-only | grep -qx "apps/api/composer.lock"
+          git diff --exit-code -- apps/api/composer.lock
+          # The accepted main already includes the #297 Laravel security fix.
+          # The subsequent composer audit --locked is a hard security gate.
       - name: Install and enforce actual Composer audit
         working-directory: apps/api
         run: |
@@ -112,18 +107,13 @@ jobs:
           test "$DB_CONNECTION" = pgsql
           test "$DB_DATABASE" = pb3_remote_222_ci
           test "$PB3_REMOTE_WIPE_PG_RACE" = 1
-      - name: Pin verified #297 Composer lock in disposable CI only
+      - name: Verify checked-in patched Composer lock without replacing it
         shell: bash
         run: |
           set -euo pipefail
-          PATCHED_COMMIT=60407676c7cb9bdb649f5017cf9450aff25eedab
-          PATCHED_BLOB=c4bcae0458bd390b797186c3e2ccf536469588ef
-          curl --fail --location --silent --show-error --retry 3 --connect-timeout 15 --max-time 90 \
-            "https://raw.githubusercontent.com/1troitsky/photobunker-v3/$PATCHED_COMMIT/apps/api/composer.lock" \
-            -o /tmp/pb3-222-pg-patched-composer.lock
-          test "$(git hash-object /tmp/pb3-222-pg-patched-composer.lock)" = "$PATCHED_BLOB"
-          cp /tmp/pb3-222-pg-patched-composer.lock apps/api/composer.lock
-          git diff --name-only | grep -qx "apps/api/composer.lock"
+          git diff --exit-code -- apps/api/composer.lock
+          # The accepted main already includes the #297 Laravel security fix.
+          # The subsequent composer audit --locked is a hard security gate.
       - name: Composer security gate
         working-directory: apps/api
         run: |
