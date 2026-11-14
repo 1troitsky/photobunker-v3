@@ -160,6 +160,15 @@ jobs:
           grep -Fq 'P4 #235 REAL PG18 ABA 1/2 PASS:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
           grep -Fq 'P4 #235 REAL PG18 ABA 2/2 PASS:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
           grep -Fq 'P4 #235 REAL PG18 ABA COMPLETE 2/2:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+          grep -Fq 'P4 #235 REAL PG18 TOMBSTONE 1/1 PASS:' "$RUNNER_TEMP/p4-failover-pg-race.txt"
+      - name: Photo and media TTL elapses after physical secondary S3 GET
+        working-directory: apps/api
+        run: |
+          set -euo pipefail
+          php tests/integration/p4-failover-real-two-garage-235.php ttl | tee "$RUNNER_TEMP/p4-failover-live-ttl.txt"
+          grep -Fq 'P4 #235 REAL GARAGE TTL 1/2 PASS:' "$RUNNER_TEMP/p4-failover-live-ttl.txt"
+          grep -Fq 'P4 #235 REAL GARAGE TTL 2/2 PASS:' "$RUNNER_TEMP/p4-failover-live-ttl.txt"
+          grep -Fq 'P4 #235 REAL GARAGE TTL COMPLETE 2/2:' "$RUNNER_TEMP/p4-failover-live-ttl.txt"
       - name: Physically stop primary Garage A; verify secondary ciphertext while A is down
         shell: bash
         run: |
