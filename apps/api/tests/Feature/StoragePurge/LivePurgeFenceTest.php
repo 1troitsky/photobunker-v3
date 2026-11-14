@@ -141,10 +141,15 @@ final class LivePurgeFenceTest extends TestCase
                 ->where('parent_id',$f['parent'])->delete(),
         ] as $attempt) {
             $thrown=false;
+            // PG18 marks a transaction aborted after a trigger exception;
+            // isolate the deliberate failure in a nested SAVEPOINT.
+            DB::beginTransaction();
             try { $attempt(); } catch(Throwable $e) {
                 $thrown=true;
                 $this->assertStringContainsString('storage.purge_fence_immutable',
                     $e->getMessage());
+            } finally {
+                DB::rollBack();
             }
             $this->assertTrue($thrown,'DB mutation must be blocked by trigger');
         }
