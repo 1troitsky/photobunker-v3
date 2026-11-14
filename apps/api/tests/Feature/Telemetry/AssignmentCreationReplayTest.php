@@ -110,7 +110,7 @@ final class AssignmentCreationReplayTest extends TestCase
         self::assertSame(0, DB::table('telemetry_event_receipts')->count());
     }
 
-    public function test_tampering_source_timestamp_detects_conflict_without_recount(): void
+    public function test_coarse_same_day_replay_and_cross_day_source_corruption_fail_closed(): void
     {
         $now = CarbonImmutable::now('UTC')->startOfSecond();
         $time = $now->subMinute();
@@ -122,6 +122,15 @@ final class AssignmentCreationReplayTest extends TestCase
         DB::table('assignment_creation_meter_v1')
             ->where('assignment_id', self::ASSIGNMENT_A)
             ->update(['created_at' => $time->addSecond()->format('Y-m-d H:i:s.u')]);
+        // Exact timestamps are deliberately absent from the minimized
+        // fingerprint: same-day replay is a Duplicate, not a Conflict.
+        $sameDay = $replay->replayPage($now->getTimestampMs());
+        self::assertSame(0, $sameDay['accepted']);
+        self::assertSame(1, $sameDay['duplicate']);
+        // But changing the authoritative day changes UTC aggregate identity.
+        DB::table('assignment_creation_meter_v1')
+            ->where('assignment_id', self::ASSIGNMENT_A)
+            ->update(['created_at' => $time->subDay()->format('Y-m-d H:i:s.u')]);
         try {
             $replay->replayPage($now->getTimestampMs());
             self::fail('changed event identity must conflict');
