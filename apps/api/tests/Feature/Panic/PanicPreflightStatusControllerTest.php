@@ -124,7 +124,7 @@ final class PanicPreflightStatusControllerTest extends TestCase
         $response = $this->asDevice($identity)
             ->getJson(self::PATH.$prepared['operationId'])
             ->assertOk()
-            ->assertHeader('Cache-Control', 'private, no-store')
+            ->assertHeader('Cache-Control', 'no-store, private')
             ->assertHeader('X-Content-Type-Options', 'nosniff')
             ->assertHeader('Vary', 'Cookie')
             ->assertJsonPath('phase', 'preflight_only')
