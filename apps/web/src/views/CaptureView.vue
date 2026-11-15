@@ -367,6 +367,8 @@ const privateTags=ref('')
 const gps=ref<GPSFix|null>(null)
 const gpsLoading=ref(false)
 const gpsError=ref('')
+const gpsTracking=ref(false)
+let gpsWatcherId:number|null=null
 let captureContextGeneration=0
 let gpsAttempt=0
 let gpsPermission:PermissionStatus|null=null
@@ -701,9 +703,10 @@ async function startCamera():Promise<void> {
       &&activeSession.value && !stream.value)void nextTick().then(startCamera)
   }
 }
-// Coordinates and consent are volatile and owned by one explicit request.
-// Permissions API reads never prompt; unsupported/failed reads cannot authorize
-// reusing a fix at shutter. No background location watcher is installed.
+// GPS tracking is opt-in (or required by a verified signed assignment),
+// ephemeral and restricted to this mounted Camera. Geolocation permissions
+// are never inferred from a displayed indicator; native callbacks are
+// validated and checked again at shutter. No background PWA GPS is promised.
 async function readGPSPermission():Promise<PermissionStatus|null>{
   if(!navigator.permissions?.query)return null
   let timer:ReturnType<typeof setTimeout>|undefined
@@ -715,8 +718,71 @@ async function readGPSPermission():Promise<PermissionStatus|null>{
   }catch{return null}
   finally{if(timer!==undefined)clearTimeout(timer)}
 }
+function stopGPSWatcher():void{
+  const id=gpsWatcherId
+  gpsWatcherId=null
+  if(id!==null)navigator.geolocation?.clearWatch?.(id)
+}
+function startGPSWatcher(identity:CameraIdentity,generation:number,attempt:number):void{
+  stopGPSWatcher()
+  if(!gpsPermission||gpsPermission.state!=='granted'
+    ||!gps.value||!navigator.geolocation?.watchPosition
+    ||!(gpsTracking.value||requiredFields.value?.requiredGps))return
+  const permission=gpsPermission
+  try{
+    gpsWatcherId=navigator.geolocation.watchPosition(
+      position=>{
+        if(attempt!==gpsAttempt||!ownsCamera(identity,generation)
+          ||!(gpsTracking.value||requiredFields.value?.requiredGps))return
+        if(permission.state!=='granted'){
+          gpsTracking.value=false
+          clearGPS();gpsError.value='camera.gps_permission_required';return
+        }
+        if(busy.value||recording.value)return
+        const fix={
+          latitude:position.coords.latitude,
+          longitude:position.coords.longitude,
+          accuracyMeters:position.coords.accuracy,
+          recordedAt:Math.round(position.timestamp),
+        }
+        try{normalizeGPS(fix,Date.now());gps.value=fix}
+        catch{
+          // Invalid hardware update must not replace a previously trusted
+          // current fix; shutter independently checks GPS freshness.
+          gpsError.value='camera.gps_unavailable'
+        }
+      },
+      failure=>{
+        if(attempt!==gpsAttempt||!ownsCamera(identity,generation))return
+        if(failure.code===1){
+          gpsTracking.value=false
+          clearGPS();gpsError.value='camera.gps_permission_required'
+        }else gpsError.value='camera.gps_unavailable'
+      },
+      {enableHighAccuracy:true,maximumAge:0,timeout:12000},
+    )
+  }catch{gpsError.value='camera.gps_unavailable'}
+}
+async function toggleGPSTracking():Promise<void>{
+  if(!activeSession.value)return
+  if(requiredFields.value?.requiredGps){
+    // Only a verified signed assignment can force tracking. The switch
+    // cannot relax it; a native permission prompt still needs an explicit
+    // "Получить GPS" click before coordinates are accepted.
+    gpsTracking.value=true
+    return
+  }
+  gpsTracking.value=!gpsTracking.value
+  if(!gpsTracking.value){
+    clearGPS()
+    return
+  }
+  await obtainGPS()
+  if(!gps.value)gpsTracking.value=false
+}
 function clearGPS():void {
   gpsAttempt++
+  stopGPSWatcher()
   if(gpsPermission)gpsPermission.onchange=null
   gpsPermission=null
   cancelGPSRequest?.();cancelGPSRequest=null
@@ -740,6 +806,7 @@ async function obtainGPS():Promise<void>{
     gpsPermission=permission
     if(permission)permission.onchange=()=>{
       if(owns()&&permission.state!=='granted'){
+        gpsTracking.value=false
         clearGPS();gpsError.value='camera.gps_permission_required'
       }
     }
@@ -774,6 +841,7 @@ async function obtainGPS():Promise<void>{
       clearGPS();gpsError.value='camera.gps_permission_required';return
     }
     gps.value=fix
+    startGPSWatcher(identity,generation,attempt)
   }catch(e){
     if(owns()){
       clearGPS()
@@ -790,6 +858,7 @@ async function consentedGPS(fix:GPSFix|null,attempt:number,at:number):Promise<GP
   const permission=await readGPSPermission()
   if(attempt!==gpsAttempt||gps.value!==fix)return null
   if(permission?.state!=='granted'){
+    gpsTracking.value=false
     clearGPS();gpsError.value='camera.gps_permission_required'
     return null
   }
@@ -798,6 +867,7 @@ async function consentedGPS(fix:GPSFix|null,attempt:number,at:number):Promise<GP
     gpsPermission=permission
     permission.onchange=()=>{
       if(attempt===gpsAttempt&&permission.state!=='granted'){
+        gpsTracking.value=false
         clearGPS();gpsError.value='camera.gps_permission_required'
       }
     }
@@ -1164,7 +1234,8 @@ watch(activeSession,session=>{
     ++instructionGeneration;assignmentPrivate.value=null
     assignmentPrivateScope.value=''
     privateInstructionState.value='none'
-    category.value='';description.value='';privateTags.value='';clearGPS()
+    category.value='';description.value='';privateTags.value=''
+    gpsTracking.value=false;clearGPS()
     message.value='';error.value=''
   }
   if(!session)return
@@ -1181,12 +1252,14 @@ onMounted(()=>{
 })
 watch(selectedAssignment,()=>{
   captureContextGeneration++
+  gpsTracking.value=false
   clearGPS()
   if(recording.value)discardRecording()
   void loadPrivateInstructions()
 },{flush:'sync'})
 watch(()=>route.query.assignmentId,()=>{
   captureContextGeneration++
+  gpsTracking.value=false
   clearGPS()
   if(recording.value)discardRecording()
   void refreshPolicies()
@@ -1201,6 +1274,8 @@ watch(videoAudioEnabled,()=>{
   void nextTick().then(startCamera)
 })
 watch(captureMode,()=>{
+  gpsTracking.value=false
+  clearGPS()
   closePrivateRecordingReview()
   closeCamera()
   if(!disposed&&activeSession.value){
@@ -1209,6 +1284,8 @@ watch(captureMode,()=>{
   }
 })
 onUnmounted(()=>{
+  gpsTracking.value=false
+  clearGPS()
   cameraSheet.value=null
   clearCameraShellActions(cameraHeaderOwner)
   if(recordingClockTimer!==null){clearInterval(recordingClockTimer);recordingClockTimer=null}
@@ -1455,6 +1532,20 @@ onUnmounted(()=>{
           <p v-if="devicePermissionStatus" role="status"
             data-testid="camera-permission-status">{{devicePermissionStatus}}</p>
         </section>
+        <label class="camera-appearance-setting">
+          <input type="checkbox" data-testid="camera-gps-tracking"
+            :checked="gpsTracking||!!requiredFields?.requiredGps"
+            :disabled="!!requiredFields?.requiredGps||gpsLoading||busy||recording"
+            @change="toggleGPSTracking">
+          Отслеживать GPS
+          <small>Только после разрешения пользователя. На iOS PWA
+            фоновое отслеживание не гарантируется.</small>
+        </label>
+        <p v-if="requiredFields?.requiredGps" class="muted"
+          data-testid="camera-gps-required">
+          GPS обязателен по подписанным правилам задания.
+          Для получения координат нажмите «Получить GPS».
+        </p>
         <label class="camera-appearance-setting">
           <input type="checkbox" v-model="gpsStatusVisible" data-testid="camera-gps-visibility">
           Показывать GPS над кнопкой съёмки
