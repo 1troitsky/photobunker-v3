@@ -108,6 +108,8 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
       buffer:Buffer.alloc(8192,0x49),
     })
     await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(2)
+    await page.getByTestId('browser-header-select').click()
+    await page.getByTestId('browser-selection-actions').click()
     await page.getByRole('button',{name:'Выбрать всё на странице'}).click()
     await page.getByTestId('browser-bulk-destination').selectOption({label:'Съёмки'})
     await page.getByRole('button',{name:/Переместить выбранные/}).click()
