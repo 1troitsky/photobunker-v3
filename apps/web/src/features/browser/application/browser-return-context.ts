@@ -17,6 +17,7 @@ export type BrowserReturnContext={
   search:string
   searchFolderScope:'current'|'all'
   archiveTab:'all'|'archive'
+  primarySection?:'all'|'personal'|'assignments'
   // Order of already-visible, authorized opaque catalog keys, not decrypted data.
   fileKeys:string[]
 }
