@@ -37,6 +37,8 @@ const cameraHeaderOwner={}
 const blindMode=ref(false)
 const cameraFacing=ref<'environment'|'user'>('environment')
 const torchOn=ref(false)
+const gridVisible=ref(false)
+const gpsStatusVisible=ref(true)
 const policies=ref<AssignmentListing[]>([])
 const selectedAssignment=ref('')
 // Volatile display only; decrypt from account-scoped, signed-revision-bound AEAD cache.
@@ -1012,6 +1014,10 @@ onUnmounted(()=>{
         <div class="video-frame" v-show="captureMode!=='audio'">
           <video ref="video" playsinline muted autoplay aria-label="Предпросмотр камеры"/>
         </div>
+        <div v-if="captureMode==='photo'&&gridVisible"
+          class="camera-grid-3x3" aria-hidden="true" data-testid="camera-grid">
+          <span></span><span></span><span></span><span></span>
+        </div>
         <div v-if="captureMode==='audio'" class="camera-audio-view"
           data-testid="camera-audio-view" aria-label="Диктофон">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1051,7 +1057,8 @@ onUnmounted(()=>{
         </div>
       </div>
       <div class="camera-stage-controls" v-show="!blindMode">
-        <div class="camera-gps-indicator" data-testid="camera-gps-indicator">
+        <div v-if="gpsStatusVisible||requiredFields?.requiredGps"
+          class="camera-gps-indicator" data-testid="camera-gps-indicator">
           <span>{{gps?'GPS · ±'+Math.round(gps.accuracyMeters)+' м':'GPS не получен'}}</span>
           <button v-if="!gps" type="button" :disabled="gpsLoading||busy"
             @click="obtainGPS">{{gpsLoading?'Определяем…':'Определить GPS'}}</button>
@@ -1094,6 +1101,16 @@ onUnmounted(()=>{
           <option value="video">Видео</option>
           <option value="audio">Аудио</option>
         </select>
+        <label class="camera-appearance-setting">
+          <input type="checkbox" v-model="gridVisible" data-testid="camera-grid-setting">
+          Сетка кадрирования 3×3
+          <small>Не показывается на готовых кадрах.</small>
+        </label>
+        <label class="camera-appearance-setting">
+          <input type="checkbox" v-model="gpsStatusVisible" data-testid="camera-gps-visibility">
+          Показывать GPS над кнопкой съёмки
+          <small>Только видимость индикатора; не изменяет GPS-согласие и требования задания.</small>
+        </label>
         <template v-if="captureMode==='audio'">
           <label for="camera-audio-bitrate">Целевой битрейт аудио</label>
           <select id="camera-audio-bitrate" v-model.number="audioTargetBitrate"
