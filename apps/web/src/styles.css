@@ -1533,3 +1533,34 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 @media(max-width:390px){
   .browser-primary-sections button{font-size:11px;padding-inline:2px}
 }
+
+/* Browser v3 real encrypted folder cards. Only already loaded, authorized
+   file TYPES decorate a cover; don't decode JPEG originals into preview DOM
+   or substitute unknown remote images for private thumbnails. */
+.browser-folder-item .browser-folder-open{display:flex;align-items:center;
+  gap:12px;min-width:0;flex:1 1 190px;padding:0;border:0;background:transparent;
+  text-align:left}
+.browser-folder-cover{position:relative;display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-rows:repeat(2,minmax(0,1fr));gap:2px;
+  flex:0 0 69px;width:69px;height:60px;
+  padding:3px;background:#27302b;border-radius:6px;overflow:hidden}
+.browser-folder-cover-cell{display:grid;place-items:center;min-width:0;
+  color:#d0d9d2;background:#39453d;font-size:20px;line-height:1}
+.browser-folder-cover-cell.is-blank{background:#303733}
+.browser-folder-cover.is-empty{place-items:center}
+.browser-folder-cover.is-empty>svg{width:33px;height:33px;color:#c1ccc4}
+.browser-folder-badge{position:absolute;top:4px;right:4px;
+  width:20px;height:18px;display:grid;place-items:center;
+  background:#121713dd;border-radius:3px;color:#eef0ee}
+.browser-folder-badge svg{width:14px;height:14px}
+.browser-folder-copy{display:flex;flex-direction:column;gap:5px;min-width:0;
+  overflow-wrap:anywhere}
+.browser-folder-copy strong{font-size:12px;color:#f1f1f1;font-weight:710}
+.browser-folder-copy small{font-size:10px;line-height:1.35;color:#a7b3aa}
+.browser-folder-item .browser-folder-open:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+@media(max-width:350px){
+  .browser-folder-cover{flex-basis:57px;width:57px;height:54px}
+  .browser-folder-item .browser-folder-open{gap:8px}
+}
