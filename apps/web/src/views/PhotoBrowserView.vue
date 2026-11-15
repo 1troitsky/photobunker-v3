@@ -90,7 +90,9 @@ const view=ref<CatalogView>('list')
 const treeExpanded=ref<string[]>([])
 const search=ref('')
 // Ephemeral search UI preference, never persisted or sent to the server.
-const searchFolderScope=ref<'current'|'all'>('current')
+type SearchFolderScope='current'|'selected'|'all'
+const searchFolderScope=ref<SearchFolderScope>('current')
+const searchSelectedFolder=ref<string|null>(null)
 // Search terms and decrypted match membership are VOLATILE: never persisted,
 // synced or placed in a server query parameter.
 const privateSearchResult=ref<PrivateSearchResult|null>(null)
@@ -363,6 +365,25 @@ function upOneFolder():void{
 }
 const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
   .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
+function setSearchFolderScope(next:SearchFolderScope):void{
+  if(next==='selected'&&(!searchSelectedFolder.value
+    ||!folderWorkspace.value.folders[searchSelectedFolder.value])){
+    searchSelectedFolder.value=selectedFolder.value
+      ??allFolders.value[0]?.id??null
+    if(!searchSelectedFolder.value){
+      searchFolderScope.value='current'
+      return
+    }
+  }
+  searchFolderScope.value=next
+}
+watch(allFolders,folders=>{
+  if(searchSelectedFolder.value
+    &&!folders.some(x=>x.id===searchSelectedFolder.value)){
+    searchSelectedFolder.value=null
+    if(searchFolderScope.value==='selected')searchFolderScope.value='current'
+  }
+})
 function folderLoadedRows(folderId:string):CatalogItem[]{
   return folderCoverIndex.value.get(folderId)?.items??[]
 }
@@ -561,9 +582,19 @@ const searchScope=computed(()=>{
   // sees ONLY rows already loaded from authenticated catalog endpoints.
   // Archive already has its own scope, independent of the active folder.
   if(archiveTab.value==='archive'||!folderReady.value)return scopedRows
+  const hasQuery=search.value.trim().length>0
+  if(hasQuery&&searchFolderScope.value==='selected'){
+    const target=searchSelectedFolder.value
+    // No selected or still-existing folder means NO matches, not root
+    // or an accidental account-wide search.
+    if(!target||!folderWorkspace.value.folders[target])return []
+    return scopeCatalogFolders(
+      scopedRows,folderWorkspace.value.placements,target,false,
+    )
+  }
   return scopeCatalogFolders(
     scopedRows,folderWorkspace.value.placements,selectedFolder.value,
-    search.value.trim().length>0&&searchFolderScope.value==='all',
+    hasQuery&&searchFolderScope.value==='all',
   )
 })
 const visible=computed(()=>filterCatalog(searchScope.value,{
@@ -1347,6 +1378,7 @@ function preserveViewerOrigin(item:CatalogItem,event:MouseEvent):void{
     fileKey:item.key,folderId:selectedFolder.value,
     filter:filter.value,sort:sort.value,view:view.value,
     search:search.value,searchFolderScope:searchFolderScope.value,
+    searchSelectedFolder:searchSelectedFolder.value,
     archiveTab:archiveTab.value,primarySection:primarySection.value,
     fileKeys:visible.value.map(row=>row.key),
   })
@@ -1409,6 +1441,7 @@ watch(activeSession,(next,previous)=>{
     archivePrefsConflict.value=false
     search.value=''
     searchFolderScope.value='current'
+    searchSelectedFolder.value=null
     privateSearchResult.value=null
     void refreshArchivePending()
     void loadFolders()
@@ -1615,6 +1648,7 @@ onMounted(()=>{
     filter.value=restored.filter;sort.value=restored.sort;view.value=restored.view
     search.value=restored.search
     searchFolderScope.value=restored.searchFolderScope
+    searchSelectedFolder.value=restored.searchSelectedFolder??null
     archiveTab.value=restored.archiveTab
     primarySection.value=restored.primarySection??'all'
     requestedFolderReturn=restored.folderId
@@ -1641,6 +1675,7 @@ onUnmounted(()=>{
   privateSearchExpanded.value=false
   search.value=''
   searchFolderScope.value='current'
+  searchSelectedFolder.value=null
   scrollReturnKey=null
   requestedFolderReturn=undefined
   archivePrefsBusy.value=false
@@ -1969,10 +2004,21 @@ onUnmounted(()=>{
         </label>
         <label v-if="archiveTab==='all'">
           <span class="browser-sr-only">Область поиска по загруженным файлам</span>
-          <select v-model="searchFolderScope"
-            data-testid="browser-search-folder-scope">
+          <select :value="searchFolderScope"
+            data-testid="browser-search-folder-scope"
+            @change="setSearchFolderScope(($event.target as HTMLSelectElement).value as SearchFolderScope)">
             <option value="current">Текущая папка</option>
+            <option value="selected" :disabled="!allFolders.length">Выбранная папка</option>
             <option value="all">Все папки (загруженные файлы)</option>
+          </select>
+        </label>
+        <label v-if="archiveTab==='all'&&searchFolderScope==='selected'"
+          for="browser-search-folder-target">
+          <span class="browser-sr-only">Выберите папку, в которой искать</span>
+          <select id="browser-search-folder-target" v-model="searchSelectedFolder"
+            data-testid="browser-search-folder-target">
+            <option v-for="folder in importFolderOptions" :key="folder.id"
+              :value="folder.id">{{ folder.label }}</option>
           </select>
         </label>
         <button v-if="archiveTab==='all'&&normalizePrivateSearch(search).length>=2"
