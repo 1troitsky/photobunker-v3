@@ -89,6 +89,7 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     expect(orderedKeys.every(key=>key.startsWith('media:'))).toBe(true)
     const firstId=orderedKeys[0]!.slice('media:'.length)
     const secondId=orderedKeys[1]!.slice('media:'.length)
+    await visibleRows.first().getByTestId('browser-file-menu-toggle').click()
     await page.getByRole('link',{name:'Полный просмотр файла '+firstId}).click()
     await expect(page).toHaveURL(new RegExp('/browser/file/media/'+firstId+'$'))
     await expect(page.getByTestId('file-viewer-audio')).toBeVisible()
