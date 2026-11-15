@@ -1280,6 +1280,32 @@ onUnmounted(()=>{
               @click="closeCameraSheet">Закрыть</button>
           </header>
           <h2 v-else>Настройки камеры</h2>
+          <section class="camera-preset-section" data-testid="camera-presets">
+            <h3>Пресеты камеры</h3>
+            <label for="camera-preset-select">Выбрать пресет</label>
+            <select id="camera-preset-select" v-model="selectedPresetId"
+              data-testid="camera-preset-select"
+              :disabled="presetBusy||busy||recording" @change="pickCameraPreset">
+              <option v-for="preset in cameraPresetCatalog.presets"
+                :key="preset.id" :value="preset.id">{{preset.name}}</option>
+            </select>
+            <label for="camera-preset-name">Название пресета</label>
+            <input id="camera-preset-name" v-model="presetName" maxlength="36"
+              autocomplete="off" :disabled="presetBusy||busy||recording"
+              data-testid="camera-preset-name">
+            <div class="camera-preset-actions">
+              <button type="button" data-testid="camera-preset-save"
+                :disabled="presetBusy||busy||recording||!presetName.trim()"
+                @click="writeCameraPreset('save')">Сохранить пресет</button>
+              <button type="button" data-testid="camera-preset-add"
+                :disabled="presetBusy||busy||recording||!presetName.trim()"
+                @click="writeCameraPreset('add')">Добавить пресет</button>
+            </div>
+            <p v-if="presetNotice" data-testid="camera-preset-status"
+              role="status" class="muted">{{presetNotice}}</p>
+            <p class="muted">Пресеты шифруются на этом устройстве. 
+              Не содержат GPS, названия заданий или данных съёмки.</p>
+          </section>
 
         <label for="camera-mode">Режим съёмки</label>
         <select id="camera-mode" v-model="captureMode" :disabled="recording||busy"
@@ -1288,6 +1314,52 @@ onUnmounted(()=>{
           <option value="video">Видео</option>
           <option value="audio">Аудио</option>
         </select>
+        <section class="camera-preset-options" aria-label="Фото">
+          <h3>Фото</h3>
+          <label for="camera-photo-aspect">Пропорции</label>
+          <select id="camera-photo-aspect" v-model="photoAspect" :disabled="busy||recording"
+            data-testid="camera-photo-aspect">
+            <option value="1:1">1:1</option>
+            <option value="4:3">4:3</option>
+            <option value="3:2">3:2</option>
+            <option value="16:9">16:9</option>
+          </select>
+          <label for="camera-photo-quality">Качество JPEG</label>
+          <select id="camera-photo-quality" v-model="photoQuality" :disabled="busy||recording"
+            data-testid="camera-photo-quality">
+            <option value="maximum">Максимальное</option>
+            <option value="high">Высокое</option>
+            <option value="medium">Среднее</option>
+            <option value="low">Низкое</option>
+          </select>
+        </section>
+        <section class="camera-preset-options" aria-label="Видео">
+          <h3>Видео</h3>
+          <label for="camera-video-quality">Целевое разрешение</label>
+          <select id="camera-video-quality" v-model="videoQuality"
+            :disabled="busy||recording||starting" data-testid="camera-video-quality">
+            <option value="480p">480p</option>
+            <option value="720p">720p</option>
+            <option value="1080p">1080p</option>
+          </select>
+          <p class="muted">Разрешение запрашивается при следующем включении камеры.
+            Фактическое разрешение зависит от устройства.</p>
+          <label for="camera-video-duration">
+            Максимальная длительность видео: {{videoMaxSeconds}} сек.
+          </label>
+          <input id="camera-video-duration" v-model.number="videoMaxSeconds"
+            type="range" min="5" max="300" step="5" :disabled="busy||recording"
+            data-testid="camera-video-duration">
+        </section>
+        <section class="camera-preset-options" aria-label="Аудио">
+          <h3>Аудио</h3>
+          <label for="camera-audio-duration">
+            Максимальная длительность аудио: {{audioMaxSeconds}} сек.
+          </label>
+          <input id="camera-audio-duration" v-model.number="audioMaxSeconds"
+            type="range" min="5" max="3000" step="5" :disabled="busy||recording"
+            data-testid="camera-audio-duration">
+        </section>
         <label class="camera-appearance-setting">
           <input type="checkbox" v-model="gridVisible" data-testid="camera-grid-setting">
           Сетка кадрирования 3×3
@@ -1298,7 +1370,7 @@ onUnmounted(()=>{
           Показывать GPS над кнопкой съёмки
           <small>Только видимость индикатора; не изменяет GPS-согласие и требования задания.</small>
         </label>
-        <template v-if="captureMode==='audio'">
+        <div class="camera-preset-options">
           <label for="camera-audio-bitrate">Целевой битрейт аудио</label>
           <select id="camera-audio-bitrate" v-model.number="audioTargetBitrate"
             :disabled="recording||busy" data-testid="camera-audio-bitrate">
@@ -1307,8 +1379,8 @@ onUnmounted(()=>{
             </option>
           </select>
           <p class="muted">Это настройка кодировщика. Фактические качество и формат зависят от браузера.</p>
-        </template>
-        <div v-if="captureMode==='photo'">
+        </div>
+        <div class="camera-preset-options">
           <label for="camera-photo-storage">Сохранить фото в</label>
           <select id="camera-photo-storage" v-model="photoStorage"
             :disabled="busy||recording" data-testid="camera-photo-storage">
