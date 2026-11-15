@@ -41,6 +41,7 @@ test('P2 Browser->File Viewer->Browser: restore encrypted folder, filter, privat
     await page.getByRole('button',{name:'Сетка'}).click()
     await page.getByTestId('browser-search').fill('RETURN-SECRET')
     await expect(row).toHaveCount(1,{timeout:20000})
+    await row.getByTestId('browser-file-menu-toggle').click()
     await row.getByRole('link',{name:'Полный просмотр файла '+id}).click()
     await expect(page).toHaveURL(new RegExp('/browser/file/media/'+id+'$'))
     expect(page.url()).not.toContain('RETURN-SECRET')
