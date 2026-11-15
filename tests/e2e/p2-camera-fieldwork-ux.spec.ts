@@ -24,6 +24,15 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('camera-mode-tabs').locator('button')).toHaveCount(3)
   await expect(page.getByTestId('camera-mode-tab-photo')).toHaveAttribute('aria-pressed','true')
   await expect(page.getByTestId('camera-viewfinder')).toBeVisible()
+  await page.getByTestId('camera-open-assignment').click()
+  await page.getByTestId('camera-grid-setting').check()
+  await expect(page.getByTestId('camera-grid').locator('span')).toHaveCount(4)
+  await page.getByTestId('camera-gps-visibility').uncheck()
+  await expect(page.getByTestId('camera-gps-indicator')).toHaveCount(0)
+  await page.getByTestId('camera-gps-visibility').check()
+  await expect(page.getByTestId('camera-gps-indicator')).toBeVisible()
+  await page.getByTestId('camera-grid-setting').uncheck()
+  await expect(page.getByTestId('camera-grid')).toHaveCount(0)
 
   // The existing mode select remains wired to the native capture pipeline.
   await page.getByTestId('camera-mode-tab-audio').click()
