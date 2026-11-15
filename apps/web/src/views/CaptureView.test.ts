@@ -260,7 +260,8 @@ describe('Camera 1.2 real JPEG creation, not CSS-only image options',()=>{
     expect(mocks.capture).toHaveBeenCalledTimes(1)
     expect(vi.mocked(HTMLCanvasElement.prototype.toBlob))
       .toHaveBeenCalledWith(expect.any(Function),'image/jpeg',.7)
-    const canvas=vi.mocked(HTMLCanvasElement.prototype.toBlob).mock.instances[0]!
+    const canvas=vi.mocked(HTMLCanvasElement.prototype.toBlob)
+      .mock.instances[0] as HTMLCanvasElement
     expect(canvas.width).toBe(480)
     expect(canvas.height).toBe(480)
     const ctx=vi.mocked(HTMLCanvasElement.prototype.getContext)
