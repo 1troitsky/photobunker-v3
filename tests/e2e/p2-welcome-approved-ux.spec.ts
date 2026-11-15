@@ -5,6 +5,13 @@ test('Welcome 1.4 routes anonymously, uses original six SVG slides and real key-
   await page.goto('/')
   await expect(page).toHaveURL(/\/welcome$/)
   await expect(page.getByTestId('welcome-screen')).toBeVisible()
+  const configuredBrand=await page.evaluate(async()=>{
+    const {brand}=await import('/src/config/brand.ts')
+    return brand.name
+  })
+  await expect(page.locator('.welcome-brand-name')).toHaveText(configuredBrand)
+  await expect(page.locator('.carousel')).toHaveAttribute('aria-label','Почему '+configuredBrand)
+  await expect(page.locator('.carousel-copy')).toContainText(configuredBrand)
   await expect(page.locator('.shell-header')).toHaveCount(0)
   await expect(page.locator('.shell-dock')).toHaveCount(0)
   await expect(page.locator('.carousel-dot')).toHaveCount(6)
