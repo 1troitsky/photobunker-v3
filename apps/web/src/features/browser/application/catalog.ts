@@ -3,7 +3,7 @@ import type {StoredMedia,CloudMedia} from '../../media/application/media-outbox'
 
 export type CatalogType='photo'|'video'|'audio'
 export type CatalogFilter='all'|CatalogType
-export type CatalogSort='newest'|'oldest'|'expiry'|'size-largest'|'size-smallest'
+export type CatalogSort='newest'|'oldest'|'name'|'expiry'|'size-largest'|'size-smallest'
 export type CatalogView='list'|'grid'|'tree'
 
 // Invalid or missing size is NOT equivalent to an empty 0-byte media file.
@@ -88,6 +88,11 @@ export function filterCatalog(
       const byId=a.key.localeCompare(b.key)
       if(options.sort==='expiry')
         return a.expiresAt-b.expiresAt||byId
+      if(options.sort==='name'){
+        // Opaque NAME-ID is the only universally authenticated display name
+        // available offline. Never guess private filenames for cloud rows.
+        return a.id.localeCompare(b.id,'ru',{numeric:true})||byId
+      }
       if(options.sort==='size-largest'||options.sort==='size-smallest'){
         // Photo indexes do not expose reliable plaintext byte counts.
         // Unknown/malformed values sort LAST in either direction. Never
