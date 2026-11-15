@@ -71,7 +71,7 @@ const dock = computed(() => displayedDock.value
         <strong>{{ brand.name }}</strong>
         <small><span class="status-dot" :class="{'session-online':activeSession?.online}" aria-hidden="true"></span>{{activeSession?(activeSession.online?'Сессия подтверждена':'Локальный режим'):'Без аккаунта'}}</small>
       </div>
-      <RouterLink v-if="verifiedPlan&&route.path!=='/notifications'&&route.path!=='/browser'&&route.name!=='browser-viewer'&&route.name!=='browser-editor'"
+      <RouterLink v-if="verifiedPlan&&route.path!=='/notifications'&&route.path!=='/browser'&&route.path!=='/camera'&&route.name!=='browser-viewer'&&route.name!=='browser-editor'"
         to="/settings/payments" class="shell-plan-pill" data-testid="verified-plan-link">
         Тариф: {{verifiedPlan}}
       </RouterLink>
