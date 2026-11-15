@@ -408,6 +408,39 @@ function toggleBlindMode():void{
   if(!activeSession.value)return
   blindMode.value=!blindMode.value
 }
+function onBlindKeydown(event:KeyboardEvent):void{
+  if(!blindMode.value)return
+  if(event.key==='Escape'){
+    event.preventDefault()
+    toggleBlindMode()
+    return
+  }
+  // The full-screen cover traps keyboard focus inside its real controls.
+  // Do not intercept Space/Enter: native button behavior must stay intact.
+  if(event.key!=='Tab')return
+  const root=document.querySelector<HTMLElement>('[data-testid="camera-blind-overlay"]')
+  const enabled=Array.from(root?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')??[])
+  if(!enabled.length)return
+  const first=enabled[0]!,last=enabled[enabled.length-1]!
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
+}
+watch(blindMode,async shown=>{
+  await nextTick()
+  if(disposed||blindMode.value!==shown)return
+  if(shown){
+    const shutter=document.querySelector<HTMLButtonElement>('[data-testid="camera-blind-shutter"]')
+    ;(shutter?.disabled
+      ?document.querySelector<HTMLButtonElement>('.camera-blind-return')
+      :shutter)?.focus()
+  }else{
+    document.querySelector<HTMLButtonElement>('[data-testid="camera-header-blind"]')
+      ?.focus()
+  }
+})
 function openCameraDetails(selector:string):void{
   if(!activeSession.value)return
   document.querySelector<HTMLElement>(selector)?.scrollIntoView({
@@ -1034,7 +1067,7 @@ onUnmounted(()=>{
         <!-- The approved blind cover obscures the WHOLE app, not only the
              video surface. Teleport leaves MediaStream/MediaRecorder untouched. -->
         <Teleport to="body">
-        <div v-if="blindMode" class="camera-blind-overlay" data-testid="camera-blind-overlay" role="dialog" aria-modal="true" aria-label="Слепой режим">
+        <div v-if="blindMode" class="camera-blind-overlay" data-testid="camera-blind-overlay" role="dialog" aria-modal="true" aria-label="Слепой режим" @keydown="onBlindKeydown">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="1.6" aria-hidden="true">
             <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/>
