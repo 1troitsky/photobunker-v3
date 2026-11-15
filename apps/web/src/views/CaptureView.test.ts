@@ -172,6 +172,33 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(document.querySelector('[data-testid="camera-blind-overlay"]')).toBeNull()
     expect(opened.track.stop).not.toHaveBeenCalled()
   })
+  it('requests camera and microphone separately and always stops permission-only tracks',async()=>{
+    const live=media()
+    await mount()
+    requests[0]!.resolve(live.stream)
+    await settle()
+    button('Разрешить микрофон').click()
+    await settle()
+    expect(getUserMedia).toHaveBeenLastCalledWith({audio:true,video:false})
+    const mic=media()
+    requests[1]!.resolve(mic.stream)
+    await settle()
+    expect(mic.track.stop).toHaveBeenCalledOnce()
+    expect(live.track.stop).not.toHaveBeenCalled()
+    expect(host.querySelector('[data-testid="camera-permission-status"]')?.textContent)
+      .toContain('Микрофон доступен')
+
+    button('Разрешить камеру').click()
+    await settle()
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      audio:false,video:{facingMode:{ideal:'environment'}},
+    })
+    const camera=media()
+    requests[2]!.resolve(camera.stream)
+    await settle()
+    expect(camera.track.stop).toHaveBeenCalledOnce()
+    expect(live.track.stop).not.toHaveBeenCalled()
+  })
   it('restarts video without microphone immediately when video sound is disabled',async()=>{
     const opened=media()
     await mount()
