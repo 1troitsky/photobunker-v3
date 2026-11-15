@@ -19,6 +19,8 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await expect(page.getByTestId('browser-primary-sections').locator('button'))
     .toHaveCount(4)
   await expect(page.getByTestId('browser-tab-active')).toHaveAttribute('aria-pressed','true')
+  await expect(page.getByTestId('browser-view-switch').locator('button'))
+    .toHaveCount(3)
   const header=page.locator('.shell-header')
   await expect(header).toHaveCount(1)
   await expect(page.locator('.shell-dock')).toHaveCount(1)
@@ -152,5 +154,10 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
     expect(await header.evaluate(el=>el.scrollWidth>el.clientWidth),
       'Header overflow at '+width).toBe(false)
     await expect(page.getByTestId('browser-shell-actions').locator('button')).toHaveCount(5)
+    const heading=page.locator('.browser-title')
+    expect(await heading.evaluate(el=>el.scrollWidth>el.clientWidth),
+      'Browser heading overflow at '+width).toBe(false)
+    await expect(page.getByTestId('browser-view-switch').locator('button'))
+      .toHaveCount(3)
   }
 })
