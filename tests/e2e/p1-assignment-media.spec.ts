@@ -649,6 +649,9 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await B.locator('#camera-tags').fill('photo-evidence')
     await B.getByRole('button',{name:'Получить GPS'}).click()
     await expect(B.getByText(/GPS получен/)).toBeVisible({timeout:12000})
+    // A completed encrypted-preset read or same-key online hydration MUST NOT
+    // silently revert the user's selected P2 MediaFile capture destination.
+    await expect(B.getByTestId('camera-photo-storage')).toHaveValue('p2')
     await expect(B.getByRole('button',{name:'Сделать снимок'}))
       .toBeEnabled({timeout:20000})
     await B.getByRole('button',{name:'Сделать снимок'}).click()
