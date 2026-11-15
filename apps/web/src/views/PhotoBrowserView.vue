@@ -1457,7 +1457,15 @@ onUnmounted(()=>{
         <h1>Browser</h1>
         <p class="subtitle">Папок: {{ folders.length }} · Файлов: {{ visible.length }}</p>
       </div>
-      <RouterLink to="/camera">Камера</RouterLink>
+      <div v-if="activeSession" class="browser-view-switch"
+        aria-label="Вид каталога" data-testid="browser-view-switch">
+        <button type="button" :aria-pressed="view==='grid'"
+          data-testid="browser-view-grid" @click="view='grid'">Сетка</button>
+        <button type="button" :aria-pressed="view==='list'"
+          data-testid="browser-view-list" @click="view='list'">Список</button>
+        <button type="button" :aria-pressed="view==='tree'"
+          data-testid="browser-view-tree" @click="view='tree'">Дерево</button>
+      </div>
     </div>
     <div v-if="!activeSession" class="foundation-card">
       <p>Список файлов доступен после входа.</p>
@@ -1806,14 +1814,7 @@ onUnmounted(()=>{
             <option value="size-smallest">Размер: маленькие</option>
           </select>
         </label>
-        <div class="browser-view-switch" aria-label="Вид каталога">
-          <button type="button" :aria-pressed="view==='grid'"
-            data-testid="browser-view-grid" @click="view='grid'">Сетка</button>
-          <button type="button" :aria-pressed="view==='list'"
-            data-testid="browser-view-list" @click="view='list'">Список</button>
-          <button type="button" :aria-pressed="view==='tree'"
-            data-testid="browser-view-tree" @click="view='tree'">Дерево</button>
-        </div>
+
         <button type="button" :disabled="busy" @click="refresh">Обновить</button>
       </div>
       <p class="muted" data-testid="browser-summary">
