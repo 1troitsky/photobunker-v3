@@ -4,6 +4,9 @@ import {RouterLink} from 'vue-router'
 import {browserShellActions,clearBrowserShellActions}
   from '../features/browser/application/browser-shell-actions'
 import {
+  browserRetentionLabel,readBrowserDaysLeft,saveBrowserDaysLeft,
+} from '../features/browser/application/browser-days-left'
+import {
   captureBrowserReturnContext,takeBrowserReturn,
 } from '../features/browser/application/browser-return-context'
 import SharePanel from '../features/sharing/SharePanel.vue'
@@ -127,6 +130,17 @@ const createFolderOpen=ref(false)
 const createFolderParent=ref('')
 const uploadSheetOpen=ref(false)
 const browserSettingsOpen=ref(false)
+const showRemainingDays=ref(readBrowserDaysLeft())
+const retentionClock=ref(Date.now())
+let retentionTimer:ReturnType<typeof setInterval>|null=null
+function updateRemainingDays(enabled:boolean):void{
+  if(saveBrowserDaysLeft(enabled))showRemainingDays.value=enabled
+}
+function retentionLabel(expiresAt:number):string{
+  return browserRetentionLabel(
+    expiresAt,retentionClock.value,showRemainingDays.value,
+  )
+}
 const newFolderName=ref('')
 const editingFolderId=ref<string|null>(null)
 const editFolderName=ref('')
@@ -1337,6 +1351,8 @@ watch([activeSession,folderReady,folderError,folderBusy,visible,selectedKeys],()
   }
 },{immediate:true})
 onMounted(()=>{
+  retentionClock.value=Date.now()
+  retentionTimer=setInterval(()=>{retentionClock.value=Date.now()},60000)
   const identity=activeSession.value
   const restored=identity?takeBrowserReturn(identity.accountId,identity.deviceId):null
   if(restored){
@@ -1352,6 +1368,7 @@ onMounted(()=>{
   void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
+  if(retentionTimer!==null){clearInterval(retentionTimer);retentionTimer=null}
   clearBrowserShellActions(browserHeaderOwner)
   ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch
   ++privateSearchEpoch;++privateExpansionEpoch
@@ -1560,6 +1577,15 @@ onUnmounted(()=>{
             aria-label="Закрыть настройки Browser" @click="closeBrowserSettings">
             Закрыть</button>
         </header>
+        <h2>Отображение</h2>
+        <label>
+          <input type="checkbox" data-testid="browser-pref-days-left"
+            :checked="showRemainingDays"
+            @change="updateRemainingDays(($event.target as HTMLInputElement).checked)">
+          Показывать оставшиеся дни
+        </label>
+        <p class="muted">Меняется только текст срока хранения. Подписанный TTL файла,
+          права доступа и очистка на сервере не изменяются.</p>
         <h2>Настройки архива</h2>
         <label>
           <input type="checkbox" data-testid="browser-pref-use-archive"
@@ -1823,7 +1849,7 @@ onUnmounted(()=>{
             <small v-if="item.state">
               Очередь: {{ item.state }}
             </small>
-            <small>Хранение до {{ new Date(item.expiresAt).toLocaleDateString('ru-RU') }}</small>
+            <small data-testid="browser-item-retention">{{ retentionLabel(item.expiresAt) }}</small>
             <small>{{ catalogSizeLabel(item.bytes) }}</small>
             <small v-if="archiveTab==='all'&&search.trim()&&searchFolderScope==='all'"
               data-testid="browser-search-result-folder">
