@@ -1898,6 +1898,7 @@ onUnmounted(()=>{
           <select v-model="sort" data-testid="browser-sort">
             <option value="newest">Новые сначала</option>
             <option value="oldest">Старые сначала</option>
+            <option value="name">По имени (NAME-ID)</option>
             <option value="expiry">Ближайшее удаление</option>
             <option value="size-largest">Размер: большие</option>
             <option value="size-smallest">Размер: маленькие</option>
