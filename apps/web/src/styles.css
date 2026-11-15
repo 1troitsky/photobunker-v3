@@ -168,7 +168,7 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .contacts-list-row button { padding:8px; }
 }
 
-.shell-header-actions { margin-left:auto; flex:0 0 auto; }
+.shell-header-actions { margin-left:auto; flex:0 0 auto; display:flex;align-items:center;gap:0; }
 /* UI-SHELL-CONTRACT: context icons are unframed 36px actions in the fixed
    64px header. Do not alter the separate Editor text actions or Viewer. */
 .shell-header-actions:not(.viewer-header-actions):not(.editor-header-actions) button {
@@ -187,6 +187,38 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 }
 .shell-header-actions button:disabled { opacity:.5; cursor:not-allowed; }
 
+
+/* The accepted Browser v3 uses five CONTEXT icons in the common header.
+   Reserve room for the brand and status on 320px portrait devices; no
+   duplicate toolbar or new Shell. */
+.browser-header-actions{display:flex;align-items:center;gap:0;white-space:nowrap}
+@media(max-width:470px){
+  .shell-header:has(.browser-header-actions){padding-inline:7px;gap:5px}
+  .shell-header:has(.browser-header-actions) .brand-mark{
+    width:34px;height:34px;flex-basis:34px
+  }
+  .shell-header:has(.browser-header-actions) .brand-copy{
+    max-width:clamp(74px,25vw,113px)
+  }
+  .shell-header:has(.browser-header-actions) .brand-copy strong{
+    font-size:12px;overflow:hidden;text-overflow:ellipsis
+  }
+  .shell-header:has(.browser-header-actions) .brand-copy small{
+    font-size:9px;overflow:hidden;white-space:nowrap
+  }
+  .shell-header .shell-header-actions.browser-header-actions button{
+    width:30px;min-width:30px;height:36px
+  }
+  .shell-header .shell-header-actions.browser-header-actions button svg{
+    width:19px;height:19px
+  }
+}
+@media(max-width:355px){
+  .shell-header .shell-header-actions.browser-header-actions button{
+    width:28px;min-width:28px
+  }
+  .shell-header:has(.browser-header-actions) .brand-copy strong{font-size:11px}
+}
 
 /* P2 Browser v3: real encrypted local/cloud catalog, independent of Matrix. */
 .browser-v3{max-width:980px}
