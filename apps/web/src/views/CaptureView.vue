@@ -1118,7 +1118,7 @@ onUnmounted(()=>{
         </Teleport>
       </div>
       </div>
-      <div class="camera-stage-controls" v-show="!blindMode">
+      <div class="camera-stage-controls" data-testid="camera-stage-controls" v-show="!blindMode">
         <div v-if="gpsStatusVisible||requiredFields?.requiredGps"
           class="camera-gps-indicator" data-testid="camera-gps-indicator">
           <span>{{gps?'GPS · ±'+Math.round(gps.accuracyMeters)+' м':'GPS не получен'}}</span>
