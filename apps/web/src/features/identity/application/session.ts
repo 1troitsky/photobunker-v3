@@ -22,6 +22,9 @@ export interface Session {
 }
 
 export const activeSession = shallowRef<Session | null>(null)
+// Only the INITIAL device-local resume, not a network-dependent login gate.
+// main.ts settles this flag in finally, even when recovery state is corrupt.
+export const sessionBootstrapPending = shallowRef(false)
 
 export function requireSession(): Session {
   const state = activeSession.value

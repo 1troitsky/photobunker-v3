@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { activeSession, beginRegistration, finishRegistration, restoreAccount } from '../features/identity/application/session'
+import { activeSession, beginRegistration, finishRegistration, restoreAccount, sessionBootstrapPending } from '../features/identity/application/session'
 import { resolveStartRoute } from '../ui/fieldwork/appearance-preferences'
 import { markInvalidRecoveryKey } from '../features/identity/application/authorization-failure'
 const route=useRoute(),router=useRouter()
@@ -117,10 +117,17 @@ async function loadFile(e:Event):Promise<void>{
         </div>
         <div class="welcome-brand-name">PhotoBunker</div>
       </div>
-      <nav class="welcome-links" aria-label="Вход">
-        <RouterLink class="welcome-link primary" to="/welcome/create">Создать аккаунт</RouterLink>
-        <RouterLink class="welcome-link recover" to="/welcome/recover">Восстановить аккаунт</RouterLink>
-      </nav>
+      <div class="welcome-auth-slot">
+        <div v-if="sessionBootstrapPending" class="welcome-bootstrap-loading"
+          role="status" aria-live="polite" data-testid="welcome-bootstrap-loading">
+          <span class="welcome-spinner" aria-hidden="true"></span>
+          <span>Входим в приложение...</span>
+        </div>
+        <nav v-else class="welcome-links" aria-label="Вход">
+          <RouterLink class="welcome-link primary" to="/welcome/create">Создать аккаунт</RouterLink>
+          <RouterLink class="welcome-link recover" to="/welcome/recover">Восстановить аккаунт</RouterLink>
+        </nav>
+      </div>
       <section class="carousel" aria-label="Почему PhotoBunker" aria-roledescription="carousel"
         :style="{'--slide-accent':current.accent}"
         @mouseenter="paused=true" @mouseleave="paused=false" @focusin="paused=true" @focusout="paused=false"
@@ -192,6 +199,9 @@ async function loadFile(e:Event):Promise<void>{
 .welcome-logo{width:68px;height:68px;border:1px solid #454e45;background:linear-gradient(140deg,#2b382b,#171e18);border-radius:17px;display:grid;place-items:center;box-shadow:0 9px 25px #0003}
 .welcome-logo svg{width:46px;height:46px;stroke-width:2.5;color:#f3fff4}
 .welcome-brand-name{font-size:25px;font-weight:800;letter-spacing:-.055em;line-height:1.2}
+.welcome-auth-slot{min-height:95px;display:flex;flex-direction:column;justify-content:center}
+.welcome-bootstrap-loading{min-height:95px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;color:#b6e9c2;font-size:12px}
+.welcome-bootstrap-loading .welcome-spinner{width:22px;height:22px;border-width:2px}
 .welcome-links{display:grid;gap:9px}
 .welcome-link{display:flex;align-items:center;justify-content:center;min-height:43px;padding:10px 16px;border:1px solid #4b4b4b;background:#303030;color:#f1f1f1;border-radius:9px;text-decoration:none;font-size:13px;font-weight:730;transition:background .14s,border-color .14s}
 .welcome-link.primary{background:#1ed760;border-color:#1ed760;color:#0c2615}
