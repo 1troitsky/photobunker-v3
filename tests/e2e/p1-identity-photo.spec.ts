@@ -106,8 +106,11 @@ test('two browser identities: key-only account, encrypted camera photo, Garage r
     await deviceB.getByRole('button',{name:'Восстановить',exact:true}).click()
     await expect(deviceB.getByText('Подтверждённая сессия')).toBeVisible()
     await deviceB.goto('/browser')
-    await expect(deviceB.getByRole('button',{name:'Проверить из облака'}).first()).toBeVisible()
-    await deviceB.getByRole('button',{name:'Проверить из облака'}).first().click()
+    const remotePhoto=deviceB.getByTestId('browser-row-photo:'+photoId)
+    await expect(remotePhoto).toBeVisible()
+    await remotePhoto.getByTestId('browser-file-menu-toggle').click()
+    await expect(remotePhoto.getByRole('button',{name:'Проверить из облака'})).toBeVisible()
+    await remotePhoto.getByRole('button',{name:'Проверить из облака'}).click()
     const image=deviceB.locator('img.decrypted-preview')
     await expect(image).toBeVisible()
     await expect.poll(()=>image.evaluate(el=>(el as HTMLImageElement).naturalWidth))
@@ -115,7 +118,10 @@ test('two browser identities: key-only account, encrypted camera photo, Garage r
 
     // Confirm repeated reload never needs the Recovery Key again on a trusted device.
     await deviceB.reload()
-    await expect(deviceB.getByRole('button',{name:'Проверить из облака'}).first()).toBeVisible()
+    const recoveredRow=deviceB.getByTestId('browser-row-photo:'+photoId)
+    await expect(recoveredRow).toBeVisible()
+    await recoveredRow.getByTestId('browser-file-menu-toggle').click()
+    await expect(recoveredRow.getByRole('button',{name:'Проверить из облака'})).toBeVisible()
 
     // A new unrelated anonymous account has no access to the first account's media.
     const third=await browser.newContext()
@@ -578,7 +584,10 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     },captured.photoId)
     expect(cloudMetadata.description).toBe('PRIVATE-E2E-METADATA-NOT-FOR-SERVER')
     expect(cloudMetadata.gps.longitude).toBe(41.639411)
-    await B.getByRole('button',{name:'Проверить из облака'}).first().click()
+    const sentRow=B.getByTestId('browser-row-photo:'+captured.photoId)
+    await expect(sentRow).toBeVisible()
+    await sentRow.getByTestId('browser-file-menu-toggle').click()
+    await sentRow.getByRole('button',{name:'Проверить из облака'}).click()
     await expect(B.getByText(/Категория: Репортаж/)).toBeVisible()
     await expect(B.getByText(/PRIVATE-E2E-METADATA-NOT-FOR-SERVER/)).toBeVisible()
     await B.goto('/assignments')
