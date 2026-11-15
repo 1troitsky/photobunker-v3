@@ -247,8 +247,40 @@ onUnmounted(()=>{
           <button type="button" class="notification-summary"
             :aria-expanded="expanded===row.id" :disabled="busy"
             @click="expand(row)">
-            <span class="notification-dot" :class="{isread:row.readAt!==null||!notificationBadgeVisible(row.kind,preferences,clock)}"
-              aria-hidden="true"></span>
+            <span class="notification-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <template v-if="row.kind==='assignment-invite'||row.kind==='team-invite'">
+                  <circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M18 8v8m-4-4h8"/>
+                </template>
+                <template v-else-if="row.kind==='assignment-deadline'">
+                  <circle cx="12" cy="13" r="9"/><path d="M12 8v5l3 2M9 2h6"/>
+                </template>
+                <template v-else-if="row.kind==='new-file'">
+                  <path d="M3 6h7l2 3h9v11H3zM12 12v5m-2.5-2.5h5"/>
+                </template>
+                <template v-else-if="row.kind==='media-review'">
+                  <rect x="3" y="4" width="18" height="16" rx="2"/>
+                  <path d="m7 12 3 3 7-7"/>
+                </template>
+                <template v-else-if="row.kind==='file-expiry'">
+                  <path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14"/>
+                </template>
+                <template v-else-if="row.kind==='backup'">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                  <path d="M3 5v14c0 4 18 4 18 0V5M3 12c0 4 18 4 18 0"/>
+                </template>
+                <template v-else-if="row.kind==='subscription'">
+                  <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+                </template>
+                <template v-else>
+                  <path d="M12 2 4 5v7c0 5.5 4 8.5 8 10 4-1.5 8-4.5 8-10V5z"/>
+                  <path d="m9 12 2 2 4-4"/>
+                </template>
+              </svg>
+              <span class="notification-dot"
+                :class="{isread:row.readAt!==null||!notificationBadgeVisible(row.kind,preferences,clock)}"></span>
+            </span>
             <span class="notification-copy">
               <strong>{{ previewNotification(row).title }}</strong>
               <small>{{ previewNotification(row).description }}</small>
@@ -287,14 +319,17 @@ onUnmounted(()=>{
 .notifications-tabs{display:flex;margin:20px 0 14px;border-bottom:1px solid var(--outline)}
 .notifications-tabs button{border:0;border-radius:0;background:transparent;color:#aaa;padding:12px 16px;border-bottom:2px solid transparent}
 .notifications-tabs button.selected{color:#fff;border-bottom-color:var(--accent)}
-.notifications-list{list-style:none;margin:0;padding:0;border-radius:10px;overflow:hidden;background:var(--surface)}
-.notifications-list li{border-bottom:1px solid var(--outline)}
-.notifications-list li:last-child{border-bottom:0}
-.notifications-list li.read .notification-summary{opacity:.65}
-.notification-summary{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:transparent!important;border:0!important;border-radius:0!important;min-height:75px!important;padding:13px!important}
+/* Owner-accepted Notifications Fieldwork 1.5: a single event surface;
+   the unread indicator belongs to the upper-left of the event icon. */
+.notifications-list{list-style:none;margin:0;padding:0;background:transparent}
+.notifications-list li{background:var(--surface);border-radius:9px;overflow:visible;margin-bottom:8px}
+.notifications-list li.read:not(.expanded) .notification-summary{opacity:.60}
+.notification-summary{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:transparent!important;border:0!important;border-radius:9px!important;min-height:88px!important;padding:17px 15px!important}
 .notification-summary:hover{background:#272e29!important}
-.notification-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 7px}
-.notification-dot.isread{background:transparent}
+.notification-icon{position:relative;display:grid;place-items:center;flex:0 0 31px;width:31px;height:31px;border-radius:8px;background:#343434;color:#bcbcbc}
+.notification-icon svg{width:18px;height:18px;flex:none}
+.notification-dot{position:absolute;top:-4px;left:-4px;width:9px;height:9px;box-sizing:content-box;border-radius:50%;background:var(--accent);border:2px solid var(--surface);z-index:1}
+.notification-dot.isread{background:transparent;border-color:transparent}
 .notification-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px}
 .notification-copy strong{font-size:13px}
 .notification-copy small,.notification-summary time{font-size:11px;color:#aaa}
