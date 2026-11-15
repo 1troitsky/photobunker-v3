@@ -4,14 +4,15 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { activeSession, beginRegistration, finishRegistration, restoreAccount, sessionBootstrapPending } from '../features/identity/application/session'
 import { resolveStartRoute } from '../ui/fieldwork/appearance-preferences'
 import { markInvalidRecoveryKey } from '../features/identity/application/authorization-failure'
+import { brand } from '../config/brand'
 const route=useRoute(),router=useRouter()
 type Feature={title:string;desc:string;caption:string;accent:string;art:string}
 const features:readonly Feature[]=[
  {title:'Снимайте — не оставляя фото в галерее.',
-  desc:'Фото из PhotoBunker не сохраняются в стандартную медиатеку. Работайте с материалами внутри защищённого пространства.',
-  caption:'Кадр остаётся в PhotoBunker',art:'gallery',accent:'#1ada62'},
+  desc:`Фото из ${brand.name} не сохраняются в стандартную медиатеку. Работайте с материалами внутри защищённого пространства.`, 
+  caption:`Кадр остаётся в ${brand.name}`,art:'gallery',accent:'#1ada62'}, 
  {title:'Сначала шифрование. Потом облако.',
-  desc:'Модель PhotoBunker строится вокруг шифрования на устройстве и ключей под вашим контролем — не вокруг доверия к администратору сервера.',
+  desc:`Модель ${brand.name} строится вокруг шифрования на устройстве и ключей под вашим контролем — не вокруг доверия к администратору сервера.`, 
   caption:'Client-side encryption',art:'crypto',accent:'#c2ef8a'},
  {title:'От съёмки до результата. В одном месте.',
   desc:'Соберите людей в команду, выдайте задание и получайте материалы сразу в нужном контексте — без хаоса в переписках.',
@@ -75,7 +76,7 @@ function saveKey():void{
  const blob=new Blob([generated.value+'\n'],{type:'text/plain;charset=utf-8'})
  const url=URL.createObjectURL(blob)
  const a=document.createElement('a')
- a.href=url;a.download='PhotoBunker-Recovery-Key.txt'
+ a.href=url;a.download=brand.slug+'-Recovery-Key.txt'
  document.body.appendChild(a);a.click();a.remove()
  setTimeout(()=>URL.revokeObjectURL(url),1000)
  notice.value='Файл с ключом передан браузеру для сохранения'
@@ -115,7 +116,7 @@ async function loadFile(e:Event):Promise<void>{
         <div class="welcome-logo" aria-hidden="true">
           <svg viewBox="0 0 72 72" fill="none"><rect x="9" y="17" width="54" height="39" rx="10" stroke="currentColor" stroke-width="3"/><path d="m19 17 5-7h24l5 7" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle cx="36" cy="37" r="13" stroke="#18d65c" stroke-width="3"/><path d="M36 26c6 3 9 8 10 13M27 42c5 3 11 4 16 1M32 27c-6 4-8 10-7 15" stroke="#a9f2b9" stroke-width="2.6" stroke-linecap="round"/></svg>
         </div>
-        <div class="welcome-brand-name">PhotoBunker</div>
+        <div class="welcome-brand-name">{{brand.name}}</div>
       </div>
       <div class="welcome-auth-slot">
         <div v-if="sessionBootstrapPending" class="welcome-bootstrap-loading"
@@ -128,7 +129,7 @@ async function loadFile(e:Event):Promise<void>{
           <RouterLink class="welcome-link recover" to="/welcome/recover">Восстановить аккаунт</RouterLink>
         </nav>
       </div>
-      <section class="carousel" aria-label="Почему PhotoBunker" aria-roledescription="carousel"
+      <section class="carousel" :aria-label="'Почему '+brand.name" aria-roledescription="carousel"
         :style="{'--slide-accent':current.accent}"
         @mouseenter="paused=true" @mouseleave="paused=false" @focusin="paused=true" @focusout="paused=false"
         @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
