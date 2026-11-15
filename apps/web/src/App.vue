@@ -10,6 +10,7 @@ import { notificationShellActions } from './features/notifications/application/n
 import {contactsShellActions} from './features/people/application/contacts-shell-actions'
 import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
 import {browserShellActions} from './features/browser/application/browser-shell-actions'
+import {cameraShellActions} from './features/media/application/camera-shell-actions'
 import {isDockSectionActive,resolveDockRetap} from './ui/fieldwork/dock-retap'
 const route = useRoute()
 const router = useRouter()
@@ -135,6 +136,39 @@ const dock = computed(() => displayedDock.value
           data-testid="editor-shell-save"
           :disabled="!viewerShellActions?.editor?.canSave"
           @click="viewerShellActions?.editor?.save()">Сохранить</button>
+      </div>
+      <div class="shell-header-actions camera-header-actions"
+        v-else-if="route.path==='/camera'" data-testid="camera-shell-actions"
+        aria-label="Действия камеры">
+        <button type="button" data-testid="camera-header-flip"
+          aria-label="Перевернуть камеру" title="Переключить переднюю и заднюю камеры"
+          :disabled="!cameraShellActions?.canFlip"
+          @click="cameraShellActions?.flip()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            aria-hidden="true"><path d="M3 10a9 9 0 0 1 15.5-5L21 7m0-5v5h-5"/>
+            <path d="M21 14a9 9 0 0 1-15.5 5L3 17m0 5v-5h5"/></svg>
+        </button>
+        <button type="button" data-testid="camera-header-torch"
+          aria-label="Фонарик" title="Фонарик (если поддерживается камерой)"
+          :aria-pressed="!!cameraShellActions?.torchOn"
+          :disabled="!cameraShellActions?.canTorch"
+          @click="cameraShellActions?.toggleTorch()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true">
+            <path d="M7 2h10l-1 8-4 4-4-4zM10 14v7h4v-7"/>
+            <path d="M9 2h6M9 6h6"/>
+          </svg>
+        </button>
+        <button type="button" data-testid="camera-header-blind"
+          aria-label="Слепой режим" title="Скрыть предпросмотр"
+          :aria-pressed="!!cameraShellActions?.blind"
+          :disabled="!cameraShellActions?.canBlind"
+          @click="cameraShellActions?.toggleBlind()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+            aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/>
+            <circle cx="12" cy="12" r="3"/><path d="m3 3 18 18"/></svg>
+        </button>
       </div>
       <div class="shell-header-actions browser-header-actions"
         v-else-if="route.path==='/browser'" data-testid="browser-shell-actions"
