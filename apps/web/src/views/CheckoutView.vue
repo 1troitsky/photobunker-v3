@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed,onMounted,ref,watch,nextTick} from 'vue'
 import {RouterLink,useRoute,useRouter} from 'vue-router'
+import {brand} from '../config/brand'
 import {readPublicCatalog,type PublicPlan} from '../features/billing/application/catalog-client'
 import {checkoutPrice,checkoutDiscount,selectCheckoutOrder,type CheckoutSelection,type CheckoutTerm}
   from '../features/billing/application/checkout-selection'
@@ -134,7 +135,7 @@ async function save():Promise<void>{
         <span class="method-radio">Позже</span>
       </div>
     </div>
-    <p class="methods-help">Сеть, токен и кошелёк выбираются у платёжного провайдера, а не в PhotoBunker.</p>
+    <p class="methods-help">Сеть, токен и кошелёк выбираются у платёжного провайдера, а не в {{brand.name}}.</p>
     <div class="info-line" role="status">
       <span aria-hidden="true">ⓘ</span>
       <p><strong>Оплата сейчас недоступна.</strong> Без проверенного инвойса и DePay нельзя
