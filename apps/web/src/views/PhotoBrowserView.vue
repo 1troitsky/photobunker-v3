@@ -1142,7 +1142,7 @@ watch([search,archiveTab],()=>{
 const browserHeaderOwner={}
 function scrollToElement(selector:string,focus=false):void{
   const el=document.querySelector<HTMLElement>(selector)
-  el?.scrollIntoView({block:'start',behavior:'instant'})
+  el?.scrollIntoView({block:'start',behavior:'auto'})
   if(focus)el?.focus({preventScroll:true})
 }
 function openCreateFolder():void{
