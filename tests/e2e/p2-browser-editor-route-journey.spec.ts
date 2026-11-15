@@ -33,6 +33,8 @@ test('P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save
     await page.goto('/browser')
     await expect(page.getByTestId('browser-row-media:'+id)).toBeVisible()
     await page.getByTestId('browser-row-media:'+id)
+      .getByTestId('browser-file-menu-toggle').click()
+    await page.getByTestId('browser-row-media:'+id)
       .getByRole('link',{name:'Полный просмотр файла '+id}).click()
     await expect(page).toHaveURL(new RegExp('/browser/file/media/'+id+'$'))
     await expect(page.getByTestId('file-viewer-image')).toBeVisible()
