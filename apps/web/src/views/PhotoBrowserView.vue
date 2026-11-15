@@ -125,6 +125,7 @@ let scrollReturnKey:string|null=null
 const createFolderOpen=ref(false)
 const createFolderParent=ref('')
 const uploadSheetOpen=ref(false)
+const browserSettingsOpen=ref(false)
 const newFolderName=ref('')
 const editingFolderId=ref<string|null>(null)
 const editFolderName=ref('')
@@ -1095,6 +1096,7 @@ watch(activeSession,(next,previous)=>{
     createFolderOpen.value=false
     createFolderParent.value=''
     uploadSheetOpen.value=false
+    browserSettingsOpen.value=false
     newFolderName.value=''
     editFolderName.value=''
     selectedKeys.value=[]
@@ -1164,6 +1166,7 @@ function scrollToElement(selector:string,focus=false):void{
 function openCreateFolder():void{
   if(!activeSession.value||!folderReady.value||!!folderError.value||folderBusy.value)return
   uploadSheetOpen.value=false
+  browserSettingsOpen.value=false
   createFolderParent.value=selectedFolder.value??''
   createFolderOpen.value=true
   void nextTick(()=>{
@@ -1203,6 +1206,7 @@ function newFolderSheetKeydown(event:KeyboardEvent):void{
 function openUploadPanel():void{
   if(!activeSession.value)return
   createFolderOpen.value=false
+  browserSettingsOpen.value=false
   uploadSheetOpen.value=true
   // This is the ONE original MediaImportPanel instance; opening/closing
   // merely moves its existing controls visually, with the durable encrypted
@@ -1244,7 +1248,39 @@ function focusPrivateSearch():void{
 }
 function openBrowserSettings():void{
   if(!activeSession.value)return
-  scrollToElement('[data-testid="browser-archive-preferences"]')
+  createFolderOpen.value=false
+  uploadSheetOpen.value=false
+  browserSettingsOpen.value=true
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-settings-close"]')?.focus()
+  })
+}
+function closeBrowserSettings():void{
+  browserSettingsOpen.value=false
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-header-settings"]')?.focus()
+  })
+}
+function browserSettingsKeydown(event:KeyboardEvent):void{
+  if(!browserSettingsOpen.value)return
+  if(event.key==='Escape'){
+    event.preventDefault();closeBrowserSettings();return
+  }
+  if(event.key!=='Tab')return
+  const root=document.querySelector<HTMLElement>(
+    '[data-testid="browser-archive-preferences"]')
+  const enabled=Array.from(root?.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href]'
+  )??[])
+  if(!enabled.length)return
+  const first=enabled[0]!,last=enabled[enabled.length-1]!
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
 }
 function toggleBatchSelection():void{
   if(!activeSession.value||!folderReady.value||!!folderError.value||folderBusy.value)return
@@ -1474,7 +1510,21 @@ onUnmounted(()=>{
         <p v-if="folderError" role="alert" class="error-text">{{ folderError }}</p>
         <p v-if="folderNotice" role="status" class="muted">{{ folderNotice }}</p>
       </section>
-      <section class="browser-archive-preferences" data-testid="browser-archive-preferences">
+      <div v-if="browserSettingsOpen" class="browser-settings-backdrop"
+        data-testid="browser-settings-backdrop" @click="closeBrowserSettings"></div>
+      <section class="browser-archive-preferences"
+        :class="{'is-browser-settings-sheet':browserSettingsOpen}"
+        data-testid="browser-archive-preferences"
+        :role="browserSettingsOpen?'dialog':undefined"
+        :aria-modal="browserSettingsOpen?'true':undefined"
+        :aria-label="browserSettingsOpen?'Настройки Browser':undefined"
+        @keydown="browserSettingsKeydown">
+        <header v-if="browserSettingsOpen" class="browser-settings-heading">
+          <strong>Настройки Browser</strong>
+          <button type="button" data-testid="browser-settings-close"
+            aria-label="Закрыть настройки Browser" @click="closeBrowserSettings">
+            Закрыть</button>
+        </header>
         <h2>Настройки архива</h2>
         <label>
           <input type="checkbox" data-testid="browser-pref-use-archive"
@@ -1507,6 +1557,9 @@ onUnmounted(()=>{
             data-testid="browser-pref-use-server"
             :disabled="archivePrefsBusy||!activeSession.online"
             @click="acceptServerArchivePrefs">Принять настройки сервера</button>
+        </div>
+        <div v-if="browserSettingsOpen" class="browser-settings-footer">
+          <button type="button" @click="closeBrowserSettings">Готово</button>
         </div>
       </section>
       <nav class="browser-archive-tabs" aria-label="Расположение файлов">
