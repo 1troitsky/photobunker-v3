@@ -13,10 +13,12 @@ export async function makeBrowserFolderThumbnail(
     ||!/^image\/(?:jpeg|png|webp|gif|avif)$/i.test(source.type))
     throw Error('browser.thumbnail_unsupported')
   let image:ImageBitmap|HTMLImageElement
+  let width:number,height:number
   let release:()=>void
   if(typeof createImageBitmap==='function'){
     const bitmap=await createImageBitmap(source)
     image=bitmap
+    width=bitmap.width;height=bitmap.height
     release=()=>bitmap.close()
   }else{
     // Some WebKit installations lack ImageBitmap; the original object URL
@@ -45,12 +47,11 @@ export async function makeBrowserFolderThumbnail(
       throw e
     }
     image=element
+    width=element.naturalWidth;height=element.naturalHeight
     release=()=>{element.src='';URL.revokeObjectURL(url)}
   }
   try{
-    const width=image instanceof ImageBitmap?image.width:image.naturalWidth
-    const height=image instanceof ImageBitmap?image.height:image.naturalHeight
-    if(width<1||height<1||width>16384||height>16384)
+      if(width<1||height<1||width>16384||height>16384)
       throw Error('browser.thumbnail_invalid_dimensions')
     const canvas=document.createElement('canvas')
     canvas.width=edge
