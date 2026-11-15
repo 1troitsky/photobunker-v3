@@ -1564,3 +1564,37 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .browser-folder-cover{flex-basis:57px;width:57px;height:54px}
   .browser-folder-item .browser-folder-open{gap:8px}
 }
+
+/* Browser v3 accepted heading: compact view switch on the right, replacing
+   the technical Camera shortcut (Camera remains in the common Dock). */
+.browser-title{min-width:0;align-items:center;gap:10px;margin-bottom:12px}
+.browser-title>div:first-child{flex:1;min-width:0}
+.browser-title>div:first-child h1{font-size:29px;line-height:1.12;
+  letter-spacing:-.04em;margin:0 0 4px}
+.browser-title>div:first-child .subtitle{margin:0;font-size:11px;
+  line-height:1.4;color:#a6a6a6;overflow-wrap:anywhere}
+.browser-title .browser-view-switch{display:flex;flex:0 0 auto;
+  gap:3px;padding:3px;border:0;border-radius:7px;background:#242424}
+.browser-title .browser-view-switch button{
+  border:0;min-height:33px;min-width:39px;padding:7px 8px;
+  border-radius:5px;background:transparent;color:#a7a7a7;
+  font-size:11px;font-weight:660;white-space:nowrap
+}
+.browser-title .browser-view-switch button[aria-pressed=true]{
+  background:#464646;color:#f3f3f3
+}
+.browser-title .browser-view-switch button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:-2px
+}
+@media(max-width:390px){
+  .browser-title{gap:6px}
+  .browser-title>div:first-child h1{font-size:25px}
+  .browser-title .browser-view-switch button{min-width:33px;
+    padding:6px 5px;font-size:10px}
+}
+@media(max-width:350px){
+  .browser-title>div:first-child h1{font-size:22px}
+  .browser-title .browser-view-switch{gap:1px;padding:2px}
+  .browser-title .browser-view-switch button{min-width:31px;
+    padding:6px 3px;font-size:9px}
+}
