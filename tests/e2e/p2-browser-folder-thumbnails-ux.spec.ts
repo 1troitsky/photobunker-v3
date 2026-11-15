@@ -93,8 +93,10 @@ test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext
   await page.waitForFunction(url=>
     (window as Window&{__folderThumbnailRevoked?:string[]})
       .__folderThumbnailRevoked?.includes(url),objectURL)
-  // The original E2EE file is still available; disposing the thumbnail
-  // must NOT remove or decrypt any durable outbox ciphertext.
+  // A cold offline page.goto is BLOCKED BY DESIGN until Signed PWA
+  // acceptance. Restore the network for this explicit document navigation,
+  // then prove that the original local E2EE bytes are still intact.
+  await context.setOffline(false)
   await page.goto('/browser')
   await expect(page.getByTestId('browser-header-folder')).toBeEnabled()
   const recovered=await page.evaluate(async mediaId=>{
