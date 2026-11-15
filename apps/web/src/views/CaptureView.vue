@@ -991,15 +991,102 @@ onUnmounted(()=>{
 </script>
 
 <template>
-  <section class="foundation-content">
-    <h1>Камера</h1>
-    <p class="subtitle">P1 · локальное шифрование до отправки</p>
+  <section class="foundation-content camera-fieldwork" data-testid="camera-fieldwork">
+    <h1 class="camera-screen-title">Камера</h1>
     <div v-if="!activeSession" class="foundation-card">
       <p>Для съёмки нужен анонимный аккаунт.</p>
       <RouterLink to="/settings">Создать или восстановить аккаунт</RouterLink>
     </div>
     <template v-else>
-      <div class="foundation-card">
+      <nav class="camera-mode-tabs" aria-label="Режим съёмки" data-testid="camera-mode-tabs">
+        <button v-for="mode in (['photo','video','audio'] as const)" :key="mode"
+          type="button" :aria-pressed="captureMode===mode"
+          :class="{selected:captureMode===mode}"
+          :data-testid="'camera-mode-tab-'+mode"
+          :disabled="recording||busy||starting" @click="captureMode=mode">
+          {{mode==='photo'?'Фото':mode==='video'?'Видео':'Аудио'}}
+        </button>
+      </nav>
+      <div class="camera-viewfinder" data-testid="camera-viewfinder">
+        <!-- Keep the video node and active stream mounted beneath blind mode. -->
+        <div class="video-frame" v-show="captureMode!=='audio'">
+          <video ref="video" playsinline muted autoplay aria-label="Предпросмотр камеры"/>
+        </div>
+        <div v-if="captureMode==='audio'" class="camera-audio-view"
+          data-testid="camera-audio-view" aria-label="Диктофон">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.6" aria-hidden="true">
+            <rect x="9" y="2" width="6" height="13" rx="3"/>
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v4m-5 0h10"/>
+          </svg>
+          <strong>Аудиозапись</strong>
+          <span>Только микрофон, без видеопотока</span>
+          <time v-if="recording" data-testid="camera-audio-time">
+            {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
+          </time>
+        </div>
+        <div v-if="blindMode" class="camera-blind-overlay" data-testid="camera-blind-overlay">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.6" aria-hidden="true">
+            <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/>
+            <circle cx="12" cy="12" r="3"/><path d="m3 3 18 18"/>
+          </svg>
+          <h2>Слепой режим</h2>
+          <p>Что-бы другие не видели, что вы делаете</p>
+          <time v-if="recording" data-testid="camera-blind-time">
+            {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
+          </time>
+          <button v-if="captureMode==='photo'" type="button" class="camera-blind-shutter"
+            data-testid="camera-blind-shutter" aria-label="Сделать снимок"
+            :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
+            @click="capture">Снять</button>
+          <button v-else-if="!recording" type="button" class="camera-blind-shutter"
+            data-testid="camera-blind-shutter"
+            :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
+            @click="beginRecording">Начать запись</button>
+          <button v-else type="button" class="camera-blind-shutter recording"
+            data-testid="camera-blind-shutter" @click="endRecording">Остановить запись</button>
+          <button type="button" class="camera-blind-return"
+            @click="toggleBlindMode">Вернуться назад</button>
+        </div>
+      </div>
+      <div class="camera-stage-controls" v-show="!blindMode">
+        <div class="camera-gps-indicator" data-testid="camera-gps-indicator">
+          <span>{{gps?'GPS · ±'+Math.round(gps.accuracyMeters)+' м':'GPS не получен'}}</span>
+          <button v-if="!gps" type="button" :disabled="gpsLoading||busy"
+            @click="obtainGPS">{{gpsLoading?'Определяем…':'Определить GPS'}}</button>
+        </div>
+        <div class="camera-control-trio">
+          <button type="button" class="camera-side-action" data-testid="camera-open-assignment"
+            @click="openCameraDetails('[data-testid=camera-assignment-panel]')">Задание</button>
+          <button v-if="captureMode==='photo'" type="button" class="camera-shutter"
+            aria-label="Сделать снимок"
+            :disabled="!stream||starting||busy||gpsLoading||!canCaptureType" @click="capture"></button>
+          <button v-else-if="!recording" type="button"
+            class="camera-shutter camera-shutter-record"
+            data-testid="camera-start-recording" aria-label="Начать запись"
+            :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
+            @click="beginRecording"></button>
+          <button v-else type="button" class="camera-shutter camera-shutter-record active"
+            data-testid="camera-stop-recording" aria-label="Остановить запись"
+            @click="endRecording"></button>
+          <button type="button" class="camera-side-action" data-testid="camera-open-settings"
+            @click="openCameraDetails('[data-testid=camera-settings-panel]')">Настройки</button>
+        </div>
+        <p v-if="recording" class="camera-recording-timer">
+          Запись · {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
+        </p>
+        <div class="camera-device-actions">
+          <button type="button" :disabled="!!stream||starting" @click="openCamera">
+            {{captureMode==='audio'?'Включить микрофон':'Включить камеру'}}
+          </button>
+          <button type="button" :disabled="!stream&&!starting" @click="closeCamera">
+            {{recording?'Отменить запись':'Отключить'}}
+          </button>
+        </div>
+      </div>
+      <div class="camera-details" data-testid="camera-details">
+      <div class="foundation-card" data-testid="camera-assignment-panel">
         <label for="camera-mode">Режим съёмки</label>
         <select id="camera-mode" v-model="captureMode" :disabled="recording||busy"
           data-testid="camera-mode">
@@ -1082,7 +1169,7 @@ onUnmounted(()=>{
           обязательные теги: {{ requiredAdvanced.requiredTags.join(', ')||'нет' }}.
         </p>
       </div>
-      <div class="foundation-card">
+      <div class="foundation-card" data-testid="camera-settings-panel">
         <h2>Приватная информация {{ captureMode==='photo'?'снимка':captureMode==='video'?'видео':'аудио' }}</h2>
         <label for="camera-category">Категория</label>
         <input id="camera-category" v-model="category" type="text" maxlength="64"
@@ -1107,31 +1194,6 @@ onUnmounted(()=>{
         <p v-if="gpsError" role="alert" class="error-text">{{ gpsError }}</p>
         <p class="muted">GPS запрашивается только по нажатию. Категория, описание и координаты шифруются на устройстве и не попадают на сервер открытым текстом.</p>
       </div>
-      <div class="video-frame" v-show="captureMode!=='audio'">
-        <video ref="video" playsinline muted autoplay aria-label="Предпросмотр камеры"/>
-      </div>
-      <p v-if="captureMode==='audio'" class="muted">
-        Аудиозапись использует только микрофон. Видеопоток не запрашивается.
-      </p>
-      <div class="action-row">
-        <button type="button" :disabled="!!stream||starting" @click="openCamera">
-          {{ captureMode==='audio'?'Включить микрофон':'Включить камеру' }}
-        </button>
-        <button v-if="captureMode==='photo'" type="button"
-          :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
-          @click="capture">
-          {{ busy ? 'Шифрование…' : 'Сделать снимок' }}
-        </button>
-        <button v-else-if="!recording" type="button"
-          data-testid="camera-start-recording"
-          :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
-          @click="beginRecording">Начать запись {{ captureMode==='video'?'видео':'аудио' }}</button>
-        <button v-else type="button"
-          data-testid="camera-stop-recording"
-          @click="endRecording">Остановить запись</button>
-        <button type="button" :disabled="!stream&&!starting" @click="closeCamera">
-          {{ recording?'Отменить запись':'Отключить' }}
-        </button>
       </div>
       <p v-if="recording" role="status" class="status-text" data-testid="camera-recording-status">
         Идёт запись с {{ recordingStartedAt?new Date(recordingStartedAt).toLocaleTimeString():'' }}. От 5 до {{ recordingMaxSeconds }} секунд, не более 128 MiB.
