@@ -7,6 +7,9 @@ test('Payments & Tariffs Fieldwork 1.1 uses live plan catalog and never fabricat
   await expect(page.getByTestId('billing-current')).toBeVisible()
   // Unauthenticated sessions must not show false active paid plans.
   await expect(page.getByText('Текущий тариф',{exact:true})).toBeVisible()
+  // A real server catalog must be verified before selection is actionable.
+  // Fail promptly on a missing/malformed catalog rather than spending 110s on a disabled button.
+  await expect(page.getByRole('button',{name:'Сравнить тарифы'})).toBeEnabled({timeout:15000})
   await page.getByRole('button',{name:'Сравнить тарифы'}).click()
   await expect(page.getByTestId('billing-tier-free')).toBeVisible()
   await expect(page.getByTestId('billing-tier-go')).toBeVisible()

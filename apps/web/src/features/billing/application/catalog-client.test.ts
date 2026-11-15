@@ -5,7 +5,7 @@ const valid=()=>({
  plans:['free','go','pro','unlimited','unlimited_plus'].map((planId,i)=>({
   planId,monthlyPriceCents:i*100,periodPricesCents:i===0?{'1':0}:{'1':i*100,'6':i*550,'12':i*1000},
   limits:{assignmentCreationsPerMonth:i+1,maxMediaFiles:i*5,storage:{amount:10,unit:'GB',byteCeiling:10000000000,unitPolicy:'DECIMAL_GB_TB_V1'},
-   retention:{days:30},manualBackupUpdatesPerWeek:1,autoBackupUpdates:{perWeek:1,perDay:null},graceDays:i===0?null:15},
+   retention:{days:30},manualBackupUpdatesPerWeek:1,autoBackupUpdates:{per_week:1,per_day:null},graceDays:i===0?null:15},
   featureFlags:{encryptedCloudBackup:true,emergencyPin:true,remoteEmergency:true,matrixE2eeMessages:true,prioritySupport:false},
  }))
 })
@@ -14,6 +14,10 @@ describe('PB3 server-owned public tariff catalog',()=>{
   const plans=parsePublicCatalog(valid())
   expect(plans.map(x=>x.planId)).toEqual(['free','go','pro','unlimited','unlimited_plus'])
   expect(plans[3]?.periodPricesCents['6']).toBe(1650)
+ })
+ it('normalizes canonical server backup limits without inventing entitlements',()=>{
+  const plans=parsePublicCatalog(valid())
+  expect(plans[0]?.limits.autoBackupUpdates).toEqual({perWeek:1,perDay:null})
  })
  it('rejects fake, duplicate or malformed price lists',()=>{
   const a=valid();a.plans[1]!.planId='free'

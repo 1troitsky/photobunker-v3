@@ -33,7 +33,7 @@ watch(activeSession,async session=>{
       <span class="person-avatar" aria-hidden="true">{{localHandle?localHandle.replace(/^@/,'').slice(0,1).toUpperCase():'P'}}</span>
       <span class="account-copy">
         <strong>{{localHandle||'Мой аккаунт'}}</strong>
-        <small>{{online?'Подтверждённая сессия':'Локальный режим'}} · Профиль на устройстве</small>
+        <small>{{online?'Доступ активен':'Локальный режим'}} · Профиль на устройстве</small>
       </span>
       <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
     </RouterLink>

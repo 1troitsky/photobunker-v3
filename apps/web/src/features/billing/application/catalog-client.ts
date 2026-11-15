@@ -39,7 +39,11 @@ export function parsePublicCatalog(raw:unknown):PublicPlan[]{
   const parsed:PublicPlan[]=items.map((value:unknown)=>{
     const p=record(value),lim=record(p.limits),st=record(lim.storage)
     const prices=record(p.periodPricesCents),flags=record(p.featureFlags)
+    // Laravel's canonical value snapshot preserves snake_case auto_backup_updates fields.
+    // Do not assume the server renamed the nested values to camelCase.
     const auto=record(lim.autoBackupUpdates),retention=record(lim.retention)
+    const perWeek=auto.per_week
+    const perDay=auto.per_day
     if(typeof p.planId!=='string'||!names.includes(p.planId as PublicPlan['planId'])
       ||found.has(p.planId)||!integer(p.monthlyPriceCents)
       ||!integer(prices['1'])||prices['1']!==p.monthlyPriceCents
@@ -50,7 +54,7 @@ export function parsePublicCatalog(raw:unknown):PublicPlan[]{
       ||!['GB','TB'].includes(String(st.unit))
       ||!quota(st.byteCeiling)||typeof st.unitPolicy!=='string'
       ||!quota(lim.manualBackupUpdatesPerWeek)
-      ||!quota(auto.perWeek)||!quota(auto.perDay)
+      ||!quota(perWeek)||!quota(perDay)
       ||!quota(lim.graceDays)
       ||!(integer(retention.days)||retention.mode==='while_plan_active_with_assignment_policy')
       ||typeof flags.encryptedCloudBackup!=='boolean'
@@ -59,7 +63,7 @@ export function parsePublicCatalog(raw:unknown):PublicPlan[]{
       ||typeof flags.matrixE2eeMessages!=='boolean'
       ||typeof flags.prioritySupport!=='boolean')fail()
     found.add(p.planId)
-    return p as unknown as PublicPlan
+    return {...p,limits:{...lim,autoBackupUpdates:{perWeek,perDay}}} as unknown as PublicPlan
   })
   if(names.some(x=>!found.has(x)))fail()
   return parsed
