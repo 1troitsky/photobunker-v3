@@ -1731,56 +1731,7 @@ onUnmounted(()=>{
               Отмена</button>
           </div>
         </form>
-        <div class="browser-folder-list">
-          <div v-for="folder in folders" :key="folder.id" class="browser-folder-item"
-            :data-testid="'browser-folder-'+folder.id">
-            <button type="button" class="browser-folder-open"
-              :aria-label="folder.name" @click="selectedFolder=folder.id">
-              <span class="browser-folder-cover"
-                :class="{'is-empty':folderLoadedRows(folder.id).length===0}"
-                aria-hidden="true">
-                <template v-if="folderLoadedRows(folder.id).length">
-                  <span v-for="index in 4" :key="index" class="browser-folder-cover-cell"
-                    :class="{'is-blank':!folderLoadedRows(folder.id)[index-1]}">
-                    <img v-if="folderLoadedRows(folder.id)[index-1]
-                        &&folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
-                      :src="folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
-                      alt="" decoding="async" data-testid="browser-folder-thumb">
-                    <template v-else>{{ folderLoadedRows(folder.id)[index-1]
-                      ?folderCoverSymbol(folderLoadedRows(folder.id)[index-1]!):'' }}</template>
-                  </span>
-                </template>
-                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="1.6"><path d="M3 7h6l2 2h10v11H3z"/>
-                  <path d="M3 7V5h7l2 2"/></svg>
-                <span class="browser-folder-badge">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="1.8"><path d="M3 7h6l2 2h10v11H3z"/></svg>
-                </span>
-              </span>
-              <span class="browser-folder-copy">
-                <strong>{{ folder.name }}</strong>
-                <small>{{ folderLoadedCount(folder.id) }} файлов в загруженном каталоге</small>
-              </span>
-            </button>
-            <button type="button" :disabled="folderBusy"
-              :aria-label="'Переименовать '+folder.name"
-              @click="openRename(folder.id,folder.name)">Переименовать</button>
-            <label class="browser-folder-parent">
-              <span>В</span>
-              <select :value="folder.parentId??''" :disabled="folderBusy"
-                :aria-label="'Переместить папку '+folder.name"
-                @change="changeFolderParent(folder.id,$event)">
-                <option value="">Корень</option>
-                <option v-for="candidate in allFolders.filter(x=>x.id!==folder.id)"
-                  :key="candidate.id" :value="candidate.id">{{ candidate.name }}</option>
-              </select>
-            </label>
-            <button type="button" :disabled="folderBusy"
-              :aria-label="'Удалить пустую папку '+folder.name"
-              @click="deleteEmptyFolder(folder.id)">Удалить</button>
-          </div>
-        </div>
+        <div id="browser-folder-cards-top" data-testid="browser-folder-cards-top"></div>
         <form v-if="editingFolderId" class="browser-folder-form"
           @submit.prevent="renameCurrentFolder">
           <label>Новое название
@@ -2140,6 +2091,60 @@ onUnmounted(()=>{
           </div>
         </div>
       </div>
+      <!-- One live list of folders, teleported ABOVE files when preferred,
+           or displayed BELOW files when disabled. No duplicate edit/ACL UI. -->
+      <Teleport to="#browser-folder-cards-top" :disabled="!foldersFirst">
+        <div class="browser-folder-list">
+          <div v-for="folder in folders" :key="folder.id" class="browser-folder-item"
+            :data-testid="'browser-folder-'+folder.id">
+            <button type="button" class="browser-folder-open"
+              :aria-label="folder.name" @click="selectedFolder=folder.id">
+              <span class="browser-folder-cover"
+                :class="{'is-empty':folderLoadedRows(folder.id).length===0}"
+                aria-hidden="true">
+                <template v-if="folderLoadedRows(folder.id).length">
+                  <span v-for="index in 4" :key="index" class="browser-folder-cover-cell"
+                    :class="{'is-blank':!folderLoadedRows(folder.id)[index-1]}">
+                    <img v-if="folderLoadedRows(folder.id)[index-1]
+                        &&folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
+                      :src="folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
+                      alt="" decoding="async" data-testid="browser-folder-thumb">
+                    <template v-else>{{ folderLoadedRows(folder.id)[index-1]
+                      ?folderCoverSymbol(folderLoadedRows(folder.id)[index-1]!):'' }}</template>
+                  </span>
+                </template>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.6"><path d="M3 7h6l2 2h10v11H3z"/>
+                  <path d="M3 7V5h7l2 2"/></svg>
+                <span class="browser-folder-badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8"><path d="M3 7h6l2 2h10v11H3z"/></svg>
+                </span>
+              </span>
+              <span class="browser-folder-copy">
+                <strong>{{ folder.name }}</strong>
+                <small>{{ folderLoadedCount(folder.id) }} файлов в загруженном каталоге</small>
+              </span>
+            </button>
+            <button type="button" :disabled="folderBusy"
+              :aria-label="'Переименовать '+folder.name"
+              @click="openRename(folder.id,folder.name)">Переименовать</button>
+            <label class="browser-folder-parent">
+              <span>В</span>
+              <select :value="folder.parentId??''" :disabled="folderBusy"
+                :aria-label="'Переместить папку '+folder.name"
+                @change="changeFolderParent(folder.id,$event)">
+                <option value="">Корень</option>
+                <option v-for="candidate in allFolders.filter(x=>x.id!==folder.id)"
+                  :key="candidate.id" :value="candidate.id">{{ candidate.name }}</option>
+              </select>
+            </label>
+            <button type="button" :disabled="folderBusy"
+              :aria-label="'Удалить пустую папку '+folder.name"
+              @click="deleteEmptyFolder(folder.id)">Удалить</button>
+          </div>
+        </div>
+      </Teleport>
       <p v-if="!visible.length&&folderReady" class="muted">Нет файлов для выбранного фильтра или папки.</p>
       <button v-if="archiveTab==='archive'&&archiveCursor" type="button"
         :disabled="archiveBusy||busy" @click="loadArchiveMore">
