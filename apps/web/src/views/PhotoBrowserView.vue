@@ -161,6 +161,19 @@ const newFolderName=ref('')
 const editingFolderId=ref<string|null>(null)
 const editFolderName=ref('')
 const selectedKeys=ref<string[]>([])
+const selectionMode=ref(false)
+const bulkActionsOpen=ref(false)
+function cancelSelectionMode():void{
+  selectionMode.value=false
+  selectedKeys.value=[]
+  bulkActionsOpen.value=false
+  closeFileMenu()
+}
+function closeBulkActions():void{
+  bulkActionsOpen.value=false
+  void nextTick(()=>document.querySelector<HTMLButtonElement>(
+    '[data-testid="browser-selection-actions"]')?.focus())
+}
 const fileMenuKey=ref<string|null>(null)
 const folderMenuId=ref<string|null>(null)
 function closeFileMenu():void{
@@ -201,6 +214,9 @@ function onBrowserMenuPointerDown(event:PointerEvent):void{
   if(!(el instanceof Element)||!el.closest(
     '.browser-file-menu-root,.browser-folder-menu-root',
   ))closeFileMenu()
+  if(bulkActionsOpen.value
+    &&(!(el instanceof Element)||!el.closest('.browser-batch-actions-root')))
+    bulkActionsOpen.value=false
 }
 const bulkDestination=ref('')
 const archiveTab=ref<'all'|'archive'>('all')
@@ -1084,6 +1100,7 @@ async function changeItemFolder(item:CatalogItem,event:Event):Promise<void>{
     folderWorkspace.value.placements[item.key]??''
 }
 function toggleItem(key:string,checked:boolean):void{
+  if(!selectionMode.value||!visible.value.some(row=>row.key===key))return
   if(checked){
     if(selectedKeys.value.includes(key))return
     if(selectedKeys.value.length>=200){
@@ -1352,6 +1369,8 @@ watch(activeSession,(next,previous)=>{
     newFolderName.value=''
     editFolderName.value=''
     selectedKeys.value=[]
+    selectionMode.value=false
+    bulkActionsOpen.value=false
     closeFileMenu()
     treeExpanded.value=[]
     bulkDestination.value=''
@@ -1395,7 +1414,7 @@ watch(activeSession,(next,previous)=>{
   void refresh()
 })
 watch([selectedFolder,filter,search,searchFolderScope,archiveTab,primarySection],
-  ()=>{selectedKeys.value=[];closeFileMenu()})
+  ()=>{selectedKeys.value=[];bulkActionsOpen.value=false;closeFileMenu()})
 watch(visible,items=>{
   if(fileMenuKey.value&&!items.some(item=>item.key===fileMenuKey.value))
     closeFileMenu()
@@ -1545,17 +1564,23 @@ function browserSettingsKeydown(event:KeyboardEvent):void{
 }
 function toggleBatchSelection():void{
   if(!activeSession.value||!folderReady.value||!!folderError.value||folderBusy.value)return
-  if(selectedKeys.value.length)selectedKeys.value=[]
-  else selectVisible()
+  if(selectionMode.value)cancelSelectionMode()
+  else{
+    selectionMode.value=true
+    selectedKeys.value=[]
+    bulkActionsOpen.value=false
+    closeFileMenu()
+  }
 }
-watch([activeSession,folderReady,folderError,folderBusy,visible,selectedKeys],()=>{
+watch([activeSession,folderReady,folderError,folderBusy,visible,selectedKeys,selectionMode],()=>{
   browserShellActions.value={
     owner:browserHeaderOwner,
     canCreateFolder:!!activeSession.value&&folderReady.value
       &&!folderError.value&&!folderBusy.value,
     canSelect:!!activeSession.value&&folderReady.value
       &&!folderError.value&&!folderBusy.value
-      &&(selectedKeys.value.length>0||visible.value.length>0),
+      &&(selectionMode.value||visible.value.length>0),
+    selecting:selectionMode.value,
     selectedCount:selectedKeys.value.length,
     createFolder:openCreateFolder,openUpload:openUploadPanel,
     toggleSelection:toggleBatchSelection,focusSearch:focusPrivateSearch,
@@ -1998,11 +2023,24 @@ onUnmounted(()=>{
           <span v-else>Все загруженные файлы проверены.</span>
         </template>
       </p>
-      <div class="browser-batch-toolbar" v-if="folderReady&&!folderError">
-        <button type="button" :disabled="folderBusy||!visible.length"
-          @click="selectVisible">Выбрать всё на странице</button>
-        <button type="button" :disabled="!selectedKeys.length"
-          @click="selectedKeys=[]">Снять выделение</button>
+      <div class="browser-batch-toolbar"
+        v-if="selectionMode&&folderReady&&!folderError"
+        data-testid="browser-selection-toolbar">
+        <strong data-testid="browser-selection-count">Выбрано: {{selectedKeys.length}}</strong>
+        <button type="button" data-testid="browser-selection-cancel"
+          @click="cancelSelectionMode">Отмена</button>
+        <div class="browser-batch-actions-root">
+          <button type="button" data-testid="browser-selection-actions"
+            :aria-expanded="bulkActionsOpen" aria-haspopup="dialog"
+            @click="bulkActionsOpen=!bulkActionsOpen">Действия</button>
+          <div v-if="bulkActionsOpen" class="browser-batch-actions-panel"
+            data-testid="browser-selection-menu" role="dialog"
+            aria-label="Массовые действия"
+            @keydown.esc.stop.prevent="closeBulkActions">
+            <button type="button" :disabled="folderBusy||!visible.length"
+              @click="selectVisible">Выбрать всё на странице</button>
+            <button type="button" :disabled="!selectedKeys.length"
+              @click="selectedKeys=[]">Снять выделение</button>
         <label v-if="selectedKeys.length&&archiveTab==='all'">
           Назначение
           <select v-model="bulkDestination" :disabled="folderBusy"
@@ -2031,6 +2069,8 @@ onUnmounted(()=>{
             @click="runArchiveBatch('delete')">Удалить окончательно выбранные
             ({{ selectedKeys.length }})</button>
         </template>
+          </div>
+        </div>
       </div>
       <p v-if="archiveBatchNotice" data-testid="browser-bulk-status"
         role="status">{{ archiveBatchNotice }}</p>
@@ -2067,7 +2107,7 @@ onUnmounted(()=>{
         <div v-for="item in visible" :key="item.key"
           :class="['browser-item', item.source==='photo'?'photo-row':'']"
           :data-testid="'browser-row-'+item.key">
-          <label v-if="folderReady&&!folderError
+          <label v-if="selectionMode&&folderReady&&!folderError
               &&(archiveTab==='all'||archivedByKey.get(item.key)?.state==='archived')"
             class="browser-item-select">
             <input type="checkbox" :checked="selectedKeys.includes(item.key)"
