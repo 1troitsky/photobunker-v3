@@ -10,6 +10,11 @@ test('Authorization Error 1.0 only appears after a proven invalid Recovery Key, 
   await page.getByTestId('welcome-restore').click()
   await expect(page).toHaveURL(/\/authorization-error$/)
   await expect(page.getByTestId('authorization-error-page')).toBeVisible()
+  const configuredBrand=await page.evaluate(async()=>{
+    const {brand}=await import('/src/config/brand.ts')
+    return brand.name
+  })
+  await expect(page.locator('.brand-name')).toHaveText(configuredBrand)
   await expect(page.locator('.shell-header')).toHaveCount(0)
   await expect(page.locator('.shell-dock')).toHaveCount(0)
   await expect(page.getByRole('heading',{name:'Вход с этим ключом невозможен'})).toBeVisible()
