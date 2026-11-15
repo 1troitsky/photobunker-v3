@@ -1,4 +1,10 @@
 import {test,expect} from '@playwright/test'
+import type {Locator} from '@playwright/test'
+
+async function ensureFileMenu(row:Locator):Promise<void>{
+  if(await row.getByTestId('browser-file-menu-panel').count()===0)
+    await row.getByTestId('browser-file-menu-toggle').click()
+}
 
 test('P2 Browser: encrypted device-local nested folders survive reload and never move media ciphertext',async({browser})=>{
   test.setTimeout(140000)
@@ -47,6 +53,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     expect(sealed).not.toContain(id)
     expect(sealed).not.toContain('PRIVATE-LOCAL-FOLDER')
 
+    await ensureFileMenu(item)
     await item.getByRole('combobox',{name:'Папка файла '+id})
       .selectOption({label:'Съёмки'})
     await expect(item).toHaveCount(0)
@@ -55,6 +62,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await page.getByRole('button',{name:'Новая папка'}).click()
     await page.getByTestId('browser-folder-name').fill('День 1')
     await page.getByRole('button',{name:'Создать',exact:true}).click()
+    await ensureFileMenu(item)
     await item.getByRole('combobox',{name:'Папка файла '+id})
       .selectOption({label:'День 1'})
     await expect(item).toHaveCount(0)
