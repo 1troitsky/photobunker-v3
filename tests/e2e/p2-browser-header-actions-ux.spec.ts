@@ -32,10 +32,10 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await expect(page.getByTestId('browser-folder-up')).toBeDisabled()
   await page.getByRole('button',{name:'UX Header Folder',exact:true}).click()
   await expect(page.getByTestId('browser-folder-up')).toBeEnabled()
-  await expect(page.locator('.browser-title .subtitle')).toContainText('0 файлов')
+  await expect(page.locator('.browser-title .subtitle')).toContainText('Файлов: 0')
   await page.getByTestId('browser-folder-up').click()
   await expect(page.getByTestId('browser-folder-up')).toBeDisabled()
-  await expect(page.locator('.browser-title .subtitle')).toContainText('1 папок')
+  await expect(page.locator('.browser-title .subtitle')).toContainText('Папок: 1')
 
   await page.getByTestId('browser-header-search').click()
   await expect(page.getByTestId('browser-search')).toBeFocused()
