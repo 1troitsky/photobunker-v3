@@ -3,6 +3,8 @@ import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
 import {RouterLink} from 'vue-router'
 import {browserShellActions,clearBrowserShellActions}
   from '../features/browser/application/browser-shell-actions'
+import {makeBrowserFolderThumbnail}
+  from '../features/browser/application/browser-folder-thumbnail'
 import {
   browserRetentionLabel,readBrowserDaysLeft,saveBrowserDaysLeft,
 } from '../features/browser/application/browser-days-left'
@@ -288,21 +290,10 @@ function upOneFolder():void{
 const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
   .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
 function folderLoadedRows(folderId:string):CatalogItem[]{
-  // Pure visual cover from the authenticated, already loaded catalog only.
-  // Do not fetch/decrypt full-res images merely to decorate a folder tile.
-  const workspace=folderWorkspace.value
-  if(!workspace.folders[folderId])return []
-  return items.value.filter(item=>{
-    const state=archivedByKey.value.get(item.key)?.state
-    if(state==='archived'||state==='deleting')return false
-    let current=workspace.placements[item.key]??null
-    let steps=0
-    while(current!==null&&steps++<300){
-      if(current===folderId)return true
-      current=workspace.folders[current]?.parentId??null
-    }
-    return false
-  })
+  return folderCoverIndex.value.get(folderId)?.items??[]
+}
+function folderLoadedCount(folderId:string):number{
+  return folderCoverIndex.value.get(folderId)?.total??0
 }
 function folderCoverSymbol(item:CatalogItem):string{
   return item.type==='photo'?'▧':item.type==='video'?'▹':'♫'
@@ -356,6 +347,97 @@ const items=computed(()=>buildCatalog(
     })),
   ],
 ))
+// Build the 2×2 covers ONCE per authenticated catalog/folder revision.
+// The previous per-folder function scanned every file 4+ times during render.
+// Rows are bounded to four; the count includes known nested descendants only.
+const folderCoverIndex=computed(()=>{
+  const workspace=folderWorkspace.value
+  const result=new Map<string,{items:CatalogItem[];total:number}>()
+  for(const id of Object.keys(workspace.folders)){
+    result.set(id,{items:[],total:0})
+  }
+  for(const item of items.value){
+    const archived=archivedByKey.value.get(item.key)?.state
+    if(archived==='archived'||archived==='deleting')continue
+    let parent:string|null=workspace.placements[item.key]??null
+    let hops=0
+    while(parent!==null&&hops++<300){
+      const summary=result.get(parent)
+      if(!summary)break
+      summary.total++
+      if(summary.items.length<4)summary.items.push(item)
+      parent=workspace.folders[parent]?.parentId??null
+    }
+  }
+  return result
+})
+// Only a handful of LOCAL decrypted image tiles are shown. No full-res
+// background cloud downloads, private persistent caches, or native galleries.
+const folderThumbnailUrls=ref<Record<string,string>>({})
+let folderThumbnailEpoch=0
+let folderThumbnailOwner:typeof activeSession.value=null
+function revokeFolderThumbnails():void{
+  ++folderThumbnailEpoch
+  for(const url of Object.values(folderThumbnailUrls.value))
+    URL.revokeObjectURL(url)
+  folderThumbnailUrls.value={}
+  folderThumbnailOwner=null
+}
+const folderThumbnailCandidateKeys=computed(()=>{
+  const keys:string[]=[]
+  for(const folder of folders.value.slice(0,8)){
+    for(const row of folderLoadedRows(folder.id)){
+      if(row.local&&row.type==='photo'&&!keys.includes(row.key))
+        keys.push(row.key)
+      if(keys.length>=12)return keys
+    }
+  }
+  return keys
+})
+async function warmFolderThumbnails():Promise<void>{
+  const owner=activeSession.value
+  if(folderThumbnailOwner!==owner){
+    revokeFolderThumbnails()
+    folderThumbnailOwner=owner
+  }
+  const token=++folderThumbnailEpoch
+  const selected=new Set(folderThumbnailCandidateKeys.value)
+  const existing={...folderThumbnailUrls.value}
+  for(const [key,url] of Object.entries(existing)){
+    if(selected.has(key))continue
+    URL.revokeObjectURL(url)
+    delete existing[key]
+  }
+  folderThumbnailUrls.value=existing
+  if(!owner)return
+  // Sequential crypto/decoding bounds peak decoded memory to one image.
+  for(const key of selected){
+    if(token!==folderThumbnailEpoch||owner!==activeSession.value)return
+    if(folderThumbnailUrls.value[key])continue
+    const row=items.value.find(item=>item.key===key&&item.local
+      &&item.type==='photo')
+    if(!row)continue
+    try{
+      const blob=row.source==='photo'
+        ?await readLocalPhoto(row.id)
+        :(await readLocalMedia(row.id)).blob
+      if(token!==folderThumbnailEpoch||owner!==activeSession.value)return
+      const jpeg=await makeBrowserFolderThumbnail(blob)
+      if(token!==folderThumbnailEpoch||owner!==activeSession.value)return
+      const url=URL.createObjectURL(jpeg)
+      if(token!==folderThumbnailEpoch||owner!==activeSession.value){
+        URL.revokeObjectURL(url)
+        return
+      }
+      folderThumbnailUrls.value={...folderThumbnailUrls.value,[key]:url}
+    }catch{
+      // Decryption, MIME, codec and memory failures produce the neutral icon.
+      // Never display raw bytes or treat failed decryption as successful.
+    }
+  }
+}
+watch([activeSession,folderThumbnailCandidateKeys],
+  ()=>{void warmFolderThumbnails()},{immediate:true})
 // Classification is a VISUAL scope only. The assignment page owns server
 // roster/ACL enforcement. Cloud-only index rows have no signed capture
 // provenance and cannot be falsely categorized as assigned media here.
@@ -1428,6 +1510,7 @@ onMounted(()=>{
   void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
+  revokeFolderThumbnails()
   if(retentionTimer!==null){clearInterval(retentionTimer);retentionTimer=null}
   clearBrowserShellActions(browserHeaderOwner)
   ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch
@@ -1626,8 +1709,12 @@ onUnmounted(()=>{
                 <template v-if="folderLoadedRows(folder.id).length">
                   <span v-for="index in 4" :key="index" class="browser-folder-cover-cell"
                     :class="{'is-blank':!folderLoadedRows(folder.id)[index-1]}">
-                    {{ folderLoadedRows(folder.id)[index-1]
-                      ?folderCoverSymbol(folderLoadedRows(folder.id)[index-1]!):'' }}
+                    <img v-if="folderLoadedRows(folder.id)[index-1]
+                        &&folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
+                      :src="folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
+                      alt="" decoding="async" data-testid="browser-folder-thumb">
+                    <template v-else>{{ folderLoadedRows(folder.id)[index-1]
+                      ?folderCoverSymbol(folderLoadedRows(folder.id)[index-1]!):'' }}</template>
                   </span>
                 </template>
                 <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1640,7 +1727,7 @@ onUnmounted(()=>{
               </span>
               <span class="browser-folder-copy">
                 <strong>{{ folder.name }}</strong>
-                <small>{{ folderLoadedRows(folder.id).length }} файлов в загруженном каталоге</small>
+                <small>{{ folderLoadedCount(folder.id) }} файлов в загруженном каталоге</small>
               </span>
             </button>
             <button type="button" :disabled="folderBusy"
