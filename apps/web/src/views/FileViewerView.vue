@@ -76,7 +76,9 @@ type Preview={
 const route=useRoute()
 const router=useRouter()
 const editorMode=computed(()=>route.name==='browser-editor')
-const editorTab=ref<'info'|'media'|'review'>('media')
+const editorTab=ref<'info'|'media'|'review'>(
+  editorMode.value&&route.query.tab==='info'?'info':'media',
+)
 const editorBody=ref<HTMLElement|null>(null)
 function selectEditorTab(tab:'info'|'media'|'review'):void{
   editorTab.value=tab
