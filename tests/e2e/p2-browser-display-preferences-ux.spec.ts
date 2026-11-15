@@ -46,6 +46,9 @@ test('Browser v3: opening section and folder-first display are real and device-p
   })
   expect(below).toBe(true)
 
+  // PB3 cold-offline navigation is blocked by design; a real online page
+  // reload can still reopen locally encrypted rows after bootstrapping.
+  await context.setOffline(false)
   await page.reload()
   await expect(page.getByTestId('browser-tab-personal'))
     .toHaveAttribute('aria-pressed','true')
