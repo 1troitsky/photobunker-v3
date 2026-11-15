@@ -1419,6 +1419,13 @@ watch([selectedFolder,filter,search,searchFolderScope,archiveTab,primarySection]
 watch(visible,items=>{
   if(fileMenuKey.value&&!items.some(item=>item.key===fileMenuKey.value))
     closeFileMenu()
+  if(selectedKeys.value.length){
+    const valid=new Set(items.filter(item=>archiveTab.value==='all'
+      ||archivedByKey.value.get(item.key)?.state==='archived')
+      .map(item=>item.key))
+    const kept=selectedKeys.value.filter(key=>valid.has(key))
+    if(kept.length!==selectedKeys.value.length)selectedKeys.value=kept
+  }
 })
 watch([search,searchScope,activeSession,privateSearchExpanded],schedulePrivateSearch)
 watch([visible,folderReady],async()=>{
