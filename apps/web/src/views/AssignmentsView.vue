@@ -475,7 +475,10 @@ async function create():Promise<void>{
     createVideoGoal.value='';createAudioGoal.value=''
     // Local-first render cannot block on network. Durable signed outbox
     // will perform root ACK -> v6 owner policy -> independent server ACK.
-    await hydrate()
+    // Coalesce with any in-flight initial/online hydration. Calling hydrate()
+    // directly races an earlier refresh which can publish stale rows AFTER
+    // the newly persisted offline mixed-media intent is rendered.
+    await refresh()
     selectedId.value=id
     notice.value=mixedCreation
       ?'Смешанное задание сохранено локально. Видео и аудио появятся только после двух подтверждений сервера. Синхронизация выполняется отдельно.'

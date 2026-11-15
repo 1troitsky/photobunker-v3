@@ -54,6 +54,9 @@ test('P2 #209: mixed photo/video/audio creation is durable offline, two owner si
     expect(queued.localIntentSigned).toBe(true)
     expect(queued.operations).toEqual(['queued'])
     expect(queued.localState).toBe('queued')
+    // The UI must observe the locally committed encrypted intent even when
+    // a preceding initial hydration and the create action overlap offline.
+    await expect(page.getByText('Смешанное задание сохранено локально', {exact:false})).toBeVisible()
     await expect(page.getByTestId('assignment-mixed-pending-'+queued.id))
       .toContainText('ещё не подтверждена сервером')
 
