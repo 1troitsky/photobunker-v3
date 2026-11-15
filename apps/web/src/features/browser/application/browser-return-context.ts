@@ -15,7 +15,9 @@ export type BrowserReturnContext={
   sort:CatalogSort
   view:CatalogView
   search:string
-  searchFolderScope:'current'|'all'
+  searchFolderScope:'current'|'selected'|'all'
+  // Volatile folder reference for the explicit searched folder, never an ACL.
+  searchSelectedFolder?:string|null
   archiveTab:'all'|'archive'
   primarySection?:'all'|'personal'|'assignments'
   // Order of already-visible, authorized opaque catalog keys, not decrypted data.
