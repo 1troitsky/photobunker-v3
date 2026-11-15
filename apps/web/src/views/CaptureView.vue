@@ -1031,14 +1031,17 @@ onUnmounted(()=>{
             {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
           </time>
         </div>
-        <div v-if="blindMode" class="camera-blind-overlay" data-testid="camera-blind-overlay">
+        <!-- The approved blind cover obscures the WHOLE app, not only the
+             video surface. Teleport leaves MediaStream/MediaRecorder untouched. -->
+        <Teleport to="body">
+        <div v-if="blindMode" class="camera-blind-overlay" data-testid="camera-blind-overlay" role="dialog" aria-modal="true" aria-label="Слепой режим">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="1.6" aria-hidden="true">
             <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/>
             <circle cx="12" cy="12" r="3"/><path d="m3 3 18 18"/>
           </svg>
           <h2>Слепой режим</h2>
-          <p>Что-бы другие не видели, что вы делаете</p>
+          <p>Что-бы другие не видели, что вы делаете 👻</p>
           <time v-if="recording" data-testid="camera-blind-time">
             {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
           </time>
@@ -1046,7 +1049,7 @@ onUnmounted(()=>{
             data-testid="camera-blind-shutter" aria-label="Сделать снимок"
             :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
             @click="capture">Снять</button>
-          <button v-else-if="!recording" type="button" class="camera-blind-shutter"
+          <button v-else-if="!recording" type="button" class="camera-blind-shutter video"
             data-testid="camera-blind-shutter"
             :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
             @click="beginRecording">Начать запись</button>
@@ -1055,6 +1058,7 @@ onUnmounted(()=>{
           <button type="button" class="camera-blind-return"
             @click="toggleBlindMode">Вернуться назад</button>
         </div>
+        </Teleport>
       </div>
       <div class="camera-stage-controls" v-show="!blindMode">
         <div v-if="gpsStatusVisible||requiredFields?.requiredGps"
