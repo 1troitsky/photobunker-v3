@@ -909,3 +909,89 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 @media(max-width:430px){
   .file-viewer-photo-text-color-size{gap:8px}
 }
+
+
+/* #291: owner-approved Messages 1.1 beta, isolated full-screen overlay.
+   Appends scoped selectors only; does NOT replace any current Shell styling,
+   camera, editor, Settings, Dock or UX source content. */
+.messages-page{max-width:920px;min-height:100%;margin:0 auto;padding:26px 16px 46px;color:#f0f1f0}
+.messages-heading,.messages-title,.messages-tools,.messages-section-title{
+  display:flex;align-items:center;gap:12px}
+.messages-heading,.messages-section-title{justify-content:space-between}
+.messages-title h1{font-size:26px;letter-spacing:-.03em;line-height:1.2;margin:0}
+.messages-local-tag{font-size:10px;line-height:1.2;padding:5px 8px;border-radius:8px;
+  background:#263229;color:#b2d4bd;white-space:nowrap}
+.messages-tools{gap:7px}
+.messages-page button,.messages-thread button{border:1px solid #444b44;border-radius:9px;
+  background:#252825;color:#eef2ee;padding:9px 12px;font:inherit;cursor:pointer}
+.messages-page button:disabled,.messages-thread button:disabled{opacity:.45;cursor:not-allowed}
+.messages-page button:focus-visible,.messages-thread button:focus-visible,
+.messages-page input:focus-visible,.messages-thread textarea:focus-visible{
+  outline:2px solid #98e0b0;outline-offset:2px}
+.messages-tabs{display:flex;gap:2px;margin:20px 0 10px;border-bottom:1px solid #343834}
+.messages-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;
+  background:transparent;color:#969c96;min-height:43px;flex:1}
+.messages-tabs button.selected{border-bottom-color:#7ecfa0;color:#f4f6f4}
+.messages-search{display:block;margin:12px 0}
+.messages-search input{width:100%;min-height:43px;padding:10px 12px;color:#f1f3f1;
+  border:1px solid #404640;border-radius:8px;background:#181b18;font:inherit}
+.messages-notice{font-size:11px;line-height:1.6;padding:11px 12px;color:#afb9af;
+  border:1px solid #343b34;border-radius:8px;background:#1b201b;margin:13px 0 18px}
+.messages-error{color:#ffa7a7;font-size:12px;overflow-wrap:anywhere}
+.messages-saved{color:#9ddeb1;font-size:11px}
+.messages-muted{color:#929d94}
+.messages-empty{padding:34px 16px;text-align:center;color:#a9b0a9;line-height:1.7}
+.messages-list,.messages-picker{min-height:240px}
+.messages-picker{outline:0}
+.messages-section-title{margin:0 0 13px}
+.messages-row{display:flex;align-items:center;gap:12px;min-width:0;width:100%;
+  text-align:left;margin:0!important;padding:15px 10px!important;border:0!important;
+  border-bottom:1px solid #303630!important;border-radius:0!important;background:transparent!important}
+.messages-row:hover,.messages-row:focus-visible{background:#232923!important}
+.messages-avatar{flex:0 0 43px;width:43px;height:43px;border-radius:50%;display:grid;
+  place-items:center;background:#324336;color:#d5ead8;font-weight:700;font-size:17px}
+.messages-row-text{min-width:0;flex:1;display:flex;flex-direction:column;gap:6px}
+.messages-row-text strong{font-size:13px;overflow-wrap:anywhere}
+.messages-row-text small{color:#9ea79f;font-size:11px}
+.messages-row-text .messages-preview{white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%}
+.messages-draft-marker{font-size:10px;color:#99cdad;padding:4px 7px;background:#253329;
+  border-radius:6px;flex:0 0 auto}
+.messages-sr-only{position:absolute!important;clip:rect(0,0,0,0);height:1px;width:1px;
+  overflow:hidden;white-space:nowrap}
+.messages-thread{position:fixed;inset:0;z-index:1200;display:flex;flex-direction:column;
+  width:100%;height:100dvh;background:#101210;color:#f0f2f0;overflow:hidden}
+.messages-thread-top{flex:0 0 66px;display:flex;align-items:center;gap:12px;
+  padding:9px max(16px,env(safe-area-inset-right,0px));background:#191d19;
+  border-bottom:1px solid #323932}
+.messages-thread-top>button{min-width:42px;min-height:42px}
+.messages-thread-identity{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
+.messages-thread-identity strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.messages-thread-identity small{color:#a4ada4;font-size:11px}
+.messages-thread-content{flex:1 1 auto;min-height:0;overflow:auto;padding:24px 16px;
+  display:flex;align-items:center;justify-content:center;overscroll-behavior:contain}
+.messages-thread-placeholder{text-align:center;max-width:420px;line-height:1.7;color:#b8bdb8;
+  background:#181c18;border:1px solid #282e28;border-radius:13px;padding:20px}
+.messages-thread-placeholder strong{color:#e5eee5;font-size:14px}
+.messages-thread-placeholder p{font-size:12px;margin:12px 0 0}
+.messages-composer{flex:0 0 auto;min-width:0;padding:13px 15px
+  calc(16px + env(safe-area-inset-bottom,0px));background:#1b201b;border-top:1px solid #343a34}
+.messages-compose-line{display:flex;gap:8px;align-items:end}
+.messages-compose-line button{flex:0 0 auto;min-height:43px}
+.messages-compose-line textarea{min-width:0;flex:1;min-height:44px;max-height:130px;
+  padding:10px 12px;border:1px solid #464e46;border-radius:10px;resize:vertical;
+  background:#111511;color:#eff3ef;font:inherit;line-height:1.5}
+.messages-composer>small{display:block;color:#9ea79e;font-size:10px;margin:9px 0 0}
+.messages-overlay-enter-active,.messages-overlay-leave-active{transition:opacity 160ms ease,transform 160ms ease}
+.messages-overlay-enter-from,.messages-overlay-leave-to{opacity:0;transform:translateY(10px)}
+@media(max-width:410px){
+  .messages-page{padding:20px 12px 35px}
+  .messages-heading{gap:6px}
+  .messages-title h1{font-size:23px}
+  .messages-tools{gap:4px}
+  .messages-tools button{padding:8px}
+  .messages-compose-line button{padding:8px}
+  .messages-thread-top{padding-left:10px;padding-right:10px}
+}
+@media(prefers-reduced-motion:reduce){
+  .messages-overlay-enter-active,.messages-overlay-leave-active{transition:none}
+}

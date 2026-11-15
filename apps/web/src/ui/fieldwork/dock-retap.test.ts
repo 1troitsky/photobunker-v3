@@ -6,7 +6,7 @@ describe('Appearance 1.3 active Dock retap: one safe logical level',()=>{
   const R=(path:string)=>({kind:'replace',path} as const)
 
   it('does not add history entries at any Dock section root',()=>{
-    for(const path of ['/assignments','/browser','/camera','/contacts','/settings','/notifications'])
+    for(const path of ['/assignments','/browser','/camera','/contacts','/settings','/notifications','/messages'])
       expect(resolveDockRetap(path,path,'/outside')).toEqual({kind:'none'})
   })
   it('does not capture adjacent lookalike routes or inactive Dock links',()=>{

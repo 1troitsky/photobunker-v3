@@ -13,6 +13,7 @@ import FileViewerView from './views/FileViewerView.vue'
 import ContactsTeamsView from './views/ContactsTeamsView.vue'
 import NotificationsView from './views/NotificationsView.vue'
 import NotificationSettingsView from './views/NotificationSettingsView.vue'
+import MessagesView from './views/MessagesView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -45,6 +46,9 @@ export const router = createRouter({
       meta: { title: 'Уведомления' } },
     { path: '/notifications/settings', component: NotificationSettingsView,
       meta: { title: 'Настройки уведомлений' } },
+    // E2EE device-local drafts ONLY; no Matrix send, remote rooms or delivery.
+    { path: '/messages', component: MessagesView,
+      meta: { title: 'Сообщения — локальные черновики' } },
     { path: '/:pathMatch(.*)*', redirect: '/assignments' },
   ],
 })

@@ -27,10 +27,10 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
     await page.getByTestId('settings-nav-appearance').click()
     await expect(page.getByTestId('appearance-page')).toBeVisible()
 
-    // Six implemented routes now exist; Messages still has no real route.
+    // Seven real routes now exist, including encrypted messages drafts.
     // The five-entry default remains unchanged until user action.
     await expect(page.getByTestId('dock-add-notifications')).toBeEnabled()
-    await expect(page.getByTestId('dock-add-messages')).toBeDisabled()
+    await expect(page.getByTestId('dock-add-messages')).toBeEnabled()
     await expect(page.getByTestId('dock-remove-settings')).toHaveCount(0)
 
     await page.getByTestId('dock-remove-contacts').click()
