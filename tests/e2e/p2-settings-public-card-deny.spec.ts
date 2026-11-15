@@ -10,7 +10,7 @@ test('Public Card 1.1: unknown and expired links fail closed without leaking met
     await expect(page.getByText('Никакие данные файла по этой ссылке не раскрываются.',{exact:false})).toBeVisible()
     await expect(page.getByRole('button',{name:/скачать/i})).toHaveCount(0)
     await expect(page.locator('img,video,audio,canvas,iframe')).toHaveCount(0)
-    await expect(page.getByText('© 2026 PhotoBunker')).toBeVisible()
+    await expect(page.getByText(/© 2026 /)).toBeVisible()
   }
   await page.getByTestId('public-card-install').click()
   await expect(page).toHaveURL(/\/install$/)

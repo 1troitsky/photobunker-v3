@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {onMounted,ref} from 'vue'
 import {RouterLink} from 'vue-router'
+import {brand} from '../config/brand'
 
 type Platform='ios'|'android'|'desktop'
 const platform=ref<Platform>('ios')
@@ -14,26 +15,18 @@ onMounted(()=>{
 <template>
 <div class="install-public-page" data-testid="install-guide-page">
   <header class="site-head">
-    <RouterLink to="/welcome" class="site-logo" aria-label="PhotoBunker — главная">
+    <RouterLink to="/welcome" class="site-logo" :aria-label="brand.name+' — главная'">
       <span class="site-logo-mark" aria-hidden="true">
-        <svg viewBox="0 0 72 72" fill="none" stroke="currentColor" stroke-width="3">
-          <rect x="9" y="17" width="54" height="39" rx="10"/>
-          <path d="m19 17 5-7h24l5 7"/>
-          <circle cx="36" cy="37" r="13"/>
-        </svg>
-      </span><strong>PhotoBunker</strong>
+        <img :src="brand.iconUrl" alt="" aria-hidden="true">
+      </span><strong>{{ brand.name }}</strong>
     </RouterLink>
     <RouterLink to="/welcome" class="install-home-link">Открыть приложение</RouterLink>
   </header>
   <main class="app-explain">
     <div class="app-icon" aria-hidden="true">
-      <svg viewBox="0 0 72 72" fill="none" stroke="#c6f1cf" stroke-width="3">
-        <rect x="9" y="17" width="54" height="39" rx="10"/>
-        <path d="m19 17 5-7h24l5 7"/>
-        <circle cx="36" cy="37" r="13"/>
-      </svg>
+      <img :src="brand.iconUrl" alt="" aria-hidden="true">
     </div>
-    <h1>PhotoBunker всегда под рукой</h1>
+    <h1>{{ brand.name }} всегда под рукой</h1>
     <p>Снимайте, организуйте задания и делитесь файлами. Когда поддерживается установка,
       веб-приложение можно добавить через браузер.</p>
     <div class="install-choices" role="group" aria-label="Выберите устройство">
@@ -68,12 +61,12 @@ onMounted(()=>{
       <p v-else>Браузер может не показывать пункт установки, если сборка ещё не соответствует требованиям PWA.</p>
     </section>
     <p class="install-release-note">
-      Подписанная офлайн-версия PhotoBunker ещё не прошла окончательную приёмку.
+      Подписанная офлайн-версия {{ brand.name }} ещё не прошла окончательную приёмку.
       Инструкция не означает, что текущая сборка уже устанавливается как полноценное PWA.
     </p>
-    <RouterLink to="/welcome" class="back-to-file">Вернуться в PhotoBunker</RouterLink>
+    <RouterLink to="/welcome" class="back-to-file">Вернуться в {{ brand.name }}</RouterLink>
   </main>
-  <footer class="install-site-footer">Опубликовано через PhotoBunker · © 2026 PhotoBunker</footer>
+  <footer class="install-site-footer">Опубликовано через {{ brand.name }} · © 2026 {{ brand.name }}</footer>
 </div>
 </template>
 <style scoped>
@@ -88,12 +81,12 @@ onMounted(()=>{
 .site-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:#f2f2f2}
 .site-logo-mark{height:36px;width:36px;border-radius:10px;background:linear-gradient(135deg,#263a2c,#1b211d);
   border:1px solid #405043;display:grid;place-items:center}
-.site-logo-mark svg{width:23px;height:23px}
+.site-logo-mark img{width:23px;height:23px;object-fit:contain}
 .site-logo strong{font-size:15px;font-weight:800;letter-spacing:-.045em}
 .install-home-link{border:1px solid #367d4b;border-radius:8px;color:#bde9c7;
   background:#203a27;padding:8px 12px;text-decoration:none;font-size:11px}
 .app-explain{min-height:calc(100dvh - 132px)}
-.app-explain .app-icon svg{width:49px;height:49px}
+.app-explain .app-icon img{width:49px;height:49px;object-fit:contain}
 .install-guide a{color:#bde9c7;overflow-wrap:anywhere}
 .install-release-note{max-width:470px!important;margin:15px auto 0!important;color:#c9ba9a!important;
   font-size:11px!important;line-height:1.6}

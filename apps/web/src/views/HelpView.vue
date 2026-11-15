@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import HelpCenter from '../features/help/ui/HelpCenter.vue'
 import type { HelpLocale } from '../features/help/domain/help-content'
+import {brand} from '../config/brand'
 
 const router = useRouter()
 const locale = ref<HelpLocale>('ru')
@@ -13,7 +14,7 @@ function leaveHelp(): void { void router.push('/settings') }
   <section data-testid="help-shell-page" class="help-shell-view">
     <nav class="help-language-nav" aria-label="Язык справки">
       <RouterLink to="/install" class="help-install-link" data-testid="help-install-link">
-        Установить PhotoBunker
+        Установить {{ brand.name }}
       </RouterLink>
       <button type="button" :aria-pressed="locale==='ru'"
         data-testid="help-language-ru" @click="locale='ru'">Русский</button>

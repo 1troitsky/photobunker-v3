@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {RouterLink} from 'vue-router'
+import {brand} from '../config/brand'
 /**
  * Owner-approved Public Card 1.1 *denial* state only.
  *
@@ -11,14 +12,10 @@ import {RouterLink} from 'vue-router'
 <template>
 <div class="public-card-denied" data-testid="public-card-unavailable">
   <header class="site-head">
-    <RouterLink class="site-logo" to="/welcome" aria-label="PhotoBunker — главная">
+    <RouterLink class="site-logo" to="/welcome" :aria-label="brand.name+' — главная'">
       <span class="site-logo-mark" aria-hidden="true">
-        <svg viewBox="0 0 72 72" fill="none" stroke="currentColor" stroke-width="3">
-          <rect x="9" y="17" width="54" height="39" rx="10"/>
-          <path d="m19 17 5-7h24l5 7"/>
-          <circle cx="36" cy="37" r="13"/>
-        </svg>
-      </span><strong>PhotoBunker</strong>
+        <img :src="brand.iconUrl" alt="" aria-hidden="true">
+      </span><strong>{{ brand.name }}</strong>
     </RouterLink>
     <RouterLink to="/install" class="install-link" data-testid="public-card-install">
       ☆ Установить приложение
@@ -31,14 +28,14 @@ import {RouterLink} from 'vue-router'
       </svg>
       <h1 id="public-unavailable-title">Карточка недоступна</h1>
       <p>Ссылка не найдена, срок действия истёк или доступ к файлу закрыт.</p>
-      <p>Публичная публикация файлов ещё не включена в этой сборке PhotoBunker.
+      <p>Публичная публикация файлов ещё не включена в этой сборке {{ brand.name }}.
         Никакие данные файла по этой ссылке не раскрываются.</p>
     </section>
   </main>
   <footer class="site-footer">
-    <span>Опубликовано через PhotoBunker</span>
-    <RouterLink to="/install">Установка PhotoBunker</RouterLink>
-    <span>© 2026 PhotoBunker</span>
+    <span>Опубликовано через {{ brand.name }}</span>
+    <RouterLink to="/install">Установка {{ brand.name }}</RouterLink>
+    <span>© 2026 {{ brand.name }}</span>
   </footer>
 </div>
 </template>
@@ -53,7 +50,7 @@ import {RouterLink} from 'vue-router'
 .site-logo{display:flex;align-items:center;gap:10px;color:#f5f5f5;text-decoration:none}
 .site-logo-mark{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
   background:linear-gradient(135deg,#263a2c,#1b211d);border:1px solid #405043}
-.site-logo-mark svg{width:23px;height:23px}
+.site-logo-mark img{width:23px;height:23px;object-fit:contain}
 .site-logo strong{font-weight:800;font-size:15px}
 .install-link{white-space:nowrap;text-decoration:none;color:#bde9c7;font-size:11px;
   border:1px solid #367d4b;border-radius:8px;padding:9px 12px;background:#203a27}
