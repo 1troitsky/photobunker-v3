@@ -169,7 +169,7 @@ async function writeCameraPreset(kind:'add'|'save'):Promise<void>{
       presetNotice.value=e instanceof Error?e.message:'camera.preset_unavailable'
   }finally{if(session===activeSession.value)presetBusy.value=false}
 }
-watch(activeSession,()=>{void reloadCameraPresets()},{immediate:true})
+// Identity-bound preset reload is registered after cameraIdentity helpers.
 const currentMediaInstruction=computed(()=>{
   const value=visiblePrivateInstructions.value
   if(!canCaptureType.value||value?.version!==2)return ''
@@ -438,6 +438,16 @@ type CameraIdentity=ReturnType<typeof cameraIdentity>
 function sameIdentity(a:CameraIdentity,b:CameraIdentity):boolean {
   return a!==null && b!==null && a.length===b.length && a.every((value,index)=>value===b[index])
 }
+// An online/offline hydration of the SAME cryptographic device must never
+// overwrite a user's already edited media destination or in-flight presets.
+let observedPresetIdentity:CameraIdentity=null
+watch(activeSession,session=>{
+  const identity=cameraIdentity(session)
+  if(sameIdentity(observedPresetIdentity,identity)
+    ||observedPresetIdentity===null&&identity===null)return
+  observedPresetIdentity=identity
+  void reloadCameraPresets()
+},{immediate:true})
 let observedIdentity=cameraIdentity(activeSession.value)
 let streamIdentity:CameraIdentity=null
 function ownsCamera(identity:CameraIdentity,generation:number):boolean {
@@ -1553,7 +1563,7 @@ onUnmounted(()=>{
         </label>
         <p v-if="requiredFields?.requiredGps" class="muted"
           data-testid="camera-gps-required">
-          GPS обязателен по подписанным правилам задания.
+          Отслеживание геолокации требуется подписанными правилами задания.
           Для получения координат нажмите «Получить GPS».
         </p>
         <label class="camera-appearance-setting">
