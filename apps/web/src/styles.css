@@ -1200,3 +1200,27 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 @media(prefers-reduced-motion:reduce){
   .camera-fieldwork *{transition:none!important;animation:none!important;scroll-behavior:auto!important}
 }
+
+/* Approved Camera 1.2 has precisely three context icons in the shared Header.
+   Keep all of them visible on the smallest supported portrait viewport. */
+@media(max-width:420px){
+  .shell-header:has(.camera-header-actions){padding-inline:8px;gap:6px}
+  .shell-header:has(.camera-header-actions) .brand-copy{
+    max-width:clamp(80px,30vw,120px);min-width:0
+  }
+  .shell-header:has(.camera-header-actions) .brand-copy strong{
+    font-size:12px;overflow:hidden;text-overflow:ellipsis
+  }
+  .shell-header:has(.camera-header-actions) .brand-copy small{font-size:9px}
+  .shell-header .shell-header-actions.camera-header-actions button{
+    width:34px;min-width:34px;height:36px
+  }
+}
+@media(max-width:350px){
+  .shell-header .shell-header-actions.camera-header-actions button{
+    width:31px;min-width:31px
+  }
+  .shell-header:has(.camera-header-actions) .brand-copy{
+    max-width:85px
+  }
+}
