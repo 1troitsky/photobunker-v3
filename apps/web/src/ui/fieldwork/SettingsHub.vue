@@ -1,8 +1,24 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import { ref, watch } from 'vue'
+import { activeSession } from '../../features/identity/application/session'
+import { readLocalProfile } from '../../features/profile/application/local-profile'
 import { settingsGroups } from './settings-navigation'
 
 defineProps<{ online: boolean }>()
+const localHandle=ref('')
+let generation=0
+watch(activeSession,async session=>{
+  const current=++generation
+  localHandle.value=''
+  if(!session)return
+  try{
+    const profile=await readLocalProfile()
+    if(current===generation&&activeSession.value?.accountId===session.accountId
+      &&activeSession.value?.deviceId===session.deviceId)
+      localHandle.value=profile.username?'@'+profile.username:(profile.name||'')
+  }catch{ /* Never display unverified, unreadable or old-account profile data. */ }
+},{immediate:true})
 </script>
 
 <template>
@@ -21,8 +37,8 @@ defineProps<{ online: boolean }>()
         </svg>
       </span>
       <span class="account-copy">
-        <strong>Мой аккаунт</strong>
-        <small>{{ online ? 'Доступ активен' : 'Локальный режим' }}</small>
+        <strong>{{ localHandle||'Мой аккаунт' }}</strong>
+        <small>{{ online ? 'Доступ активен' : 'Локальный режим' }} · Профиль на устройстве</small>
       </span>
       <RouterLink class="account-access-link" to="/settings/profile" data-testid="settings-own-profile">Мой профиль</RouterLink>
       <a class="account-access-link" href="#identity-access">
