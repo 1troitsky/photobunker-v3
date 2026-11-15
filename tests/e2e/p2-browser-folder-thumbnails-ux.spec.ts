@@ -44,6 +44,13 @@ test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext
     return rows.find(row=>row.mediaType==='photo')!.mediaId
   })
   await page.getByTestId('browser-import-sheet-close').click()
+  await page.getByTestId('browser-tab-personal').click()
+  await expect(page.getByTestId('browser-personal-catalog-scope')).toBeVisible()
+  await expect(row).toHaveCount(1)
+  await page.getByTestId('browser-tab-assignments').click()
+  await expect(row).toHaveCount(0)
+  await page.getByTestId('browser-tab-active').click()
+  await expect(row).toHaveCount(1)
   await row.getByRole('combobox',{name:'Папка файла '+id})
     .selectOption({label:'Encrypted covers'})
   await expect(row).toHaveCount(0)
