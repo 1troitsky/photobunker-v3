@@ -2,6 +2,7 @@ import {expect,test} from '@playwright/test'
 
 test('Browser v3: file and encrypted-folder three-dot actions use original local operations',async({page,context})=>{
   test.setTimeout(120000)
+  await page.setViewportSize({width:390,height:844})
   await page.goto('/settings')
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
@@ -29,6 +30,10 @@ test('Browser v3: file and encrypted-folder three-dot actions use original local
   await expect(trigger).toHaveAttribute('aria-expanded','true')
   const panel=row.getByTestId('browser-file-menu-panel')
   await expect(panel).toHaveAttribute('role','dialog')
+  const bounds=await panel.boundingBox()
+  expect(bounds).not.toBeNull()
+  expect(bounds!.x).toBeGreaterThanOrEqual(0)
+  expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(391)
   await expect(panel.getByRole('link',{
     name:'Полный просмотр файла '+mediaId,
   })).toBeVisible()
