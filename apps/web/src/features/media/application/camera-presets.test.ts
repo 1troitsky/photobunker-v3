@@ -9,8 +9,8 @@ import {
   loadCameraPresetCatalog,validateCameraPresetCatalog,
 } from './camera-presets'
 
-async function device(accountId=crypto.randomUUID(),
-  deviceId=crypto.randomUUID()):Promise<Session>{
+async function device(accountId:string=crypto.randomUUID(),
+  deviceId:string=crypto.randomUUID()):Promise<Session>{
   const encryptionKey=await crypto.subtle.generateKey({
     name:'AES-GCM',length:256,
   },false,['encrypt','decrypt'])
