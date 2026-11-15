@@ -72,12 +72,20 @@ test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext
   })
   await page.getByRole('button',{name:'Encrypted covers',exact:true}).click()
   await expect(thumb).toHaveCount(0)
+  await expect(row).toHaveCount(1)
+  const fileThumb=row.getByTestId('browser-file-thumb')
+  await expect(fileThumb).toBeVisible()
+  expect(await fileThumb.getAttribute('src')).toBe(objectURL)
+  // One objectURL is shared between the folder cover and the authenticated
+  // file row, then explicitly revoked when leaving Browser entirely.
+  await page.locator('.shell-dock a[href="/camera"]').click()
   await page.waitForFunction(url=>
     (window as Window&{__folderThumbnailRevoked?:string[]})
       .__folderThumbnailRevoked?.includes(url),objectURL)
   // The original E2EE file is still available; disposing the thumbnail
   // must NOT remove or decrypt any durable outbox ciphertext.
-  await expect(row).toHaveCount(1)
+  await page.goto('/browser')
+  await expect(page.getByTestId('browser-header-folder')).toBeEnabled()
   const recovered=await page.evaluate(async mediaId=>{
     const m=await import('/src/features/media/application/media-outbox.ts')
     const media=await m.readLocalMedia(mediaId)
