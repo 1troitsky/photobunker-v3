@@ -408,6 +408,12 @@ onUnmounted(()=>{
         <label for="contacts-edit-alias">Локальное имя</label>
         <input id="contacts-edit-alias" v-model="editAlias" maxlength="64">
         <div class="action-row">
+          <RouterLink class="contacts-draft-link"
+            :to="{path:'/messages',query:{peer:selected}}"
+            data-testid="contacts-message-draft-link"
+            title="Только зашифрованный черновик; отправка Matrix ещё недоступна">
+            Написать (черновик)
+          </RouterLink>
           <button type="button" :disabled="busy" @click="saveAlias">Сохранить имя</button>
           <button type="button" :disabled="busy" @click="remove">Удалить контакт</button>
           <button type="button" :disabled="busy" data-testid="contacts-local-block"

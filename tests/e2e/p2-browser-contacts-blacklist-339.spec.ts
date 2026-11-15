@@ -79,6 +79,29 @@ test('P2 #339: two real trusted peers, encrypted local block, refilter after ali
     await A.getByRole('button',{name:'Сохранить имя'}).click()
     await expect(A.getByTestId('contacts-row-'+idC)).toContainText('Allowed after refresh')
     await expect(A.getByTestId('contacts-row-'+idB)).toHaveCount(0)
+
+    // The contact action opens only a confirmed LOCAL encrypted draft,
+    // never a fabricated Matrix network conversation.
+    await A.getByTestId('contacts-message-draft-link').click()
+    await expect(A).toHaveURL(new RegExp('/messages\\?peer='+idC))
+    await expect(A.getByTestId('messages-thread')).toBeVisible()
+    await expect(A.getByRole('button',{name:'Отправить сообщение'})).toBeDisabled()
+    await A.getByTestId('messages-editor').fill('Allowed local draft only')
+    await A.getByTestId('messages-close').click()
+    await expect(A.getByTestId('messages-draft-'+idC))
+      .toContainText('Allowed local draft only')
+
+    // Direct URL to a locally blocked former contact must never show an
+    // existing encrypted draft, contact picker option or conversation.
+    await A.goto('/messages?peer='+idB)
+    await expect(A.getByTestId('messages-page')).toBeVisible()
+    await expect(A.getByTestId('messages-thread')).toHaveCount(0)
+    await expect(A.getByTestId('messages-draft-'+idB)).toHaveCount(0)
+    await A.getByTestId('messages-compose').click()
+    await expect(A.getByTestId('messages-picker-'+idC)).toBeVisible()
+    await expect(A.getByTestId('messages-picker-'+idB)).toHaveCount(0)
+
+    await A.goto('/contacts')
     await A.getByRole('button',{name:/^Команды \(/}).click()
     await A.getByRole('button',{name:'Создать команду'}).click()
     await A.getByTestId('team-name').fill('P2 339 safe invite choice')

@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
+import {useRoute} from 'vue-router'
 import {activeSession} from '../features/identity/application/session'
 import {
   listConfirmedContacts,
 } from '../features/people/application/contact-book'
 import type {ConfirmedContact} from '../features/people/application/contact-book'
+import {
+  listLocallyBlockedPeers,excludeLocallyBlockedContacts,
+} from '../features/people/application/contact-blocklist'
 import {
   getMessageDraft,listMessageDrafts,saveMessageDraft,
   MAX_MESSAGE_DRAFT_LENGTH,
@@ -12,6 +16,12 @@ import {
 import type {MessageDraft} from '../features/messages/application/message-drafts'
 
 type Filter='all'|'unread'|'teams'
+const route=useRoute()
+const peerPattern=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
+function requestedPeer():string|null{
+  const raw=route.query.peer
+  return typeof raw==='string'&&peerPattern.test(raw)?raw:null
+}
 const filter=ref<Filter>('all')
 const searchOpen=ref(false)
 const search=ref('')
@@ -66,15 +76,28 @@ function message(errorValue:unknown):string{
 async function reload():Promise<void>{
   const owner=identity(),token=++run
   drafts.value=[];contacts.value=[];error.value=''
-  if(!owner)return
+  if(!owner){loading.value=false;return}
   loading.value=true
   try{
-    const [peers,localDrafts]=await Promise.all([
-      listConfirmedContacts(),listMessageDrafts(),
+    // A corrupt/missing decryption of the encrypted local blacklist fails
+    // CLOSED. Do not display drafts or auto-open blocked contacts.
+    const [peers,localDrafts,blocked]=await Promise.all([
+      listConfirmedContacts(),listMessageDrafts(),listLocallyBlockedPeers(),
     ])
     if(!matches(owner,token))return
-    contacts.value=peers
+    const allowed=excludeLocallyBlockedContacts(peers,blocked)
+    contacts.value=allowed
     drafts.value=localDrafts
+    if(selected.value&&!allowed.some(x=>
+      x.peerAccountId===selected.value?.peerAccountId
+      &&x.safetyFingerprint===selected.value?.safetyFingerprint))
+      dismissWithoutSave()
+    const wanted=requestedPeer()
+    if(wanted&&!threadOpen.value){
+      const peer=allowed.find(x=>x.peerAccountId===wanted)
+      if(peer)void open(peer)
+      else error.value='Контакт недоступен или не подтверждён.'
+    }
   }catch(e){if(matches(owner,token))error.value=message(e)}
   finally{if(matches(owner,token))loading.value=false}
 }
@@ -85,6 +108,12 @@ async function open(contact:ConfirmedContact):Promise<void>{
   returnFocus=document.activeElement instanceof HTMLElement
     ?document.activeElement:null
   try{
+    // Recheck before decrypting an existing draft: a stale picker/deep link
+    // must not bypass the local encrypted blocked-contact list.
+    const blocked=await listLocallyBlockedPeers()
+    if(!matches(owner,token))return
+    if(blocked.some(x=>x.peerAccountId===contact.peerAccountId))
+      throw Error('messages.peer_blocked_locally')
     const body=await getMessageDraft(contact)
     if(!matches(owner,token))return
     selected.value=contact;editor.value=body
@@ -181,6 +210,13 @@ function newConversation():void{
     void nextTick(()=>pickerRef.value?.focus())
   }
 }
+watch(()=>route.query.peer,()=>{
+  if(threadOpen.value)return
+  const peer=requestedPeer()
+  if(!peer)return
+  const confirmed=contacts.value.find(c=>c.peerAccountId===peer)
+  if(confirmed)void open(confirmed)
+})
 watch(activeSession,(_current,old)=>{
   const prev=old?[
     old.accountId,old.deviceId,old.pkg.akek,old.pkg.accountSpki,old.pkg.revision,

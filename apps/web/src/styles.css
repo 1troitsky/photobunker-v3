@@ -1054,3 +1054,10 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 @media(max-width:480px){.assignments-p1 .assignment-card-bottom{flex-wrap:wrap}
   .assignments-p1 .assignment-card-actions{width:100%}
   .assignments-p1 .assignment-card-actions>*{flex:1}}
+
+/* A trusted contact opens only a LOCAL encrypted draft; no Matrix delivery. */
+.contacts-page .action-row .contacts-draft-link{display:inline-flex;align-items:center;
+  justify-content:center;min-height:38px;border-radius:7px;border:1px solid #3d7650;
+  background:#213b2a;color:#c8f0d1;text-decoration:none;font-size:12px;font-weight:700}
+.contacts-page .action-row .contacts-draft-link:hover{background:#2b4935}
+.contacts-page .action-row .contacts-draft-link:focus-visible{outline:2px solid #9be4a9;outline-offset:2px}
