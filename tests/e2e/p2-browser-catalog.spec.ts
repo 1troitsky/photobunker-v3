@@ -1,4 +1,10 @@
 import {test,expect} from '@playwright/test'
+import type {Locator} from '@playwright/test'
+
+async function ensureFileMenu(row:Locator):Promise<void>{
+  if(await row.getByTestId('browser-file-menu-panel').count()===0)
+    await row.getByTestId('browser-file-menu-toggle').click()
+}
 
 test('P2 Browser v3: real anonymous login → offline encrypted media → catalog filters and decrypted viewer',async({browser})=>{
   test.setTimeout(120000)
@@ -36,6 +42,7 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     await page.getByTestId('browser-search').fill('')
     await page.getByRole('button',{name:'Сетка',exact:true}).click()
     await expect(page.getByTestId('browser-catalog')).toHaveClass(/browser-grid/)
+    await ensureFileMenu(rows.first())
     await rows.first().getByRole('button',{name:/Открыть файл/}).click()
     const preview=page.getByTestId('browser-preview')
     await expect(preview).toContainText('PRIVATE-VIDEO-TEST.webm')
