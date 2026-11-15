@@ -43,6 +43,8 @@ test('P2 Browser: owner-confirmed sequential batch archive and restore use real 
     await ensureFileMenu(row.first())
     await expect(row.first().getByRole('button',{name:/Архивировать файл/}))
       .toBeEnabled()
+    await page.getByTestId('browser-header-select').click()
+    await page.getByTestId('browser-selection-actions').click()
     await page.getByRole('button',{name:'Выбрать всё на странице'}).click()
     await expect(page.getByTestId('browser-bulk-archive')).toContainText('(2)')
     page.once('dialog',d=>d.accept())
