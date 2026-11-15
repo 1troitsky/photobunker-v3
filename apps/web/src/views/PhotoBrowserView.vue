@@ -161,6 +161,20 @@ const newFolderName=ref('')
 const editingFolderId=ref<string|null>(null)
 const editFolderName=ref('')
 const selectedKeys=ref<string[]>([])
+const fileMenuKey=ref<string|null>(null)
+function closeFileMenu():void{
+  fileMenuKey.value=null
+}
+function toggleFileMenu(key:string):void{
+  if(!visible.value.some(item=>item.key===key))return
+  fileMenuKey.value=fileMenuKey.value===key?null:key
+}
+function onBrowserMenuPointerDown(event:PointerEvent):void{
+  if(!fileMenuKey.value)return
+  const el=event.target
+  if(!(el instanceof Element)||!el.closest('.browser-file-menu-root'))
+    closeFileMenu()
+}
 const bulkDestination=ref('')
 const archiveTab=ref<'all'|'archive'>('all')
 type PrimarySection='all'|'personal'|'assignments'
@@ -1311,6 +1325,7 @@ watch(activeSession,(next,previous)=>{
     newFolderName.value=''
     editFolderName.value=''
     selectedKeys.value=[]
+    closeFileMenu()
     treeExpanded.value=[]
     bulkDestination.value=''
     folderNotice.value=''
@@ -1353,7 +1368,11 @@ watch(activeSession,(next,previous)=>{
   void refresh()
 })
 watch([selectedFolder,filter,search,searchFolderScope,archiveTab,primarySection],
-  ()=>{selectedKeys.value=[]})
+  ()=>{selectedKeys.value=[];closeFileMenu()})
+watch(visible,items=>{
+  if(fileMenuKey.value&&!items.some(item=>item.key===fileMenuKey.value))
+    closeFileMenu()
+})
 watch([search,searchScope,activeSession,privateSearchExpanded],schedulePrivateSearch)
 watch([visible,folderReady],async()=>{
   const key=scrollReturnKey
@@ -1517,6 +1536,7 @@ watch([activeSession,folderReady,folderError,folderBusy,visible,selectedKeys],()
   }
 },{immediate:true})
 onMounted(()=>{
+  document.addEventListener('pointerdown',onBrowserMenuPointerDown)
   retentionClock.value=Date.now()
   retentionTimer=setInterval(()=>{retentionClock.value=Date.now()},60000)
   const identity=activeSession.value
@@ -1537,6 +1557,8 @@ onMounted(()=>{
   void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
+  document.removeEventListener('pointerdown',onBrowserMenuPointerDown)
+  closeFileMenu()
   revokeFolderThumbnails()
   if(retentionTimer!==null){clearInterval(retentionTimer);retentionTimer=null}
   clearBrowserShellActions(browserHeaderOwner)
@@ -2047,7 +2069,19 @@ onUnmounted(()=>{
               Папка: {{ catalogFolderLabel(item) }}
             </small>
           </div>
-          <div class="browser-item-actions">
+          <div class="browser-file-menu-root" :data-testid="'browser-file-menu-'+item.key">
+            <button type="button" class="browser-file-menu-toggle"
+              data-testid="browser-file-menu-toggle"
+              :aria-label="'Действия с файлом '+item.id"
+              :aria-expanded="fileMenuKey===item.key"
+              aria-haspopup="true" @click.stop="toggleFileMenu(item.key)">
+              <span aria-hidden="true">•••</span>
+            </button>
+            <div v-if="fileMenuKey===item.key"
+              class="browser-item-actions browser-file-menu-panel"
+              :aria-label="'Действия с файлом '+item.id"
+              role="group" data-testid="browser-file-menu-panel"
+              @keydown.esc.stop.prevent="closeFileMenu">
             <label v-if="archiveTab==='all'&&folderReady&&!folderError"
               class="browser-file-move">
               <span>Папка</span>
@@ -2089,6 +2123,7 @@ onUnmounted(()=>{
             <button v-if="item.cloud" type="button" :disabled="previewBusy||busy"
               aria-label="Проверить из облака"
               @click="openItem(item,true)">Проверить из облака</button>
+            </div>
           </div>
         </div>
       </div>
