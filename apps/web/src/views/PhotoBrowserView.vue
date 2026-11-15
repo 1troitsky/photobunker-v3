@@ -167,6 +167,15 @@ function closeFileMenu():void{
   fileMenuKey.value=null
   folderMenuId.value=null
 }
+function fileMenuEscape(key:string):void{
+  closeFileMenu()
+  void nextTick(()=>{
+    const toggle=document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-file-menu-'+key+'"] button.browser-file-menu-toggle',
+    )
+    toggle?.focus()
+  })
+}
 function toggleFolderMenu(id:string):void{
   if(!folders.value.some(folder=>folder.id===id))return
   folderMenuId.value=folderMenuId.value===id?null:id
@@ -2092,14 +2101,14 @@ onUnmounted(()=>{
               data-testid="browser-file-menu-toggle"
               :aria-label="'Действия с файлом '+item.id"
               :aria-expanded="fileMenuKey===item.key"
-              aria-haspopup="true" @click.stop="toggleFileMenu(item.key)">
+              aria-haspopup="dialog" @click.stop="toggleFileMenu(item.key)">
               <span aria-hidden="true">•••</span>
             </button>
             <div v-if="fileMenuKey===item.key"
               class="browser-item-actions browser-file-menu-panel"
               :aria-label="'Действия с файлом '+item.id"
-              role="group" data-testid="browser-file-menu-panel"
-              @keydown.esc.stop.prevent="closeFileMenu">
+              role="dialog" data-testid="browser-file-menu-panel"
+              @keydown.esc.stop.prevent="fileMenuEscape(item.key)">
             <label v-if="archiveTab==='all'&&folderReady&&!folderError"
               class="browser-file-move">
               <span>Папка</span>
@@ -2186,11 +2195,11 @@ onUnmounted(()=>{
                 data-testid="browser-folder-menu-toggle"
                 :aria-label="'Действия с папкой '+folder.name"
                 :aria-expanded="folderMenuId===folder.id"
-                aria-haspopup="true" @click.stop="toggleFolderMenu(folder.id)">
+                aria-haspopup="dialog" @click.stop="toggleFolderMenu(folder.id)">
                 <span aria-hidden="true">•••</span>
               </button>
               <div v-if="folderMenuId===folder.id"
-                class="browser-folder-menu-panel" role="group"
+                class="browser-folder-menu-panel" role="dialog"
                 data-testid="browser-folder-menu-panel"
                 :aria-label="'Действия с папкой '+folder.name"
                 @keydown.esc.stop.prevent="folderMenuEscape">
