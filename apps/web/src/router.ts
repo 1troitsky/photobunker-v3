@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { resolveStartRoute } from './ui/fieldwork/appearance-preferences'
 import { activeSession } from './features/identity/application/session'
+import {brand} from './config/brand'
 import WelcomeView from './views/WelcomeView.vue'
 import AuthorizationErrorView from './views/AuthorizationErrorView.vue'
 import AssignmentsView from './views/AssignmentsView.vue'
@@ -36,7 +37,7 @@ export const router = createRouter({
       meta: {title:'Ошибка доступа',standalone:true} },
     // Public install instructions are not proof of signed offline installability.
     { path: '/install', component: InstallGuideView,
-      meta: {title:'Установка PhotoBunker',standalone:true} },
+      meta: {title:'Установка '+brand.name,standalone:true} },
     // Until a separately audited server publication grant exists, EVERY
     // unknown external card is denied without revealing media or metadata.
     { path: '/p/:token', component: PublicCardView,

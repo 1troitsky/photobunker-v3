@@ -5,10 +5,18 @@ test('Accepted Fieldwork routes: one real account, one Shell, no missing pages',
   const runtimeErrors:string[]=[]
   page.on('pageerror',err=>runtimeErrors.push(err.message))
   await page.goto('/settings')
+  const configuredBrand=await page.evaluate(async()=>{
+    const {brand}=await import('/src/config/brand.ts')
+    return brand.name
+  })
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
   await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  // Brand white-labelling must apply to the standalone install page too.
+  await page.goto('/install')
+  await expect(page.getByRole('heading',{name:configuredBrand+' всегда под рукой'})).toBeVisible()
+  await page.goto('/settings')
 
   const routes=[
     ['/assignments','assignment-monthly-usage'],
