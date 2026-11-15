@@ -1605,3 +1605,15 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .browser-title .browser-view-switch button{min-width:31px;
     padding:6px 3px;font-size:9px}
 }
+
+/* Browser v3 preference controls. The one original encrypted folder list
+   moves via Vue Teleport, so toggling placement never duplicates form state. */
+.browser-archive-preferences select[data-testid="browser-pref-open-first"]{
+  display:block;width:100%;min-height:40px;
+  padding:8px 11px;margin:7px 0 11px;
+  border:1px solid #525252;border-radius:7px;
+  background:#272727;color:#ededed;font-size:12px
+}
+.browser-folder-list{min-width:0}
+.browser-catalog-after-folders{margin-top:7px}
+.browser-folder-list:empty{display:none}
