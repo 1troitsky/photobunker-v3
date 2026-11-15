@@ -97,6 +97,19 @@ afterEach(()=>{
   activeSession.value=null
 })
 describe('Notifications 1.5 encrypted inbox UI',()=>{
+  it('places an event-kind icon and unread badge in the approved single icon surface',async()=>{
+    await mount()
+    const item=el('notification-'+ID)
+    expect(item.querySelectorAll('.notification-icon svg')).toHaveLength(1)
+    const badge=item.querySelector('.notification-icon > .notification-dot')
+    expect(badge).not.toBeNull()
+    expect(badge?.classList.contains('isread')).toBe(false)
+    item.querySelector('button')!.click()
+    await settle()
+    expect(el('notification-'+ID).querySelector('.notification-icon .notification-dot.isread'))
+      .not.toBeNull()
+  })
+
   it('renders cached rows offline, filters unread and persists local read before showing it read',async()=>{
     await mount()
     expect(el('notifications-list').textContent).toContain('Новые материалы')
