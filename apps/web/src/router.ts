@@ -22,6 +22,7 @@ import ProfileEditView from './views/ProfileEditView.vue'
 import SecurityPrivacyView from './views/SecurityPrivacyView.vue'
 import PaymentsView from './views/PaymentsView.vue'
 import CheckoutView from './views/CheckoutView.vue'
+import InstallGuideView from './views/InstallGuideView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -32,6 +33,9 @@ export const router = createRouter({
     { path: '/welcome/recover', component: WelcomeView, meta: { title:'Восстановить аккаунт',standalone:true } },
     { path: '/authorization-error', component: AuthorizationErrorView,
       meta: {title:'Ошибка доступа',standalone:true} },
+    // Public install instructions are not proof of signed offline installability.
+    { path: '/install', component: InstallGuideView,
+      meta: {title:'Установка PhotoBunker',standalone:true} },
     { path: '/assignments', component: AssignmentsView, meta: { title: 'Задания' } },
     { path: '/assignments/:assignmentId/edit', component: AssignmentEditorView,
       meta: { title: 'Редактор задания' } },
