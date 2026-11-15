@@ -22,187 +22,84 @@ watch(activeSession,async session=>{
 </script>
 
 <template>
-  <section class="fieldwork-settings" data-testid="fieldwork-settings"
-    aria-labelledby="settings-main-title">
-    <header class="settings-head">
-      <h1 id="settings-main-title">Настройки</h1>
-      <p>Профиль, приложение и управление аккаунтом</p>
-    </header>
+<section class="fieldwork-settings" data-testid="fieldwork-settings" aria-labelledby="settings-main-title">
+  <header class="settings-head">
+    <h1 id="settings-main-title">Настройки</h1>
+  </header>
 
-    <div class="account-summary">
-      <span class="account-symbol" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-          <circle cx="12" cy="8" r="3.5"/>
-          <path d="M4.5 21v-2a7.5 7.5 0 0 1 15 0v2"/>
-        </svg>
-      </span>
+  <div class="account-overview">
+    <RouterLink class="account-overview-link" to="/settings/profile"
+      data-testid="settings-own-profile" aria-label="Открыть свой профиль">
+      <span class="person-avatar" aria-hidden="true">{{localHandle?localHandle.replace(/^@/,'').slice(0,1).toUpperCase():'P'}}</span>
       <span class="account-copy">
-        <strong>{{ localHandle||'Мой аккаунт' }}</strong>
-        <small>{{ online ? 'Доступ активен' : 'Локальный режим' }} · Профиль на устройстве</small>
+        <strong>{{localHandle||'Мой аккаунт'}}</strong>
+        <small>{{online?'Подтверждённая сессия':'Локальный режим'}} · Профиль на устройстве</small>
       </span>
-      <RouterLink class="account-access-link" to="/settings/profile" data-testid="settings-own-profile">Мой профиль</RouterLink>
-      <a class="account-access-link" href="#identity-access">
-        Доступ и устройство
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="1.8">
-          <path d="m9 18 6-6-6-6"/>
-        </svg>
-      </a>
-    </div>
+      <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+    </RouterLink>
+    <a class="identity-link" href="#identity-access">Доступ и устройство</a>
+  </div>
 
-    <div class="settings-groups">
-      <section v-for="group in settingsGroups" :key="group.id" class="setting-group"
-        :aria-labelledby="'settings-group-'+group.id">
-        <h2 :id="'settings-group-'+group.id">{{ group.title }}</h2>
-        <div class="setting-list">
-          <template v-for="entry in group.entries" :key="entry.id">
-            <RouterLink v-if="entry.to" class="setting-row" :to="entry.to"
-              :data-testid="'settings-nav-'+entry.id">
-              <span class="setting-row-copy">
-                <strong>{{ entry.label }}</strong>
-                <small>{{ entry.description }}</small>
-              </span>
-              <svg class="row-chevron" aria-hidden="true"
-                viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="1.8">
-                <path d="m9 18 6-6-6-6"/>
+  <div class="settings-grid">
+    <section v-for="group in settingsGroups" :key="group.id" class="settings-group"
+      :aria-labelledby="'settings-group-'+group.id">
+      <h2 class="group-title" :id="'settings-group-'+group.id">{{group.title}}</h2>
+      <div class="settings-list">
+        <template v-for="entry in group.entries" :key="entry.id">
+          <RouterLink v-if="entry.to" :to="entry.to" class="settings-row"
+            :data-testid="'settings-nav-'+entry.id">
+            <span class="row-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                stroke-linecap="round" stroke-linejoin="round">
+                <template v-if="entry.id==='contacts-teams'"><circle cx="8" cy="8" r="3"/><path d="M2 20v-2a6 6 0 0 1 12 0v2M17 7a3 3 0 0 1 0 6M21 20v-3a5 5 0 0 0-4-4"/></template>
+                <template v-else-if="entry.id==='appearance'"><path d="M12 3a9 9 0 0 0 0 18h2a2 2 0 0 0 1.5-3.3 2 2 0 0 1 1.5-3.2h1a3 3 0 0 0 3-3A9 9 0 0 0 12 3Z"/><circle cx="7.5" cy="12" r="1"/><circle cx="10" cy="7.5" r="1"/><circle cx="15.5" cy="8" r="1"/></template>
+                <template v-else-if="entry.id==='notifications'"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></template>
+                <template v-else-if="entry.id==='security-privacy'"><path d="M12 2 4 5v7c0 5.5 4 8.5 8 10 4-1.5 8-4.5 8-10V5z"/><path d="m9 12 2 2 4-4"/></template>
+                <template v-else-if="entry.id==='data-storage'"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 4 18 4 18 0V5M3 12c0 4 18 4 18 0"/></template>
+                <template v-else-if="entry.id==='payments'"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></template>
+                <template v-else-if="entry.id==='help'"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1.3-1.5 2.5M12 17h.01"/></template>
+                <template v-else><circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></template>
               </svg>
-            </RouterLink>
-            <div v-else class="setting-row unavailable" aria-disabled="true"
-              :data-testid="'settings-pending-'+entry.id">
-              <span class="setting-row-copy">
-                <strong>{{ entry.label }}</strong>
-                <small>{{ entry.description }}</small>
-              </span>
-              <span class="setting-planned">Позже</span>
-            </div>
-          </template>
-        </div>
-      </section>
-    </div>
-  </section>
+            </span>
+            <span class="row-copy"><strong>{{entry.label}}</strong><small>{{entry.description}}</small></span>
+            <svg class="row-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+          </RouterLink>
+          <div v-else class="settings-row unavailable" aria-disabled="true"
+            :data-testid="'settings-pending-'+entry.id">
+            <span class="row-icon" aria-hidden="true">·</span>
+            <span class="row-copy"><strong>{{entry.label}}</strong><small>{{entry.description}}</small></span>
+            <span class="setting-planned">Позже</span>
+          </div>
+        </template>
+      </div>
+    </section>
+  </div>
+</section>
 </template>
-
 <style scoped>
-.fieldwork-settings {
-  --settings-panel: #202020;
-  --settings-line: #303030;
-  --settings-muted: #a2a2a2;
-  width: 100%;
-}
-.settings-head h1 {
-  font-size: 28px;
-  font-weight: 780;
-  letter-spacing: -.04em;
-  margin: 0;
-}
-.settings-head p {
-  margin: 5px 0 0;
-  font-size: 12px;
-  color: var(--settings-muted);
-}
-.account-summary {
-  margin: 19px 0 28px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 17px;
-  border-radius: 10px;
-  background: var(--settings-panel);
-  border: 1px solid var(--settings-line);
-}
-.account-symbol {
-  flex: 0 0 42px;
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: #35473b;
-  color: #c4e9d0;
-}
-.account-symbol svg { width: 25px; height: 25px; }
-.account-copy {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-.account-copy strong { font-size: 14px; font-weight: 730; }
-.account-copy small { font-size: 12px; color: var(--settings-muted); }
-.account-access-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #bfeace;
-  text-decoration: none;
-  padding: 7px 5px;
-}
-.account-access-link svg { width: 16px; height: 16px; }
-.account-access-link:hover { text-decoration: underline; }
-.settings-groups {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  column-gap: 18px;
-  row-gap: 18px;
-}
-.setting-group { min-width: 0; }
-.setting-group h2 {
-  margin: 0 0 8px 3px;
-  color: var(--settings-muted);
-  font-size: 11px;
-  font-weight: 720;
-  letter-spacing: .02em;
-}
-.setting-list {
-  background: var(--settings-panel);
-  border-radius: 9px;
-  overflow: hidden;
-}
-.setting-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-height: 58px;
-  padding: 12px 13px;
-  color: #f3f3f3;
-  text-decoration: none;
-  border-bottom: 1px solid var(--settings-line);
-}
-.setting-row:last-child { border-bottom: 0; }
-a.setting-row:hover { background: #292f2b; }
-a.setting-row:focus-visible, .account-access-link:focus-visible {
-  outline: 2px solid #1ed760;
-  outline-offset: -3px;
-}
-.setting-row-copy {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-.setting-row-copy strong { font-size: 13px; font-weight: 680; }
-.setting-row-copy small { font-size: 11px; color: var(--settings-muted); }
-.row-chevron { flex: 0 0 16px; width: 16px; height: 16px; color: #a2aba5; }
-.setting-row.unavailable { color: #b3bab5; }
-.setting-row.unavailable strong { color: #b3bab5; }
-.setting-row.unavailable small { color: #828b85; }
-.setting-planned {
-  font-size: 11px;
-  white-space: nowrap;
-  color: #8b978f;
-}
-@media (min-width: 750px) {
-  .settings-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@media (max-width: 430px) {
-  .account-summary { flex-wrap: wrap; }
-  .account-access-link { flex: 1 1 100%; justify-content: flex-end; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .fieldwork-settings * { scroll-behavior: auto; }
-}
+/* Owner-approved Settings & Profile 1.6 menu structure and CSS from docs/ux/settings-profile. */
+.settings-grid{display:grid;gap:20px}.settings-group{min-width:0}.group-title{font-size:11px;color:#a2a2a2;font-weight:720;letter-spacing:.025em;margin:0 0 9px 3px}.settings-list{background:var(--surface);border-radius:9px;overflow:hidden}.settings-row{display:flex;align-items:center;gap:12px;width:100%;min-height:55px;border:0;border-bottom:1px solid #343434;background:none;text-align:left;padding:11px 12px}.settings-row:last-child{border-bottom:0}.settings-row:hover{background:#292929}.row-icon{width:24px;height:24px;display:grid;place-items:center;color:#b5b5b5;flex:none}.row-icon svg{width:19px;height:19px}.row-copy{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}.row-copy strong{font-size:12.5px;font-weight:670}.row-copy small{color:#929292;font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row-chevron{color:#868686;width:16px;height:16px}.account-overview{display:flex;align-items:center;gap:12px;background:var(--surface);border:0;width:100%;padding:15px 13px;border-radius:9px;text-align:left;margin-bottom:22px}.account-overview:hover{background:#282828}.account-overview .person-avatar{width:48px;height:48px;flex:0 0 48px;font-size:18px}.account-copy{min-width:0;flex:1}.account-copy strong{font-size:15px;font-weight:760;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.account-copy span{color:#a2a2a2;font-size:11px;display:block;margin-top:3px}.account-overview>.row-chevron{width:19px;height:19px}
+.fieldwork-settings{--surface:#202020;--green:#1ed760;width:100%}
+.settings-head h1{font-size:27px;margin:0 0 22px;font-weight:800;letter-spacing:-.04em}
+.account-overview{background:#202020;border-radius:10px;margin-bottom:25px}
+.account-overview-link{display:flex;align-items:center;gap:13px;min-height:82px;padding:15px 15px;color:#f1f1f1;text-decoration:none}
+.account-overview-link:hover,.settings-row:hover{background:#292929}
+.account-overview-link .person-avatar{width:43px;height:43px;font-size:15px}
+.account-overview-link .row-chevron{width:17px;height:17px;color:#aaa}
+.account-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px}
+.account-copy strong{font-size:14px}
+.account-copy small{font-size:11px;color:#a6a6a6}
+.identity-link{display:block;padding:8px 15px 13px;color:#b6e6c0;text-align:right;font-size:11px;text-decoration:none}
+.settings-grid{grid-template-columns:minmax(0,1fr);gap:20px}
+.settings-row{color:#f2f2f2;text-decoration:none;cursor:pointer}
+.settings-row .row-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.settings-row .row-copy strong{font-weight:700}
+.settings-row .row-copy small{font-size:11px;color:#a9a9a9;line-height:1.4}
+.settings-row .row-icon{flex-shrink:0}
+.settings-row .row-chevron{width:17px;height:17px;flex-shrink:0;color:#999}
+.settings-row.unavailable{opacity:.5;cursor:default}
+.setting-planned{color:#a5a5a5;font-size:10px}
+.settings-row:focus-visible,.account-overview-link:focus-visible,.identity-link:focus-visible{outline:2px solid #9fe4b3;outline-offset:-2px}
+@media(min-width:800px){.settings-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:390px){.settings-row{padding:11px 10px;gap:9px}.account-overview-link{padding:12px}}
 </style>
