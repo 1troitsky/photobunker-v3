@@ -36,6 +36,8 @@ test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navig
     })
 
     await page.getByTestId('browser-row-media:'+ids.video)
+      .getByTestId('browser-file-menu-toggle').click()
+    await page.getByTestId('browser-row-media:'+ids.video)
       .getByRole('link',{name:'Полный просмотр файла '+ids.video}).click()
     await expect(page.getByTestId('file-viewer')).toBeVisible()
     await expect(page.getByTestId('file-viewer-info'))
