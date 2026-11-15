@@ -240,6 +240,11 @@ const archivedByKey=computed(()=>new Map(
 ))
 const folders=computed(()=>folderChildren(folderWorkspace.value,selectedFolder.value))
 const breadcrumb=computed(()=>folderPath(folderWorkspace.value,selectedFolder.value))
+function upOneFolder():void{
+  if(selectedFolder.value===null)return
+  const path=breadcrumb.value
+  selectedFolder.value=path.length>1?path[path.length-2]!.id:null
+}
 const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
   .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
 const importFolderOptions=computed(()=>allFolders.value.map(folder=>({
@@ -1229,7 +1234,7 @@ onUnmounted(()=>{
     <div class="browser-title">
       <div>
         <h1>Browser</h1>
-        <p class="subtitle">Файлы и локальная очередь · без ожидания облака</p>
+        <p class="subtitle">{{ folders.length }} папок · {{ visible.length }} файлов в текущем разделе</p>
       </div>
       <RouterLink to="/camera">Камера</RouterLink>
     </div>
@@ -1241,6 +1246,14 @@ onUnmounted(()=>{
       <section class="browser-folders" data-testid="browser-folders">
         <div class="browser-folder-head">
           <div class="browser-breadcrumb" aria-label="Путь папки">
+            <button type="button" class="browser-folder-up" aria-label="На уровень выше"
+              data-testid="browser-folder-up" :disabled="selectedFolder===null"
+              @click="upOneFolder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" aria-hidden="true">
+                <path d="m14 5-7 7 7 7"/>
+              </svg>
+            </button>
             <button type="button" :aria-current="selectedFolder===null?'location':undefined"
               @click="selectedFolder=null">Мои файлы</button>
             <template v-for="part in breadcrumb" :key="part.id">
