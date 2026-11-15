@@ -45,6 +45,8 @@ const blindMode=ref(false)
 const cameraSheet=ref<'assignment'|'settings'|null>(null)
 const cameraFacing=ref<'environment'|'user'>('environment')
 const torchOn=ref(false)
+const permissionBusy=ref(false)
+const devicePermissionStatus=ref('')
 const gridVisible=ref(false)
 const gpsStatusVisible=ref(true)
 const photoAspect=ref<CameraPhotoAspect>('4:3')
@@ -586,6 +588,40 @@ watch([activeSession,captureMode,stream,recording,busy,starting,torchOn,blindMod
     }
   },{immediate:true})
 
+/**
+ * Explicit browser permission preflight only. The temporary stream is
+ * always released; permission success is not proof of future capture
+ * rights, sustained hardware access, or persistent OS authorization.
+ */
+async function requestDevicePermission(which:'camera'|'microphone'):Promise<void>{
+  const session=activeSession.value
+  if(!session||recording.value||busy.value||starting.value||permissionBusy.value)return
+  const identity=cameraIdentity(session)
+  if(!navigator.mediaDevices?.getUserMedia){
+    devicePermissionStatus.value='Браузер не предоставляет доступ к оборудованию.'
+    return
+  }
+  permissionBusy.value=true;devicePermissionStatus.value=''
+  let temp:MediaStream|null=null
+  try{
+    temp=await navigator.mediaDevices.getUserMedia(which==='camera'
+      ?{audio:false,video:{facingMode:{ideal:cameraFacing.value}}}
+      :{audio:true,video:false})
+    if(disposed||!sameIdentity(identity,cameraIdentity(activeSession.value)))return
+    const tracks=temp.getTracks()
+    if(tracks.length===0||tracks.some(t=>t.readyState!=='live'))
+      throw Error('camera.permission_stream_ended')
+    devicePermissionStatus.value=which==='camera'
+      ?'Камера доступна для текущей сессии. При следующем запуске разрешение проверяется снова.'
+      :'Микрофон доступен для текущей сессии. При следующей записи разрешение проверяется снова.'
+  }catch(e){
+    if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value)))
+      devicePermissionStatus.value=e instanceof Error?e.message:'camera.permission_denied'
+  }finally{
+    if(temp)stopTracks(temp)
+    permissionBusy.value=false
+  }
+}
 async function openCamera():Promise<void> {
   cameraWanted=true
   await startCamera()
@@ -1103,6 +1139,7 @@ watch(activeSession,session=>{
   const identity=cameraIdentity(session)
   if(!sameIdentity(observedIdentity,identity)){
     closePrivateRecordingReview()
+    devicePermissionStatus.value=''
     cameraSheet.value=null
     blindMode.value=false;torchOn.value=false
     localDrafts.value=[];localDraftError.value=''
@@ -1383,6 +1420,21 @@ onUnmounted(()=>{
           Сетка кадрирования 3×3
           <small>Не показывается на готовых кадрах.</small>
         </label>
+        <section class="camera-preset-options" data-testid="camera-permissions">
+          <h3>Разрешения устройства</h3>
+          <div class="camera-preset-actions">
+            <button type="button" data-testid="camera-permission-camera"
+              :disabled="permissionBusy||busy||recording||starting"
+              @click="requestDevicePermission('camera')">Разрешить камеру</button>
+            <button type="button" data-testid="camera-permission-microphone"
+              :disabled="permissionBusy||busy||recording||starting"
+              @click="requestDevicePermission('microphone')">Разрешить микрофон</button>
+          </div>
+          <p class="muted">Камера нужна для фото и видео; микрофон — для аудио и видео со звуком.
+            Браузер запросит разрешение отдельно.</p>
+          <p v-if="devicePermissionStatus" role="status"
+            data-testid="camera-permission-status">{{devicePermissionStatus}}</p>
+        </section>
         <label class="camera-appearance-setting">
           <input type="checkbox" v-model="gpsStatusVisible" data-testid="camera-gps-visibility">
           Показывать GPS над кнопкой съёмки
