@@ -36,14 +36,14 @@ describe('authenticated Browser folder JPEG previews',()=>{
     await expect(makeBrowserFolderThumbnail(new Blob([],{
       type:'image/jpeg',
     }))).rejects.toThrow('browser.thumbnail_unsupported')
-    await expect(makeBrowserFolderThumbnail(new Blob([1],{
+    await expect(makeBrowserFolderThumbnail(new Blob([Uint8Array.of(1)],{
       type:'image/jpeg',
     }),300)).rejects.toThrow('browser.thumbnail_unsupported')
     const close=vi.fn()
     vi.stubGlobal('createImageBitmap',vi.fn(async()=>({
       width:0,height:200,close,
     } as unknown as ImageBitmap)))
-    await expect(makeBrowserFolderThumbnail(new Blob([1],{
+    await expect(makeBrowserFolderThumbnail(new Blob([Uint8Array.of(1)],{
       type:'image/jpeg',
     }))).rejects.toThrow('browser.thumbnail_invalid_dimensions')
     expect(close).toHaveBeenCalledOnce()
@@ -74,7 +74,7 @@ describe('authenticated Browser folder JPEG previews',()=>{
     const jpeg=new Blob([Uint8Array.of(0xff,0xd8,0xff)],{type:'image/jpeg'})
     vi.spyOn(HTMLCanvasElement.prototype,'toBlob')
       .mockImplementation(callback=>callback(jpeg))
-    const output=await makeBrowserFolderThumbnail(new Blob([1,2,3],{
+    const output=await makeBrowserFolderThumbnail(new Blob([Uint8Array.of(1,2,3)],{
       type:'image/png',
     }))
     expect(output).toBe(jpeg)
@@ -93,7 +93,7 @@ describe('authenticated Browser folder JPEG previews',()=>{
       .mockImplementation(()=>({drawImage:vi.fn()} as unknown as CanvasRenderingContext2D))
     vi.spyOn(HTMLCanvasElement.prototype,'toBlob')
       .mockImplementation(callback=>callback(null))
-    await expect(makeBrowserFolderThumbnail(new Blob([1],{
+    await expect(makeBrowserFolderThumbnail(new Blob([Uint8Array.of(1)],{
       type:'image/jpeg',
     }))).rejects.toThrow('browser.thumbnail_encode_failed')
     expect(close).toHaveBeenCalledOnce()
