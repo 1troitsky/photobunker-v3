@@ -287,6 +287,26 @@ function upOneFolder():void{
 }
 const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
   .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
+function folderLoadedRows(folderId:string):CatalogItem[]{
+  // Pure visual cover from the authenticated, already loaded catalog only.
+  // Do not fetch/decrypt full-res images merely to decorate a folder tile.
+  const workspace=folderWorkspace.value
+  if(!workspace.folders[folderId])return []
+  return items.value.filter(item=>{
+    const state=archivedByKey.value.get(item.key)?.state
+    if(state==='archived'||state==='deleting')return false
+    let current=workspace.placements[item.key]??null
+    let steps=0
+    while(current!==null&&steps++<300){
+      if(current===folderId)return true
+      current=workspace.folders[current]?.parentId??null
+    }
+    return false
+  })
+}
+function folderCoverSymbol(item:CatalogItem):string{
+  return item.type==='photo'?'▧':item.type==='video'?'▹':'♫'
+}
 const treeNodes=computed(()=>{
   const workspace=folderWorkspace.value
   const results:{id:string;name:string;depth:number;children:number}[]=[]
@@ -1592,7 +1612,28 @@ onUnmounted(()=>{
             :data-testid="'browser-folder-'+folder.id">
             <button type="button" class="browser-folder-open"
               @click="selectedFolder=folder.id">
-              <span aria-hidden="true">▣</span> {{ folder.name }}
+              <span class="browser-folder-cover"
+                :class="{'is-empty':folderLoadedRows(folder.id).length===0}"
+                aria-hidden="true">
+                <template v-if="folderLoadedRows(folder.id).length">
+                  <span v-for="index in 4" :key="index" class="browser-folder-cover-cell"
+                    :class="{'is-blank':!folderLoadedRows(folder.id)[index-1]}">
+                    {{ folderLoadedRows(folder.id)[index-1]
+                      ?folderCoverSymbol(folderLoadedRows(folder.id)[index-1]!):'' }}
+                  </span>
+                </template>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.6"><path d="M3 7h6l2 2h10v11H3z"/>
+                  <path d="M3 7V5h7l2 2"/></svg>
+                <span class="browser-folder-badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8"><path d="M3 7h6l2 2h10v11H3z"/></svg>
+                </span>
+              </span>
+              <span class="browser-folder-copy">
+                <strong>{{ folder.name }}</strong>
+                <small>{{ folderLoadedRows(folder.id).length }} файлов в загруженном каталоге</small>
+              </span>
             </button>
             <button type="button" :disabled="folderBusy"
               :aria-label="'Переименовать '+folder.name"
