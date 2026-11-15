@@ -1611,7 +1611,7 @@ onUnmounted(()=>{
           <div v-for="folder in folders" :key="folder.id" class="browser-folder-item"
             :data-testid="'browser-folder-'+folder.id">
             <button type="button" class="browser-folder-open"
-              @click="selectedFolder=folder.id">
+              :aria-label="folder.name" @click="selectedFolder=folder.id">
               <span class="browser-folder-cover"
                 :class="{'is-empty':folderLoadedRows(folder.id).length===0}"
                 aria-hidden="true">
