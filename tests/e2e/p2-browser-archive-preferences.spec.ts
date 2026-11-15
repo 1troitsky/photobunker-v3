@@ -89,8 +89,19 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     await row.getByRole('button',{name:/Запросить прямое удаление файла/}).click()
     await expect(a.getByTestId('browser-archive-status'))
       .toContainText('физическая очистка S3 ещё НЕ подтверждена',{timeout:20000})
-    await a.getByTestId('browser-tab-archive').click()
-    await expect(row).toContainText('pending_gc')
+    // Accepted Browser v3 hides the Archive tab when the owner disables it.
+    // UI hiding NEVER constitutes deletion proof or extends any signed TTL.
+    await expect(a.getByTestId('browser-tab-archive')).toHaveCount(0)
+    const tombstone=await a.evaluate(async id=>{
+      const r=await fetch('/browser/v1/archive')
+      const data=await r.json() as {items:Array<{
+        assetId:string;state:string;physicalStatus:string
+      }>}
+      return data.items.find(item=>item.assetId===id)
+    },assetId)
+    expect(tombstone).toMatchObject({
+      assetId,state:'deleting',physicalStatus:'pending_gc',
+    })
 
     // With remote network absent, the option toggles locally, but no
     // destructive action is authorized until a signed server ACK.
