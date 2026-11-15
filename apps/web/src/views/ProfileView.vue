@@ -3,21 +3,24 @@ import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { activeSession } from '../features/identity/application/session'
 import { blankProfile, readLocalProfile, type Profile } from '../features/profile/application/local-profile'
+import { listLocalTeams, type TeamView } from '../features/people/application/team-book'
 
 const profile=ref<Profile>(blankProfile())
+const teams=ref<TeamView[]>([])
 const busy=ref(false)
 const error=ref('')
 let seq=0
 async function refresh():Promise<void>{
   const id=++seq, session=activeSession.value
   profile.value=blankProfile()
+  teams.value=[]
   error.value=''
   if(!session)return
   busy.value=true
   try{
-    const value=await readLocalProfile()
+    const [value,owned]=await Promise.all([readLocalProfile(),listLocalTeams()])
     if(id===seq&&activeSession.value?.accountId===session.accountId
-      &&activeSession.value?.deviceId===session.deviceId)profile.value=value
+      &&activeSession.value?.deviceId===session.deviceId){profile.value=value;teams.value=owned}
   }catch(e){if(id===seq)error.value=e instanceof Error?e.message:'Ошибка чтения профиля'}
   finally{if(id===seq)busy.value=false}
 }
@@ -51,6 +54,9 @@ async function copy(value:string):Promise<void>{try{await navigator.clipboard.wr
       <p>{{ profile.about||'Пока ничего не указано.' }}</p>
       <h3>Приватность</h3>
       <p>Карточка: {{ profile.cardVisibility }} · Команды: {{ profile.teamsVisibility }} · Статус: {{ profile.presenceVisibility }}</p>
+      <h3>Мои команды</h3>
+      <ul v-if="teams.length" class="profile-teams"><li v-for="team in teams" :key="team.teamId"><strong>{{ team.name }}</strong><small>{{ team.memberCount }} участников · {{ team.delivery==='synced'?'Синхронизирована':'Локальная очередь' }}</small></li></ul>
+      <p v-else>У вас пока нет команд. <RouterLink to="/contacts">Контакты и команды</RouterLink></p>
       <p class="profile-note">Поля хранятся зашифрованно на этом устройстве. Публичная карточка, глобальный @username, восьмизначный #UserID и серверная видимость ещё не подключены. Эти настройки не опубликованы.</p>
     </template>
   </section>
@@ -68,4 +74,5 @@ async function copy(value:string):Promise<void>{try{await navigator.clipboard.wr
 .profile-buttons a{color:#e4f5e8;text-decoration:none;background:#293b2d;border:1px solid #526d58;border-radius:9px;padding:11px 15px;font-size:13px}
 .profile-page h3{font-size:16px;text-align:left;margin:26px 0 10px}
 .profile-page h3+p{text-align:left;font-size:13px;line-height:1.7}
+.profile-teams{list-style:none;padding:0;text-align:left}.profile-teams li{display:flex;flex-direction:column;gap:5px;border-bottom:1px solid #3b443d;padding:12px 4px}.profile-teams small{color:#acb8ae;font-size:11px}.profile-page a{color:#a8deb6}
 </style>
