@@ -12,6 +12,7 @@ export interface BrowserShellActions {
   readonly owner:object
   readonly canCreateFolder:boolean
   readonly canSelect:boolean
+  readonly selecting:boolean
   readonly selectedCount:number
   readonly createFolder:()=>void
   readonly openUpload:()=>void
