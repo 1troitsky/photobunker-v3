@@ -3,6 +3,8 @@ import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { readPublicCatalog, type PublicPlan } from '../features/billing/application/catalog-client'
 import { activeSession } from '../features/identity/application/session'
+import { readBackupTechnicalStatus,type BackupTechnicalStatus }
+  from '../features/storage/application/backup-technical-status'
 import {
   filteredEncryptedQueue, readEncryptedLocalQueueDetails, readServerStorageUsage,
   retryPendingEncryptedQueue,
@@ -48,6 +50,8 @@ function opaqueSuffix(key: string): string {
 }
 const server = shallowRef<ServerStorageUsage | null>(null)
 const catalogPlan = shallowRef<PublicPlan | null>(null)
+const backupStatus=shallowRef<BackupTechnicalStatus|null>(null)
+const backupPhase=ref<Phase>('locked')
 const cloudPercent = computed(() => server.value && server.value.enforcedByteCeiling>0
   ? Math.min(100,Math.round(server.value.recordedCipherBytes*100/server.value.enforcedByteCeiling))
   : null)
@@ -84,6 +88,7 @@ function refresh(): void {
   queueEntries.value = []
   server.value = null
   catalogPlan.value = null
+  backupStatus.value=null
   if (!session) {
     queueOpen.value = false
     queueFilter.value = 'all'
@@ -91,6 +96,7 @@ function refresh(): void {
     retryError.value = ''
     localPhase.value = 'locked'
     serverPhase.value = 'locked'
+    backupPhase.value='locked'
     return
   }
   localPhase.value = 'loading'
@@ -113,9 +119,24 @@ function refresh(): void {
 
   if (!session.online || !navigator.onLine) {
     serverPhase.value = 'offline'
+    backupPhase.value='offline'
     return
   }
   serverPhase.value = 'loading'
+  backupPhase.value='loading'
+  void readBackupTechnicalStatus()
+    .then(value=>{
+      if(requestId===id&&activeSession.value===session){
+        backupStatus.value=value
+        backupPhase.value='ready'
+      }
+    })
+    .catch(()=>{
+      if(requestId===id&&activeSession.value===session){
+        backupStatus.value=null
+        backupPhase.value='error'
+      }
+    })
   void readServerStorageUsage(session)
     .then(result => {
       if (requestId === id && activeSession.value === session) {
@@ -197,6 +218,7 @@ onUnmounted(() => {
   queueEntries.value = []
   queueOpen.value = false
   server.value = null
+  backupStatus.value=null
   window.removeEventListener('online', onNetworkChange)
   window.removeEventListener('offline', onNetworkChange)
   document.removeEventListener('visibilitychange', onVisibilityChange)
@@ -371,6 +393,33 @@ onUnmounted(() => {
       <section class="foundation-card storage-section" aria-labelledby="storage-backup-heading">
         <h2 id="storage-backup-heading">Резервные копии</h2>
         <div class="backup-cards">
+          <div v-if="backupPhase==='loading'" class="backup-technical"
+            role="status" data-testid="storage-backup-technical-loading">
+            Проверяем технические лимиты на сервере…
+          </div>
+          <div v-else-if="backupPhase==='ready'&&backupStatus"
+            class="backup-technical" data-testid="storage-backup-technical-ready">
+            <strong>Техническая проверка запуска резервной копии</strong>
+            <span v-if="backupStatus.technicalGate==='clear'">
+              Ограничение частоты запуска сейчас не препятствует запросу.
+            </span>
+            <span v-else-if="backupStatus.technicalGate==='cooldown'">
+              Действует техническая пауза между запусками.
+            </span>
+            <span v-else>На сервере зарегистрирована активная техническая операция.</span>
+            <span v-if="backupStatus.nextTechnicalStartAt">
+              Следующая возможная попытка: {{backupStatus.nextTechnicalStartAt}} (UTC).
+            </span>
+            <small>Это только проверка технических ограничений. Она не подтверждает
+              существование копии, право на запуск или работоспособность восстановления.</small>
+          </div>
+          <p v-else-if="backupPhase==='error'" class="muted"
+            role="alert" data-testid="storage-backup-technical-error">
+            Технические ограничения резервных копий не подтверждены сервером.
+          </p>
+          <p v-else-if="backupPhase==='offline'" class="muted" role="status">
+            Офлайн: статус технических ограничений резервных копий неизвестен.
+          </p>
           <div class="backup-empty" data-testid="storage-backup-unavailable">
             Нет проверенных копий для отображения. До завершения безопасного
             восстановления отсюда нельзя создавать, заменять или удалять резервные копии.
@@ -411,6 +460,10 @@ onUnmounted(() => {
 .storage-view .queue-amount{font-size:12px;font-weight:710;color:#e8ece8;text-align:right}
 .storage-view .queue-footnote{font-size:11px;color:#a5b0a8;line-height:1.5;margin:8px 0 0}
 .storage-view .backup-cards{display:grid;gap:9px}
+.storage-view .backup-technical{display:grid;gap:8px;padding:14px;
+  border:1px solid #3e5944;background:#233126;border-radius:9px;color:#d6e6d9;font-size:12px}
+.storage-view .backup-technical strong{font-size:12px;color:#ddf5e2}
+.storage-view .backup-technical small{color:#a5b4a8;line-height:1.6}
 .storage-view .backup-empty{padding:15px;background:#252525;border:1px solid #383838;border-radius:9px;font-size:12px;color:#b7c2b9}
 .storage-view .storage-backup-manage,.storage-view .cache-usage button{background:#2c332d;border:1px solid #494f49;border-radius:8px;color:#b5c0b6;padding:10px}
 .storage-view .cache-usage{display:flex;gap:12px;align-items:center;justify-content:space-between}

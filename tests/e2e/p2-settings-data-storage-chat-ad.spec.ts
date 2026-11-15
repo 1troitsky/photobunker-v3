@@ -22,6 +22,10 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await page.getByTestId('settings-nav-data-storage').click()
     await expect(page.getByTestId('storage-local-ready')).toBeVisible({ timeout: 20000 })
     await expect(page.getByTestId('storage-server-ready')).toBeVisible({ timeout: 25000 })
+    await expect(page.getByTestId('storage-backup-technical-ready')).toBeVisible({timeout:25000})
+    await expect(page.getByTestId('storage-backup-technical-ready'))
+      .toContainText('не подтверждает')
+    await expect(page.getByTestId('storage-backup-unavailable')).toBeVisible()
     await expect(page.getByTestId('storage-local-pending-count')).toHaveText('0')
     await expect(page.getByTestId('storage-effective-plan')).toHaveText('free')
     await expect(page.getByTestId('storage-recorded-cipher-bytes')).toHaveText('0 Б')
@@ -36,6 +40,7 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     // server ACK, fake sync, browser gallery or OS Camera Roll is involved.
     await context.setOffline(true)
     await expect(page.getByTestId('storage-server-offline')).toBeVisible()
+    await expect(page.getByTestId('storage-backup-technical-ready')).toHaveCount(0)
     const result = await page.evaluate(async () => {
       const { captureEncrypted } = await import('/src/features/photo-sync/application/p1-photo.ts')
       const canvas = document.createElement('canvas')
