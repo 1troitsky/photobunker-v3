@@ -1444,6 +1444,29 @@ onUnmounted(()=>{
       <RouterLink to="/settings">Открыть доступ</RouterLink>
     </div>
     <template v-else>
+      <nav class="browser-archive-tabs browser-primary-sections"
+        aria-label="Разделы Browser" data-testid="browser-primary-sections">
+        <button type="button" data-testid="browser-tab-active"
+          :aria-pressed="archiveTab==='all'&&primarySection==='all'"
+          @click="choosePrimarySection('all')">Все</button>
+        <button type="button" data-testid="browser-tab-personal"
+          :aria-pressed="archiveTab==='all'&&primarySection==='personal'"
+          @click="choosePrimarySection('personal')">Мои фото</button>
+        <button type="button" data-testid="browser-tab-assignments"
+          :aria-pressed="archiveTab==='all'&&primarySection==='assignments'"
+          @click="choosePrimarySection('assignments')">Задания</button>
+        <button v-if="archivePrefsShown.useArchive" type="button"
+          data-testid="browser-tab-archive"
+          :aria-pressed="archiveTab==='archive'"
+          @click="choosePrimarySection('archive')">Архив</button>
+      </nav>
+      <p v-if="primarySection==='assignments'&&archiveTab==='all'"
+        class="browser-section-note" data-testid="browser-assignment-catalog-scope">
+        Показываются только загруженные на этом устройстве материалы с
+        сохранённым подписанным контекстом задания. Проверка участия и доступов
+        выполняется при открытии файлов; облачные материалы без доказательства
+        задания здесь не классифицируются.
+      </p>
       <section class="browser-folders" data-testid="browser-folders">
         <div class="browser-folder-head">
           <div class="browser-breadcrumb" aria-label="Путь папки">
@@ -1663,29 +1686,6 @@ onUnmounted(()=>{
           <button type="button" @click="closeBrowserSettings">Готово</button>
         </div>
       </section>
-      <nav class="browser-archive-tabs browser-primary-sections"
-        aria-label="Разделы Browser" data-testid="browser-primary-sections">
-        <button type="button" data-testid="browser-tab-active"
-          :aria-pressed="archiveTab==='all'&&primarySection==='all'"
-          @click="choosePrimarySection('all')">Все</button>
-        <button type="button" data-testid="browser-tab-personal"
-          :aria-pressed="archiveTab==='all'&&primarySection==='personal'"
-          @click="choosePrimarySection('personal')">Мои фото</button>
-        <button type="button" data-testid="browser-tab-assignments"
-          :aria-pressed="archiveTab==='all'&&primarySection==='assignments'"
-          @click="choosePrimarySection('assignments')">Задания</button>
-        <button v-if="archivePrefsShown.useArchive" type="button"
-          data-testid="browser-tab-archive"
-          :aria-pressed="archiveTab==='archive'"
-          @click="choosePrimarySection('archive')">Архив</button>
-      </nav>
-      <p v-if="primarySection==='assignments'&&archiveTab==='all'"
-        class="browser-section-note" data-testid="browser-assignment-catalog-scope">
-        Показываются только загруженные на этом устройстве материалы с
-        сохранённым подписанным контекстом задания. Проверка участия и доступов
-        выполняется при открытии файлов; облачные материалы без доказательства
-        задания здесь не классифицируются.
-      </p>
       <p v-if="archiveTab==='archive'" class="muted">
         Файлы остаются зашифрованными до подтверждённого окончательного
         удаления. Архив не продлевает TTL.
