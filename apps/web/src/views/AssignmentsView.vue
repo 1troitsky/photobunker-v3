@@ -1077,7 +1077,7 @@ onUnmounted(cleanPreview)
               <div v-for="media in visibleMedia(assignment)" :key="media.kind"
                 class="assignment-media-line" :data-testid="'assignment-media-'+media.kind">
                 <span><strong>{{media.label}}:</strong>
-                  {{media.count===null?'Ожидает подтверждения':media.count}}
+                  {{media.count===null?'ожидает подтверждения':media.count}}
                   <template v-if="media.goal!==null"> / {{media.goal}}</template>
                 </span>
                 <progress v-if="media.goal!==null&&media.count!==null"

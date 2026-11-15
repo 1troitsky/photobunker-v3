@@ -22,6 +22,9 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await page.getByTestId('settings-nav-data-storage').click()
     await expect(page.getByTestId('storage-local-ready')).toBeVisible({ timeout: 20000 })
     await expect(page.getByTestId('storage-server-ready')).toBeVisible({ timeout: 25000 })
+    // Real owner GET must be reachable through the Vite dev proxy.
+    const backupReply=await page.request.get('/backup/v1/limits')
+    expect(backupReply.status()).toBe(200)
     await expect(page.getByTestId('storage-backup-technical-ready')).toBeVisible({timeout:25000})
     await expect(page.getByTestId('storage-backup-technical-ready'))
       .toContainText('не подтверждает')
@@ -125,6 +128,9 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await page.getByRole('button', { name: 'Выйти' }).click()
     await expect(page.getByRole('button', { name: 'Создать ключ' })).toBeVisible()
     await page.goto('/settings/storage')
+    // Owner-only technical limits must deny a signed-out browser.
+    const deniedBackup=await page.request.get('/backup/v1/limits')
+    expect(deniedBackup.status()).toBe(401)
     await expect(page.getByTestId('storage-signed-out')).toBeVisible()
     await expect(page.getByTestId('storage-local-ready')).toHaveCount(0)
     await expect(page.getByTestId('storage-queue-item')).toHaveCount(0)

@@ -55,6 +55,9 @@ export default defineConfig(({ mode }) => {
         // Backend exposes the verified own-account entitlement under this
         // path. Without this proxy the PWA silently got Vite 404 and kept
         // Free13 forever, even for verified Go/Pro subscribers.
+        // Backup rate status is owner-authenticated and read-only. The
+        // actual worker/restore API is intentionally not enabled yet.
+        '/backup/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/billing/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/identity/v2': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/photos/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
