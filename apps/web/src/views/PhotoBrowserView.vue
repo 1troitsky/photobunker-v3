@@ -6,6 +6,12 @@ import {browserShellActions,clearBrowserShellActions}
 import {makeBrowserFolderThumbnail}
   from '../features/browser/application/browser-folder-thumbnail'
 import {
+  readBrowserOpeningSection,saveBrowserOpeningSection,
+  readBrowserFoldersFirst,saveBrowserFoldersFirst,
+} from '../features/browser/application/browser-display-preferences'
+import type {BrowserOpeningSection}
+  from '../features/browser/application/browser-display-preferences'
+import {
   browserRetentionLabel,readBrowserDaysLeft,saveBrowserDaysLeft,
 } from '../features/browser/application/browser-days-left'
 import {
@@ -133,6 +139,14 @@ const createFolderParent=ref('')
 const uploadSheetOpen=ref(false)
 const browserSettingsOpen=ref(false)
 const showRemainingDays=ref(readBrowserDaysLeft())
+const browserOpenFirst=ref<BrowserOpeningSection>(readBrowserOpeningSection())
+const foldersFirst=ref(readBrowserFoldersFirst())
+function updateBrowserOpenFirst(next:BrowserOpeningSection):void{
+  if(saveBrowserOpeningSection(next))browserOpenFirst.value=next
+}
+function updateBrowserFoldersFirst(value:boolean):void{
+  if(saveBrowserFoldersFirst(value))foldersFirst.value=value
+}
 const retentionClock=ref(Date.now())
 let retentionTimer:ReturnType<typeof setInterval>|null=null
 function updateRemainingDays(enabled:boolean):void{
@@ -1306,6 +1320,7 @@ watch(activeSession,(next,previous)=>{
     mergeBackups.value=[]
     archiveTab.value='all'
     primarySection.value='all'
+    if(next)choosePrimarySection(browserOpenFirst.value)
     archiveEntries.value=[]
     archiveCursor.value=null
     archiveNotice.value=''
@@ -1514,6 +1529,8 @@ onMounted(()=>{
     primarySection.value=restored.primarySection??'all'
     requestedFolderReturn=restored.folderId
     scrollReturnKey=restored.fileKey
+  }else if(identity){
+    choosePrimarySection(browserOpenFirst.value)
   }
   schedulePrivateSearch()
   void loadFolders();void loadMergeBackups();void loadArchivePrefState()
@@ -1793,6 +1810,24 @@ onUnmounted(()=>{
             Закрыть</button>
         </header>
         <h2>Отображение</h2>
+        <label for="browser-pref-open-first">Открывать первым
+          <select id="browser-pref-open-first" :value="browserOpenFirst"
+            data-testid="browser-pref-open-first"
+            @change="updateBrowserOpenFirst(($event.target as HTMLSelectElement).value as BrowserOpeningSection)">
+            <option value="all">Все</option>
+            <option value="personal">Мои фото</option>
+            <option value="assignments">Задания</option>
+            <option v-if="archivePrefsShown.useArchive" value="archive">Архив</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" data-testid="browser-pref-folders-first"
+            :checked="foldersFirst"
+            @change="updateBrowserFoldersFirst(($event.target as HTMLInputElement).checked)">
+          Папки всегда сверху
+        </label>
+        <p class="muted">Положение папок меняется только на экране.
+          Файлы и шифрованная структура остаются на прежнем месте.</p>
         <label>
           <input type="checkbox" data-testid="browser-pref-days-left"
             :checked="showRemainingDays"
