@@ -2114,7 +2114,7 @@ onUnmounted(()=>{
               <span>Папка</span>
               <select :value="folderWorkspace.placements[item.key]??''"
                 :disabled="folderBusy||busy" :aria-label="'Папка файла '+item.id"
-                @change="changeItemFolder(item,$event)">
+                @change="changeItemFolder(item,$event);closeFileMenu()">
                 <option value="">Мои файлы</option>
                 <option v-for="folder in allFolders" :key="folder.id"
                   :value="folder.id">{{ folder.name }}</option>
@@ -2124,32 +2124,32 @@ onUnmounted(()=>{
               type="button"
               :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!archivePrefsConfirmed"
               :aria-label="'Архивировать файл '+item.id"
-              @click="archiveAction(item,'archive')">В архив</button>
+              @click="archiveAction(item,'archive');closeFileMenu()">В архив</button>
             <button v-if="archiveTab==='all'&&item.cloud&&!archivePrefsShown.useArchive"
               type="button"
               :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!archivePrefsConfirmed"
               :aria-label="'Запросить прямое удаление файла '+item.id"
-              @click="archiveAction(item,'delete')">Удалить окончательно</button>
+              @click="archiveAction(item,'delete');closeFileMenu()">Удалить окончательно</button>
             <template v-if="archiveTab==='archive'&&archivedByKey.get(item.key)?.state==='archived'">
               <button type="button" :disabled="archiveBusy||!activeSession.online||!archiveWriteEnabled"
                 :aria-label="'Восстановить файл '+item.id"
-                @click="archiveAction(item,'restore')">Восстановить</button>
+                @click="archiveAction(item,'restore');closeFileMenu()">Восстановить</button>
               <button type="button" :disabled="archiveBusy||!activeSession.online||!archiveWriteEnabled"
                 :aria-label="'Запросить удаление файла '+item.id"
-                @click="archiveAction(item,'delete')">Удалить окончательно</button>
+                @click="archiveAction(item,'delete');closeFileMenu()">Удалить окончательно</button>
             </template>
             <span v-if="archivedByKey.get(item.key)?.state==='deleting'">
               Удаление ожидает подтверждения GC:
               {{ archivedByKey.get(item.key)?.physicalStatus }}</span>
             <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
               :aria-label="'Полный просмотр файла '+item.id"
-              @click="preserveViewerOrigin(item,$event)">Просмотр</RouterLink>
+              @click="preserveViewerOrigin(item,$event)">Открыть файл</RouterLink>
             <button v-if="item.local" type="button" :disabled="previewBusy||busy"
               :aria-label="item.source==='photo'?'Открыть':'Открыть файл '+item.id"
-              @click="openItem(item)">Открыть</button>
+              @click="openItem(item);closeFileMenu()">Быстрый просмотр</button>
             <button v-if="item.cloud" type="button" :disabled="previewBusy||busy"
               aria-label="Проверить из облака"
-              @click="openItem(item,true)">Проверить из облака</button>
+              @click="openItem(item,true);closeFileMenu()">Проверить из облака</button>
             </div>
           </div>
         </div>
@@ -2205,12 +2205,12 @@ onUnmounted(()=>{
                 @keydown.esc.stop.prevent="folderMenuEscape">
                 <button type="button" :disabled="folderBusy"
                   :aria-label="'Переименовать '+folder.name"
-                  @click="openRename(folder.id,folder.name)">Переименовать</button>
+                  @click="openRename(folder.id,folder.name);closeFileMenu()">Переименовать</button>
             <label class="browser-folder-parent">
               <span>В</span>
               <select :value="folder.parentId??''" :disabled="folderBusy"
                 :aria-label="'Переместить папку '+folder.name"
-                @change="changeFolderParent(folder.id,$event)">
+                @change="changeFolderParent(folder.id,$event);closeFileMenu()">
                 <option value="">Корень</option>
                 <option v-for="candidate in allFolders.filter(x=>x.id!==folder.id)"
                   :key="candidate.id" :value="candidate.id">{{ candidate.name }}</option>
@@ -2218,7 +2218,7 @@ onUnmounted(()=>{
             </label>
                 <button type="button" :disabled="folderBusy"
                   :aria-label="'Удалить пустую папку '+folder.name"
-                  @click="deleteEmptyFolder(folder.id)">Удалить</button>
+                  @click="deleteEmptyFolder(folder.id);closeFileMenu()">Удалить</button>
               </div>
             </div>
           </div>
