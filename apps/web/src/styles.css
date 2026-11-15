@@ -1659,3 +1659,37 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .browser-file-menu-root :focus-visible{
   outline:2px solid var(--accent);outline-offset:2px
 }
+
+/* Browser v3 folder actions use the same one-menu-at-a-time behavior as
+   files; the existing encrypted folder mutation controllers are reused. */
+.browser-folder-item{position:relative;overflow:visible}
+.browser-folder-menu-root{position:relative;flex:0 0 auto;margin-left:auto}
+.browser-folder-menu-toggle{width:36px;height:36px;min-width:36px;
+  display:grid;place-items:center;padding:0;
+  border:1px solid #454545;border-radius:8px;
+  background:#2b302d;color:#edf2ed;font-size:19px;letter-spacing:1px}
+.browser-folder-menu-toggle[aria-expanded=true]{
+  border-color:var(--accent);background:#333e36
+}
+.browser-folder-menu-panel{position:absolute;right:0;top:calc(100% + 4px);
+  z-index:121;width:min(300px,calc(100vw - 34px));
+  max-height:min(64dvh,470px);overflow-y:auto;
+  padding:11px;background:#292b29;border:1px solid #555;
+  border-radius:9px;box-shadow:0 14px 34px #000a;
+  display:grid;gap:7px;align-items:stretch}
+.browser-folder-menu-panel>button{
+  min-width:0;width:100%;min-height:38px;padding:9px 11px;
+  border:0;border-radius:6px;text-align:left;
+  background:#343934;color:#f1f1f1;font-size:12px
+}
+.browser-folder-menu-panel>button:disabled{opacity:.4;cursor:not-allowed}
+.browser-folder-menu-panel .browser-folder-parent{
+  display:grid;gap:6px;min-width:0;width:100%;
+  padding:8px 10px;font-size:11px;color:#d1d1d1
+}
+.browser-folder-menu-panel .browser-folder-parent select{
+  width:100%;min-width:0;max-width:100%
+}
+.browser-folder-menu-root :focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
