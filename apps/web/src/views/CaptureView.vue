@@ -206,6 +206,17 @@ const recordingMaxSeconds=computed(()=>captureMode.value==='photo'?0
   :recordingBounds(captureMode.value).maxMs/1000)
 const recorder=shallowRef<MediaRecorder|null>(null)
 const recordingStartedAt=ref<number|null>(null)
+const recordingClock=ref(Date.now())
+let recordingClockTimer:ReturnType<typeof setInterval>|null=null
+const recordingElapsed=computed(()=>recording.value&&recordingStartedAt.value!==null
+  ?Math.max(0,Math.floor((recordingClock.value-recordingStartedAt.value)/1000)):0)
+watch(recording,nowRecording=>{
+  if(recordingClockTimer!==null){clearInterval(recordingClockTimer);recordingClockTimer=null}
+  if(nowRecording){
+    recordingClock.value=Date.now()
+    recordingClockTimer=setInterval(()=>{recordingClock.value=Date.now()},1000)
+  }
+})
 let recordingTimer:ReturnType<typeof setTimeout>|null=null
 // Keep only bounded, queued native chunks in RAM. All durable draft parts
 // are AEAD ciphertext before IndexedDB writes; never persist raw MediaRecorder blobs.
@@ -394,6 +405,12 @@ async function toggleTorch():Promise<void>{
 function toggleBlindMode():void{
   if(!activeSession.value)return
   blindMode.value=!blindMode.value
+}
+function openCameraDetails(selector:string):void{
+  if(!activeSession.value)return
+  document.querySelector<HTMLElement>(selector)?.scrollIntoView({
+    behavior:'auto',block:'start',
+  })
 }
 watch([activeSession,captureMode,stream,recording,busy,starting,torchOn,blindMode],
   ()=>{
@@ -965,6 +982,7 @@ watch(captureMode,()=>{
 })
 onUnmounted(()=>{
   clearCameraShellActions(cameraHeaderOwner)
+  if(recordingClockTimer!==null){clearInterval(recordingClockTimer);recordingClockTimer=null}
   closePrivateRecordingReview()
   disposed=true;++instructionGeneration;assignmentPrivate.value=null
   assignmentPrivateScope.value=''
