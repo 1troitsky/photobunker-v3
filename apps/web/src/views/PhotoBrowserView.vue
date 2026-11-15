@@ -147,6 +147,22 @@ const editFolderName=ref('')
 const selectedKeys=ref<string[]>([])
 const bulkDestination=ref('')
 const archiveTab=ref<'all'|'archive'>('all')
+type PrimarySection='all'|'personal'|'assignments'
+const primarySection=ref<PrimarySection>('all')
+function choosePrimarySection(next:PrimarySection|'archive'):void{
+  if(next==='archive'){
+    if(!archivePrefsShown.value.useArchive)return
+    archiveTab.value='archive'
+    primarySection.value='all'
+  }else{
+    archiveTab.value='all'
+    primarySection.value=next
+  }
+  filter.value='all'
+  search.value=''
+  selectedFolder.value=null
+  selectedKeys.value=[]
+}
 watch(()=>archivePrefsShown.value.useArchive,enabled=>{
   // The accepted Browser v3 hides the Archive tab when the user disables
   // it. Hiding is ONLY presentation, never authorization to erase or extend
@@ -320,6 +336,19 @@ const items=computed(()=>buildCatalog(
     })),
   ],
 ))
+// Classification is a VISUAL scope only. The assignment page owns server
+// roster/ACL enforcement. Cloud-only index rows have no signed capture
+// provenance and cannot be falsely categorized as assigned media here.
+const localAssignmentKeys=computed(()=>{
+  const scoped=new Set<string>()
+  for(const photo of localPhotos.value){
+    if(photo.capture)scoped.add('photo:'+photo.photoId)
+  }
+  for(const media of localMedia.value){
+    if(media.capture)scoped.add('media:'+media.mediaId)
+  }
+  return scoped
+})
 const searchScope=computed(()=>{
   const authenticatedRows=filterCatalog(items.value,{
     type:filter.value,query:'',sort:sort.value,
@@ -329,12 +358,20 @@ const searchScope=computed(()=>{
       return archived==='archived'||archived==='deleting'
     return archived!=='archived'&&archived!=='deleting'
   })
+  // "Мои фото" and "Задания" restrict the already-authenticated catalog.
+  // These are NOT authorization scopes and MUST NOT invent cloud-only proof.
+  const scopedRows=archiveTab.value==='archive'||primarySection.value==='all'
+    ?authenticatedRows
+    :primarySection.value==='personal'
+      ?authenticatedRows.filter(item=>item.type==='photo'
+        &&!localAssignmentKeys.value.has(item.key))
+      :authenticatedRows.filter(item=>localAssignmentKeys.value.has(item.key))
   // Folders are encrypted virtual client metadata. An all-folder query
   // sees ONLY rows already loaded from authenticated catalog endpoints.
   // Archive already has its own scope, independent of the active folder.
-  if(archiveTab.value==='archive'||!folderReady.value)return authenticatedRows
+  if(archiveTab.value==='archive'||!folderReady.value)return scopedRows
   return scopeCatalogFolders(
-    authenticatedRows,folderWorkspace.value.placements,selectedFolder.value,
+    scopedRows,folderWorkspace.value.placements,selectedFolder.value,
     search.value.trim().length>0&&searchFolderScope.value==='all',
   )
 })
@@ -1115,7 +1152,7 @@ function preserveViewerOrigin(item:CatalogItem,event:MouseEvent):void{
     fileKey:item.key,folderId:selectedFolder.value,
     filter:filter.value,sort:sort.value,view:view.value,
     search:search.value,searchFolderScope:searchFolderScope.value,
-    archiveTab:archiveTab.value,
+    archiveTab:archiveTab.value,primarySection:primarySection.value,
     fileKeys:visible.value.map(row=>row.key),
   })
 }
@@ -1156,6 +1193,7 @@ watch(activeSession,(next,previous)=>{
     mergeChoices.value={}
     mergeBackups.value=[]
     archiveTab.value='all'
+    primarySection.value='all'
     archiveEntries.value=[]
     archiveCursor.value=null
     archiveNotice.value=''
@@ -1187,7 +1225,8 @@ watch(activeSession,(next,previous)=>{
   if(next)void loadArchivePrefState()
   void refresh()
 })
-watch([selectedFolder,filter,search,searchFolderScope,archiveTab],()=>{selectedKeys.value=[]})
+watch([selectedFolder,filter,search,searchFolderScope,archiveTab,primarySection],
+  ()=>{selectedKeys.value=[]})
 watch([search,searchScope,activeSession,privateSearchExpanded],schedulePrivateSearch)
 watch([visible,folderReady],async()=>{
   const key=scrollReturnKey
@@ -1360,6 +1399,7 @@ onMounted(()=>{
     search.value=restored.search
     searchFolderScope.value=restored.searchFolderScope
     archiveTab.value=restored.archiveTab
+    primarySection.value=restored.primarySection??'all'
     requestedFolderReturn=restored.folderId
     scrollReturnKey=restored.fileKey
   }
@@ -1623,13 +1663,29 @@ onUnmounted(()=>{
           <button type="button" @click="closeBrowserSettings">Готово</button>
         </div>
       </section>
-      <nav class="browser-archive-tabs" aria-label="Расположение файлов">
+      <nav class="browser-archive-tabs browser-primary-sections"
+        aria-label="Разделы Browser" data-testid="browser-primary-sections">
         <button type="button" data-testid="browser-tab-active"
-          :aria-pressed="archiveTab==='all'" @click="archiveTab='all'">Каталог</button>
+          :aria-pressed="archiveTab==='all'&&primarySection==='all'"
+          @click="choosePrimarySection('all')">Все</button>
+        <button type="button" data-testid="browser-tab-personal"
+          :aria-pressed="archiveTab==='all'&&primarySection==='personal'"
+          @click="choosePrimarySection('personal')">Мои фото</button>
+        <button type="button" data-testid="browser-tab-assignments"
+          :aria-pressed="archiveTab==='all'&&primarySection==='assignments'"
+          @click="choosePrimarySection('assignments')">Задания</button>
         <button v-if="archivePrefsShown.useArchive" type="button"
           data-testid="browser-tab-archive"
-          :aria-pressed="archiveTab==='archive'" @click="archiveTab='archive'">Архив</button>
+          :aria-pressed="archiveTab==='archive'"
+          @click="choosePrimarySection('archive')">Архив</button>
       </nav>
+      <p v-if="primarySection==='assignments'&&archiveTab==='all'"
+        class="browser-section-note" data-testid="browser-assignment-catalog-scope">
+        Показываются только загруженные на этом устройстве материалы с
+        сохранённым подписанным контекстом задания. Проверка участия и доступов
+        выполняется при открытии файлов; облачные материалы без доказательства
+        задания здесь не классифицируются.
+      </p>
       <p v-if="archiveTab==='archive'" class="muted">
         Файлы остаются зашифрованными до подтверждённого окончательного
         удаления. Архив не продлевает TTL.
