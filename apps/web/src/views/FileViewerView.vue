@@ -2024,7 +2024,7 @@ watch([fileUrl,preview,activeSession,editorMode,editorReady],()=>{
 },{immediate:true})
 watch(editorMode,opened=>{
   panel.value=null
-  editorTab.value='media'
+  editorTab.value=opened&&route.query.tab==='info'?'info':'media'
   if(opened)resetPrivateCopyDraft()
 })
 watch(activeSession,(next,previous)=>{
