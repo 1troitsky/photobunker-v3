@@ -162,18 +162,36 @@ const editingFolderId=ref<string|null>(null)
 const editFolderName=ref('')
 const selectedKeys=ref<string[]>([])
 const fileMenuKey=ref<string|null>(null)
+const folderMenuId=ref<string|null>(null)
 function closeFileMenu():void{
   fileMenuKey.value=null
+  folderMenuId.value=null
+}
+function toggleFolderMenu(id:string):void{
+  if(!folders.value.some(folder=>folder.id===id))return
+  folderMenuId.value=folderMenuId.value===id?null:id
+  fileMenuKey.value=null
+}
+function folderMenuEscape():void{
+  const id=folderMenuId.value
+  closeFileMenu()
+  if(id)void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-folder-menu-'+id+'"] button.browser-folder-menu-toggle',
+    )?.focus()
+  })
 }
 function toggleFileMenu(key:string):void{
   if(!visible.value.some(item=>item.key===key))return
   fileMenuKey.value=fileMenuKey.value===key?null:key
+  folderMenuId.value=null
 }
 function onBrowserMenuPointerDown(event:PointerEvent):void{
-  if(!fileMenuKey.value)return
+  if(!fileMenuKey.value&&!folderMenuId.value)return
   const el=event.target
-  if(!(el instanceof Element)||!el.closest('.browser-file-menu-root'))
-    closeFileMenu()
+  if(!(el instanceof Element)||!el.closest(
+    '.browser-file-menu-root,.browser-folder-menu-root',
+  ))closeFileMenu()
 }
 const bulkDestination=ref('')
 const archiveTab=ref<'all'|'archive'>('all')
@@ -2162,9 +2180,23 @@ onUnmounted(()=>{
                 <small>{{ folderLoadedCount(folder.id) }} файлов в загруженном каталоге</small>
               </span>
             </button>
-            <button type="button" :disabled="folderBusy"
-              :aria-label="'Переименовать '+folder.name"
-              @click="openRename(folder.id,folder.name)">Переименовать</button>
+            <div class="browser-folder-menu-root"
+              :data-testid="'browser-folder-menu-'+folder.id">
+              <button type="button" class="browser-folder-menu-toggle"
+                data-testid="browser-folder-menu-toggle"
+                :aria-label="'Действия с папкой '+folder.name"
+                :aria-expanded="folderMenuId===folder.id"
+                aria-haspopup="true" @click.stop="toggleFolderMenu(folder.id)">
+                <span aria-hidden="true">•••</span>
+              </button>
+              <div v-if="folderMenuId===folder.id"
+                class="browser-folder-menu-panel" role="group"
+                data-testid="browser-folder-menu-panel"
+                :aria-label="'Действия с папкой '+folder.name"
+                @keydown.esc.stop.prevent="folderMenuEscape">
+                <button type="button" :disabled="folderBusy"
+                  :aria-label="'Переименовать '+folder.name"
+                  @click="openRename(folder.id,folder.name)">Переименовать</button>
             <label class="browser-folder-parent">
               <span>В</span>
               <select :value="folder.parentId??''" :disabled="folderBusy"
@@ -2175,9 +2207,11 @@ onUnmounted(()=>{
                   :key="candidate.id" :value="candidate.id">{{ candidate.name }}</option>
               </select>
             </label>
-            <button type="button" :disabled="folderBusy"
-              :aria-label="'Удалить пустую папку '+folder.name"
-              @click="deleteEmptyFolder(folder.id)">Удалить</button>
+                <button type="button" :disabled="folderBusy"
+                  :aria-label="'Удалить пустую папку '+folder.name"
+                  @click="deleteEmptyFolder(folder.id)">Удалить</button>
+              </div>
+            </div>
           </div>
         </div>
       </Teleport>
