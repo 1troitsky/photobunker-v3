@@ -1,4 +1,10 @@
 import {expect,test} from '@playwright/test'
+import type {Locator} from '@playwright/test'
+
+async function ensureFileMenu(row:Locator):Promise<void>{
+  if(await row.getByTestId('browser-file-menu-panel').count()===0)
+    await row.getByTestId('browser-file-menu-toggle').click()
+}
 
 test('P2 Browser: Local-First signed archive settings, independent-device recovery, no auto-TTL extension and direct delete',async({browser})=>{
   test.setTimeout(185000)
@@ -54,10 +60,12 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     }),{timeout:30000}).toBe(1)
     await a.getByRole('button',{name:'Обновить',exact:true}).first().click()
     const row=a.locator('[data-testid^="browser-row-media:"]')
+    await ensureFileMenu(row)
     await expect(row.getByRole('button',{name:/Архивировать файл/})).toBeVisible()
     const assetId=(await row.getAttribute('data-testid'))!
       .slice('browser-row-media:'.length)
     a.once('dialog',d=>d.accept())
+    await ensureFileMenu(row)
     await row.getByRole('button',{name:/Архивировать файл/}).click()
     await expect(a.getByTestId('browser-archive-status'))
       .toContainText('помещён в архив',{timeout:20000})
@@ -72,6 +80,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
       assetId,state:'archived',archiveUntilMs:null,physicalStatus:'not_started',
     })
     await a.getByTestId('browser-tab-archive').click()
+    await ensureFileMenu(row)
     await row.getByRole('button',{name:/Восстановить файл/}).click()
     await expect(a.getByTestId('browser-archive-status'))
       .toContainText('восстановлен из архива',{timeout:20000})
