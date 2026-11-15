@@ -88,6 +88,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await page.locator('.browser-folder-open').filter({hasText:'День 1'}).click()
     await expect(item).toHaveCount(1)
     await page.getByRole('button',{name:'Мои файлы'}).click()
+    await page.getByRole('button',{name:'Действия с папкой Съёмки'}).click()
     const remove=page.getByRole('button',{name:'Удалить пустую папку Съёмки'})
     page.once('dialog',d=>d.accept())
     await remove.click()
