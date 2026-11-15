@@ -6,6 +6,7 @@ import type { DockDefinition } from './ui/fieldwork/dock-preferences'
 import { brand } from './config/brand'
 import { activeSession } from './features/identity/application/session'
 import { readVerifiedGraceStatus } from './features/billing/application/grace-client'
+import { notificationShellActions } from './features/notifications/application/notification-shell-actions'
 import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
 import {isDockSectionActive,resolveDockRetap} from './ui/fieldwork/dock-retap'
 const route = useRoute()
@@ -67,12 +68,29 @@ const dock = computed(() => displayedDock.value
         <strong>{{ brand.name }}</strong>
         <small><span class="status-dot" :class="{'session-online':activeSession?.online}" aria-hidden="true"></span>{{activeSession?(activeSession.online?'Сессия подтверждена':'Локальный режим'):'Без аккаунта'}}</small>
       </div>
-      <RouterLink v-if="verifiedPlan&&route.name!=='browser-viewer'&&route.name!=='browser-editor'"
+      <RouterLink v-if="verifiedPlan&&route.path!=='/notifications'&&route.name!=='browser-viewer'&&route.name!=='browser-editor'"
         to="/settings/payments" class="shell-plan-pill" data-testid="verified-plan-link">
         Тариф: {{verifiedPlan}}
       </RouterLink>
+      <div class="shell-header-actions notification-header-actions"
+        v-if="route.path==='/notifications'" data-testid="notifications-header-actions">
+        <button type="button" aria-label="Прочитать все" title="Прочитать все"
+          data-testid="notifications-mark-all"
+          :disabled="!notificationShellActions?.canMarkAll"
+          @click="notificationShellActions?.markAll()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true"><path d="m3 12 5 5 7-8M13 16l3 3 5-7"/></svg>
+        </button>
+        <button type="button" aria-label="Настройки уведомлений"
+          title="Настройки уведомлений"
+          data-testid="notifications-settings" @click="router.push('/notifications/settings')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"/>
+            <path d="m19.4 15 .1.1 1.3 1.3-2 3.4-1.8-.5a8 8 0 0 1-2 .9l-.5 1.8h-4l-.5-1.8a8 8 0 0 1-2-.9l-1.8.5-2-3.4 1.3-1.3a8 8 0 0 1 0-2.2L4.2 11l2-3.4 1.8.5a8 8 0 0 1 2-.9L10.5 5h4l.5 2.2a8 8 0 0 1 2 .9l1.8-.5 2 3.4-1.3 1.3a8 8 0 0 1-.1 2.2"/></svg>
+        </button>
+      </div>
       <div class="shell-header-actions viewer-header-actions"
-        v-if="route.name==='browser-viewer'" data-testid="viewer-shell-actions"
+        v-else-if="route.name==='browser-viewer'" data-testid="viewer-shell-actions"
         aria-label="Действия с файлом">
         <button type="button" disabled aria-label="Избранное"
           title="Синхронизированная E2EE-коллекция Избранное ещё не реализована">

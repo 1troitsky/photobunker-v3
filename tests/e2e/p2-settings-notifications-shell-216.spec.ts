@@ -32,7 +32,10 @@ test('P2 #216: real account, encrypted Notifications UI, offline route/settings 
     await expect(page.getByTestId('notifications-page')).toBeVisible()
     await expect(page.getByTestId('notifications-signed-out')).toHaveCount(0)
     await expect(page.getByTestId('notifications-list')).toHaveCount(0)
-    await expect(page.getByTestId('notifications-mark-all')).toBeDisabled()
+    await expect(page.locator('.shell-header').getByTestId('notifications-mark-all')).toBeDisabled()
+    await expect(page.locator('.shell-header').getByTestId('notifications-settings')).toBeVisible()
+    await expect(page.getByTestId('notifications-page').getByTestId('notifications-mark-all')).toHaveCount(0)
+    await expect(page.getByTestId('verified-plan-link')).toHaveCount(0)
 
     await page.getByTestId('notifications-settings').click()
     await expect(page).toHaveURL(/\/notifications\/settings$/)

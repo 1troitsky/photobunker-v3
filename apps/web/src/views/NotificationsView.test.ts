@@ -44,6 +44,7 @@ vi.mock('../features/notifications/application/server-event-sync',()=>({
   resolveNotificationTarget:mocks.resolve,
 }))
 import NotificationsView from './NotificationsView.vue'
+import { notificationShellActions } from '../features/notifications/application/notification-shell-actions'
 
 const ID='44444444-4444-4444-8444-444444444444'
 const TARGET='55555555-5555-4555-8555-555555555555'
@@ -127,16 +128,16 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
       version:2,invitations:false,deadlines:true,expiry:true,system:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480,
     })
     await mount()
-    el('notifications-mark-all').click()
+    await notificationShellActions.value?.markAll()
     await settle()
     expect(mocks.markAll).toHaveBeenCalledWith(expect.any(Number),[ID])
   })
   it('marks all locally without falsely acknowledging a server read',async()=>{
     await mount()
-    el('notifications-mark-all').click()
+    await notificationShellActions.value?.markAll()
     await settle()
     expect(mocks.markAll).toHaveBeenCalledOnce()
-    expect(el('notifications-mark-all').hasAttribute('disabled')).toBe(true)
+    expect(notificationShellActions.value?.canMarkAll).toBe(false)
     expect(mocks.sync).not.toHaveBeenCalled()
   })
   it('uses fresh server event ACL for file navigation and never the cached target',async()=>{
@@ -277,7 +278,7 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
   })
   it('opens a real notification display settings route',async()=>{
     await mount()
-    el('notifications-settings').click()
+    notificationShellActions.value?.settings()
     await settle()
     expect(mocks.push).toHaveBeenCalledWith('/notifications/settings')
   })

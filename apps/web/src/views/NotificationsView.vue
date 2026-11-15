@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { notificationShellActions, clearNotificationShellActions } from '../features/notifications/application/notification-shell-actions'
 import { activeSession } from '../features/identity/application/session'
 import {
   listLocalNotifications, markNotificationRead, markAllLocalNotificationsRead,
@@ -13,6 +14,8 @@ import {
 } from '../features/notifications/application/server-event-sync'
 
 const router=useRouter()
+const headerOwner={}
+function openNotificationSettings():void{void router.push('/notifications/settings')}
 const tab=ref<'all'|'unread'>('all')
 const rows=ref<LocalNotification[]>([])
 const expanded=ref<string|null>(null)
@@ -55,7 +58,12 @@ function current(owner:string,token:number):boolean{
   return run===token&&scope()===owner
 }
 const shown=computed(()=>rows.value.filter(row=>notificationIsVisible(row.kind,preferences.value)))
-const visible=computed(()=>shown.value.filter(row=>tab.value==='all'||row.readAt===null))
+// Expanded events stay visible even after the local read acknowledgment. On
+// Unread tab, opening an item must not make its own content disappear.
+const visible=computed(()=>expanded.value
+  ?shown.value.filter(row=>row.id===expanded.value)
+  :shown.value.filter(row=>tab.value==='all'||row.readAt===null))
+watch(tab,()=>{expanded.value=null})
 const unread=computed(()=>shown.value.filter(row=>row.readAt===null).length)
 const canSync=computed(()=>activeSession.value?.online===true)
 function time(ms:number):string{
@@ -179,6 +187,13 @@ function canOpen(row:LocalNotification):boolean{
   return canSync.value&&row.targetId!==null&&
     ['new-file','assignment-invite','team-invite'].includes(row.kind)
 }
+// Header never operates on a stale notification view after it is unmounted.
+watch([unread,busy],()=>{
+  notificationShellActions.value={
+    owner:headerOwner,canMarkAll:unread.value>0&&!busy.value,
+    markAll,settings:openNotificationSettings,
+  }
+},{immediate:true})
 function wake():void{tickClock();void reload()}
 watch(activeSession,()=>{void reload()})
 onMounted(()=>{
@@ -188,6 +203,7 @@ onMounted(()=>{
   clockTimer=setInterval(tickClock,60_000)
 })
 onUnmounted(()=>{
+  clearNotificationShellActions(headerOwner)
   ++run;rows.value=[];expanded.value=null
   busyOwner='';busyGeneration++;busy.value=false
   window.removeEventListener('online',wake)
@@ -200,14 +216,6 @@ onUnmounted(()=>{
   <section class="foundation-content notifications-page" data-testid="notifications-page">
     <header class="notifications-heading">
       <h1>Уведомления</h1>
-      <div class="notifications-actions">
-        <button type="button" aria-label="Прочитать все" title="Прочитать все"
-          :disabled="busy||unread===0" data-testid="notifications-mark-all"
-          @click="markAll">✓ <span>Прочитать все</span></button>
-        <button type="button" aria-label="Настройки уведомлений"
-          title="Настройки уведомлений"
-          data-testid="notifications-settings" @click="router.push('/notifications/settings')">⚙</button>
-      </div>
     </header>
     <nav class="notifications-tabs" aria-label="Фильтр уведомлений">
       <button type="button" :class="{selected:tab==='all'}"
@@ -257,6 +265,9 @@ onUnmounted(()=>{
             <p v-else-if="row.targetId!==null" class="notifications-hint">
               Для открытия требуется актуальная проверка доступа на сервере.
             </p>
+            <button type="button" class="notification-back-to-list"
+              data-testid="notifications-back-to-list"
+              @click="expanded=null">К списку уведомлений</button>
           </div>
         </li>
       </ul>
@@ -273,8 +284,6 @@ onUnmounted(()=>{
 <style scoped>
 .notifications-page{max-width:860px}
 .notifications-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
-.notifications-actions{display:flex;gap:7px;align-items:center}
-.notifications-actions button{min-height:36px;white-space:nowrap;background:transparent}
 .notifications-tabs{display:flex;margin:20px 0 14px;border-bottom:1px solid var(--outline)}
 .notifications-tabs button{border:0;border-radius:0;background:transparent;color:#aaa;padding:12px 16px;border-bottom:2px solid transparent}
 .notifications-tabs button.selected{color:#fff;border-bottom-color:var(--accent)}
@@ -293,6 +302,7 @@ onUnmounted(()=>{
 .notification-chevron{color:#999}
 .notification-details{padding:0 16px 16px 32px}
 .notification-details p{margin:0 0 13px;color:#aaa;line-height:1.5}
+.notification-back-to-list{display:block;width:100%;padding:14px 0 3px;margin-top:14px;border:0;border-top:1px solid var(--outline);background:transparent;color:#bbdec4;cursor:pointer;font-size:12px;text-align:left}
 .notifications-hint{font-size:11px;color:#aaa}
 .notifications-empty{padding:35px 15px;text-align:center;color:#aaa}
 .notifications-footer{display:flex;justify-content:flex-end;margin-top:15px}
