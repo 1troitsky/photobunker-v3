@@ -23,8 +23,8 @@ export async function makeBrowserFolderThumbnail(
   }else{
     // Some WebKit installations lack ImageBitmap; the original object URL
     // is temporary and revoked even when image decoding fails or times out.
-    const url=URL.createObjectURL(source)
     const element=new Image()
+    const url=URL.createObjectURL(source)
     try{
       await new Promise<void>((resolve,reject)=>{
         let settled=false
@@ -51,7 +51,7 @@ export async function makeBrowserFolderThumbnail(
     release=()=>{element.src='';URL.revokeObjectURL(url)}
   }
   try{
-      if(width<1||height<1||width>16384||height>16384)
+    if(width<1||height<1||width>16384||height>16384)
       throw Error('browser.thumbnail_invalid_dimensions')
     const canvas=document.createElement('canvas')
     canvas.width=edge
