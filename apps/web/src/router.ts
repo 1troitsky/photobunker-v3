@@ -21,6 +21,7 @@ import ProfileView from './views/ProfileView.vue'
 import ProfileEditView from './views/ProfileEditView.vue'
 import SecurityPrivacyView from './views/SecurityPrivacyView.vue'
 import PaymentsView from './views/PaymentsView.vue'
+import CheckoutView from './views/CheckoutView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -53,6 +54,8 @@ export const router = createRouter({
       meta: { title: 'Безопасность и приватность' } },
     { path: '/settings/payments', component: PaymentsView,
       meta: { title: 'Платежи и тарифы' } },
+    { path: '/settings/payments/checkout', component: CheckoutView,
+      meta: { title: 'Оформление подписки · Web3' } },
     { path: '/settings/appearance', component: AppearanceView,
       meta: { title: 'Оформление' } },
     { path: '/settings/storage', component: DataStorageView,

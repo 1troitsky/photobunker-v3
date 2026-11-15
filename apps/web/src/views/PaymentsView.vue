@@ -198,7 +198,15 @@ onMounted(()=>{void loadCatalog()})
     <p class="billing-note">Окончательная цена, зачёт ранее оплаченного периода и условия перехода должны рассчитываться серверным checkout. Этот интерфейс не выставляет счёт и не проводит платёж.</p>
     <div class="billing-footer-actions">
       <button type="button" class="billing-btn" @click="openCompare">Сравнить</button>
-      <button type="button" class="billing-btn primary" disabled>Перейти к оплате</button>
+      <RouterLink v-if="selectedPlan&&chosenPrice!==null&&selectedPlan.planId!=='free'"
+        class="billing-btn primary" data-testid="billing-checkout-link"
+        :to="{path:'/settings/payments/checkout',
+          query:{plan:selectedPlan.planId,term:String(period)}}">
+        Открыть оформление
+      </RouterLink>
+      <button v-else type="button" class="billing-btn primary" disabled>
+        {{selectedPlan?.planId==='free'?'Free не требует оплаты':'Оформление недоступно'}}
+      </button>
     </div>
   </template>
 
@@ -329,6 +337,7 @@ onMounted(()=>{void loadCatalog()})
 .billing-page .billing-current{max-width:790px}
 .billing-page .billing-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
 .billing-page .billing-price{min-height:35px}
+.billing-page a.billing-btn{text-decoration:none}
 .billing-page .billing-price small{display:block}
 .billing-page .billing-nav-row:disabled{opacity:.5;cursor:not-allowed}
 .billing-page .billing-note button{margin-left:8px}
