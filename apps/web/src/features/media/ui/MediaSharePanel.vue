@@ -16,6 +16,9 @@ import type {
 import type {StoredMedia} from '../application/media-outbox'
 import {listSafeDerivativeCandidates} from '../application/safe-derivatives'
 import type {SafeDerivativeCandidate} from '../application/safe-derivatives'
+import {prepareContributorReviewSource} from '../application/public-card-contributor-source'
+import type {ContributorReviewSource} from '../application/public-card-contributor-source'
+import PublicCardConsentReview from './PublicCardConsentReview.vue'
 import {
   emptyPreviewFields,loadFilePreviewDraft,queueFilePreviewDraft,
   flushFilePreviewDrafts,filePreviewDraftStatus,PREVIEW_FIELD_KEYS,
@@ -49,6 +52,8 @@ const outgoing=ref<OutgoingMediaGrant[]>([])
 const incoming=ref<ReceivedMediaGrant[]>([])
 const safeCandidates=ref<SafeDerivativeCandidate[]>([])
 const previewCandidate=ref<SafeDerivativeCandidate|null>(null)
+const contributorReview=ref<ContributorReviewSource|null>(null)
+let contributorReviewSerial=0
 const previewFields=ref<PreviewFields>(emptyPreviewFields())
 const previewRevision=ref(0)
 const previewStatus=ref('none')
@@ -148,6 +153,22 @@ function sendSafe(candidate:SafeDerivativeCandidate):void{
     await flushMediaGrants()
     outgoing.value=await listOutgoingMediaGrants()
     status.value='Адресный Safe-грант записан: '+grantId.slice(0,8)
+  })
+}
+function openContributorReview(candidate:SafeDerivativeCandidate):void{
+  const serial=++contributorReviewSerial
+  contributorReview.value=null
+  void action(async()=>{
+    const session=activeSession.value
+    if(!session)throw Error('public_card.source_logged_out')
+    const review=await prepareContributorReviewSource(candidate)
+    // No asynchronous result from a previous image/account can become
+    // visible when a newer user selection or identity has superseded it.
+    if(serial!==contributorReviewSerial||activeSession.value!==session)return
+    if(review.published!==false||review.publicAuthorized!==false)
+      throw Error('public_card.source_unexpected_public_capability')
+    contributorReview.value=review
+    status.value='Открыта локальная проверка безопасного JPEG. Публикация выключена.'
   })
 }
 function openPreviewDraft(candidate:SafeDerivativeCandidate):void{
@@ -336,6 +357,8 @@ function sameIdentity(
     &&a.pkg.revision===b.pkg.revision
 }
 watch(activeSession,(next,previous)=>{
+  ++contributorReviewSerial
+  contributorReview.value=null
   // Background proof/online refresh may replace the Session object while
   // a user is editing a private preview or signing an editorial link.
   // Never destroy that work unless the cryptographic identity changed.
@@ -367,6 +390,8 @@ onMounted(()=>{
   void hydrate()
 })
 onUnmounted(()=>{
+  ++contributorReviewSerial
+  contributorReview.value=null
   detach()
   window.removeEventListener('online',refreshPreviewOutbox)
   document.removeEventListener('visibilitychange',refreshPreviewOutbox)
@@ -435,8 +460,18 @@ onUnmounted(()=>{
         <button type="button" :disabled="busy"
           data-testid="media-open-editorial-binding"
           @click="openEditorial(candidate)">Связать с моим заданием</button>
+        <button type="button" :disabled="busy"
+          data-testid="media-open-public-card-consent-review"
+          @click="openContributorReview(candidate)">
+          Проверить Safe-копию для локального согласия
+        </button>
       </div>
     </template>
+    <PublicCardConsentReview
+      v-if="contributorReview"
+      :prepared="contributorReview.prepared"
+      :binding="contributorReview.binding"
+      data-testid="media-contributor-public-card-review"/>
     <section v-if="previewCandidate" class="file-preview-settings"
       data-testid="media-file-preview-settings">
       <strong>Черновик Public Card · публикация выключена</strong>
