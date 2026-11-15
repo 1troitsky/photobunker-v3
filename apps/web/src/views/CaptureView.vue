@@ -3,6 +3,13 @@ import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } fr
 import { RouterLink, useRoute } from 'vue-router'
 import {cameraShellActions,clearCameraShellActions}
   from '../features/media/application/camera-shell-actions'
+import {
+  changeCameraPreset,defaultCameraPresetCatalog,loadCameraPresetCatalog,
+} from '../features/media/application/camera-presets'
+import type {
+  CameraPhotoAspect,CameraPhotoQuality,CameraVideoQuality,CameraPresetSettings,
+} from '../features/media/application/camera-presets'
+import {cameraPhotoFormat} from '../features/media/domain/camera-photo-format'
 import { activeSession, type Session } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
 import { enqueueEncryptedMedia } from '../features/media/application/media-outbox'
@@ -40,6 +47,17 @@ const cameraFacing=ref<'environment'|'user'>('environment')
 const torchOn=ref(false)
 const gridVisible=ref(false)
 const gpsStatusVisible=ref(true)
+const photoAspect=ref<CameraPhotoAspect>('4:3')
+const photoQuality=ref<CameraPhotoQuality>('high')
+const videoQuality=ref<CameraVideoQuality>('720p')
+const videoMaxSeconds=ref(300)
+const audioMaxSeconds=ref(3000)
+const cameraPresetCatalog=ref(defaultCameraPresetCatalog())
+const selectedPresetId=ref('default')
+const presetName=ref('По умолчанию')
+const presetBusy=ref(false)
+const presetNotice=ref('')
+let presetLoadGeneration=0
 const policies=ref<AssignmentListing[]>([])
 const selectedAssignment=ref('')
 // Volatile display only; decrypt from account-scoped, signed-revision-bound AEAD cache.
@@ -65,6 +83,88 @@ const captureMode=ref<'photo'|'video'|'audio'>('photo')
 const photoStorage=ref<'p1'|'p2'>('p1')
 // Device encoder target: the browser may choose a different effective bitrate.
 const audioTargetBitrate=ref<AudioTargetBitrate>(DEFAULT_AUDIO_TARGET_BITRATE)
+function cameraSettingsSnapshot():CameraPresetSettings {
+  return {
+    photoAspect:photoAspect.value,photoQuality:photoQuality.value,
+    photoStorage:photoStorage.value,videoQuality:videoQuality.value,
+    videoMaxSeconds:videoMaxSeconds.value,audioMaxSeconds:audioMaxSeconds.value,
+    audioTargetBitrate:audioTargetBitrate.value,
+    gridVisible:gridVisible.value,gpsStatusVisible:gpsStatusVisible.value,
+  }
+}
+function applyCameraPreset(settings:CameraPresetSettings):void {
+  photoAspect.value=settings.photoAspect
+  photoQuality.value=settings.photoQuality
+  photoStorage.value=settings.photoStorage
+  videoQuality.value=settings.videoQuality
+  videoMaxSeconds.value=settings.videoMaxSeconds
+  audioMaxSeconds.value=settings.audioMaxSeconds
+  audioTargetBitrate.value=settings.audioTargetBitrate
+  gridVisible.value=settings.gridVisible
+  gpsStatusVisible.value=settings.gpsStatusVisible
+}
+async function reloadCameraPresets():Promise<void>{
+  const session=activeSession.value,generation=++presetLoadGeneration
+  const defaults=defaultCameraPresetCatalog()
+  cameraPresetCatalog.value=defaults
+  selectedPresetId.value=defaults.selectedId
+  presetName.value=defaults.presets[0]!.name
+  presetNotice.value=''
+  applyCameraPreset(defaults.presets[0]!.settings)
+  if(!session)return
+  try{
+    const found=await loadCameraPresetCatalog()
+    if(session!==activeSession.value||generation!==presetLoadGeneration)return
+    cameraPresetCatalog.value=found
+    selectedPresetId.value=found.selectedId
+    const chosen=found.presets.find(p=>p.id===found.selectedId)!
+    presetName.value=chosen.name
+    applyCameraPreset(chosen.settings)
+  }catch(e){
+    if(session===activeSession.value&&generation===presetLoadGeneration)
+      presetNotice.value='Не удалось прочитать зашифрованные пресеты: '
+        +(e instanceof Error?e.message:'camera.preset_unavailable')
+  }
+}
+async function pickCameraPreset():Promise<void>{
+  if(!activeSession.value||recording.value||busy.value||presetBusy.value)return
+  const session=activeSession.value,id=selectedPresetId.value
+  const chosen=cameraPresetCatalog.value.presets.find(p=>p.id===id)
+  if(!chosen)return
+  presetBusy.value=true;presetNotice.value=''
+  try{
+    const next=await changeCameraPreset({kind:'select',id})
+    if(session!==activeSession.value)return
+    cameraPresetCatalog.value=next
+    presetName.value=chosen.name
+    applyCameraPreset(chosen.settings)
+    presetNotice.value='Пресет выбран. Параметры камеры применяются при следующем запуске.'
+  }catch(e){
+    if(session===activeSession.value){
+      selectedPresetId.value=cameraPresetCatalog.value.selectedId
+      presetNotice.value=e instanceof Error?e.message:'camera.preset_unavailable'
+    }
+  }finally{if(session===activeSession.value)presetBusy.value=false}
+}
+async function writeCameraPreset(kind:'add'|'save'):Promise<void>{
+  if(!activeSession.value||recording.value||busy.value||presetBusy.value)return
+  const session=activeSession.value,name=presetName.value
+  const settings=cameraSettingsSnapshot(),id=selectedPresetId.value
+  presetBusy.value=true;presetNotice.value=''
+  try{
+    const next=await changeCameraPreset(kind==='add'
+      ?{kind:'add',name,settings}:{kind:'save',id,name,settings})
+    if(session!==activeSession.value)return
+    cameraPresetCatalog.value=next
+    selectedPresetId.value=next.selectedId
+    presetName.value=next.presets.find(p=>p.id===next.selectedId)!.name
+    presetNotice.value='Пресет зашифрован и сохранён на этом устройстве.'
+  }catch(e){
+    if(session===activeSession.value)
+      presetNotice.value=e instanceof Error?e.message:'camera.preset_unavailable'
+  }finally{if(session===activeSession.value)presetBusy.value=false}
+}
+watch(activeSession,()=>{void reloadCameraPresets()},{immediate:true})
 const currentMediaInstruction=computed(()=>{
   const value=visiblePrivateInstructions.value
   if(!canCaptureType.value||value?.version!==2)return ''
@@ -206,7 +306,7 @@ async function removePrivateRecordingDraft(id:string):Promise<void>{
 }
 const recording=ref(false)
 const recordingMaxSeconds=computed(()=>captureMode.value==='photo'?0
-  :recordingBounds(captureMode.value).maxMs/1000)
+  :captureMode.value==='video'?videoMaxSeconds.value:audioMaxSeconds.value)
 const recorder=shallowRef<MediaRecorder|null>(null)
 const recordingStartedAt=ref<number|null>(null)
 const recordingClock=ref(Date.now())
@@ -504,7 +604,10 @@ async function startCamera():Promise<void> {
     opened=await navigator.mediaDevices.getUserMedia({
       audio:mode!=='photo',
       video:mode!=='audio'
-        ?{facingMode:{ideal:cameraFacing.value},width:{ideal:1280}}:false,
+        ?{facingMode:{ideal:cameraFacing.value},
+          width:{ideal:mode==='video'
+            ?videoQuality.value==='1080p'?1920:videoQuality.value==='480p'?854:1280
+            :1280}}:false,
     })
     await nextTick()
     if(!opened.getTracks().length||opened.getTracks().some(track=>track.readyState!=='live'))
@@ -864,7 +967,10 @@ async function beginRecording():Promise<void>{
     // Signed intent was captured before async policy/GPS preflight. Reserve
     // enough of its server-visible wall-clock window for both clocks to stay
     // under the same 300s/3000s ceiling when the native max timer fires.
-    const stopBudgetMs=signedRecordingBudget(mode,startedAt,Date.now())
+    const stopBudgetMs=Math.min(
+      signedRecordingBudget(mode,startedAt,Date.now()),
+      (mode==='video'?videoMaxSeconds.value:audioMaxSeconds.value)*1000,
+    )
     worker.start(1000)
     recordingTimer=setTimeout(()=>{
       if(activeRecording===token&&worker.state==='recording'){
@@ -923,16 +1029,17 @@ async function capture():Promise<void> {
     }
     privateFields.gps=await consentedGPS(privateFields.gps,gpsAtStart,startedAt)
     assertOwner()
-    const ratio=Math.min(1,1280/Math.max(v.videoWidth,v.videoHeight))
+    const format=cameraPhotoFormat(
+      v.videoWidth,v.videoHeight,photoAspect.value,photoQuality.value)
     const canvas=document.createElement('canvas')
-    canvas.width=Math.max(1,Math.round(v.videoWidth*ratio))
-    canvas.height=Math.max(1,Math.round(v.videoHeight*ratio))
+    canvas.width=format.width;canvas.height=format.height
     const ctx=canvas.getContext('2d')
     if(!ctx)throw new Error('camera.canvas_unavailable')
-    ctx.drawImage(v,0,0,canvas.width,canvas.height)
+    ctx.drawImage(v,format.sx,format.sy,format.sw,format.sh,
+      0,0,format.width,format.height)
     const jpeg=await new Promise<Blob>((resolve,reject)=>{
       canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('camera.jpeg_failed')),
-        'image/jpeg',0.85)
+        'image/jpeg',format.jpegQuality)
     })
     assertOwner()
     // Canvas output strips source EXIF; no device gallery write occurs.
