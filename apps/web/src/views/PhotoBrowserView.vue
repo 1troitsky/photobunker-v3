@@ -1776,7 +1776,7 @@ onUnmounted(()=>{
           @click="selectTreeFolder(null)">Мои файлы</button>
         <div v-for="node in treeNodes" :key="node.id" class="browser-tree-node"
           :data-testid="'browser-tree-folder-'+node.id"
-          :style="{'--tree-depth':String(Math.min(node.depth,10))}">
+          :style="{paddingLeft:(Math.min(node.depth,10)*15+8)+'px'}">
           <button type="button" class="browser-tree-expand"
             :disabled="node.children===0" :aria-label="'Раскрыть '+node.name"
             :aria-expanded="node.children?treeExpanded.includes(node.id):undefined"
