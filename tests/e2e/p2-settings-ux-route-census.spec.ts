@@ -67,3 +67,35 @@ test('Mobile Fieldwork Shell has one header and dock across primary sections',as
     await expect(page.locator('.shell-dock')).toHaveCount(1)
   }
 })
+
+
+test('Owner-approved header icons never grow into framed cards or overflow the 64px Shell',async({page})=>{
+  test.setTimeout(90000)
+  for(const viewport of [{width:390,height:844},{width:1280,height:800}]){
+    await page.setViewportSize(viewport)
+    for(const path of ['/notifications','/settings','/contacts']){
+      await page.goto(path)
+      const header=page.locator('.shell-header')
+      await expect(header,path).toHaveCSS('height','64px')
+      const buttons=header.locator('.shell-header-actions button')
+      await expect(buttons.first(),path).toBeVisible()
+      const sizes=await buttons.evaluateAll(items=>items.map(button=>{
+        const rect=button.getBoundingClientRect()
+        const svg=button.querySelector('svg')?.getBoundingClientRect()
+        return {width:rect.width,height:rect.height,
+          border:getComputedStyle(button).borderTopWidth,
+          iconWidth:svg?.width??0,iconHeight:svg?.height??0}
+      }))
+      expect(sizes.length,path).toBeGreaterThan(0)
+      for(const size of sizes){
+        expect(size.width,path).toBe(36)
+        expect(size.height,path).toBe(36)
+        expect(size.border,path).toBe('0px')
+        expect(size.iconWidth,path).toBe(20)
+        expect(size.iconHeight,path).toBe(20)
+      }
+      const clipped=await header.evaluate(el=>el.scrollWidth>el.clientWidth)
+      expect(clipped,path+' '+viewport.width).toBe(false)
+    }
+  }
+})
