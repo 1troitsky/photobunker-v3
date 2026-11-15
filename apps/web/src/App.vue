@@ -9,6 +9,7 @@ import { readVerifiedGraceStatus } from './features/billing/application/grace-cl
 import { notificationShellActions } from './features/notifications/application/notification-shell-actions'
 import {contactsShellActions} from './features/people/application/contacts-shell-actions'
 import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
+import {browserShellActions} from './features/browser/application/browser-shell-actions'
 import {isDockSectionActive,resolveDockRetap} from './ui/fieldwork/dock-retap'
 const route = useRoute()
 const router = useRouter()
@@ -69,7 +70,7 @@ const dock = computed(() => displayedDock.value
         <strong>{{ brand.name }}</strong>
         <small><span class="status-dot" :class="{'session-online':activeSession?.online}" aria-hidden="true"></span>{{activeSession?(activeSession.online?'Сессия подтверждена':'Локальный режим'):'Без аккаунта'}}</small>
       </div>
-      <RouterLink v-if="verifiedPlan&&route.path!=='/notifications'&&route.name!=='browser-viewer'&&route.name!=='browser-editor'"
+      <RouterLink v-if="verifiedPlan&&route.path!=='/notifications'&&route.path!=='/browser'&&route.name!=='browser-viewer'&&route.name!=='browser-editor'"
         to="/settings/payments" class="shell-plan-pill" data-testid="verified-plan-link">
         Тариф: {{verifiedPlan}}
       </RouterLink>
@@ -134,6 +135,49 @@ const dock = computed(() => displayedDock.value
           data-testid="editor-shell-save"
           :disabled="!viewerShellActions?.editor?.canSave"
           @click="viewerShellActions?.editor?.save()">Сохранить</button>
+      </div>
+      <div class="shell-header-actions browser-header-actions"
+        v-else-if="route.path==='/browser'" data-testid="browser-shell-actions"
+        aria-label="Действия с каталогом">
+        <button type="button" data-testid="browser-header-folder"
+          aria-label="Новая папка" title="Новая папка"
+          :disabled="!browserShellActions?.canCreateFolder"
+          @click="browserShellActions?.createFolder()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            aria-hidden="true"><path d="M3 7h7l2 3h9v10H3z"/><path d="M16 12v6m-3-3h6"/></svg>
+        </button>
+        <button type="button" data-testid="browser-header-upload"
+          aria-label="Загрузить файлы" title="Открыть импорт файлов"
+          :disabled="!activeSession||!browserShellActions"
+          @click="browserShellActions?.openUpload()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            aria-hidden="true"><path d="M12 17V3m-5 5 5-5 5 5M4 17v4h16v-4"/></svg>
+        </button>
+        <button type="button" data-testid="browser-header-select"
+          :aria-label="browserShellActions?.selectedCount?'Снять выделение':'Выбрать'"
+          :title="browserShellActions?.selectedCount?'Снять выделение':'Выбрать файлы'"
+          :aria-pressed="!!browserShellActions?.selectedCount"
+          :disabled="!browserShellActions?.canSelect"
+          @click="browserShellActions?.toggleSelection()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/>
+            <path d="m7 12 3.5 3.5L17 8.5"/></svg>
+        </button>
+        <button type="button" data-testid="browser-header-search"
+          aria-label="Поиск" title="Приватный поиск"
+          :disabled="!activeSession||!browserShellActions"
+          @click="browserShellActions?.focusSearch()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            aria-hidden="true"><circle cx="10.8" cy="10.8" r="7.2"/><path d="m16 16 5 5"/></svg>
+        </button>
+        <button type="button" data-testid="browser-header-settings"
+          aria-label="Настройки Browser" title="Настройки Browser"
+          :disabled="!activeSession||!browserShellActions"
+          @click="browserShellActions?.openSettings()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            aria-hidden="true"><circle cx="12" cy="12" r="3"/>
+            <path d="m19 12 2-1-2-4-2 1-2-1V5H9v2L7 8 5 7l-2 4 2 1v2l-2 1 2 4 2-1 2 1v2h6v-2l2-1 2 1 2-4-2-1z"/></svg>
+        </button>
       </div>
       <div class="shell-header-actions" v-else-if="route.path.startsWith('/settings')"
         data-testid="settings-shell-header-actions">
