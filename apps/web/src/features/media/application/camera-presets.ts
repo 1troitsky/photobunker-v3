@@ -13,6 +13,7 @@ export interface CameraPresetSettings{
   photoQuality:CameraPhotoQuality
   photoStorage:'p1'|'p2'
   videoQuality:CameraVideoQuality
+  videoAudioEnabled:boolean
   videoMaxSeconds:number
   audioMaxSeconds:number
   audioTargetBitrate:AudioTargetBitrate
@@ -41,7 +42,8 @@ const aspects=['1:1','4:3','3:2','16:9'] as const
 const videos=['480p','720p','1080p'] as const
 const defaultSettings:CameraPresetSettings={
   photoAspect:'4:3',photoQuality:'high',photoStorage:'p1',
-  videoQuality:'720p',videoMaxSeconds:300,audioMaxSeconds:3000,
+  videoQuality:'720p',videoAudioEnabled:true,
+  videoMaxSeconds:300,audioMaxSeconds:3000,
   audioTargetBitrate:128000,gridVisible:false,gpsStatusVisible:true,
 }
 export function defaultCameraPresetCatalog():CameraPresetCatalog{
@@ -59,10 +61,11 @@ export function validateCameraPresetSettings(raw:unknown):CameraPresetSettings{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))
     throw Error('camera.preset_invalid')
   const s=raw as Record<string,unknown>
-  if(Object.keys(s).length!==9
+  if(Object.keys(s).length!==10
     ||!validEnum(s.photoAspect,aspects)||!validEnum(s.photoQuality,quality)
     ||!validEnum(s.photoStorage,['p1','p2'])
     ||!validEnum(s.videoQuality,videos)
+    ||typeof s.videoAudioEnabled!=='boolean'
     ||!validBound(s.videoMaxSeconds,5,300)
     ||!validBound(s.audioMaxSeconds,5,3000)
     ||!validBound(s.audioTargetBitrate,64000,256000)
@@ -74,6 +77,7 @@ export function validateCameraPresetSettings(raw:unknown):CameraPresetSettings{
     photoQuality:s.photoQuality as CameraPhotoQuality,
     photoStorage:s.photoStorage as 'p1'|'p2',
     videoQuality:s.videoQuality as CameraVideoQuality,
+    videoAudioEnabled:s.videoAudioEnabled as boolean,
     videoMaxSeconds:s.videoMaxSeconds as number,
     audioMaxSeconds:s.audioMaxSeconds as number,
     audioTargetBitrate:s.audioTargetBitrate as AudioTargetBitrate,
