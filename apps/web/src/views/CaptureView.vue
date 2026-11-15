@@ -301,7 +301,7 @@ async function refreshPolicies():Promise<void> {
 const stream=ref<MediaStream|null>(null)
 const torchSupported=computed(()=>{
   if(captureMode.value==='audio'||!stream.value)return false
-  const track=stream.value.getVideoTracks()[0]
+  const track=stream.value.getVideoTracks?.()[0]
   if(!track||track.readyState!=='live'||!track.getCapabilities)return false
   try{
     return (track.getCapabilities() as MediaTrackCapabilities & {torch?:boolean}).torch===true
@@ -387,7 +387,7 @@ async function toggleTorch():Promise<void>{
   if(!activeSession.value||!torchSupported.value
     ||recording.value||busy.value||starting.value)return
   const session=cameraIdentity(activeSession.value)
-  const track=stream.value?.getVideoTracks()[0]
+  const track=stream.value?.getVideoTracks?.()[0]
   if(!track)return
   const next=!torchOn.value
   try{
@@ -395,10 +395,10 @@ async function toggleTorch():Promise<void>{
       advanced:[{torch:next}],
     } as unknown as MediaTrackConstraints)
     if(!disposed&&sameIdentity(session,cameraIdentity(activeSession.value))
-      &&stream.value?.getVideoTracks()[0]===track)
+      &&stream.value?.getVideoTracks?.()[0]===track)
       torchOn.value=next
   }catch{
-    if(stream.value?.getVideoTracks()[0]===track){
+    if(stream.value?.getVideoTracks?.()[0]===track){
       torchOn.value=false
       error.value='Фонарик недоступен на этой камере.'
     }
@@ -1068,15 +1068,21 @@ onUnmounted(()=>{
             @click="openCameraDetails('[data-testid=camera-assignment-panel]')">Задание</button>
           <button v-if="captureMode==='photo'" type="button" class="camera-shutter"
             aria-label="Сделать снимок"
-            :disabled="!stream||starting||busy||gpsLoading||!canCaptureType" @click="capture"></button>
+            :disabled="!stream||starting||busy||gpsLoading||!canCaptureType" @click="capture">
+              <span class="camera-screen-title">Сделать снимок</span>
+            </button>
           <button v-else-if="!recording" type="button"
             class="camera-shutter camera-shutter-record"
             data-testid="camera-start-recording" aria-label="Начать запись"
             :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
-            @click="beginRecording"></button>
+            @click="beginRecording">
+              <span class="camera-screen-title">Начать запись {{captureMode==='video'?'видео':'аудио'}}</span>
+            </button>
           <button v-else type="button" class="camera-shutter camera-shutter-record active"
             data-testid="camera-stop-recording" aria-label="Остановить запись"
-            @click="endRecording"></button>
+            @click="endRecording">
+              <span class="camera-screen-title">Остановить запись</span>
+            </button>
           <button type="button" class="camera-side-action" data-testid="camera-open-settings"
             @click="openCameraDetails('[data-testid=camera-settings-panel]')">Настройки</button>
         </div>
