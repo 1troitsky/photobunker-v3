@@ -4,7 +4,7 @@ import type {StoredMedia,CloudMedia} from '../../media/application/media-outbox'
 export type CatalogType='photo'|'video'|'audio'
 export type CatalogFilter='all'|CatalogType
 export type CatalogSort='newest'|'oldest'|'expiry'|'size-largest'|'size-smallest'
-export type CatalogView='list'|'grid'
+export type CatalogView='list'|'grid'|'tree'
 
 // Invalid or missing size is NOT equivalent to an empty 0-byte media file.
 function knownCatalogBytes(value:number):number|null{
