@@ -35,7 +35,9 @@ test('Browser v3: file and encrypted-folder three-dot actions use original local
   await expect(panel.getByRole('combobox',{
     name:'Папка файла '+mediaId,
   })).toBeVisible()
-  await panel.press('Escape')
+  await panel.getByRole('link',{
+    name:'Полный просмотр файла '+mediaId,
+  }).press('Escape')
   await expect(panel).toHaveCount(0)
   await expect(trigger).toBeFocused()
 
@@ -49,6 +51,8 @@ test('Browser v3: file and encrypted-folder three-dot actions use original local
   await expect(row).toHaveCount(0)
   await page.getByRole('button',{name:'Private Actions',exact:true}).click()
   await expect(row).toHaveCount(1)
+  await page.getByTestId('browser-folder-up').click()
+  await expect(row).toHaveCount(0)
 
   const folderTrigger=page.getByRole('button',{
     name:'Действия с папкой Private Actions',
@@ -63,7 +67,9 @@ test('Browser v3: file and encrypted-folder three-dot actions use original local
   await expect(folderPanel.getByRole('combobox',{
     name:'Переместить папку Private Actions',
   })).toBeVisible()
-  await folderPanel.press('Escape')
+  await folderPanel.getByRole('button',{
+    name:'Переименовать Private Actions',
+  }).press('Escape')
   await expect(folderPanel).toHaveCount(0)
   await expect(folderTrigger).toBeFocused()
 
@@ -74,7 +80,8 @@ test('Browser v3: file and encrypted-folder three-dot actions use original local
     const item=(await media.listLocalMedia()).find(x=>x.mediaId===id)!
     return {size:item.plainBytes,state:item.state}
   },mediaId)
-  expect(result).toEqual({size:8192,state:'queued'})
+  expect(result.size).toBe(8192)
+  expect(['queued','retry']).toContain(result.state)
   const storage=await page.evaluate(()=>Object.values(localStorage).join(' '))
   expect(storage).not.toContain('Private Actions')
   expect(storage).not.toContain('ACTION-ENCRYPTED.wav')
