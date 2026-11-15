@@ -62,9 +62,18 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('camera-mode')).toHaveValue('photo')
   await expect(page.getByTestId('camera-header-flip')).toBeEnabled()
   await page.getByTestId('camera-open-settings').click()
+  await expect(page.getByTestId('camera-settings-panel')).toHaveCSS('position','fixed')
   await expect(page.getByTestId('camera-settings-panel')).toBeInViewport()
+  await expect(page.getByTestId('camera-sheet-backdrop')).toBeVisible()
+  await page.getByTestId('camera-sheet-close').click()
+  await expect(page.getByTestId('camera-sheet-backdrop')).toHaveCount(0)
+  await expect(page.getByTestId('camera-open-settings')).toBeFocused()
   await page.getByTestId('camera-open-assignment').click()
+  await expect(page.getByTestId('camera-assignment-panel')).toHaveCSS('position','fixed')
   await expect(page.getByTestId('camera-assignment-panel')).toBeInViewport()
+  await expect(page.getByTestId('camera-assignment-finish')).toBeEnabled()
+  await page.getByTestId('camera-assignment-finish').click()
+  await expect(page.getByTestId('camera-sheet-backdrop')).toHaveCount(0)
 
   // Device capture permission may fail in CI; the UI must not invent hardware.
   // Viewfinder and E2EE forms are the same mounted instance on every screen.
