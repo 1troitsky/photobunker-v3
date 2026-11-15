@@ -1445,3 +1445,35 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 @media(max-width:450px){
   .browser-new-folder-sheet{padding:12px 13px max(20px,env(safe-area-inset-bottom,20px))}
 }
+
+/* Browser v3 Header Settings reuses the single actual archive-preferences
+   controller: toggles maintain signed-server confirmation and fail-closed
+   destructive-action gates. There is no second settings form. */
+.browser-settings-backdrop{position:fixed;inset:0;z-index:2000;background:#000b}
+.browser-archive-preferences.is-browser-settings-sheet{
+  position:fixed;left:50%;bottom:0;transform:translateX(-50%);
+  z-index:2001;width:min(520px,100vw);max-height:min(87dvh,880px);
+  padding:14px 16px max(24px,env(safe-area-inset-bottom,24px));
+  margin:0;overflow-y:auto;overscroll-behavior:contain;
+  border:0;border-radius:14px 14px 0 0;background:#292929;
+  box-shadow:0 -12px 40px #0009
+}
+.browser-settings-heading{display:flex;justify-content:space-between;
+  align-items:center;gap:12px;padding:7px 0 14px;
+  margin-bottom:7px;border-bottom:1px solid #464646}
+.browser-settings-heading strong{font-size:16px;font-weight:760}
+.browser-settings-heading button{border:0;background:transparent;
+  min-height:36px;padding:8px 10px;font-size:12px}
+.browser-settings-footer{display:flex;justify-content:flex-end;
+  border-top:1px solid #464646;margin-top:7px;padding-top:15px}
+.browser-settings-footer button{min-width:136px;min-height:42px;
+  background:var(--accent);color:#102718;border:0;
+  border-radius:7px;font-weight:740}
+.browser-archive-preferences.is-browser-settings-sheet :focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+@media(max-width:450px){
+  .browser-archive-preferences.is-browser-settings-sheet{
+    padding:11px 12px max(20px,env(safe-area-inset-bottom,20px))
+  }
+}
