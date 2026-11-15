@@ -48,6 +48,42 @@ describe('authenticated Browser folder JPEG previews',()=>{
     }))).rejects.toThrow('browser.thumbnail_invalid_dimensions')
     expect(close).toHaveBeenCalledOnce()
   })
+  it('supports WebKit without ImageBitmap and revokes the original temporary URL',async()=>{
+    vi.stubGlobal('createImageBitmap',undefined)
+    class FakeImage{
+      naturalWidth=300
+      naturalHeight=200
+      onload:(()=>void)|null=null
+      onerror:(()=>void)|null=null
+      private source=''
+      set src(next:string){
+        this.source=next
+        if(next)queueMicrotask(()=>this.onload?.())
+      }
+      get src():string{return this.source}
+    }
+    vi.stubGlobal('Image',FakeImage)
+    const revoke=vi.fn()
+    vi.stubGlobal('URL',{
+      createObjectURL:vi.fn(()=>'blob:temporary-private-decoder'),
+      revokeObjectURL:revoke,
+    })
+    const drawImage=vi.fn()
+    vi.spyOn(HTMLCanvasElement.prototype,'getContext')
+      .mockImplementation(()=>({drawImage} as unknown as CanvasRenderingContext2D))
+    const jpeg=new Blob([Uint8Array.of(0xff,0xd8,0xff)],{type:'image/jpeg'})
+    vi.spyOn(HTMLCanvasElement.prototype,'toBlob')
+      .mockImplementation(callback=>callback(jpeg))
+    const output=await makeBrowserFolderThumbnail(new Blob([1,2,3],{
+      type:'image/png',
+    }))
+    expect(output).toBe(jpeg)
+    expect(drawImage).toHaveBeenCalledWith(expect.objectContaining({
+      naturalWidth:300,naturalHeight:200,
+    }),50,0,200,200,0,0,96,96)
+    expect(revoke).toHaveBeenCalledExactlyOnceWith(
+      'blob:temporary-private-decoder')
+  })
   it('always closes the image decoder when canvas encoding fails',async()=>{
     const close=vi.fn()
     vi.stubGlobal('createImageBitmap',vi.fn(async()=>({
