@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { resolveStartRoute } from './ui/fieldwork/appearance-preferences'
+import { activeSession } from './features/identity/application/session'
+import WelcomeView from './views/WelcomeView.vue'
 import AssignmentsView from './views/AssignmentsView.vue'
 import AssignmentEditorView from './views/AssignmentEditorView.vue'
 import AccountView from './views/AccountView.vue'
@@ -22,7 +24,10 @@ import PaymentsView from './views/PaymentsView.vue'
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: () => resolveStartRoute() },
+    { path: '/', redirect: () => activeSession.value?resolveStartRoute():'/welcome' },
+    { path: '/welcome', component: WelcomeView, meta: { title:'Welcome',standalone:true } },
+    { path: '/welcome/create', component: WelcomeView, meta: { title:'Создать аккаунт',standalone:true } },
+    { path: '/welcome/recover', component: WelcomeView, meta: { title:'Восстановить аккаунт',standalone:true } },
     { path: '/assignments', component: AssignmentsView, meta: { title: 'Задания' } },
     { path: '/assignments/:assignmentId/edit', component: AssignmentEditorView,
       meta: { title: 'Редактор задания' } },

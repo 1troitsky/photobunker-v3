@@ -56,6 +56,7 @@ async function copyKey():Promise<void> {
   <section class="foundation-content">
     <SettingsHub v-if="activeSession" :online="activeSession.online" />
     <h1 v-if="!activeSession">Настройки / Доступ</h1>
+    <RouterLink v-if="!activeSession" to="/welcome" class="account-welcome-link">← Welcome PhotoBunker</RouterLink>
     <h2 v-else id="identity-access" class="identity-access-title">Доступ и устройство</h2>
     <p class="subtitle">Key-Only Identity · P1</p>
     <div v-if="activeSession" class="foundation-card">
@@ -96,6 +97,7 @@ async function copyKey():Promise<void> {
 </template>
 
 <style scoped>
+.account-welcome-link{display:inline-block;margin:12px 0;color:#b6e8c4;font-size:12px;text-decoration:none}
 .identity-access-title {
   margin: 28px 0 0;
   font-size: 18px;

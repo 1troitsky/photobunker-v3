@@ -41,7 +41,9 @@ const dock = computed(() => displayedDock.value
 </script>
 
 <template>
-  <div class="shell">
+  <!-- Welcome 1.4 is the explicit single accepted exception to the shared Shell. -->
+  <RouterView v-if="route.meta.standalone" />
+  <div v-else class="shell">
     <header class="shell-header">
       <span class="brand-mark" aria-hidden="true">{{ brand.mark }}</span>
       <div class="brand-copy">
