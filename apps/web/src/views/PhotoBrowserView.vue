@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
 import {RouterLink} from 'vue-router'
+import {browserShellActions,clearBrowserShellActions}
+  from '../features/browser/application/browser-shell-actions'
 import {
   captureBrowserReturnContext,takeBrowserReturn,
 } from '../features/browser/application/browser-return-context'
@@ -1137,6 +1139,54 @@ watch([search,archiveTab],()=>{
   privateSearchExpanded.value=false
   privateExpansionStatus.value=''
 })
+const browserHeaderOwner={}
+function scrollToElement(selector:string,focus=false):void{
+  const el=document.querySelector<HTMLElement>(selector)
+  el?.scrollIntoView({block:'start',behavior:'instant'})
+  if(focus)el?.focus({preventScroll:true})
+}
+function openCreateFolder():void{
+  if(!activeSession.value||!folderReady.value||!!folderError.value||folderBusy.value)return
+  createFolderOpen.value=true
+  void nextTick(()=>{
+    scrollToElement('[data-testid="browser-folder-name"]',true)
+  })
+}
+function openUploadPanel():void{
+  if(!activeSession.value)return
+  scrollToElement('[data-testid="browser-import-panel"]')
+  // Keep existing file/destination/HTTPS metadata forms and durable outbox
+  // mounted: closing/opening a panel must never erase unsent evidence.
+  document.querySelector<HTMLElement>('#media-import-destination')
+    ?.focus({preventScroll:true})
+}
+function focusPrivateSearch():void{
+  if(!activeSession.value)return
+  scrollToElement('[data-testid="browser-search"]',true)
+}
+function openBrowserSettings():void{
+  if(!activeSession.value)return
+  scrollToElement('[data-testid="browser-archive-preferences"]')
+}
+function toggleBatchSelection():void{
+  if(!activeSession.value||!folderReady.value||!!folderError.value||folderBusy.value)return
+  if(selectedKeys.value.length)selectedKeys.value=[]
+  else selectVisible()
+}
+watch([activeSession,folderReady,folderError,folderBusy,visible,selectedKeys],()=>{
+  browserShellActions.value={
+    owner:browserHeaderOwner,
+    canCreateFolder:!!activeSession.value&&folderReady.value
+      &&!folderError.value&&!folderBusy.value,
+    canSelect:!!activeSession.value&&folderReady.value
+      &&!folderError.value&&!folderBusy.value
+      &&(selectedKeys.value.length>0||visible.value.length>0),
+    selectedCount:selectedKeys.value.length,
+    createFolder:openCreateFolder,openUpload:openUploadPanel,
+    toggleSelection:toggleBatchSelection,focusSearch:focusPrivateSearch,
+    openSettings:openBrowserSettings,
+  }
+},{immediate:true})
 onMounted(()=>{
   const identity=activeSession.value
   const restored=identity?takeBrowserReturn(identity.accountId,identity.deviceId):null
@@ -1153,6 +1203,7 @@ onMounted(()=>{
   void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
+  clearBrowserShellActions(browserHeaderOwner)
   ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch
   ++privateSearchEpoch;++privateExpansionEpoch
   if(privateSearchTimer!==null)clearTimeout(privateSearchTimer)
@@ -1199,8 +1250,7 @@ onUnmounted(()=>{
                 @click="selectedFolder=part.id">{{ part.name }}</button>
             </template>
           </div>
-          <button type="button" :disabled="!folderReady||!!folderError||folderBusy"
-            @click="createFolderOpen=!createFolderOpen">Новая папка</button>
+          <!-- Create Folder is the sole shared Header action per Browser v3. -->
         </div>
         <p class="muted">Названия и состав папок зашифрованы. Изменения сохраняются
           сразу на устройстве, а общий снимок передаётся только после подтверждения сервера.
@@ -1636,7 +1686,7 @@ onUnmounted(()=>{
         <p class="muted">Файл расшифрован на этом устройстве. Экспорт в системную галерею не выполнялся.</p>
         <button type="button" @click="revokePreview">Закрыть просмотр</button>
       </div>
-      <section class="browser-operations">
+      <section class="browser-operations" data-testid="browser-import-panel">
         <h2>Импорт и операции</h2>
         <p class="muted">Загрузка, выдача доступа и версии используют действующий защищённый pipeline.</p>
         <MediaImportPanel
