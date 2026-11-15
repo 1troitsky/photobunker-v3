@@ -41,6 +41,14 @@ test('P2 #216: real account, encrypted Notifications UI, offline route/settings 
     await expect(page).toHaveURL(/\/notifications\/settings$/)
     await expect(page.getByTestId('notification-settings-page')).toBeVisible()
     await expect(page.getByTestId('notification-setting-push')).toBeDisabled()
+    // Fieldwork 1.5: Save/Cancel stay above the persistent Dock, including
+    // on a narrow phone, without creating a second scrolling list.
+    const settingsBar=page.locator('.notification-settings .settings-actions')
+    await expect(settingsBar).toHaveCSS('position','sticky')
+    await expect(settingsBar).toBeInViewport()
+    const barBox=await settingsBar.boundingBox()
+    const dockBox=await dock.boundingBox()
+    expect(barBox&&dockBox&&barBox.y+barBox.height<=dockBox.y+2).toBe(true)
     await page.getByTestId('notification-setting-invitations').uncheck()
     await page.getByTestId('notification-settings-save').click()
     await expect(page.getByText('Сохранено в зашифрованном хранилище этого устройства.'))
