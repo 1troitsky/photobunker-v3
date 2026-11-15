@@ -1167,18 +1167,29 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .camera-audio-view strong{font-size:17px}
 .camera-audio-view span{font-size:12px;color:#a3aca6}
 .camera-audio-view time{font:700 24px ui-monospace,monospace;font-variant-numeric:tabular-nums}
-.camera-blind-overlay{position:absolute;inset:0;z-index:2;display:flex;
+.camera-blind-overlay{position:fixed;inset:0;z-index:10000;display:flex;
   align-items:center;justify-content:center;flex-direction:column;gap:11px;
-  padding:16px;background:#101210;color:#f0f0f0;overflow-y:auto;text-align:center}
-.camera-blind-overlay svg{height:42px;width:42px;color:#d5d5d5;flex-shrink:0}
+  padding:max(20px,env(safe-area-inset-top)) 16px max(20px,env(safe-area-inset-bottom));
+  background:#090a09;color:#f0f0f0;overflow-y:auto;text-align:center}
+.camera-blind-overlay svg{height:57px;width:57px;color:#d5d5d5;flex-shrink:0}
 .camera-blind-overlay h2{font-size:19px;letter-spacing:-.03em;margin:0}
 .camera-blind-overlay p{font-size:11px;color:#b0b0b0;margin:0}
 .camera-blind-overlay time{font:700 19px ui-monospace,monospace;font-variant-numeric:tabular-nums}
-.camera-fieldwork .camera-blind-shutter{min-width:116px;min-height:45px;
-  padding:10px 17px;border-radius:30px;border:1px solid #e0e0e0;
-  color:#141414;background:#f3f3f3;font-weight:700}
-.camera-fieldwork .camera-blind-shutter.recording{background:#c83a39;color:#fff;border-color:#c83a39}
-.camera-fieldwork .camera-blind-return{border:0;background:none;color:#c8d9ce;font-size:12px}
+/* The opaque cover is teleported OUTSIDE the zoomed/scrolled Shell.
+   Use real on-screen controls rather than assuming volume-key events exist. */
+.camera-blind-shutter{width:76px;height:76px;min-height:76px;min-width:76px;
+  display:grid;place-items:center;border-radius:50%;border:4px solid #f6f6f6;
+  background:#101010;padding:5px;font-size:0;color:transparent;cursor:pointer}
+.camera-blind-shutter:before{content:'';display:block;width:100%;height:100%;
+  background:#fff;border-radius:50%}
+.camera-blind-shutter.video:before{background:#ee454c}
+.camera-blind-shutter.recording:before{width:26px;height:26px;
+  background:#ee454c;border-radius:5px}
+.camera-blind-shutter:disabled{opacity:.48;cursor:not-allowed}
+.camera-blind-return{min-width:185px;min-height:42px;margin-top:11px;
+  border:1px solid #595959;background:#272727;color:#f3f3f3;
+  border-radius:8px;font-size:12px;padding:12px 22px}
+.camera-blind-overlay button:focus-visible{outline:2px solid #a0e9ba;outline-offset:3px}
 .camera-stage-controls{width:100%;max-width:740px;margin:0 auto;padding:9px 0 7px}
 .camera-gps-indicator{display:flex;justify-content:center;align-items:center;
   min-height:27px;gap:10px;font-size:11px;color:#aab4ad}
@@ -1213,7 +1224,7 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .camera-control-trio .camera-shutter{width:66px;height:66px;min-height:66px}
   .camera-mode-tabs{margin-bottom:7px}
   .camera-blind-overlay{gap:7px;padding:8px}
-  .camera-blind-overlay svg{width:30px;height:30px}
+  .camera-blind-overlay svg{width:43px;height:43px}
 }
 @media(prefers-reduced-motion:reduce){
   .camera-fieldwork *{transition:none!important;animation:none!important;scroll-behavior:auto!important}
