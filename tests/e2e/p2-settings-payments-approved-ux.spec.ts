@@ -19,8 +19,14 @@ test('Payments & Tariffs Fieldwork 1.1 uses live plan catalog and never fabricat
   await page.getByRole('button',{name:'12 месяцев · выгоднее'}).click()
   await page.getByTestId('billing-tier-pro').getByRole('button',{name:'Выбрать Pro'}).click()
   await expect(page.getByText('Предварительный расчёт — не счёт')).toBeVisible()
-  await expect(page.getByRole('button',{name:'Перейти к оплате'})).toBeDisabled()
-  await page.getByRole('button',{name:'‹ К тарифам'}).click()
+  // The accepted Checkout 1.0 now opens an actual order screen; its
+  // DePay action remains fail-closed until a verified server invoice exists.
+  await expect(page.getByTestId('billing-checkout-link')).toBeVisible()
+  await page.getByTestId('billing-checkout-link').click()
+  await expect(page.getByTestId('checkout-order')).toBeVisible()
+  await expect(page.getByTestId('checkout-pay')).toBeDisabled()
+  await page.getByRole('link',{name:'Вернуться к тарифам'}).click()
+  await expect(page).toHaveURL(/\/settings\/payments$/)
   await page.getByRole('button',{name:'История платежей'}).click()
   await expect(page.getByText('Нет проверенных записей для отображения.')).toBeVisible()
 })
