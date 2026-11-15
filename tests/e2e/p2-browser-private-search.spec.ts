@@ -121,11 +121,25 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Проверено 1 из 1',{timeout:30000})
     await expect(remote).toHaveCount(1)
-    // V-33: opt-in extended search fetches authenticated opaque index
-    // pages, not the user's query; actual AES-GCM metadata check stays local.
+    // V-33: explicit expanded search must NEVER silently broaden a
+    // selected-folder search to "All" when wider authorized index pages
+    // arrive. The recovered cloud row is in root; the new empty folder
+    // cannot inherit that row's encrypted virtual placement.
+    await b.getByTestId('browser-header-folder').click()
+    await b.getByTestId('browser-folder-name').fill('Only This Private Folder')
+    await b.getByRole('button',{name:'Создать',exact:true}).click()
+    await b.getByTestId('browser-search-folder-scope').selectOption('selected')
+    await b.getByTestId('browser-search-folder-target')
+      .selectOption({label:'Only This Private Folder'})
+    await expect(remote).toHaveCount(0)
     await b.getByTestId('browser-private-search-expand').click()
     await expect(b.getByTestId('browser-expanded-search-status'))
       .toContainText('Индексы этих двух типов загружены полностью.',{timeout:30000})
+    await expect(b.getByTestId('browser-search-folder-scope')).toHaveValue('selected')
+    await expect(b.getByTestId('browser-search-folder-target'))
+      .toHaveText('Only This Private Folder')
+    await expect(remote).toHaveCount(0)
+    await b.getByTestId('browser-search-folder-scope').selectOption('all')
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Проверено 1 из 1',{timeout:30000})
     await expect(remote).toHaveCount(1)
