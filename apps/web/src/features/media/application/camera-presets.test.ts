@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto'
 import Dexie from 'dexie'
 import {afterEach,describe,expect,it} from 'vitest'
 import {activeSession} from '../../identity/application/session'
+import {b64,unb64} from '../../identity/infrastructure/crypto'
 import type {Session} from '../../identity/application/session'
 import {
   changeCameraPreset,defaultCameraPresetCatalog,
@@ -59,6 +60,27 @@ describe('Camera 1.2 device-scoped encrypted Local-First presets',()=>{
     expect((await loadCameraPresetCatalog()).presets[0]!.name).toBe('По умолчанию')
     activeSession.value=s
     expect((await loadCameraPresetCatalog()).presets[0]!.name).toBe('Only original device')
+  })
+
+  it('fails closed on a changed authenticated ciphertext without erasing the encrypted row',async()=>{
+    const s=await device();activeSession.value=s
+    const original=defaultCameraPresetCatalog().presets[0]!.settings
+    await changeCameraPreset({kind:'save',id:'default',
+      name:'Important sealed profile',settings:original})
+    const peek=new Dexie('pb3-camera-encrypted-presets-v1')
+    peek.version(1).stores({rows:'&key'})
+    const key=s.accountId+'/'+s.deviceId
+    try{
+      const row=await peek.table('rows').get(key)
+      const cipher=unb64(row.ciphertext) 
+      const altered=new Uint8Array(cipher)
+      altered[Math.floor(altered.length/2)]^=1
+      await peek.table('rows').put({...row,ciphertext:b64(altered)})
+      await expect(loadCameraPresetCatalog()).rejects.toThrow()
+      const after=await peek.table('rows').get(key)
+      expect(after.ciphertext).toBe(b64(altered))
+      expect(JSON.stringify(after)).not.toContain('Important sealed profile')
+    }finally{peek.close()}
   })
 
   it('bounds duration, quality, audio bitrate, names and preset count',async()=>{
