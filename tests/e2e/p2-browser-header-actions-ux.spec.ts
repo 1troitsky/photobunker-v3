@@ -39,7 +39,7 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await expect(page.getByTestId('browser-folder-name')).toBeFocused()
   await page.getByTestId('browser-folder-name').fill('UX Header Folder')
   await page.getByRole('button',{name:'Создать',exact:true}).click()
-  await expect(page.getByRole('button',{name:/UX Header Folder/})).toBeVisible()
+  await expect(page.getByRole('button',{name:'UX Header Folder',exact:true})).toBeVisible()
   await expect(page.locator('.browser-folder-cover.is-empty')).toBeVisible()
   await expect(page.locator('.browser-folder-badge')).toBeVisible()
   await expect(page.getByTestId('browser-folder-up')).toBeDisabled()
