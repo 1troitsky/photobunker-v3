@@ -606,6 +606,63 @@ describe('Issue #260 GPS consent and capture races',()=>{
       getCurrentPosition:vi.fn((ok:PositionCallback,fail?:PositionErrorCallback)=>callbacks.push({ok,fail})),
     }})
   })
+  it('starts one high-precision GPS watcher only after opt-in and clears it with the fix',async()=>{
+    let watchOk:PositionCallback|undefined
+    const clearWatch=vi.fn()
+    const watchPosition=vi.fn((ok:PositionCallback)=>{
+      watchOk=ok
+      return 17
+    })
+    Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
+      getCurrentPosition:vi.fn((ok:PositionCallback,fail?:PositionErrorCallback)=>
+        callbacks.push({ok,fail})),
+      watchPosition,clearWatch,
+    }})
+    await ready()
+    expect(watchPosition).not.toHaveBeenCalled()
+    const toggle=host.querySelector<HTMLInputElement>(
+      '[data-testid="camera-gps-tracking"]')!
+    toggle.checked=true;toggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(callbacks).toHaveLength(1)
+    expect(watchPosition).not.toHaveBeenCalled()
+    callbacks[0]!.ok(point());await settle()
+    expect(watchPosition).toHaveBeenCalledOnce()
+    expect(watchPosition).toHaveBeenCalledWith(expect.any(Function),
+      expect.any(Function),{
+        enableHighAccuracy:true,maximumAge:0,timeout:12000,
+      })
+    watchOk!({...point(),coords:{...point().coords,latitude:41.88}})
+    await settle()
+    button('Сделать снимок').click();await settle()
+    expect(mocks.capture.mock.calls[0]![2].gps).toMatchObject({
+      latitude:41.88,
+    })
+    toggle.checked=false;toggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(clearWatch).toHaveBeenCalledWith(17)
+    expect(host.textContent).not.toContain('GPS получен')
+    watchOk!(point());await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+  })
+  it('locks the GPS tracking switch when the independently signed policy requires GPS',async()=>{
+    mocks.requiredGps=true
+    mocks.policies.mockResolvedValue([
+      {assignmentId:'assignment-a',policyRevision:2},
+    ])
+    await ready()
+    const selected=host.querySelector<HTMLSelectElement>('#camera-assignment')!
+    selected.value='assignment-a'
+    selected.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const toggle=host.querySelector<HTMLInputElement>(
+      '[data-testid="camera-gps-tracking"]')!
+    expect(toggle.checked).toBe(true)
+    expect(toggle.disabled).toBe(true)
+    expect(host.querySelector('[data-testid="camera-gps-required"]')?.textContent)
+      .toContain('GPS обязателен')
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled()
+  })
   it('clears previous fix immediately on repeat; denial never retains old consent, retry succeeds',async()=>{
     await ready();await fix()
     button('Получить GPS').click();await settle()
