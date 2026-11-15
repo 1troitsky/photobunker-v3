@@ -55,6 +55,23 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await page.getByTestId('browser-folder-up').click()
   await expect(page.getByTestId('browser-folder-up')).toBeDisabled()
 
+  // The third accepted Browser v3 view is a REAL encrypted folder tree,
+  // not an independent demo. Navigate nested folders without touching ACL.
+  await page.getByTestId('browser-view-tree').click()
+  await expect(page.getByTestId('browser-view-tree')).toHaveAttribute('aria-pressed','true')
+  const rootTree=page.getByTestId('browser-tree-folder-'+rootFolderId)
+  await expect(rootTree).toBeVisible()
+  await expect(rootTree.locator('button.browser-tree-expand')).toHaveAttribute('aria-expanded','false')
+  await rootTree.locator('button.browser-tree-expand').click()
+  await expect(rootTree.locator('button.browser-tree-expand')).toHaveAttribute('aria-expanded','true')
+  await page.locator('.browser-tree-select').filter({hasText:'Nested UX'}).click()
+  await expect(page.locator('.browser-breadcrumb')).toContainText('Nested UX')
+  await expect(page.getByTestId('browser-folder-up')).toBeEnabled()
+  await page.getByTestId('browser-tree-root').click()
+  await expect(page.getByTestId('browser-folder-up')).toBeDisabled()
+  await page.getByTestId('browser-view-list').click()
+  await expect(page.getByTestId('browser-view-list')).toHaveAttribute('aria-pressed','true')
+
   await page.getByTestId('browser-header-search').click()
   await expect(page.getByTestId('browser-search')).toBeFocused()
   await page.getByTestId('browser-header-settings').click()
