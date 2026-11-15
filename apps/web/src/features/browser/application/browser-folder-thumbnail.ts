@@ -28,15 +28,16 @@ export async function makeBrowserFolderThumbnail(
     try{
       await new Promise<void>((resolve,reject)=>{
         let settled=false
+        let timer:ReturnType<typeof setTimeout>|null=null
         const finish=(error?:Error):void=>{
           if(settled)return
           settled=true
-          clearTimeout(timer)
+          if(timer!==null)clearTimeout(timer)
           element.onload=null;element.onerror=null
           if(error)reject(error)
           else resolve()
         }
-        const timer=setTimeout(()=>finish(Error('browser.thumbnail_decode_timeout')),8000)
+        timer=setTimeout(()=>finish(Error('browser.thumbnail_decode_timeout')),8000)
         element.onload=()=>finish()
         element.onerror=()=>finish(Error('browser.thumbnail_decode_failed'))
         element.src=url
