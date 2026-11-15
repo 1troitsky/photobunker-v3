@@ -243,6 +243,25 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
   })
 })
 
+describe('Camera preset hydration does not change a user-selected capture destination',()=>{
+  it('preserves P2 encrypted MediaFile choice across online same-key session hydration',async()=>{
+    const session=await mount()
+    requests[0]!.resolve(media().stream)
+    await settle()
+    const destination=host.querySelector<HTMLSelectElement>('#camera-photo-storage')!
+    destination.value='p2'
+    destination.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(destination.value).toBe('p2')
+    activeSession.value={
+      ...session,online:true,
+      device:{...session.device},pkg:{...session.pkg},
+    }
+    await settle()
+    expect(host.querySelector<HTMLSelectElement>('#camera-photo-storage')!.value).toBe('p2')
+  })
+})
+
 describe('Camera 1.2 real JPEG creation, not CSS-only image options',()=>{
   it('crops center square at true sensor resolution and encrypts a medium-quality JPEG',async()=>{
     await mount()
