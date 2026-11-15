@@ -163,12 +163,6 @@ function choosePrimarySection(next:PrimarySection|'archive'):void{
   selectedFolder.value=null
   selectedKeys.value=[]
 }
-watch(()=>archivePrefsShown.value.useArchive,enabled=>{
-  // The accepted Browser v3 hides the Archive tab when the user disables
-  // it. Hiding is ONLY presentation, never authorization to erase or extend
-  // an archived asset's signed TTL.
-  if(!enabled&&archiveTab.value==='archive')archiveTab.value='all'
-})
 const archiveEntries=ref<ArchiveEntry[]>([])
 const archiveCursor=ref<string|null>(null)
 const archiveBusy=ref(false)
@@ -187,6 +181,12 @@ const archivePrefsConflict=ref(false)
 const archivePrefsShown=computed<ArchivePreferenceValues>(()=>
   archivePrefs.value?effectiveArchivePreferenceValues(archivePrefs.value)
     :{useArchive:true,autoDeleteAfter7Days:true})
+watch(()=>archivePrefsShown.value.useArchive,enabled=>{
+  // The accepted Browser v3 hides the Archive tab when the user disables
+  // it. Hiding is ONLY presentation, never authorization to erase or extend
+  // an archived asset's signed TTL.
+  if(!enabled&&archiveTab.value==='archive')archiveTab.value='all'
+})
 const archivePrefsConfirmed=computed(()=>
   !!archivePrefs.value?.confirmed&&!archivePrefs.value?.draft
     &&!archivePrefs.value?.pending)
