@@ -26,7 +26,10 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
     expect(implementedSearchTargets).toEqual([
       '/settings/appearance?field=dock', '/contacts',
       '/settings/appearance?field=launch', '/notifications',
-      '/settings/profile/edit','/settings/security','/settings/storage',
+      '/settings/profile/edit','/settings/security?field=pin',
+      '/settings/security?field=relock','/settings/security?field=emergency',
+      '/settings/security?field=devices','/settings/security?field=key',
+      '/settings/security?field=inactivity','/settings/storage',
       '/settings/payments','/settings/help',
     ])
     expect(searchSettings('')).toEqual(
@@ -34,7 +37,15 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
     )
     expect(new Set(settingsSearchEntries.map(entry => entry.id)).size)
       .toBe(settingsSearchEntries.length)
-    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(9)
+    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(14)
+  })
+  it('routes security search to the exact approved field, including disabled controls', () => {
+    expect(searchSettings('PIN экстренного').find(item => item.id==='emergency-pin')?.to)
+      .toBe('/settings/security?field=emergency')
+    expect(searchSettings('recovery').find(item => item.id==='recovery')?.to)
+      .toBe('/settings/security?field=key')
+    expect(searchSettings('неактивность').find(item => item.id==='inactivity')?.to)
+      .toBe('/settings/security?field=inactivity')
   })
   it('never treats messages as a nested Contacts settings route', () => {
     expect(settingsSearchEntries.some(entry => entry.id === 'messages')).toBe(false)
