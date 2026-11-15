@@ -697,7 +697,7 @@ describe('Issue #260 GPS consent and capture races',()=>{
     expect(toggle.checked).toBe(true)
     expect(toggle.disabled).toBe(true)
     expect(host.querySelector('[data-testid="camera-gps-required"]')?.textContent)
-      .toContain('GPS обязателен')
+      .toContain('Отслеживание геолокации требуется подписанными правилами задания')
     expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled()
   })
   it('clears previous fix immediately on repeat; denial never retains old consent, retry succeeds',async()=>{
