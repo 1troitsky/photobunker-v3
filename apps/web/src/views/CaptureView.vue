@@ -562,6 +562,21 @@ function openCameraSheet(which:'assignment'|'settings'):void{
       document.querySelector<HTMLButtonElement>('.camera-sheet-close')?.focus()
   })
 }
+function trapCameraSheetFocus(event:KeyboardEvent,which:'assignment'|'settings'):void{
+  if(cameraSheet.value!==which||event.key!=='Tab')return
+  const root=document.querySelector<HTMLElement>(
+    '[data-testid="camera-'+which+'-panel"]')
+  const controls=Array.from(root?.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),input:not(:disabled),textarea:not(:disabled),select:not(:disabled),a[href]'
+  )??[])
+  if(!controls.length)return
+  const first=controls[0]!,last=controls[controls.length-1]!
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
+}
 function closeCameraSheet():void{
   const last=cameraSheet.value
   cameraSheet.value=null
@@ -1321,7 +1336,12 @@ onUnmounted(()=>{
       <div class="camera-details" data-testid="camera-details">
         <div class="foundation-card camera-config-card"
           :class="{'is-camera-sheet':cameraSheet==='settings'}"
-          data-testid="camera-settings-panel" @keydown.esc.stop.prevent="closeCameraSheet">
+          data-testid="camera-settings-panel"
+          :role="cameraSheet==='settings'?'dialog':undefined"
+          :aria-modal="cameraSheet==='settings'?'true':undefined"
+          :aria-label="cameraSheet==='settings'?'Настройки камеры':undefined"
+          @keydown.esc.stop.prevent="closeCameraSheet"
+          @keydown.tab="trapCameraSheetFocus($event,'settings')">
           <header v-if="cameraSheet==='settings'" class="camera-sheet-heading">
             <strong>Настройки камеры</strong>
             <button type="button" class="camera-sheet-close"
@@ -1471,7 +1491,12 @@ onUnmounted(()=>{
         </div>
         <div class="foundation-card camera-assignment-card"
           :class="{'is-camera-sheet':cameraSheet==='assignment'}"
-          data-testid="camera-assignment-panel" @keydown.esc.stop.prevent="closeCameraSheet">
+          data-testid="camera-assignment-panel"
+          :role="cameraSheet==='assignment'?'dialog':undefined"
+          :aria-modal="cameraSheet==='assignment'?'true':undefined"
+          :aria-label="cameraSheet==='assignment'?'Задание и данные съёмки':undefined"
+          @keydown.esc.stop.prevent="closeCameraSheet"
+          @keydown.tab="trapCameraSheetFocus($event,'assignment')">
           <header v-if="cameraSheet==='assignment'" class="camera-sheet-heading">
             <strong>Задание и данные съёмки</strong>
             <button type="button" class="camera-sheet-close"
