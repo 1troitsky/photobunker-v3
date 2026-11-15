@@ -23,6 +23,7 @@ import SecurityPrivacyView from './views/SecurityPrivacyView.vue'
 import PaymentsView from './views/PaymentsView.vue'
 import CheckoutView from './views/CheckoutView.vue'
 import InstallGuideView from './views/InstallGuideView.vue'
+import PublicCardView from './views/PublicCardView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -36,6 +37,10 @@ export const router = createRouter({
     // Public install instructions are not proof of signed offline installability.
     { path: '/install', component: InstallGuideView,
       meta: {title:'Установка PhotoBunker',standalone:true} },
+    // Until a separately audited server publication grant exists, EVERY
+    // unknown external card is denied without revealing media or metadata.
+    { path: '/p/:token', component: PublicCardView,
+      meta: {title:'Публичная карточка недоступна',standalone:true} },
     { path: '/assignments', component: AssignmentsView, meta: { title: 'Задания' } },
     { path: '/assignments/:assignmentId/edit', component: AssignmentEditorView,
       meta: { title: 'Редактор задания' } },
