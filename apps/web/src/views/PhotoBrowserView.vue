@@ -675,9 +675,13 @@ async function expandPrivateSearch():Promise<void>{
     ||query.length<2||query.length>160)return
   const token=++privateExpansionEpoch
   const catGeneration=generation
+  const scopeAtStart=searchFolderScope.value
+  const folderAtStart=searchSelectedFolder.value
   const valid=()=>token===privateExpansionEpoch
     &&identity===activeSession.value&&generation===catGeneration
     &&normalizePrivateSearch(search.value)===query
+    &&searchFolderScope.value===scopeAtStart
+    &&searchSelectedFolder.value===folderAtStart
     &&archiveTab.value==='all'
     &&(typeof navigator==='undefined'||navigator.onLine!==false)
   privateExpansionBusy.value=true
@@ -706,7 +710,8 @@ async function expandPrivateSearch():Promise<void>{
       for(const item of media.items)known.set(item.mediaId,item)
       cloudMedia.value=[...known.values()]
     }
-    searchFolderScope.value='all'
+    // Expanded authenticated index pages may include many folders, but a
+    // wider network fetch must never change the explicit local search scope.
     privateSearchExpanded.value=true
     privateExpansionStatus.value='Получено '+photos.items.length+' фото и '
       +media.items.length+' медиа из авторизованных индексов. '
@@ -1480,8 +1485,8 @@ watch([visible,folderReady],async()=>{
     `[data-testid="browser-row-${key}"]`)
   if(item){item.scrollIntoView({block:'center'});scrollReturnKey=null}
 })
-watch([search,archiveTab],()=>{
-  // Broader authenticated index fetches are explicit per typed query.
+watch([search,archiveTab,searchFolderScope,searchSelectedFolder],()=>{
+  // Broader authenticated index fetches are explicit per typed query/scope.
   // Changing the question/tab must invalidate in-flight work immediately.
   ++privateExpansionEpoch
   privateExpansionBusy.value=false
@@ -2195,7 +2200,8 @@ onUnmounted(()=>{
             </small>
             <small data-testid="browser-item-retention">{{ retentionLabel(item.expiresAt) }}</small>
             <small>{{ catalogSizeLabel(item.bytes) }}</small>
-            <small v-if="archiveTab==='all'&&search.trim()&&searchFolderScope==='all'"
+            <small v-if="archiveTab==='all'&&search.trim()
+              &&(searchFolderScope==='all'||searchFolderScope==='selected')"
               data-testid="browser-search-result-folder">
               Папка: {{ catalogFolderLabel(item) }}
             </small>
