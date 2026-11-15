@@ -74,7 +74,8 @@ describe('Camera 1.2 device-scoped encrypted Local-First presets',()=>{
       const row=await peek.table('rows').get(key)
       const cipher=unb64(row.ciphertext) 
       const altered=new Uint8Array(cipher)
-      altered[Math.floor(altered.length/2)]^=1
+      const index=Math.floor(altered.length/2)
+      altered[index]=altered[index]! ^ 0x01
       await peek.table('rows').put({...row,ciphertext:b64(altered)})
       await expect(loadCameraPresetCatalog()).rejects.toThrow()
       const after=await peek.table('rows').get(key)
