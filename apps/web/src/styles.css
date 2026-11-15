@@ -1286,6 +1286,47 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .camera-details .camera-sheet-footer button:disabled{
   opacity:.45;cursor:not-allowed
 }
+/* Camera Fieldwork 1.2 accepted single preset area with the two action
+   buttons INSIDE the section; these are real device-key-sealed profiles. */
+.camera-details .camera-preset-section{
+  display:grid;gap:5px;padding:13px;margin:10px 0 15px;
+  border-radius:9px;background:#353535
+}
+.camera-details .camera-preset-section h3,
+.camera-details .camera-preset-options h3{
+  margin:0 0 3px;font-size:12px;letter-spacing:0;font-weight:760;color:#f2f2f2
+}
+.camera-details .camera-preset-section label{margin:7px 0 3px;font-size:12px}
+.camera-details .camera-preset-section .camera-preset-actions{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;
+  margin-top:10px
+}
+.camera-details .camera-preset-actions button{
+  min-width:0;min-height:42px;padding:8px 6px;
+  border:1px solid #545454;border-radius:7px;background:#424242;
+  color:#ececec;font-size:12px;font-weight:680
+}
+.camera-details .camera-preset-actions button:disabled{opacity:.4;cursor:not-allowed}
+.camera-details .camera-preset-section .muted{
+  font-size:10px;line-height:1.5;margin:4px 0
+}
+.camera-details .camera-preset-options{
+  display:grid;gap:5px;padding:13px;margin:10px 0;
+  border-radius:9px;background:#353535
+}
+.camera-details .camera-preset-options label{margin:8px 0 3px;font-size:12px}
+.camera-details .camera-preset-options .muted{
+  margin:2px 0 5px;font-size:10px;line-height:1.5
+}
+.camera-details .camera-preset-options input[type=range]{
+  display:block;width:100%;min-height:30px;margin:5px 0;
+  accent-color:var(--accent)
+}
+@media(max-width:370px){
+  .camera-details .camera-preset-section{padding:10px}
+  .camera-details .camera-preset-options{padding:10px}
+  .camera-details .camera-preset-actions button{font-size:11px}
+}
 @media(max-width:470px){
   .camera-details .foundation-card.is-camera-sheet{max-height:86dvh;padding-inline:13px}
 }
