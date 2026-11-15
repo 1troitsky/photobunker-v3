@@ -136,16 +136,55 @@ const showCreate=ref(false)
 const previewUrl=ref('')
 const previewMime=ref('image/jpeg')
 const previewPrivate=ref<{category?:string;description?:string;tags?:string[];gps?:GPSFix}|null>(null)
-const filters=ref<'all'|'active'>('active')
-
+const filters=ref<'all'|'active'|'finished'>('active')
+const sorting=ref<'created'|'files'|'deadline'>('created')
 const selected=computed(()=>assignments.value.find(a=>a.id===selectedId.value)??null)
-const visible=computed(()=>assignments.value
-  .filter(a=>filters.value==='all'||a.state==='active'
-    ||a.localState==='queued'||a.localState==='retry'
-    ||a.localState==='conflict')
-  .filter(a=>(a.data?.title??'').toLocaleLowerCase().includes(search.value.toLocaleLowerCase())
-      ||a.id.toLowerCase().includes(search.value.toLowerCase()))
-  .sort((a,b)=>b.createdAt-a.createdAt))
+const verifiedFileCount=(assignment:VisibleAssignment):number|null=>{
+  const counts=[
+    assignment.allowedMedia.includes('photo')?assignment.confirmedPhotos:null,
+    assignment.allowedMedia.includes('video')?assignment.confirmedVideos:null,
+    assignment.allowedMedia.includes('audio')?assignment.confirmedAudio:null,
+  ]
+  if(counts.some((v,i)=>assignment.allowedMedia.includes((['photo','video','audio'] as const)[i]!)&&v===null))
+    return null
+  return counts.reduce<number>((sum,n)=>sum+(n??0),0)
+}
+function effectiveEnd(assignment:VisibleAssignment):number|null{
+  const bounds=[assignment.endsAt,assignment.filesAccessUntil,assignment.assignmentAccessUntil]
+    .filter((ms):ms is number=>typeof ms==='number'&&Number.isFinite(ms)&&ms>0)
+  return bounds.length?Math.min(...bounds):null
+}
+type MediaProgressRow={kind:'photo'|'video'|'audio';label:string;count:number|null;goal:number|null}
+function visibleMedia(assignment:VisibleAssignment):MediaProgressRow[]{
+  return [
+    {kind:'photo' as const,label:'Фото',count:assignment.confirmedPhotos,goal:assignment.goal},
+    {kind:'video' as const,label:'Видео',count:assignment.confirmedVideos,goal:assignment.videoGoal},
+    {kind:'audio' as const,label:'Аудио',count:assignment.confirmedAudio,goal:assignment.audioGoal},
+  ].filter(x=>assignment.allowedMedia.includes(x.kind))
+}
+const visible=computed(()=>{
+  const needle=search.value.trim().toLocaleLowerCase()
+  return assignments.value
+    .filter(a=>filters.value==='all'
+      ||filters.value==='active'&&(a.state==='active'||['queued','retry','conflict'].includes(a.localState??''))
+      ||filters.value==='finished'&&a.state==='finished')
+    .filter(a=>!needle||[
+      a.data?.title,a.data?.instructions,a.id,
+      ...a.allowedMedia.map(kind=>({photo:'фото',video:'видео',audio:'аудио'})[kind]),
+    ].some(value=>(value??'').toLocaleLowerCase().includes(needle)))
+    .sort((a,b)=>{
+      if(sorting.value==='files'){
+        const ac=verifiedFileCount(a),bc=verifiedFileCount(b)
+        if(ac===null||bc===null)return ac===bc?b.createdAt-a.createdAt:ac===null?1:-1
+        return bc-ac||b.createdAt-a.createdAt
+      }
+      if(sorting.value==='deadline'){
+        return (effectiveEnd(a)??Number.POSITIVE_INFINITY)
+          -(effectiveEnd(b)??Number.POSITIVE_INFINITY)||b.createdAt-a.createdAt
+      }
+      return b.createdAt-a.createdAt
+    })
+})
 const count=computed(()=>assignments.value.length)
 const activeCount=computed(()=>assignments.value.filter(a=>a.state==='active').length)
 const finishedCount=computed(()=>assignments.value.filter(a=>a.state==='finished').length)
@@ -174,11 +213,7 @@ const eligiblePhotos=computed(()=>photos.value
     &&(!p.capture||p.capture.assignmentId===selectedId.value))
   .sort((a,b)=>Number(!!b.capture)-Number(!!a.capture)))
 function progressPercentage(assignment:VisibleAssignment):number|null{
-  const targeted=[
-    {goal:assignment.goal,count:assignment.confirmedPhotos},
-    {goal:assignment.videoGoal,count:assignment.confirmedVideos},
-    {goal:assignment.audioGoal,count:assignment.confirmedAudio},
-  ].filter(x=>x.goal!==null)
+  const targeted=visibleMedia(assignment).filter(row=>row.goal!==null)
   // Only live, server-confirmed E2EE receipts count. No goals => no percent.
   // Offline counts are unknown: never invent progress from pending captures.
   if(!targeted.length||targeted.some(x=>x.count===null))return null
@@ -908,7 +943,7 @@ onUnmounted(cleanPreview)
         <span>Готово <strong>{{ finishedCount }}</strong></span>
       </div>
     </div>
-    <p class="subtitle">P1 · рабочий E2EE-сценарий · полный Fieldwork 5.0 / Editor 2.2 ещё не перенесён</p>
+    <p class="subtitle">Зашифрованные задания. В прогресс включаются только подтверждённые сервером материалы.</p>
     <p v-if="activeSession&&monthlyUsage&&!showingOfflineSnapshot"
       class="muted" role="status" data-testid="assignment-monthly-usage">
       Тариф {{ assignmentMonthlyPlanLabel(monthlyUsage.planId) }} · создано заданий за месяц:
@@ -970,12 +1005,21 @@ onUnmounted(cleanPreview)
         <button type="submit" :disabled="busy">Создать зашифрованное задание</button>
       </form>
 
-      <div class="assignment-toolbar">
+      <div class="assignment-toolbar assignment-list-tools">
         <div class="assignment-tabs">
           <button type="button" :class="{selected:filters==='active'}" @click="filters='active'">Активные</button>
+          <button type="button" :class="{selected:filters==='finished'}" @click="filters='finished'">Завершённые</button>
           <button type="button" :class="{selected:filters==='all'}" @click="filters='all'">Все</button>
         </div>
-        <input v-model="search" aria-label="Поиск заданий" placeholder="Поиск по названию или ID">
+        <input v-model="search" aria-label="Поиск заданий" data-testid="assignment-search"
+          placeholder="Название, описание, ID, фото / видео / аудио">
+        <label class="assignment-sort-label">Сортировка
+          <select v-model="sorting" data-testid="assignment-sort" aria-label="Сортировка заданий">
+            <option value="created">По созданию</option>
+            <option value="deadline">По ближайшему завершению</option>
+            <option value="files">По числу подтверждённых файлов</option>
+          </select>
+        </label>
         <button type="button" :disabled="syncing" @click="refresh">Обновить</button>
       </div>
 
@@ -983,7 +1027,8 @@ onUnmounted(cleanPreview)
         <p>Нет доступных заданий. Локальные зашифрованные черновики появляются здесь без ожидания сервера.</p>
       </div>
       <div class="assignments-cards">
-        <article v-for="assignment in visible" :key="assignment.id" class="assignment-card">
+        <article v-for="assignment in visible" :key="assignment.id"
+          class="assignment-card task-card" :data-testid="'assignment-card-'+assignment.id">
           <p v-if="pendingMixed[assignment.id]" class="muted" role="status"
             :data-testid="'assignment-mixed-pending-'+assignment.id">
             {{ pendingMixed[assignment.id]?.stage==='conflict'
@@ -1001,26 +1046,34 @@ onUnmounted(cleanPreview)
             <span class="assignment-state">{{ assignment.localState==='conflict'?'Не принято сервером':assignment.localState==='retry'?'Повтор отправки':assignment.localState==='queued'?'В очереди':assignment.state==='active'?'Активно':assignment.state==='finished'?'Завершено':assignment.state }}</span>
           </div>
           <p v-if="assignment.data?.instructions" class="assignment-description">{{ assignment.data.instructions }}</p>
+          <div class="assignment-time-row" data-testid="assignment-time-row">
+            <span>Начало: {{new Date(assignment.startsAt).toLocaleString('ru-RU')}}</span>
+            <span v-if="effectiveEnd(assignment)">Завершение: {{new Date(effectiveEnd(assignment)!).toLocaleString('ru-RU')}}</span>
+            <span v-else>Без срока</span>
+          </div>
+          <div class="assignment-auto-removal">
+            <span v-if="assignment.filesAccessUntil">Файлы до: {{new Date(assignment.filesAccessUntil).toLocaleString('ru-RU')}}</span>
+            <span v-if="assignment.assignmentAccessUntil">Задание до: {{new Date(assignment.assignmentAccessUntil).toLocaleString('ru-RU')}}</span>
+          </div>
           <div class="assignment-card-bottom">
-            <div class="assignment-card-progress">
-              <span v-if="assignment.confirmedPhotos!==null">
-                Фото: {{ assignment.confirmedPhotos }}{{ assignment.goal===null?'':' / '+assignment.goal }}
+            <div class="assignment-card-progress" data-testid="assignment-media-summary">
+              <div v-for="media in visibleMedia(assignment)" :key="media.kind"
+                class="assignment-media-line" :data-testid="'assignment-media-'+media.kind">
+                <span><strong>{{media.label}}:</strong>
+                  {{media.count===null?'Ожидает подтверждения':media.count}}
+                  <template v-if="media.goal!==null"> / {{media.goal}}</template>
+                </span>
+                <progress v-if="media.goal!==null&&media.count!==null"
+                  :max="media.goal" :value="Math.min(media.count,media.goal)"
+                  :aria-label="media.label+' — подтверждённый прогресс'"/>
+              </div>
+              <span v-if="progressPercentage(assignment)!==null" class="assignment-total-progress">
+                Всего {{progressPercentage(assignment)}}%
+                <progress :max="100" :value="progressPercentage(assignment)??0"
+                  :aria-label="'Подтверждённый прогресс задания '+assignment.id"/>
               </span>
-              <span v-else class="muted">Фото: цель {{ assignment.goal??'не задана' }} · ожидает подтверждения</span>
-              <span v-if="assignment.allowedMedia.includes('video')&&assignment.confirmedVideos!==null">
-                · Видео: {{ assignment.confirmedVideos }}{{ assignment.videoGoal===null?'':' / '+assignment.videoGoal }}
-              </span>
-              <span v-if="assignment.allowedMedia.includes('audio')&&assignment.confirmedAudio!==null">
-                · Аудио: {{ assignment.confirmedAudio }}{{ assignment.audioGoal===null?'':' / '+assignment.audioGoal }}
-              </span>
-              <span v-if="progressPercentage(assignment)!==null">
-                · Всего {{ progressPercentage(assignment) }}%
-              </span>
-              <progress v-if="progressPercentage(assignment)!==null"
-                :max="100" :value="progressPercentage(assignment)??0"
-                :aria-label="'Подтверждённый прогресс задания '+assignment.id"/>
               <small v-if="pendingReceiptCount(assignment.id)>0" class="muted">
-                Локально ожидают отправки: {{ pendingReceiptCount(assignment.id) }}
+                Локально ожидают отправки: {{pendingReceiptCount(assignment.id)}}
               </small>
             </div>
             <button type="button" :disabled="busy" @click="choose(assignment.id)">Открыть</button>

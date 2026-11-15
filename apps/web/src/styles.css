@@ -1011,3 +1011,34 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 :root[data-ui-scheme="light"] .shell-header .brand-copy small{color:#526357}
 :root[data-ui-scheme="light"] .shell-dock a{color:#526357}
 :root[data-ui-scheme="light"] .shell-dock a.active{color:var(--accent)}
+
+/* Assignment Fieldwork 5.0: media-only-confirmed progress and card geometry.
+   Owner-approved docs/ux/assignments/v5, reused in the actual E2EE list.
+   No fake local queue receipts, fabricated archive or inferred team ownership. */
+.assignments-p1 .assignment-list-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.assignments-p1 .assignment-list-tools .assignment-tabs{display:flex;gap:3px;flex-shrink:0}
+.assignments-p1 .assignment-list-tools>input{flex:1 1 190px;min-width:150px}
+.assignments-p1 .assignment-sort-label{display:flex;align-items:center;gap:7px;color:#aab4ac;font-size:11px;min-width:0}
+.assignments-p1 .assignment-sort-label select{min-height:37px;background:#282d29;border:1px solid #4c594d;
+  color:#e0ece2;border-radius:7px;padding:7px 10px;font-size:11px;max-width:240px}
+.assignments-p1 .task-card{min-width:0;padding:16px 15px 15px;background:var(--surface);border-radius:9px}
+.assignments-p1 .assignment-time-row{display:flex;flex-wrap:wrap;gap:6px 16px;
+  border-top:1px solid #363b36;margin-top:12px;padding-top:11px;color:#b5c0b7;font-size:11px}
+.assignments-p1 .assignment-auto-removal{display:flex;gap:5px 12px;flex-wrap:wrap;margin-top:5px;
+  font-size:10px;color:#a5deb5}
+.assignments-p1 .assignment-media-line{display:flex;flex-direction:column;align-items:stretch;gap:5px;
+  min-width:0;color:#d5e2d8;font-size:11px}
+.assignments-p1 .assignment-media-line strong{font-weight:740;color:#f2f5f2}
+.assignments-p1 .assignment-media-line progress{display:block;width:100%;max-width:225px;
+  height:5px;border:0;accent-color:var(--accent);border-radius:4px}
+.assignments-p1 .assignment-total-progress{display:flex;flex-direction:column;gap:4px;
+  margin-top:4px;font-size:11px;font-weight:720;color:#a8e6b5}
+.assignments-p1 .assignment-total-progress progress{width:100%;max-width:225px;height:6px;accent-color:var(--accent)}
+.assignments-p1 .assignment-card-bottom{align-items:flex-end}
+.assignments-p1 .assignment-card-progress{gap:10px}
+@media(max-width:580px){
+  .assignments-p1 .assignment-list-tools .assignment-tabs{width:100%}
+  .assignments-p1 .assignment-list-tools .assignment-tabs button{flex:1}
+  .assignments-p1 .assignment-list-tools .assignment-sort-label{width:100%;justify-content:space-between}
+  .assignments-p1 .assignment-list-tools .assignment-sort-label select{flex:1;max-width:260px}
+}
