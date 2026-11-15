@@ -11,6 +11,8 @@ const loading=ref(true),error=ref('')
 const order=ref<CheckoutSelection|null>(null)
 const draft=ref<CheckoutSelection|null>(null),showEditor=ref(false)
 const closeButton=ref<HTMLButtonElement|null>(null)
+const editorButton=ref<HTMLButtonElement|null>(null)
+const editorDialog=ref<HTMLElement|null>(null)
 const periodChoices=[1,6,12] as const
 const names:Readonly<Record<string,string>>={go:'Go',pro:'Pro',unlimited:'Unlimited',unlimited_plus:'Unlimited+'}
 const allowedPlans=computed(()=>plans.value.filter(x=>x.planId!=='free'))
@@ -38,7 +40,29 @@ async function edit():Promise<void>{
   await nextTick()
   closeButton.value?.focus()
 }
-function close():void{showEditor.value=false;draft.value=null}
+function close():void{
+  showEditor.value=false
+  draft.value=null
+  void nextTick(()=>editorButton.value?.focus())
+}
+function dialogKeydown(event:KeyboardEvent):void{
+  if(event.key==='Escape'){
+    event.preventDefault();event.stopPropagation();close();return
+  }
+  if(event.key!=='Tab'||!editorDialog.value)return
+  // Owner-approved checkout is a modal inside the existing Shell: keyboard
+  // focus cannot escape to the background Header/Dock.
+  const items=Array.from(editorDialog.value.querySelectorAll<HTMLButtonElement>(
+    'button:not(:disabled)',
+  ))
+  const first=items[0],last=items[items.length-1]
+  if(!first||!last)return
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
+}
 function selectPlan(item:PublicPlan):void{
   if(!draft.value)return
   const term=checkoutPrice(item,draft.value.term)===null?1:draft.value.term
@@ -89,7 +113,7 @@ async function save():Promise<void>{
         <strong>{{discount===null?'Не рассчитана':usd(discount)}}</strong></div>
       <div class="summary-row total"><span>Предварительно</span>
         <strong data-testid="checkout-total">{{usd(amount)}}</strong></div>
-      <button type="button" class="order-edit" data-testid="checkout-edit-order"
+      <button ref="editorButton" type="button" class="order-edit" data-testid="checkout-edit-order"
         @click="edit">Изменить тариф и период</button>
     </section>
     <p class="plan-context warn" data-testid="checkout-no-invoice">
@@ -126,8 +150,8 @@ async function save():Promise<void>{
     </footer>
   </template>
   <p v-else role="alert" class="checkout-error">Нет подтверждённых платных тарифов для выбора.</p>
-  <div v-if="showEditor&&draft" class="overlay" @click.self="close" @keydown.esc="close">
-    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="edit-checkout-title"
+  <div v-if="showEditor&&draft" class="overlay" @click.self="close" @keydown="dialogKeydown">
+    <section ref="editorDialog" class="sheet" role="dialog" aria-modal="true" aria-labelledby="edit-checkout-title"
       data-testid="checkout-editor">
       <div class="sheet-head"><strong id="edit-checkout-title">Изменить заказ</strong>
         <button ref="closeButton" type="button" aria-label="Закрыть" @click="close">×</button>
