@@ -65,7 +65,8 @@ export function validateCameraPresetSettings(raw:unknown):CameraPresetSettings{
     ||!validEnum(s.videoQuality,videos)
     ||!validBound(s.videoMaxSeconds,5,300)
     ||!validBound(s.audioMaxSeconds,5,3000)
-    ||!validEnum(s.audioTargetBitrate,AUDIO_TARGET_BITRATES as readonly number[] as never[])
+    ||!validBound(s.audioTargetBitrate,64000,256000)
+    ||!(AUDIO_TARGET_BITRATES as readonly number[]).includes(s.audioTargetBitrate as number)
     ||typeof s.gridVisible!=='boolean'||typeof s.gpsStatusVisible!=='boolean')
     throw Error('camera.preset_invalid')
   return {
