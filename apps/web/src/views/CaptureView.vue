@@ -1125,7 +1125,7 @@ onUnmounted(()=>{
         </div>
         <div class="camera-control-trio">
           <button type="button" class="camera-side-action" data-testid="camera-open-assignment"
-            @click="openCameraDetails('[data-testid=camera-assignment-panel]')">Задание</button>
+            @click="openCameraSheet('assignment')">Задание</button>
           <button v-if="captureMode==='photo'" type="button" class="camera-shutter"
             aria-label="Сделать снимок"
             :disabled="!stream||starting||busy||gpsLoading||!canCaptureType" @click="capture">
@@ -1144,7 +1144,7 @@ onUnmounted(()=>{
               <span class="camera-screen-title">Остановить запись</span>
             </button>
           <button type="button" class="camera-side-action" data-testid="camera-open-settings"
-            @click="openCameraDetails('[data-testid=camera-settings-panel]')">Настройки</button>
+            @click="openCameraSheet('settings')">Настройки</button>
         </div>
         <p v-if="recording" class="camera-recording-timer">
           Запись · {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
@@ -1158,8 +1158,20 @@ onUnmounted(()=>{
           </button>
         </div>
       </div>
+      <div v-if="cameraSheet" class="camera-sheet-backdrop"
+        data-testid="camera-sheet-backdrop" @click="closeCameraSheet"></div>
       <div class="camera-details" data-testid="camera-details">
-      <div class="foundation-card" data-testid="camera-assignment-panel">
+        <div class="foundation-card camera-config-card"
+          :class="{'is-camera-sheet':cameraSheet==='settings'}"
+          data-testid="camera-settings-panel" @keydown.esc.stop.prevent="closeCameraSheet">
+          <header v-if="cameraSheet==='settings'" class="camera-sheet-heading">
+            <strong>Настройки камеры</strong>
+            <button type="button" class="camera-sheet-close"
+              data-testid="camera-sheet-close" aria-label="Закрыть настройки"
+              @click="closeCameraSheet">Закрыть</button>
+          </header>
+          <h2 v-else>Настройки камеры</h2>
+
         <label for="camera-mode">Режим съёмки</label>
         <select id="camera-mode" v-model="captureMode" :disabled="recording||busy"
           data-testid="camera-mode">
@@ -1201,6 +1213,21 @@ onUnmounted(()=>{
             проверка камеры или достоверности GPS.
           </p>
         </div>
+
+          <div v-if="cameraSheet==='settings'" class="camera-sheet-footer">
+            <button type="button" @click="closeCameraSheet">Готово</button>
+          </div>
+        </div>
+        <div class="foundation-card camera-assignment-card"
+          :class="{'is-camera-sheet':cameraSheet==='assignment'}"
+          data-testid="camera-assignment-panel" @keydown.esc.stop.prevent="closeCameraSheet">
+          <header v-if="cameraSheet==='assignment'" class="camera-sheet-heading">
+            <strong>Задание и данные съёмки</strong>
+            <button type="button" class="camera-sheet-close"
+              data-testid="camera-sheet-close" aria-label="Закрыть задание"
+              @click="closeCameraSheet">Закрыть</button>
+          </header>
+          <h2 v-else>Задание и данные съёмки</h2>
         <label for="camera-assignment">Задание для съёмки</label>
         <select id="camera-assignment" v-model="selectedAssignment" :disabled="busy||recording">
           <option value="">Личная запись (без задания)</option>
@@ -1251,8 +1278,7 @@ onUnmounted(()=>{
           Категории (публичный список правил): {{ requiredAdvanced.allowedCategories.join(', ')||'любые' }};
           обязательные теги: {{ requiredAdvanced.requiredTags.join(', ')||'нет' }}.
         </p>
-      </div>
-      <div class="foundation-card" data-testid="camera-settings-panel">
+
         <h2>Приватная информация {{ captureMode==='photo'?'снимка':captureMode==='video'?'видео':'аудио' }}</h2>
         <label for="camera-category">Категория</label>
         <input id="camera-category" v-model="category" type="text" maxlength="64"
@@ -1276,7 +1302,13 @@ onUnmounted(()=>{
         </p>
         <p v-if="gpsError" role="alert" class="error-text">{{ gpsError }}</p>
         <p class="muted">GPS запрашивается только по нажатию. Категория, описание и координаты шифруются на устройстве и не попадают на сервер открытым текстом.</p>
-      </div>
+
+          <div v-if="cameraSheet==='assignment'" class="camera-sheet-footer">
+            <button type="button" :disabled="!canConfirmCameraAssignment"
+              data-testid="camera-assignment-finish"
+              @click="finishCameraAssignment">Готово</button>
+          </div>
+        </div>
       </div>
       <p v-if="recording" role="status" class="status-text" data-testid="camera-recording-status">
         Идёт запись с {{ recordingStartedAt?new Date(recordingStartedAt).toLocaleTimeString():'' }}. От 5 до {{ recordingMaxSeconds }} секунд, не более 128 MiB.
