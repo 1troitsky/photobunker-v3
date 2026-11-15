@@ -188,9 +188,9 @@ const dock = computed(() => displayedDock.value
             aria-hidden="true"><path d="M12 17V3m-5 5 5-5 5 5M4 17v4h16v-4"/></svg>
         </button>
         <button type="button" data-testid="browser-header-select"
-          :aria-label="browserShellActions?.selectedCount?'Снять выделение':'Выбрать'"
-          :title="browserShellActions?.selectedCount?'Снять выделение':'Выбрать файлы'"
-          :aria-pressed="!!browserShellActions?.selectedCount"
+          :aria-label="browserShellActions?.selecting?'Отменить выбор':'Выбрать'"
+          :title="browserShellActions?.selecting?'Отменить выбор файлов':'Выбрать файлы'"
+          :aria-pressed="!!browserShellActions?.selecting"
           :disabled="!browserShellActions?.canSelect"
           @click="browserShellActions?.toggleSelection()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
