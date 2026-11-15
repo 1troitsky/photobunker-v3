@@ -81,8 +81,8 @@ describe('authenticated Browser folder JPEG previews',()=>{
     expect(drawImage).toHaveBeenCalledWith(expect.objectContaining({
       naturalWidth:300,naturalHeight:200,
     }),50,0,200,200,0,0,96,96)
-    expect(revoke).toHaveBeenCalledExactlyOnceWith(
-      'blob:temporary-private-decoder')
+    expect(revoke).toHaveBeenCalledOnce()
+    expect(revoke).toHaveBeenCalledWith('blob:temporary-private-decoder')
   })
   it('always closes the image decoder when canvas encoding fails',async()=>{
     const close=vi.fn()
