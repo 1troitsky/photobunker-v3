@@ -140,6 +140,7 @@ test('P2 Browser: two recovered devices exchange signed E2EE folders, replay Los
     await expect(a.getByTestId('browser-folder-sync-status'))
       .toContainText('подтверждён сервером',{timeout:20000})
 
+    await b.getByRole('button',{name:'Действия с папкой PRIVATE-E2EE-A'}).click()
     await b.getByRole('button',{name:'Переименовать PRIVATE-E2EE-A'}).click()
     await b.getByTestId('browser-rename-folder').fill('PRIVATE-B-RENAME')
     await b.getByRole('button',{name:'Сохранить',exact:true}).click()
