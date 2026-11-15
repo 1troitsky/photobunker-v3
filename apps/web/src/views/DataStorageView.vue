@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { readPublicCatalog, type PublicPlan } from '../features/billing/application/catalog-client'
 import { activeSession } from '../features/identity/application/session'
 import {
   filteredEncryptedQueue, readEncryptedLocalQueueDetails, readServerStorageUsage,
@@ -27,6 +28,13 @@ const pendingQueueTotal = computed(() => local.value
 const fileKind = (kind: EncryptedQueueEntry['kind']): string => ({
   photo: 'Фото', video: 'Видео', audio: 'Аудио',
 })[kind]
+function filesNoun(count:number):string {
+  const tail=count%100
+  if(tail>=11&&tail<=14)return 'файлов'
+  if(count%10===1)return 'файл'
+  if(count%10>=2&&count%10<=4)return 'файла'
+  return 'файлов'
+}
 const fileStatus = (status: EncryptedQueueEntry['status']): string => ({
   queued: 'Ожидает отправки', retry: 'Ожидает повтора',
   conflict: 'Требует внимания', expired: 'Срок истёк',
@@ -39,6 +47,17 @@ function opaqueSuffix(key: string): string {
   return key.slice(-8)
 }
 const server = shallowRef<ServerStorageUsage | null>(null)
+const catalogPlan = shallowRef<PublicPlan | null>(null)
+const cloudPercent = computed(() => server.value && server.value.enforcedByteCeiling>0
+  ? Math.min(100,Math.round(server.value.recordedCipherBytes*100/server.value.enforcedByteCeiling))
+  : null)
+const fileMax = computed(()=>catalogPlan.value?.limits.maxMediaFiles??null)
+const filePercent = computed(()=>fileMax.value!==null && fileMax.value>0 && server.value
+  ? Math.min(100,Math.round(server.value.activeLogicalMediaFiles*100/fileMax.value))
+  : null)
+const estimatedCloudAfterQueue = computed(()=>server.value && local.value
+  ? formatBytes(server.value.recordedCipherBytes+local.value.pendingCipherBytes)
+  : null)
 const localPhase = ref<Phase>('locked')
 const serverPhase = ref<Phase>('locked')
 const onlineNow = ref(typeof navigator !== 'undefined' && navigator.onLine)
@@ -64,6 +83,7 @@ function refresh(): void {
   local.value = null
   queueEntries.value = []
   server.value = null
+  catalogPlan.value = null
   if (!session) {
     queueOpen.value = false
     queueFilter.value = 'all'
@@ -101,6 +121,14 @@ function refresh(): void {
       if (requestId === id && activeSession.value === session) {
         server.value = result
         serverPhase.value = 'ready'
+        // Public, versioned catalog supplies plan file limits; never fabricate
+        // a denominator when the catalog is missing or not verified.
+        void readPublicCatalog()
+          .then(plans=>{
+            if(requestId===id && activeSession.value===session)
+              catalogPlan.value=plans.find(plan=>plan.planId===result.planId)??null
+          })
+          .catch(()=>{if(requestId===id)catalogPlan.value=null})
       }
     })
     .catch(() => {
@@ -225,12 +253,21 @@ onUnmounted(() => {
         <p class="muted">Локальное сохранение не означает проверенную загрузку в облако.
           Не очищайте данные приложения до завершения синхронизации.</p>
 
-        <button v-if="localPhase==='ready'" type="button"
-          class="storage-queue-open" data-testid="storage-open-queue"
-          :aria-expanded="queueOpen" aria-controls="storage-queue-detail"
-          @click="queueOpen=!queueOpen">
-          {{ queueOpen ? 'Скрыть очередь' : 'Открыть очередь' }} ({{ pendingQueueTotal }})
-        </button>
+        <div v-if="localPhase==='ready'" class="queue-summary" data-testid="storage-queue-summary">
+          <div class="queue-quick">
+            <button type="button" class="storage-queue-open" data-testid="storage-open-queue"
+              :aria-expanded="queueOpen" aria-controls="storage-queue-detail"
+              @click="queueOpen=!queueOpen">
+              {{queueOpen?'Скрыть очередь':'Открыть очередь'}}
+            </button>
+            <strong class="queue-amount">{{pendingQueueTotal}} {{filesNoun(pendingQueueTotal)}} · {{formatBytes(local?.pendingCipherBytes??0)}}</strong>
+          </div>
+          <p class="queue-footnote">Очередь состоит из локальных зашифрованных файлов и пока не учтена как занятое место в облаке.</p>
+          <p v-if="estimatedCloudAfterQueue" class="queue-footnote">
+            При успешной отправке всех ожидающих материалов общий объём составит примерно {{estimatedCloudAfterQueue}}.
+            Это оценка, не подтверждённая сервером квота и не обещание загрузки.
+          </p>
+        </div>
         <section v-if="queueOpen && localPhase==='ready'" id="storage-queue-detail"
           class="storage-queue-detail" data-testid="storage-queue-detail"
           aria-label="Очередь зашифрованных файлов">
@@ -280,7 +317,7 @@ onUnmounted(() => {
       </section>
 
       <section class="foundation-card storage-section" aria-labelledby="storage-cloud-heading">
-        <h2 id="storage-cloud-heading">Учёт облачных файлов</h2>
+        <h2 id="storage-cloud-heading">Используемые лимиты</h2>
         <p v-if="serverPhase==='loading'" role="status" data-testid="storage-server-loading">
           Проверяем данные на сервере…
         </p>
@@ -292,6 +329,24 @@ onUnmounted(() => {
         </p>
         <div v-else-if="serverPhase==='ready' && server"
           data-testid="storage-server-ready" class="storage-values">
+          <div class="quota-block" data-testid="storage-cloud-quota">
+            <div class="quota-metric">
+              <strong>Зашифрованное облако</strong>
+              <span>{{formatBytes(server.recordedCipherBytes)}} / {{formatBytes(server.enforcedByteCeiling)}} · {{cloudPercent}}%</span>
+            </div>
+            <progress class="bar" :value="cloudPercent??0" max="100"
+              aria-label="Использованный объём зашифрованного облака"></progress>
+            <p class="quota-note">Предел подтверждён сервером. Кэш и ожидающая отправки очередь не входят в использованный объём облака.</p>
+          </div>
+          <div class="quota-block" data-testid="storage-files-quota">
+            <div class="quota-metric">
+              <strong>Файлы</strong>
+              <span>{{server.activeLogicalMediaFiles}} / {{fileMax===null?'Без лимита плана':fileMax}}</span>
+            </div>
+            <progress class="bar" :value="filePercent??0" max="100"
+              :aria-label="fileMax===null?'Количество файлов без тарифного ограничения':'Использованный лимит количества файлов'"></progress>
+            <p class="quota-note">{{fileMax===null?'Лимит количества файлов не подтверждён либо не предусмотрен тарифом.':'Доля от лимита количества файлов по действующему тарифному каталогу.'}}</p>
+          </div>
           <div>
             <span>Тариф для новых операций</span>
             <strong data-testid="storage-effective-plan">{{ server.planId }}</strong>
@@ -315,12 +370,28 @@ onUnmounted(() => {
 
       <section class="foundation-card storage-section" aria-labelledby="storage-backup-heading">
         <h2 id="storage-backup-heading">Резервные копии</h2>
-        <p data-testid="storage-backup-unavailable">
-          Восстановление из Recovery Vault ещё не принято. На этой странице
-          резервные копии не создаются, не восстанавливаются и не удаляются.
-        </p>
-        <p class="muted">Очистка кэша не предлагается, пока нельзя безопасно отделить
-          временные данные от несинхронизированных зашифрованных файлов.</p>
+        <div class="backup-cards">
+          <div class="backup-empty" data-testid="storage-backup-unavailable">
+            Нет проверенных копий для отображения. До завершения безопасного
+            восстановления отсюда нельзя создавать, заменять или удалять резервные копии.
+          </div>
+        </div>
+        <button type="button" disabled class="storage-backup-manage">Управление копиями и автообновлением</button>
+      </section>
+      <section class="foundation-card storage-section" aria-labelledby="storage-cache-heading">
+        <h2 id="storage-cache-heading">Зашифрованный кэш</h2>
+        <p class="muted">Миниатюры и временные данные для быстрого просмотра.</p>
+        <div class="cache-usage"><span>Объём: не измерен</span>
+          <button type="button" disabled title="Очистка будет доступна после подтверждения границ кэша">
+            Очистить кэш
+          </button>
+        </div>
+        <label for="storage-cache-range" class="muted">Размер кэша</label>
+        <input id="storage-cache-range" type="range" min="0" max="2" value="1" disabled
+          class="cache-range" aria-label="Размер зашифрованного кэша">
+        <p class="muted">Очистка не должна удалять несинхронизированные файлы,
+          Recovery Key или локальные оригиналы. Пока разделение не проверено,
+          разрушительные действия недоступны.</p>
       </section>
     </template>
   </section>
@@ -328,6 +399,22 @@ onUnmounted(() => {
 
 <style scoped>
 .storage-view{display:grid;gap:17px}
+.storage-view .quota-block{display:block;text-align:left;width:100%;padding:12px 0}
+.storage-view .quota-block+.quota-block{border-top:1px solid #363636}
+.storage-view .quota-metric{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.storage-view .quota-metric strong{font-size:13px;font-weight:750;text-align:left}
+.storage-view .quota-metric span{font-size:11px;color:#b2bdb3}
+.storage-view .bar{display:block;width:100%;height:9px;margin:10px 0;border-radius:5px;accent-color:var(--accent)}
+.storage-view .quota-note{font-size:11px;color:#9da9a0;line-height:1.5;margin:8px 0 0}
+.storage-view .queue-summary{border-top:1px solid #363636;margin-top:13px;padding-top:13px}
+.storage-view .queue-quick{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.storage-view .queue-amount{font-size:12px;font-weight:710;color:#e8ece8;text-align:right}
+.storage-view .queue-footnote{font-size:11px;color:#a5b0a8;line-height:1.5;margin:8px 0 0}
+.storage-view .backup-cards{display:grid;gap:9px}
+.storage-view .backup-empty{padding:15px;background:#252525;border:1px solid #383838;border-radius:9px;font-size:12px;color:#b7c2b9}
+.storage-view .storage-backup-manage,.storage-view .cache-usage button{background:#2c332d;border:1px solid #494f49;border-radius:8px;color:#b5c0b6;padding:10px}
+.storage-view .cache-usage{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.storage-view .cache-range{accent-color:var(--accent);width:100%}
 .storage-heading h1{margin:9px 0 4px;font-size:25px;letter-spacing:-.03em}
 .storage-heading p{margin:0}
 .storage-back,.storage-link{color:#bfeace;text-decoration:none;font-size:13px}

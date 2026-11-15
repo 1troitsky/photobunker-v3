@@ -25,7 +25,12 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await expect(page.getByTestId('storage-local-pending-count')).toHaveText('0')
     await expect(page.getByTestId('storage-effective-plan')).toHaveText('free')
     await expect(page.getByTestId('storage-recorded-cipher-bytes')).toHaveText('0 Б')
+    await expect(page.getByTestId('storage-cloud-quota')).toBeVisible()
+    await expect(page.getByTestId('storage-files-quota')).toBeVisible()
+    await expect(page.getByTestId('storage-cloud-quota').locator('progress')).toHaveAttribute('value','0')
     await expect(page.getByTestId('storage-backup-unavailable')).toBeVisible()
+    await expect(page.getByRole('button',{name:'Управление копиями и автообновлением'})).toBeDisabled()
+    await expect(page.getByRole('button',{name:'Очистить кэш'})).toBeDisabled()
 
     // Real AES-GCM local Photo objects are created while disconnected. No
     // server ACK, fake sync, browser gallery or OS Camera Roll is involved.
@@ -58,6 +63,7 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await expect(page.getByTestId('storage-server-ready')).toHaveCount(0)
 
     // Real ciphertext rows must be inspectable, not just a cosmetic counter.
+    await expect(page.getByTestId('storage-queue-summary')).toContainText('1 файл')
     await page.getByTestId('storage-open-queue').click()
     await expect(page.getByTestId('storage-queue-detail')).toBeVisible()
     await expect(page.getByTestId('storage-queue-item')).toHaveCount(1)
