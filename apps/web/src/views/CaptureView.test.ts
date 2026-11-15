@@ -172,6 +172,33 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(document.querySelector('[data-testid="camera-blind-overlay"]')).toBeNull()
     expect(opened.track.stop).not.toHaveBeenCalled()
   })
+  it('restarts video without microphone immediately when video sound is disabled',async()=>{
+    const opened=media()
+    await mount()
+    requests[0]!.resolve(opened.stream)
+    await settle()
+    const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
+    mode.value='video';mode.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      audio:true,
+      video:{facingMode:{ideal:'environment'},width:{ideal:1280}},
+    })
+    const videoSession=media()
+    requests[1]!.resolve(videoSession.stream)
+    await settle()
+    const toggle=host.querySelector<HTMLInputElement>(
+      '[data-testid="camera-video-audio"]')!
+    expect(toggle.checked).toBe(true)
+    toggle.checked=false
+    toggle.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(videoSession.track.stop).toHaveBeenCalledOnce()
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      audio:false,
+      video:{facingMode:{ideal:'environment'},width:{ideal:1280}},
+    })
+  })
   it('switches facingMode only after stopping the prior stream, never during recording',async()=>{
     const opened=media()
     await mount()
