@@ -153,7 +153,9 @@ onMounted(()=>{void initialize()})
   </section>
 </template>
 <style scoped>
-.notification-settings{max-width:800px;margin:0 auto}
+/* Keep the accepted Save/Cancel bar attached immediately above the
+   shared Dock while the Shell main (not a nested settings list) scrolls. */
+.notification-settings{max-width:800px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;padding-bottom:0}
 .settings-heading h1{font-size:26px;margin:0}
 .settings-heading p,.settings-hint{color:#aab2aa;font-size:12px;line-height:1.55}
 .settings-options{margin-top:24px;background:var(--surface);border-radius:12px;overflow:hidden}
@@ -169,7 +171,16 @@ onMounted(()=>{void initialize()})
 .quiet-hours label{display:flex;align-items:center;gap:10px;font-size:12px}
 .quiet-hours input{width:auto;height:auto;color:inherit;background:transparent;border:1px solid var(--outline);border-radius:5px;padding:5px}
 .settings-hint{margin:20px 0}
-.settings-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+.settings-actions{
+  position:sticky;bottom:0;z-index:3;flex:0 0 auto;
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;
+  margin:24px -16px 0;padding:11px 16px 12px;
+  background:var(--header);border-top:1px solid #373737;
+}
+.settings-actions button{min-height:42px;border-radius:8px;font-weight:690;font-size:12px}
+.settings-actions button:last-child{background:var(--accent);border-color:var(--accent);color:#102719}
+.settings-actions button:last-child:disabled{background:#334737;color:#87998d;border-color:#334737}
+.settings-actions button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:480px){.setting-option{padding:12px}.setting-option.fixed>span:last-child{white-space:normal;text-align:right}}
 </style>
 
