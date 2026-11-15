@@ -148,6 +148,10 @@ test('P2 #209: mixed photo/video/audio creation is durable offline, two owner si
     await expect(card.getByTestId('assignment-media-video')).toContainText('0 / 3')
     await expect(card.getByTestId('assignment-media-audio')).toContainText('0 / 4')
     await expect(card.getByTestId('assignment-time-row')).toBeVisible()
+    // The card can navigate to Camera only after a signed accepted policy.
+    // Camera itself revalidates rights; this link is never a grant.
+    await expect(card.getByTestId('assignment-capture-'+queued.id))
+      .toHaveAttribute('href','/camera?assignmentId='+queued.id)
     await page.getByTestId('assignment-search').fill('Encrypted instructions 209')
     await expect(card).toBeVisible()
     await page.getByTestId('assignment-search').fill('аудио')

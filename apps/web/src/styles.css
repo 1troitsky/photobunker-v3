@@ -1042,3 +1042,15 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .assignments-p1 .assignment-list-tools .assignment-sort-label{width:100%;justify-content:space-between}
   .assignments-p1 .assignment-list-tools .assignment-sort-label select{flex:1;max-width:260px}
 }
+
+/* Cards retain real authenticated Camera navigation without a second Shell. */
+.assignments-p1 .assignment-card-actions{display:flex;align-items:center;flex-wrap:wrap;
+  justify-content:flex-end;gap:8px}
+.assignments-p1 .assignment-capture-action{display:inline-flex;align-items:center;justify-content:center;
+  min-height:37px;padding:8px 12px;border-radius:7px;border:1px solid #3d7650;
+  background:#213b2a;color:#c8f0d1;text-decoration:none;font-size:11px;font-weight:700}
+.assignments-p1 .assignment-capture-action:hover{background:#2b4935}
+.assignments-p1 .assignment-capture-action:focus-visible{outline:2px solid #9be4a9;outline-offset:2px}
+@media(max-width:480px){.assignments-p1 .assignment-card-bottom{flex-wrap:wrap}
+  .assignments-p1 .assignment-card-actions{width:100%}
+  .assignments-p1 .assignment-card-actions>*{flex:1}}

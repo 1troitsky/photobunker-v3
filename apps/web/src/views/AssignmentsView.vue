@@ -150,9 +150,26 @@ const verifiedFileCount=(assignment:VisibleAssignment):number|null=>{
   return counts.reduce<number>((sum,n)=>sum+(n??0),0)
 }
 function effectiveEnd(assignment:VisibleAssignment):number|null{
-  const bounds=[assignment.endsAt,assignment.filesAccessUntil,assignment.assignmentAccessUntil]
+  // Fieldwork 5.0: an explicit signed end is authoritative for display.
+  // Access/retention ceilings are displayed separately, never conflated.
+  if(assignment.endsAt!==null&&Number.isFinite(assignment.endsAt))
+    return assignment.endsAt
+  const bounds=[assignment.filesAccessUntil,assignment.assignmentAccessUntil]
     .filter((ms):ms is number=>typeof ms==='number'&&Number.isFinite(ms)&&ms>0)
   return bounds.length?Math.min(...bounds):null
+}
+/** A navigation convenience, not an authorization decision: Camera validates
+ * the current signed policy, peer role, time limits and media permissions. */
+function canOpenCamera(assignment:VisibleAssignment):boolean{
+  if(assignment.state!=='active'
+    ||['queued','retry','conflict'].includes(assignment.localState??'')
+    ||assignment.allowedMedia.length===0)return false
+  const now=Date.now()
+  if(assignment.blockBeforeStart&&now<assignment.startsAt)return false
+  if(assignment.blockAfterEnd&&assignment.endsAt!==null&&now>=assignment.endsAt)return false
+  if((assignment.filesAccessUntil??Infinity)<=now
+    ||(assignment.assignmentAccessUntil??Infinity)<=now)return false
+  return true
 }
 type MediaProgressRow={kind:'photo'|'video'|'audio';label:string;count:number|null;goal:number|null}
 function visibleMedia(assignment:VisibleAssignment):MediaProgressRow[]{
@@ -1076,7 +1093,15 @@ onUnmounted(cleanPreview)
                 Локально ожидают отправки: {{pendingReceiptCount(assignment.id)}}
               </small>
             </div>
-            <button type="button" :disabled="busy" @click="choose(assignment.id)">Открыть</button>
+            <div class="assignment-card-actions">
+              <RouterLink v-if="canOpenCamera(assignment)"
+                :to="{path:'/camera',query:{assignmentId:assignment.id}}"
+                :data-testid="'assignment-capture-'+assignment.id"
+                class="assignment-capture-action">
+                {{assignment.allowedMedia.length===1&&assignment.allowedMedia[0]==='audio'?'Записать':'Снимать'}}
+              </RouterLink>
+              <button type="button" :disabled="busy" @click="choose(assignment.id)">Открыть</button>
+            </div>
           </div>
         </article>
       </div>
