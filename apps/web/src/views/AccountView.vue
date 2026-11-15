@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { markInvalidRecoveryKey } from '../features/identity/application/authorization-failure'
 import SettingsHub from '../ui/fieldwork/SettingsHub.vue'
 import GraceStatusPanel from '../features/billing/ui/GraceStatusPanel.vue'
 import {
@@ -7,6 +9,7 @@ import {
   restoreAccount, reauthenticate,
 } from '../features/identity/application/session'
 
+const router=useRouter()
 const generatedKey=ref('')
 const inputKey=ref('')
 const acknowledged=ref(false)
@@ -36,7 +39,15 @@ function finish():void {
 }
 function restore():void {
   void perform(async()=>{
-    await restoreAccount(inputKey.value.trim())
+    try{await restoreAccount(inputKey.value.trim())}
+    catch(e){
+      if(markInvalidRecoveryKey(e)){
+        inputKey.value=''
+        await router.replace('/authorization-error')
+        return
+      }
+      throw e
+    }
     inputKey.value=''
     status.value='Доступ восстановлен на этом устройстве.'
   })

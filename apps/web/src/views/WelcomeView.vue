@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { activeSession, beginRegistration, finishRegistration, restoreAccount } from '../features/identity/application/session'
 import { resolveStartRoute } from '../ui/fieldwork/appearance-preferences'
+import { markInvalidRecoveryKey } from '../features/identity/application/authorization-failure'
 const route=useRoute(),router=useRouter()
 type Feature={title:string;desc:string;caption:string;accent:string;art:string}
 const features:readonly Feature[]=[
@@ -90,7 +91,12 @@ async function restore():Promise<void>{
  if(busy.value||!recovery.value.trim())return
  busy.value=true;error.value=''
  try{await restoreAccount(recovery.value.trim());recovery.value='';await router.replace(resolveStartRoute())}
- catch(e){error.value=e instanceof Error?e.message:'Не удалось восстановить аккаунт'}
+ catch(e){
+   if(markInvalidRecoveryKey(e)){
+     recovery.value=''
+     await router.replace('/authorization-error')
+   }else error.value=e instanceof Error?e.message:'Не удалось восстановить аккаунт'
+ }
  finally{busy.value=false}
 }
 async function loadFile(e:Event):Promise<void>{
