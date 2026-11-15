@@ -50,6 +50,7 @@ const gpsStatusVisible=ref(true)
 const photoAspect=ref<CameraPhotoAspect>('4:3')
 const photoQuality=ref<CameraPhotoQuality>('high')
 const videoQuality=ref<CameraVideoQuality>('720p')
+const videoAudioEnabled=ref(true)
 const videoMaxSeconds=ref(300)
 const audioMaxSeconds=ref(3000)
 const cameraPresetCatalog=ref(defaultCameraPresetCatalog())
@@ -87,6 +88,7 @@ function cameraSettingsSnapshot():CameraPresetSettings {
   return {
     photoAspect:photoAspect.value,photoQuality:photoQuality.value,
     photoStorage:photoStorage.value,videoQuality:videoQuality.value,
+    videoAudioEnabled:videoAudioEnabled.value,
     videoMaxSeconds:videoMaxSeconds.value,audioMaxSeconds:audioMaxSeconds.value,
     audioTargetBitrate:audioTargetBitrate.value,
     gridVisible:gridVisible.value,gpsStatusVisible:gpsStatusVisible.value,
@@ -97,6 +99,7 @@ function applyCameraPreset(settings:CameraPresetSettings):void {
   photoQuality.value=settings.photoQuality
   photoStorage.value=settings.photoStorage
   videoQuality.value=settings.videoQuality
+  videoAudioEnabled.value=settings.videoAudioEnabled
   videoMaxSeconds.value=settings.videoMaxSeconds
   audioMaxSeconds.value=settings.audioMaxSeconds
   audioTargetBitrate.value=settings.audioTargetBitrate
@@ -602,7 +605,7 @@ async function startCamera():Promise<void> {
   let opened:MediaStream|null=null
   try{
     opened=await navigator.mediaDevices.getUserMedia({
-      audio:mode!=='photo',
+      audio:mode==='audio'||mode==='video'&&videoAudioEnabled.value,
       video:mode!=='audio'
         ?{facingMode:{ideal:cameraFacing.value},
           width:{ideal:mode==='video'
@@ -1136,6 +1139,15 @@ watch(()=>route.query.assignmentId,()=>{
   if(recording.value)discardRecording()
   void refreshPolicies()
 },{flush:'sync'})
+watch(videoAudioEnabled,()=>{
+  // Disabling video sound must revoke an already active microphone track;
+  // a note about "next session" would otherwise create false privacy.
+  if(disposed||!activeSession.value||captureMode.value!=='video'
+    ||recording.value||busy.value)return
+  closeCamera()
+  cameraWanted=true
+  void nextTick().then(startCamera)
+})
 watch(captureMode,()=>{
   closePrivateRecordingReview()
   closeCamera()
@@ -1344,6 +1356,12 @@ onUnmounted(()=>{
           </select>
           <p class="muted">Разрешение запрашивается при следующем включении камеры.
             Фактическое разрешение зависит от устройства.</p>
+          <label class="camera-appearance-setting">
+            <input type="checkbox" v-model="videoAudioEnabled"
+              :disabled="busy||recording||starting" data-testid="camera-video-audio">
+            Записывать звук в видео
+            <small>При отключении микрофон освобождается; для аудио требуется отдельное разрешение.</small>
+          </label>
           <label for="camera-video-duration">
             Максимальная длительность видео: {{videoMaxSeconds}} сек.
           </label>
