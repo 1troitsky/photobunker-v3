@@ -17,6 +17,7 @@ test('Camera Fieldwork 1.2: encrypted device preset with real photo, video and a
   await page.getByTestId('camera-photo-quality').selectOption('maximum')
   await page.getByTestId('camera-video-quality').selectOption('1080p')
   await page.getByTestId('camera-audio-bitrate').selectOption('192000')
+  await page.getByTestId('camera-video-audio').uncheck()
   await page.getByTestId('camera-grid-setting').check()
   await page.getByTestId('camera-gps-visibility').uncheck()
   // Native input is range; emit the same input event a real slider generates.
@@ -52,6 +53,7 @@ test('Camera Fieldwork 1.2: encrypted device preset with real photo, video and a
   await expect(page.getByTestId('camera-photo-quality')).toHaveValue('maximum')
   await expect(page.getByTestId('camera-video-quality')).toHaveValue('1080p')
   await expect(page.getByTestId('camera-audio-bitrate')).toHaveValue('192000')
+  await expect(page.getByTestId('camera-video-audio')).not.toBeChecked()
   await expect(page.getByTestId('camera-video-duration')).toHaveValue('90')
   await expect(page.getByTestId('camera-audio-duration')).toHaveValue('600')
   await expect(page.getByTestId('camera-grid-setting')).toBeChecked()
