@@ -7,6 +7,7 @@ import { brand } from './config/brand'
 import { activeSession } from './features/identity/application/session'
 import { readVerifiedGraceStatus } from './features/billing/application/grace-client'
 import { notificationShellActions } from './features/notifications/application/notification-shell-actions'
+import {contactsShellActions} from './features/people/application/contacts-shell-actions'
 import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
 import {isDockSectionActive,resolveDockRetap} from './ui/fieldwork/dock-retap'
 const route = useRoute()
@@ -154,9 +155,20 @@ const dock = computed(() => displayedDock.value
           </svg>
         </button>
       </div>
-      <div class="shell-header-actions" v-else-if="route.path==='/contacts'">
-        <button type="button" disabled aria-label="Blacklist — пока недоступен"
-          title="Требует настоящего серверного отзыва полномочий">Blacklist</button>
+      <div class="shell-header-actions" v-else-if="route.path==='/contacts'"
+        data-testid="contacts-shell-actions">
+        <button type="button" data-testid="contacts-blacklist-toggle"
+          aria-label="Blacklist" title="Локально заблокированные контакты — не отзыв серверных прав"
+          :disabled="!activeSession||!contactsShellActions"
+          :aria-expanded="contactsShellActions?.open?'true':'false'"
+          aria-controls="contacts-local-blacklist"
+          @click="contactsShellActions?.toggle()">
+          <svg viewBox="0 0 24 24" width="19" height="19"
+            fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <circle cx="9" cy="9" r="4"/>
+            <path d="M2 21v-2a7 7 0 0 1 10-6.3M17 16l5 5M22 16l-5 5"/>
+          </svg>
+        </button>
       </div>
     </header>
 

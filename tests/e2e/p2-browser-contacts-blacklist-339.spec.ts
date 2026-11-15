@@ -36,6 +36,8 @@ test('P2 #339: two real trusted peers, encrypted local block, refilter after ali
     await expect(C.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
     await A.goto('/contacts')
     await expect(A.getByTestId('contacts-blacklist-toggle')).toBeEnabled()
+    await expect(A.locator('.shell-header').getByTestId('contacts-blacklist-toggle')).toBeVisible()
+    await expect(A.getByTestId('contacts-blacklist-toggle')).toHaveCount(1)
     await confirmAndAdd(idB,'Blocked recipient')
     await confirmAndAdd(idC,'Allowed recipient')
 

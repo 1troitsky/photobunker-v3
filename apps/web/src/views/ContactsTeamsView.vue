@@ -14,11 +14,20 @@ import type { LocallyBlockedPeer } from '../features/people/application/contact-
 import { listLocalTeams, queueTeam, refreshTeams } from '../features/people/application/team-book'
 import type { TeamView } from '../features/people/application/team-book'
 import TeamMembershipPanel from './TeamMembershipPanel.vue'
+import {contactsShellActions,clearContactsShellActions}
+  from '../features/people/application/contacts-shell-actions'
 
 const activeTab=ref<'contacts'|'teams'>('contacts')
 const contacts=ref<ConfirmedContact[]>([])
 const blocked=ref<LocallyBlockedPeer[]>([])
 const showBlacklist=ref(false)
+const shellOwner={}
+function updateShellBlacklist():void{
+  if(contactsShellActions.value?.owner===shellOwner)
+    contactsShellActions.value={owner:shellOwner,open:showBlacklist.value,
+      toggle:()=>{showBlacklist.value=!showBlacklist.value}}
+}
+watch(showBlacklist,updateShellBlacklist)
 const teams=ref<TeamView[]>([])
 const teamForm=ref(false)
 const teamName=ref('')
@@ -249,10 +258,13 @@ watch(activeSession,(_now,previous)=>{
   }
 })
 onMounted(()=>{
+  contactsShellActions.value={owner:shellOwner,open:showBlacklist.value,
+    toggle:()=>{showBlacklist.value=!showBlacklist.value}}
   void reload();void reloadTeams()
   window.addEventListener('online',handleTeamOnline)
 })
 onUnmounted(()=>{
+  clearContactsShellActions(shellOwner)
   ++run;++teamRun;candidate.value=null;contacts.value=[];blocked.value=[]
   showBlacklist.value=false;teams.value=[]
   window.removeEventListener('online',handleTeamOnline)
@@ -263,9 +275,6 @@ onUnmounted(()=>{
   <section class="foundation-content contacts-page" data-testid="contacts-teams">
     <div class="contacts-heading">
       <h1>Контакты и Команды</h1>
-      <button type="button" data-testid="contacts-blacklist-toggle"
-        :aria-expanded="showBlacklist" aria-controls="contacts-local-blacklist"
-        @click="showBlacklist=!showBlacklist">Blacklist</button>
     </div>
     <div v-if="showBlacklist&&activeSession" id="contacts-local-blacklist"
       class="foundation-card" data-testid="contacts-local-blacklist">
