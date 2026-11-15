@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createApp, markRaw, nextTick, reactive, type App } from 'vue'
 import { activeSession, type Session } from '../features/identity/application/session'
 import CaptureView from './CaptureView.vue'
+import {cameraShellActions} from '../features/media/application/camera-shell-actions'
 
 const mocks = vi.hoisted(() => ({
   capture: vi.fn(), policies: vi.fn(), server: vi.fn(), binding: vi.fn(),
@@ -152,6 +153,40 @@ afterEach(async () => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   vi.useRealTimers()
+})
+
+describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',()=>{
+  it('keeps the same live MediaStream while entering and exiting the full-screen blind cover',async()=>{
+    const opened=media()
+    await mount()
+    requests[0]!.resolve(opened.stream)
+    await settle()
+    expect(cameraShellActions.value?.canBlind).toBe(true)
+    expect(cameraShellActions.value?.canTorch).toBe(false)
+    cameraShellActions.value?.toggleBlind()
+    await settle()
+    expect(document.querySelector('[data-testid="camera-blind-overlay"]')).not.toBeNull()
+    expect(opened.track.stop).not.toHaveBeenCalled()
+    cameraShellActions.value?.toggleBlind()
+    await settle()
+    expect(document.querySelector('[data-testid="camera-blind-overlay"]')).toBeNull()
+    expect(opened.track.stop).not.toHaveBeenCalled()
+  })
+  it('switches facingMode only after stopping the prior stream, never during recording',async()=>{
+    const opened=media()
+    await mount()
+    requests[0]!.resolve(opened.stream)
+    await settle()
+    expect(cameraShellActions.value?.canFlip).toBe(true)
+    cameraShellActions.value?.flip()
+    await settle()
+    expect(opened.track.stop).toHaveBeenCalledOnce()
+    expect(getUserMedia).toHaveBeenCalledTimes(2)
+    expect(getUserMedia).toHaveBeenLastCalledWith({
+      audio:false,
+      video:{facingMode:{ideal:'user'},width:{ideal:1280}},
+    })
+  })
 })
 
 describe('private instructions and hardware lifecycle',()=>{
