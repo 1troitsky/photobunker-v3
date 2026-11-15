@@ -1243,7 +1243,16 @@ watch(activeSession,session=>{
   void refreshPolicies()
   void nextTick().then(startCamera)
 },{flush:'sync'})
+function onCameraVisibilityChange():void{
+  // Never continue collecting GPS while this PWA is in the background.
+  // A future foreground visit requires fresh explicit permission/fix.
+  if(document.visibilityState!=='visible'){
+    gpsTracking.value=false
+    clearGPS()
+  }
+}
 onMounted(()=>{
+  document.addEventListener('visibilitychange',onCameraVisibilityChange)
   if(activeSession.value){
     void refreshLocalRecordingDrafts(true)
     void refreshPolicies()
@@ -1284,6 +1293,7 @@ watch(captureMode,()=>{
   }
 })
 onUnmounted(()=>{
+  document.removeEventListener('visibilitychange',onCameraVisibilityChange)
   gpsTracking.value=false
   clearGPS()
   cameraSheet.value=null
