@@ -54,6 +54,7 @@ test('P2 Browser: owner-confirmed sequential batch archive and restore use real 
     await expect(row).toHaveCount(0)
     await page.getByTestId('browser-tab-archive').click()
     await expect(row).toHaveCount(2)
+    await page.getByTestId('browser-selection-actions').click()
     await page.getByRole('button',{name:'Выбрать всё на странице'}).click()
     page.once('dialog',d=>d.accept())
     await page.getByTestId('browser-bulk-restore').click()
