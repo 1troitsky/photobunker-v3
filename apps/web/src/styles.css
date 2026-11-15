@@ -995,3 +995,10 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 @media(prefers-reduced-motion:reduce){
   .messages-overlay-enter-active,.messages-overlay-leave-active{transition:none}
 }
+
+/* Owner-approved Fieldwork tariff pill: only authenticated server-verified plan. */
+.shell-header .shell-plan-pill{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;flex:0 1 auto;min-height:32px;padding:0 10px;max-width:175px;min-width:0;border:1px solid #408653;background:#24432f;color:#d8f9e1;border-radius:8px;text-decoration:none;font-size:11px;font-weight:690;white-space:nowrap}
+.shell-header .shell-plan-pill:hover{background:#2c5038}
+.shell-header .status-dot.session-online{background:var(--accent)}
+.shell-header .shell-plan-pill:focus-visible{outline:2px solid #a3edb6;outline-offset:2px}
+@media(max-width:410px){.shell-header .shell-plan-pill{font-size:9px;padding:0 7px;max-width:124px}.shell-header .brand-copy{max-width:128px}}

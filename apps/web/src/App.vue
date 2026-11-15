@@ -1,13 +1,30 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { displayedDock, dockDefinitions } from './ui/fieldwork/dock-preferences'
 import type { DockDefinition } from './ui/fieldwork/dock-preferences'
 import { brand } from './config/brand'
+import { activeSession } from './features/identity/application/session'
+import { readVerifiedGraceStatus } from './features/billing/application/grace-client'
 import {viewerShellActions} from './features/browser/application/viewer-shell-actions'
 import {isDockSectionActive,resolveDockRetap} from './ui/fieldwork/dock-retap'
 const route = useRoute()
 const router = useRouter()
+const verifiedPlan=ref('')
+let planRequest=0
+const planLabels:Readonly<Record<string,string>>={
+  free:'Free',go:'Go',pro:'Pro',unlimited:'Unlimited',unlimited_plus:'Unlimited+',
+}
+watch(activeSession,async session=>{
+  const generation=++planRequest
+  verifiedPlan.value=''
+  if(!session?.online)return
+  try{
+    const response=await readVerifiedGraceStatus(session)
+    if(generation===planRequest&&activeSession.value===session)
+      verifiedPlan.value=planLabels[response.planId]??''
+  }catch{ /* No stale paid rights or guessed plan displayed when unverified. */ }
+},{immediate:true})
 function isActive(to:string):boolean {
   return isDockSectionActive(route.path,to)
 }
@@ -48,8 +65,12 @@ const dock = computed(() => displayedDock.value
       <span class="brand-mark" aria-hidden="true">{{ brand.mark }}</span>
       <div class="brand-copy">
         <strong>{{ brand.name }}</strong>
-        <small><span class="status-dot" aria-hidden="true"></span>Подготовка</small>
+        <small><span class="status-dot" :class="{'session-online':activeSession?.online}" aria-hidden="true"></span>{{activeSession?(activeSession.online?'Сессия подтверждена':'Локальный режим'):'Без аккаунта'}}</small>
       </div>
+      <RouterLink v-if="verifiedPlan&&route.name!=='browser-viewer'&&route.name!=='browser-editor'"
+        to="/settings/payments" class="shell-plan-pill" data-testid="verified-plan-link">
+        Тариф: {{verifiedPlan}}
+      </RouterLink>
       <div class="shell-header-actions viewer-header-actions"
         v-if="route.name==='browser-viewer'" data-testid="viewer-shell-actions"
         aria-label="Действия с файлом">
