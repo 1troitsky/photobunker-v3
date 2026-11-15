@@ -385,12 +385,21 @@ function revokeFolderThumbnails():void{
 }
 const folderThumbnailCandidateKeys=computed(()=>{
   const keys:string[]=[]
+  const add=(row:CatalogItem):void=>{
+    if(row.local&&row.type==='photo'&&!keys.includes(row.key))
+      keys.push(row.key)
+  }
+  // At most 8 folder cards × 4 cells, capped to 12 decoded images.
   for(const folder of folders.value.slice(0,8)){
     for(const row of folderLoadedRows(folder.id)){
-      if(row.local&&row.type==='photo'&&!keys.includes(row.key))
-        keys.push(row.key)
+      add(row)
       if(keys.length>=12)return keys
     }
+  }
+  // The same small in-memory preview serves actual list/grid file rows.
+  for(const row of visible.value.slice(0,12)){
+    add(row)
+    if(keys.length>=16)break
   }
   return keys
 })
@@ -436,8 +445,6 @@ async function warmFolderThumbnails():Promise<void>{
     }
   }
 }
-watch([activeSession,folderThumbnailCandidateKeys],
-  ()=>{void warmFolderThumbnails()},{immediate:true})
 // Classification is a VISUAL scope only. The assignment page owns server
 // roster/ACL enforcement. Cloud-only index rows have no signed capture
 // provenance and cannot be falsely categorized as assigned media here.
@@ -482,6 +489,9 @@ const visible=computed(()=>filterCatalog(searchScope.value,{
   privateMatches:privateSearchResult.value?.query===normalizePrivateSearch(search.value)
     ?privateSearchResult.value.matches:undefined,
 }))
+watch([activeSession,folderThumbnailCandidateKeys],
+  ()=>{void warmFolderThumbnails()},{immediate:true})
+
 function catalogSizeLabel(bytes:number|null):string{
   if(bytes===null||!Number.isSafeInteger(bytes)||bytes<0)
     return 'Размер неизвестен'
@@ -2023,7 +2033,10 @@ onUnmounted(()=>{
               @change="toggleItem(item.key,($event.target as HTMLInputElement).checked)">
           </label>
           <div class="browser-item-kind" aria-hidden="true">
-            {{ item.type==='photo'?'▧':item.type==='video'?'▷':'♫' }}
+            <img v-if="item.type==='photo'&&folderThumbnailUrls[item.key]"
+              :src="folderThumbnailUrls[item.key]" alt="" decoding="async"
+              data-testid="browser-file-thumb">
+            <template v-else>{{ item.type==='photo'?'▧':item.type==='video'?'▷':'♫' }}</template>
           </div>
           <div class="browser-item-detail">
             <strong>{{ item.id.slice(0,8) }}</strong>
