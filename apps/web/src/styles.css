@@ -416,6 +416,14 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .browser-folders{margin:18px 0 20px;padding-bottom:17px;border-bottom:1px solid #393939}
 .browser-folder-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .browser-breadcrumb{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:0;flex:1}
+.browser-breadcrumb .browser-folder-up{
+  display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;
+  padding:4px;color:#dedede;border:0
+}
+.browser-breadcrumb .browser-folder-up svg{width:19px;height:19px;flex:none}
+.browser-breadcrumb .browser-folder-up:disabled{opacity:.35;cursor:default}
+.browser-breadcrumb .browser-folder-up:not(:disabled):hover{background:#2a352c}
+
 .browser-breadcrumb button{background:transparent;border:1px solid transparent;
   border-radius:6px;padding:7px;color:#a9d8b2;font:inherit;overflow-wrap:anywhere}
 .browser-breadcrumb button[aria-current=location]{color:#fff;border-color:#4c5e50}
