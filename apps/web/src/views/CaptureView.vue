@@ -86,6 +86,15 @@ const captureMode=ref<'photo'|'video'|'audio'>('photo')
 const photoStorage=ref<'p1'|'p2'>('p1')
 // Device encoder target: the browser may choose a different effective bitrate.
 const audioTargetBitrate=ref<AudioTargetBitrate>(DEFAULT_AUDIO_TARGET_BITRATE)
+// A late IndexedDB read must NOT overwrite a user-touched setting (especially
+// the P2 E2EE destination) or a newer on-device preset write.
+let presetUiEpoch=0
+let applyingCameraPreset=false
+watch([
+  photoAspect,photoQuality,photoStorage,videoQuality,videoAudioEnabled,
+  videoMaxSeconds,audioMaxSeconds,audioTargetBitrate,gridVisible,
+  gpsStatusVisible,selectedPresetId,presetName,
+],()=>{if(!applyingCameraPreset)presetUiEpoch++},{flush:'sync'})
 function cameraSettingsSnapshot():CameraPresetSettings {
   return {
     photoAspect:photoAspect.value,photoQuality:photoQuality.value,
@@ -97,16 +106,19 @@ function cameraSettingsSnapshot():CameraPresetSettings {
   }
 }
 function applyCameraPreset(settings:CameraPresetSettings):void {
-  photoAspect.value=settings.photoAspect
-  photoQuality.value=settings.photoQuality
-  photoStorage.value=settings.photoStorage
-  videoQuality.value=settings.videoQuality
-  videoAudioEnabled.value=settings.videoAudioEnabled
-  videoMaxSeconds.value=settings.videoMaxSeconds
-  audioMaxSeconds.value=settings.audioMaxSeconds
-  audioTargetBitrate.value=settings.audioTargetBitrate
-  gridVisible.value=settings.gridVisible
-  gpsStatusVisible.value=settings.gpsStatusVisible
+  applyingCameraPreset=true
+  try{
+    photoAspect.value=settings.photoAspect
+    photoQuality.value=settings.photoQuality
+    photoStorage.value=settings.photoStorage
+    videoQuality.value=settings.videoQuality
+    videoAudioEnabled.value=settings.videoAudioEnabled
+    videoMaxSeconds.value=settings.videoMaxSeconds
+    audioMaxSeconds.value=settings.audioMaxSeconds
+    audioTargetBitrate.value=settings.audioTargetBitrate
+    gridVisible.value=settings.gridVisible
+    gpsStatusVisible.value=settings.gpsStatusVisible
+  }finally{applyingCameraPreset=false}
 }
 async function reloadCameraPresets():Promise<void>{
   const session=activeSession.value,generation=++presetLoadGeneration
@@ -116,17 +128,26 @@ async function reloadCameraPresets():Promise<void>{
   presetName.value=defaults.presets[0]!.name
   presetNotice.value=''
   applyCameraPreset(defaults.presets[0]!.settings)
+  const beforeRead=presetUiEpoch
   if(!session)return
   try{
     const found=await loadCameraPresetCatalog()
-    if(session!==activeSession.value||generation!==presetLoadGeneration)return
+    if(!sameIdentity(cameraIdentity(session),cameraIdentity(activeSession.value))
+      ||generation!==presetLoadGeneration)return
     cameraPresetCatalog.value=found
-    selectedPresetId.value=found.selectedId
-    const chosen=found.presets.find(p=>p.id===found.selectedId)!
-    presetName.value=chosen.name
-    applyCameraPreset(chosen.settings)
+    // User input during an IndexedDB read owns the current visible values.
+    // Keep loaded encrypted presets available without overwriting those edits.
+    if(presetUiEpoch!==beforeRead)return
+    applyingCameraPreset=true
+    try{
+      selectedPresetId.value=found.selectedId
+      const chosen=found.presets.find(p=>p.id===found.selectedId)!
+      presetName.value=chosen.name
+      applyCameraPreset(chosen.settings)
+    }finally{applyingCameraPreset=false}
   }catch(e){
-    if(session===activeSession.value&&generation===presetLoadGeneration)
+    if(sameIdentity(cameraIdentity(session),cameraIdentity(activeSession.value))
+      &&generation===presetLoadGeneration)
       presetNotice.value='Не удалось прочитать зашифрованные пресеты: '
         +(e instanceof Error?e.message:'camera.preset_unavailable')
   }
@@ -135,6 +156,7 @@ async function pickCameraPreset():Promise<void>{
   if(!activeSession.value||recording.value||busy.value||presetBusy.value)return
   const session=activeSession.value,id=selectedPresetId.value
   const chosen=cameraPresetCatalog.value.presets.find(p=>p.id===id)
+  ++presetLoadGeneration // A completed write/select supersedes stale reads.
   if(!chosen)return
   presetBusy.value=true;presetNotice.value=''
   try{
@@ -155,6 +177,7 @@ async function writeCameraPreset(kind:'add'|'save'):Promise<void>{
   if(!activeSession.value||recording.value||busy.value||presetBusy.value)return
   const session=activeSession.value,name=presetName.value
   const settings=cameraSettingsSnapshot(),id=selectedPresetId.value
+  ++presetLoadGeneration // A completed write/select supersedes stale reads.
   presetBusy.value=true;presetNotice.value=''
   try{
     const next=await changeCameraPreset(kind==='add'
