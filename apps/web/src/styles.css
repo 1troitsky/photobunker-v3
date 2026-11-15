@@ -1693,3 +1693,53 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .browser-folder-menu-root :focus-visible{
   outline:2px solid var(--accent);outline-offset:2px
 }
+
+/* Browser v3 selection is explicit. Only the ORIGINAL signed batch
+   operations live in this dropdown. Zero items is a valid selection state. */
+.browser-batch-toolbar[data-testid="browser-selection-toolbar"]{
+  display:flex;align-items:center;gap:8px;flex-wrap:nowrap;
+  position:relative;margin:12px 0;padding:8px 10px;
+  border-radius:8px;background:#252c27;
+  border:1px solid #39493d;min-height:53px
+}
+.browser-batch-toolbar [data-testid="browser-selection-count"]{
+  flex:1;min-width:0;font-size:12px;white-space:nowrap;font-weight:740
+}
+.browser-batch-toolbar>button,
+.browser-batch-actions-root>button{
+  min-height:36px;padding:7px 12px;background:#343a35;
+  color:#e4e9e4;border:1px solid #4c554e;border-radius:6px;
+  font-size:12px;font-weight:700
+}
+.browser-batch-actions-root{position:relative;flex:0 0 auto}
+.browser-batch-actions-root>button[aria-expanded=true]{
+  border-color:var(--accent);background:#414d43
+}
+.browser-batch-actions-panel{
+  display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;
+  gap:8px;position:absolute;right:0;top:calc(100% + 6px);
+  z-index:129;width:min(340px,calc(100vw - 30px));
+  max-height:min(70dvh,570px);overflow:auto;
+  padding:11px;background:#292b29;border:1px solid #566059;
+  border-radius:9px;box-shadow:0 16px 40px #000b
+}
+.browser-batch-actions-panel button{display:flex;align-items:center;
+  justify-content:flex-start;min-width:0;width:100%;
+  min-height:38px;padding:9px 10px;text-align:left;
+  background:#383d39;color:#eee;font-size:12px;border:0;border-radius:6px
+}
+.browser-batch-actions-panel button:disabled{opacity:.4;cursor:not-allowed}
+.browser-batch-actions-panel label{display:grid;gap:5px;padding:5px 2px;
+  font-size:11px}
+.browser-batch-actions-panel select{width:100%;min-height:39px}
+.browser-batch-actions-root :focus-visible,
+.browser-batch-toolbar>button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+@media(max-width:380px){
+  .browser-batch-toolbar[data-testid="browser-selection-toolbar"]{
+    gap:5px;padding:7px
+  }
+  .browser-batch-toolbar>button,
+  .browser-batch-actions-root>button{padding:7px 8px;font-size:11px}
+}
