@@ -1318,6 +1318,12 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .camera-details .camera-preset-options .muted{
   margin:2px 0 5px;font-size:10px;line-height:1.5
 }
+.camera-details .camera-preset-options .camera-preset-actions{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px
+}
+.camera-details .camera-preset-options [data-testid="camera-permission-status"]{
+  font-size:11px;line-height:1.4;color:#b6eec4;overflow-wrap:anywhere
+}
 .camera-details .camera-preset-options input[type=range]{
   display:block;width:100%;min-height:30px;margin:5px 0;
   accent-color:var(--accent)
