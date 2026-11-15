@@ -74,6 +74,7 @@ const mediaCursor=ref<string|null>(null)
 const filter=ref<CatalogFilter>('all')
 const sort=ref<CatalogSort>('newest')
 const view=ref<CatalogView>('list')
+const treeExpanded=ref<string[]>([])
 const search=ref('')
 // Ephemeral search UI preference, never persisted or sent to the server.
 const searchFolderScope=ref<'current'|'all'>('current')
@@ -250,6 +251,33 @@ function upOneFolder():void{
 }
 const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
   .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
+const treeNodes=computed(()=>{
+  const workspace=folderWorkspace.value
+  const results:{id:string;name:string;depth:number;children:number}[]=[]
+  const walk=(parentId:string|null,depth:number):void=>{
+    for(const node of folderChildren(workspace,parentId)){
+      const children=folderChildren(workspace,node.id).length
+      results.push({id:node.id,name:node.name,depth,children})
+      if(treeExpanded.value.includes(node.id)&&depth<300)walk(node.id,depth+1)
+    }
+  }
+  walk(null,0)
+  return results
+})
+function toggleTreeFolder(id:string):void{
+  if(!folderWorkspace.value.folders[id])return
+  if(treeExpanded.value.includes(id))
+    treeExpanded.value=treeExpanded.value.filter(x=>x!==id)
+  else treeExpanded.value=[...treeExpanded.value,id]
+}
+function selectTreeFolder(id:string|null):void{
+  if(id!==null&&!folderWorkspace.value.folders[id])return
+  selectedFolder.value=id
+  if(id!==null){
+    const ancestors=folderPath(folderWorkspace.value,id).map(node=>node.id)
+    treeExpanded.value=[...new Set([...treeExpanded.value,...ancestors])]
+  }
+}
 const importFolderOptions=computed(()=>allFolders.value.map(folder=>({
   id:folder.id,
   label:folderPath(folderWorkspace.value,folder.id)
@@ -1100,6 +1128,7 @@ watch(activeSession,(next,previous)=>{
     newFolderName.value=''
     editFolderName.value=''
     selectedKeys.value=[]
+    treeExpanded.value=[]
     bulkDestination.value=''
     folderNotice.value=''
     folderSyncStatus.value=''
@@ -1648,10 +1677,12 @@ onUnmounted(()=>{
           </select>
         </label>
         <div class="browser-view-switch" aria-label="Вид каталога">
-          <button type="button" :aria-pressed="view==='list'"
-            @click="view='list'">Список</button>
           <button type="button" :aria-pressed="view==='grid'"
-            @click="view='grid'">Сетка</button>
+            data-testid="browser-view-grid" @click="view='grid'">Сетка</button>
+          <button type="button" :aria-pressed="view==='list'"
+            data-testid="browser-view-list" @click="view='list'">Список</button>
+          <button type="button" :aria-pressed="view==='tree'"
+            data-testid="browser-view-tree" @click="view='tree'">Дерево</button>
         </div>
         <button type="button" :disabled="busy" @click="refresh">Обновить</button>
       </div>
@@ -1737,6 +1768,30 @@ onUnmounted(()=>{
         data-testid="browser-bulk-progress">
         Подтверждено {{ archiveBatchProgress }} операций.
       </p>
+      <section v-if="view==='tree'&&archiveTab==='all'&&folderReady&&!folderError"
+        class="browser-tree-navigation" data-testid="browser-tree-navigation"
+        aria-label="Дерево папок">
+        <button type="button" class="browser-tree-root"
+          data-testid="browser-tree-root" :aria-current="selectedFolder===null?'location':undefined"
+          @click="selectTreeFolder(null)">Мои файлы</button>
+        <div v-for="node in treeNodes" :key="node.id" class="browser-tree-node"
+          :data-testid="'browser-tree-folder-'+node.id"
+          :style="{'--tree-depth':String(Math.min(node.depth,10))}">
+          <button type="button" class="browser-tree-expand"
+            :disabled="node.children===0" :aria-label="'Раскрыть '+node.name"
+            :aria-expanded="node.children?treeExpanded.includes(node.id):undefined"
+            @click="toggleTreeFolder(node.id)">
+            {{node.children?(treeExpanded.includes(node.id)?'▾':'▸'):'·'}}
+          </button>
+          <button type="button" class="browser-tree-select"
+            :aria-current="selectedFolder===node.id?'location':undefined"
+            @click="selectTreeFolder(node.id)">
+            <span aria-hidden="true">▣</span> {{node.name}}
+          </button>
+        </div>
+        <p class="muted">Дерево содержит только зашифрованные пользовательские папки.
+          Файлы ниже относятся к выбранной папке.</p>
+      </section>
       <div :class="['browser-items',view==='grid'?'browser-grid':'browser-list']"
         data-testid="browser-catalog">
         <div v-for="item in visible" :key="item.key"
