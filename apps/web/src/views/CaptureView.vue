@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import {cameraShellActions,clearCameraShellActions}
+  from '../features/media/application/camera-shell-actions'
 import { activeSession, type Session } from '../features/identity/application/session'
 import { captureEncrypted } from '../features/photo-sync/application/p1-photo'
 import { enqueueEncryptedMedia } from '../features/media/application/media-outbox'
@@ -31,6 +33,10 @@ import type { PrivateAssignment } from '../features/assignments/infrastructure/a
 
 const route=useRoute()
 const video=ref<HTMLVideoElement|null>(null)
+const cameraHeaderOwner={}
+const blindMode=ref(false)
+const cameraFacing=ref<'environment'|'user'>('environment')
+const torchOn=ref(false)
 const policies=ref<AssignmentListing[]>([])
 const selectedAssignment=ref('')
 // Volatile display only; decrypt from account-scoped, signed-revision-bound AEAD cache.
@@ -280,6 +286,14 @@ async function refreshPolicies():Promise<void> {
 }
 
 const stream=ref<MediaStream|null>(null)
+const torchSupported=computed(()=>{
+  if(captureMode.value==='audio'||!stream.value)return false
+  const track=stream.value.getVideoTracks()[0]
+  if(!track||track.readyState!=='live'||!track.getCapabilities)return false
+  try{
+    return (track.getCapabilities() as MediaTrackCapabilities & {torch?:boolean}).torch===true
+  }catch{return false}
+})
 const busy=ref(false)
 const message=ref('')
 const error=ref('')
@@ -340,11 +354,61 @@ function stopTracks(opened:MediaStream):void {
   for(const track of opened.getTracks())if(track.readyState!=='ended')track.stop()
 }
 function releaseStream():void {
+  torchOn.value=false
   discardRecording()
   if(stream.value)stopTracks(stream.value)
   stream.value=null;streamIdentity=null
   if(video.value)video.value.srcObject=null
 }
+
+function flipCamera():void {
+  if(!activeSession.value||captureMode.value==='audio'||recording.value
+    ||busy.value||starting.value)return
+  cameraFacing.value=cameraFacing.value==='environment'?'user':'environment'
+  closeCamera()
+  cameraWanted=true
+  void nextTick().then(startCamera)
+}
+/** Light is a real track capability, not a simulated UI toggle. */
+async function toggleTorch():Promise<void>{
+  if(!activeSession.value||!torchSupported.value
+    ||recording.value||busy.value||starting.value)return
+  const session=cameraIdentity(activeSession.value)
+  const track=stream.value?.getVideoTracks()[0]
+  if(!track)return
+  const next=!torchOn.value
+  try{
+    await track.applyConstraints({
+      advanced:[{torch:next}],
+    } as unknown as MediaTrackConstraints)
+    if(!disposed&&sameIdentity(session,cameraIdentity(activeSession.value))
+      &&stream.value?.getVideoTracks()[0]===track)
+      torchOn.value=next
+  }catch{
+    if(stream.value?.getVideoTracks()[0]===track){
+      torchOn.value=false
+      error.value='Фонарик недоступен на этой камере.'
+    }
+  }
+}
+function toggleBlindMode():void{
+  if(!activeSession.value)return
+  blindMode.value=!blindMode.value
+}
+watch([activeSession,captureMode,stream,recording,busy,starting,torchOn,blindMode],
+  ()=>{
+    cameraShellActions.value={
+      owner:cameraHeaderOwner,
+      canFlip:!!activeSession.value&&captureMode.value!=='audio'
+        &&!recording.value&&!busy.value&&!starting.value,
+      canTorch:!!activeSession.value&&torchSupported.value
+        &&!recording.value&&!busy.value&&!starting.value,
+      torchOn:torchOn.value,blind:blindMode.value,
+      canBlind:!!activeSession.value,
+      flip:flipCamera,toggleTorch:()=>{void toggleTorch()},
+      toggleBlind:toggleBlindMode,
+    }
+  },{immediate:true})
 
 async function openCamera():Promise<void> {
   cameraWanted=true
@@ -367,7 +431,7 @@ async function startCamera():Promise<void> {
     opened=await navigator.mediaDevices.getUserMedia({
       audio:mode!=='photo',
       video:mode!=='audio'
-        ?{facingMode:{ideal:'environment'},width:{ideal:1280}}:false,
+        ?{facingMode:{ideal:cameraFacing.value},width:{ideal:1280}}:false,
     })
     await nextTick()
     if(!opened.getTracks().length||opened.getTracks().some(track=>track.readyState!=='live'))
@@ -377,6 +441,7 @@ async function startCamera():Promise<void> {
       return
     }
     stream.value=opened;streamIdentity=identity
+    torchOn.value=false
     const preview=video.value
     if(captureMode.value!=='audio'){
       preview.srcObject=opened
@@ -855,6 +920,7 @@ watch(activeSession,session=>{
   const identity=cameraIdentity(session)
   if(!sameIdentity(observedIdentity,identity)){
     closePrivateRecordingReview()
+    blindMode.value=false;torchOn.value=false
     localDrafts.value=[];localDraftError.value=''
     observedIdentity=identity;cameraGeneration++
     releaseStream()
@@ -898,6 +964,7 @@ watch(captureMode,()=>{
   }
 })
 onUnmounted(()=>{
+  clearCameraShellActions(cameraHeaderOwner)
   closePrivateRecordingReview()
   disposed=true;++instructionGeneration;assignmentPrivate.value=null
   assignmentPrivateScope.value=''
