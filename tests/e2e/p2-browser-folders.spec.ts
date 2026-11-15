@@ -71,6 +71,25 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await expect(page.getByLabel('Путь папки')).toContainText('Съёмки')
     await expect(page.getByLabel('Путь папки')).toContainText('День 1')
 
+    // Approved Browser v3 search supports CURRENT, explicitly SELECTED,
+    // and ALL already authenticated folders, without server-side plaintext
+    // queries or moving the current breadcrumb.
+    const term=page.getByTestId('browser-search')
+    const scope=page.getByTestId('browser-search-folder-scope')
+    await term.fill(id.slice(0,8))
+    await scope.selectOption('selected')
+    const target=page.getByTestId('browser-search-folder-target')
+    await target.selectOption({label:'Съёмки / День 1'})
+    await expect(item).toHaveCount(1)
+    await target.selectOption({label:'Съёмки'})
+    await expect(item).toHaveCount(0)
+    await expect(page.getByLabel('Путь папки')).toContainText('День 1')
+    await scope.selectOption('all')
+    await expect(item).toHaveCount(1)
+    await scope.selectOption('current')
+    await expect(item).toHaveCount(1)
+    await term.fill('')
+
     // The virtual membership must not change actual immutable media bytes.
     const bytes=await page.evaluate(async mediaId=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
