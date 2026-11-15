@@ -24,6 +24,7 @@ defineProps<{ online: boolean }>()
         <strong>Мой аккаунт</strong>
         <small>{{ online ? 'Доступ активен' : 'Локальный режим' }}</small>
       </span>
+      <RouterLink class="account-access-link" to="/settings/profile" data-testid="settings-own-profile">Мой профиль</RouterLink>
       <a class="account-access-link" href="#identity-access">
         Доступ и устройство
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none"

@@ -17,8 +17,8 @@ export interface SettingsGroup {
 export const settingsGroups: readonly SettingsGroup[] = [
   {
     id: 'people', title: 'Профиль и люди', entries: [
-      {id:'profile-card',label:'Карточка профиля',description:'Профиль и его видимость',to:null},
-      {id:'profile-edit',label:'Настройки профиля',description:'Имя, описание и приватность',to:null},
+      {id:'profile-card',label:'Карточка профиля',description:'Локально зашифрованная карточка',to:'/settings/profile'},
+      {id:'profile-edit',label:'Настройки профиля',description:'Имя, описание и локальные предпочтения',to:'/settings/profile/edit'},
       {id:'contacts-teams',label:'Контакты и команды',description:'Контакты, команды и участники',to:'/contacts'},
     ],
   },
@@ -30,13 +30,13 @@ export const settingsGroups: readonly SettingsGroup[] = [
   },
   {
     id: 'security', title: 'Безопасность и данные', entries: [
-      {id:'security-privacy',label:'Безопасность и приватность',description:'PIN, устройства и Recovery Key',to:null},
+      {id:'security-privacy',label:'Безопасность и приватность',description:'Проверка сессии, устройство и статус PIN/Recovery',to:'/settings/security'},
       {id:'data-storage',label:'Данные и хранилище',description:'Зашифрованная очередь и серверный учёт',to:'/settings/storage'},
     ],
   },
   {
     id: 'subscription', title: 'Подписка', entries: [
-      {id:'payments',label:'Платежи и тарифы',description:'Тариф, продление и история',to:null},
+      {id:'payments',label:'Платежи и тарифы',description:'Реальный каталог и подтверждённый статус тарифа',to:'/settings/payments'},
     ],
   },
   {

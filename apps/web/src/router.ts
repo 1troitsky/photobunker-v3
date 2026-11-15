@@ -14,6 +14,10 @@ import ContactsTeamsView from './views/ContactsTeamsView.vue'
 import NotificationsView from './views/NotificationsView.vue'
 import NotificationSettingsView from './views/NotificationSettingsView.vue'
 import MessagesView from './views/MessagesView.vue'
+import ProfileView from './views/ProfileView.vue'
+import ProfileEditView from './views/ProfileEditView.vue'
+import SecurityPrivacyView from './views/SecurityPrivacyView.vue'
+import PaymentsView from './views/PaymentsView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -33,6 +37,14 @@ export const router = createRouter({
     { path: '/camera', component: CaptureView, meta: { title: 'Камера' } },
     { path: '/contacts', component: ContactsTeamsView, meta: { title: 'Контакты и Команды' } },
     { path: '/settings', component: AccountView, meta: { title: 'Настройки' } },
+    { path: '/settings/profile', component: ProfileView,
+      meta: { title: 'Мой профиль' } },
+    { path: '/settings/profile/edit', component: ProfileEditView,
+      meta: { title: 'Настройки профиля' } },
+    { path: '/settings/security', component: SecurityPrivacyView,
+      meta: { title: 'Безопасность и приватность' } },
+    { path: '/settings/payments', component: PaymentsView,
+      meta: { title: 'Платежи и тарифы' } },
     { path: '/settings/appearance', component: AppearanceView,
       meta: { title: 'Оформление' } },
     { path: '/settings/storage', component: DataStorageView,

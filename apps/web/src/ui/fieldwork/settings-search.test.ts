@@ -25,14 +25,16 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
   it('only exposes existing PB3 routes and anchored fields', () => {
     expect(implementedSearchTargets).toEqual([
       '/settings/appearance?field=dock', '/contacts',
-      '/settings/appearance?field=launch',
+      '/settings/appearance?field=launch', '/notifications',
+      '/settings/profile/edit','/settings/security','/settings/storage',
+      '/settings/payments','/settings/help',
     ])
     expect(searchSettings('')).toEqual(
       settingsSearchEntries.filter(entry => entry.to !== null),
     )
     expect(new Set(settingsSearchEntries.map(entry => entry.id)).size)
       .toBe(settingsSearchEntries.length)
-    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(3)
+    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(9)
   })
   it('never treats messages as a nested Contacts settings route', () => {
     expect(settingsSearchEntries.some(entry => entry.id === 'messages')).toBe(false)
