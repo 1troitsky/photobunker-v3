@@ -5,6 +5,8 @@ import {browserShellActions,clearBrowserShellActions}
   from '../features/browser/application/browser-shell-actions'
 import {makeBrowserFolderThumbnail}
   from '../features/browser/application/browser-folder-thumbnail'
+import {mayCopyPersonalMediaSource}
+  from '../features/browser/application/personal-media-copy'
 import {
   readBrowserOpeningSection,saveBrowserOpeningSection,
   readBrowserFoldersFirst,saveBrowserFoldersFirst,
@@ -369,6 +371,14 @@ function folderLoadedCount(folderId:string):number{
 }
 function folderCoverSymbol(item:CatalogItem):string{
   return item.type==='photo'?'▧':item.type==='video'?'▹':'♫'
+}
+function canEditViaPrivateCopy(item:CatalogItem):boolean{
+  if(item.source!=='media'||!item.local||item.expiresAt<=Date.now())
+    return false
+  const row=localMedia.value.find(media=>media.mediaId===item.id)
+  // Only personal local media. A signed assignment capture MUST NOT
+  // be copied as if it were an independently editable owner file.
+  return mayCopyPersonalMediaSource(row)
 }
 const treeNodes=computed(()=>{
   const workspace=folderWorkspace.value
@@ -2192,6 +2202,13 @@ onUnmounted(()=>{
             <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
               :aria-label="'Полный просмотр файла '+item.id"
               @click="preserveViewerOrigin(item,$event)">Открыть файл</RouterLink>
+            <RouterLink v-if="canEditViaPrivateCopy(item)"
+              :to="{name:'browser-editor',
+                params:{protocol:'media',id:item.id},query:{tab:'info'}}"
+              :aria-label="'Редактировать личные метаданные файла '+item.id+' (новая копия)'"
+              @click="preserveViewerOrigin(item,$event)">
+              Изменить имя, теги и категорию (новая зашифрованная копия)
+            </RouterLink>
             <button v-if="item.local" type="button" :disabled="previewBusy||busy"
               :aria-label="item.source==='photo'?'Открыть':'Открыть файл '+item.id"
               @click="openItem(item);closeFileMenu()">Быстрый просмотр</button>
