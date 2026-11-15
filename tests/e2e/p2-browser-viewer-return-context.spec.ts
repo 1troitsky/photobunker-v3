@@ -28,6 +28,7 @@ test('P2 Browser->File Viewer->Browser: restore encrypted folder, filter, privat
     await page.getByTestId('browser-folder-name').fill('Приватная папка')
     await page.getByRole('button',{name:'Создать',exact:true}).click()
     await expect(page.locator('.browser-folder-item')).toHaveCount(1)
+    await row.getByTestId('browser-file-menu-toggle').click()
     await row.getByRole('combobox',{name:'Папка файла '+id})
       .selectOption({label:'Приватная папка'})
     await expect(row).toHaveCount(0)
