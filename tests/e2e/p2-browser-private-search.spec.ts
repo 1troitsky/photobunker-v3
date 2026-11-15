@@ -66,6 +66,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await a.getByRole('button',{name:'Новая папка'}).click()
     await a.getByTestId('browser-folder-name').fill('Секретный раздел')
     await a.getByRole('button',{name:'Создать',exact:true}).click()
+    await rows.getByTestId('browser-file-menu-toggle').click()
     await rows.getByRole('combobox',{name:'Папка файла '+movedId})
       .selectOption({label:'Секретный раздел'})
     await expect(rows).toHaveCount(0)
