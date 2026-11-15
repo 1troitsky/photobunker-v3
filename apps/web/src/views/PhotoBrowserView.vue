@@ -472,7 +472,7 @@ const searchScope=computed(()=>{
   const scopedRows=archiveTab.value==='archive'||primarySection.value==='all'
     ?authenticatedRows
     :primarySection.value==='personal'
-      ?authenticatedRows.filter(item=>item.type==='photo'
+      ?authenticatedRows.filter(item=>item.type==='photo'&&item.local
         &&!localAssignmentKeys.value.has(item.key))
       :authenticatedRows.filter(item=>localAssignmentKeys.value.has(item.key))
   // Folders are encrypted virtual client metadata. An all-folder query
@@ -1581,6 +1581,12 @@ onUnmounted(()=>{
           :aria-pressed="archiveTab==='archive'"
           @click="choosePrimarySection('archive')">Архив</button>
       </nav>
+      <p v-if="primarySection==='personal'&&archiveTab==='all'"
+        class="browser-section-note" data-testid="browser-personal-catalog-scope">
+        Здесь показаны только доступные на этом устройстве фотографии без
+        подписанного контекста задания. Облачные файлы, назначение которых
+        ещё не проверено, остаются в разделе «Все».
+      </p>
       <p v-if="primarySection==='assignments'&&archiveTab==='all'"
         class="browser-section-note" data-testid="browser-assignment-catalog-scope">
         Показываются только загруженные на этом устройстве материалы с
