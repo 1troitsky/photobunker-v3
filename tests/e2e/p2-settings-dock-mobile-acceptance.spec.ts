@@ -48,6 +48,7 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
       localStorage.getItem('pb3.appearance.v2')||'null',
     ))).toEqual({
       version:2,dock:['assignments','browser','settings'],launch:'tasks',
+      visual:{theme:'dark',accent:'green',size:'normal',language:'ru'},
     })
     // A cold HTTP reload offline is NOT asserted: the separate signed PWA
     // bootstrap/last-known-good functionality has not been accepted.
@@ -200,12 +201,14 @@ test('P2 #214 mobile RU/EN Dock search focus, retap one-level and hidden-section
     await expect(input).toHaveValue('navigation')
     await expect(input).toBeFocused()
 
-    // A locale keyword is indexed, but the actual language control is
-    // explicitly unavailable; it must not navigate to a false target.
+    // Language is implemented as an exact Appearance field.
     await input.fill('language')
-    await expect(page.getByTestId('settings-search-pending-language'))
-      .toBeVisible()
-    await expect(page.getByRole('link',{name:'Язык'})).toHaveCount(0)
+    await expect(page.getByTestId('settings-search-result-language')).toBeVisible()
+    await page.getByTestId('settings-search-result-language').click()
+    await expect(page).toHaveURL(/\/settings\/appearance\?field=language$/)
+    await expect(page.getByTestId('appearance-language-field')).toBeFocused()
+    await settings.click()
+    await expect(page).toHaveURL(/\/settings\/search\?q=language$/)
     await settings.click()
     await expect(page).toHaveURL(/\/settings$/)
     const position=await page.evaluate(()=>window.history.state?.position)

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('UX Settings search: Header, RU/EN synonym, exact Dock field, browser Back and pending language',async ({browser}) => {
+test('UX Settings search: Header, RU/EN synonym, exact Dock and Language fields and Back',async ({browser}) => {
   test.setTimeout(130000)
   const context=await browser.newContext()
   const page=await context.newPage()
@@ -32,10 +32,13 @@ test('UX Settings search: Header, RU/EN synonym, exact Dock field, browser Back 
     await expect(page).toHaveURL(/\/settings\/search\?q=DoCk$/)
     await expect(page.getByTestId('settings-search-input')).toHaveValue('DoCk')
     await input.fill('язык')
-    await expect(page.getByTestId('settings-search-pending-language')).toBeVisible()
+    await expect(page.getByTestId('settings-search-result-language')).toBeVisible()
     await expect(page.getByTestId('settings-search-result-dock')).toHaveCount(0)
-    await expect(page.getByRole('link',{name:/Язык/})).toHaveCount(0)
-
+    await page.getByTestId('settings-search-result-language').click()
+    await expect(page).toHaveURL(/\/settings\/appearance\?field=language$/)
+    await expect(page.getByTestId('appearance-language-field')).toBeFocused()
+    await page.goBack()
+    await expect(page).toHaveURL(/\/settings\/search\?q=/)
     await input.fill('панель')
     await expect(page.getByTestId('settings-search-result-dock')).toBeVisible()
     await shellHeader.getByRole('button',{name:'Закрыть поиск'}).click()

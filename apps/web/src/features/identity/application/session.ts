@@ -190,9 +190,11 @@ export async function signPhotoContract(json:string):Promise<string> {
 
 export async function logout():Promise<void> {
   const state=activeSession.value
-  activeSession.value=null
+  // Persist the signed-out flag before presenting a signed-out screen.
+  // A reload after the UI updates must not rehydrate the old private session.
   if(state){
     await markSignedOut(state.accountId,state.deviceId,true)
+    if(activeSession.value===state)activeSession.value=null
     if(state.online) {
       try { await jsonApi('/identity/v2/logout','POST',{}) } catch { /* local sign-out still succeeds */ }
     }
