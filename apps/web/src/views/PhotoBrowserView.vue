@@ -1234,7 +1234,7 @@ onUnmounted(()=>{
     <div class="browser-title">
       <div>
         <h1>Browser</h1>
-        <p class="subtitle">{{ folders.length }} папок · {{ visible.length }} файлов в текущем разделе</p>
+        <p class="subtitle">Папок: {{ folders.length }} · Файлов: {{ visible.length }}</p>
       </div>
       <RouterLink to="/camera">Камера</RouterLink>
     </div>
