@@ -123,6 +123,7 @@ const selectedFolder=ref<string|null>(null)
 let requestedFolderReturn:string|null|undefined
 let scrollReturnKey:string|null=null
 const createFolderOpen=ref(false)
+const createFolderParent=ref('')
 const uploadSheetOpen=ref(false)
 const newFolderName=ref('')
 const editingFolderId=ref<string|null>(null)
@@ -796,9 +797,16 @@ async function changeFolders(change:Parameters<typeof changeFolderWorkspace>[0])
   }
 }
 async function createFolder():Promise<void>{
+  const parent=createFolderParent.value||null
   const ok=await changeFolders({kind:'add',id:crypto.randomUUID(),
-    parentId:selectedFolder.value,name:newFolderName.value,at:Date.now()})
-  if(ok){newFolderName.value='';createFolderOpen.value=false}
+    parentId:parent,name:newFolderName.value,at:Date.now()})
+  if(ok){
+    newFolderName.value=''
+    createFolderOpen.value=false
+    createFolderParent.value=''
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-header-folder"]')?.focus()
+  }
 }
 function openRename(id:string,name:string):void{
   editingFolderId.value=id;editFolderName.value=name
@@ -1085,6 +1093,7 @@ watch(activeSession,(next,previous)=>{
     scrollReturnKey=null
     editingFolderId.value=null
     createFolderOpen.value=false
+    createFolderParent.value=''
     uploadSheetOpen.value=false
     newFolderName.value=''
     editFolderName.value=''
@@ -1154,13 +1163,46 @@ function scrollToElement(selector:string,focus=false):void{
 }
 function openCreateFolder():void{
   if(!activeSession.value||!folderReady.value||!!folderError.value||folderBusy.value)return
+  uploadSheetOpen.value=false
+  createFolderParent.value=selectedFolder.value??''
   createFolderOpen.value=true
   void nextTick(()=>{
-    scrollToElement('[data-testid="browser-folder-name"]',true)
+    document.querySelector<HTMLInputElement>(
+      '[data-testid="browser-folder-name"]')?.focus()
   })
+}
+function closeCreateFolder():void{
+  if(folderBusy.value)return
+  createFolderOpen.value=false
+  createFolderParent.value=''
+  newFolderName.value=''
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-header-folder"]')?.focus()
+  })
+}
+function newFolderSheetKeydown(event:KeyboardEvent):void{
+  if(!createFolderOpen.value)return
+  if(event.key==='Escape'){
+    event.preventDefault();closeCreateFolder();return
+  }
+  if(event.key!=='Tab')return
+  const root=document.querySelector<HTMLElement>(
+    '[data-testid="browser-new-folder-sheet"]')
+  const elements=Array.from(root?.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),input:not(:disabled),select:not(:disabled)'
+  )??[])
+  if(!elements.length)return
+  const first=elements[0]!,last=elements[elements.length-1]!
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
 }
 function openUploadPanel():void{
   if(!activeSession.value)return
+  createFolderOpen.value=false
   uploadSheetOpen.value=true
   // This is the ONE original MediaImportPanel instance; opening/closing
   // merely moves its existing controls visually, with the durable encrypted
@@ -1363,13 +1405,36 @@ onUnmounted(()=>{
               @click="restoreFolderBackup(backup.id)">Восстановить локально</button>
           </div>
         </div>
-        <form v-if="createFolderOpen" class="browser-folder-form" @submit.prevent="createFolder">
+        <div v-if="createFolderOpen" class="browser-new-folder-backdrop"
+          data-testid="browser-new-folder-backdrop"
+          @click="closeCreateFolder"></div>
+        <form v-if="createFolderOpen"
+          class="browser-folder-form browser-new-folder-sheet"
+          data-testid="browser-new-folder-sheet"
+          role="dialog" aria-modal="true" aria-label="Новая папка"
+          @keydown="newFolderSheetKeydown" @submit.prevent="createFolder">
+          <header class="browser-new-folder-heading">
+            <strong>Новая папка</strong>
+            <button type="button" data-testid="browser-new-folder-close"
+              :disabled="folderBusy" @click="closeCreateFolder">Закрыть</button>
+          </header>
           <label>Название папки
             <input v-model="newFolderName" maxlength="80" autocomplete="off"
               data-testid="browser-folder-name" required>
           </label>
-          <button type="submit" :disabled="folderBusy">Создать</button>
-          <button type="button" @click="createFolderOpen=false">Отмена</button>
+          <label for="browser-new-folder-parent">Расположение
+            <select id="browser-new-folder-parent" v-model="createFolderParent"
+              data-testid="browser-new-folder-parent" :disabled="folderBusy">
+              <option value="">Мои файлы (корень)</option>
+              <option v-for="folder in importFolderOptions"
+                :key="folder.id" :value="folder.id">{{folder.label}}</option>
+            </select>
+          </label>
+          <div class="browser-new-folder-actions">
+            <button type="submit" :disabled="folderBusy">Создать</button>
+            <button type="button" :disabled="folderBusy" @click="closeCreateFolder">
+              Отмена</button>
+          </div>
         </form>
         <div class="browser-folder-list">
           <div v-for="folder in folders" :key="folder.id" class="browser-folder-item"
