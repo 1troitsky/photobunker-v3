@@ -141,10 +141,15 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await expect(page.getByTestId('browser-header-select')).toBeEnabled()
   await page.getByTestId('browser-header-select').click()
   await expect(page.getByTestId('browser-header-select')).toHaveAttribute('aria-pressed','true')
-  await expect(rows.first().locator('input[type=checkbox]')).toBeChecked()
+  await expect(page.getByTestId('browser-selection-count')).toHaveText('Выбрано: 0')
+  const selected=rows.first().locator('input[type=checkbox]')
+  await expect(selected).not.toBeChecked()
+  await selected.check()
+  await expect(page.getByTestId('browser-selection-count')).toHaveText('Выбрано: 1')
   await page.getByTestId('browser-header-select').click()
   await expect(page.getByTestId('browser-header-select')).toHaveAttribute('aria-pressed','false')
-  await expect(rows.first().locator('input[type=checkbox]')).not.toBeChecked()
+  await expect(page.getByTestId('browser-selection-toolbar')).toHaveCount(0)
+  await expect(rows.first().locator('input[type=checkbox]')).toHaveCount(0)
 
   // All controls fit both the smallest approved mobile width and desktop;
   // only the existing single App header/dock are used.
