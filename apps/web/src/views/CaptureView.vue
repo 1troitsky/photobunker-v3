@@ -1065,6 +1065,7 @@ onUnmounted(()=>{
           {{mode==='photo'?'Фото':mode==='video'?'Видео':'Аудио'}}
         </button>
       </nav>
+      <div class="camera-stage" data-testid="camera-stage">
       <div class="camera-viewfinder" data-testid="camera-viewfinder">
         <!-- Keep the video node and active stream mounted beneath blind mode. -->
         <div class="video-frame" v-show="captureMode!=='audio'">
@@ -1115,6 +1116,7 @@ onUnmounted(()=>{
             @click="toggleBlindMode">Вернуться назад</button>
         </div>
         </Teleport>
+      </div>
       </div>
       <div class="camera-stage-controls" v-show="!blindMode">
         <div v-if="gpsStatusVisible||requiredFields?.requiredGps"
