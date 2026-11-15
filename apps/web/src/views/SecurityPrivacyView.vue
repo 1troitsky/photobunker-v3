@@ -2,14 +2,41 @@
 import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { activeSession, logout, reauthenticate } from '../features/identity/application/session'
+import { jsonApi } from '../features/identity/infrastructure/api'
 const busy=ref(false),status=ref(''),error=ref('')
 const inactive=ref('off')
 const device=ref('')
-watch(activeSession, session=>{device.value=session?.deviceId||'';status.value='';error.value=''}, {immediate:true})
+type TrustedDevice={id:string;created_at:string;revoked_at:string|null}
+const devices=ref<TrustedDevice[]>([])
+const deviceLoading=ref(false),deviceError=ref('')
+let deviceRequest=0
+async function loadDevices():Promise<void>{
+  const session=activeSession.value,request=++deviceRequest
+  devices.value=[];deviceError.value=''
+  if(!session||!session.online)return
+  deviceLoading.value=true
+  try{
+    const result=await jsonApi<unknown>('/identity/v2/devices')
+    if(!result||typeof result!=='object'||!Array.isArray((result as {devices?:unknown}).devices))
+      throw Error('identity.devices_invalid')
+    const rows=(result as {devices:unknown[]}).devices.map(row=>{
+      if(!row||typeof row!=='object')throw Error('identity.devices_invalid')
+      const item=row as TrustedDevice
+      if(typeof item.id!=='string'||typeof item.created_at!=='string'
+        ||(item.revoked_at!==null&&typeof item.revoked_at!=='string'))
+        throw Error('identity.devices_invalid')
+      return item
+    })
+    if(request===deviceRequest&&activeSession.value?.accountId===session.accountId
+      &&activeSession.value?.deviceId===session.deviceId)devices.value=rows
+  }catch(e){if(request===deviceRequest)deviceError.value=e instanceof Error?e.message:'Ошибка чтения устройств'}
+  finally{if(request===deviceRequest)deviceLoading.value=false}
+}
+watch(activeSession, session=>{device.value=session?.deviceId||'';status.value='';error.value='';void loadDevices()}, {immediate:true})
 async function verify():Promise<void>{
   if(busy.value||!activeSession.value)return
   busy.value=true;status.value='';error.value=''
-  try{await reauthenticate();status.value='Сессия проверена сервером.'}
+  try{await reauthenticate();status.value='Сессия проверена сервером.';await loadDevices()}
   catch(e){error.value=e instanceof Error?e.message:'Не удалось подтвердить сессию'}
   finally{busy.value=false}
 }
@@ -48,6 +75,16 @@ async function copyDevice():Promise<void>{
       <h2>Другие устройства</h2>
       <p>Текущее устройство: <code>{{ device }}</code></p>
       <div class="actions"><button type="button" @click="copyDevice">Скопировать ID</button><button type="button" :disabled="busy||!activeSession.online" @click="verify">Проверить сессию</button></div>
+      <div class="actions"><button type="button" :disabled="deviceLoading||!activeSession.online" @click="loadDevices">Обновить устройства</button></div>
+      <p v-if="deviceLoading" role="status">Загрузка списка с сервера…</p>
+      <p v-if="deviceError" role="alert" class="warning">{{ deviceError }}</p>
+      <ul v-if="devices.length" class="device-list" data-testid="account-devices">
+        <li v-for="entry in devices" :key="entry.id">
+          <code>{{ entry.id }}</code>
+          <span>{{ entry.id===device?'Это устройство':entry.revoked_at?'Отозвано':'Другое устройство' }}</span>
+          <small>Создано: {{ entry.created_at }}</small>
+        </li>
+      </ul>
       <p class="note">Удалённое отключение других устройств ещё не включено — оно требует подтверждённой серверной процедуры отзыва ключей и сессий.</p>
       <button type="button" disabled>Управление другими устройствами</button>
     </article>
@@ -89,5 +126,5 @@ async function copyDevice():Promise<void>{
 .panel button:disabled{opacity:.48;cursor:not-allowed}
 .panel label{display:grid;gap:10px;font-size:13px}
 .panel select,.panel input{accent-color:#6fca83;max-width:100%;padding:8px;background:#262b27;color:#e4ede7;border:1px solid #48544a;border-radius:8px}
-.actions{display:flex;gap:10px;flex-wrap:wrap}.panel a{color:#aad9b9}
+.actions{display:flex;gap:10px;flex-wrap:wrap}.device-list{list-style:none;padding:0}.device-list li{display:grid;gap:5px;padding:12px 0;border-bottom:1px solid #414941;font-size:12px}.device-list small{color:#adb5ad}.panel a{color:#aad9b9}
 </style>

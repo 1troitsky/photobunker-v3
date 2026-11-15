@@ -29,11 +29,14 @@ The script builds the actual application, creates separate development credentia
 | Encrypted local Notifications inbox | `/notifications` |
 | Notification settings | `/notifications/settings` |
 | Encrypted local Messages **drafts** (not sent messages) | `/messages` |
+| Encrypted device-local profile + edit | `/settings/profile`, `/settings/profile/edit` |
+| Security status / verified session / device list | `/settings/security` |
+| Server tariff catalog + verified account plan | `/settings/payments` |
 
 The default Dock remains five items; Notifications and Messages can be added via Appearance after opting in. No fake message delivery, payment settlement or server acknowledgments.
 
 ## Not yet ready for a production release
 
-A complete public profile, PIN/Panic/remote wipe, verified cross-device Matrix messaging, live payment settlement, full encrypted Vault restore, independently signed cold-offline PWA, physical iOS/Android hardware validation and final owner acceptance remain outstanding. Some Security/Subscription menu entries are intentionally disabled rather than misleading clickable placeholders. No production deployment or merge into `main` is authorized.
+Public profile publishing and global handles, PIN/Panic/remote wipe, verified cross-device Matrix messaging, live payment settlement, full encrypted Vault restore, independently signed cold-offline PWA, physical iOS/Android hardware validation and final owner acceptance remain outstanding. Some Security/Subscription menu entries are intentionally disabled rather than misleading clickable placeholders. No production deployment or merge into `main` is authorized.
 
 Sources: [Specification](ts.md), [Engineering constraints](AGENTS.md), [consolidation audit](docs/audits/PB3-FRONTEND-ONE-SHELL-20261115.md).

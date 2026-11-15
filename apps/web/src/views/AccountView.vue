@@ -91,7 +91,7 @@ async function copyKey():Promise<void> {
     <GraceStatusPanel v-if="activeSession" :session="activeSession" />
     <p v-if="status" role="status" class="status-text">{{ status }}</p>
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>
-    <p class="muted">PIN Shell, защищённый режим экрана и финальная страница профиля появятся на следующих этапах.</p>
+    <p class="muted">Профиль хранится локально в зашифрованном виде. PIN Shell и экстренное удаление пока недоступны — см. раздел «Безопасность и приватность».</p>
   </section>
 </template>
 
