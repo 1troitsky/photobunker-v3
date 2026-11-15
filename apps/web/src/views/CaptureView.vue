@@ -35,6 +35,7 @@ const route=useRoute()
 const video=ref<HTMLVideoElement|null>(null)
 const cameraHeaderOwner={}
 const blindMode=ref(false)
+const cameraSheet=ref<'assignment'|'settings'|null>(null)
 const cameraFacing=ref<'environment'|'user'>('environment')
 const torchOn=ref(false)
 const gridVisible=ref(false)
@@ -441,11 +442,31 @@ watch(blindMode,async shown=>{
       ?.focus()
   }
 })
-function openCameraDetails(selector:string):void{
+const canConfirmCameraAssignment=computed(()=>{
+  if(!selectedAssignment.value)return true
+  const fields=requiredFields.value
+  return !(fields?.requiredCategory&&!category.value.trim())
+    &&description.value.trim().length>=(fields?.descriptionMinLength??0)
+    &&!(fields?.requiredGps&&!gps.value)
+})
+function openCameraSheet(which:'assignment'|'settings'):void{
   if(!activeSession.value)return
-  document.querySelector<HTMLElement>(selector)?.scrollIntoView({
-    behavior:'auto',block:'start',
+  cameraSheet.value=which
+  void nextTick().then(()=>{
+    if(cameraSheet.value===which)
+      document.querySelector<HTMLButtonElement>('.camera-sheet-close')?.focus()
   })
+}
+function closeCameraSheet():void{
+  const last=cameraSheet.value
+  cameraSheet.value=null
+  if(last)void nextTick().then(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="camera-open-'+last+'"]')?.focus()
+  })
+}
+function finishCameraAssignment():void{
+  if(canConfirmCameraAssignment.value)closeCameraSheet()
 }
 watch([activeSession,captureMode,stream,recording,busy,starting,torchOn,blindMode],
   ()=>{
@@ -972,6 +993,7 @@ watch(activeSession,session=>{
   const identity=cameraIdentity(session)
   if(!sameIdentity(observedIdentity,identity)){
     closePrivateRecordingReview()
+    cameraSheet.value=null
     blindMode.value=false;torchOn.value=false
     localDrafts.value=[];localDraftError.value=''
     observedIdentity=identity;cameraGeneration++
@@ -1016,6 +1038,7 @@ watch(captureMode,()=>{
   }
 })
 onUnmounted(()=>{
+  cameraSheet.value=null
   clearCameraShellActions(cameraHeaderOwner)
   if(recordingClockTimer!==null){clearInterval(recordingClockTimer);recordingClockTimer=null}
   closePrivateRecordingReview()
