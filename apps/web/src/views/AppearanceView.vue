@@ -154,55 +154,74 @@ onBeforeRouteLeave(() => {
       <section id="setting-field-theme" ref="themeSection" tabindex="-1"
         class="appearance-section" aria-labelledby="theme-title" data-testid="appearance-theme-field">
         <h2 id="theme-title">Тема</h2>
-        <div class="appearance-panel">
-          <div class="visual-options themes" role="group" aria-label="Тема">
+        <div class="option-panel">
+          <div class="theme-grid" role="group" aria-label="Тема">
             <button v-for="option in themeChoices" :key="option.value" type="button"
-              class="visual-choice" :aria-pressed="draftVisual.theme===option.value"
+              class="theme-card" :aria-pressed="draftVisual.theme===option.value"
               :data-testid="'appearance-theme-'+option.value"
-              @click="draftVisual.theme=option.value;changeVisual()">{{option.label}}</button>
+              @click="draftVisual.theme=option.value;changeVisual()">
+              <span class="theme-mini" :class="option.value" aria-hidden="true">
+                <span class="mini-bar"></span><span class="mini-line"></span>
+                <span class="mini-line short"></span><span class="mini-hl"></span>
+              </span>
+              <span class="theme-label"><span>{{ option.label }}</span>
+                <span v-if="draftVisual.theme===option.value" class="picked" aria-hidden="true">✓</span>
+              </span>
+            </button>
           </div>
-          <p class="visual-hint">Системная тема следует настройкам устройства.</p>
+          <p class="option-help">Системная тема следует настройкам устройства.</p>
         </div>
       </section>
       <section id="setting-field-accent" ref="accentSection" tabindex="-1"
         class="appearance-section" aria-labelledby="accent-title" data-testid="appearance-accent-field">
         <h2 id="accent-title">Основной цвет</h2>
-        <div class="appearance-panel">
-          <div class="visual-options accents" role="group" aria-label="Основной цвет">
+        <div class="option-panel">
+          <div class="color-grid" role="group" aria-label="Основной цвет">
             <button v-for="option in accentChoices" :key="option.value" type="button"
-              class="visual-choice color" :aria-pressed="draftVisual.accent===option.value"
+              class="color-button" :aria-pressed="draftVisual.accent===option.value"
               :data-testid="'appearance-accent-'+option.value"
               @click="draftVisual.accent=option.value;changeVisual()">
-              <span class="color-mark" :style="{background:accentColors[option.value]}" aria-hidden="true"></span>
-              {{option.label}}
+              <span class="color-swatch" :style="{background:accentColors[option.value]}" aria-hidden="true">
+                <svg v-if="draftVisual.accent===option.value" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="m4 12 5 5L20 6"/>
+                </svg>
+              </span>
+              <span>{{option.label}}</span>
             </button>
           </div>
+          <p class="option-help">Меняется только цветовой акцент интерфейса.</p>
         </div>
       </section>
       <section id="setting-field-size" ref="sizeSection" tabindex="-1"
         class="appearance-section" aria-labelledby="size-title" data-testid="appearance-size-field">
         <h2 id="size-title">Размер текста</h2>
-        <div class="appearance-panel">
-          <div class="visual-options" role="group" aria-label="Размер текста">
+        <div class="option-panel">
+          <div class="segment" role="group" aria-label="Размер текста">
             <button v-for="option in sizeChoices" :key="option.value" type="button"
-              class="visual-choice" :aria-pressed="draftVisual.size===option.value"
+              class="seg-button" :aria-pressed="draftVisual.size===option.value"
               :data-testid="'appearance-size-'+option.value"
               @click="draftVisual.size=option.value;changeVisual()">{{option.label}}</button>
           </div>
+          <div class="example-text">Это пример текста в выбранном размере.</div>
         </div>
       </section>
       <section id="setting-field-language" ref="languageSection" tabindex="-1"
         class="appearance-section" aria-labelledby="language-title" data-testid="appearance-language-field">
         <h2 id="language-title">Язык</h2>
-        <div class="appearance-panel">
-          <div class="visual-options" role="group" aria-label="Язык">
-            <button v-for="option in languageChoices" :key="option.value" type="button"
-              class="visual-choice" :aria-pressed="draftVisual.language===option.value"
-              :data-testid="'appearance-language-'+option.value"
-              @click="draftVisual.language=option.value;changeVisual()">{{option.label}}</button>
-          </div>
-          <p class="visual-hint">Настройка языка интерфейса на устройстве. Полный перевод всех экранов ещё не завершён.</p>
+        <div class="option-list" role="group" aria-label="Язык">
+          <button v-for="option in languageChoices" :key="option.value" type="button"
+            class="option-row" :aria-pressed="draftVisual.language===option.value"
+            :data-testid="'appearance-language-'+option.value"
+            @click="draftVisual.language=option.value;changeVisual()">
+            <span class="option-icon" aria-hidden="true">◎</span>
+            <span class="option-copy"><strong>{{option.label}}</strong>
+              <small>{{option.value==='ru'?'RU':'EN'}}</small>
+            </span>
+            <span v-if="draftVisual.language===option.value" class="option-mark" aria-hidden="true">✓</span>
+          </button>
         </div>
+        <p class="option-help">Настройка языка интерфейса на устройстве. Полный перевод всех экранов ещё не завершён.</p>
       </section>
       <section id="setting-field-launch" ref="launchSection" tabindex="-1"
         class="appearance-section" aria-labelledby="launch-title" data-testid="appearance-launch-field">
@@ -361,4 +380,48 @@ onBeforeRouteLeave(() => {
 .appearance-page button:focus-visible{outline:2px solid #a6f3b9;outline-offset:2px}
 @media(max-width:470px){.appearance-page{padding:20px 12px 38px}.available-list{grid-template-columns:1fr}.dock-line{gap:5px}.required-label{font-size:9px}.dock-actions button{width:27px}.appearance-panel{padding:11px}.dock-grip{padding-right:3px}}
 @media(prefers-reduced-motion:reduce){.appearance-page *{scroll-behavior:auto!important}}
+
+/* Identical option geometry and selection classes from owner-accepted docs/ux/app-appearance/style.css. */
+.option-help{font-size:.84em;color:var(--muted);line-height:1.45;margin:10px 2px 0}
+.theme-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.theme-card{display:block;text-align:left;min-width:0;padding:8px;background:var(--soft-bg);border:1px solid transparent;border-radius:8px;color:var(--text);transition:background .13s,border-color .13s}
+.theme-card[aria-pressed="true"],.color-button[aria-pressed="true"],.seg-button[aria-pressed="true"]{border-color:var(--ui-accent);background:color-mix(in srgb,var(--ui-accent) 11%,var(--soft-bg))}
+.theme-card:hover,.color-button:hover,.seg-button:hover{border-color:var(--muted)}
+.theme-mini{position:relative;display:block;height:53px;border-radius:5px;overflow:hidden;border:1px solid #5b5b5b;margin-bottom:8px}
+.theme-mini .mini-bar{height:12px;background:#292929;border-bottom:1px solid #555}
+.theme-mini .mini-line{height:5px;margin:6px 7px 0;width:57%;background:#737373;border-radius:2px}
+.theme-mini .mini-line.short{width:33%;margin-top:5px}
+.theme-mini .mini-hl{position:absolute;bottom:6px;right:7px;width:24px;height:7px;background:#1ed760;border-radius:2px}
+.theme-mini.dark{background:#171717;border-color:#525252}
+.theme-mini.light{background:#f5f5f5;border-color:#bdbdbd}
+.theme-mini.light .mini-bar{background:#e5e5e5;border-bottom-color:#cecece}
+.theme-mini.light .mini-line{background:#a4a4a4}
+.theme-mini.system{background:linear-gradient(90deg,#171717 0 50%,#f5f5f5 50% 100%);border-color:#777}
+.theme-mini.system .mini-bar{background:linear-gradient(90deg,#292929 0 50%,#e5e5e5 50% 100%)}
+.theme-label{display:flex;gap:4px;align-items:center;justify-content:space-between;font-size:.88em;font-weight:650;min-width:0}
+.theme-label span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.picked{color:var(--ui-accent);display:inline-flex;align-items:center}
+.picked svg{width:14px;height:14px}
+.color-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.color-button{display:flex;flex-direction:column;align-items:center;gap:8px;min-height:68px;padding:8px 4px 7px;border:1px solid transparent;border-radius:8px;background:var(--soft-bg);font-size:.8em;color:var(--text);white-space:nowrap}
+.color-swatch{display:flex;align-items:center;justify-content:center;width:29px;height:29px;border-radius:6px;border:1px solid #ffffff27}
+.color-swatch svg{width:15px;height:15px;color:#101010;stroke-width:2.8}
+.segment{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.seg-button{border:1px solid transparent;border-radius:7px;min-height:39px;padding:7px 4px;background:var(--soft-bg);font-size:.88em;font-weight:630;color:var(--text)}
+.example-text{margin:13px 0 0;padding:10px 11px;border:1px solid var(--line);border-radius:7px;line-height:1.5;font-size:calc(.95em * var(--text-scale));color:var(--text)}
+.option-list{background:var(--surface);border-radius:9px;overflow:hidden}
+.option-row{display:flex;align-items:center;width:100%;text-align:left;gap:11px;min-height:56px;padding:9px 13px;background:none;border:0;border-bottom:1px solid var(--line);color:var(--text)}
+.option-row:last-child{border:0}.option-row:hover{background:var(--soft-bg)}
+.option-icon{width:29px;height:29px;display:grid;place-items:center;flex:none;color:var(--muted)}
+.option-icon svg{width:19px;height:19px}
+.option-copy{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px}
+.option-copy strong{font-size:.97em;font-weight:650;line-height:1.25}
+.option-copy small{font-size:.81em;color:var(--muted);line-height:1.35}
+.option-mark{width:20px;height:20px;flex:none;display:grid;place-items:center;color:var(--ui-accent)}
+.option-mark svg{width:19px;height:19px}
+.appearance-page{--ui-accent:var(--accent);--text-scale:var(--ui-text-scale);--line:#373737;--soft-bg:#292929;--text:#f3f3f3;--muted:#aaa;--raised:#333;--ui-accent-ink:#102719}
+.appearance-page .theme-card,.appearance-page .color-button,.appearance-page .seg-button,.appearance-page .option-row{cursor:pointer}
+.appearance-page .theme-card:focus-visible,.appearance-page .color-button:focus-visible,.appearance-page .seg-button:focus-visible,.appearance-page .option-row:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+:global(:root[data-ui-scheme="light"]) .appearance-page{--soft-bg:#ededed;--text:#262d27;--muted:#68746a;--line:#cbd4cc}
+:global(:root[data-ui-scheme="light"]) .appearance-page .option-panel,:global(:root[data-ui-scheme="light"]) .appearance-page .option-list{background:#fff}
 </style>
