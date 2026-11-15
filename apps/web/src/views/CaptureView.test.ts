@@ -646,6 +646,23 @@ describe('Issue #260 GPS consent and capture races',()=>{
     watchOk!(point());await settle()
     expect(host.textContent).not.toContain('GPS получен')
   })
+  it('revokes the volatile GPS fix on PWA background without auto-restarting on foreground',async()=>{
+    await ready()
+    button('Получить GPS').click();await settle()
+    callbacks[0]!.ok(point());await settle()
+    expect(host.textContent).toContain('GPS получен')
+    const visibility=vi.spyOn(document,'visibilityState','get')
+      .mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+    expect(status.onchange).toBeNull()
+    visibility.mockReturnValue('visible')
+    document.dispatchEvent(new Event('visibilitychange'))
+    await settle()
+    expect(host.textContent).not.toContain('GPS получен')
+    expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1)
+  })
   it('locks the GPS tracking switch when the independently signed policy requires GPS',async()=>{
     mocks.requiredGps=true
     mocks.policies.mockResolvedValue([
