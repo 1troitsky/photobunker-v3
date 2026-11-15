@@ -1477,3 +1477,31 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
     padding:11px 12px max(20px,env(safe-area-inset-bottom,20px))
   }
 }
+
+/* Browser v3 Tree view is an actual navigator over authenticated,
+   AES-GCM-sealed folder workspace. It cannot expand server ACL scope. */
+.browser-tree-navigation{display:grid;gap:0;margin:10px 0 16px;
+  border-top:1px solid #343434;border-bottom:1px solid #343434;
+  background:#1b1d1b}
+.browser-tree-navigation .browser-tree-root,
+.browser-tree-navigation .browser-tree-select{
+  min-width:0;display:flex;align-items:center;gap:7px;
+  min-height:39px;padding:8px 11px;border:0;background:none;
+  color:#dedede;text-align:left;font-size:12px;overflow-wrap:anywhere
+}
+.browser-tree-navigation .browser-tree-root{
+  padding-left:16px;font-weight:740;border-bottom:1px solid #343434
+}
+.browser-tree-navigation [aria-current=location]{color:var(--accent);font-weight:740}
+.browser-tree-node{display:flex;align-items:stretch;gap:2px;
+  min-height:39px;padding-left:calc(min(var(--tree-depth),10) * 15px + 8px);
+  border-bottom:1px solid #303530}
+.browser-tree-node:last-of-type{border-bottom:0}
+.browser-tree-node .browser-tree-expand{width:30px;flex:0 0 30px;
+  min-height:39px;padding:0;border:0;background:none;color:#bcc7bf;
+  font-size:21px}
+.browser-tree-node .browser-tree-expand:disabled{opacity:.3}
+.browser-tree-node .browser-tree-select{flex:1 1 0}
+.browser-tree-navigation .muted{margin:5px 15px 11px;font-size:10px;line-height:1.5}
+.browser-tree-navigation button:focus-visible{outline:2px solid var(--accent);
+  outline-offset:-3px}
