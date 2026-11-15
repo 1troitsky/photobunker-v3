@@ -20,12 +20,16 @@ test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext
   // random byte buffer; the Web decoder must render the private preview.
   const png=await page.evaluate(()=>{
     const c=document.createElement('canvas')
-    c.width=40;c.height=30
+    c.width=96;c.height=96
     const ctx=c.getContext('2d')!
-    ctx.fillStyle='#dd4422';ctx.fillRect(0,0,40,30)
+    for(let x=0;x<96;x+=3){
+      ctx.fillStyle='hsl('+((x*17)%360)+' 80% 45%)'
+      ctx.fillRect(x,0,3,96)
+    }
     ctx.fillStyle='#fff';ctx.fillRect(2,2,12,12)
     return c.toDataURL('image/png').split(',')[1]!
   })
+  expect(Buffer.from(png,'base64').length).toBeGreaterThan(128)
   await context.setOffline(true)
   await page.getByTestId('browser-header-upload').click()
   await page.getByTestId('media-import-file').setInputFiles({
