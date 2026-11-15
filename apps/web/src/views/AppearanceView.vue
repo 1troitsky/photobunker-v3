@@ -23,7 +23,8 @@ const themeSection = ref<HTMLElement | null>(null)
 const accentSection = ref<HTMLElement | null>(null)
 const sizeSection = ref<HTMLElement | null>(null)
 const languageSection = ref<HTMLElement | null>(null)
-const draftVisual = ref<VisualPreferences>({...savedVisual.value})
+type VisualDraft = {-readonly [K in keyof VisualPreferences]:VisualPreferences[K]}
+const draftVisual = ref<VisualDraft>({...savedVisual.value})
 const themeChoices: readonly {value:Theme;label:string}[] = [
  {value:'dark',label:'Тёмная'}, {value:'light',label:'Светлая'}, {value:'system',label:'Системная'},
 ]
