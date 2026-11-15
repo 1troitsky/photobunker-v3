@@ -123,6 +123,7 @@ const selectedFolder=ref<string|null>(null)
 let requestedFolderReturn:string|null|undefined
 let scrollReturnKey:string|null=null
 const createFolderOpen=ref(false)
+const uploadSheetOpen=ref(false)
 const newFolderName=ref('')
 const editingFolderId=ref<string|null>(null)
 const editFolderName=ref('')
@@ -1084,6 +1085,7 @@ watch(activeSession,(next,previous)=>{
     scrollReturnKey=null
     editingFolderId.value=null
     createFolderOpen.value=false
+    uploadSheetOpen.value=false
     newFolderName.value=''
     editFolderName.value=''
     selectedKeys.value=[]
@@ -1159,11 +1161,40 @@ function openCreateFolder():void{
 }
 function openUploadPanel():void{
   if(!activeSession.value)return
-  scrollToElement('[data-testid="browser-import-panel"]')
-  // Keep existing file/destination/HTTPS metadata forms and durable outbox
-  // mounted: closing/opening a panel must never erase unsent evidence.
-  document.querySelector<HTMLElement>('#media-import-destination')
-    ?.focus({preventScroll:true})
+  uploadSheetOpen.value=true
+  // This is the ONE original MediaImportPanel instance; opening/closing
+  // merely moves its existing controls visually, with the durable encrypted
+  // outbox and the destination selection staying completely intact.
+  void nextTick(()=>{
+    if(uploadSheetOpen.value)
+      document.querySelector<HTMLButtonElement>(
+        '[data-testid="browser-import-sheet-close"]')?.focus()
+  })
+}
+function closeUploadPanel():void{
+  uploadSheetOpen.value=false
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-header-upload"]')?.focus()
+  })
+}
+function uploadSheetKeydown(event:KeyboardEvent):void{
+  if(!uploadSheetOpen.value)return
+  if(event.key==='Escape'){
+    event.preventDefault();closeUploadPanel();return
+  }
+  if(event.key!=='Tab')return
+  const root=document.querySelector<HTMLElement>('[data-testid="browser-import-sheet"]')
+  const enabled=Array.from(root?.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]'
+  )??[])
+  if(!enabled.length)return
+  const first=enabled[0]!,last=enabled[enabled.length-1]!
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
 }
 function focusPrivateSearch():void{
   if(!activeSession.value)return
@@ -1702,11 +1733,26 @@ onUnmounted(()=>{
       <section class="browser-operations" data-testid="browser-import-panel">
         <h2>Импорт и операции</h2>
         <p class="muted">Загрузка, выдача доступа и версии используют действующий защищённый pipeline.</p>
-        <MediaImportPanel
-          :destination-folders="importFolderOptions"
-          :default-folder-id="selectedFolder"
-          @media-imported="placeImportedMedia"
-          @catalog-change="refresh"/>
+        <div v-if="uploadSheetOpen" class="browser-upload-backdrop"
+          data-testid="browser-import-backdrop" @click="closeUploadPanel"></div>
+        <div class="browser-upload-sheet" :class="{open:uploadSheetOpen}"
+          data-testid="browser-import-sheet"
+          :role="uploadSheetOpen?'dialog':undefined"
+          :aria-modal="uploadSheetOpen?'true':undefined"
+          :aria-label="uploadSheetOpen?'Загрузить файлы':undefined"
+          @keydown="uploadSheetKeydown">
+          <header v-if="uploadSheetOpen" class="browser-upload-heading">
+            <strong>Загрузить файлы</strong>
+            <button type="button" data-testid="browser-import-sheet-close"
+              aria-label="Закрыть загрузчик" @click="closeUploadPanel">
+              Закрыть</button>
+          </header>
+          <MediaImportPanel
+            :destination-folders="importFolderOptions"
+            :default-folder-id="selectedFolder"
+            @media-imported="placeImportedMedia"
+            @catalog-change="refresh"/>
+        </div>
         <SharePanel :local-photos="localPhotos" @open-photo="showReceived"/>
       </section>
     </template>
