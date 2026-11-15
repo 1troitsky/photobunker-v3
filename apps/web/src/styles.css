@@ -169,8 +169,22 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 }
 
 .shell-header-actions { margin-left:auto; flex:0 0 auto; }
-.shell-header-actions button { background:transparent; color:#999; border:1px solid #424242;
-  border-radius:8px; padding:8px 10px; font:inherit; }
+/* UI-SHELL-CONTRACT: context icons are unframed 36px actions in the fixed
+   64px header. Do not alter the separate Editor text actions or Viewer. */
+.shell-header-actions:not(.viewer-header-actions):not(.editor-header-actions) button {
+  display:grid;place-items:center;width:36px;height:36px;min-width:36px;
+  padding:0;border:0;border-radius:7px;background:transparent;color:#d7d7d7;
+  font:inherit;cursor:pointer;touch-action:manipulation;
+}
+.shell-header-actions:not(.viewer-header-actions):not(.editor-header-actions) button svg {
+  display:block;width:20px;height:20px;stroke-linecap:round;stroke-linejoin:round;
+}
+.shell-header-actions:not(.viewer-header-actions):not(.editor-header-actions) button:hover:not(:disabled) {
+  background:#303a32;color:var(--accent);
+}
+.shell-header-actions:not(.viewer-header-actions):not(.editor-header-actions) button:focus-visible {
+  outline:2px solid var(--accent);outline-offset:2px;
+}
 .shell-header-actions button:disabled { opacity:.5; cursor:not-allowed; }
 
 
