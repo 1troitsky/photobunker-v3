@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import {brand} from '../config/brand'
 import {
   defaultDock, dockChoices, dockDefinitions,
   previewDock, restoreDock, savedDock, validateDock,
@@ -227,7 +228,7 @@ onBeforeRouteLeave(() => {
         class="appearance-section" aria-labelledby="launch-title" data-testid="appearance-launch-field">
         <h2 id="launch-title">Стартовая страница</h2>
         <div class="appearance-panel">
-          <p class="launch-hint">Какой раздел открывать при запуске PhotoBunker. Прямые ссылки на файлы и задания сохраняются.</p>
+          <p class="launch-hint">Какой раздел открывать при запуске {{brand.name}}. Прямые ссылки на файлы и задания сохраняются.</p>
           <div class="launch-options" role="radiogroup" aria-label="Стартовая страница">
             <label v-for="option in launchChoices" :key="option.id" class="launch-option"
               :class="{chosen:draftLaunch===option.id}">
