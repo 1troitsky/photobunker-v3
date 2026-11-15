@@ -72,6 +72,20 @@ describe('Browser v3 encrypted catalog union',()=>{
     expect(filterCatalog(rows,{type:'all',query:'secret.jpg',sort:'newest'}))
       .toEqual([])
   })
+  it('sorts by authenticated visible NAME-ID with natural numeric order',()=>{
+    const rows=buildCatalog(
+      [photo('ABCD0010',5000),photo('ABCD0002',5000)],[],
+      [media('ABCD0001','audio',5000)],
+      [remoteMedia('ABCD0009','video')],
+    )
+    const original=rows.map(item=>item.id)
+    expect(filterCatalog(rows,{type:'all',query:'',sort:'name'})
+      .map(item=>item.id)).toEqual([
+        'ABCD0001','ABCD0002','ABCD0009','ABCD0010',
+      ])
+    expect(rows.map(item=>item.id)).toEqual(original)
+    // The sort never decrypts or invents metadata for cloud-only rows.
+  })
   it('sorts by actual TTL regardless of local/cloud origin',()=>{
     const rows=buildCatalog(
       [photo('late',3000)],[],[media('soon','audio',1000)],[],
