@@ -209,11 +209,12 @@ function toggleFileMenu(key:string):void{
   folderMenuId.value=null
 }
 function onBrowserMenuPointerDown(event:PointerEvent):void{
-  if(!fileMenuKey.value&&!folderMenuId.value)return
   const el=event.target
-  if(!(el instanceof Element)||!el.closest(
-    '.browser-file-menu-root,.browser-folder-menu-root',
-  ))closeFileMenu()
+  if(fileMenuKey.value||folderMenuId.value){
+    if(!(el instanceof Element)||!el.closest(
+      '.browser-file-menu-root,.browser-folder-menu-root',
+    ))closeFileMenu()
+  }
   if(bulkActionsOpen.value
     &&(!(el instanceof Element)||!el.closest('.browser-batch-actions-root')))
     bulkActionsOpen.value=false
