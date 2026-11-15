@@ -42,7 +42,18 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await page.getByTestId('browser-header-settings').click()
   await expect(page.getByTestId('browser-archive-preferences')).toBeInViewport()
   await page.getByTestId('browser-header-upload').click()
-  await expect(page.getByTestId('browser-import-panel')).toBeInViewport()
+  const sheet=page.getByTestId('browser-import-sheet')
+  await expect(sheet).toBeVisible()
+  await expect(sheet).toHaveAttribute('role','dialog')
+  await expect(sheet).toHaveAttribute('aria-modal','true')
+  await expect(sheet).toHaveCSS('position','fixed')
+  await expect(page.getByTestId('browser-import-sheet-close')).toBeFocused()
+  await expect(page.getByTestId('browser-import-backdrop')).toBeVisible()
+  await page.getByTestId('browser-import-sheet-close').press('Escape')
+  await expect(page.getByTestId('browser-import-backdrop')).toHaveCount(0)
+  await expect(page.getByTestId('browser-header-upload')).toBeFocused()
+  await page.getByTestId('browser-header-upload').click()
+  await expect(sheet).toHaveCSS('position','fixed')
 
   // Import remains in the real encrypted Local-First outbox. Header selection
   // never creates/approves permissions or bypasses folder membership.
@@ -53,6 +64,8 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   })
   const rows=page.locator('[data-testid^="browser-row-media:"]')
   await expect(rows).toHaveCount(1,{timeout:25000})
+  await page.getByTestId('browser-import-sheet-close').click()
+  await expect(page.getByTestId('browser-import-backdrop')).toHaveCount(0)
   await expect(page.getByTestId('browser-header-select')).toBeEnabled()
   await page.getByTestId('browser-header-select').click()
   await expect(page.getByTestId('browser-header-select')).toHaveAttribute('aria-pressed','true')
