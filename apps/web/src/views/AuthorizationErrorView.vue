@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { authFailure, clearAuthFailure, authFailureCopy } from '../features/identity/application/authorization-failure'
+import {brand} from '../config/brand'
 
 const router=useRouter()
 onMounted(()=>{
@@ -20,7 +21,7 @@ onMounted(()=>{
           <path d="M29 42c5 5 11 6 17 1"/>
         </svg>
       </div>
-      <div class="brand-name">PhotoBunker</div>
+      <div class="brand-name">{{brand.name}}</div>
     </div>
     <div class="error-message" role="alert">
       <div class="error-icon" aria-hidden="true">
