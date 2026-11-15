@@ -243,6 +243,33 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
   })
 })
 
+describe('Camera 1.2 real JPEG creation, not CSS-only image options',()=>{
+  it('crops center square at true sensor resolution and encrypts a medium-quality JPEG',async()=>{
+    await mount()
+    requests[0]!.resolve(media().stream)
+    await settle()
+    const aspect=host.querySelector<HTMLSelectElement>('#camera-photo-aspect')!
+    aspect.value='1:1'
+    aspect.dispatchEvent(new Event('change',{bubbles:true}))
+    const quality=host.querySelector<HTMLSelectElement>('#camera-photo-quality')!
+    quality.value='medium'
+    quality.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.capture).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(HTMLCanvasElement.prototype.toBlob))
+      .toHaveBeenCalledWith(expect.any(Function),'image/jpeg',.7)
+    const canvas=vi.mocked(HTMLCanvasElement.prototype.toBlob).mock.instances[0]!
+    expect(canvas.width).toBe(480)
+    expect(canvas.height).toBe(480)
+    const ctx=vi.mocked(HTMLCanvasElement.prototype.getContext)
+      .mock.results[0]!.value as CanvasRenderingContext2D
+    expect(ctx.drawImage).toHaveBeenCalledWith(expect.any(HTMLVideoElement),
+      80,0,480,480,0,0,480,480)
+  })
+})
+
 describe('private instructions and hardware lifecycle',()=>{
   const policy={assignmentId:'assignment-a',ownerAccountId:'owner-a',policyRevision:1,privateRevision:2}
   const privateText={version:2,title:'Private title',instructions:'Common instructions',
