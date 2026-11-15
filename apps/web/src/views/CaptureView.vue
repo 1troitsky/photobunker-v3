@@ -23,7 +23,7 @@ import {
 import type { MediaCaptureIntent } from '../features/media/application/media-outbox'
 import {acquireCameraWriterLease,type CameraWriterLease} from '../features/media/application/recording-writer-lease'
 import { MAX_MEDIA_BYTES } from '../features/media/domain/media-crypto'
-import {assertRecordingDuration, recordingBounds, signedRecordingBudget} from '../features/media/domain/recording-limits'
+import {assertRecordingDuration, signedRecordingBudget} from '../features/media/domain/recording-limits'
 import {AUDIO_TARGET_BITRATES, DEFAULT_AUDIO_TARGET_BITRATE, recordingOptions} from '../features/media/domain/recording-options'
 import type {AudioTargetBitrate} from '../features/media/domain/recording-options'
 import { normalizeGPS, type GPSFix } from '../features/photo-sync/domain/capture-metadata'
