@@ -15,17 +15,21 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
         .toBe('/settings/appearance?field=launch')
     }
   })
-  it('shows language as an unavailable real future setting, not a fake jump', () => {
+  it('opens exact Appearance 1.3 language section from RU/EN search', () => {
     for (const term of ['язык', 'language', 'english']) {
       const entry = searchSettings(term).find(row => row.id === 'language')
       expect(entry).toBeDefined()
-      expect(entry?.to).toBeNull()
+      expect(entry?.to).toBe('/settings/appearance?field=language')
     }
   })
   it('only exposes existing PB3 routes and anchored fields', () => {
     expect(implementedSearchTargets).toEqual([
       '/settings/appearance?field=dock', '/contacts',
-      '/settings/appearance?field=launch', '/notifications',
+      '/settings/appearance?field=theme',
+      '/settings/appearance?field=accent',
+      '/settings/appearance?field=size',
+      '/settings/appearance?field=launch',
+      '/settings/appearance?field=language', '/notifications',
       '/settings/profile/edit','/settings/security?field=pin',
       '/settings/security?field=relock','/settings/security?field=emergency',
       '/settings/security?field=devices','/settings/security?field=key',
@@ -37,7 +41,7 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
     )
     expect(new Set(settingsSearchEntries.map(entry => entry.id)).size)
       .toBe(settingsSearchEntries.length)
-    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(14)
+    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(18)
   })
   it('routes security search to the exact approved field, including disabled controls', () => {
     expect(searchSettings('PIN экстренного').find(item => item.id==='emergency-pin')?.to)

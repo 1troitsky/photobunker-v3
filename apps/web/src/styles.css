@@ -1002,3 +1002,12 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .shell-header .status-dot.session-online{background:var(--accent)}
 .shell-header .shell-plan-pill:focus-visible{outline:2px solid #a3edb6;outline-offset:2px}
 @media(max-width:410px){.shell-header .shell-plan-pill{font-size:9px;padding:0 7px;max-width:124px}.shell-header .brand-copy{max-width:128px}}
+
+/* Approved device-local Appearance controls: root tokens, no media pixel inversion. */
+:root{--ui-text-scale:1}
+.shell-main{zoom:var(--ui-text-scale)}
+:root[data-ui-scheme="light"] .shell,:root[data-ui-scheme="light"] .shell-header,
+:root[data-ui-scheme="light"] .shell-dock{color:#17251b}
+:root[data-ui-scheme="light"] .shell-header .brand-copy small{color:#526357}
+:root[data-ui-scheme="light"] .shell-dock a{color:#526357}
+:root[data-ui-scheme="light"] .shell-dock a.active{color:var(--accent)}

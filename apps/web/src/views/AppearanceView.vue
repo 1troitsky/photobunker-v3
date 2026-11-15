@@ -7,17 +7,47 @@ import {
 } from '../ui/fieldwork/dock-preferences'
 import type { DockId } from '../ui/fieldwork/dock-preferences'
 import {
-  launchChoices, savedLaunch, saveAppearance,
+  launchChoices, savedLaunch,
 } from '../ui/fieldwork/appearance-preferences'
 import type { LaunchPage } from '../ui/fieldwork/appearance-preferences'
+import {
+  accentColors, previewVisual, restoreVisual, savedVisual, saveCompleteAppearance,
+} from '../ui/fieldwork/visual-preferences'
+import type { Theme, Accent, TextSize, Language, VisualPreferences } from '../ui/fieldwork/visual-preferences'
 
 const router = useRouter()
 const route = useRoute()
 const dockSection = ref<HTMLElement | null>(null)
 const launchSection = ref<HTMLElement | null>(null)
+const themeSection = ref<HTMLElement | null>(null)
+const accentSection = ref<HTMLElement | null>(null)
+const sizeSection = ref<HTMLElement | null>(null)
+const languageSection = ref<HTMLElement | null>(null)
+const draftVisual = ref<VisualPreferences>({...savedVisual.value})
+const themeChoices: readonly {value:Theme;label:string}[] = [
+ {value:'dark',label:'Тёмная'}, {value:'light',label:'Светлая'}, {value:'system',label:'Системная'},
+]
+const accentChoices: readonly {value:Accent;label:string}[] = [
+ {value:'green',label:'Зелёный'}, {value:'gray',label:'Серый'},
+ {value:'amber',label:'Янтарный'}, {value:'coral',label:'Коралловый'},
+]
+const sizeChoices: readonly {value:TextSize;label:string}[] = [
+ {value:'small',label:'Мелкий'}, {value:'normal',label:'Обычный'}, {value:'large',label:'Крупный'},
+]
+const languageChoices: readonly {value:Language;label:string}[] = [
+ {value:'ru',label:'Русский'}, {value:'en',label:'English'},
+]
+function changeVisual():void{
+  notice.value='';error.value=''
+  previewVisual(draftVisual.value)
+}
 async function focusRequestedField(): Promise<void> {
   const target = route.query.field === 'dock' ? dockSection
-    : route.query.field === 'launch' ? launchSection : null
+    : route.query.field === 'launch' ? launchSection
+    : route.query.field === 'theme' ? themeSection
+    : route.query.field === 'accent' ? accentSection
+    : route.query.field === 'size' ? sizeSection
+    : route.query.field === 'language' ? languageSection : null
   if (!target) return
   await nextTick()
   target.value?.scrollIntoView({block:'start'})
@@ -31,7 +61,8 @@ const error = ref('')
 const dragging = ref<DockId | null>(null)
 const dirty = computed(() =>
   JSON.stringify(draft.value) !== JSON.stringify(savedDock.value)
-  || draftLaunch.value !== savedLaunch.value,
+  || draftLaunch.value !== savedLaunch.value
+  || JSON.stringify(draftVisual.value)!==JSON.stringify(savedVisual.value),
 )
 const otherChoices = computed(() => dockChoices.filter(item => !draft.value.includes(item.id)))
 const chosen = computed(() => draft.value.map(id => dockDefinitions[id]))
@@ -85,12 +116,14 @@ function onDrop(event: DragEvent, target: DockId): void {
 function cancel(): void {
   draft.value=[...savedDock.value]
   draftLaunch.value=savedLaunch.value
+  draftVisual.value={...savedVisual.value}
   restoreDock()
+  restoreVisual()
   void router.push('/settings')
 }
 function save(): void {
   if (!dirty.value) return
-  if (!saveAppearance(draft.value,draftLaunch.value)) {
+  if (!saveCompleteAppearance(draft.value,draftLaunch.value,draftVisual.value)) {
     error.value='Не удалось сохранить оформление на этом устройстве. Настройки не изменены.'
     return
   }
@@ -101,8 +134,8 @@ function updateLaunch(): void {
   notice.value=''
   error.value=''
 }
-onMounted(() => { previewDock(draft.value); void focusRequestedField() })
-onUnmounted(() => { restoreDock() })
+onMounted(() => { previewDock(draft.value); previewVisual(draftVisual.value); void focusRequestedField() })
+onUnmounted(() => { restoreDock(); restoreVisual() })
 onBeforeRouteLeave(() => {
   if (!dirty.value) return true
   return window.confirm('Изменения оформления не сохранены. Выйти без сохранения?')
@@ -117,6 +150,59 @@ onBeforeRouteLeave(() => {
     </header>
 
     <div class="appearance-body">
+      <section id="setting-field-theme" ref="themeSection" tabindex="-1"
+        class="appearance-section" aria-labelledby="theme-title" data-testid="appearance-theme-field">
+        <h2 id="theme-title">Тема</h2>
+        <div class="appearance-panel">
+          <div class="visual-options themes" role="group" aria-label="Тема">
+            <button v-for="option in themeChoices" :key="option.value" type="button"
+              class="visual-choice" :aria-pressed="draftVisual.theme===option.value"
+              :data-testid="'appearance-theme-'+option.value"
+              @click="draftVisual.theme=option.value;changeVisual()">{{option.label}}</button>
+          </div>
+          <p class="visual-hint">Системная тема следует настройкам устройства.</p>
+        </div>
+      </section>
+      <section id="setting-field-accent" ref="accentSection" tabindex="-1"
+        class="appearance-section" aria-labelledby="accent-title" data-testid="appearance-accent-field">
+        <h2 id="accent-title">Основной цвет</h2>
+        <div class="appearance-panel">
+          <div class="visual-options accents" role="group" aria-label="Основной цвет">
+            <button v-for="option in accentChoices" :key="option.value" type="button"
+              class="visual-choice color" :aria-pressed="draftVisual.accent===option.value"
+              :data-testid="'appearance-accent-'+option.value"
+              @click="draftVisual.accent=option.value;changeVisual()">
+              <span class="color-mark" :style="{background:accentColors[option.value]}" aria-hidden="true"></span>
+              {{option.label}}
+            </button>
+          </div>
+        </div>
+      </section>
+      <section id="setting-field-size" ref="sizeSection" tabindex="-1"
+        class="appearance-section" aria-labelledby="size-title" data-testid="appearance-size-field">
+        <h2 id="size-title">Размер текста</h2>
+        <div class="appearance-panel">
+          <div class="visual-options" role="group" aria-label="Размер текста">
+            <button v-for="option in sizeChoices" :key="option.value" type="button"
+              class="visual-choice" :aria-pressed="draftVisual.size===option.value"
+              :data-testid="'appearance-size-'+option.value"
+              @click="draftVisual.size=option.value;changeVisual()">{{option.label}}</button>
+          </div>
+        </div>
+      </section>
+      <section id="setting-field-language" ref="languageSection" tabindex="-1"
+        class="appearance-section" aria-labelledby="language-title" data-testid="appearance-language-field">
+        <h2 id="language-title">Язык</h2>
+        <div class="appearance-panel">
+          <div class="visual-options" role="group" aria-label="Язык">
+            <button v-for="option in languageChoices" :key="option.value" type="button"
+              class="visual-choice" :aria-pressed="draftVisual.language===option.value"
+              :data-testid="'appearance-language-'+option.value"
+              @click="draftVisual.language=option.value;changeVisual()">{{option.label}}</button>
+          </div>
+          <p class="visual-hint">Настройка языка интерфейса на устройстве. Полный перевод всех экранов ещё не завершён.</p>
+        </div>
+      </section>
       <section id="setting-field-launch" ref="launchSection" tabindex="-1"
         class="appearance-section" aria-labelledby="launch-title" data-testid="appearance-launch-field">
         <h2 id="launch-title">Стартовая страница</h2>
@@ -197,12 +283,6 @@ onBeforeRouteLeave(() => {
         </div>
       </section>
 
-      <section class="appearance-section" aria-labelledby="other-appearance-title">
-        <h2 id="other-appearance-title">Остальные параметры</h2>
-        <div class="appearance-panel pending-appearance">
-          <p>Тема, основной цвет, размер текста и язык будут подключены отдельно, с полноценным сохранением и проверкой локализации.</p>
-        </div>
-      </section>
     </div>
 
     <div class="appearance-actions">
@@ -211,7 +291,7 @@ onBeforeRouteLeave(() => {
     </div>
     <p v-if="notice" role="status" class="save-notice">{{ notice }}</p>
     <p v-if="error" role="alert" class="save-error">{{ error }}</p>
-    <p class="storage-notice">Порядок панели и стартовая страница сохраняются одним действием локально на этом устройстве. Синхронизация между устройствами пока не подключена.</p>
+    <p class="storage-notice">Dock, стартовая страница и оформление сохраняются одним действием на этом устройстве. Перенос между устройствами пока не подключён.</p>
   </section>
 </template>
 
@@ -221,9 +301,17 @@ onBeforeRouteLeave(() => {
 .appearance-heading p{color:#a4ada6;font-size:12px;margin:6px 0 0}
 .appearance-body{margin-top:34px;display:grid;gap:22px}
 .appearance-section h2{font-size:15px;font-weight:720;margin:0 0 8px}
-#setting-field-dock,#setting-field-launch{scroll-margin-top:16px}
-#setting-field-dock:focus,#setting-field-launch:focus{outline:none}
-#setting-field-dock:focus-visible,#setting-field-launch:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+#setting-field-dock,#setting-field-launch,#setting-field-theme,#setting-field-accent,#setting-field-size,#setting-field-language{scroll-margin-top:16px}
+#setting-field-dock:focus,#setting-field-launch:focus,#setting-field-theme:focus,#setting-field-accent:focus,#setting-field-size:focus,#setting-field-language:focus{outline:none}
+#setting-field-dock:focus-visible,#setting-field-launch:focus-visible,#setting-field-theme:focus-visible,#setting-field-accent:focus-visible,#setting-field-size:focus-visible,#setting-field-language:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.visual-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.visual-options.accents{grid-template-columns:repeat(4,minmax(0,1fr))}
+.visual-choice{display:flex;justify-content:center;align-items:center;gap:8px;padding:12px 9px;border:1px solid #494e49;border-radius:8px;background:#2a2a2a;color:#e9e9e9;font-size:12px;cursor:pointer;min-height:46px}
+.visual-choice[aria-pressed="true"]{border-color:var(--accent);background:#273b2e}
+.visual-choice:focus-visible{outline:2px solid var(--accent)}
+.visual-hint{font-size:11px;color:#adb5ae;margin:11px 0 0}
+.color-mark{display:block;width:18px;height:18px;flex:none;border:1px solid #ffffff54;border-radius:50%}
+@media(max-width:560px){.visual-options.accents{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .launch-hint{font-size:12px;line-height:1.55;color:#aeb5ae;margin:0 0 12px}
 .launch-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .launch-option{display:flex;align-items:center;gap:9px;padding:13px 11px;

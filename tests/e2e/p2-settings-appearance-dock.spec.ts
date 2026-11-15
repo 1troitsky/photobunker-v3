@@ -42,6 +42,7 @@ test('UX Appearance 1.3: Dock draft, cancel, save, device reload and protected S
       version:2,
       dock:['assignments','browser','settings','camera'],
       launch:'tasks',
+      visual:{theme:'dark',accent:'green',size:'normal',language:'ru'},
     })
     await page.reload()
     await expect(dock.getByRole('link')).toHaveCount(4)

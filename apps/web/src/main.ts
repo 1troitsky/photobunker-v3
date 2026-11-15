@@ -2,6 +2,7 @@ import { createApp, watch } from 'vue'
 import App from './App.vue'
 import { router } from './router'
 import { brand } from './config/brand'
+import { initializeVisualAppearance } from './ui/fieldwork/visual-preferences'
 import './styles.css'
 import { ensureOwnExchangeKey } from './features/sharing/key-directory'
 import { attachShareLifecycle, flushRecipientGrants } from './features/sharing/grant-flow'
@@ -12,6 +13,7 @@ import { refreshRetentionHint } from './features/media/application/retention-hin
 import { attachMediaRetryCoordinator } from './features/media/application/media-retry-coordinator'
 
 document.title = brand.name
+initializeVisualAppearance()
 // P0 deliberately does NOT register a Service Worker pending signed-release design.
 // Navigation and this shell are available without waiting for any network identity call.
 createApp(App).use(router).mount('#app')

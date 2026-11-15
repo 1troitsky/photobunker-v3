@@ -19,10 +19,10 @@ test('UX: settings hub provides real Contacts route without breaking Key-Only Id
     await expect(page.getByRole('heading',{name:'Настройки',exact:true})).toBeVisible()
     const contacts = page.getByTestId('settings-nav-contacts-teams')
     await expect(contacts).toHaveAttribute('href','/contacts')
-    await expect(page.getByTestId('settings-pending-profile-card')).toBeVisible()
+    await expect(page.getByTestId('settings-nav-profile-card')).toHaveAttribute('href','/settings/profile')
     await expect(page.getByTestId('settings-nav-appearance'))
       .toHaveAttribute('href','/settings/appearance')
-    await expect(page.getByTestId('settings-pending-security-privacy')).toBeVisible()
+    await expect(page.getByTestId('settings-nav-security-privacy')).toHaveAttribute('href','/settings/security')
     await expect(page.getByTestId('settings-nav-data-storage'))
       .toHaveAttribute('href','/settings/storage')
 

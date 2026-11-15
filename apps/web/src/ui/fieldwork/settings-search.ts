@@ -30,21 +30,21 @@ export const settingsSearchEntries: readonly SettingsSearchEntry[] = [
   },
   {
     id: 'theme', label: 'Тема', group: 'Оформление',
-    description: 'Тёмная, светлая и системная тема — ещё не подключены',
+    description: 'Тёмная, светлая или системная тема устройства',
     keywords: ['тема', 'theme', 'темн', 'светл', 'system', 'dark', 'light'],
-    to: null,
+    to: '/settings/appearance?field=theme',
   },
   {
     id: 'accent', label: 'Основной цвет', group: 'Оформление',
-    description: 'Цветовой акцент — ещё не подключён',
+    description: 'Зелёный, серый, янтарный или коралловый акцент',
     keywords: ['цвет', 'акцент', 'accent', 'color', 'colour'],
-    to: null,
+    to: '/settings/appearance?field=accent',
   },
   {
     id: 'text-size', label: 'Размер текста', group: 'Оформление',
-    description: 'Масштаб текста — ещё не подключён',
+    description: 'Мелкий, обычный или крупный текст',
     keywords: ['шрифт', 'размер текста', 'text size', 'font', 'size'],
-    to: null,
+    to: '/settings/appearance?field=size',
   },
   {
     id: 'start-page', label: 'Стартовая страница', group: 'Оформление',
@@ -54,9 +54,9 @@ export const settingsSearchEntries: readonly SettingsSearchEntry[] = [
   },
   {
     id: 'language', label: 'Язык', group: 'Оформление',
-    description: 'Русский / English — полная локализация ещё не подключена',
+    description: 'Русский / English — выбор языка интерфейса на устройстве',
     keywords: ['язык', 'языки', 'language', 'locale', 'русский', 'english', 'localization'],
-    to: null,
+    to: '/settings/appearance?field=language',
   },
   {
     id: 'notifications', label: 'Уведомления', group: 'Приложение',
