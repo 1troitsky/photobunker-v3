@@ -12,21 +12,55 @@ export async function makeBrowserFolderThumbnail(
     ||source.size<1||source.size>24*1024*1024
     ||!/^image\/(?:jpeg|png|webp|gif|avif)$/i.test(source.type))
     throw Error('browser.thumbnail_unsupported')
-  if(typeof createImageBitmap!=='function')
-    throw Error('browser.thumbnail_decoder_unavailable')
-  const bitmap=await createImageBitmap(source)
+  let image:ImageBitmap|HTMLImageElement
+  let release:()=>void
+  if(typeof createImageBitmap==='function'){
+    const bitmap=await createImageBitmap(source)
+    image=bitmap
+    release=()=>bitmap.close()
+  }else{
+    // Some WebKit installations lack ImageBitmap; the original object URL
+    // is temporary and revoked even when image decoding fails or times out.
+    const url=URL.createObjectURL(source)
+    const element=new Image()
+    try{
+      await new Promise<void>((resolve,reject)=>{
+        let settled=false
+        const finish=(error?:Error):void=>{
+          if(settled)return
+          settled=true
+          clearTimeout(timer)
+          element.onload=null;element.onerror=null
+          if(error)reject(error)
+          else resolve()
+        }
+        const timer=setTimeout(()=>finish(Error('browser.thumbnail_decode_timeout')),8000)
+        element.onload=()=>finish()
+        element.onerror=()=>finish(Error('browser.thumbnail_decode_failed'))
+        element.src=url
+      })
+    }catch(e){
+      element.src=''
+      URL.revokeObjectURL(url)
+      throw e
+    }
+    image=element
+    release=()=>{element.src='';URL.revokeObjectURL(url)}
+  }
   try{
-    if(bitmap.width<1||bitmap.height<1||bitmap.width>16384||bitmap.height>16384)
+    const width=image instanceof ImageBitmap?image.width:image.naturalWidth
+    const height=image instanceof ImageBitmap?image.height:image.naturalHeight
+    if(width<1||height<1||width>16384||height>16384)
       throw Error('browser.thumbnail_invalid_dimensions')
     const canvas=document.createElement('canvas')
     canvas.width=edge
     canvas.height=edge
     const ctx=canvas.getContext('2d')
     if(!ctx)throw Error('browser.thumbnail_canvas_unavailable')
-    const crop=Math.min(bitmap.width,bitmap.height)
-    const x=Math.floor((bitmap.width-crop)/2)
-    const y=Math.floor((bitmap.height-crop)/2)
-    ctx.drawImage(bitmap,x,y,crop,crop,0,0,edge,edge)
+    const crop=Math.min(width,height)
+    const x=Math.floor((width-crop)/2)
+    const y=Math.floor((height-crop)/2)
+    ctx.drawImage(image,x,y,crop,crop,0,0,edge,edge)
     const result=await new Promise<Blob>((resolve,reject)=>{
       canvas.toBlob(blob=>blob?resolve(blob):
         reject(Error('browser.thumbnail_encode_failed')),'image/jpeg',0.68)
@@ -35,6 +69,6 @@ export async function makeBrowserFolderThumbnail(
       throw Error('browser.thumbnail_invalid_result')
     return result
   }finally{
-    bitmap.close()
+    release()
   }
 }
