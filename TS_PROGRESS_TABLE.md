@@ -1,5 +1,22 @@
 # PB3 — единственная таблица прогресса
 
+## Дополнение: Frontend Fieldwork / Draft PR #412 — 16.11.2026
+
+**Ветка:** `integration/pb3-one-frontend-shell-20261115`. **Статус:** код в Draft PR; `main` не изменён. Это не новая оценка процента готовности и **не owner acceptance**. Упомянутый ниже HEAD фиксируется в [PR #412](https://github.com/1troitsky/photobunker-v3/pull/412); из-за продолжающихся коммитов хеш проверять по PR перед проверкой.
+
+| Направление frontend | Код в отдельной Draft-ветке | Проверка / блокер |
+| --- | --- | --- |
+| Unified Fieldwork Shell | Общий Header 64px, Dock 82px, контекстные действия Browser/Camera, брендинг без hardcode | UX parity на реальных устройствах НЕ ПРИНЯТА |
+| Browser v3 | Все/Мои фото/Задания/Архив; Grid/List/Tree, реальные зашифрованные папки, Breadcrumbs, Header actions; bottom sheets New Folder/Upload/Settings; локальный режим оставшихся дней; архивный TTL/ACL без ослабления | Cloud-only assignment classification нельзя обещать; папочные коллажи пока используют безопасные типовые заглушки, а не подтверждённые E2EE thumbnails; 100% parity нет |
+| Camera Fieldwork 1.2 | Фото/Видео/Аудио, реальный capture/MediaRecorder и stop timer; Header flip/torch/blind; 3×3, GPS consent/watch, нижние sheets; AES-GCM device presets, фото-обрезка и настройки качества | Safari iOS / Chrome Android: torch, разрешения, codec/duration, screenshot geometry **NOT TESTED** |
+| Regression coverage | Vitest encrypted presets/JPEG/MediaRecorder/GPS; Playwright Browser Header/sections/folders/import/settings и Camera viewfinder/overlays/presets | Exact latest HEAD CI **НЕ ПОДТВЕРЖДЁН**. В промежуточном `7c2fee0` Chromium PG18/Garage **118/120 PASS, 2 FAIL**; `c3d4473` frontend 744/745 PASS, 1 FAIL; исправления внесены позднее и требуют полного повторного прогона |
+| Security-gated feature UX | Не объявлять PIN/Panic/Matrix/public safe sharing/paid settlement/backup restore/signed offline PWA готовыми по наличию экранов | Backend/Security release gates + независимые E2E и owner acceptance обязательны |
+
+**Решение:** продолжать реализацию и независимые проверки; не выполнять merge/релиз, пока не будет точного CI PASS и UX/device acceptance. Непроверенные макеты не превращать в статус «готово».
+
+---
+
+
 **Срез 13.11.2026.** Проценты не используются: реализация, тестирование и приёмка — разные состояния. `main` проверен по удалённому SHA: **`da7327b8c9c440dae3dc864b3245b9f9f4ad14eb`**. Ошибочный merge #290 (`9160cbf1…`) в нём **не достижим**, несмотря на GitHub `merged`.
 
 Одна изолированная ветка `integration/global-acceptance-20261113` сохраняет #290 **`f4bce2e1…`** и его историю, переносит только clock-margin #63 с новыми Safe/ACL ceilings и обновляет 5 уязвимых Symfony patch-версий. #292 / Matrix / альтернативный GPS #262 не добавлены. Отдельного разрешения на merge main нет.
