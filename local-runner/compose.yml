@@ -31,8 +31,8 @@ services:
       APP_SHORT_NAME: PhotoBunker
       APP_SLUG: photobunker
       APP_MARK: app
-      APP_PUBLIC_URL: http://127.0.0.1:5173
-      APP_URL: http://127.0.0.1:5173
+      APP_PUBLIC_URL: ${PB3_PUBLIC_ORIGIN:-http://127.0.0.1:5173}
+      APP_URL: ${PB3_PUBLIC_ORIGIN:-http://127.0.0.1:5173}
       APP_ENV: local
       APP_DEBUG: 'false'
       APP_KEY: ${PB3_APP_KEY:?local Laravel key required}

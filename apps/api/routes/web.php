@@ -34,7 +34,7 @@ Route::get('/api/readyz', static function(){
 
 // Public, versioned plan definitions and strictly owner-scoped entitlements.
 // Paid plan activation deliberately has NO browser route.
-Route::prefix('billing/v1')->middleware('throttle:40,1')->group(function(){
+Route::prefix('billing/v1')->middleware('throttle:pb3-billing')->group(function(){
     Route::get('/plans',[BillingV1Controller::class,'plans']);
     Route::get('/me',[BillingV1Controller::class,'me']);
 });
@@ -55,7 +55,7 @@ Route::prefix('identity/v2')->middleware('throttle:pb3-identity')->group(functio
     Route::get('/devices',[IdentityController::class,'devices']);
 });
 
-Route::prefix('photos/v1')->middleware('throttle:120,1')->group(function(){
+Route::prefix('photos/v1')->middleware('throttle:pb3-photos')->group(function(){
     Route::get('/',[PhotoSyncController::class,'index']);
     Route::post('/reserve',[PhotoSyncController::class,'reserve']);
     Route::put('/{photoId}/objects/{assetId}',[PhotoSyncController::class,'upload'])
@@ -124,7 +124,7 @@ Route::prefix('media-shares/v1')->middleware('throttle:pb3-media')->group(functi
 
 // P1-03: all endpoints require an enrolled identity; mutating calls also
 // require exact Origin + Laravel CSRF and signed root-account commands.
-Route::prefix('shares/v1')->middleware('throttle:40,1')->group(function(){
+Route::prefix('shares/v1')->middleware('throttle:pb3-sharing')->group(function(){
     Route::get('/keys/me',[RecipientKeyController::class,'mine']);
     Route::post('/keys',[RecipientKeyController::class,'publish']);
     Route::get('/keys/{accountId}',[RecipientKeyController::class,'show'])->whereUuid('accountId');

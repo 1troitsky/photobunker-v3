@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
+import {onBeforeRouteLeave} from 'vue-router'
 import {activeSession} from '../features/identity/application/session'
 import {
   listConfirmedContacts,
@@ -31,6 +32,7 @@ const draftSaving=ref(false)
 let run=0
 let saveTimer:ReturnType<typeof setTimeout>|null=null
 let returnFocus:HTMLElement|null=null
+let closing=false
 
 function identity():string{
   const s=activeSession.value
@@ -105,13 +107,13 @@ function rememberInput():void{
 }
 async function persist(
   peer:ConfirmedContact,body:string,owner:string,token:number,
-):Promise<void>{
-  if(!matches(owner,token))return
+):Promise<boolean>{
+  if(!matches(owner,token))return false
   draftSaving.value=true
+  error.value='';status.value=''
   try{
     await saveMessageDraft(peer,body)
-    if(!matches(owner,token))return
-    if(editor.value!==body)return
+    if(!matches(owner,token)||editor.value!==body)return false
     if(!body.trim()){
       drafts.value=drafts.value.filter(x=>x.peerAccountId!==peer.peerAccountId)
     }else{
@@ -122,27 +124,39 @@ async function persist(
       ]
     }
     status.value='Черновик зашифрован на этом устройстве'
-  }catch(e){if(matches(owner,token))error.value=message(e)}
-  finally{if(matches(owner,token))draftSaving.value=false}
+    return true
+  }catch(e){
+    if(matches(owner,token))error.value=message(e)
+    return false
+  }finally{if(matches(owner,token))draftSaving.value=false}
 }
 async function close():Promise<void>{
-  if(!threadOpen.value)return
-  if(saveTimer!==null){clearTimeout(saveTimer);saveTimer=null}
-  const owner=identity(),token=run,peer=selected.value
-  if(peer)await persist(peer,editor.value,owner,token)
-  if(!matches(owner,token))return
-  threadOpen.value=false
-  selected.value=null;editor.value=''
-  await nextTick()
-  // Picker rows leave the tree when a draft is opened. Restore focus to
-  // the original control if it survives, otherwise use the draft row or
-  // New Message action (not the document body or a hidden Dock element).
-  const fallback=document.querySelector<HTMLElement>(
-    '[data-testid="messages-draft-'+peer?.peerAccountId+'"]',
-  )??document.querySelector<HTMLElement>('[data-testid="messages-compose"]')
-  if(returnFocus&&document.contains(returnFocus))returnFocus.focus()
-  else fallback?.focus()
-  returnFocus=null
+  if(!threadOpen.value||closing)return
+  closing=true
+  try{
+    if(saveTimer!==null){clearTimeout(saveTimer);saveTimer=null}
+    const owner=identity(),token=run,peer=selected.value
+    if(peer){
+      const saved=await persist(peer,editor.value,owner,token)
+      if(!matches(owner,token))return
+      if(!saved){
+        if(!error.value)error.value='Черновик изменился во время сохранения. Повторите закрытие.'
+        editorRef.value?.focus()
+        return
+      }
+    }
+    if(!matches(owner,token))return
+    threadOpen.value=false
+    selected.value=null;editor.value=''
+    await nextTick()
+    // Restore focus to the draft row, or the new-message action if needed.
+    const fallback=document.querySelector<HTMLElement>(
+      '[data-testid="messages-draft-'+peer?.peerAccountId+'"]',
+    )??document.querySelector<HTMLElement>('[data-testid="messages-compose"]')
+    if(returnFocus&&document.contains(returnFocus))returnFocus.focus()
+    else fallback?.focus()
+    returnFocus=null
+  }finally{closing=false}
 }
 function dismissWithoutSave():void{
   if(saveTimer!==null){clearTimeout(saveTimer);saveTimer=null}
@@ -181,6 +195,14 @@ function newConversation():void{
     void nextTick(()=>pickerRef.value?.focus())
   }
 }
+// A browser Back while the modal is open closes the modal rather than
+// navigating away. Failed IndexedDB writes keep the composer and text visible.
+onBeforeRouteLeave(async()=>{
+  if(!threadOpen.value)return true
+  if(!activeSession.value){dismissWithoutSave();return true}
+  await close()
+  return false
+})
 watch(activeSession,(_current,old)=>{
   const prev=old?[
     old.accountId,old.deviceId,old.pkg.akek,old.pkg.accountSpki,old.pkg.revision,
