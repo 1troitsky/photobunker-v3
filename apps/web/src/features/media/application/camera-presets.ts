@@ -77,7 +77,7 @@ export function validateCameraPresetSettings(raw:unknown):CameraPresetSettings{
   const gpsTrack=legacy?false:s.gpsTrackingEnabled
   if((!legacy&&Object.keys(s).length!==13)
     ||typeof zoom!=='number'||!Number.isFinite(zoom)
-    ||zoom<1||zoom>3||Math.abs(zoom*10-Math.round(zoom*10))>1e-6
+    ||zoom<1||zoom>3
     ||typeof torch!=='boolean'||typeof gpsTrack!=='boolean'
     ||!validEnum(s.photoAspect,aspects)||!validEnum(s.photoQuality,quality)
     ||!validEnum(s.photoStorage,['p1','p2'])
