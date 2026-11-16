@@ -42,6 +42,26 @@ const closing=ref(false)
 let run=0
 let saveTimer:ReturnType<typeof setTimeout>|null=null
 let returnFocus:HTMLElement|null=null
+let modalBackground:HTMLElement|null=null
+let previousBackgroundInert=false
+
+// Messages 1.1 is a fullscreen modal, not merely an overlaid panel.
+// While it is open, the shared Shell (including its header and Dock) must
+// not be keyboard- or screen-reader-accessible. Restore its ORIGINAL inert
+// state after close/unmount; do not reset another owner's lock.
+function setModalBackground(open:boolean):void{
+  if(open){
+    if(modalBackground)return
+    const shell=document.querySelector<HTMLElement>('.shell')
+    if(!shell)return
+    modalBackground=shell
+    previousBackgroundInert=shell.inert
+    shell.inert=true
+  }else if(modalBackground){
+    modalBackground.inert=previousBackgroundInert
+    modalBackground=null
+  }
+}
 
 function identity():string{
   const s=activeSession.value
@@ -233,6 +253,7 @@ function newConversation():void{
     void nextTick(()=>pickerRef.value?.focus())
   }
 }
+watch(threadOpen,open=>setModalBackground(open),{flush:'post'})
 watch(()=>route.query.peer,()=>{
   if(threadOpen.value)return
   const peer=requestedPeer()
@@ -259,6 +280,7 @@ onUnmounted(()=>{
     void saveMessageDraft(selected.value,editor.value).catch(()=>{})
   }
   ++run;dismissWithoutSave();contacts.value=[];drafts.value=[]
+  setModalBackground(false)
   window.removeEventListener('keydown',keyboard)
 })
 </script>

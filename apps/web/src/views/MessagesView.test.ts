@@ -30,6 +30,7 @@ const contact:ConfirmedContact={
 }
 let app:App|undefined
 let host:HTMLDivElement
+let shell:HTMLDivElement
 function session():Session{
   return {accountId:'11111111-1111-4111-8111-111111111111',
     deviceId:'33333333-3333-4333-8333-333333333333',
@@ -72,8 +73,11 @@ function closeThread():void{
   button.click()
 }
 beforeEach(()=>{
+  shell=document.createElement('div')
+  shell.className='shell'
   host=document.createElement('div')
-  document.body.append(host)
+  shell.append(host)
+  document.body.append(shell)
   activeSession.value=session()
   mocks.contacts.mockReset().mockResolvedValue([contact])
   mocks.drafts.mockReset().mockResolvedValue([])
@@ -83,10 +87,31 @@ beforeEach(()=>{
 })
 afterEach(()=>{
   app?.unmount();app=undefined
-  host.remove()
+  shell.remove()
   activeSession.value=null
 })
 describe('Messages 1.1 local-first draft safety',()=>{
+  it('makes only the fullscreen dialog interactive, then restores Shell access',async()=>{
+    await mountAndOpen()
+    expect(shell.inert).toBe(true)
+    expect(document.activeElement).toBe(editor())
+    expect(thread()?.getAttribute('aria-modal')).toBe('true')
+    closeThread()
+    await settle()
+    expect(shell.inert).toBe(false)
+    expect(thread()).toBeNull()
+    expect(document.activeElement).toBe(
+      host.querySelector('[data-testid="messages-compose"]'))
+  })
+  it('restores the original Shell inert state after unmount while dialog is open',async()=>{
+    await mountAndOpen()
+    expect(shell.inert).toBe(true)
+    app?.unmount()
+    app=undefined
+    await settle()
+    expect(shell.inert).toBe(false)
+  })
+
   it('keeps unsaved text and the fullscreen editor when encrypted persistence fails',async()=>{
     mocks.save.mockRejectedValueOnce(new Error('IndexedDB quota'))
     await mountAndOpen()

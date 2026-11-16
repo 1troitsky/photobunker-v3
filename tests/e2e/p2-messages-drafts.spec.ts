@@ -53,6 +53,9 @@ test('P2-01: verified contact → real encrypted message draft → fullscreen ov
     await A.getByTestId('messages-picker-'+peerId).click()
     const overlay=A.getByTestId('messages-thread')
     await expect(overlay).toBeVisible()
+    // Fullscreen modal overlays Header+Dock, but the background Shell
+    // must also be inert to keyboard and screen-reader interaction.
+    await expect(A.locator('.shell')).toHaveAttribute('inert','')
     await expect(A.getByRole('button',{name:'Отправить сообщение'})).toBeDisabled()
     await expect(A.getByRole('button',{name:'Добавить вложение'})).toBeDisabled()
     expect(await A.evaluate(()=>Boolean(
@@ -63,6 +66,7 @@ test('P2-01: verified contact → real encrypted message draft → fullscreen ov
     await A.getByTestId('messages-editor').fill(content)
     await A.getByTestId('messages-close').click()
     await expect(overlay).toHaveCount(0)
+    await expect(A.locator('.shell')).not.toHaveAttribute('inert','')
     await expect(A.getByTestId('messages-draft-'+peerId))
       .toContainText(content)
     const encrypted=await A.evaluate(async()=>{
