@@ -1273,8 +1273,16 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   min-height:25px;padding:3px 5px;color:#c1edca;font-size:11px}
 .camera-control-trio{display:grid;grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr);
   gap:12px;align-items:center;min-height:83px}
-.camera-fieldwork .camera-side-action{border:0;background:none;color:#e4e4e4;
-  font-size:12px;font-weight:660;min-width:0;padding:12px 5px}
+.camera-fieldwork .camera-side-action{
+  border:0;background:transparent;display:flex;align-items:center;
+  justify-content:center;flex-direction:column;gap:7px;
+  color:#ccc;min-width:0;padding:6px 2px
+}
+.camera-fieldwork .camera-side-action svg{width:23px;height:23px;color:#aeb1af;flex:none}
+.camera-fieldwork .camera-side-action strong{
+  font-weight:650;font-size:11px;white-space:nowrap;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis
+}
 .camera-control-trio .camera-shutter{position:relative;width:72px;height:72px;
   min-height:72px;justify-self:center;border-radius:50%;background:#f5f5f5;
   border:5px solid #101210;box-shadow:0 0 0 2px #e8e8e8;padding:0}
