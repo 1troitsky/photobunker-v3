@@ -106,7 +106,7 @@ test('P2-01: verified contact → real encrypted message draft → fullscreen ov
       const {router}=await import('/src/router.ts')
       await router.push('/contacts')
     })
-    await expect(A).toHaveURL(/\\/contacts$/)
+    await expect(A).toHaveURL(/\/contacts$/)
     await A.goto('/messages')
     await expect(A.getByTestId('messages-draft-'+peerId))
       .toContainText(content+' ROUTED')
