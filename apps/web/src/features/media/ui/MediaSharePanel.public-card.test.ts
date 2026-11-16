@@ -3,6 +3,7 @@ import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {createApp,h,nextTick,type App} from 'vue'
 import {activeSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
+import type {StoredMedia} from '../application/media-outbox'
 import MediaSharePanel from './MediaSharePanel.vue'
 
 const m=vi.hoisted(()=>({
@@ -209,9 +210,12 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
     m.queue.mockImplementation(()=>new Promise<string>(
       resolve=>{resolveGrant=resolve}))
     host=document.createElement('div');document.body.append(host)
-    app=createApp({render:()=>h(MediaSharePanel,{localMedia:[{
+    // Pure DOM fixture: no ciphertext is read or sent; the real E2EE
+    // application APIs are stubbed only at the module boundary.
+    const fixture={
       key:'only-media',mediaId:id('4'),mediaType:'audio',state:'synced',
-    }]})})
+    } as unknown as StoredMedia
+    app=createApp({render:()=>h(MediaSharePanel,{localMedia:[fixture]})})
     app.mount(host);await settle()
     const peer=host.querySelector<HTMLInputElement>('#media-share-peer-id')!
     peer.value=id('3');peer.dispatchEvent(new Event('input',{bubbles:true}))
