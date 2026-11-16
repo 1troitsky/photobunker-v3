@@ -271,6 +271,17 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(host.querySelector('[data-testid="camera-photo-zoom"]')).toBeNull()
     expect(host.querySelector('[data-testid="camera-photo-zoom-unavailable"]')).not.toBeNull()
   })
+  it('never captures from a stopped native track even before the browser emits ended',async()=>{
+    const opened=media()
+    await mount()
+    requests[0]!.resolve(opened.stream)
+    await settle()
+    opened.track.stop() // Browser may defer the ended event for a revoked track.
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.capture).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
   it('fails closed after a native idle camera track ends, then retries only after permission action',async()=>{
     const opened=media()
     await mount()
