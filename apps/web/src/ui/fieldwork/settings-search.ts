@@ -83,6 +83,30 @@ export const settingsSearchEntries: readonly SettingsSearchEntry[] = [
     to: '/notifications/settings?field=expiry',
   },
   {
+    id: 'notification-new-files', label: 'Новые файлы', group: 'Настройки уведомлений',
+    description: 'Уведомления о новых материалах',
+    keywords: ['новые', 'файл', 'материал', 'new files', 'notifications'],
+    to: '/notifications/settings?field=newFiles',
+  },
+  {
+    id: 'notification-reviews', label: 'Проверка материалов', group: 'Настройки уведомлений',
+    description: 'Уведомления о проверке материалов',
+    keywords: ['проверка', 'материал', 'review', 'media', 'notifications'],
+    to: '/notifications/settings?field=reviews',
+  },
+  {
+    id: 'notification-backups', label: 'Резервные копии', group: 'Настройки уведомлений',
+    description: 'Уведомления о резервном копировании',
+    keywords: ['бэкап', 'backup', 'резервн', 'notifications'],
+    to: '/notifications/settings?field=backups',
+  },
+  {
+    id: 'notification-subscription', label: 'Подписка', group: 'Настройки уведомлений',
+    description: 'Уведомления о подписке',
+    keywords: ['подписка', 'subscription', 'платеж', 'notifications'],
+    to: '/notifications/settings?field=subscription',
+  },
+  {
     id: 'notification-badges', label: 'Индикаторы уведомлений', group: 'Настройки уведомлений',
     description: 'Значки непрочитанных уведомлений в приложении',
     keywords: ['значок', 'индикатор', 'badge', 'unread', 'notifications'],
