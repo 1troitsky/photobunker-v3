@@ -216,25 +216,33 @@ async function modify(
  * Defaults are safe if the device has never saved preferences.
  */
 export type NotificationPreferences=Readonly<{
-  version:2
+  version:3
   invitations:boolean
   deadlines:boolean
   expiry:boolean
-  system:boolean
+  newFiles:boolean
+  reviews:boolean
+  backups:boolean
+  subscription:boolean
   badges:boolean
   quietEnabled:boolean
   quietStart:number
   quietEnd:number
 }>
 export const defaultNotificationPreferences:NotificationPreferences=Object.freeze({
-  version:2,invitations:true,deadlines:true,expiry:true,system:true,badges:true,
+  version:3,invitations:true,deadlines:true,expiry:true,
+  newFiles:true,reviews:true,backups:true,subscription:true,badges:true,
   quietEnabled:false,quietStart:22*60,quietEnd:8*60,
 })
 const PREFERENCE_KEYS=[
+  'backups','badges','deadlines','expiry','invitations','newFiles',
+  'quietEnabled','quietEnd','quietStart','reviews','subscription','version',
+] as const
+const V2_PREFERENCE_KEYS=[
   'badges','deadlines','expiry','invitations','quietEnabled','quietEnd',
   'quietStart','system','version',
 ] as const
-const OLD_PREFERENCE_KEYS=['badges','deadlines','expiry','invitations','system','version'] as const
+const V1_PREFERENCE_KEYS=['badges','deadlines','expiry','invitations','system','version'] as const
 function minute(value:unknown):value is number{
   return typeof value==='number'&&Number.isInteger(value)&&value>=0&&value<1440
 }
@@ -243,9 +251,9 @@ function validatePreferences(value:unknown):asserts value is NotificationPrefere
     throw Error('notifications.invalid_preferences')
   const v=value as Record<string,unknown>
   if(Object.keys(v).sort().join('|')!==PREFERENCE_KEYS.join('|')
-    ||v.version!==2
-    ||['badges','deadlines','expiry','invitations','system','quietEnabled']
-      .some(key=>typeof v[key]!=='boolean')
+    ||v.version!==3
+    ||['backups','badges','deadlines','expiry','invitations','newFiles',
+      'quietEnabled','reviews','subscription'].some(key=>typeof v[key]!=='boolean')
     ||!minute(v.quietStart)||!minute(v.quietEnd)
     ||v.quietEnabled===true&&v.quietStart===v.quietEnd)
     throw Error('notifications.invalid_preferences')
@@ -253,17 +261,37 @@ function validatePreferences(value:unknown):asserts value is NotificationPrefere
 function normalizedPreferences(value:unknown):NotificationPreferences{
   if(value&&typeof value==='object'&&!Array.isArray(value)){
     const v=value as Record<string,unknown>
-    if(v.version===1&&Object.keys(v).sort().join('|')===OLD_PREFERENCE_KEYS.join('|')
+    const keys=Object.keys(v).sort().join('|')
+    if(v.version===1&&keys===V1_PREFERENCE_KEYS.join('|')
       &&['badges','deadlines','expiry','invitations','system']
         .every(key=>typeof v[key]==='boolean')){
-      const upgraded={...defaultNotificationPreferences,
+      // v1 had one broad system toggle. Preserve its intent for each newly
+      // separated notification kind, never expose a category that was hidden.
+      const system=v.system as boolean
+      return {...defaultNotificationPreferences,
         invitations:v.invitations as boolean,
         deadlines:v.deadlines as boolean,
         expiry:v.expiry as boolean,
-        system:v.system as boolean,
+        newFiles:system,reviews:system,backups:system,subscription:system,
         badges:v.badges as boolean,
       }
-      return upgraded
+    }
+    if(v.version===2&&keys===V2_PREFERENCE_KEYS.join('|')
+      &&['badges','deadlines','expiry','invitations','system','quietEnabled']
+        .every(key=>typeof v[key]==='boolean')
+      &&minute(v.quietStart)&&minute(v.quietEnd)
+      &&!(v.quietEnabled===true&&v.quietStart===v.quietEnd)){
+      // v2 quiet hours survive unchanged, including a dormant equal-time
+      // setting when quiet hours were explicitly disabled.
+      const system=v.system as boolean
+      return {...defaultNotificationPreferences,
+        invitations:v.invitations as boolean,
+        deadlines:v.deadlines as boolean,
+        expiry:v.expiry as boolean,
+        newFiles:system,reviews:system,backups:system,subscription:system,
+        badges:v.badges as boolean,quietEnabled:v.quietEnabled as boolean,
+        quietStart:v.quietStart,quietEnd:v.quietEnd,
+      }
     }
   }
   validatePreferences(value)
@@ -294,13 +322,20 @@ function preferencesAAD(ownerScope:string):Uint8Array<ArrayBuffer>{
 export function notificationIsVisible(
   kind:NotificationKind,preferences:NotificationPreferences,
 ):boolean{
-  // No user toggle may hide security-critical notices.
-  if(kind==='security')return true
-  if(kind==='assignment-invite'||kind==='team-invite')
-    return preferences.invitations
-  if(kind==='assignment-deadline')return preferences.deadlines
-  if(kind==='file-expiry')return preferences.expiry
-  return preferences.system
+  // Security notifications are not optional; all other categories have
+  // independent owner-selected display controls, not server-side filters.
+  switch(kind){
+    case 'security':return true
+    case 'assignment-invite':
+    case 'team-invite':return preferences.invitations
+    case 'assignment-deadline':return preferences.deadlines
+    case 'file-expiry':return preferences.expiry
+    case 'new-file':return preferences.newFiles
+    case 'media-review':return preferences.reviews
+    case 'backup':return preferences.backups
+    case 'subscription':return preferences.subscription
+    default:return false
+  }
 }
 export async function readNotificationPreferences():Promise<NotificationPreferences>{
   const session=requireSession()
