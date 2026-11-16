@@ -84,3 +84,26 @@ test('Security devices: offline transition clears a pending server spinner and r
     await page.unroute('**/identity/v2/devices')
   }
 })
+
+
+test('Security devices: real Chromium offline / online switches clear and reload authenticated rows',async({page})=>{
+  test.setTimeout(120000)
+  await page.goto('/settings')
+  await page.getByRole('button',{name:'Создать ключ'}).click()
+  await page.getByLabel('Я сохранил ключ восстановления').check()
+  await page.getByRole('button',{name:'Завершить регистрацию'}).click()
+  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await page.goto('/settings/security')
+  await expect(page.getByTestId('account-device').first()).toBeVisible()
+  try{
+    await page.context().setOffline(true)
+    await expect(page.getByTestId('account-device')).toHaveCount(0)
+    await expect(page.getByText('Загружаем устройства с сервера…')).toHaveCount(0)
+    await expect(page.getByText('Список устройств не подтверждён. Не показываем вымышленные данные.'))
+      .toBeVisible()
+  }finally{
+    await page.context().setOffline(false)
+  }
+  await expect(page.getByTestId('account-device').first()).toBeVisible()
+  await expect(page.getByText('Загружаем устройства с сервера…')).toHaveCount(0)
+})
