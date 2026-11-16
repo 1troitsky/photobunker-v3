@@ -182,4 +182,19 @@ test('hydrated camera captures offline against an already verified signed assign
     return (await (await import(path)).listLocalPhotos())[0].assets.map((a:any)=>a.sha256)
   })
   expect(digests).toEqual(stored.digest)
+
+  // The captured ciphertext must also open through the real Browser→Viewer
+  // route and decrypt as an actual JPEG; a synced row alone is insufficient.
+  const capturedId=await page.evaluate(async()=>{
+    const {listLocalPhotos}=await import('/src/features/photo-sync/application/p1-photo.ts')
+    return (await listLocalPhotos())[0]!.photoId
+  })
+  const row=page.getByTestId('browser-row-photo:'+capturedId)
+  await row.getByTestId('browser-file-menu-toggle').click()
+  await row.getByRole('link',{name:'Полный просмотр файла '+capturedId}).click()
+  const image=page.getByTestId('file-viewer-image')
+  await expect(image).toBeVisible()
+  await expect.poll(()=>image.evaluate(el=>(el as HTMLImageElement).naturalWidth))
+    .toBeGreaterThan(0)
+  await expect(page.getByTestId('file-viewer')).toBeVisible()
 })
