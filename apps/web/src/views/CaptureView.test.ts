@@ -575,6 +575,14 @@ describe('Camera 1.2 real JPEG creation, not CSS-only image options',()=>{
       .mock.results[0]!.value as CanvasRenderingContext2D
     expect(ctx.drawImage).toHaveBeenCalledWith(expect.any(HTMLVideoElement),
       80,0,480,480,0,0,480,480)
+    // A previously successful shutter animation must never run again when
+    // returning to Photo after switching modes without capturing a new frame.
+    selectMode('audio')
+    await settle()
+    expect(host.querySelector('[data-testid="camera-snap-flash"]')).toBeNull()
+    selectMode('photo')
+    await settle()
+    expect(host.querySelector('[data-testid="camera-snap-flash"]')).toBeNull()
   })
 })
 
