@@ -37,7 +37,7 @@ const current=computed(()=>features[slide.value]!)
 // can otherwise advance a slide immediately after the user selects it.
 let timer:ReturnType<typeof setTimeout>|null=null
 let motion:MediaQueryList|null=null
-let hoverPause=false,focusPause=false,touchPause=false
+let hoverPause:boolean=false,focusPause:boolean=false,touchPause:boolean=false
 let touchX:number|null=null
 function stopAutoplay():void{
   if(timer!==null)clearTimeout(timer)
