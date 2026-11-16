@@ -1379,6 +1379,23 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   text-align:center;overflow-wrap:anywhere;pointer-events:none;
 }
 .camera-stage .camera-toast-error{border-color:#8d4a48;color:#ffb8b5;background:#302020ef}
+/* Owner-approved Camera 1.2 feedback is viewfinder-only and never enters JPEG. */
+.camera-record-badge{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);
+  z-index:5;display:flex;align-items:center;gap:7px;
+  padding:7px 11px;border-radius:20px;background:#131313cc;
+  color:#fff;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums
+}
+.camera-record-dot{
+  flex:none;width:8px;height:8px;border-radius:50%;background:#ef4e57;
+  animation:camera-record-pulse 1.5s ease-in-out infinite
+}
+@keyframes camera-record-pulse{50%{opacity:.45}}
+.camera-snap-flash{
+  position:absolute;inset:0;z-index:8;background:#fff;opacity:0;
+  pointer-events:none;animation:camera-snap-white .25s ease-out both
+}
+@keyframes camera-snap-white{from{opacity:.7}to{opacity:0}}
 .camera-photo-zoom-indicator{
   position:absolute;z-index:5;bottom:9px;left:50%;
   transform:translateX(-50%);color:#eee;font-size:11px;
