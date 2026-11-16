@@ -50,6 +50,11 @@ jobs:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Parse every real-browser spec before spending minutes provisioning
+      # PostgreSQL/Garage. --list imports test source without launching
+      # Chromium or requiring an API, and catches malformed E2E TypeScript.
+      - name: Playwright E2E syntax/collection preflight
+        run: pnpm exec playwright test --config tests/playwright.config.ts --list
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test:web
