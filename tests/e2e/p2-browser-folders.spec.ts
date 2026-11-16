@@ -108,6 +108,12 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await expect(item).toHaveCount(1)
     await page.getByRole('button',{name:'Мои файлы'}).click()
     await page.getByRole('button',{name:'Действия с папкой Съёмки'}).click()
+    // Browser v3 never offers an invalid move into a descendant. The domain
+    // still rejects forged moves; UI must not invite the user to fail.
+    const moveParent=page.getByRole('combobox',{name:'Переместить папку Съёмки'})
+    await expect(moveParent.locator('option',{hasText:'День 1'})).toHaveCount(0)
+    await expect(moveParent.locator('option',{hasText:'Съёмки'})).toHaveCount(0)
+    await expect(moveParent.locator('option',{hasText:'Корень'})).toHaveCount(1)
     const remove=page.getByRole('button',{name:'Удалить пустую папку Съёмки'})
     page.once('dialog',d=>d.accept())
     await remove.click()
