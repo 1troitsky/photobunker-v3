@@ -137,10 +137,24 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
     expect((await download).suggestedFilename()).toBe(saved.name)
     const url=await page.getByTestId('file-viewer-wav-preview')
       .getAttribute('src')
+    // A real audio element must be paused BEFORE logout removes its native
+    // player and revokes the decrypted original media Blob URL.
+    await page.getByTestId('file-viewer-audio').evaluate((element:HTMLAudioElement)=>{
+      const w=window as Window & {__viewerPauseCount?:number}
+      w.__viewerPauseCount=0
+      const original=element.pause.bind(element)
+      element.pause=()=>{
+        w.__viewerPauseCount=(w.__viewerPauseCount??0)+1
+        original()
+      }
+    })
     await page.evaluate(async()=>{
       const {logout}=await import('/src/features/identity/application/session.ts')
       await logout()
     })
+    expect(await page.evaluate(()=>(
+      window as Window & {__viewerPauseCount?:number}
+    ).__viewerPauseCount??0)).toBeGreaterThan(0)
     await expect(page.getByTestId('file-viewer-wav-preview')).toHaveCount(0)
     expect(await page.evaluate(async source=>{
       try{const res=await fetch(source!);return res.ok}catch{return false}

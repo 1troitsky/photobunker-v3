@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
+import {computed,nextTick,onBeforeUnmount,onMounted,onUnmounted,ref,watch} from 'vue'
 import {onBeforeRouteLeave,RouterLink,useRoute,useRouter} from 'vue-router'
 import {
   armBrowserReturn,discardBrowserReturnContext,
   peekOriginPager,noteViewerPosition,
 } from '../features/browser/application/browser-return-context'
 import {activeSession} from '../features/identity/application/session'
+import {pauseViewerPlayback} from '../features/browser/application/viewer-playback'
 import {setViewerShellActions}
   from '../features/browser/application/viewer-shell-actions'
 import {
@@ -1236,6 +1237,10 @@ function clearStill():void{
   stillSavedId.value=null
 }
 function clearBlob():void{
+  // The accepted File Viewer keeps media in one fixed stage. Stop BOTH
+  // players synchronously before replacing/revoking their encrypted Blob URL;
+  // clearing the video trim preview alone did not stop ordinary audio.
+  pauseViewerPlayback(videoElement.value,audioElement.value)
   clearLivePhotoPreview()
   panel.value=null
   panelOpener=null
@@ -2081,6 +2086,9 @@ onBeforeRouteLeave((to)=>{
     discardBrowserReturnContext()
 })
 onMounted(()=>window.addEventListener('keydown',onKeyDown))
+// Refs are still available BEFORE Vue removes the audio/video DOM nodes.
+// onUnmounted alone is too late to reliably stop active native playback.
+onBeforeUnmount(()=>pauseViewerPlayback(videoElement.value,audioElement.value))
 onUnmounted(()=>{
   setViewerShellActions(null)
   compositionObserver?.disconnect()
