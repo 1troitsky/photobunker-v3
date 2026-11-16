@@ -178,9 +178,7 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
     expect(host.textContent).not.toContain('OLD-GRANT')
   })
   it('drops the stale recipient fingerprint from a pending check after account switch',async()=>{
-    const s=session()
-    s.online=true
-    activeSession.value=s
+    activeSession.value={...session(),online:true}
     let resolvePeer!:(value:{directory:{safetyFingerprint:string};confirmed:boolean})=>void
     m.inspect.mockImplementationOnce(()=>new Promise(resolve=>{resolvePeer=resolve}))
     host=document.createElement('div');document.body.append(host)
