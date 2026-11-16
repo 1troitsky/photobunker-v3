@@ -31,16 +31,19 @@ watch(showBlacklist,updateShellBlacklist)
 const teams=ref<TeamView[]>([])
 const selectedTeamId=ref<string|null>(null)
 const showTeamSettings=ref(false)
+const teamMenuId=ref<string|null>(null)
 const selectedTeam=computed(()=>teams.value.find(
   team=>team.teamId===selectedTeamId.value)??null)
-function openTeamCard(team:TeamView):void{
+function openTeamCard(team:TeamView,settings=false):void{
   selectedTeamId.value=team.teamId
-  showTeamSettings.value=false
+  showTeamSettings.value=settings&&team.delivery==='synced'
+  teamMenuId.value=null
   teamForm.value=false
 }
 function closeTeamCard():void{
   selectedTeamId.value=null
   showTeamSettings.value=false
+  teamMenuId.value=null
 }
 const teamForm=ref(false)
 const teamName=ref('')
@@ -50,12 +53,20 @@ const teamLoading=ref(false)
 const teamError=ref('')
 const teamNotice=ref('')
 let teamRun=0
+let loadedTeamIdentity=''
 function sameTeamIdentity(expected:string,token:number):boolean{
   return identity()===expected&&token===teamRun
 }
 async function reloadTeams():Promise<void>{
   const token=++teamRun,owner=identity()
-  teams.value=[];teamError.value='';teamLoading.value=false
+  // Keep the encrypted cached list visible during a same-account refresh.
+  // Identity transitions clear previous-account records synchronously.
+  if(loadedTeamIdentity!==owner){
+    teams.value=[]
+    teamMenuId.value=null
+    loadedTeamIdentity=owner
+  }
+  teamError.value='';teamLoading.value=false
   if(!owner)return
   try{
     const local=await listLocalTeams()
@@ -285,6 +296,7 @@ watch(activeSession,(_now,previous)=>{
     teamBusy.value=false;teamLoading.value=false;teamError.value=''
     teamNotice.value=''
     teams.value=[];teamForm.value=false;teamName.value='';teamDescription.value=''
+    loadedTeamIdentity=''
     closeTeamCard()
     ++teamRun
     void reload();void reloadTeams()
@@ -300,6 +312,7 @@ onUnmounted(()=>{
   clearContactsShellActions(shellOwner)
   ++run;++teamRun;candidate.value=null;contacts.value=[];blocked.value=[]
   showBlacklist.value=false;teams.value=[]
+  loadedTeamIdentity=''
   closeTeamCard()
   window.removeEventListener('online',handleTeamOnline)
 })
@@ -340,11 +353,12 @@ onUnmounted(()=>{
         <div class="contacts-list-heading">
           <button type="button" data-testid="team-profile-back"
             @click="closeTeamCard">К командам</button>
-          <button type="button" data-testid="team-profile-settings"
-            :disabled="selectedTeam.delivery!=='synced'"
+          <button type="button" class="contacts-team-settings"
+            data-testid="team-profile-settings" aria-label="Настройки команды"
+            title="Настройки команды" :disabled="selectedTeam.delivery!=='synced'"
             :aria-expanded="showTeamSettings"
             @click="showTeamSettings=!showTeamSettings">
-            Настройки команды
+            <span aria-hidden="true">⚙</span>
           </button>
         </div>
         <h2 data-testid="team-profile-name">{{ selectedTeam.name }}</h2>
@@ -397,7 +411,6 @@ onUnmounted(()=>{
         <p v-if="!teams.length" class="muted">Команд пока нет.</p>
         <div v-for="team in teams" :key="team.teamId"
           class="contacts-list-row" :data-testid="'team-row-'+team.teamId">
-          <span class="contacts-avatar" aria-hidden="true">{{ team.name.slice(0,1).toUpperCase() }}</span>
           <div class="contacts-row-label">
             <button type="button" class="contacts-team-open"
               :data-testid="'team-open-'+team.teamId"
@@ -405,8 +418,28 @@ onUnmounted(()=>{
             <p class="muted">{{ team.description }}</p>
             <small>Участники: {{ team.memberCount }} · {{ team.delivery==='synced'?'В облаке':team.delivery==='conflict'?'Конфликт синхронизации':'В очереди' }}</small>
           </div>
+          <div class="contacts-team-menu-wrap">
+            <button type="button" class="contacts-member-more"
+              :data-testid="'team-actions-toggle-'+team.teamId"
+              :aria-label="'Действия команды '+team.name"
+              :aria-expanded="teamMenuId===team.teamId"
+              :aria-controls="'team-actions-menu-'+team.teamId"
+              @click="teamMenuId=teamMenuId===team.teamId?null:team.teamId">•••</button>
+            <div v-if="teamMenuId===team.teamId"
+              :id="'team-actions-menu-'+team.teamId"
+              class="contacts-team-actions-menu" role="group"
+              :aria-label="'Действия команды '+team.name"
+              data-testid="team-actions-menu"
+              @keydown.esc.prevent="teamMenuId=null">
+              <button type="button" data-testid="team-actions-open"
+                @click="openTeamCard(team)">Открыть команду</button>
+              <button v-if="team.delivery==='synced'" type="button"
+                data-testid="team-actions-settings"
+                @click="openTeamCard(team,true)">Настройки</button>
+            </div>
+          </div>
         </div>
-        <p class="muted">Владелец команды подтверждён сервером после синхронизации. Приглашения и изменение ролей появятся с отдельной подписанной моделью полномочий.</p>
+        <p class="muted">Настройки состава доступны для подтверждённых сервером команд. Зашифрованная локальная запись не подтверждает серверные права.</p>
       </div>
       <TeamMembershipPanel :owned-teams="teams" :contacts="contacts"
         @refresh="reloadTeams" />

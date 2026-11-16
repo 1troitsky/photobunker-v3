@@ -36,6 +36,11 @@ import ContactsTeamsView from './ContactsTeamsView.vue'
 const A='11111111-1111-4111-8111-111111111111'
 const B='33333333-3333-4333-8333-333333333333'
 const PEER='55555555-5555-4555-8555-555555555555'
+const TEAM='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const SERVER_TEAM={
+  teamId:TEAM,name:'Encrypted team',description:'Real local owner data',
+  memberCount:2,delivery:'synced' as const,
+}
 let app:App|undefined,host:HTMLDivElement
 function session(accountId=A):Session{
   return {accountId,deviceId:'22222222-2222-4222-8222-222222222222',
@@ -91,6 +96,59 @@ beforeEach(()=>{
 afterEach(()=>{
   app?.unmount();app=undefined;host.remove()
   activeSession.value=null
+})
+describe('Approved local-first Team navigation',()=>{
+  it('keeps an encrypted Team row during same-account local refresh',async()=>{
+    mock.teams.mockResolvedValue([SERVER_TEAM])
+    mock.refreshTeams.mockResolvedValue([SERVER_TEAM])
+    await mount()
+    click('Команды (1)');await settle()
+    expect(host.querySelector('[data-testid="team-row-'+TEAM+'"]')).not.toBeNull()
+    const pending=deferred<typeof SERVER_TEAM[]>()
+    mock.teams.mockImplementationOnce(()=>pending.promise)
+    click('Обновить');await settle()
+    expect(host.querySelector('[data-testid="team-row-'+TEAM+'"]')).not.toBeNull()
+    pending.resolve([SERVER_TEAM]);await settle()
+    expect(host.querySelector('[data-testid="team-row-'+TEAM+'"]')).not.toBeNull()
+  })
+  it('never grants queued Team access to remote-only settings',async()=>{
+    const queued={...SERVER_TEAM,delivery:'queued' as const}
+    mock.teams.mockResolvedValue([queued])
+    mock.refreshTeams.mockResolvedValue([queued])
+    await mount()
+    click('Команды (1)');await settle()
+    host.querySelector<HTMLButtonElement>(
+      '[data-testid="team-actions-toggle-'+TEAM+'"]')!.click()
+    await settle()
+    const menu=host.querySelector('[data-testid="team-actions-menu"]')!
+    expect(menu.querySelector('[data-testid="team-actions-open"]')).not.toBeNull()
+    expect(menu.querySelector('[data-testid="team-actions-settings"]')).toBeNull()
+    menu.querySelector<HTMLButtonElement>(
+      '[data-testid="team-actions-open"]')!.click()
+    await settle()
+    expect(host.querySelector('[data-testid="team-profile"]')).not.toBeNull()
+    expect(host.querySelector<HTMLButtonElement>(
+      '[data-testid="team-profile-settings"]')?.disabled).toBe(true)
+    expect(mock.queueTeam).not.toHaveBeenCalled()
+  })
+  it('opens verified Team settings from its contextual menu',async()=>{
+    mock.teams.mockResolvedValue([SERVER_TEAM])
+    mock.refreshTeams.mockResolvedValue([SERVER_TEAM])
+    await mount()
+    click('Команды (1)');await settle()
+    host.querySelector<HTMLButtonElement>(
+      '[data-testid="team-actions-toggle-'+TEAM+'"]')!.click()
+    await settle()
+    host.querySelector<HTMLButtonElement>(
+      '[data-testid="team-actions-settings"]')!.click()
+    await settle()
+    expect(host.querySelector('[data-testid="team-profile"]')).not.toBeNull()
+    expect(host.querySelector<HTMLButtonElement>(
+      '[data-testid="team-profile-settings"]')?.getAttribute('aria-expanded'))
+      .toBe('true')
+    expect(host.querySelector('[data-testid="team-actions-menu"]')).toBeNull()
+    expect(mock.queueTeam).not.toHaveBeenCalled()
+  })
 })
 describe('Contacts crypto identity and asynchronous peer verification',()=>{
   it('discards delayed key-directory fingerprints from the previous account',async()=>{

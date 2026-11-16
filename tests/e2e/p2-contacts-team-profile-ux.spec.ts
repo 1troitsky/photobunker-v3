@@ -17,7 +17,10 @@ test('Contacts & Teams 1.1: real encrypted team opens its own card without assum
   await page.getByTestId('team-create-submit').click()
   const row=page.getByTestId(/^team-row-/)
   await expect(row.getByTestId(/^team-open-/)).toBeVisible({timeout:20000})
-  await row.getByTestId(/^team-open-/).click()
+  await row.getByTestId(/^team-actions-toggle-/).click()
+  const menu=row.getByTestId('team-actions-menu')
+  await expect(menu.getByTestId('team-actions-open')).toBeVisible()
+  await menu.getByTestId('team-actions-open').click()
   const profile=page.getByTestId('team-profile')
   await expect(profile.getByTestId('team-profile-name')).toHaveText('PRIVATE TEAM UX')
   await expect(profile.getByTestId('team-profile-description')).toHaveText('Only encrypted members')
@@ -28,7 +31,9 @@ test('Contacts & Teams 1.1: real encrypted team opens its own card without assum
   // the card exists or the local owner name was decrypted.
   if(await delivery.textContent()!==null
     &&(await delivery.textContent())?.includes('Подтверждено сервером')){
-    await page.getByTestId('team-profile-settings').click()
+    const settings=page.getByTestId('team-profile-settings')
+    await expect(settings).toHaveAttribute('aria-label','Настройки команды')
+    await settings.click()
     await expect(profile.getByTestId('team-membership-panel')).toBeVisible()
     await expect(profile.getByTestId('team-member-selector')).toHaveCount(0)
     const ownerActions=profile.getByTestId('team-owner-actions')
