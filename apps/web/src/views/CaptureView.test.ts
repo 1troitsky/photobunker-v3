@@ -1078,7 +1078,8 @@ describe('Issue #260 GPS consent and capture races',()=>{
     })
     button('Сделать снимок').click();await settle()
     expect(host.textContent).toContain('camera.gps_consent_changed')
-    expect(host.textContent).not.toContain('P2 JPEG зашифрован')
+    expect(host.querySelector('[data-testid="camera-capture-feedback"]')).toBeNull()
+    expect(host.textContent).not.toContain('Зашифровано и сохранено локально')
   })
 
   it.each(['photo','audio'] as const)('does not sign using a new account during pending %s permission read',async mode=>{
