@@ -38,11 +38,13 @@ function session():Session{
 async function settle():Promise<void>{
   for(let i=0;i<12;i++){await Promise.resolve();await nextTick()}
 }
+// Vue Transition keeps a closing Teleport in the DOM until its CSS leave
+// animation finishes. Only active, non-leaving dialogs can receive input.
 function thread():HTMLElement|null{
-  return document.querySelector('[data-testid="messages-thread"]')
+  return document.querySelector('[data-testid="messages-thread"]:not(.messages-overlay-leave-active)')
 }
 function editor():HTMLTextAreaElement{
-  const input=document.querySelector<HTMLTextAreaElement>('[data-testid="messages-editor"]')
+  const input=thread()?.querySelector<HTMLTextAreaElement>('[data-testid="messages-editor"]')
   if(!input)throw Error('message editor absent')
   return input
 }
@@ -65,7 +67,7 @@ function write(value:string):void{
   editor().dispatchEvent(new Event('input',{bubbles:true}))
 }
 function closeThread():void{
-  const button=document.querySelector<HTMLButtonElement>('[data-testid="messages-close"]')
+  const button=thread()?.querySelector<HTMLButtonElement>('[data-testid="messages-close"]')
   if(!button)throw Error('close absent')
   button.click()
 }
@@ -93,7 +95,7 @@ describe('Messages 1.1 local-first draft safety',()=>{
     await settle()
     expect(thread()).not.toBeNull()
     expect(editor().value).toBe('PRIVATE_UNSAVED_DRAFT')
-    expect(document.querySelector('[data-testid="messages-thread"] [role="alert"]')?.textContent)
+    expect(thread()?.querySelector('[role="alert"]')?.textContent)
       .toContain('Не удалось сохранить зашифрованный черновик')
     expect(document.activeElement).toBe(editor())
     closeThread()
@@ -111,7 +113,7 @@ describe('Messages 1.1 local-first draft safety',()=>{
     write('old text')
     closeThread()
     await settle()
-    expect(document.querySelector<HTMLButtonElement>('[data-testid="messages-close"]')?.disabled)
+    expect(thread()?.querySelector<HTMLButtonElement>('[data-testid="messages-close"]')?.disabled)
       .toBe(true)
     // The close request must not silently discard a later draft edit.
     write('latest text')
