@@ -653,15 +653,27 @@ watch(blindMode,async shown=>{
       ?.focus()
   }
 })
-const canConfirmCameraAssignment=computed(()=>{
-  if(!selectedAssignment.value)return true
-  const fields=requiredFields.value
-  return !(fields?.requiredCategory&&!category.value.trim())
-    &&!(requiredAdvanced.value?.allowedCategories.length
-      &&!requiredAdvanced.value.allowedCategories.includes(category.value))
-    &&description.value.trim().length>=(fields?.descriptionMinLength??0)
-    &&!(fields?.requiredGps&&!gps.value)
-})
+function cameraAssignmentBlockReason():string|null{
+  if(!selectedAssignment.value)return null
+  if(!canCaptureType.value)return 'Недоступна подтверждённая политика задания'
+  const fields=requiredFields.value,advanced=requiredAdvanced.value
+  if(fields?.requiredCategory&&!category.value.trim())
+    return 'Категория обязательна по правилам задания'
+  if(advanced?.allowedCategories.length
+    &&!advanced.allowedCategories.includes(category.value))
+    return 'Выберите категорию из списка задания'
+  if(description.value.trim().length<(fields?.descriptionMinLength??0))
+    return 'Заполните описание по правилам задания'
+  if(fields?.requiredGps&&!gps.value)
+    return 'GPS обязателен по правилам задания'
+  let tags:string[]
+  try{tags=parseRulesCsv(privateTags.value,12,48)}
+  catch{return 'Проверьте теги по правилам задания'}
+  if(advanced?.requiredTags.some(tag=>!tags.includes(tag)))
+    return 'Добавьте обязательные теги по правилам задания'
+  return null
+}
+const canConfirmCameraAssignment=computed(()=>cameraAssignmentBlockReason()===null)
 function openCameraSheet(which:'assignment'|'settings',focusGps=false):void{
   if(!activeSession.value)return
   cameraSheet.value=which
@@ -1294,6 +1306,14 @@ async function capture():Promise<void> {
   const contextGeneration=captureContextGeneration
   if(busy.value||starting.value||cameraZoomBusy.value||torchBusy.value||!v||!stream.value||!ownsCamera(identity,generation)
     ||!liveTracks()||v.videoWidth<1||v.videoHeight<1)return
+  // User-facing form preflight complements (never replaces) signed
+  // assignment verification before ciphertext is committed.
+  const blocked=cameraAssignmentBlockReason()
+  if(blocked){
+    message.value='';error.value=blocked
+    if(!blindMode.value)openCameraSheet('assignment')
+    return
+  }
   const assertOwner=()=>{
     if(!cameraWanted||!ownsCamera(identity,generation)
       ||!liveTracks()||contextGeneration!==captureContextGeneration)
