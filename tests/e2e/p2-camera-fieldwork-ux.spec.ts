@@ -28,7 +28,14 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('camera-stage')).toBeVisible()
   await expect(page.getByTestId('camera-viewfinder')).toBeVisible()
   await expect(page.getByTestId('camera-details')).toBeHidden()
+  // The owner-approved Camera 1.2 has only three actions below the stage,
+  // one mode selector (tabs), and NO P1/P2 technical destination selector.
+  await expect(page.locator('.camera-device-actions')).toHaveCount(0)
   await page.getByTestId('camera-open-settings').click()
+  await expect(page.locator('#camera-mode')).toHaveCount(0)
+  await expect(page.locator('#camera-photo-storage')).toHaveCount(0)
+  await expect(page.getByTestId('camera-permission-camera')).toBeVisible()
+  await expect(page.getByTestId('camera-permission-microphone')).toBeVisible()
   await expect(page.getByTestId('camera-assignment-panel')).toBeHidden()
   await page.getByTestId('camera-grid-setting').check()
   await expect(page.getByTestId('camera-grid').locator('span')).toHaveCount(4)
