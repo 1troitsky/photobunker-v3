@@ -1435,11 +1435,20 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   overflow-y:auto;overscroll-behavior:contain;
   box-shadow:0 -12px 40px #0009;scroll-margin-top:0;
 }
+.camera-sheet-handle{
+  display:block;width:36px;height:4px;margin:0 auto 13px;
+  border-radius:5px;background:#666
+}
 .camera-sheet-heading{display:flex;align-items:center;justify-content:space-between;
   gap:12px;margin:0 0 16px;padding:7px 0 12px;border-bottom:1px solid #444}
 .camera-sheet-heading strong{font-size:16px;font-weight:760}
-.camera-details .camera-sheet-close{border:0;background:transparent;color:#e7e7e7;
-  min-height:36px;border-radius:6px;padding:7px 10px;font-size:12px}
+.camera-details .camera-sheet-close{
+  display:grid;place-items:center;width:36px;height:36px;min-height:36px;
+  border:0;background:transparent;color:#e7e7e7;border-radius:6px;padding:6px
+}
+.camera-details .camera-sheet-close svg{
+  width:20px;height:20px;flex:none;stroke:currentColor
+}
 .camera-details .is-camera-sheet label{margin-top:13px;color:#e6e6e6;font-size:12px}
 .camera-details .is-camera-sheet select,.camera-details .is-camera-sheet input:not([type=checkbox]),
 .camera-details .is-camera-sheet textarea{
