@@ -651,6 +651,9 @@ describe('Camera 1.2 active video recording indicator',()=>{
     const badge=host.querySelector('[data-testid="camera-record-badge"]')
     expect(badge).not.toBeNull()
     expect(badge?.textContent).toContain('00:00')
+    for(const id of ['camera-open-assignment','camera-open-settings','camera-gps-pill']){
+      expect(host.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)?.disabled).toBe(true)
+    }
     expect(host.querySelector('[data-testid="camera-snap-flash"]')).toBeNull()
     expect(host.querySelector('[data-testid="camera-audio-view"]')).toBeNull()
   })
