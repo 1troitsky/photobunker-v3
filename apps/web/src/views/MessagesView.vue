@@ -38,6 +38,7 @@ const editorRef=ref<HTMLTextAreaElement|null>(null)
 const threadRef=ref<HTMLElement|null>(null)
 const pickerRef=ref<HTMLElement|null>(null)
 const draftSaving=ref(false)
+const closing=ref(false)
 let run=0
 let saveTimer:ReturnType<typeof setTimeout>|null=null
 let returnFocus:HTMLElement|null=null
@@ -123,6 +124,8 @@ async function open(contact:ConfirmedContact):Promise<void>{
   }catch(e){if(matches(owner,token))error.value=message(e)}
 }
 function rememberInput():void{
+  error.value=''
+  status.value=''
   if(saveTimer!==null)clearTimeout(saveTimer)
   const peer=selected.value,owner=identity(),token=run
   if(!peer||!owner)return
@@ -134,13 +137,12 @@ function rememberInput():void{
 }
 async function persist(
   peer:ConfirmedContact,body:string,owner:string,token:number,
-):Promise<void>{
-  if(!matches(owner,token))return
+):Promise<boolean>{
+  if(!matches(owner,token))return false
   draftSaving.value=true
   try{
     await saveMessageDraft(peer,body)
-    if(!matches(owner,token))return
-    if(editor.value!==body)return
+    if(!matches(owner,token)||editor.value!==body)return false
     if(!body.trim()){
       drafts.value=drafts.value.filter(x=>x.peerAccountId!==peer.peerAccountId)
     }else{
@@ -151,34 +153,55 @@ async function persist(
       ]
     }
     status.value='Черновик зашифрован на этом устройстве'
-  }catch(e){if(matches(owner,token))error.value=message(e)}
+    error.value=''
+    return true
+  }catch(e){
+    if(matches(owner,token)){
+      // A failed local encrypted write is NOT a saved draft. Keep the editor
+      // mounted and plaintext available ONLY inside the active session.
+      error.value='Не удалось сохранить зашифрованный черновик. Текст остался в редакторе — повторите попытку.'
+    }
+    return false
+  }
   finally{if(matches(owner,token))draftSaving.value=false}
 }
 async function close():Promise<void>{
-  if(!threadOpen.value)return
+  if(!threadOpen.value||closing.value)return
+  closing.value=true
   if(saveTimer!==null){clearTimeout(saveTimer);saveTimer=null}
   const owner=identity(),token=run,peer=selected.value
-  if(peer)await persist(peer,editor.value,owner,token)
-  if(!matches(owner,token))return
-  threadOpen.value=false
-  selected.value=null;editor.value=''
-  await nextTick()
-  // Picker rows leave the tree when a draft is opened. Restore focus to
-  // the original control if it survives, otherwise use the draft row or
-  // New Message action (not the document body or a hidden Dock element).
-  const fallback=document.querySelector<HTMLElement>(
-    '[data-testid="messages-draft-'+peer?.peerAccountId+'"]',
-  )??document.querySelector<HTMLElement>('[data-testid="messages-compose"]')
-  if(returnFocus&&document.contains(returnFocus))returnFocus.focus()
-  else fallback?.focus()
-  returnFocus=null
+  try{
+    const saved=peer ? await persist(peer,editor.value,owner,token) : false
+    if(!matches(owner,token))return
+    if(!saved){
+      // No silent data loss on IndexedDB quota, revoked contact or an edit
+      // made while the previous save was in flight.
+      await nextTick()
+      editorRef.value?.focus()
+      return
+    }
+    threadOpen.value=false
+    selected.value=null;editor.value=''
+    await nextTick()
+    // Picker rows leave the tree when a draft is opened. Restore focus to
+    // the original control if it survives, otherwise use the draft row or
+    // New Message action (not the document body or a hidden Dock element).
+    const fallback=document.querySelector<HTMLElement>(
+      '[data-testid="messages-draft-'+peer?.peerAccountId+'"]',
+    )??document.querySelector<HTMLElement>('[data-testid="messages-compose"]')
+    if(returnFocus&&document.contains(returnFocus))returnFocus.focus()
+    else fallback?.focus()
+    returnFocus=null
+  }finally{
+    if(matches(owner,token))closing.value=false
+  }
 }
 function dismissWithoutSave():void{
   if(saveTimer!==null){clearTimeout(saveTimer);saveTimer=null}
   threadOpen.value=false
   selected.value=null;editor.value=''
   pickerOpen.value=false;returnFocus=null
-  status.value='';draftSaving.value=false
+  status.value='';draftSaving.value=false;closing.value=false
 }
 function keyboard(event:KeyboardEvent):void{
   if(!threadOpen.value)return
@@ -325,7 +348,7 @@ onUnmounted(()=>{
           data-testid="messages-thread">
           <header class="messages-thread-top">
             <button type="button" aria-label="Назад к сообщениям"
-              data-testid="messages-close" @click="close">←</button>
+              data-testid="messages-close" :disabled="closing" @click="close">←</button>
             <div class="messages-thread-identity">
               <strong>{{ selected.alias||selected.peerAccountId }}</strong>
               <small>Матрица шифрования ещё не подключена</small>
