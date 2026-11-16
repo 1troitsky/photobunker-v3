@@ -16,7 +16,9 @@ vi.mock('vue-router',()=>({
 }))
 vi.mock('../features/notifications/application/local-inbox',()=>({
   listLocalNotifications:mocks.local,
-  defaultNotificationPreferences:{version:2,invitations:true,deadlines:true,expiry:true,system:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480},
+  defaultNotificationPreferences:{version:3,invitations:true,deadlines:true,expiry:true,
+    newFiles:true,reviews:true,backups:true,subscription:true,badges:true,
+    quietEnabled:false,quietStart:1320,quietEnd:480},
   readNotificationPreferences:mocks.preferences,
   notificationBadgeVisible:(kind:string,prefs:{badges:boolean;quietEnabled:boolean;quietStart:number;quietEnd:number},at:Date)=>{
     if(kind==='security')return true
@@ -27,10 +29,15 @@ vi.mock('../features/notifications/application/local-inbox',()=>({
       ?!(minute>=prefs.quietStart&&minute<prefs.quietEnd)
       :!(minute>=prefs.quietStart||minute<prefs.quietEnd)
   },
-  notificationIsVisible:(kind:string,prefs:{invitations:boolean;deadlines:boolean;expiry:boolean;system:boolean})=>
-    kind==='security'||(kind==='team-invite'||kind==='assignment-invite'
-      ?prefs.invitations:kind==='file-expiry'?prefs.expiry
-        :kind==='assignment-deadline'?prefs.deadlines:prefs.system),
+  notificationIsVisible:(kind:string,prefs:{
+    invitations:boolean;deadlines:boolean;expiry:boolean;newFiles:boolean;
+    reviews:boolean;backups:boolean;subscription:boolean;
+  })=>kind==='security'||(kind==='team-invite'||kind==='assignment-invite'
+    ?prefs.invitations:kind==='file-expiry'?prefs.expiry
+      :kind==='assignment-deadline'?prefs.deadlines
+      :kind==='new-file'?prefs.newFiles
+      :kind==='media-review'?prefs.reviews
+      :kind==='backup'?prefs.backups:prefs.subscription),
   markNotificationRead:mocks.mark,
   markAllLocalNotificationsRead:mocks.markAll,
   previewNotification:(row:{id:string;kind:string;occurredAt:number;readAt:number|null})=>({
