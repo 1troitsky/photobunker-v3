@@ -1879,7 +1879,7 @@ onUnmounted(()=>{
       </section>
       <div v-if="browserSettingsOpen" class="browser-settings-backdrop"
         data-testid="browser-settings-backdrop" @click="closeBrowserSettings"></div>
-      <section class="browser-archive-preferences"
+      <section v-show="browserSettingsOpen" class="browser-archive-preferences"
         :class="{'is-browser-settings-sheet':browserSettingsOpen}"
         data-testid="browser-archive-preferences"
         :role="browserSettingsOpen?'dialog':undefined"

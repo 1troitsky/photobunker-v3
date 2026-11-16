@@ -18,6 +18,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     await a.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(a.getByText('Подтверждённая сессия')).toBeVisible()
     await a.goto('/browser')
+    await a.getByTestId('browser-header-settings').click()
     await expect(a.getByTestId('browser-pref-use-archive')).toBeChecked()
     await expect(a.getByTestId('browser-pref-auto-delete')).toBeChecked()
     await expect(a.getByTestId('browser-pref-unconfirmed')).toHaveCount(0)
@@ -31,6 +32,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     })
     expect(pref).toMatchObject({revision:1,useArchive:true,
       autoDeleteAfter7Days:false,writeEnabled:true,autoCleanupEnabled:false})
+    await a.getByTestId('browser-settings-close').click()
 
     // A second browser with its own nonextractable device key recovers the
     // account and sees the authoritative owner-signed policy.
@@ -39,9 +41,11 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     await b.getByRole('button',{name:'Восстановить',exact:true}).click()
     await expect(b.getByText('Подтверждённая сессия')).toBeVisible()
     await b.goto('/browser')
+    await b.getByTestId('browser-header-settings').click()
     await expect(b.getByTestId('browser-pref-auto-delete')).not.toBeChecked()
     await expect(b.getByTestId('browser-pref-use-archive')).toBeChecked()
     await expect(b.getByTestId('browser-pref-unconfirmed')).toHaveCount(0)
+    await b.getByTestId('browser-settings-close').click()
 
     await a.getByTestId('media-import-file').setInputFiles({
       name:'PRIVATE-PREF-VOICE.wav',mimeType:'audio/wav',
@@ -89,9 +93,11 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
 
     // Signed policy opts out of archive; direct owner-confirmed deletion
     // now creates a tombstone, never claims verified physical GC.
+    await a.getByTestId('browser-header-settings').click()
     await a.getByTestId('browser-pref-use-archive').uncheck()
     await expect(a.getByTestId('browser-pref-status'))
       .toContainText('подтверждены сервером',{timeout:20000})
+    await a.getByTestId('browser-settings-close').click()
     await ensureFileMenu(row)
     await expect(row.getByRole('button',{name:/Запросить прямое удаление файла/}))
       .toBeVisible()
@@ -116,22 +122,26 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     // With remote network absent, the option toggles locally, but no
     // destructive action is authorized until a signed server ACK.
     await aContext.setOffline(true)
+    await a.getByTestId('browser-header-settings').click()
     await a.getByTestId('browser-pref-use-archive').check()
     await expect(a.getByTestId('browser-pref-unconfirmed')).toBeVisible()
     await expect(a.getByTestId('browser-pref-status'))
       .toContainText('Ожидает подтверждения сервера.')
+    await a.getByTestId('browser-settings-close').click()
     // Vite's dev server is deliberately not an offline Service Worker
     // acceptance environment. Restore the network but fail preference
     // requests across a reload to verify device-encrypted draft durability.
     await aContext.setOffline(false)
     await a.route('**/browser/v1/archive/preferences',route=>route.abort('failed'))
     await a.reload()
+    await a.getByTestId('browser-header-settings').click()
     await expect(a.getByTestId('browser-pref-use-archive')).toBeChecked()
     await expect(a.getByTestId('browser-pref-unconfirmed')).toBeVisible()
     await a.unroute('**/browser/v1/archive/preferences')
     await a.getByTestId('browser-pref-sync').click()
     await expect(a.getByTestId('browser-pref-unconfirmed'))
       .toHaveCount(0,{timeout:20000})
+    await a.getByTestId('browser-settings-close').click()
     const after=await a.evaluate(async()=>{
       const r=await fetch('/browser/v1/archive/preferences')
       return r.json() as Promise<{useArchive:boolean;autoDeleteAfter7Days:boolean}>

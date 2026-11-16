@@ -81,6 +81,7 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
 
   await page.getByTestId('browser-header-search').click()
   await expect(page.getByTestId('browser-search')).toBeFocused()
+  await expect(page.getByTestId('browser-archive-preferences')).toBeHidden()
   await page.getByTestId('browser-header-settings').click()
   const settings=page.getByTestId('browser-archive-preferences')
   await expect(settings).toBeInViewport()
