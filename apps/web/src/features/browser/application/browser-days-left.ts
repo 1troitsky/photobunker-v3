@@ -28,7 +28,8 @@ export function saveBrowserDaysLeft(
 export function browserRetentionLabel(
   expiresAt:number,now:number,showRemainingDays:boolean,
 ):string{
-  if(!Number.isFinite(expiresAt)||!Number.isFinite(now)||expiresAt<0)
+  if(!Number.isSafeInteger(expiresAt)||expiresAt<=0
+    ||expiresAt>8_640_000_000_000_000||!Number.isFinite(now))
     return 'Срок хранения неизвестен'
   if(!showRemainingDays)
     return 'Хранение до '+new Date(expiresAt).toLocaleDateString('ru-RU')

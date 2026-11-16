@@ -86,6 +86,29 @@ describe('Browser v3 encrypted catalog union',()=>{
     expect(rows.map(item=>item.id)).toEqual(original)
     // The sort never decrypts or invents metadata for cloud-only rows.
   })
+  it('puts unknown, malformed and out-of-range expiration last without inventing a TTL',()=>{
+    const rows=buildCatalog(
+      [photo('valid-late',3000),photo('unknown-zero',2000),photo('valid-soon',1000)],
+      [],
+      [media('unknown-nan','audio',1000),media('unknown-infinite','video',1000)],
+      [],
+    ).map(row=>({
+      ...row,
+      expiresAt:row.id==='unknown-zero'?0:
+        row.id==='unknown-nan'?Number.NaN:
+        row.id==='unknown-infinite'?Number.POSITIVE_INFINITY:
+        row.id==='valid-soon'?1000:5000,
+    }))
+    const original=rows.map(item=>item.id)
+    expect(filterCatalog(rows,{type:'all',query:'',sort:'expiry'}).map(x=>x.id))
+      .toEqual(['valid-soon','valid-late','unknown-infinite','unknown-nan','unknown-zero'])
+    expect(rows.map(x=>x.id)).toEqual(original)
+    const tooLarge=rows.map(row=>row.id==='unknown-nan'
+      ?{...row,expiresAt:Number.MAX_SAFE_INTEGER}:row)
+    expect(filterCatalog(tooLarge,{type:'all',query:'',sort:'expiry'})
+      .slice(-3).map(x=>x.id))
+      .toEqual(['unknown-infinite','unknown-nan','unknown-zero'])
+  })
   it('sorts by actual TTL regardless of local/cloud origin',()=>{
     const rows=buildCatalog(
       [photo('late',3000)],[],[media('soon','audio',1000)],[],
