@@ -515,6 +515,38 @@ describe('Camera Fieldwork owner-signed categories',()=>{
   })
 })
 
+describe('Camera photo capture validates the signed form before JPEG work',()=>{
+  it('opens the approved assignment sheet instead of persisting an incomplete photo',async()=>{
+    mocks.requiredCategory=true
+    mocks.allowedCategories=['Фасад']
+    mocks.route.query={assignmentId:'assignment-a'}
+    mocks.policies.mockResolvedValue([{
+      assignmentId:'assignment-a',ownerAccountId:'owner-a',policyRevision:2,
+    }])
+    await mount()
+    requests[0]!.resolve(media().stream)
+    await settle()
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.capture).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(vi.mocked(HTMLCanvasElement.prototype.toBlob)).not.toHaveBeenCalled()
+    expect(host.querySelector('[data-testid="camera-capture-error"]')?.textContent)
+      .toContain('Категория обязательна')
+    expect(host.querySelector<HTMLElement>('[data-testid="camera-assignment-panel"]')!.style.display)
+      .not.toBe('none')
+    const select=host.querySelector<HTMLSelectElement>('[data-testid="camera-category-select"]')!
+    select.value='Фасад'
+    select.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-assignment-finish"]')!.click()
+    await settle()
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.capture).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('Camera 1.2 real JPEG creation, not CSS-only image options',()=>{
   it('crops center square at true sensor resolution and encrypts a medium-quality JPEG',async()=>{
     await mount()
