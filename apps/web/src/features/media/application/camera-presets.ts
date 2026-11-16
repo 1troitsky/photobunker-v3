@@ -234,6 +234,9 @@ async function commit(s:Session,change:Change,epoch:number):Promise<CameraPreset
           throw Error('camera.preset_write_race')
         assertSame(s,epoch)
         await db.rows.put(sealed)
+        // Recheck before transaction commits. If account/key switches while
+        // IndexedDB write is in flight, throw to ABORT the entire transaction.
+        assertSame(s,epoch)
       })
       assertSame(s,epoch)
       return next
