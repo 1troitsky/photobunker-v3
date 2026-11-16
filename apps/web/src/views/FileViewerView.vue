@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed,nextTick,onBeforeUnmount,onMounted,onUnmounted,ref,watch} from 'vue'
-import {onBeforeRouteLeave,RouterLink,useRoute,useRouter} from 'vue-router'
+import {onBeforeRouteLeave,onBeforeRouteUpdate,RouterLink,useRoute,useRouter} from 'vue-router'
 import {
   armBrowserReturn,discardBrowserReturnContext,
   peekOriginPager,noteViewerPosition,
@@ -2070,14 +2070,27 @@ watch([()=>route.params.protocol,()=>route.params.id],()=>{
 })
 // Browser history Back, the shell dock and the explicit breadcrumb all
 // converge here. Never put a private search term or folder path into a URL.
-onBeforeRouteLeave((to)=>{
-  if(editorMode.value&&privateCopyBusy.value&&!privateCopySavedId.value)
-    return false
-  if(editorMode.value&&editorUnsaved.value){
+function confirmEditorExit():boolean{
+  if(!editorMode.value)return true
+  if(privateCopyBusy.value&&!privateCopySavedId.value)return false
+  if(editorUnsaved.value){
     if(!window.confirm('Отменить несохранённые изменения файла? Исходный файл останется без изменений.'))
       return false
     resetEditorDraft()
   }
+  return true
+}
+// Vue Router REUSES this component for /browser/file/:protocol/:id/edit
+// when the user changes only the file ID. onBeforeRouteLeave is NOT called
+// for that transition, yet openFile() would drop the volatile edit buffer.
+onBeforeRouteUpdate((to,from)=>{
+  if(from.name!=='browser-editor')return true
+  const changed=String(to.params.id)!==String(from.params.id)
+    ||String(to.params.protocol)!==String(from.params.protocol)
+  return !changed||confirmEditorExit()
+})
+onBeforeRouteLeave((to)=>{
+  if(!confirmEditorExit())return false
   if(to.path==='/browser'){
     const identity=activeSession.value
     if(identity)armBrowserReturn(identity.accountId,identity.deviceId)

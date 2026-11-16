@@ -79,6 +79,28 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
       .toContainText('Начало · 0.2 с')
     await expect(page.getByTestId('file-viewer-audio-editor'))
       .toContainText('Конец · 0.7 с')
+    // A new file ID within /browser/file/:protocol/:id/edit REUSES the
+    // component, so onBeforeRouteLeave alone cannot protect trim edits.
+    const editorUrl=page.url()
+    let discardPrompts=0
+    page.once('dialog',async dialog=>{
+      expect(dialog.type()).toBe('confirm')
+      discardPrompts++
+      await dialog.dismiss()
+    })
+    await page.evaluate(async()=>{
+      const {router}=await import('/src/router.ts')
+      await router.replace({
+        name:'browser-editor',
+        params:{protocol:'media',id:crypto.randomUUID()},
+      })
+    })
+    expect(discardPrompts).toBe(1)
+    expect(page.url()).toBe(editorUrl)
+    await expect(page.getByTestId('file-viewer-audio-editor'))
+      .toContainText('Начало · 0.2 с')
+    await expect(page.getByTestId('file-viewer-audio-editor'))
+      .toContainText('Конец · 0.7 с')
     let downloadCount=0
     page.on('download',()=>{downloadCount++})
     await page.getByTestId('file-viewer-make-wav').click()
