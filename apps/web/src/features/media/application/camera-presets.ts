@@ -19,6 +19,11 @@ export interface CameraPresetSettings{
   audioTargetBitrate:AudioTargetBitrate
   gridVisible:boolean
   gpsStatusVisible:boolean
+  // Camera 1.2 optical/hardware preferences. Restoring GPS never itself
+  // grants geolocation consent or starts an unapproved watcher.
+  photoZoom:number
+  torchEnabled:boolean
+  gpsTrackingEnabled:boolean
 }
 export interface CameraPreset{
   id:string;name:string;settings:CameraPresetSettings
@@ -45,6 +50,7 @@ const defaultSettings:CameraPresetSettings={
   videoQuality:'720p',videoAudioEnabled:true,
   videoMaxSeconds:300,audioMaxSeconds:3000,
   audioTargetBitrate:128000,gridVisible:false,gpsStatusVisible:true,
+  photoZoom:1,torchEnabled:false,gpsTrackingEnabled:false,
 }
 export function defaultCameraPresetCatalog():CameraPresetCatalog{
   return {version:1,selectedId:'default',presets:[{
@@ -61,7 +67,18 @@ export function validateCameraPresetSettings(raw:unknown):CameraPresetSettings{
   if(!raw||typeof raw!=='object'||Array.isArray(raw))
     throw Error('camera.preset_invalid')
   const s=raw as Record<string,unknown>
-  if(Object.keys(s).length!==10
+  // Existing AES-GCM v1 catalogs were sealed with exactly ten fields.
+  // Accept ONLY that old shape or the new exact 13-field shape, normalize
+  // legacy defaults in memory, and never silently delete/rotate the row.
+  const legacy=Object.keys(s).length===10
+    &&!('photoZoom' in s||'torchEnabled' in s||'gpsTrackingEnabled' in s)
+  const zoom=legacy?1:s.photoZoom
+  const torch=legacy?false:s.torchEnabled
+  const gpsTrack=legacy?false:s.gpsTrackingEnabled
+  if((!legacy&&Object.keys(s).length!==13)
+    ||typeof zoom!=='number'||!Number.isFinite(zoom)
+    ||zoom<1||zoom>3||Math.abs(zoom*10-Math.round(zoom*10))>1e-6
+    ||typeof torch!=='boolean'||typeof gpsTrack!=='boolean'
     ||!validEnum(s.photoAspect,aspects)||!validEnum(s.photoQuality,quality)
     ||!validEnum(s.photoStorage,['p1','p2'])
     ||!validEnum(s.videoQuality,videos)
@@ -83,6 +100,7 @@ export function validateCameraPresetSettings(raw:unknown):CameraPresetSettings{
     audioTargetBitrate:s.audioTargetBitrate as AudioTargetBitrate,
     gridVisible:s.gridVisible as boolean,
     gpsStatusVisible:s.gpsStatusVisible as boolean,
+    photoZoom:zoom,torchEnabled:torch,gpsTrackingEnabled:gpsTrack,
   }
 }
 export function validateCameraPresetCatalog(raw:unknown):CameraPresetCatalog{
