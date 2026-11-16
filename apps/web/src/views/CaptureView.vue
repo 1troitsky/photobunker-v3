@@ -445,6 +445,9 @@ const torchSupported=computed(()=>{
   }catch{return false}
 })
 const busy=ref(false)
+// Keyed flash animation matches the approved viewfinder without any
+// plaintext screenshot, gallery write or timer that can outlive the camera.
+const photoFlashRevision=ref(0)
 const message=ref('')
 const error=ref('')
 const starting=ref(false)
@@ -1342,6 +1345,7 @@ async function capture():Promise<void> {
     if(!ctx)throw new Error('camera.canvas_unavailable')
     ctx.drawImage(v,format.sx,format.sy,format.sw,format.sh,
       0,0,format.width,format.height)
+    photoFlashRevision.value++
     const jpeg=await new Promise<Blob>((resolve,reject)=>{
       canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('camera.jpeg_failed')),
         'image/jpeg',format.jpegQuality)
@@ -1520,6 +1524,14 @@ onUnmounted(()=>{
           <i class="camera-finder-corner bl" aria-hidden="true"></i>
           <i class="camera-finder-corner br" aria-hidden="true"></i>
         </template>
+        <div v-if="photoFlashRevision>0&&captureMode==='photo'"
+          :key="photoFlashRevision" class="camera-snap-flash" aria-hidden="true"
+          data-testid="camera-snap-flash"></div>
+        <div v-if="recording&&captureMode==='video'"
+          class="camera-record-badge" data-testid="camera-record-badge">
+          <span class="camera-record-dot" aria-hidden="true"></span>
+          <time>{{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}</time>
+        </div>
         <span v-if="captureMode==='photo'&&cameraZoomRange&&cameraZoom>1.01"
           class="camera-photo-zoom-indicator" data-testid="camera-zoom-indicator">
           {{cameraZoom.toFixed(1)}}×
