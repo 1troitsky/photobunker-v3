@@ -5,6 +5,7 @@ import {activeSession,type Session} from '../features/identity/application/sessi
 const mock=vi.hoisted(()=>({api:vi.fn(),reauth:vi.fn(),logout:vi.fn()}))
 vi.mock('vue-router',()=>({
   useRoute:()=>({query:{}}),
+  RouterLink:{name:'RouterLink',render:()=>null},
 }))
 vi.mock('../features/identity/infrastructure/api',()=>({jsonApi:mock.api}))
 vi.mock('../features/identity/application/session',async(importOriginal)=>{
