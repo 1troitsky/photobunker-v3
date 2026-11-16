@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   allowedMedia: ['photo'] as string[],
   route: {query: {} as Record<string, string>},
   presetDestination:'p1' as 'p1'|'p2',
+  presetZoom:1,presetTorch:false,presetGpsTracking:false,
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => mocks.route,
@@ -31,6 +32,9 @@ vi.mock('../features/media/application/camera-presets',async importOriginal=>{
   return {...actual,loadCameraPresetCatalog:vi.fn(async()=>{
     const catalog=actual.defaultCameraPresetCatalog()
     catalog.presets[0]!.settings.photoStorage=mocks.presetDestination
+    catalog.presets[0]!.settings.photoZoom=mocks.presetZoom
+    catalog.presets[0]!.settings.torchEnabled=mocks.presetTorch
+    catalog.presets[0]!.settings.gpsTrackingEnabled=mocks.presetGpsTracking
     return catalog
   })}
 })
@@ -160,6 +164,9 @@ beforeEach(() => {
   mocks.binding.mockResolvedValue({assignmentId: 'assignment-a', policyRevision: 1})
   mocks.capture.mockResolvedValue({photoId: 'photo-fixture'})
   mocks.presetDestination='p1'
+  mocks.presetZoom=1
+  mocks.presetTorch=false
+  mocks.presetGpsTracking=false
   mocks.allowedMedia = ['photo']
   mocks.privateCache.mockResolvedValue(null)
   mocks.verifyPolicy.mockResolvedValue(undefined)
@@ -479,6 +486,42 @@ describe('Camera preset hydration preserves the selected encrypted media destina
     await settle()
     expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
     expect(mocks.capture).not.toHaveBeenCalled()
+  })
+})
+
+describe('Camera 1.2 native hardware preferences and private GPS consent',()=>{
+  it('applies only actual track-supported zoom/torch from a device-sealed preset and does not prompt GPS',async()=>{
+    mocks.presetZoom=2.3
+    mocks.presetTorch=true
+    mocks.presetGpsTracking=true
+    const getGPS=vi.fn()
+    Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
+      getCurrentPosition:getGPS,watchPosition:vi.fn(),clearWatch:vi.fn(),
+    }})
+    await mount()
+    const opened=media()
+    const applied=vi.fn().mockResolvedValue(undefined)
+    Object.assign(opened.track,{
+      getCapabilities:()=>({zoom:{min:1,max:5,step:.1},torch:true}),
+      getSettings:()=>({zoom:1}),
+      applyConstraints:applied,
+    })
+    Object.assign(opened.stream,{getVideoTracks:()=>[opened.track]})
+    requests[0]!.resolve(opened.stream)
+    await settle()
+    expect(applied).toHaveBeenCalledWith({advanced:[{zoom:2.3}]})
+    expect(applied).toHaveBeenCalledWith({advanced:[{torch:true}]})
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-photo-zoom"]')?.value)
+      .toBe('2.3')
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-photo-torch"]')?.checked)
+      .toBe(true)
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-photo-zoom"]')?.max)
+      .toBe('3')
+    expect(getGPS).not.toHaveBeenCalled()
+    expect(host.querySelector('[data-testid="camera-preset-gps-consent"]')?.textContent)
+      .toContain('требуется новое разрешение')
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-gps-tracking"]')?.checked)
+      .toBe(false)
   })
 })
 
