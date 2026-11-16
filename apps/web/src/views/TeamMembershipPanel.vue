@@ -52,12 +52,16 @@ const loading=ref(false)
 const error=ref('')
 const notice=ref('')
 let generation=0
+let rosterEpoch=0
 function identity():string{
   const s=activeSession.value
   return s?[s.accountId,s.deviceId,s.pkg.accountSpki,s.pkg.akek,s.pkg.revision].join('|'):''
 }
 function current(expected:string,token:number):boolean{
   return identity()===expected&&token===generation
+}
+function confirmedOwnTeam(id:string):boolean{
+  return props.ownedTeams.some(team=>team.teamId===id&&team.delivery==='synced')
 }
 function isEpochInvite(item:TeamInvitation|EpochTeamInvite):item is EpochTeamInvite{
   return 'version' in item&&item.version===2
@@ -142,40 +146,50 @@ async function reload():Promise<void>{
   }finally{if(current(scope,token))loading.value=false}
 }
 async function reloadRoster():Promise<void>{
-  const scope=identity(),id=selectedTeam.value
+  const scope=identity(),id=selectedTeam.value,epoch=++rosterEpoch
+  const stillCurrent=()=>scope!==''&&identity()===scope
+    &&epoch===rosterEpoch&&selectedTeam.value===id&&confirmedOwnTeam(id)
   roster.value=[];rotationRequired.value=false;keyEpoch.value=1
   roleEditId.value=null;error.value=''
   if(!id)return
+  if(!confirmedOwnTeam(id)){
+    // A previously selected owner Team is no longer server-confirmed.
+    // Its historical cached roster must not remain actionable.
+    selectedTeam.value=''
+    return
+  }
   if(!hasNetwork()){error.value='teams.roster_requires_online';return}
   try{
     await syncTeamKeyRotations()
+    if(!stillCurrent())return
     await syncEpochInvitationOperations()
-    const epoch=await ownerEpochStatus(id)
+    if(!stillCurrent())return
+    const teamEpoch=await ownerEpochStatus(id)
+    if(!stillCurrent())return
     const [oldMembers,history]=await Promise.all([
       listOwnerTeamRoster(id),verifiedTeamMembershipHistory(id),
     ])
-    // Do not introduce v2 roster/network dependencies into an unchanged
-    // original-epoch Team (P1-28 remains an independently working flow).
-    const epochMembers=epoch.keyEpoch>=2
+    if(!stillCurrent())return
+    // Preserve the independently working original Team protocol.
+    const epochMembers=teamEpoch.keyEpoch>=2
       ?await listOwnerEpochRoster(id):[]
-    if(epoch.membershipRevision!==history.revision
-      ||epoch.rotationRequired!==history.rotationRequired)
+    if(!stillCurrent())return
+    if(teamEpoch.membershipRevision!==history.revision
+      ||teamEpoch.rotationRequired!==history.rotationRequired)
       throw Error('teams.membership_epoch_mismatch')
-    if(identity()===scope&&selectedTeam.value===id){
-      const activeFirst=new Map<string,TeamRosterMember|EpochRosterMember>()
-      for(const person of [...oldMembers,...epochMembers]){
-        const prior=activeFirst.get(person.recipientAccountId)
-        if(!prior||person.state==='accepted'
-          ||(prior.state!=='accepted'
-            &&isEpochMember(person)))
-          activeFirst.set(person.recipientAccountId,person)
-      }
-      roster.value=[...activeFirst.values()]
-      rotationRequired.value=history.rotationRequired
-      keyEpoch.value=epoch.keyEpoch
+    const activeFirst=new Map<string,TeamRosterMember|EpochRosterMember>()
+    for(const person of [...oldMembers,...epochMembers]){
+      const prior=activeFirst.get(person.recipientAccountId)
+      if(!prior||person.state==='accepted'
+        ||(prior.state!=='accepted'&&isEpochMember(person)))
+        activeFirst.set(person.recipientAccountId,person)
     }
+    if(!stillCurrent())return
+    roster.value=[...activeFirst.values()]
+    rotationRequired.value=history.rotationRequired
+    keyEpoch.value=teamEpoch.keyEpoch
   }catch(e){
-    if(identity()===scope&&selectedTeam.value===id)
+    if(stillCurrent())
       error.value=e instanceof Error?e.message:'teams.roster_error'
   }
 }
@@ -202,7 +216,7 @@ async function rotateTeam():Promise<void>{
   }catch(e){
     if(identity()===scope)
       error.value=e instanceof Error?e.message:'teams.epoch_rotation_failed'
-  }finally{busy.value=false}
+  }finally{if(identity()===scope)busy.value=false}
 }
 async function memberAction(
   person:TeamRosterMember,action:'change_role'|'remove',nextRole:TeamRole|null,
@@ -241,7 +255,7 @@ async function memberAction(
   }catch(e){
     if(identity()===scope)
       error.value=e instanceof Error?e.message:'teams.membership_change_failed'
-  }finally{busy.value=false}
+  }finally{if(identity()===scope)busy.value=false}
 }
 // A contact hidden by local Blacklist may still be selected in a stale form.
 // Never create a new signed invite from an out-of-date visible selection.
@@ -288,7 +302,7 @@ async function sendInvite():Promise<void>{
   }catch(e){
     if(identity()===scope)
       error.value=e instanceof Error?e.message:'teams.invite_error'
-  }finally{busy.value=false}
+  }finally{if(identity()===scope)busy.value=false}
 }
 async function acceptInvite(item:TeamInvitation|EpochTeamInvite):Promise<void>{
   if(busy.value||!item.trustedOwner||item.expired)return
@@ -315,24 +329,55 @@ async function acceptInvite(item:TeamInvitation|EpochTeamInvite):Promise<void>{
   }catch(e){
     if(identity()===scope)
       error.value=e instanceof Error?e.message:'teams.accept_error'
-  }finally{busy.value=false}
+  }finally{if(identity()===scope)busy.value=false}
 }
 function online():void{void reload();void reloadRoster()}
 function applyTeamContext():void{
   const id=props.initialTeamId
-  if(!id||selectedTeam.value===id)return
-  // Never imply that a queued/local Team is an authorized remote roster.
-  if(!props.ownedTeams.some(team=>team.teamId===id
-    &&team.delivery==='synced'))return
+  if(!id||selectedTeam.value===id||!confirmedOwnTeam(id))return
   selectedTeam.value=id
   void reloadRoster()
 }
+function onTeamsChanged():void{
+  const id=selectedTeam.value
+  if(id&&!confirmedOwnTeam(id)){
+    ++rosterEpoch
+    selectedTeam.value=''
+    roster.value=[]
+    rotationRequired.value=false
+    keyEpoch.value=1
+    roleEditId.value=null
+    showInvite.value=false
+    selectedContact.value=''
+    error.value=''
+  }
+  applyTeamContext()
+}
 watch(()=>[props.initialTeamId,
   props.ownedTeams.map(team=>team.teamId+':'+team.delivery).join('|')],
-  applyTeamContext,{immediate:true})
-watch(activeSession,()=>{++generation;selectedTeam.value='';roster.value=[];void reload();applyTeamContext()})
+  onTeamsChanged,{immediate:true})
+watch(activeSession,(next,previous)=>{
+  ++generation;++rosterEpoch
+  const scope=(s:typeof activeSession.value)=>s
+    ?[s.accountId,s.deviceId,s.pkg.accountSpki,s.pkg.akek,s.pkg.revision].join('|'):''
+  if(scope(next)!==scope(previous)){
+    selectedTeam.value='';selectedContact.value='';showInvite.value=false
+    roster.value=[];incoming.value=[];joined.value=[]
+    revokedTeamIds.value=[];suspendedTeamIds.value=[]
+    rotationRequired.value=false;keyEpoch.value=1
+    roleEditId.value=null
+    busy.value=false;loading.value=false
+    notice.value='';error.value=''
+  }
+  void reload()
+  applyTeamContext()
+  if(selectedTeam.value)void reloadRoster()
+})
 onMounted(()=>{void reload();window.addEventListener('online',online)})
-onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
+onUnmounted(()=>{
+  ++generation;++rosterEpoch
+  window.removeEventListener('online',online)
+})
 </script>
 
 <template>
