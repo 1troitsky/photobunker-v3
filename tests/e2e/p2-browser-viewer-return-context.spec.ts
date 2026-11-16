@@ -46,6 +46,10 @@ test('P2 Browser->File Viewer->Browser: restore encrypted folder, filter, privat
     await expect(page).toHaveURL(new RegExp('/browser/file/media/'+id+'$'))
     expect(page.url()).not.toContain('RETURN-SECRET')
     await expect(page.getByTestId('file-viewer-audio')).toBeVisible()
+    // Real Browser v3 breadcrumb, never plaintext in the URL or server query.
+    await expect(page.getByTestId('file-viewer-path'))
+      .toContainText('Browser / Приватная папка / RETURN-SECRET-AUDIO.wav')
+    await expect(page.getByTestId('file-viewer-path')).toHaveCSS('height','45px')
     await expect(page.getByTestId('file-viewer-info'))
       .toContainText('RETURN-SECRET-AUDIO.wav')
 
