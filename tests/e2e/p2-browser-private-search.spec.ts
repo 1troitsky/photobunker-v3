@@ -14,6 +14,10 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await expect(a.getByText('Подтверждённая сессия')).toBeVisible()
     await a.goto('/browser')
     await expect(a.getByTestId('browser-v3')).toBeVisible()
+    // Owner-approved Browser v3 places private upload controls in the
+    // Header-triggered sheet; none are visible beneath the catalog.
+    await a.getByTestId('browser-header-upload').click()
+    await expect(a.getByTestId('browser-import-sheet')).toBeVisible()
     await a.locator('#media-import-category').fill('Полевые отчёты')
     await a.locator('#media-import-description').fill('Секретная заметка для клиента')
     await a.locator('#media-import-tags').fill('evidence, night')
@@ -29,6 +33,8 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     })
     const rows=a.locator('[data-testid^="browser-row-media:"]')
     await expect(rows).toHaveCount(1,{timeout:25000})
+    await a.getByTestId('browser-import-sheet-close').click()
+    await expect(a.getByTestId('browser-import-sheet')).toBeHidden()
     // Assert actual AEAD-decrypted persistence, not only UI search behavior.
     const metadata=await a.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
@@ -155,7 +161,10 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     // Return one REAL signed/ciphertext-authorized row twice to mimic a
     // stale/malicious index. The local-first UI must retain the previous
     // authentic cloud list and cursor, rather than accepting duplicated IDs.
-    const panel=b.locator('.media-import-p1')
+    await b.getByTestId('browser-header-upload').click()
+    const sheet=b.getByTestId('browser-import-sheet')
+    await expect(sheet).toBeVisible()
+    const panel=sheet.locator('.media-import-p1')
     const verifiedCloud=panel.getByRole('button',{name:'Проверить из облака'})
     await expect(verifiedCloud).toHaveCount(1,{timeout:20000})
     let duplicateDelivered=0
@@ -214,6 +223,8 @@ test('P2 Browser: offline private metadata search and second-device cloud search
 
     expect(requests.join('\n')).not.toContain('секретная')
     expect(requests.join('\n')).not.toContain(secret)
+    await b.getByTestId('browser-import-sheet-close').click()
+    await expect(sheet).toBeHidden()
   }finally{
     await aContext.close();await bContext.close()
   }
