@@ -1311,6 +1311,14 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   height:auto;aspect-ratio:4/3;background:#172423;box-shadow:0 0 0 1px #ffffff12
 }
 .camera-stage .camera-viewfinder .video-frame video{object-fit:cover}
+.camera-finder-corner{
+  pointer-events:none;position:absolute;z-index:4;
+  width:18px;height:18px;border-style:solid;border-color:#ffffff7f
+}
+.camera-finder-corner.tl{top:12px;left:12px;border-width:1.5px 0 0 1.5px}
+.camera-finder-corner.tr{top:12px;right:12px;border-width:1.5px 1.5px 0 0}
+.camera-finder-corner.bl{bottom:12px;left:12px;border-width:0 0 1.5px 1.5px}
+.camera-finder-corner.br{bottom:12px;right:12px;border-width:0 1.5px 1.5px}
 /* Camera 1.2 single feedback toast. Absolute overlay never enlarges the stage,
    blocks the shutter or shifts the global Dock during offline capture. */
 .camera-stage .camera-toast{
