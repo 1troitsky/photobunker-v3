@@ -5,6 +5,7 @@ import { activeSession, beginRegistration, finishRegistration, restoreAccount, s
 import { resolveStartRoute } from '../ui/fieldwork/appearance-preferences'
 import { markInvalidRecoveryKey } from '../features/identity/application/authorization-failure'
 import { brand } from '../config/brand'
+import { saveRecoveryKeyWithSystemDialog } from '../ui/fieldwork/recovery-key-save'
 const route=useRoute(),router=useRouter()
 type Feature={title:string;desc:string;caption:string;accent:string;art:string}
 const features:readonly Feature[]=[
@@ -122,15 +123,24 @@ async function copyKey():Promise<void>{
  try{await navigator.clipboard.writeText(generated.value);notice.value='Recovery Key скопирован'}
  catch{error.value='Не удалось скопировать ключ'}
 }
-function saveKey():void{
+async function saveKey():Promise<void>{
  if(!generated.value)return
- const blob=new Blob([generated.value+'\n'],{type:'text/plain;charset=utf-8'})
- const url=URL.createObjectURL(blob)
- const a=document.createElement('a')
- a.href=url;a.download=brand.slug+'-Recovery-Key.txt'
- document.body.appendChild(a);a.click();a.remove()
- setTimeout(()=>URL.revokeObjectURL(url),1000)
- notice.value='Файл с ключом передан браузеру для сохранения'
+ // Deliberate user gesture: never auto-download or save a Recovery Key
+ // without asking for a local destination through the native OS dialog.
+ const key=generated.value
+ error.value='';notice.value=''
+ const result=await saveRecoveryKeyWithSystemDialog(key,brand.slug)
+ // A stale async chooser must never report success for a different key.
+ if(key!==generated.value)return
+ if(result==='saved')
+   notice.value='Файл Recovery Key сохранён в выбранном вами месте. Проверьте его.'
+ else if(result==='shared')
+   notice.value='Системное меню закрыто. Проверьте сохранение в «Файлы». Не передавайте ключ другим людям.'
+ else if(result==='unsupported')
+   error.value='Этот браузер не умеет выбирать место для файла. Скопируйте Recovery Key и сохраните отдельно.'
+ else if(result==='failed')
+   error.value='Не удалось сохранить Recovery Key. Ключ остаётся на экране — скопируйте его.'
+ // A cancelled chooser is not a successfully saved key.
 }
 async function createAccount():Promise<void>{
  if(busy.value||!generated.value||!acknowledged.value)return
@@ -232,7 +242,8 @@ async function loadFile(e:Event):Promise<void>{
           <p>Храните ключ отдельно от устройства и не передавайте третьим лицам!</p>
           <div class="actions-inline">
             <button class="action" type="button" @click="copyKey">Скопировать</button>
-            <button class="action" type="button" @click="saveKey">Сохранить на устройство</button>
+            <button class="action" type="button" data-testid="welcome-save-key"
+              @click="saveKey">Сохранить на устройство</button>
           </div>
           <label class="auth-check"><input v-model="acknowledged" type="checkbox">Я сохранил Recovery Key отдельно от устройства.</label>
           <button class="action primary" type="button" data-testid="welcome-finish"
