@@ -56,6 +56,18 @@ const cloudPercent = computed(() => server.value && server.value.enforcedByteCei
   ? Math.min(100,Math.round(server.value.recordedCipherBytes*100/server.value.enforcedByteCeiling))
   : null)
 const fileMax = computed(()=>catalogPlan.value?.limits.maxMediaFiles??null)
+// A missing/failed catalog is UNKNOWN, never an unlimited entitlement.
+// Only the versioned, verified catalog's Unlimited plans may render it.
+const unlimitedFileQuota = computed(()=>!!catalogPlan.value
+  &&(catalogPlan.value.planId==='unlimited'
+    ||catalogPlan.value.planId==='unlimited_plus')
+  &&catalogPlan.value.limits.maxMediaFiles===null)
+const fileQuotaConfirmed = computed(()=>fileMax.value!==null||unlimitedFileQuota.value)
+const fileQuotaDenominator = computed(()=>{
+  if(unlimitedFileQuota.value)return 'Без ограничения'
+  if(fileMax.value===null)return 'Лимит не подтверждён'
+  return String(fileMax.value)
+})
 const filePercent = computed(()=>fileMax.value!==null && fileMax.value>0 && server.value
   ? Math.min(100,Math.round(server.value.activeLogicalMediaFiles*100/fileMax.value))
   : null)
@@ -149,7 +161,10 @@ function refresh(): void {
             if(requestId===id && activeSession.value===session)
               catalogPlan.value=plans.find(plan=>plan.planId===result.planId)??null
           })
-          .catch(()=>{if(requestId===id)catalogPlan.value=null})
+          .catch(()=>{
+            if(requestId===id&&activeSession.value===session)
+              catalogPlan.value=null
+          })
       }
     })
     .catch(() => {
@@ -363,11 +378,24 @@ onUnmounted(() => {
           <div class="quota-block" data-testid="storage-files-quota">
             <div class="quota-metric">
               <strong>Файлы</strong>
-              <span>{{server.activeLogicalMediaFiles}} / {{fileMax===null?'Без лимита плана':fileMax}}</span>
+              <span data-testid="storage-file-quota-denominator">
+                {{server.activeLogicalMediaFiles}} / {{fileQuotaDenominator}}
+                <template v-if="filePercent!==null"> · {{filePercent}}%</template>
+              </span>
             </div>
-            <progress class="bar" :value="filePercent??0" max="100"
-              :aria-label="fileMax===null?'Количество файлов без тарифного ограничения':'Использованный лимит количества файлов'"></progress>
-            <p class="quota-note">{{fileMax===null?'Лимит количества файлов не подтверждён либо не предусмотрен тарифом.':'Доля от лимита количества файлов по действующему тарифному каталогу.'}}</p>
+            <progress v-if="fileQuotaConfirmed" class="bar"
+              data-testid="storage-file-quota-progress"
+              :value="filePercent??0" max="100"
+              :aria-label="unlimitedFileQuota
+                ?'Количество файлов не ограничено подтверждённым тарифом'
+                :'Использованный лимит количества файлов'"></progress>
+            <p class="quota-note" data-testid="storage-file-quota-note">
+              {{unlimitedFileQuota
+                ?'Количество файлов не ограничено подтверждённым тарифом; ограничения на облачное хранение действуют.'
+                :fileMax===null
+                  ?'Не удалось подтвердить квоту файлов по тарифному каталогу. Это не означает безлимит.'
+                  :'Доля от лимита количества файлов по действующему тарифному каталогу.'}}
+            </p>
           </div>
           <div>
             <span>Тариф для новых операций</span>
