@@ -168,6 +168,30 @@ export const settingsSearchEntries: readonly SettingsSearchEntry[] = [
     to: '/settings/security?field=inactivity',
   },
   {
+    id: 'storage-queue', label: 'Очередь отправки', group: 'Данные и хранилище',
+    description: 'Локальные зашифрованные файлы, ожидающие синхронизации',
+    keywords: ['очередь', 'загрузка', 'ожидают', 'queue', 'upload', 'pending'],
+    to: '/settings/storage?field=queue',
+  },
+  {
+    id: 'storage-usage', label: 'Используемые лимиты', group: 'Данные и хранилище',
+    description: 'Подтверждённый серверный объём и количество файлов',
+    keywords: ['лимиты', 'объем', 'объём', 'quota', 'usage', 'cloud', 'квота'],
+    to: '/settings/storage?field=usage',
+  },
+  {
+    id: 'storage-backups', label: 'Резервные копии', group: 'Данные и хранилище',
+    description: 'Технический статус резервного копирования',
+    keywords: ['резервн', 'копии', 'бэкап', 'backup', 'restore', 'storage'],
+    to: '/settings/storage?field=backups',
+  },
+  {
+    id: 'storage-cache', label: 'Зашифрованный кэш', group: 'Данные и хранилище',
+    description: 'Кэш просмотра; безопасная очистка пока недоступна',
+    keywords: ['кэш', 'cache', 'миниатюры', 'thumbnails'],
+    to: '/settings/storage?field=cache',
+  },
+  {
     id: 'storage', label: 'Данные и хранилище', group: 'Безопасность и данные',
     description: 'Зашифрованная очередь, объём и резервные копии',
     keywords: ['хранилище', 'данные', 'кэш', 'storage', 'backup', 'cache'],

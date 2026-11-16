@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import { readPublicCatalog, type PublicPlan } from '../features/billing/application/catalog-client'
 import { activeSession } from '../features/identity/application/session'
 import { readBackupTechnicalStatus,type BackupTechnicalStatus }
@@ -13,6 +13,14 @@ import {
 } from '../features/storage/application/storage-status'
 
 type Phase = 'locked' | 'loading' | 'ready' | 'error' | 'offline'
+const route = useRoute()
+const storageRoot = ref<HTMLElement|null>(null)
+const storageSearchTargets:Readonly<Record<string,string>> = {
+  queue:'storage-open-queue',
+  usage:'storage-cloud-section',
+  backups:'storage-backup-section',
+  cache:'storage-cache-section',
+}
 const local = shallowRef<LocalStorageSummary | null>(null)
 const queueEntries = shallowRef<readonly EncryptedQueueEntry[]>([])
 const queueOpen = ref(false)
@@ -25,8 +33,11 @@ const queueFilters: readonly { id: QueueDisplayFilter; label: string }[] = [
 ]
 const matchingEntries = computed(() => filteredEncryptedQueue(queueEntries.value, queueFilter.value))
 const visibleEntries = computed(() => matchingEntries.value.slice(0, 50))
-const pendingQueueTotal = computed(() => local.value
-  ? local.value.pendingCount + local.value.conflictedCount + local.value.expiredPendingCount : 0)
+// This total must use the SAME subset as pendingCipherBytes. Conflicts and
+// expired ciphertext are displayed separately, never as uploadable bytes.
+const pendingQueueTotal = computed(() => local.value?.pendingCount ?? 0)
+const blockedQueueTotal = computed(() => local.value
+  ? local.value.conflictedCount + local.value.expiredPendingCount : 0)
 const fileKind = (kind: EncryptedQueueEntry['kind']): string => ({
   photo: 'Фото', video: 'Видео', audio: 'Аудио',
 })[kind]
@@ -226,6 +237,24 @@ async function retryQueue(): Promise<void> {
     }
   }
 }
+async function focusRequestedStorageField():Promise<void>{
+  if(!activeSession.value)return
+  const field=route.query.field
+  if(typeof field!=='string')return
+  const testId=storageSearchTargets[field]
+  if(!testId)return
+  // Local queue inspection is offline-first; wait for encrypted IndexedDB,
+  // not a server request. No stale/other account rows are revealed.
+  if(field==='queue'&&localPhase.value!=='ready')return
+  if(field==='queue')queueOpen.value=true
+  await nextTick()
+  const target=storageRoot.value?.querySelector<HTMLElement>(
+    '[data-testid="'+testId+'"]')
+  if(!target)return
+  target.scrollIntoView?.({block:'center'})
+  target.focus({preventScroll:true})
+}
+watch([()=>route.query.field,localPhase],()=>{void focusRequestedStorageField()})
 function onNetworkChange(): void {
   onlineNow.value = typeof navigator !== 'undefined' && navigator.onLine
   refresh()
@@ -244,6 +273,7 @@ onMounted(() => {
   window.addEventListener('online', onNetworkChange)
   window.addEventListener('offline', onNetworkChange)
   document.addEventListener('visibilitychange', onVisibilityChange)
+  void focusRequestedStorageField()
 })
 onUnmounted(() => {
   ++requestId
@@ -263,7 +293,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="foundation-content storage-view" data-testid="data-storage-page">
+  <section ref="storageRoot" class="foundation-content storage-view" data-testid="data-storage-page">
     <header class="storage-heading">
       <RouterLink to="/settings" class="storage-back">Настройки</RouterLink>
       <h1>Данные и хранилище</h1>
@@ -321,6 +351,11 @@ onUnmounted(() => {
             </button>
             <strong class="queue-amount">{{pendingQueueTotal}} {{filesNoun(pendingQueueTotal)}} · {{formatBytes(local?.pendingCipherBytes??0)}}</strong>
           </div>
+          <p v-if="blockedQueueTotal" data-testid="storage-queue-blocked" class="queue-footnote">
+            Дополнительно {{local?.conflictedCount??0}} конфликтных и
+            {{local?.expiredPendingCount??0}} просроченных записей.
+            Они не входят в количество и объём ожидающей отправки.
+          </p>
           <p class="queue-footnote">Очередь состоит из локальных зашифрованных файлов и пока не учтена как занятое место в облаке.</p>
           <p v-if="estimatedCloudAfterQueue" class="queue-footnote"
             data-testid="storage-after-upload-estimate">
@@ -379,7 +414,8 @@ onUnmounted(() => {
         <RouterLink to="/browser" class="storage-link">Открыть Browser</RouterLink>
       </section>
 
-      <section class="foundation-card storage-section" aria-labelledby="storage-cloud-heading">
+      <section class="foundation-card storage-section" aria-labelledby="storage-cloud-heading"
+        tabindex="-1" data-testid="storage-cloud-section">
         <h2 id="storage-cloud-heading">Используемые лимиты</h2>
         <p v-if="serverPhase==='loading'" role="status" data-testid="storage-server-loading">
           Проверяем данные на сервере…
@@ -444,7 +480,8 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <section class="foundation-card storage-section" aria-labelledby="storage-backup-heading">
+      <section class="foundation-card storage-section" aria-labelledby="storage-backup-heading"
+        tabindex="-1" data-testid="storage-backup-section">
         <h2 id="storage-backup-heading">Резервные копии</h2>
         <div class="backup-cards">
           <div v-if="backupPhase==='loading'" class="backup-technical"
@@ -481,7 +518,8 @@ onUnmounted(() => {
         </div>
         <button type="button" disabled class="storage-backup-manage">Управление копиями и автообновлением</button>
       </section>
-      <section class="foundation-card storage-section" aria-labelledby="storage-cache-heading">
+      <section class="foundation-card storage-section" aria-labelledby="storage-cache-heading"
+        tabindex="-1" data-testid="storage-cache-section">
         <h2 id="storage-cache-heading">Зашифрованный кэш</h2>
         <p class="muted">Миниатюры и временные данные для быстрого просмотра.</p>
         <div class="cache-usage"><span>Объём: не измерен</span>

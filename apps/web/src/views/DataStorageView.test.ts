@@ -6,6 +6,7 @@ import {activeSession,type Session} from '../features/identity/application/sessi
 const mock=vi.hoisted(()=>({
   catalog:vi.fn(),server:vi.fn(),queue:vi.fn(),
   backup:vi.fn(),retry:vi.fn(),
+  route:{query:{field:undefined as string|undefined}},
 }))
 vi.mock('../features/billing/application/catalog-client',()=>({
   readPublicCatalog:mock.catalog,
@@ -24,6 +25,7 @@ vi.mock('../features/storage/application/backup-technical-status',()=>({
 // rejects during test mount, independently of storage state.
 vi.mock('vue-router',()=>({
   RouterLink:{render:()=>null},
+  useRoute:()=>mock.route,
 }))
 import DataStorageView from './DataStorageView.vue'
 
@@ -50,6 +52,7 @@ function quotaText():string{
 beforeEach(()=>{
   host=document.createElement('div');document.body.append(host)
   activeSession.value=session()
+  mock.route.query.field=undefined
   mock.queue.mockReset().mockResolvedValue({
     summary:{pendingCount:0,conflictedCount:0,expiredPendingCount:0,pendingCipherBytes:0},
     entries:[],
@@ -161,6 +164,37 @@ describe('Data & Storage 1.2 verified file quota',()=>{
     expect(estimate?.textContent).toContain('15,612 ГБ')
     expect(estimate?.textContent).toContain('128 файлов')
     expect(estimate?.textContent).toContain('прогноз')
+  })
+  it('keeps the visible pending count and bytes aligned, excluding conflicts and expiry',async()=>{
+    mock.queue.mockResolvedValue({
+      summary:{pendingCount:3,conflictedCount:2,expiredPendingCount:1,
+        pendingCipherBytes:612_000_000,syncedLocalCount:0},
+      entries:[],
+    })
+    await mount()
+    const summary=host.querySelector('[data-testid="storage-queue-summary"]')
+    expect(summary?.querySelector('.queue-amount')?.textContent).toContain('3 файла')
+    expect(summary?.querySelector('.queue-amount')?.textContent).not.toContain('6 файлов')
+    expect(host.querySelector('[data-testid="storage-queue-blocked"]')?.textContent)
+      .toContain('2 конфликтных')
+    expect(host.querySelector('[data-testid="storage-queue-blocked"]')?.textContent)
+      .toContain('1 просроченных')
+  })
+  it.each([
+    ['usage','storage-cloud-section'],
+    ['backups','storage-backup-section'],
+    ['cache','storage-cache-section'],
+    ['queue','storage-open-queue'],
+  ])('focuses exact Data & Storage search target %s after mount',async(field,id)=>{
+    mock.route.query.field=field
+    await mount()
+    const target=host.querySelector('[data-testid="'+id+'"]')
+    expect(target).not.toBeNull()
+    expect(document.activeElement).toBe(target)
+    if(field==='queue'){
+      expect(target?.getAttribute('aria-expanded')).toBe('true')
+      expect(host.querySelector('[data-testid="storage-queue-detail"]')).not.toBeNull()
+    }
   })
   it('shows the real limited-plan file count and percentage',async()=>{
     mock.catalog.mockResolvedValue([{

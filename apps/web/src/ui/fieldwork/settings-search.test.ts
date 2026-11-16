@@ -43,7 +43,12 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
       '/settings/profile/edit','/settings/security?field=pin',
       '/settings/security?field=relock','/settings/security?field=emergency',
       '/settings/security?field=devices','/settings/security?field=key',
-      '/settings/security?field=inactivity','/settings/storage',
+      '/settings/security?field=inactivity',
+      '/settings/storage?field=queue',
+      '/settings/storage?field=usage',
+      '/settings/storage?field=backups',
+      '/settings/storage?field=cache',
+      '/settings/storage',
       '/settings/payments','/settings/help',
     ])
     expect(searchSettings('')).toEqual(
@@ -51,7 +56,7 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
     )
     expect(new Set(settingsSearchEntries.map(entry => entry.id)).size)
       .toBe(settingsSearchEntries.length)
-    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(28)
+    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(32)
   })
   it('routes RU/EN notification searches to exact working controls', () => {
     for(const [word,id,field] of [
@@ -66,6 +71,19 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
     ] as const){
       expect(searchSettings(word).find(item=>item.id===id)?.to)
         .toBe('/notifications/settings?field='+field)
+    }
+  })
+  it('links storage RU/EN terms directly to real Fieldwork sections',()=>{
+    for(const [word,id,field] of [
+      ['очередь','storage-queue','queue'],
+      ['pending','storage-queue','queue'],
+      ['лимиты','storage-usage','usage'],
+      ['quota','storage-usage','usage'],
+      ['бэкап','storage-backups','backups'],
+      ['cache','storage-cache','cache'],
+    ] as const){
+      expect(searchSettings(word).find(item=>item.id===id)?.to)
+        .toBe('/settings/storage?field='+field)
     }
   })
   it('routes security search to the exact approved field, including disabled controls', () => {
