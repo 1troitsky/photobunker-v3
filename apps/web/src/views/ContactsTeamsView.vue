@@ -121,6 +121,7 @@ const loading=ref(false)
 const message=ref('')
 const error=ref('')
 let run=0
+let mutationRun=0
 
 function identity(){
   const session=activeSession.value
@@ -162,14 +163,17 @@ async function reload():Promise<void>{
 async function operate(action:()=>Promise<void>):Promise<void>{
   if(busy.value)return
   busy.value=true;error.value='';message.value=''
-  const owner=identity(),token=run
+  // reload() advances the read generation during block/unblock. Its token
+  // must not strand this independent mutation's controls in a busy state.
+  const owner=identity(),token=++mutationRun
+  const current=()=>identity()===owner&&token===mutationRun
   try{
     await action()
-    if(!sessionMatches(owner,token))return
+    if(!current())return
   }catch(e){
-    if(sessionMatches(owner,token))
+    if(current())
       error.value=e instanceof Error?e.message:'contacts.operation_failed'
-  }finally{if(sessionMatches(owner,token))busy.value=false}
+  }finally{if(current())busy.value=false}
 }
 function resetSearch():void{
   candidate.value=null;fingerprintAgreed.value=false;alias.value=''
@@ -290,6 +294,7 @@ watch(activeSession,(_now,previous)=>{
     previous.pkg.akek,previous.pkg.revision,
   ].join('|'):''
   if(identity()!==prev){
+    ++mutationRun
     resetSearch();query.value='';selected.value=null;editAlias.value=''
     contacts.value=[];blocked.value=[];showBlacklist.value=false
     busy.value=false;message.value='';error.value=''
@@ -309,6 +314,7 @@ onMounted(()=>{
   window.addEventListener('online',handleTeamOnline)
 })
 onUnmounted(()=>{
+  ++mutationRun
   clearContactsShellActions(shellOwner)
   ++run;++teamRun;candidate.value=null;contacts.value=[];blocked.value=[]
   showBlacklist.value=false;teams.value=[]

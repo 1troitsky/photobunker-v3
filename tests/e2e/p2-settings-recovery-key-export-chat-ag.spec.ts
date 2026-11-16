@@ -1,45 +1,44 @@
 import { test, expect } from '@playwright/test'
-import { text as streamText } from 'node:stream/consumers'
 
-test('P2 #400: Recovery Key download requires deliberate click and preserves registration', async ({ browser }) => {
+test('P2 #400: explicit system share requires a click and preserves registration', async ({ browser }) => {
   test.setTimeout(120000)
   const context = await browser.newContext({ acceptDownloads: true })
   const page = await context.newPage()
   try {
-    // Test the genuine browser download fallback (Safari/Firefox compatibility).
     await page.addInitScript(() => {
-      Object.defineProperty(window, 'showSaveFilePicker', {
-        configurable: true, value: undefined,
-      })
+      const state: { value?: string; opens: number } = { opens: 0 }
+      Object.defineProperty(window, '__pb3KeyShareTest', { value: state })
+      Object.defineProperty(window, 'showSaveFilePicker', {configurable:true,value:undefined})
+      Object.defineProperty(navigator, 'canShare', {configurable:true,value:()=>true})
+      Object.defineProperty(navigator, 'share', {configurable:true,value:async(data:{files:File[]})=>{
+        state.opens++;state.value=await data.files[0]!.text()
+      }})
     })
-    let downloads = 0
-    page.on('download', () => { downloads++ })
+    let downloads=0
+    page.on('download',()=>{downloads++})
     await page.goto('/settings')
-    await page.getByRole('button', { name: 'Создать ключ' }).click()
-    await expect(page.getByTestId('recovery-key-save')).toBeVisible()
-    const key = await page.locator('#generated-key').inputValue()
+    await page.getByRole('button',{name:'Создать ключ'}).click()
+    await expect(page.getByTestId('account-save-key')).toBeVisible()
+    const key=await page.locator('#generated-key').inputValue()
     expect(key.startsWith('PB2.')).toBe(true)
-    expect(downloads).toBe(0) // No key file is written just by rendering the key.
-    await expect(page.getByTestId('recovery-key-save-warning')).toBeVisible()
-
-    const [download] = await Promise.all([
-      page.waitForEvent('download'),
-      page.getByTestId('recovery-key-save').click(),
-    ])
-    expect(download.suggestedFilename()).toBe('recovery-key.txt')
-    const stream = await download.createReadStream()
-    if (!stream) throw new Error('Recovery Key export stream absent')
-    // Never print or attach plaintext Key to a test failure log.
-    expect((await streamText(stream)) === (key + '\n')).toBe(true)
-    await expect(page.getByRole('status')).toContainText('Загрузка файла запрошена')
-    await expect(page.locator('#generated-key')).toBeVisible()
-
+    expect(downloads).toBe(0)
+    expect(await page.evaluate(()=>(window as unknown as {
+      __pb3KeyShareTest:{opens:number}
+    }).__pb3KeyShareTest.opens)).toBe(0)
+    await page.getByTestId('account-save-key').click()
+    await expect(page.getByText('Системное меню закрыто. Проверьте сохранение в «Файлы»; не передавайте ключ другим людям.')).toBeVisible()
+    expect(await page.evaluate(expected=>{
+      const state=(window as unknown as {__pb3KeyShareTest:{opens:number;value?:string}}).__pb3KeyShareTest
+      return state.opens===1&&state.value===expected+'\n'
+    },key)).toBe(true)
+    // A closed OS sheet is never treated as proof the key was saved.
+    await expect(page.getByRole('button',{name:'Завершить регистрацию'})).toBeDisabled()
     await page.getByLabel('Я сохранил ключ восстановления').check()
-    await page.getByRole('button', { name: 'Завершить регистрацию' }).click()
+    await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await expect(page.locator('#generated-key')).toHaveCount(0)
-    await expect(page.getByTestId('recovery-key-save')).toHaveCount(0)
-    expect(downloads).toBe(1)
+    await expect(page.getByTestId('account-save-key')).toHaveCount(0)
+    expect(downloads).toBe(0)
   } finally { await context.close() }
 })
 
@@ -73,8 +72,8 @@ test('P2 #400: native picker writes only after user action without network or lo
       __pb3KeySaveTest: { opens: number; closed?: boolean }
     }).__pb3KeySaveTest)
     expect(initial.opens).toBe(0)
-    await page.getByTestId('recovery-key-save').click()
-    await expect(page.getByRole('status')).toContainText('Ключ сохранён')
+    await page.getByTestId('account-save-key').click()
+    await expect(page.getByText('Файл Recovery Key сохранён в выбранном месте. Проверьте его.')).toBeVisible()
     const matched = await page.evaluate((expected) => {
       const v = (window as unknown as {
         __pb3KeySaveTest: { value?: string; closed?: boolean; opens: number }

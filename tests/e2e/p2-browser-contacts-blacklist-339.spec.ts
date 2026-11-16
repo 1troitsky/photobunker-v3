@@ -83,7 +83,7 @@ test('P2 #339: two real trusted peers, encrypted local block, refilter after ali
     // The contact action opens only a confirmed LOCAL encrypted draft,
     // never a fabricated Matrix network conversation.
     await A.getByTestId('contacts-message-draft-link').click()
-    await expect(A).toHaveURL(new RegExp('/messages\\?peer='+idC))
+    await expect(A).toHaveURL(url=>url.pathname==='/messages'&&url.searchParams.get('peer')===idC)
     await expect(A.getByTestId('messages-thread')).toBeVisible()
     await expect(A.getByRole('button',{name:'Отправить сообщение'})).toBeDisabled()
     await A.getByTestId('messages-editor').fill('Allowed local draft only')

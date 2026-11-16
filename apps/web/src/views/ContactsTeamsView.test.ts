@@ -151,6 +151,24 @@ describe('Approved local-first Team navigation',()=>{
   })
 })
 describe('Contacts crypto identity and asynchronous peer verification',()=>{
+  it('releases mutation controls after block reloads the encrypted list',async()=>{
+    mock.contacts.mockResolvedValue([{
+      peerAccountId:PEER,alias:'Confirmed peer',safetyFingerprint:'CURRENT-PIN',
+    }])
+    const consent=vi.spyOn(window,'confirm').mockReturnValue(true)
+    try{
+      await mount()
+      click('Карточка');await settle()
+      click('Скрыть локально (Blacklist)');await settle()
+      expect(mock.block).toHaveBeenCalledWith(PEER)
+      click('Карточка');await settle()
+      const save=Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+        .find(button=>button.textContent?.trim()==='Сохранить имя')!
+      expect(save.disabled).toBe(false)
+      save.click();await settle()
+      expect(mock.save).toHaveBeenCalled()
+    }finally{consent.mockRestore()}
+  })
   it('discards delayed key-directory fingerprints from the previous account',async()=>{
     const pending=deferred<{directory:{safetyFingerprint:string};confirmed:boolean}>()
     mock.inspect.mockImplementationOnce(()=>pending.promise)

@@ -131,7 +131,9 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
 
     await page.getByRole('navigation', { name: 'Главная навигация' })
       .getByRole('link', { name: 'Настройки' }).click()
+    const signedOut=page.waitForResponse(r=>r.url().endsWith('/identity/v2/logout')&&r.request().method()==='POST')
     await page.getByRole('button', { name: 'Выйти' }).click()
+    expect((await signedOut).status()).toBe(200)
     await expect(page.getByRole('button', { name: 'Создать ключ' })).toBeVisible()
     await page.goto('/settings/storage')
     // Owner-only technical limits must deny a signed-out browser.

@@ -79,6 +79,9 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('camera-viewfinder').locator('.camera-finder-corner')).toHaveCount(0)
   await expect(page.getByTestId('camera-header-flip')).toBeDisabled()
   await expect(page.getByTestId('camera-header-torch')).toBeDisabled()
+  // Wait for the real microphone/camera mode transition before asserting
+  // focus on its enabled shutter (otherwise the safe Return action is focused).
+  await expect(page.getByRole('button',{name:'Начать запись'})).toBeEnabled()
   await page.getByTestId('camera-header-blind').click()
   const blind=page.getByTestId('camera-blind-overlay')
   await expect(blind).toBeVisible()

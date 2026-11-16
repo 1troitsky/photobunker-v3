@@ -145,6 +145,7 @@ const uploadSheetOpen=ref(false)
 const sharePhotoId=ref<string|null>(null)
 const shareMediaId=ref<string|null>(null)
 const shareFileKey=ref<string|null>(null)
+let shareFocusReturnKey:string|null=null
 const browserSettingsOpen=ref(false)
 const showRemainingDays=ref(readBrowserDaysLeft())
 const browserOpenFirst=ref<BrowserOpeningSection>(readBrowserOpeningSection())
@@ -1427,7 +1428,11 @@ watch(activeSession,(next,previous)=>{
   revokePreview()
   clearCatalog()
   if(next?.accountId!==previous?.accountId
-    ||next?.deviceId!==previous?.deviceId){
+    ||next?.deviceId!==previous?.deviceId
+    ||next?.pkg.accountSpki!==previous?.pkg.accountSpki
+    ||next?.pkg.akek!==previous?.pkg.akek
+    ||next?.pkg.revision!==previous?.pkg.revision){
+    shareFocusReturnKey=null
     requestedFolderReturn=undefined
     scrollReturnKey=null
     editingFolderId.value=null
@@ -1489,6 +1494,11 @@ watch(activeSession,(next,previous)=>{
 watch([selectedFolder,filter,search,searchFolderScope,archiveTab,primarySection],
   ()=>{selectedKeys.value=[];bulkActionsOpen.value=false;closeFileMenu()})
 watch(visible,items=>{
+  // The embedded grant panel can renew an equivalent online Session. If
+  // its catalog refresh temporarily removes the opener, restore focus when
+  // that same authenticated row returns, without stealing subsequent input.
+  if(shareFocusReturnKey&&items.some(item=>item.key===shareFocusReturnKey))
+    void nextTick(restoreShareFocus)
   if(fileMenuKey.value&&!items.some(item=>item.key===fileMenuKey.value))
     closeFileMenu()
   if(selectedKeys.value.length){
@@ -1570,6 +1580,7 @@ function newFolderSheetKeydown(event:KeyboardEvent):void{
 function openPhotoShare(item:CatalogItem):void{
   if(!activeSession.value||item.source!=='photo'||!item.local)return
   sharePhotoId.value=item.id
+  shareFocusReturnKey=null
   shareMediaId.value=null
   shareFileKey.value=item.key
   uploadSheetOpen.value=false
@@ -1584,6 +1595,7 @@ function openPhotoShare(item:CatalogItem):void{
 function openMediaShare(item:CatalogItem):void{
   if(!activeSession.value||item.source!=='media'||!item.local)return
   sharePhotoId.value=null
+  shareFocusReturnKey=null
   shareMediaId.value=item.id
   shareFileKey.value=item.key
   uploadSheetOpen.value=false
@@ -1595,16 +1607,25 @@ function openMediaShare(item:CatalogItem):void{
       '[data-testid="browser-media-share-close"]')?.focus()
   })
 }
+function restoreShareFocus():void{
+  const key=shareFocusReturnKey
+  if(!key||sharePhotoId.value||shareMediaId.value)return
+  const focused=document.activeElement
+  if(focused!==document.body&&focused!==document.documentElement){
+    shareFocusReturnKey=null
+    return
+  }
+  const opener=document.querySelector<HTMLButtonElement>(
+    '[data-testid="browser-row-'+key+'"] [data-testid="browser-file-menu-toggle"]')
+  if(opener){opener.focus();shareFocusReturnKey=null}
+}
 function closePhotoShare():void{
   const key=shareFileKey.value
   sharePhotoId.value=null
   shareMediaId.value=null
   shareFileKey.value=null
-  void nextTick(()=>{
-    if(key)document.querySelector<HTMLButtonElement>(
-      '[data-testid="browser-row-'+key+'"] [data-testid="browser-file-menu-toggle"]'
-    )?.focus()
-  })
+  shareFocusReturnKey=key
+  void nextTick(restoreShareFocus)
 }
 function fileShareKeydown(event:KeyboardEvent):void{
   if(!sharePhotoId.value&&!shareMediaId.value)return
@@ -1752,6 +1773,7 @@ onMounted(()=>{
   void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
+  shareFocusReturnKey=null
   document.removeEventListener('pointerdown',onBrowserMenuPointerDown)
   closeFileMenu()
   sharePhotoId.value=null
