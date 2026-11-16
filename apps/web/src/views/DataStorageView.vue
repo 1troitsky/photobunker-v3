@@ -126,6 +126,12 @@ function formatCloudBytes(value:number,policy:string):string{
   }).format(value/magnitude)+' '+unit
 }
 
+// Approved Storage 1.2 expresses pending ciphertext in decimal MB
+// (612,000,000 bytes = 612 МБ), distinct from GiB used elsewhere.
+function formatQueueBytes(value:number):string{
+  return formatCloudBytes(value,'DECIMAL_GB_TB_V1')
+}
+
 function refresh(): void {
   const id = ++requestId
   const session = activeSession.value
@@ -394,7 +400,7 @@ onUnmounted(() => {
           </div>
           <div>
             <span>Объём ожидающего ciphertext</span>
-            <strong data-testid="storage-local-pending-bytes">{{ formatBytes(local.pendingCipherBytes) }}</strong>
+            <strong data-testid="storage-local-pending-bytes">{{ formatQueueBytes(local.pendingCipherBytes) }}</strong>
           </div>
           <div>
             <span>Требуют разрешения конфликта</span>
@@ -415,7 +421,7 @@ onUnmounted(() => {
               @click="queueOpen=!queueOpen">
               {{queueOpen?'Скрыть очередь':'Открыть очередь'}}
             </button>
-            <strong class="queue-amount">{{pendingQueueTotal}} {{filesNoun(pendingQueueTotal)}} · {{formatBytes(local?.pendingCipherBytes??0)}}</strong>
+            <strong class="queue-amount">{{pendingQueueTotal}} {{filesNoun(pendingQueueTotal)}} · {{formatQueueBytes(local?.pendingCipherBytes??0)}}</strong>
           </div>
           <p v-if="blockedQueueTotal" data-testid="storage-queue-blocked" class="queue-footnote">
             Дополнительно {{local?.conflictedCount??0}} конфликтных и

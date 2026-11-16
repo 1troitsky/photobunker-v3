@@ -73,6 +73,7 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await expect(page.getByTestId('storage-local-ready')).toBeVisible()
     await expect(page.getByTestId('storage-local-pending-count')).toHaveText('1')
     await expect(page.getByTestId('storage-local-pending-bytes')).not.toHaveText('0 Б')
+    await expect(page.getByTestId('storage-local-pending-bytes')).not.toContainText('МиБ')
     await expect(page.getByTestId('storage-server-ready')).toHaveCount(0)
 
     // Real ciphertext rows must be inspectable, not just a cosmetic counter.

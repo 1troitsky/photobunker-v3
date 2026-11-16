@@ -144,6 +144,18 @@ describe('Data & Storage 1.2 verified file quota',()=>{
     expect(host.querySelector('[data-testid="storage-local-ready"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="storage-after-upload-estimate"]')).toBeNull()
   })
+  it('renders pending encrypted queue bytes as decimal MB rather than binary MiB',async()=>{
+    mock.queue.mockResolvedValue({
+      summary:{pendingCount:3,conflictedCount:0,expiredPendingCount:0,
+        pendingCipherBytes:612_000_000,syncedLocalCount:0},
+      entries:[],
+    })
+    await mount()
+    expect(host.querySelector('[data-testid="storage-local-pending-bytes"]')?.textContent)
+      .toContain('612 МБ')
+    expect(host.querySelector('[data-testid="storage-queue-summary"]')?.textContent)
+      .toContain('3 файла · 612 МБ')
+  })
   it('renders decimal cloud tariff units and combined queue estimate as approved',async()=>{
     mock.server.mockResolvedValue({
       planId:'go',recordedCipherBytes:15_000_000_000,
