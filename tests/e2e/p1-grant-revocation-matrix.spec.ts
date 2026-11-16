@@ -1,3 +1,5 @@
+import {openMediaExchange} from './helpers/browser-import'
+import {mediaImportViews,sendImportedMedia} from './helpers/browser-import'
 import {openImportSheet} from './helpers/browser-import'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -38,17 +40,18 @@ test('P1 ACL matrix: A→B verified grant only, C denied, source namespace denie
     const a = await enroll(A)
     await A.goto('/browser')
     await openImportSheet(A)
-    const aPanel = A.locator('.media-import-p1')
+    const aPanel = mediaImportViews(A)
     await expect(aPanel.getByTestId('media-import-file')).toBeEnabled()
 
     // Genuine local AES-GCM encryption, signed reserve, Garage chunks/finalize.
     const synthetic = Buffer.alloc(16391, 0x4d)
-    await aPanel.getByTestId('media-import-file').setInputFiles({
+    await openImportSheet(aPanel.getByTestId('media-import-file').page())
+await aPanel.getByTestId('media-import-file').setInputFiles({
       name: 'PRIVATE-ACL-MATRIX-OWNER.wav',
       mimeType: 'audio/wav',
       buffer: synthetic,
     })
-    await aPanel.getByRole('button', { name: 'Отправить медиа' }).click()
+    await sendImportedMedia(aPanel.page())
     await expect.poll(() => A.evaluate(async () => {
       const media = await import('/src/features/media/application/media-outbox.ts')
       return (await media.listLocalMedia())[0]?.state ?? 'missing'
@@ -75,7 +78,7 @@ test('P1 ACL matrix: A→B verified grant only, C denied, source namespace denie
     const c = await enroll(C)
     expect(new Set([a.accountId,b.accountId,c.accountId]).size).toBe(3)
 
-    const share = A.getByTestId('media-share-panel')
+    const share = await openMediaExchange(A)
     await expect(share).toBeVisible()
     await share.locator('#media-share-peer-id').fill(b.accountId)
     await share.getByRole('button', { name: 'Проверить получателя медиа' }).click()
@@ -119,7 +122,7 @@ test('P1 ACL matrix: A→B verified grant only, C denied, source namespace denie
     }, {grantId,mediaId})
     expect(cAccess).toEqual({grant:404,visible:0,ownerManifest:404})
 
-    const received = B.getByTestId('media-share-panel')
+    const received = await openMediaExchange(B)
     await received.getByRole('button', { name: 'Обновить медиа-разрешения' }).click()
     await expect(received.getByText(mediaId.slice(0, 8))).toBeVisible()
 

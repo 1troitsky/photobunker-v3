@@ -112,6 +112,13 @@ try{
       await page.getByTestId('browser-settings-close').click()
       await expect(page.locator('.photo-row')).toHaveAttribute('data-sync-state','synced',{timeout:30000})
       await page.getByTestId('browser-tab-personal').click()
+      await page.getByTestId('browser-header-upload').click()
+      await pair('browser-upload','browser/',{sheet:'.dialog-sheet,.browser-upload-sheet.open',heading:'.dialog-heading,.browser-upload-heading',destination:'#upload-destination,#media-import-destination',dropzone:'.upload-dropzone',divider:'.upload-divider',url:'#upload-url,#media-import-https-url',action:'.primary-action',note:'.upload-note'},page,async(ref,actual)=>{
+        await ref.locator('[data-action="upload"]').click()
+        const notes=await actual.locator('.upload-note span').allTextContents()
+        await ref.locator('.upload-note span').evaluateAll((nodes,texts)=>nodes.forEach((node,i)=>node.textContent=texts[i]??''),notes)
+      })
+      await page.getByTestId('browser-import-sheet-close').click()
       for(const title of ['Городские прогулки','Студия']){
         await page.getByTestId('browser-header-folder').click()
         if(title==='Городские прогулки')await pair('browser-new-folder','browser/',{sheet:'.dialog-sheet,.browser-new-folder-sheet',heading:'.dialog-heading,.browser-new-folder-heading',name:'#folder-name,[data-testid="browser-folder-name"]',parent:'#folder-parent,[data-testid="browser-new-folder-parent"]',action:'.primary-action'},page,ref=>ref.locator('[data-action="create"]').click())

@@ -61,6 +61,7 @@ const photoAspect=ref<CameraPhotoAspect>('4:3')
 const photoQuality=ref<CameraPhotoQuality>('high')
 const videoQuality=ref<CameraVideoQuality>('720p')
 const videoAudioEnabled=ref(true)
+function cameraDurationLabel(seconds:number):string{return seconds<60?seconds+' сек':seconds%60===0?seconds/60+' мин':Math.floor(seconds/60)+' мин '+seconds%60+' сек'}
 const videoMaxSeconds=ref(300)
 const audioMaxSeconds=ref(3000)
 const cameraPresetCatalog=ref(defaultCameraPresetCatalog())
@@ -1833,7 +1834,7 @@ onUnmounted(()=>{
             Фактическое разрешение зависит от устройства.</p>
           <label class="camera-appearance-setting setting-toggle"><span>Записывать звук в видео<small>При отключении микрофон освобождается; для аудио требуется отдельное разрешение.</small></span><input type="checkbox" v-model="videoAudioEnabled"
               :disabled="busy||recording||starting" data-testid="camera-video-audio"></label>
-          <label class="camera-source-field" for="camera-video-duration">Максимальная длительность видео: {{videoMaxSeconds}} сек.<input id="camera-video-duration" v-model.number="videoMaxSeconds"
+          <label class="sheet-slider" for="camera-video-duration"><span class="slider-head">Максимальная длительность видео <strong>{{cameraDurationLabel(videoMaxSeconds)}}</strong></span><input id="camera-video-duration" v-model.number="videoMaxSeconds"
             type="range" min="5" max="300" step="5" :disabled="busy||recording"
             data-testid="camera-video-duration"></label>
         </section>
@@ -1845,7 +1846,7 @@ onUnmounted(()=>{
               {{ rate/1000 }} кбит/с
             </option>
           </select></label>
-          <label class="camera-source-field" for="camera-audio-duration">Максимальная длительность аудио: {{audioMaxSeconds}} сек.<input id="camera-audio-duration" v-model.number="audioMaxSeconds"
+          <label class="sheet-slider" for="camera-audio-duration"><span class="slider-head">Максимальная длительность аудио <strong>{{cameraDurationLabel(audioMaxSeconds)}}</strong></span><input id="camera-audio-duration" v-model.number="audioMaxSeconds"
             type="range" min="5" max="3000" step="5" :disabled="busy||recording"
             data-testid="camera-audio-duration"></label>
           <p class="muted">Аудио записывается без видеопотока. Фактический битрейт зависит от браузера и кодека.</p>
@@ -1878,10 +1879,10 @@ onUnmounted(()=>{
           <div class="camera-preset-actions">
             <button type="button" data-testid="camera-permission-camera"
               :disabled="permissionBusy||busy||recording||starting"
-              @click="requestDevicePermission('camera')">Разрешить камеру</button>
+              @click="requestDevicePermission('camera')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="14" r="4"/></svg> Разрешить камеру</button>
             <button type="button" data-testid="camera-permission-microphone"
               :disabled="permissionBusy||busy||recording||starting"
-              @click="requestDevicePermission('microphone')">Разрешить микрофон</button>
+              @click="requestDevicePermission('microphone')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/></svg> Разрешить микрофон</button>
           </div>
           <p class="muted">Камера нужна для фото и видео; микрофон — для аудио и видео со звуком.
             Браузер запросит разрешение отдельно.</p>

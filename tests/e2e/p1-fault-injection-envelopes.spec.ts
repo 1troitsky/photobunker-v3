@@ -1,3 +1,4 @@
+import {mediaImportViews,sendImportedMedia} from './helpers/browser-import'
 import {openImportSheet} from './helpers/browser-import'
 import { test, expect, type Page } from '@playwright/test'
 
@@ -54,12 +55,13 @@ test('P1-25 lost finalize ACK: real commit, offline E2EE outbox, idempotent repl
     await owner.goto('/browser')
     await expect(owner.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await openImportSheet(owner)
-    const panel = owner.locator('.media-import-p1')
+    const panel = mediaImportViews(owner)
     await expect(panel.getByTestId('media-import-file')).toBeEnabled()
 
     await ownerContext.setOffline(true)
     const inputBytes = Buffer.alloc(14413, 0x6b)
-    await panel.getByTestId('media-import-file').setInputFiles({
+    await openImportSheet(panel.getByTestId('media-import-file').page())
+await panel.getByTestId('media-import-file').setInputFiles({
       name: 'PRIVATE-FAULT-INJECTION-LOSS.wav',
       mimeType: 'audio/wav',
       buffer: inputBytes,
@@ -101,7 +103,7 @@ test('P1-25 lost finalize ACK: real commit, offline E2EE outbox, idempotent repl
     })
 
     await ownerContext.setOffline(false)
-    await panel.getByRole('button', { name: 'Отправить медиа' }).click()
+    await sendImportedMedia(panel.page())
     await expect.poll(() => discardedAck, { timeout: 35_000 }).toBe(1)
     expect(realFinalize).toBe(200)
 
@@ -194,10 +196,11 @@ test('P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean 
     await page.goto('/browser')
     await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await openImportSheet(page)
-    const panel = page.locator('.media-import-p1')
+    const panel = mediaImportViews(page)
     await expect(panel.getByTestId('media-import-file')).toBeEnabled()
     await context.setOffline(true)
-    await panel.getByTestId('media-import-file').setInputFiles({
+    await openImportSheet(panel.getByTestId('media-import-file').page())
+await panel.getByTestId('media-import-file').setInputFiles({
       name: 'PRIVATE-FAULT-INJECTION-CORRUPT.webm',
       mimeType: 'video/webm',
       buffer: Buffer.alloc(18021, 0x5e),
@@ -234,7 +237,7 @@ test('P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean 
     })
 
     await context.setOffline(false)
-    await panel.getByRole('button', { name: 'Отправить медиа' }).click()
+    await sendImportedMedia(panel.page())
     await expect.poll(() => corruptUploads, { timeout: 30_000 }).toBeGreaterThan(0)
     expect(rejectedHttp).toBe(503)
     await expect.poll(async () => (await localState(page, mediaId))?.state, {

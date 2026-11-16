@@ -1,3 +1,4 @@
+import {mediaImportViews,sendImportedMedia} from './helpers/browser-import'
 import {browserControl,browserHeader} from './support/browser-ui'
 import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
@@ -50,13 +51,14 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     await b.getByTestId('browser-settings-close').click()
 
     await openImportSheet(a)
+    await openImportSheet(a.getByTestId('media-import-file').page())
     await a.getByTestId('media-import-file').setInputFiles({
       name:'PRIVATE-PREF-VOICE.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x31),
     })
     await expect(a.locator('[data-testid^="browser-row-media:"]'))
       .toHaveCount(1,{timeout:30000})
-    await a.locator('.media-import-p1').getByRole('button',{name:'Отправить медиа'}).click()
+    await sendImportedMedia(mediaImportViews(a).page())
     await a.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       await m.synchronizeMedia()

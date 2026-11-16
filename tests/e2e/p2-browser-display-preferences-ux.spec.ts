@@ -1,3 +1,4 @@
+import {openImportSheet} from './helpers/browser-import'
 import {browserHeader} from './support/browser-ui'
 import {expect,test} from '@playwright/test'
 
@@ -19,7 +20,8 @@ test('Browser v3: opening section and folder-first display are real and device-p
 
   await context.setOffline(true)
   await browserHeader(page,'upload')
-  await page.getByTestId('media-import-file').setInputFiles({
+  await openImportSheet(page.getByTestId('media-import-file').page())
+    await page.getByTestId('media-import-file').setInputFiles({
     name:'PRESENTATION-ONLY.wav',mimeType:'audio/wav',
     buffer:Buffer.alloc(8192,0x44),
   })

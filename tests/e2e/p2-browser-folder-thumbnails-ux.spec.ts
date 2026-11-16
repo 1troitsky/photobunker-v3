@@ -1,3 +1,4 @@
+import {openImportSheet} from './helpers/browser-import'
 import {browserHeader} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
@@ -33,7 +34,8 @@ test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext
   expect(Buffer.from(png,'base64').length).toBeGreaterThan(128)
   await context.setOffline(true)
   await browserHeader(page,'upload')
-  await page.getByTestId('media-import-file').setInputFiles({
+  await openImportSheet(page.getByTestId('media-import-file').page())
+    await page.getByTestId('media-import-file').setInputFiles({
     name:'LOCAL-ONLY-PRIVATE-COVER.png',mimeType:'image/png',
     buffer:Buffer.from(png,'base64'),
   })

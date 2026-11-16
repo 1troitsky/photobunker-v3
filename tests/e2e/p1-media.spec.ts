@@ -1,3 +1,6 @@
+import {openMediaExchange} from './helpers/browser-import'
+import {openImportTools} from './helpers/browser-import'
+import {openImportPanel,sendImportedMedia} from './helpers/browser-import'
 import {browserHeader} from './support/browser-ui'
 import {test,expect,type Page} from '@playwright/test'
 
@@ -28,14 +31,15 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     await A.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(A.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await A.goto('/browser')
-    const panel=(await openImportSheet(A)).locator('.media-import-p1')
-    await expect(panel).toBeVisible()
+    const panel=await openImportPanel(A)
+    await expect(panel.getByTestId('media-import-file')).toBeVisible()
 
     // Real Local-First: the application is loaded, then network disappears
     // BEFORE any media data is read, encrypted or added to IndexedDB.
     await primary.setOffline(true)
     const length=1024*1024+317
-    await panel.getByTestId('media-import-file').setInputFiles({
+    await openImportSheet(panel.getByTestId('media-import-file').page())
+await panel.getByTestId('media-import-file').setInputFiles({
       name:'SECRET-CLOUD-ONLY-VIDEO.webm',mimeType:'video/webm',
       buffer:Buffer.alloc(length,0x43),
     })
@@ -60,7 +64,7 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     })
 
     await primary.setOffline(false)
-    await panel.getByRole('button',{name:'Отправить медиа'}).click()
+    await sendImportedMedia(panel.page())
     await expect(panel.locator('.photo-row').filter({hasText:local.mediaId.slice(0,8)}).first())
       .toContainText('synced',{timeout:30000})
     const server=await A.evaluate(async mediaId=>{
@@ -84,7 +88,8 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     await B.getByRole('button',{name:'Восстановить',exact:true}).click()
     await expect(B.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await B.goto('/browser')
-    const remote=(await openImportSheet(B)).locator('.media-import-p1')
+    const remote=await openImportPanel(B)
+    await openImportTools(B)
     await expect(remote.locator('.photo-row')
       .filter({hasText:local.mediaId.slice(0,8)})).toBeVisible({timeout:20000})
     await remote.getByRole('button',{name:'Проверить из облака'}).click()
@@ -132,12 +137,13 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     // Audio uses the same real upload/decryption route without requiring
     // camera permissions or auto-writing the OS gallery.
     await A.goto('/browser')
-    const again=(await openImportSheet(A)).locator('.media-import-p1')
-    await again.getByTestId('media-import-file').setInputFiles({
+    const again=await openImportPanel(A)
+    await openImportSheet(again.getByTestId('media-import-file').page())
+await again.getByTestId('media-import-file').setInputFiles({
       name:'SENSITIVE-VOICE.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(4096,0x5a),
     })
-    await again.getByRole('button',{name:'Отправить медиа'}).click()
+    await sendImportedMedia(again.page())
     await expect.poll(()=>A.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       return (await m.listLocalMedia()).filter(x=>x.state==='synced').length
@@ -181,12 +187,13 @@ test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant
       return s.requireSession().accountId
     })
     await owner.goto('/browser')
-    const ownerPanel=(await openImportSheet(owner)).locator('.media-import-p1')
-    await ownerPanel.getByTestId('media-import-file').setInputFiles({
+    const ownerPanel=await openImportPanel(owner)
+    await openImportSheet(ownerPanel.getByTestId('media-import-file').page())
+await ownerPanel.getByTestId('media-import-file').setInputFiles({
       name:'SENSITIVE-RECIPIENT-AUDIO.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(16427,0x5e),
     })
-    await ownerPanel.getByRole('button',{name:'Отправить медиа'}).click()
+    await sendImportedMedia(ownerPanel.page())
     await expect.poll(()=>owner.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       return (await m.listLocalMedia())[0]?.state
@@ -207,7 +214,8 @@ test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant
     })
     await recipient.goto('/browser')
     await openImportSheet(recipient)
-    await expect(recipient.getByTestId('media-share-panel')).toBeVisible()
+    await openMediaExchange(recipient)
+await expect(recipient.getByTestId('media-share-panel')).toBeVisible()
     // Registration UI and online session proof complete independently.
     // Verify the server account before publishing an account-signed ECDH key.
     await recipient.evaluate(async()=>{
@@ -220,7 +228,7 @@ test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant
       await keys.ensureOwnExchangeKey()
     })
 
-    const share=owner.getByTestId('media-share-panel')
+    const share=await openMediaExchange(owner)
     await share.locator('#media-share-peer-id').fill(recipientId)
     await share.getByRole('button',{name:'Проверить получателя медиа'}).click()
     await expect(share.getByTestId('media-recipient-fingerprint')).not.toBeEmpty()
@@ -244,7 +252,8 @@ test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant
     },grantId)
     expect(rawGrant).toBe(404) // even owner is not recipient
 
-    const received=recipient.getByTestId('media-share-panel')
+    await openImportTools(recipient)
+    const received=await openMediaExchange(recipient)
     await received.getByRole('button',{name:'Обновить медиа-разрешения'}).click()
     await expect(received.getByText(mediaId.slice(0,8))).toBeVisible()
     await received.getByRole('button',{name:'Проверить отправителя медиа'}).click()

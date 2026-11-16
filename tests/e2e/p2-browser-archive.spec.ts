@@ -1,3 +1,5 @@
+import {sendImportedMedia} from './helpers/browser-import'
+import {mediaImportViews} from './helpers/browser-import'
 import {browserControl} from './support/browser-ui'
 import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
@@ -29,8 +31,7 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
     })
     const row=page.locator('[data-testid^="browser-row-media:"]')
     await expect(row).toHaveCount(1,{timeout:20000})
-    await page.locator('.media-import-p1')
-      .getByRole('button',{name:'Отправить медиа'}).click()
+    await sendImportedMedia(mediaImportViews(page).page())
     // Import is Local-First and may already be flushing in the background.
     // Require a genuine signed server ACK before exposing archive actions.
     await page.evaluate(async()=>{

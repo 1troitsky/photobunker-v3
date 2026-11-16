@@ -1,3 +1,5 @@
+import {openImportSheet} from './helpers/browser-import'
+import {mediaImportViews,openImportTools} from './helpers/browser-import'
 import {browserControl,browserHeader,searchBrowser} from './support/browser-ui'
 import {expect,test} from '@playwright/test'
 
@@ -19,6 +21,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     // Header-triggered sheet; none are visible beneath the catalog.
     await browserHeader(a,'upload')
     await expect(a.getByTestId('browser-import-sheet')).toBeVisible()
+    await openImportTools(a)
     await a.locator('#media-import-category').fill('Полевые отчёты')
     await a.locator('#media-import-description').fill('Секретная заметка для клиента')
     await a.locator('#media-import-tags').fill('evidence, night')
@@ -28,6 +31,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await expect(a.locator('#media-import-description'))
       .toHaveValue('Секретная заметка для клиента')
     await expect(a.locator('#media-import-tags')).toHaveValue('evidence, night')
+    await openImportSheet(a.getByTestId('media-import-file').page())
     await a.getByTestId('media-import-file').setInputFiles({
       name:secret+'.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x42),
@@ -177,7 +181,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await browserHeader(b,'upload')
     const sheet=b.getByTestId('browser-import-sheet')
     await expect(sheet).toBeVisible()
-    const panel=sheet.locator('.media-import-p1')
+    const panel=mediaImportViews(sheet)
     const verifiedCloud=panel.getByRole('button',{name:'Проверить из облака'})
     await expect(verifiedCloud).toHaveCount(1,{timeout:20000})
     let duplicateDelivered=0

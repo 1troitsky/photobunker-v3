@@ -119,7 +119,7 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   const config=page.getByTestId('camera-settings-panel')
   await expect(config.locator('.camera-sheet-handle')).toHaveCount(1)
   await expect(config.locator('.camera-sheet-close svg')).toHaveCount(1)
-  const groups=await config.locator(':scope > section[aria-label], :scope > section[data-testid="camera-geolocation-section"], :scope > section[data-testid="camera-permissions"]')
+  const groups=await config.locator(':scope > .camera-source-body > section[aria-label], :scope > .camera-source-body > section[data-testid="camera-geolocation-section"], :scope > .camera-source-body > section[data-testid="camera-permissions"]')
     .evaluateAll(nodes=>nodes.map(el=>el.getAttribute('aria-label')||el.querySelector('h3')?.textContent?.trim()))
   expect(groups).toEqual(['Фото','Видео','Аудио','Геолокация','Разрешения устройства'])
   await expect(config.locator('section[aria-label="Фото"] [data-testid="camera-grid-setting"]')).toHaveCount(1)

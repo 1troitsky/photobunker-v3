@@ -1,3 +1,5 @@
+import {sendImportedMedia} from './helpers/browser-import'
+import {mediaImportViews} from './helpers/browser-import'
 import {browserControl} from './support/browser-ui'
 import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
@@ -20,14 +22,14 @@ test('P2 Archive: unresolved signed delete/archival command cannot be discarded;
     await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
     await openImportSheet(page)
+    await openImportSheet(page.getByTestId('media-import-file').page())
     await page.getByTestId('media-import-file').setInputFiles({
       name:'PRIVATE-STALENESS.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x37),
     })
     await expect(page.locator('[data-testid^="browser-row-media:"]'))
       .toHaveCount(1,{timeout:30000})
-    await page.locator('.media-import-p1')
-      .getByRole('button',{name:'Отправить медиа'}).click()
+    await sendImportedMedia(mediaImportViews(page).page())
     await page.evaluate(async()=>{
       const module=await import('/src/features/media/application/media-outbox.ts')
       await module.synchronizeMedia()

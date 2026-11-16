@@ -1,3 +1,5 @@
+import {openImportSheet} from './helpers/browser-import'
+import {mediaImportViews} from './helpers/browser-import'
 import {browserHeader,filterBrowser} from './support/browser-ui'
 import {searchBrowser,sortBrowser} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
@@ -58,11 +60,12 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     // Owner-approved Browser v3: import is opened from Header as one sheet.
     await browserHeader(page,'upload')
     await expect(page.getByTestId('browser-import-sheet')).toBeVisible()
+    await openImportSheet(page.getByTestId('media-import-file').page())
     await page.getByTestId('media-import-file').setInputFiles({
       name:'PRIVATE-VIDEO-TEST.webm',mimeType:'video/webm',
       buffer:Buffer.alloc(8192,0x42),
     })
-    await expect(page.locator('.media-import-p1')
+    await expect(mediaImportViews(page)
       .getByText('Файл зашифрован и сохранён', {exact:false}))
       .toBeVisible()
     // Independently verify durable account-scoped AES-GCM ciphertext in IDB:

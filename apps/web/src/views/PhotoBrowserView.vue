@@ -2106,6 +2106,7 @@ onUnmounted(()=>{
         <button type="button" :disabled="busy" @click="sync">Синхронизировать</button>
         <button type="button" :disabled="busy" @click="refresh">Обновить</button>
       </div>
+        <div id="browser-import-settings"></div>
         <SharePanel v-if="sharePhotoId===null" v-show="browserSettingsOpen"
           :local-photos="localPhotos" @open-photo="showReceived"/>
         <div v-if="browserSettingsOpen" class="browser-settings-footer">
@@ -2534,8 +2535,7 @@ onUnmounted(()=>{
           <header v-if="uploadSheetOpen" class="browser-upload-heading">
             <strong>Загрузить файлы</strong>
             <button type="button" data-testid="browser-import-sheet-close"
-              aria-label="Закрыть загрузчик" @click="closeUploadPanel">
-              Закрыть</button>
+              aria-label="Закрыть загрузчик" @click="closeUploadPanel">✕</button>
           </header>
           <MediaImportPanel
             :destination-folders="importFolderOptions"

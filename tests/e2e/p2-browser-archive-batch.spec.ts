@@ -1,3 +1,5 @@
+import {sendImportedMedia} from './helpers/browser-import'
+import {mediaImportViews} from './helpers/browser-import'
 import {browserControl,browserHeader} from './support/browser-ui'
 import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
@@ -30,8 +32,7 @@ test('P2 Browser: owner-confirmed sequential batch archive and restore use real 
       await expect(page.locator('[data-testid^="browser-row-media:"]'))
         .toHaveCount(i+1,{timeout:20000})
     }
-    await page.locator('.media-import-p1')
-      .getByRole('button',{name:'Отправить медиа'}).click()
+    await sendImportedMedia(mediaImportViews(page).page())
     await page.evaluate(async()=>{
       const module=await import('/src/features/media/application/media-outbox.ts')
       await module.synchronizeMedia()

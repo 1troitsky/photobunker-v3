@@ -1,3 +1,4 @@
+import {mediaImportViews,openImportTools} from './helpers/browser-import'
 import {openImportSheet} from './helpers/browser-import'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -169,18 +170,21 @@ test('P1 #378 genuine encrypted offline media stays private in persistent browse
     // not a claimed signed Service Worker or cold offline startup.
     await page.goto('/browser')
     await openImportSheet(page)
-    const importPanel = page.locator('.media-import-p1')
+    const importPanel = mediaImportViews(page)
     await expect(importPanel.getByTestId('media-import-file')).toBeEnabled()
     await context.setOffline(true)
+    await openImportTools(importPanel.page())
     await importPanel.locator('#media-import-category').fill(category)
     await importPanel.locator('#media-import-description').fill(description)
     await importPanel.locator('#media-import-tags').fill(tag)
+    await openImportSheet(importPanel.getByTestId('media-import-file').page())
     await importPanel.getByTestId('media-import-file').setInputFiles({
       name: filename,
       mimeType: 'audio/wav',
       buffer: Buffer.from(payload.repeat(16), 'utf8'),
     })
     await expect(importPanel.getByText(/Файл зашифрован и сохранён/)).toBeVisible()
+    await openImportTools(page)
     const localRow = importPanel.locator('.photo-row').filter({ hasText: 'queued' }).first()
     await expect(localRow).toBeVisible()
     await localRow.getByRole('button', { name: 'Открыть' }).click()

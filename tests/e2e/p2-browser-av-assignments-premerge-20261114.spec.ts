@@ -1,3 +1,5 @@
+import {openImportSheet} from './helpers/browser-import'
+import {sendImportedMedia} from './helpers/browser-import'
 import {browserControl,browserHeader,exchangeReady} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
@@ -69,10 +71,11 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
         console.log('PB3_AV_E2E stage=media_upload_start kind='+mime)
         await expect(uploader.getByTestId('media-import-file'))
           .toBeEnabled({timeout:30_000})
-        await uploader.getByTestId('media-import-file').setInputFiles({
+        await openImportSheet(uploader.getByTestId('media-import-file').page())
+await uploader.getByTestId('media-import-file').setInputFiles({
           name,mimeType:mime,buffer:Buffer.alloc(2048,fill),
         })
-        await uploader.getByRole('button',{name:'Отправить медиа'}).click()
+        await sendImportedMedia(uploader.page())
         await B.evaluate(async()=>{
           const m=await import('/src/features/media/application/media-outbox.ts')
           await m.synchronizeMedia()

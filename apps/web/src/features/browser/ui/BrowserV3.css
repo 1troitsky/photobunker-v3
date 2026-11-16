@@ -158,3 +158,9 @@
 .browser-v3 .browser-new-folder-sheet .approved-folder-content input,.browser-v3 .browser-new-folder-sheet .approved-folder-content select{min-height:0;height:auto}
 @media(min-width:700px){.browser-v3 .browser-folders .browser-folder-form.browser-new-folder-sheet{max-width:480px}}
 .browser-v3 .browser-new-folder-sheet .approved-folder-content input{max-width:none}
+
+.browser-v3 .browser-upload-sheet.open{width:100%;max-width:none;max-height:86dvh;padding:18px 17px 24px;border:0;border-radius:12px 12px 0 0;box-shadow:none;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.browser-v3 .browser-upload-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0;margin:0 0 15px;border:0}
+.browser-v3 .browser-upload-heading strong{font-size:15px;font-weight:750}
+.browser-v3 .browser-upload-heading button{padding:6px;min-height:0;width:auto;background:transparent;border:0;color:#ddd;font:inherit}
+@media(min-width:700px){.browser-v3 .browser-upload-sheet.open{max-width:480px}}

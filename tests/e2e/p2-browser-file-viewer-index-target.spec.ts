@@ -1,3 +1,5 @@
+import {openImportSheet} from './helpers/browser-import'
+import {mediaImportViews} from './helpers/browser-import'
 import {browserHeader} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
@@ -23,11 +25,12 @@ test('P2 File Viewer: authenticated deep-link target on opaque index page 2, rej
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
     await browserHeader(A,'upload')
     await expect(A.getByTestId('browser-import-sheet')).toBeVisible()
-    await A.getByTestId('media-import-file').setInputFiles({
+    await openImportSheet(A.getByTestId('media-import-file').page())
+await A.getByTestId('media-import-file').setInputFiles({
       name:'VIEWER-PAGE-2-E2EE.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x5c),
     })
-    await expect(A.locator('.media-import-p1')
+    await expect(mediaImportViews(A)
       .getByText('Файл зашифрован и сохранён на устройстве.'))
       .toBeVisible({timeout:30000})
     await A.evaluate(async()=>{
