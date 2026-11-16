@@ -138,6 +138,8 @@ function applyCameraPreset(settings:CameraPresetSettings):void {
 }
 async function reloadCameraPresets():Promise<void>{
   const session=activeSession.value,generation=++presetLoadGeneration
+  // A cryptographic identity switch retires the old pending mutation UI.
+  presetBusy.value=false
   const defaults=defaultCameraPresetCatalog()
   cameraPresetCatalog.value=defaults
   selectedPresetId.value=defaults.selectedId
@@ -173,12 +175,13 @@ async function pickCameraPreset():Promise<void>{
   if(!activeSession.value||recording.value||busy.value||presetBusy.value)return
   const session=activeSession.value,id=selectedPresetId.value
   const chosen=cameraPresetCatalog.value.presets.find(p=>p.id===id)
-  ++presetLoadGeneration // A completed write/select supersedes stale reads.
+  const generation=++presetLoadGeneration // Retire stale A→B→A actions.
   if(!chosen)return
   presetBusy.value=true;presetNotice.value=''
   try{
     const next=await changeCameraPreset({kind:'select',id})
-    if(session!==activeSession.value)return
+    if(generation!==presetLoadGeneration
+      ||!sameIdentity(cameraIdentity(session),cameraIdentity(activeSession.value)))return
     cameraPresetCatalog.value=next
     presetName.value=chosen.name
     applyCameraPreset(chosen.settings)
@@ -187,30 +190,41 @@ async function pickCameraPreset():Promise<void>{
       ?'Пресет выбран. Для GPS подтвердите разрешение кнопкой «Определить координаты».'
       :'Пресет выбран. Параметры камеры применены при поддержке устройства.'
   }catch(e){
-    if(session===activeSession.value){
+    if(generation===presetLoadGeneration
+      &&sameIdentity(cameraIdentity(session),cameraIdentity(activeSession.value))){
       selectedPresetId.value=cameraPresetCatalog.value.selectedId
       presetNotice.value=e instanceof Error?e.message:'camera.preset_unavailable'
     }
-  }finally{if(session===activeSession.value)presetBusy.value=false}
+  }finally{
+    if(generation===presetLoadGeneration
+      &&sameIdentity(cameraIdentity(session),cameraIdentity(activeSession.value)))
+      presetBusy.value=false
+  }
 }
 async function writeCameraPreset(kind:'add'|'save'):Promise<void>{
   if(!activeSession.value||recording.value||busy.value||presetBusy.value)return
   const session=activeSession.value,name=presetName.value
   const settings=cameraSettingsSnapshot(),id=selectedPresetId.value
-  ++presetLoadGeneration // A completed write/select supersedes stale reads.
+  const generation=++presetLoadGeneration // Retire stale A→B→A actions.
   presetBusy.value=true;presetNotice.value=''
   try{
     const next=await changeCameraPreset(kind==='add'
       ?{kind:'add',name,settings}:{kind:'save',id,name,settings})
-    if(session!==activeSession.value)return
+    if(generation!==presetLoadGeneration
+      ||!sameIdentity(cameraIdentity(session),cameraIdentity(activeSession.value)))return
     cameraPresetCatalog.value=next
     selectedPresetId.value=next.selectedId
     presetName.value=next.presets.find(p=>p.id===next.selectedId)!.name
     presetNotice.value='Пресет зашифрован и сохранён на этом устройстве.'
   }catch(e){
-    if(session===activeSession.value)
+    if(generation===presetLoadGeneration
+      &&sameIdentity(cameraIdentity(session),cameraIdentity(activeSession.value)))
       presetNotice.value=e instanceof Error?e.message:'camera.preset_unavailable'
-  }finally{if(session===activeSession.value)presetBusy.value=false}
+  }finally{
+    if(generation===presetLoadGeneration
+      &&sameIdentity(cameraIdentity(session),cameraIdentity(activeSession.value)))
+      presetBusy.value=false
+  }
 }
 // Identity-bound preset reload is registered after cameraIdentity helpers.
 const currentMediaInstruction=computed(()=>{
