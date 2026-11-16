@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { displayedDock, dockDefinitions } from './ui/fieldwork/dock-preferences'
 import type { DockDefinition } from './ui/fieldwork/dock-preferences'
@@ -14,6 +14,23 @@ import {cameraShellActions} from './features/media/application/camera-shell-acti
 import {isDockSectionActive,resolveDockRetap} from './ui/fieldwork/dock-retap'
 const route = useRoute()
 const router = useRouter()
+// Session proof alone does NOT mean a browser is online. A previously
+// authenticated account can remain in encrypted Local-First mode after
+// Wi-Fi/airplane-mode loss without any new server acknowledgment.
+const networkOnline=ref(typeof navigator!=='undefined'&&navigator.onLine)
+const sessionDisplayedOnline=computed(()=>
+  !!activeSession.value?.online&&networkOnline.value)
+function updateNetworkOnline():void{
+  networkOnline.value=typeof navigator!=='undefined'&&navigator.onLine
+}
+onMounted(()=>{
+  window.addEventListener('online',updateNetworkOnline)
+  window.addEventListener('offline',updateNetworkOnline)
+})
+onUnmounted(()=>{
+  window.removeEventListener('online',updateNetworkOnline)
+  window.removeEventListener('offline',updateNetworkOnline)
+})
 const verifiedPlan=ref('')
 let planRequest=0
 const planLabels:Readonly<Record<string,string>>={
@@ -76,8 +93,8 @@ const dock = computed(() => displayedDock.value
           data-testid="shell-status-link" aria-label="Открыть локальные уведомления"
           title="Локальный журнал уведомлений; серверная доставка не подтверждена">
           <small><span class="status-dot"
-            :class="{'session-online':activeSession?.online}"
-            aria-hidden="true"></span>{{activeSession?(activeSession.online?'Сессия подтверждена':'Локальный режим'):'Без аккаунта'}}</small>
+            :class="{'session-online':sessionDisplayedOnline}"
+            aria-hidden="true"></span>{{activeSession?(sessionDisplayedOnline?'Сессия подтверждена':'Локальный режим'):'Без аккаунта'}}</small>
         </RouterLink>
       </div>
       <RouterLink v-if="verifiedPlan&&route.path!=='/notifications'&&route.path!=='/browser'&&route.path!=='/camera'&&route.name!=='browser-viewer'&&route.name!=='browser-editor'"
