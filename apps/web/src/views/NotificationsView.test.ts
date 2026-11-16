@@ -83,7 +83,7 @@ beforeEach(()=>{
   mocks.rows=[{id:ID,kind:'new-file',targetId:TARGET,occurredAt:moment,
     readAt:null,origin:'local',version:1}]
   mocks.local.mockReset().mockImplementation(async()=>mocks.rows.map(x=>({...x})))
-  mocks.preferences.mockReset().mockResolvedValue({version:2,invitations:true,deadlines:true,expiry:true,system:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480})
+  mocks.preferences.mockReset().mockResolvedValue({version:3,invitations:true,deadlines:true,expiry:true,newFiles:true,reviews:true,backups:true,subscription:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480})
   mocks.mark.mockReset().mockImplementation(async(id:string)=>{
     mocks.rows=mocks.rows.map(x=>x.id===id?{...x,readAt:moment+1}:x)
     return mocks.rows.find(x=>x.id===id)??null
@@ -173,7 +173,7 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
         kind:'team-invite'},
     ]
     mocks.preferences.mockResolvedValueOnce({
-      version:2,invitations:false,deadlines:true,expiry:true,system:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480,
+      version:3,invitations:false,deadlines:true,expiry:true,newFiles:true,reviews:true,backups:true,subscription:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480,
     })
     await mount()
     await notificationShellActions.value?.markAll()
@@ -298,7 +298,7 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
         kind:'security',targetId:null},
     ]
     mocks.preferences.mockResolvedValueOnce({
-      version:2,invitations:false,deadlines:false,expiry:false,system:false,badges:false,quietEnabled:false,quietStart:1320,quietEnd:480,
+      version:3,invitations:false,deadlines:false,expiry:false,newFiles:false,reviews:false,backups:false,subscription:false,badges:false,quietEnabled:false,quietStart:1320,quietEnd:480,
     })
     await mount()
     expect(el('notifications-list').textContent).not.toContain('Приглашение в команду')
@@ -315,8 +315,8 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
         kind:'team-invite'},
     ]
     mocks.preferences.mockResolvedValueOnce({
-      version:2,invitations:true,deadlines:true,expiry:true,
-      system:true,badges:true,quietEnabled:true,quietStart:0,quietEnd:1439,
+      version:3,invitations:true,deadlines:true,expiry:true,
+      newFiles:true,reviews:true,backups:true,subscription:true,badges:true,quietEnabled:true,quietStart:0,quietEnd:1439,
     })
     await mount()
     expect(host.querySelectorAll('.notification-dot')).toHaveLength(2)
