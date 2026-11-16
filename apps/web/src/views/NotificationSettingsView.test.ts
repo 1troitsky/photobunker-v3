@@ -126,6 +126,10 @@ describe('Encrypted device-local notification display settings',()=>{
       .toContain('пока')
     expect(host.querySelector('[data-testid="notification-permission-status"]')?.textContent)
       .toContain('запрещено')
+    // User-facing copy is white-label; the repository's technical slug
+    // must never become the displayed product name.
+    expect(host.querySelector('[data-testid="notification-delivery-status"]')?.textContent)
+      .not.toMatch(/PhotoBunker/i)
     expect(requestPermission).not.toHaveBeenCalled()
   })
   it('clears stale saved confirmation after changing quiet hours again',async()=>{
