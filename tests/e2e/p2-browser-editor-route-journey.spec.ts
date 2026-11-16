@@ -10,11 +10,26 @@ test('P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
-    await page.goto('/browser')
-    await expect.poll(()=>page.evaluate(async()=>{
+    // Keep the owner/device identity from the actual newly registered
+    // cryptographic session. A hard page.goto() briefly restores a local
+    // account before the server's genuine signed device reproof completes.
+    const owner=await page.evaluate(async()=>{
       const m=await import('/src/features/identity/application/session.ts')
-      return !!m.activeSession.value?.accountId
-    }),{timeout:30000}).toBe(true)
+      const session=m.requireSession()
+      return {accountId:session.accountId,deviceId:session.deviceId}
+    })
+    async function waitForOwnerReproof():Promise<void>{
+      await expect.poll(()=>page.evaluate(async expected=>{
+        const {activeSession}=await import('/src/features/identity/application/session.ts')
+        const session=activeSession.value
+        if(session&&(session.accountId!==expected.accountId
+          ||session.deviceId!==expected.deviceId))
+          throw Error('qa.unexpected_editor_route_owner')
+        return session?.online===true
+      },owner),{timeout:30_000}).toBe(true)
+    }
+    await page.goto('/browser')
+    await waitForOwnerReproof()
     // The local encrypted media outbox must be usable before network sync.
     await context.setOffline(true)
     const id=await page.evaluate(async()=>{
@@ -31,11 +46,17 @@ test('P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save
     })
     await context.setOffline(false)
     await page.goto('/browser')
-    await expect(page.getByTestId('browser-row-media:'+id)).toBeVisible()
-    await page.getByTestId('browser-row-media:'+id)
-      .getByTestId('browser-file-menu-toggle').click()
-    await page.getByTestId('browser-row-media:'+id)
-      .getByRole('link',{name:'Полный просмотр файла '+id}).click()
+    // The Browser header can hydrate the locally queued item before
+    // async signed reauthentication updates the same account's catalogs.
+    // Open the real file menu only after this auth boundary settles,
+    // otherwise the link detaches when the catalog is re-rendered.
+    await waitForOwnerReproof()
+    const row=page.getByTestId('browser-row-media:'+id)
+    await expect(row).toBeVisible()
+    await row.getByTestId('browser-file-menu-toggle').click()
+    const actions=row.getByTestId('browser-file-menu-panel')
+    await expect(actions).toBeVisible()
+    await actions.getByRole('link',{name:'Полный просмотр файла '+id}).click()
     await expect(page).toHaveURL(new RegExp('/browser/file/media/'+id+'$'))
     await expect(page.getByTestId('file-viewer-image')).toBeVisible()
 
@@ -103,5 +124,9 @@ test('P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save
     await page.goBack()
     await expect(page).toHaveURL(/\/browser$/)
     await expect(page.getByTestId('viewer-shell-actions')).toHaveCount(0)
-  }finally{await context.close()}
+  }finally{
+    // Preserve the original assertion/step failure if Playwright already
+    // terminated its browser context after a bounded E2E timeout.
+    await context.close().catch(()=>{})
+  }
 })
