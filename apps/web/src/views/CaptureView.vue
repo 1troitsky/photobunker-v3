@@ -1411,11 +1411,16 @@ onUnmounted(()=>{
         </button>
       </nav>
       <div class="camera-stage" data-testid="camera-stage">
-      <div class="camera-viewfinder" data-testid="camera-viewfinder">
+      <div class="camera-viewfinder" data-testid="camera-viewfinder"
+        :style="{aspectRatio:photoAspect.replace(':',' / ')}">
         <!-- Keep the video node and active stream mounted beneath blind mode. -->
         <div class="video-frame" v-show="captureMode!=='audio'">
           <video ref="video" playsinline muted autoplay aria-label="Предпросмотр камеры"/>
         </div>
+        <span v-if="captureMode==='photo'&&cameraZoomRange&&cameraZoom>1.01"
+          class="camera-photo-zoom-indicator" data-testid="camera-zoom-indicator">
+          {{cameraZoom.toFixed(1)}}×
+        </span>
         <div v-if="captureMode==='photo'&&gridVisible"
           class="camera-grid-3x3" aria-hidden="true" data-testid="camera-grid">
           <span></span><span></span><span></span><span></span>

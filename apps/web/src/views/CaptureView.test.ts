@@ -178,6 +178,24 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(settings.style.display).toBe('none')
   })
 
+  it('renders each approved photo crop in the live viewfinder without restarting capture',async()=>{
+    const opened=media()
+    await mount()
+    requests[0]!.resolve(opened.stream)
+    await settle()
+    const finder=host.querySelector<HTMLElement>('[data-testid="camera-viewfinder"]')!
+    const aspect=host.querySelector<HTMLSelectElement>('[data-testid="camera-photo-aspect"]')!
+    for(const [value,css] of [
+      ['4:3','4 / 3'],['1:1','1 / 1'],['3:2','3 / 2'],['16:9','16 / 9'],
+    ] as const){
+      aspect.value=value
+      aspect.dispatchEvent(new Event('change',{bubbles:true}))
+      await settle()
+      expect(finder.style.aspectRatio).toBe(css)
+    }
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    expect(opened.track.stop).not.toHaveBeenCalled()
+  })
   it('offers real zoom only for a live track with reported capabilities',async()=>{
     const opened=media()
     const apply=vi.fn().mockResolvedValue(undefined)
@@ -203,6 +221,7 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     await settle()
     expect(apply).toHaveBeenCalledWith({advanced:[{zoom:2.5}]})
     expect(host.textContent).toContain('Масштаб: 2.5×')
+    expect(host.querySelector('[data-testid="camera-zoom-indicator"]')?.textContent).toContain('2.5×')
     expect(getUserMedia).toHaveBeenCalledTimes(1)
     expect(opened.track.stop).not.toHaveBeenCalled()
   })
@@ -226,6 +245,7 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(slider.value).toBe('1')
     expect(host.textContent).toContain('Масштаб: 1.0×')
     expect(host.textContent).toContain('Не удалось применить масштаб камеры.')
+    expect(host.querySelector('[data-testid="camera-zoom-indicator"]')).toBeNull()
     button('Отключить').click()
     await settle()
     expect(opened.track.stop).toHaveBeenCalledOnce()

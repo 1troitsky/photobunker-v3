@@ -1220,7 +1220,8 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   padding:6px 11px;background:#232723;color:#c3ccc4;border:0;border-radius:7px}
 /* Camera 1.2 stage occupies exactly the free space between Shell header,
    46px mode tabs, 124px controls, and persistent 82px Dock. Only the actual
-   finder retains 4:3; black letterbox remains outside the sensor image. */
+   finder follows the approved photo aspect preset (4:3 default);
+   the neutral stage letterbox remains outside the sensor image. */
 .camera-mode-tabs{height:46px;margin-bottom:0;background:#151515;border-bottom:1px solid #303030}
 .camera-fieldwork .camera-mode-tabs button{height:46px;min-height:46px}
 .camera-stage{width:100%;height:clamp(260px,
@@ -1233,6 +1234,12 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   height:auto;aspect-ratio:4/3;background:#172423;box-shadow:0 0 0 1px #ffffff12
 }
 .camera-stage .camera-viewfinder .video-frame video{object-fit:cover}
+.camera-photo-zoom-indicator{
+  position:absolute;z-index:5;bottom:9px;left:50%;
+  transform:translateX(-50%);color:#eee;font-size:11px;
+  background:#111b;padding:5px 10px;border-radius:30px;
+  pointer-events:none;
+}
 .camera-stage-controls{
   width:100%;max-width:none;min-height:124px;position:sticky;bottom:0;
   z-index:10;margin:0;padding:9px 13px 7px;background:#171717;
