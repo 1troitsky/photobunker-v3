@@ -1,4 +1,5 @@
 .git
+.local-delivery
 **/.env
 **/.env.*
 !**/.env.example

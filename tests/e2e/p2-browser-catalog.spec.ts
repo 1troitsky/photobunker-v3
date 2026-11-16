@@ -6,6 +6,31 @@ async function ensureFileMenu(row:Locator):Promise<void>{
     await row.getByTestId('browser-file-menu-toggle').click()
 }
 
+// Hard navigation remounts the app before signed device reproof completes.
+// Private offline writes require the same registered account and device,
+// verified online by BOTH the client and the actual backend first.
+async function awaitVerifiedCatalogSession(
+  page:import('@playwright/test').Page,
+  expected:{accountId:string;deviceId:string},
+):Promise<void>{
+  await expect.poll(()=>page.evaluate(async expected=>{
+    const identity=await import('/src/features/identity/application/session.ts')
+    const current=identity.activeSession.value
+    if(!current)return 'device-unsealing'
+    if(current.accountId!==expected.accountId||current.deviceId!==expected.deviceId)
+      throw Error('qa404.wrong_local_account_or_device')
+    if(!current.online)return 'signed-login-pending'
+    const response=await fetch('/identity/v2/me',{
+      credentials:'same-origin',cache:'no-store',
+    })
+    if(!response.ok)return 'server-session-'+response.status
+    const proof=await response.json() as {accountId:string;deviceId:string}
+    if(proof.accountId!==expected.accountId||proof.deviceId!==expected.deviceId)
+      throw Error('qa404.wrong_server_account_or_device')
+    return 'verified'
+  },expected),{timeout:30_000}).toBe('verified')
+}
+
 test('P2 Browser v3: real anonymous login → offline encrypted media → catalog filters and decrypted viewer',async({browser})=>{
   test.setTimeout(120000)
   const context=await browser.newContext()
@@ -16,9 +41,16 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    const registered=await page.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      const current=identity.requireSession()
+      if(!current.online)throw Error('qa404.registration_unproved')
+      return {accountId:current.accountId,deviceId:current.deviceId}
+    })
     await page.goto('/browser')
     await expect(page.getByTestId('browser-v3')).toBeVisible()
     await expect(page.getByTestId('browser-summary')).toContainText('0 файлов')
+    await awaitVerifiedCatalogSession(page,registered)
 
     await context.setOffline(true)
     // Owner-approved Browser v3: import is opened from Header as one sheet.
@@ -31,6 +63,28 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     await expect(page.locator('.media-import-p1')
       .getByText('Файл зашифрован и сохранён', {exact:false}))
       .toBeVisible()
+    // Independently verify durable account-scoped AES-GCM ciphertext in IDB:
+    // a visible toast alone is not evidence that the encrypted write committed.
+    const saved=await page.evaluate(async accountId=>{
+      const media=await import('/src/features/media/application/media-outbox.ts')
+      const items=await media.listLocalMedia()
+      if(items.length!==1)throw Error('qa404.encrypted_outbox_missing')
+      const row=items[0]!
+      return {
+        accountCorrect:row.accountId===accountId
+          &&row.contract.accountId===accountId,
+        kind:row.mediaType,plainBytes:row.plainBytes,state:row.state,
+        ciphertextDurable:row.chunks.length>=2&&row.chunks.every(chunk=>
+          chunk.blob instanceof Blob&&chunk.blob.size===chunk.bytes
+          &&chunk.bytes>chunk.plainBytes
+          &&/^[0-9a-f]{64}$/.test(chunk.sha256)),
+        noPrivateName:!JSON.stringify(row).includes('PRIVATE-VIDEO-TEST.webm'),
+      }
+    },registered.accountId)
+    expect(saved).toEqual({
+      accountCorrect:true,kind:'video',plainBytes:8192,state:'queued',
+      ciphertextDurable:true,noPrivateName:true,
+    })
     const rows=page.locator('[data-testid^="browser-row-media:"]')
     await expect(rows).toHaveCount(1,{timeout:25000})
     await expect(rows.first()).toContainText('На устройстве')
@@ -59,6 +113,7 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     // survives reload. Cold offline app boot is a separate signed-PWA gate.
     await context.setOffline(false)
     await page.reload()
+    await awaitVerifiedCatalogSession(page,registered)
     await context.setOffline(true)
     await expect(page.getByTestId('browser-v3')).toBeVisible()
     await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(1)
@@ -75,7 +130,14 @@ test('P2 Browser: sort two genuinely encrypted offline files by confirmed byte s
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    const registered=await page.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      const current=identity.requireSession()
+      if(!current.online)throw Error('qa404.registration_unproved')
+      return {accountId:current.accountId,deviceId:current.deviceId}
+    })
     await page.goto('/browser')
+    await awaitVerifiedCatalogSession(page,registered)
     await context.setOffline(true)
     await page.getByTestId('browser-header-upload').click()
     const picker=page.getByTestId('media-import-file')

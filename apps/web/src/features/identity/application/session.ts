@@ -6,6 +6,10 @@ import {watchPinDeviceSealed} from '../../security/application/pin-tab-fence'
 import {acquirePinSessionLease} from '../../security/application/pin-session-lease'
 import {PIN_RELOCK_DEFAULT_MS,mustRelockPinAfterBackground} from '../../security/application/pin-relock-policy'
 import type {PinSessionLease} from '../../security/application/pin-session-lease'
+import {
+  clearLogoutFenceAfterExplicitProof, establishLogoutFence,
+  isLogoutFenced, isLogoutFenceStorageEvent,
+} from './logout-fence'
 import { jsonApi, resetCsrf } from '../infrastructure/api'
 import {
   b64, canonical, createPB2, digest, freshPackage, hex,
@@ -114,9 +118,23 @@ export const identityBootstrapReady = shallowRef(false)
 /** Fail closed if a saved Identity row is corrupt or mixed with a legacy copy. */
 export const identityBootstrapError = shallowRef<string|null>(null)
 
+// Another tab may sign out while this one still holds volatile decrypted keys.
+// A delayed storage event cannot grant privileged requireSession operations.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', event => {
+    if (isLogoutFenceStorageEvent(event)) {
+      activeSession.value = null
+      resetCsrf()
+    }
+  })
+}
+
 export function requireSession(): Session {
   const state = activeSession.value
-  if (!state) throw new Error('identity.account_locked')
+  if (!state || isLogoutFenced()) {
+    activeSession.value = null
+    throw new Error('identity.account_locked')
+  }
   return state
 }
 
@@ -145,6 +163,7 @@ async function prove(
 }
 
 function activate(pkg:PackageV2, device:LocalDevice, online:boolean):Session {
+  if (isLogoutFenced()) throw new Error('identity.account_locked')
   const s:Session={accountId:pkg.accountId,deviceId:device.deviceId,device,pkg,online}
   activeSession.value=s
   return s
@@ -162,6 +181,23 @@ export async function beginRegistration():Promise<string> {
   })
   // Only the caller holds this string in volatile UI state. Never persist it.
   return kit.encoded
+}
+
+async function admitExplicitDeviceAfterProof(device: LocalDevice): Promise<void> {
+  // A failed/crash-interrupted logout can leave the previous device IDB row
+  // unsigned-out, even though the origin-wide synchronous fence is present.
+  // Before explicit Key-Only admission clears that fence, durably block all
+  // OTHER devices retained in this browser. Never drop their encrypted keys.
+  // Other physical devices and server grants are outside this local action.
+  if (isLogoutFenced()) {
+    for (const previous of await listDevices()) {
+      if (previous.deviceId !== device.deviceId) {
+        await markSignedOut(previous.accountId, previous.deviceId, true)
+      }
+    }
+  }
+  await markSignedOut(device.accountId,device.deviceId,false)
+  clearLogoutFenceAfterExplicitProof()
 }
 
 export async function finishRegistration(recoveryKey:string):Promise<Session> {
@@ -202,7 +238,7 @@ export async function finishRegistration(recoveryKey:string):Promise<Session> {
   }
   await saveDevice(device)
   await dropPending(pending.operationId)
-  await markSignedOut(device.accountId,device.deviceId,false)
+  await admitExplicitDeviceAfterProof(device)
   identityBootstrapError.value=null
   identityBootstrapReady.value=true
   await ensureDeviceLease(device)
@@ -246,7 +282,7 @@ export async function restoreAccount(recoveryKey:string):Promise<Session> {
         former.deviceId===previous?.deviceId))
       await markSignedOut(former.accountId,former.deviceId,true)
   }
-  await markSignedOut(device.accountId,device.deviceId,false)
+  await admitExplicitDeviceAfterProof(device)
   pendingPinUnlock.value=null
   identityBootstrapError.value=null
   identityBootstrapReady.value=true
@@ -470,6 +506,7 @@ function installPinTabReconciliation():void {
 }
 
 async function resumeLocalDevice():Promise<Session|null> {
+  if (isLogoutFenced()) return null
   if(activeSession.value)return activeSession.value
   await probeCapabilities()
   const devices=await listDevices()
@@ -480,6 +517,7 @@ async function resumeLocalDevice():Promise<Session|null> {
       break
     }
   }
+  if(isLogoutFenced())return null
   if(!saved){pendingPinUnlock.value=null;identityBootstrapError.value=null;return null}
   if(isSealedCandidate(saved)){
     if(devices.some(other=>other.deviceId!==saved.deviceId &&
@@ -509,7 +547,7 @@ async function resumeLocalDevice():Promise<Session|null> {
      latest.deviceSpki!==saved.deviceSpki ||
      canonical(latest.envelope as unknown as Record<string,unknown>) !==
        canonical(saved.envelope as unknown as Record<string,unknown>) ||
-     await isSignedOut(saved.accountId,saved.deviceId))
+     await isSignedOut(saved.accountId,saved.deviceId) || isLogoutFenced())
     throw new Error('identity.device_changed')
   if(activeSession.value)return activeSession.value
   // Unprotected legacy devices preserve their prior behavior.
@@ -522,7 +560,15 @@ async function resumeLocalDevice():Promise<Session|null> {
   identityBootstrapReady.value=true
   try {
     await prove('login',{accountId:saved.accountId,deviceId:saved.deviceId,purpose:'login'},saved.deviceKey)
-    if (activeSession.value===local) activate(pkg,saved,true)
+    if (activeSession.value===local) {
+      const revoked=await isSignedOut(saved.accountId,saved.deviceId)
+      if (activeSession.value===local) {
+        if (revoked || isLogoutFenced()) {
+          activeSession.value=null
+          resetCsrf()
+        } else activate(pkg,saved,true)
+      }
+    }
   } catch {
     // Offline or revoked: only locally available encrypted media remains.
   }
@@ -730,20 +776,28 @@ export async function signPhotoContract(json:string):Promise<string> {
   const current=requireSession()
   if(!current.online) throw new Error('identity.offline')
   const signature=await sign(current.device.deviceKey,'photobunker.photo-sync.v1\n'+json)
-  if(activeSession.value!==current) throw new Error('identity.changed')
+  if(activeSession.value!==current || isLogoutFenced()) throw new Error('identity.changed')
   return signature
 }
 
 export async function logout():Promise<void> {
   const state=activeSession.value
-  // Persist signed-out intent BEFORE removing the private device session.
-  // A concurrent reload must never restore a locally signed-out account.
-  if(state){
-    await markSignedOut(state.accountId,state.deviceId,true)
-    if(activeSession.value===state)activeSession.value=null
-    if(state.online) {
-      try { await jsonApi('/identity/v2/logout','POST',{}) } catch { /* local sign-out still succeeds */ }
-    }
-  }
+  if (!state) { resetCsrf(); return }
+  // Never publish a signed-out UI before a synchronous origin-wide fence;
+  // IndexedDB writes can be aborted by a hard reload before oncomplete.
+  let fenceFailure:unknown=null
+  try { establishLogoutFence() } catch(error) { fenceFailure=error }
+  // Even if origin Web Storage is blocked, immediately close the volatile UI
+  // and attempt the independent durable device IDB marker. Never claim
+  // success if either safety guard was unavailable.
+  activeSession.value=null
   resetCsrf()
+  let durableFailure:unknown=null
+  try { await markSignedOut(state.accountId,state.deviceId,true) }
+  catch(error) { durableFailure=error }
+  if(state.online) {
+    try { await jsonApi('/identity/v2/logout','POST',{}) } catch { /* best effort; no fake ACK */ }
+  }
+  if (durableFailure) throw durableFailure
+  if (fenceFailure) throw fenceFailure
 }

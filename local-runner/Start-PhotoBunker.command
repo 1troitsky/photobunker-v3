@@ -46,7 +46,13 @@ export PB3_S3_ACCESS_KEY="$(read_key PB3_S3_ACCESS_KEY)"
 export PB3_S3_SECRET_KEY="$(read_key PB3_S3_SECRET_KEY)"
 [[ -n "$PB3_S3_ACCESS_KEY" ]] || export PB3_S3_ACCESS_KEY=bootstrap-unset
 [[ -n "$PB3_S3_SECRET_KEY" ]] || export PB3_S3_SECRET_KEY=bootstrap-unset
-dc(){ docker compose --project-directory "$ROOT" --env-file "$secrets" -f "$DIR/compose.yml" "$@"; }
+compose_files=(-f "$DIR/compose.yml")
+case "${PB3_WEB_MODE:-production}" in
+  production) compose_files+=(-f "$DIR/compose.production.yml");;
+  development) ;;
+  *) fail "PB3_WEB_MODE must be production or development";;
+esac
+dc(){ docker compose --project-directory "$ROOT" --env-file "$secrets" "${compose_files[@]}" "$@"; }
 echo "Starting persistent private PostgreSQL and Garage..."
 dc up -d postgres garage
 ready=0
@@ -81,7 +87,7 @@ fi
 export PB3_S3_ACCESS_KEY="$(read_key PB3_S3_ACCESS_KEY)"
 export PB3_S3_SECRET_KEY="$(read_key PB3_S3_SECRET_KEY)"
 [[ -n "$PB3_S3_ACCESS_KEY" && -n "$PB3_S3_SECRET_KEY" ]] || fail "Garage credentials missing"
-echo "Building the actual Laravel 13 API and Vue 3 application..."
+echo "Building Laravel 13 and the ${PB3_WEB_MODE:-production} Vue application..."
 dc up -d --build api web
 ready=0
 for n in $(seq 1 120); do

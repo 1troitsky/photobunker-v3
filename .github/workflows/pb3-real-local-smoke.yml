@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'delivery/pb3-real-local-run-*'
+      - 'integration/working-main-*'
   pull_request:
     paths:
       - 'local-runner/**'
@@ -55,9 +56,43 @@ jobs:
         if: failure()
         run: docker compose --project-directory "$PWD" -f local-runner/compose.yml --env-file local-runner/ci-secrets.env ps || true
 
+  production-browser:
+    name: Compiled frontend user journeys (no Vite source modules)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated real API, PostgreSQL and Garage
+        run: bash local-runner/ci-smoke.sh
+      - name: Replace dev frontend with compiled Nginx application
+        run: |
+          set -euo pipefail
+          docker compose --project-directory "$PWD" --env-file local-runner/ci-secrets.env \
+            -f local-runner/compose.yml -f local-runner/compose.production.yml up -d --build --no-deps web
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5173/api/readyz
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/src/main.ts)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/sw.js)" = 404
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test ordinary UI, offline queue, cloud recovery and recipient access
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install chromium
+          pnpm exec playwright test --config tests/playwright.config.ts \
+            tests/e2e/p1-identity-photo.spec.ts \
+            --grep 'two browser identities: key-only account|P1-03: signed recipient'
+
   mac-source-package:
     name: Full original PB3 source with tested Mac launcher
-    needs: real-stack
+    needs: [real-stack, production-browser]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
