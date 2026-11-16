@@ -696,6 +696,10 @@ export async function enrollAppPinWithRecovery(
           activeSession.value=session
         else releaseDeviceLease()
       }
+      // A failed storage read or concurrent replacement must NOT expose the
+      // private Shell merely because no valid PIN context was recovered.
+      if(!activeSession.value&&!pendingPinUnlock.value&&!identityBootstrapError.value)
+        identityBootstrapError.value='identity.device_changed'
       throw error
     }finally{
       identityBootstrapReady.value=true
