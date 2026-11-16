@@ -221,3 +221,20 @@ describe('Security & Privacy 1.3 owner-scoped device list',()=>{
     expect(host.textContent).not.toContain('late failure')
   })
 })
+
+
+it('clears unsubmitted PIN and Recovery Key inputs when the authenticated account changes',async()=>{
+  mock.api.mockResolvedValue({devices:[]})
+  activeSession.value={...session(A,true),device:{}} as Session
+  mount();await settle()
+  host.querySelector<HTMLButtonElement>('[data-testid="security-pin-create"]')!.click();await settle()
+  for(const [id,value] of [['security-pin-new','4826'],['security-pin-repeat','4826'],['security-pin-recovery','PRIVATE-RECOVERY-INPUT']]){
+    const field=host.querySelector<HTMLInputElement|HTMLTextAreaElement>('[data-testid="'+id+'"]')!
+    field.value=value!;field.dispatchEvent(new Event('input',{bubbles:true}))
+  }
+  activeSession.value={...session(B,true),device:{}} as Session;await settle()
+  expect(host.querySelector('[data-testid="security-pin-dialog"]')).toBeNull()
+  host.querySelector<HTMLButtonElement>('[data-testid="security-pin-create"]')!.click();await settle()
+  expect(host.querySelector<HTMLInputElement>('[data-testid="security-pin-new"]')!.value).toBe('')
+  expect(host.querySelector<HTMLTextAreaElement>('[data-testid="security-pin-recovery"]')!.value).toBe('')
+})

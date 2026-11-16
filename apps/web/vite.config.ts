@@ -39,7 +39,7 @@ export default defineConfig(({ mode }) => {
           short_name: configuredBrand.shortName,
           description: 'A private media workspace.',
           display: 'standalone',
-          start_url: '/assignments',
+          start_url: '/',
           scope: '/',
           theme_color: configuredBrand.themeColor,
           background_color: '#121212',

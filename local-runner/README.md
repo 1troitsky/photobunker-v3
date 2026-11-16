@@ -22,3 +22,12 @@ To stop without deleting data, run `local-runner/Stop-PhotoBunker.command`. Dock
 `bash local-runner/ci-smoke.sh` provisions **disposable** test services and verifies genuine backend readiness, identity/plan HTTP endpoints and the actual Vue shell. Dedicated GitHub Actions run separate real Chromium **photo capture/recovery**, **E2EE audio/video cloud readback**, and **signed mixed assignments**, using live disposable PostgreSQL/Garage and server authorization.
 
 This runner does **not** claim production security accreditation, a signed PWA Service Worker, native iOS/Android validation, Matrix E2EE, paid settlement or cloud backup. The binding release gates in `ts.md` remain requirements.
+
+
+## Prepared Docker image package
+
+The core delivery contains `pb3-core-api:20261116`, `pb3-core-web:20261116`, `postgres:18` and `dxflrs/garage:v2.5.0`, together with source/image SHA manifests. Load the accompanying image archive with `docker load -i <archive.tar.gz>`, then run `PB3_BUILD_IMAGES=0 bash local-runner/Start-PhotoBunker.command`. Ordinary startup builds from the exact checked-out source. No databases, Garage objects, Recovery Keys, private credentials or browser profiles are included in a delivery package.
+
+`local-runner/project-name` is an ignored local project identifier. When transferring an existing local stack to the primary checkout, keep its original identifier, secret file and Garage config: Compose then reuses the original named volumes. Never adopt another project's volumes or generate replacement credentials to bypass a failed startup. `PB3_OPEN_BROWSER=0` suppresses only the automatic browser opening.
+
+The delivered vertical slice supports encrypted personal photo capture, encrypted offline outbox/retry, photo Browser/Viewer, Welcome/Loader, PIN enrollment/change/disable/0–5 minute relock, and explicit personal-JPEG Public Cards. Public links support expiry/revoke and owner management after independent Recovery Key restoration. Assignment/public metadata projection, video/audio public publication and Emergency PIN destructive processing are disabled. See the core integration audit for actual acceptance and hardware limitations.

@@ -7,13 +7,15 @@ import {expect,type Page} from '@playwright/test'
  */
 export async function revokeGeolocation(page:Page):Promise<void>{
   const cdp=await page.context().newCDPSession(page)
-  try{
-    const {targetInfo}=await cdp.send('Target.getTargetInfo')
-    await cdp.send('Browser.setPermission',{
-      permission:{name:'geolocation'},setting:'denied',
-      origin:new URL(page.url()).origin,browserContextId:targetInfo.browserContextId,
-    })
-  }finally{await cdp.detach()}
+  const {targetInfo}=await cdp.send('Target.getTargetInfo')
+  const origin=new URL(page.url()).origin
+  await cdp.send('Browser.setPermission',{
+    permission:{name:'geolocation'},setting:'denied',origin,embeddingOrigin:origin,
+    browserContextId:targetInfo.browserContextId,
+  })
+  // Chromium resets the overrides when this DevTools session detaches,
+  // including the camera grant. Keep it alive for the test's scoped context;
+  // BrowserContext.close() disposes it together with that native permission.
   await expect.poll(()=>page.evaluate(async()=>
     (await navigator.permissions.query({name:'geolocation'})).state)).not.toBe('granted')
   await expect.poll(()=>page.locator('video').evaluate(video=>{

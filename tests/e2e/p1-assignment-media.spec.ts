@@ -468,20 +468,20 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await expect(B.getByTestId('camera-start-recording'))
       .toBeEnabled({timeout:20000})
     await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByTestId('camera-capture-error').filter({hasText:'Категория обязательна по правилам задания'})).toBeVisible()
+    await expect(B.getByText('assignment.category_required')).toBeVisible()
     // Closed signed allowlist: the approved select cannot manufacture an
     // invalid category. The lower-level signed submission negatives below
     // still explicitly reject forged/wrong categories without ciphertext.
     await expect(B.getByTestId('camera-category-select').locator('option[value="Wrong"]')).toHaveCount(0)
     await editCameraFields({category:'Report'})
     await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByTestId('camera-capture-error').filter({hasText:'Заполните описание по правилам задания'})).toBeVisible()
+    await expect(B.getByText('assignment.description_too_short')).toBeVisible()
     await editCameraFields({description:'PRIVATE-AUDIO-CAPTURE-METADATA'})
     await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByTestId('camera-capture-error').filter({hasText:'GPS обязателен по правилам задания'})).toBeVisible()
+    await expect(B.getByText('assignment.gps_required')).toBeVisible()
     await requestCameraGps()
     await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByTestId('camera-capture-error').filter({hasText:'Добавьте обязательные теги по правилам задания'})).toBeVisible()
+    await expect(B.getByText('assignment.required_tags_missing')).toBeVisible()
     await editCameraFields({tags:'evidence'})
     await B.getByTestId('camera-start-recording').click()
     await expect(B.getByTestId('camera-recording-status')).toBeVisible()
@@ -685,7 +685,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await expect(B.getByRole('button',{name:'Сделать снимок'}))
       .toBeEnabled({timeout:20000})
     await B.getByRole('button',{name:'Сделать снимок'}).click()
-    await expect(B.getByText(/P2 JPEG зашифрован в Media Library/))
+    await expect(B.getByText(/Зашифровано и сохранено локально/))
       .toBeVisible({timeout:30000})
     const cameraPhoto=await B.evaluate(async()=>{
       const media=await import('/src/features/media/application/media-outbox.ts')
