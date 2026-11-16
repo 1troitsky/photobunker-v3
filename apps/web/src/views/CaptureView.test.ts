@@ -892,6 +892,8 @@ describe('Issue #260 GPS consent and capture races',()=>{
     expect(host.textContent).not.toContain('GPS получен')
     callbacks[1]!.fail!({code:1,message:'denied'} as GeolocationPositionError)
     await settle()
+    expect(host.textContent).toContain('camera.gps_permission_required')
+    expect(host.textContent).not.toContain('camera.gps_unavailable')
     button('Сделать снимок').click();await settle()
     expect(mocks.capture.mock.calls[0]![2].gps).toBeNull()
     await fix()

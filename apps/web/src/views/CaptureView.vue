@@ -890,6 +890,14 @@ function clearGPS():void {
   gpsLoading.value=false
   gpsError.value=''
 }
+function gpsRequestFailure(e:unknown):string{
+  // Native GeolocationPositionError is not required to extend Error. Its
+  // code 1 is a genuine permission denial, not a generic unavailable sensor.
+  // Do not leak browser-specific native error messages into account UI.
+  if(e&&typeof e==='object'&&'code' in e&&e.code===1)
+    return 'camera.gps_permission_required'
+  return e instanceof Error?e.message:'camera.gps_unavailable'
+}
 async function obtainGPS():Promise<void>{
   // Clear BEFORE requesting, including missing identity/API and pending prompts.
   clearGPS()
@@ -945,7 +953,7 @@ async function obtainGPS():Promise<void>{
   }catch(e){
     if(owns()){
       clearGPS()
-      gpsError.value=e instanceof Error?e.message:'camera.gps_unavailable'
+      gpsError.value=gpsRequestFailure(e)
     }
   }finally{
     if(attempt===gpsAttempt)gpsLoading.value=false

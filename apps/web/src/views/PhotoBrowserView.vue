@@ -2467,7 +2467,8 @@ onUnmounted(()=>{
         <p class="muted">Загрузка, выдача доступа и версии используют действующий защищённый pipeline.</p>
         <div v-if="uploadSheetOpen" class="browser-upload-backdrop"
           data-testid="browser-import-backdrop" @click="closeUploadPanel"></div>
-        <div class="browser-upload-sheet" :class="{open:uploadSheetOpen}"
+        <div v-show="uploadSheetOpen" class="browser-upload-sheet"
+          :class="{open:uploadSheetOpen}"
           data-testid="browser-import-sheet"
           :role="uploadSheetOpen?'dialog':undefined"
           :aria-modal="uploadSheetOpen?'true':undefined"
