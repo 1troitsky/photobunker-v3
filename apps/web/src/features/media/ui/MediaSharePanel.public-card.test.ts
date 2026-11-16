@@ -152,7 +152,8 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
   })
   it('removes old account media grant states immediately on identity switch',async()=>{
     m.hydrateGrants.mockResolvedValue([{
-      id:'OLD-GRANT',accountId:id('1'),mediaId:id('4'),state:'sent',
+      id:'OLD-GRANT',ownerAccountId:id('1'),
+      recipientAccountId:id('3'),mediaId:id('4'),state:'sent',
       contract:'',signature:'',
     }])
     await mount()
