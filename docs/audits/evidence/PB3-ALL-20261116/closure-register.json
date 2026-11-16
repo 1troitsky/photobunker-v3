@@ -1,0 +1,3027 @@
+[
+  {
+    "kind": "pr",
+    "number": 412,
+    "timestamp_utc": "2026-11-16T07:32:51Z",
+    "preserved_head": "f4c7c91fe8100377c10d7af734c7ead90b217e7f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 411,
+    "timestamp_utc": "2026-11-16T07:32:54Z",
+    "preserved_head": "3aac0ac71a982d14086f064ebce63c00ead6b231",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 410,
+    "timestamp_utc": "2026-11-16T07:32:57Z",
+    "preserved_head": "d7ccec973a58510d065fae18de3e8cc8991fbd86",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 409,
+    "timestamp_utc": "2026-11-16T07:33:00Z",
+    "preserved_head": "b711fde7b56ec3616f4fa96d52d9df76df7f977d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 407,
+    "timestamp_utc": "2026-11-16T07:33:03Z",
+    "preserved_head": "5998ed7322c473ac841e31c9195a674d91de0465",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 405,
+    "timestamp_utc": "2026-11-16T07:33:05Z",
+    "preserved_head": "6004aec2807521257e95e7a98b605a852eddff4b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 403,
+    "timestamp_utc": "2026-11-16T07:33:08Z",
+    "preserved_head": "f56e42ec3224bdd995f75c26abd47220469bda55",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 401,
+    "timestamp_utc": "2026-11-16T07:33:10Z",
+    "preserved_head": "53ea2283d608823901380c82fedcbdb54e7ffe9d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 399,
+    "timestamp_utc": "2026-11-16T07:33:13Z",
+    "preserved_head": "bb391828f34ad4bcf4bc7fd9dfe7b17aa8f7e1be",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 398,
+    "timestamp_utc": "2026-11-16T07:33:16Z",
+    "preserved_head": "463969c56bc6313a7a4d3ec5cb0ae935051f27e9",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 397,
+    "timestamp_utc": "2026-11-16T07:33:18Z",
+    "preserved_head": "53ae9ec2aa0af0bc10934349f33c3fa548169b32",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 396,
+    "timestamp_utc": "2026-11-16T07:33:21Z",
+    "preserved_head": "4c6ed06d8ad850eb48b54c28f4bb11dc01abfd07",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 395,
+    "timestamp_utc": "2026-11-16T07:33:23Z",
+    "preserved_head": "ec6281c7896f1daa1824d65f4eb05ff986965685",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 394,
+    "timestamp_utc": "2026-11-16T07:33:26Z",
+    "preserved_head": "619235290ed28d367d2195f7afea95a510fca1a8",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 392,
+    "timestamp_utc": "2026-11-16T07:33:29Z",
+    "preserved_head": "49221175dd4a520d64f2a3cc6ee12383be9182a9",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 391,
+    "timestamp_utc": "2026-11-16T07:33:31Z",
+    "preserved_head": "0133dbab2ac56d1ca78eac39cacccbb999b879cb",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 389,
+    "timestamp_utc": "2026-11-16T07:33:34Z",
+    "preserved_head": "371ba3aa54b07a3d635ee588ff06152eb6ef8dd1",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 386,
+    "timestamp_utc": "2026-11-16T07:33:37Z",
+    "preserved_head": "6fa8a579242e90de1176266f650fb7ee17c98eac",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 384,
+    "timestamp_utc": "2026-11-16T07:33:39Z",
+    "preserved_head": "4af3c8a36a5490803fb8be081d408c9d8d732b13",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 383,
+    "timestamp_utc": "2026-11-16T07:33:42Z",
+    "preserved_head": "f4408862c439583efc0bfb1660d4caa54f3b939d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 380,
+    "timestamp_utc": "2026-11-16T07:33:44Z",
+    "preserved_head": "ccf75055f20560465f5e2f58dfc30ed0e6ed86ba",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 379,
+    "timestamp_utc": "2026-11-16T07:33:47Z",
+    "preserved_head": "26438426995a16f9f0e3839588795bbf3873a84a",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 377,
+    "timestamp_utc": "2026-11-16T07:33:49Z",
+    "preserved_head": "3b6d857470e68a5dded5e1c1c1abcc79703ec875",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 375,
+    "timestamp_utc": "2026-11-16T07:33:53Z",
+    "preserved_head": "a0c35250efbe9161d21a62b4516c6e8905af2b9a",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 373,
+    "timestamp_utc": "2026-11-16T07:33:56Z",
+    "preserved_head": "f4f4a3fac941c9d41fe8a3e446f45e455155bd32",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 372,
+    "timestamp_utc": "2026-11-16T07:33:58Z",
+    "preserved_head": "7cd89da4f7d7347a65f65322c255047d3300734e",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 370,
+    "timestamp_utc": "2026-11-16T07:34:01Z",
+    "preserved_head": "ec905480d9915bdaa483d1ed7b52d3dabce04de3",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 368,
+    "timestamp_utc": "2026-11-16T07:34:04Z",
+    "preserved_head": "40dcefb147f29423501b7b1c630ebfff3c30cb2f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 367,
+    "timestamp_utc": "2026-11-16T07:34:07Z",
+    "preserved_head": "2bce0915617369093e2c9a9ca0606d26de418823",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 366,
+    "timestamp_utc": "2026-11-16T07:34:09Z",
+    "preserved_head": "bc3137c79c78e49e6422d32c42da3c250581a5c0",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 365,
+    "timestamp_utc": "2026-11-16T07:34:12Z",
+    "preserved_head": "a2c6ad7166b0a4237f5a487fe66083d9b7441cdb",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 364,
+    "timestamp_utc": "2026-11-16T07:34:14Z",
+    "preserved_head": "29ac58a1e8e020743c8afb40ac0bb3ad665d04cd",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 363,
+    "timestamp_utc": "2026-11-16T07:34:17Z",
+    "preserved_head": "317ee28c5ffd85d5ac4c4c549835dd6767f45964",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 362,
+    "timestamp_utc": "2026-11-16T07:34:19Z",
+    "preserved_head": "a44d8eb5592ba9e505079947a533a1c2b01c0ffb",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 361,
+    "timestamp_utc": "2026-11-16T07:34:22Z",
+    "preserved_head": "0cc869d9e9bdc62b303439e9a446ad42ea92118d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 360,
+    "timestamp_utc": "2026-11-16T07:34:25Z",
+    "preserved_head": "112ce16be7c76cfc6dbc0f3c185ab536e1d2e866",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 359,
+    "timestamp_utc": "2026-11-16T07:34:28Z",
+    "preserved_head": "3016a8d2ecaf5d0dd24272734fb796533b858260",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 357,
+    "timestamp_utc": "2026-11-16T07:34:30Z",
+    "preserved_head": "23a36670000e072dd63b9783a71de8b36a3cc97e",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 356,
+    "timestamp_utc": "2026-11-16T07:34:33Z",
+    "preserved_head": "5933426563650b326233af8ea64ec4d3bec29fa4",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 355,
+    "timestamp_utc": "2026-11-16T07:34:35Z",
+    "preserved_head": "4a8bb1dbc9df66b3026e49b2a2867b9720241358",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 354,
+    "timestamp_utc": "2026-11-16T07:34:39Z",
+    "preserved_head": "2dbd5c2f0e20b35a69944b619e6642d71e7b9100",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 353,
+    "timestamp_utc": "2026-11-16T07:34:41Z",
+    "preserved_head": "88ddcccd0f73a7b219c08df49ea132f193447961",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 352,
+    "timestamp_utc": "2026-11-16T07:34:44Z",
+    "preserved_head": "c3e8e7c56561ed37345a714c4c2d6d8fa756adbf",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 351,
+    "timestamp_utc": "2026-11-16T07:34:46Z",
+    "preserved_head": "3f491bcd21e1a5c176ef966b734c876134b2787b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 350,
+    "timestamp_utc": "2026-11-16T07:34:49Z",
+    "preserved_head": "a9f57751a4d68356430189854012d8b9c13caf9b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 349,
+    "timestamp_utc": "2026-11-16T07:34:52Z",
+    "preserved_head": "b9d49188a206058603e037751bacde828a5b750f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 348,
+    "timestamp_utc": "2026-11-16T07:34:55Z",
+    "preserved_head": "0c2b9bd0f9a515379ac415cf71f4a914e7ddf1e3",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 336,
+    "timestamp_utc": "2026-11-16T07:34:57Z",
+    "preserved_head": "b24f93990ef3cac9eb10e2e86e6fb562611dfb05",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 335,
+    "timestamp_utc": "2026-11-16T07:34:58Z",
+    "preserved_head": "3114b04750c150c2374295b7c7adc2ca942069c2",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 334,
+    "timestamp_utc": "2026-11-16T07:35:01Z",
+    "preserved_head": "c2b8b55d38f99c31b746d313b10c136c7aea2597",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 333,
+    "timestamp_utc": "2026-11-16T07:35:02Z",
+    "preserved_head": "452631f888b246bccc9734f21fe476ca87d47252",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 332,
+    "timestamp_utc": "2026-11-16T07:35:03Z",
+    "preserved_head": "ebf22831a88a30b9d3bc693e29c8b36c033cdbfc",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 331,
+    "timestamp_utc": "2026-11-16T07:35:05Z",
+    "preserved_head": "d8155a471eb8f0acf34883c558d673493bbfdc7b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 330,
+    "timestamp_utc": "2026-11-16T07:35:08Z",
+    "preserved_head": "27778dd53c8b469337ba5176e1b51886b6f45e32",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 329,
+    "timestamp_utc": "2026-11-16T07:35:08Z",
+    "preserved_head": "912e892eb8ffd609d123eee6096591fa59d1eb85",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 328,
+    "timestamp_utc": "2026-11-16T07:35:11Z",
+    "preserved_head": "2b91506e06b9d0c061a9518ea5f22916c6c39bde",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 327,
+    "timestamp_utc": "2026-11-16T07:35:13Z",
+    "preserved_head": "9b770407c64fb157100f84963a44dd7e7594ce27",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 326,
+    "timestamp_utc": "2026-11-16T07:35:14Z",
+    "preserved_head": "7de3a1f738071c5e492dd6874fe3c9162bc82e39",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 325,
+    "timestamp_utc": "2026-11-16T07:35:15Z",
+    "preserved_head": "befb8ea4443c629bba9b9bb1443fd510e1b8f920",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 324,
+    "timestamp_utc": "2026-11-16T07:35:16Z",
+    "preserved_head": "61bf9dba29d85f8b356c7f2f71417ea082002766",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 323,
+    "timestamp_utc": "2026-11-16T07:35:19Z",
+    "preserved_head": "06659a874390dda3619fe4bb62eff7218871b530",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 322,
+    "timestamp_utc": "2026-11-16T07:35:22Z",
+    "preserved_head": "c91408709d353059fc3aeafb9d640c8e93fbea96",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 321,
+    "timestamp_utc": "2026-11-16T07:35:24Z",
+    "preserved_head": "7d3281e7cfb24465ad182794bbd8c8bb122cf188",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 320,
+    "timestamp_utc": "2026-11-16T07:35:27Z",
+    "preserved_head": "9e86c157d254f41797c08f2e85c29c35bcbfc749",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 319,
+    "timestamp_utc": "2026-11-16T07:35:30Z",
+    "preserved_head": "6f5859429db31ac2a11d7fba7898b92a479987e0",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 318,
+    "timestamp_utc": "2026-11-16T07:35:32Z",
+    "preserved_head": "60b3ca52a7cbe3e055cfa025abceeb71c00152e2",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 317,
+    "timestamp_utc": "2026-11-16T07:35:35Z",
+    "preserved_head": "f29d5b2aab7ae11a0510e293b330cf5d2ac0055c",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 316,
+    "timestamp_utc": "2026-11-16T07:35:38Z",
+    "preserved_head": "e3251cfe5e5ed1906aa917c719cd7c1fec466f76",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 315,
+    "timestamp_utc": "2026-11-16T07:35:41Z",
+    "preserved_head": "c6a03430385422bf0accc85ba77ab614c1123a7f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 314,
+    "timestamp_utc": "2026-11-16T07:35:43Z",
+    "preserved_head": "db79e677d3a98b8267420cfb3a092f2ed608a458",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 313,
+    "timestamp_utc": "2026-11-16T07:35:46Z",
+    "preserved_head": "f69afd2cc3ebb7c55eb7ecd86eb587bf2c1f75a3",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 312,
+    "timestamp_utc": "2026-11-16T07:35:48Z",
+    "preserved_head": "5be3834fc03c9bcf2e47ec0dfac3415ed5903115",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 310,
+    "timestamp_utc": "2026-11-16T07:35:54Z",
+    "preserved_head": "4f3d6a4bc7da3c29d2663d9142cadf85d3d3f091",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 308,
+    "timestamp_utc": "2026-11-16T07:35:56Z",
+    "preserved_head": "ef8e965947b3f584b6972d87db2e47db810f9947",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 307,
+    "timestamp_utc": "2026-11-16T07:35:59Z",
+    "preserved_head": "6949974aa303fbfa6f10f02650330f78c8999aab",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 306,
+    "timestamp_utc": "2026-11-16T07:36:01Z",
+    "preserved_head": "44c1aac0332a8db04b5cd6fdb1698440d88cbce1",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 305,
+    "timestamp_utc": "2026-11-16T07:36:04Z",
+    "preserved_head": "9591d7dde54e30ad8b628a0f2527996000ec9772",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 304,
+    "timestamp_utc": "2026-11-16T07:36:06Z",
+    "preserved_head": "c1a17171348a453167fc99360d01ddb01ee3601d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 303,
+    "timestamp_utc": "2026-11-16T07:36:10Z",
+    "preserved_head": "dd46ce45fad4101e5b979a97c16e76ff7822c47d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 301,
+    "timestamp_utc": "2026-11-16T07:36:13Z",
+    "preserved_head": "6507d15767bdc79c4ea68dd166c8cc8d4ab1b01b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 300,
+    "timestamp_utc": "2026-11-16T07:36:16Z",
+    "preserved_head": "e0bf685f67bb16e8843f311a1297e311e8250423",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 299,
+    "timestamp_utc": "2026-11-16T07:36:18Z",
+    "preserved_head": "3789e67b0dc4c4b9e1ccddb1e8ea8f39cfd019d5",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 298,
+    "timestamp_utc": "2026-11-16T07:36:21Z",
+    "preserved_head": "60407676c7cb9bdb649f5017cf9450aff25eedab",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 296,
+    "timestamp_utc": "2026-11-16T07:36:24Z",
+    "preserved_head": "e49fbb29df9204778c55b092ed303da8fcc00b8b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 295,
+    "timestamp_utc": "2026-11-16T07:36:27Z",
+    "preserved_head": "35978914689b7c9b863a7e22719dee46ecca90f3",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 294,
+    "timestamp_utc": "2026-11-16T07:36:29Z",
+    "preserved_head": "81ee4efd81bdd1bf2337b56e1e59e045a7f529de",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 293,
+    "timestamp_utc": "2026-11-16T07:36:32Z",
+    "preserved_head": "4521f7b9c954df5af2356311115f425673796d8e",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 292,
+    "timestamp_utc": "2026-11-16T07:36:33Z",
+    "preserved_head": "034deb1140d17e62eaf136606fac714dc747e414",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 290,
+    "timestamp_utc": "2026-11-16T07:36:36Z",
+    "preserved_head": "f4bce2e1ab3e5ad72ec1d7e8c8f4d7517e286faa",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 288,
+    "timestamp_utc": "2026-11-16T07:36:37Z",
+    "preserved_head": "f906f1490653db98df34b41db55fbda9cb3238e0",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 286,
+    "timestamp_utc": "2026-11-16T07:36:40Z",
+    "preserved_head": "de2c63fa5701d88c4fb4929cd571218fb0920a95",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 284,
+    "timestamp_utc": "2026-11-16T07:36:42Z",
+    "preserved_head": "e4acbb571937f22658cb049e4a00435e3def3f1f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 282,
+    "timestamp_utc": "2026-11-16T07:36:45Z",
+    "preserved_head": "33d31028dec4344fb613f5554132c4cdfac25234",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 280,
+    "timestamp_utc": "2026-11-16T07:36:47Z",
+    "preserved_head": "1c27a130dfb15fbb65f07c0d58dfe264d684022d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 278,
+    "timestamp_utc": "2026-11-16T07:36:49Z",
+    "preserved_head": "bb68436f698935453102098e2b999e46bfa28040",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 276,
+    "timestamp_utc": "2026-11-16T07:36:58Z",
+    "preserved_head": "f705c7e12446430363172071ea2252922722a12d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 275,
+    "timestamp_utc": "2026-11-16T07:37:01Z",
+    "preserved_head": "54442de1a72ee937abc2da74c84a3dd66ef14dd3",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 274,
+    "timestamp_utc": "2026-11-16T07:37:03Z",
+    "preserved_head": "734487d022acbc43a8dc8f9d49c73d5b9e543178",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 273,
+    "timestamp_utc": "2026-11-16T07:37:06Z",
+    "preserved_head": "4007da211b7eaad01eec01c9e72370afa7b956db",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 272,
+    "timestamp_utc": "2026-11-16T07:37:09Z",
+    "preserved_head": "189ee19e4c81fb0f41339e252a58c51c187340c0",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 271,
+    "timestamp_utc": "2026-11-16T07:37:11Z",
+    "preserved_head": "cbd9965dac1896bf4a62654503c281f2aa86ba34",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 270,
+    "timestamp_utc": "2026-11-16T07:37:14Z",
+    "preserved_head": "a77e9e7e8621c493af159de56bc52e6891ef904f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 269,
+    "timestamp_utc": "2026-11-16T07:37:17Z",
+    "preserved_head": "1e06b553454258c5317157f76270c4aa66cd913a",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 268,
+    "timestamp_utc": "2026-11-16T07:37:19Z",
+    "preserved_head": "33be05bd14d039da1a15281258b324a73ff8c150",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 267,
+    "timestamp_utc": "2026-11-16T07:37:22Z",
+    "preserved_head": "89b40310bb26b719a9defa5811f46ea2694b994d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 266,
+    "timestamp_utc": "2026-11-16T07:37:25Z",
+    "preserved_head": "57f330fb467e1ff695b3c147573f3ee0bcecb94a",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 265,
+    "timestamp_utc": "2026-11-16T07:37:27Z",
+    "preserved_head": "b5783a731ec565b6abf1158dc86ed13de6ea5c71",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 263,
+    "timestamp_utc": "2026-11-16T07:37:30Z",
+    "preserved_head": "e79b438d5f08ed85ba15c7289d94a0423795c54d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 262,
+    "timestamp_utc": "2026-11-16T07:37:32Z",
+    "preserved_head": "6e2698a316abc5153d38bfb894b53d1b10a6f7a2",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 261,
+    "timestamp_utc": "2026-11-16T07:37:35Z",
+    "preserved_head": "f9c4a2e97f4b42f471b24ba5b8fa7961b946f1ca",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 259,
+    "timestamp_utc": "2026-11-16T07:37:38Z",
+    "preserved_head": "b33ecc734f6c3fc5d8df96b4a58177bffd3bad1f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 258,
+    "timestamp_utc": "2026-11-16T07:37:40Z",
+    "preserved_head": "16ecbfa5720e93ebc0ebb2fd12ab4a5c0e3a5283",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 257,
+    "timestamp_utc": "2026-11-16T07:37:43Z",
+    "preserved_head": "2c089dd1cf04f189d0a169523ec2a8a4f00b6452",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 256,
+    "timestamp_utc": "2026-11-16T07:37:46Z",
+    "preserved_head": "bbd683339fa1699bc1178487a38077d0402e554c",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 255,
+    "timestamp_utc": "2026-11-16T07:37:49Z",
+    "preserved_head": "760bf02a5c0d48dcc486782ee3346168047cac5a",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 253,
+    "timestamp_utc": "2026-11-16T07:37:55Z",
+    "preserved_head": "21ac289c56a809378fa954a1218ae43bf2a7520d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 252,
+    "timestamp_utc": "2026-11-16T07:37:58Z",
+    "preserved_head": "a3bd912e783c09af6720c40f91b3a55a1df06812",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 251,
+    "timestamp_utc": "2026-11-16T07:38:01Z",
+    "preserved_head": "c11a77e48d2ac3bef1f403cf11d4c455d415b157",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 250,
+    "timestamp_utc": "2026-11-16T07:38:03Z",
+    "preserved_head": "778a1faf2cb9fb0f259c6517ce01b1456f3641b0",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 249,
+    "timestamp_utc": "2026-11-16T07:38:06Z",
+    "preserved_head": "54e940d51ecd26e579073d73e4583d1f34f9cc26",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 248,
+    "timestamp_utc": "2026-11-16T07:38:08Z",
+    "preserved_head": "f4c8ebdfae54d9c526133a723d2f2fbb0edc7d45",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 247,
+    "timestamp_utc": "2026-11-16T07:38:11Z",
+    "preserved_head": "972585c5b60d727a3b297a6b81a8e91936a633b5",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 246,
+    "timestamp_utc": "2026-11-16T07:38:14Z",
+    "preserved_head": "a3b835d3e079ddccf204fb6fab0e762d249b07cd",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 245,
+    "timestamp_utc": "2026-11-16T07:38:16Z",
+    "preserved_head": "84cddbc8d16ef56a752bc22f0efa18ffcad029b7",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 207,
+    "timestamp_utc": "2026-11-16T07:38:19Z",
+    "preserved_head": "6899df3e8f3f206a51ee5d8460ab883a2b5a94ad",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 188,
+    "timestamp_utc": "2026-11-16T07:38:22Z",
+    "preserved_head": "e2baa0893909cd69a3a5e592efd6c49379abf3a5",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 187,
+    "timestamp_utc": "2026-11-16T07:38:25Z",
+    "preserved_head": "7a309508cc140897ae6dd75f8d473a89c7296be2",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 186,
+    "timestamp_utc": "2026-11-16T07:38:27Z",
+    "preserved_head": "1ea8e18f2cf37b834c7b76391e2a8be4d549bb74",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 185,
+    "timestamp_utc": "2026-11-16T07:38:30Z",
+    "preserved_head": "031268fcef916bf05e69c23226a702325775aefb",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 184,
+    "timestamp_utc": "2026-11-16T07:38:32Z",
+    "preserved_head": "3e56dc8759fa1c07eccd3661a6971c7b45116a45",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 162,
+    "timestamp_utc": "2026-11-16T07:38:35Z",
+    "preserved_head": "ed0392fa83696fa15cf993b1791863d5b07a3a54",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 160,
+    "timestamp_utc": "2026-11-16T07:38:38Z",
+    "preserved_head": "5ed67d74d72c207a3b50ac7d623ec29a3790d2f5",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 159,
+    "timestamp_utc": "2026-11-16T07:38:41Z",
+    "preserved_head": "f9c781d61495472ce3d6dd546b2cc067c7d4f2aa",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 158,
+    "timestamp_utc": "2026-11-16T07:38:44Z",
+    "preserved_head": "b0b7a9ffbe0b3828ce4f60de31e8f52a1bc120ed",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 157,
+    "timestamp_utc": "2026-11-16T07:38:47Z",
+    "preserved_head": "b887a0ffc993ad21a23eee7cac0d24eb66488215",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 156,
+    "timestamp_utc": "2026-11-16T07:38:49Z",
+    "preserved_head": "db22454cca1816a473871109f5dab3d8c9337507",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 155,
+    "timestamp_utc": "2026-11-16T07:38:54Z",
+    "preserved_head": "d439f1b05879ad148ce03c1d5462993fc6e1fbd0",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 154,
+    "timestamp_utc": "2026-11-16T07:38:56Z",
+    "preserved_head": "1f4c6a1d5ece34b203e6cb1bf97d26da5e3ba86d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 153,
+    "timestamp_utc": "2026-11-16T07:38:59Z",
+    "preserved_head": "b888b3b94ba74a5d7baedb08b80a75608457cfbe",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 152,
+    "timestamp_utc": "2026-11-16T07:39:02Z",
+    "preserved_head": "7539bdd709a9c988b5296661b74a1038f39587f8",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 151,
+    "timestamp_utc": "2026-11-16T07:39:04Z",
+    "preserved_head": "e3aa6c7b24d1be49fcb5ab9b453de1fdc47ed755",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 150,
+    "timestamp_utc": "2026-11-16T07:39:07Z",
+    "preserved_head": "c4d0f7e06fbf3467b0cc25663f70d8a3e8421bd0",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 149,
+    "timestamp_utc": "2026-11-16T07:39:09Z",
+    "preserved_head": "37f6c9aa018b5919a5c05ddf2b323972f2893fda",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 148,
+    "timestamp_utc": "2026-11-16T07:39:12Z",
+    "preserved_head": "c1eb47ce9ee78d86f816fda75aea1e288f52e63b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 147,
+    "timestamp_utc": "2026-11-16T07:39:15Z",
+    "preserved_head": "6324daf1f9821b70b5234824a484d227975ac2a1",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 146,
+    "timestamp_utc": "2026-11-16T07:39:17Z",
+    "preserved_head": "f490dd532624be3b405622af6469f3a2eb1fd5f3",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 145,
+    "timestamp_utc": "2026-11-16T07:39:20Z",
+    "preserved_head": "d62c4cae599b5e3c3de300f808242566f3ee124a",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 144,
+    "timestamp_utc": "2026-11-16T07:39:23Z",
+    "preserved_head": "a9bc0aead3c86daa1f114430f49ac31d96b69513",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 143,
+    "timestamp_utc": "2026-11-16T07:39:26Z",
+    "preserved_head": "7efbe1dbe1d0a64d82041695eb6ae8d200ca796b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 142,
+    "timestamp_utc": "2026-11-16T07:39:28Z",
+    "preserved_head": "f03d3741509dc9f28f8cac8b2506cbe8820676b6",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 141,
+    "timestamp_utc": "2026-11-16T07:39:29Z",
+    "preserved_head": "2e40c7097ac0fcad477302b56df1f59a1541369d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 140,
+    "timestamp_utc": "2026-11-16T07:39:32Z",
+    "preserved_head": "17b0e47887cc91f2d361a815ba02e81077de2cce",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 139,
+    "timestamp_utc": "2026-11-16T07:39:35Z",
+    "preserved_head": "82c8b1e2568f89d8bfe5e68decba91956f49afa1",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 138,
+    "timestamp_utc": "2026-11-16T07:39:38Z",
+    "preserved_head": "64f415f0ce92474ecc8a8c64ddb3e7482cab2168",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 137,
+    "timestamp_utc": "2026-11-16T07:39:40Z",
+    "preserved_head": "98e62fd179021885331f7e4108b0dce2695a627b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 136,
+    "timestamp_utc": "2026-11-16T07:39:43Z",
+    "preserved_head": "88c242ee045b31c49924540f1702f38154519aaf",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 135,
+    "timestamp_utc": "2026-11-16T07:39:46Z",
+    "preserved_head": "25fd55d90b453d60b88c9317e7a9438406d7be97",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 134,
+    "timestamp_utc": "2026-11-16T07:39:49Z",
+    "preserved_head": "07fa2832043fc6799c0b5acd127cbafdd5c72eee",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 133,
+    "timestamp_utc": "2026-11-16T07:39:58Z",
+    "preserved_head": "0aa993e3944e02d7c87908cca8a4573cc61a9ea0",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 132,
+    "timestamp_utc": "2026-11-16T07:40:00Z",
+    "preserved_head": "987d619c31698809b1c088a4befa9f50ad79782a",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 131,
+    "timestamp_utc": "2026-11-16T07:40:03Z",
+    "preserved_head": "7a7c186f3d2527f5ec9199d67099c1d11b7042d0",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 130,
+    "timestamp_utc": "2026-11-16T07:40:05Z",
+    "preserved_head": "b26938a7afd8ae275aadf3557c5d64ddd7fbb250",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 129,
+    "timestamp_utc": "2026-11-16T07:40:08Z",
+    "preserved_head": "25052de8ba37704964675c947344a9feb1f03474",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 128,
+    "timestamp_utc": "2026-11-16T07:40:10Z",
+    "preserved_head": "e28bbbd58ed5d7f2d4001c6b3ac4a5a2036d3c35",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 127,
+    "timestamp_utc": "2026-11-16T07:40:13Z",
+    "preserved_head": "0a99ce1892a0e71adc1adfe2472cb447ab64ec64",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 126,
+    "timestamp_utc": "2026-11-16T07:40:16Z",
+    "preserved_head": "9b1d2321cdfd34f2b72398e618133f01ba03791e",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 125,
+    "timestamp_utc": "2026-11-16T07:40:19Z",
+    "preserved_head": "75298149a17ebcd2c3986c8a9fcc1087b3196266",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 124,
+    "timestamp_utc": "2026-11-16T07:40:21Z",
+    "preserved_head": "8fa6ab81ce6fa2c45418daff89fecb6d3fcaa2d6",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 123,
+    "timestamp_utc": "2026-11-16T07:40:24Z",
+    "preserved_head": "9a43a2a848abcd5927b7fbef692c33fc264567bc",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 122,
+    "timestamp_utc": "2026-11-16T07:40:27Z",
+    "preserved_head": "51ee44ba53e0466d91d2029f3ceab93442dc1433",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 121,
+    "timestamp_utc": "2026-11-16T07:40:29Z",
+    "preserved_head": "97f96d42794e7b50ff1da0a8fe693b106a09097e",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 120,
+    "timestamp_utc": "2026-11-16T07:40:32Z",
+    "preserved_head": "ab7914bdc31d8c5f24803bafc2a8909a3456604a",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 119,
+    "timestamp_utc": "2026-11-16T07:40:35Z",
+    "preserved_head": "ca00b66fdfc6ee8050695eace90f76f9582edfd5",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 118,
+    "timestamp_utc": "2026-11-16T07:40:37Z",
+    "preserved_head": "3eea33570ea7858503c911699d33d419d05e12d7",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 117,
+    "timestamp_utc": "2026-11-16T07:40:40Z",
+    "preserved_head": "29b2125e9256a7c7720cd10a07d2a33d9a2025fa",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 116,
+    "timestamp_utc": "2026-11-16T07:40:43Z",
+    "preserved_head": "b89d0ffa3246edb8f8d5372fb3260a6139565038",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 115,
+    "timestamp_utc": "2026-11-16T07:40:46Z",
+    "preserved_head": "6226bfae7915b34b0c36f9c787362e51df3d6804",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 114,
+    "timestamp_utc": "2026-11-16T07:40:49Z",
+    "preserved_head": "53ddc559b151b7ced722d7defa7a5cea5ce58d3c",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 113,
+    "timestamp_utc": "2026-11-16T07:40:57Z",
+    "preserved_head": "19eca3bddc015a067af34e528e0baf506371f9fb",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 112,
+    "timestamp_utc": "2026-11-16T07:40:59Z",
+    "preserved_head": "401fd12c7d63458739f89091538725935486d7cf",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 111,
+    "timestamp_utc": "2026-11-16T07:41:02Z",
+    "preserved_head": "8a9d8f58aba1b7143986c968792101e3205a3e5f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 110,
+    "timestamp_utc": "2026-11-16T07:41:05Z",
+    "preserved_head": "ffe54c0ddcd17ad961a3fdde4e8026cea16a1511",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 109,
+    "timestamp_utc": "2026-11-16T07:41:08Z",
+    "preserved_head": "1be4759dec3abba0aad94358ec5e590668362de6",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 108,
+    "timestamp_utc": "2026-11-16T07:41:11Z",
+    "preserved_head": "28f031627ef2809081e1920729eecaca00e326ea",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 107,
+    "timestamp_utc": "2026-11-16T07:41:13Z",
+    "preserved_head": "498fb06a76bec79ee7c88b45a351bb6c1eaaa322",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 106,
+    "timestamp_utc": "2026-11-16T07:41:16Z",
+    "preserved_head": "6d2c3bd4ee540f567e7905e367c61d96f82589fb",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 105,
+    "timestamp_utc": "2026-11-16T07:41:19Z",
+    "preserved_head": "85ed8a2097e2287beb6853d4ec0c5ed52485c4e3",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 104,
+    "timestamp_utc": "2026-11-16T07:41:21Z",
+    "preserved_head": "5cf2b021fa49e6bf1416bcf19532778cd3a16d81",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 103,
+    "timestamp_utc": "2026-11-16T07:41:24Z",
+    "preserved_head": "8f7bf507f2b1a5531c9b4d3ec062dc2a1951c167",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 102,
+    "timestamp_utc": "2026-11-16T07:41:27Z",
+    "preserved_head": "349567c831c9920a31659d3de9c8d12c5cdef544",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 101,
+    "timestamp_utc": "2026-11-16T07:41:30Z",
+    "preserved_head": "366d79ffe977c458a57cbfbbcf7f83be3d8df85f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 100,
+    "timestamp_utc": "2026-11-16T07:41:32Z",
+    "preserved_head": "29e3ecace7bb7b890dc27d7fe652fe9f18ca9a78",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 99,
+    "timestamp_utc": "2026-11-16T07:41:35Z",
+    "preserved_head": "cd80449c3561b58b397e3e6eaa4f8e42d0d4ef2f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 98,
+    "timestamp_utc": "2026-11-16T07:41:38Z",
+    "preserved_head": "bc001551ec93424ce916faf387a1ae06c06a335f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 97,
+    "timestamp_utc": "2026-11-16T07:41:41Z",
+    "preserved_head": "16a8bdcc7052c3aa6aeffac4051b7562601e9162",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 96,
+    "timestamp_utc": "2026-11-16T07:41:43Z",
+    "preserved_head": "15ebdc215969f0486edee5db5a8f189538119d17",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 95,
+    "timestamp_utc": "2026-11-16T07:41:46Z",
+    "preserved_head": "b4f55dea69a797268d0e29a2e7146e0fef97558d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 94,
+    "timestamp_utc": "2026-11-16T07:41:49Z",
+    "preserved_head": "1e403ae4d1f6680cf0b2f53f78c10069c9dfd293",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 93,
+    "timestamp_utc": "2026-11-16T07:41:54Z",
+    "preserved_head": "d2181146718822abd371334423d3c6a63a3f6db2",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 92,
+    "timestamp_utc": "2026-11-16T07:41:57Z",
+    "preserved_head": "92c83f95ff327b94131c513d0c1ba65863928b19",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 91,
+    "timestamp_utc": "2026-11-16T07:42:02Z",
+    "preserved_head": "32c5e21b1e2cb1b5b0da58b1afab3583e4af3d44",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 90,
+    "timestamp_utc": "2026-11-16T07:42:05Z",
+    "preserved_head": "cbee6c28dbdfaf0f02ef892e27f02036c13b84e8",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 89,
+    "timestamp_utc": "2026-11-16T07:42:08Z",
+    "preserved_head": "dd7577e02fc1b5d55a34f95c47ad8a1d779b9f76",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 88,
+    "timestamp_utc": "2026-11-16T07:42:10Z",
+    "preserved_head": "bf6634de4ee495c635bcb07aa5948dabcc2ec11d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 87,
+    "timestamp_utc": "2026-11-16T07:42:13Z",
+    "preserved_head": "3931aab72711c4eec3f105aa4c89ff02f186b784",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 86,
+    "timestamp_utc": "2026-11-16T07:42:16Z",
+    "preserved_head": "63bcfb8ae6065feb71e18e386bd39cafd412334c",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 85,
+    "timestamp_utc": "2026-11-16T07:42:19Z",
+    "preserved_head": "c2b27af4d6bc07c0f4d763bfc42c2ed587724a71",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 84,
+    "timestamp_utc": "2026-11-16T07:42:21Z",
+    "preserved_head": "d8643cc6340e310833cce206cb26b04940b0da3d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 83,
+    "timestamp_utc": "2026-11-16T07:42:24Z",
+    "preserved_head": "c892eb8dbe499956adadfa3716b27946df62c658",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 82,
+    "timestamp_utc": "2026-11-16T07:42:26Z",
+    "preserved_head": "8e5ab9b92aa32ff3c653bd8342a5a189fb519369",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 81,
+    "timestamp_utc": "2026-11-16T07:42:27Z",
+    "preserved_head": "5f13992b94b90157a38d25b3fe27543e3e8642f1",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 80,
+    "timestamp_utc": "2026-11-16T07:42:30Z",
+    "preserved_head": "97d73fffaab26af79df4bd4b5db48a698c2a5342",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 79,
+    "timestamp_utc": "2026-11-16T07:42:33Z",
+    "preserved_head": "95c1a3e7a9578d3c176f2cc4388705867680a259",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 78,
+    "timestamp_utc": "2026-11-16T07:42:36Z",
+    "preserved_head": "f77d2f3d319b3cc4d83b2783307e7d7e7675ce62",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 77,
+    "timestamp_utc": "2026-11-16T07:42:39Z",
+    "preserved_head": "33d5c7fb8df55ccd86a3b5749a4476e9f1cf976e",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 76,
+    "timestamp_utc": "2026-11-16T07:42:42Z",
+    "preserved_head": "41b46bc8b5ac24ea42ee3af231e9d082c6cebee1",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 75,
+    "timestamp_utc": "2026-11-16T07:42:44Z",
+    "preserved_head": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 74,
+    "timestamp_utc": "2026-11-16T07:42:47Z",
+    "preserved_head": "2b1c66740064a1e28c46f3ca013014ee2eddd028",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 73,
+    "timestamp_utc": "2026-11-16T07:42:57Z",
+    "preserved_head": "d4d9bc9316a32ee284dbfcdbf8931da315e1ad49",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 72,
+    "timestamp_utc": "2026-11-16T07:42:59Z",
+    "preserved_head": "fdbaf8ee89453aff2043051c66b2fd74a7faa2e4",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 71,
+    "timestamp_utc": "2026-11-16T07:43:02Z",
+    "preserved_head": "5fde4baa055771665b3f21d015fab2cbc5e40e53",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 70,
+    "timestamp_utc": "2026-11-16T07:43:05Z",
+    "preserved_head": "e2ac226583ce12a3f0a01c9d57643df523ec7e17",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 69,
+    "timestamp_utc": "2026-11-16T07:43:08Z",
+    "preserved_head": "163a4cfd83507e2a9ac059dd395aeb960bcbe136",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 68,
+    "timestamp_utc": "2026-11-16T07:43:10Z",
+    "preserved_head": "b8e0e13f9b2d4ce6915c9cb417b13f0e2991000c",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 67,
+    "timestamp_utc": "2026-11-16T07:43:13Z",
+    "preserved_head": "c972a8977313b6c437cbef79aaaeeadb255c2490",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 66,
+    "timestamp_utc": "2026-11-16T07:43:16Z",
+    "preserved_head": "f927ce80d3b7e574e5d3afab32ff619216595210",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 65,
+    "timestamp_utc": "2026-11-16T07:43:19Z",
+    "preserved_head": "312d809ef91a516c58a5edcd1ce55aa91ac561ac",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 64,
+    "timestamp_utc": "2026-11-16T07:43:20Z",
+    "preserved_head": "fbf09ab796aa60cbce539c62277cdfaed53984db",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 63,
+    "timestamp_utc": "2026-11-16T07:43:22Z",
+    "preserved_head": "2e2c5711d4f3c6806b9cc8124c992dcaaaac2193",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 62,
+    "timestamp_utc": "2026-11-16T07:43:25Z",
+    "preserved_head": "e216f490c5b98d9783fe88e992248783db4eba5d",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 61,
+    "timestamp_utc": "2026-11-16T07:43:26Z",
+    "preserved_head": "31f6334415f8417ff00b09015a22aafb85fe1a96",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 60,
+    "timestamp_utc": "2026-11-16T07:43:29Z",
+    "preserved_head": "54f984162451e44e49d374ba5c08cb3a2b7a0536",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 59,
+    "timestamp_utc": "2026-11-16T07:43:31Z",
+    "preserved_head": "ff9c7bab2485c7d2cfd094e67fdb505a1221ee00",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 58,
+    "timestamp_utc": "2026-11-16T07:43:34Z",
+    "preserved_head": "b95e0b089ad6958747d8c0e055f6b8207e41ee88",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 57,
+    "timestamp_utc": "2026-11-16T07:43:37Z",
+    "preserved_head": "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 56,
+    "timestamp_utc": "2026-11-16T07:43:40Z",
+    "preserved_head": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 55,
+    "timestamp_utc": "2026-11-16T07:43:42Z",
+    "preserved_head": "7f653a590ab4a0b44a1e576ee4e5ea9ad07183bc",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 54,
+    "timestamp_utc": "2026-11-16T07:43:45Z",
+    "preserved_head": "4a4340871ffff2aa553e630373383484fcf401ab",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 53,
+    "timestamp_utc": "2026-11-16T07:43:48Z",
+    "preserved_head": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 52,
+    "timestamp_utc": "2026-11-16T07:43:56Z",
+    "preserved_head": "70d6a1e55b7fee8b56cece70f483fba5589346ef",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 51,
+    "timestamp_utc": "2026-11-16T07:43:59Z",
+    "preserved_head": "b45028d46b56c37173cafdc7bcd311b65c042e15",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 50,
+    "timestamp_utc": "2026-11-16T07:44:01Z",
+    "preserved_head": "157909c9b414f7d4ea8591b683b69913946a42c3",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 49,
+    "timestamp_utc": "2026-11-16T07:44:02Z",
+    "preserved_head": "75b072200e8ec24c87ea819f252b4dd3654c4edb",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 48,
+    "timestamp_utc": "2026-11-16T07:44:05Z",
+    "preserved_head": "a14a3008aa837c37c4f7cafb05f4c4e10471dd3a",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 47,
+    "timestamp_utc": "2026-11-16T07:44:06Z",
+    "preserved_head": "98f2545dd70b8c03a0f13015d8d3cd9aa22f459b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 46,
+    "timestamp_utc": "2026-11-16T07:44:09Z",
+    "preserved_head": "34d566a0bcb7b1d4cebb493197250be1e4ebfd87",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 45,
+    "timestamp_utc": "2026-11-16T07:44:10Z",
+    "preserved_head": "3a5f5cf1d5f96c5e903e0099261081919b3236e1",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 44,
+    "timestamp_utc": "2026-11-16T07:44:13Z",
+    "preserved_head": "f13ad76929916ecfbb2ef0d5fd7a5a284f680e02",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 43,
+    "timestamp_utc": "2026-11-16T07:44:16Z",
+    "preserved_head": "1e98f6e2b3c865fde97ea2687f55efaf4fcd7d84",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 42,
+    "timestamp_utc": "2026-11-16T07:44:19Z",
+    "preserved_head": "854eed102956cc728a45150a6fb5854a6928d180",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 41,
+    "timestamp_utc": "2026-11-16T07:44:21Z",
+    "preserved_head": "2635055ac6d72d6cd200a950efb73079cc466853",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 40,
+    "timestamp_utc": "2026-11-16T07:44:24Z",
+    "preserved_head": "95ec6a61f55dcb181a05f10f67f74664ba3b7f6e",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 39,
+    "timestamp_utc": "2026-11-16T07:44:28Z",
+    "preserved_head": "3c499d672ad108ce1c2109c2b7a58e22f20f235b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 38,
+    "timestamp_utc": "2026-11-16T07:44:31Z",
+    "preserved_head": "bb04b62e14ea611ce2dc8cd85dc99fc8df228282",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 37,
+    "timestamp_utc": "2026-11-16T07:44:33Z",
+    "preserved_head": "2a1c25b40f3ef2e091e9f2059ac5e8b31b1a7a53",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 36,
+    "timestamp_utc": "2026-11-16T07:44:36Z",
+    "preserved_head": "4bb56771910fac9e95b84aa6f8529528a9dfbbfe",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 35,
+    "timestamp_utc": "2026-11-16T07:44:39Z",
+    "preserved_head": "9f292eb6fd9d591887ec009e8f0bdbcfce26c2ec",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 34,
+    "timestamp_utc": "2026-11-16T07:44:42Z",
+    "preserved_head": "093a977caa9278491ed555661d6b0730ba8903e8",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 33,
+    "timestamp_utc": "2026-11-16T07:44:44Z",
+    "preserved_head": "f136d29cab9fe405c53c16fbd064a14592010f0f",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 32,
+    "timestamp_utc": "2026-11-16T07:44:47Z",
+    "preserved_head": "57bdad994393fd4c68a06059458ad5b64307e9e5",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 31,
+    "timestamp_utc": "2026-11-16T07:44:54Z",
+    "preserved_head": "c6d0acbe635c44d016e8f420f47eef5b842b7d6d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 30,
+    "timestamp_utc": "2026-11-16T07:44:56Z",
+    "preserved_head": "603ab03b0d940269842833e7ecb930f5fba9baa1",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 29,
+    "timestamp_utc": "2026-11-16T07:44:59Z",
+    "preserved_head": "9f066faa32be7fb7b60887975c56c1bcd9297838",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 28,
+    "timestamp_utc": "2026-11-16T07:45:03Z",
+    "preserved_head": "9485e549ef4d269bb49e0448b7c9856913444b0d",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 27,
+    "timestamp_utc": "2026-11-16T07:45:05Z",
+    "preserved_head": "aac9353793987da84d04ff8c01d20309bcfb74f4",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 26,
+    "timestamp_utc": "2026-11-16T07:45:08Z",
+    "preserved_head": "e1e8d08d287271db760fbc0acb7159527520b953",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 24,
+    "timestamp_utc": "2026-11-16T07:45:10Z",
+    "preserved_head": "039762d3bec173b767cbb8898bda92d01e413f26",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 23,
+    "timestamp_utc": "2026-11-16T07:45:13Z",
+    "preserved_head": "b3bc95ec2d45efc7485b9b11059d421fee2392c0",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 22,
+    "timestamp_utc": "2026-11-16T07:45:16Z",
+    "preserved_head": "d3cb8f1ea59e7a6191095bd9c9aeba48d4adcf66",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 21,
+    "timestamp_utc": "2026-11-16T07:45:19Z",
+    "preserved_head": "06cff85c9e04565af50d30da417f7309b3d2112b",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 20,
+    "timestamp_utc": "2026-11-16T07:45:22Z",
+    "preserved_head": "e2215e13d687dca02e0063bc115ffeb31a164355",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 19,
+    "timestamp_utc": "2026-11-16T07:45:24Z",
+    "preserved_head": "cacfff0911ff6687b1d79d8ae00ceff7aee413b7",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 18,
+    "timestamp_utc": "2026-11-16T07:45:27Z",
+    "preserved_head": "bab9a1a450e731e01333ea04d2e3ff424028aafc",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 17,
+    "timestamp_utc": "2026-11-16T07:45:30Z",
+    "preserved_head": "07297a690265a362f8dbaa22f74976e2ebb74405",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 16,
+    "timestamp_utc": "2026-11-16T07:45:33Z",
+    "preserved_head": "3b6454f079d750994a022f8b85e8ae4dc07c3bb4",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 15,
+    "timestamp_utc": "2026-11-16T07:45:36Z",
+    "preserved_head": "87ebdde325c1a1dd51937a5abb74a70adf98b42f",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 14,
+    "timestamp_utc": "2026-11-16T07:45:37Z",
+    "preserved_head": "89fa33d73b6488ccb4fb06315e1fff540776e8b8",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 13,
+    "timestamp_utc": "2026-11-16T07:45:38Z",
+    "preserved_head": "5d6116ae222b0694344f42f2b9a8d5a853682dc4",
+    "result": "closed"
+  },
+  {
+    "kind": "pr",
+    "number": 12,
+    "timestamp_utc": "2026-11-16T07:45:42Z",
+    "preserved_head": "5ae003f8a6a6eb4c602301f3eb3d81215ab1a07c",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 11,
+    "timestamp_utc": "2026-11-16T07:45:43Z",
+    "preserved_head": "e72c350d8926bcac17c515acef6eb1dc884c6206",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 9,
+    "timestamp_utc": "2026-11-16T07:45:45Z",
+    "preserved_head": "c0026b0ba7be8f7d97a9de6a513c9982a2b40819",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 7,
+    "timestamp_utc": "2026-11-16T07:45:50Z",
+    "preserved_head": "9462075ac12e59420ee5888517048056e9ce0c1d",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 5,
+    "timestamp_utc": "2026-11-16T07:45:53Z",
+    "preserved_head": "55234764da758c6140d97b9abbce2c28126425b4",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 3,
+    "timestamp_utc": "2026-11-16T07:45:54Z",
+    "preserved_head": "176fd52eab1770a2ff21ee71b997f1d020f6031c",
+    "result": "already_closed"
+  },
+  {
+    "kind": "pr",
+    "number": 1,
+    "timestamp_utc": "2026-11-16T07:45:55Z",
+    "preserved_head": "7e3d44c4faed062aac431a2f3d0f8657eea3fd87",
+    "result": "already_closed"
+  },
+  {
+    "kind": "issue",
+    "number": 2,
+    "timestamp_utc": "2026-11-16T07:45:56Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 4,
+    "timestamp_utc": "2026-11-16T07:45:58Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 6,
+    "timestamp_utc": "2026-11-16T07:46:00Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 8,
+    "timestamp_utc": "2026-11-16T07:46:02Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 10,
+    "timestamp_utc": "2026-11-16T07:46:04Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 25,
+    "timestamp_utc": "2026-11-16T07:46:06Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 161,
+    "timestamp_utc": "2026-11-16T07:46:08Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 163,
+    "timestamp_utc": "2026-11-16T07:46:11Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 164,
+    "timestamp_utc": "2026-11-16T07:46:13Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 165,
+    "timestamp_utc": "2026-11-16T07:46:15Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 166,
+    "timestamp_utc": "2026-11-16T07:46:17Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 167,
+    "timestamp_utc": "2026-11-16T07:46:19Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 168,
+    "timestamp_utc": "2026-11-16T07:46:21Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 169,
+    "timestamp_utc": "2026-11-16T07:46:24Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 170,
+    "timestamp_utc": "2026-11-16T07:46:26Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 171,
+    "timestamp_utc": "2026-11-16T07:46:28Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 172,
+    "timestamp_utc": "2026-11-16T07:46:30Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 173,
+    "timestamp_utc": "2026-11-16T07:46:32Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 174,
+    "timestamp_utc": "2026-11-16T07:46:34Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 175,
+    "timestamp_utc": "2026-11-16T07:46:36Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 176,
+    "timestamp_utc": "2026-11-16T07:46:38Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 177,
+    "timestamp_utc": "2026-11-16T07:46:40Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 178,
+    "timestamp_utc": "2026-11-16T07:46:43Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 179,
+    "timestamp_utc": "2026-11-16T07:46:45Z",
+    "result": "already_closed"
+  },
+  {
+    "kind": "issue",
+    "number": 180,
+    "timestamp_utc": "2026-11-16T07:46:46Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 181,
+    "timestamp_utc": "2026-11-16T07:46:48Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 182,
+    "timestamp_utc": "2026-11-16T07:46:51Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 183,
+    "timestamp_utc": "2026-11-16T07:46:53Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 189,
+    "timestamp_utc": "2026-11-16T07:46:55Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 190,
+    "timestamp_utc": "2026-11-16T07:46:57Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 191,
+    "timestamp_utc": "2026-11-16T07:46:59Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 192,
+    "timestamp_utc": "2026-11-16T07:47:02Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 193,
+    "timestamp_utc": "2026-11-16T07:47:04Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 194,
+    "timestamp_utc": "2026-11-16T07:47:06Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 195,
+    "timestamp_utc": "2026-11-16T07:47:09Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 196,
+    "timestamp_utc": "2026-11-16T07:47:11Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 197,
+    "timestamp_utc": "2026-11-16T07:47:13Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 198,
+    "timestamp_utc": "2026-11-16T07:47:16Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 199,
+    "timestamp_utc": "2026-11-16T07:47:18Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 200,
+    "timestamp_utc": "2026-11-16T07:47:20Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 201,
+    "timestamp_utc": "2026-11-16T07:47:22Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 202,
+    "timestamp_utc": "2026-11-16T07:47:25Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 203,
+    "timestamp_utc": "2026-11-16T07:47:27Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 204,
+    "timestamp_utc": "2026-11-16T07:47:29Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 205,
+    "timestamp_utc": "2026-11-16T07:47:32Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 206,
+    "timestamp_utc": "2026-11-16T07:47:34Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 208,
+    "timestamp_utc": "2026-11-16T07:47:36Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 209,
+    "timestamp_utc": "2026-11-16T07:47:38Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 210,
+    "timestamp_utc": "2026-11-16T07:47:40Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 211,
+    "timestamp_utc": "2026-11-16T07:47:43Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 212,
+    "timestamp_utc": "2026-11-16T07:47:45Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 213,
+    "timestamp_utc": "2026-11-16T07:47:47Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 214,
+    "timestamp_utc": "2026-11-16T07:47:49Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 215,
+    "timestamp_utc": "2026-11-16T07:47:51Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 216,
+    "timestamp_utc": "2026-11-16T07:47:54Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 217,
+    "timestamp_utc": "2026-11-16T07:47:56Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 218,
+    "timestamp_utc": "2026-11-16T07:47:59Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 219,
+    "timestamp_utc": "2026-11-16T07:48:01Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 220,
+    "timestamp_utc": "2026-11-16T07:48:03Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 221,
+    "timestamp_utc": "2026-11-16T07:48:05Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 222,
+    "timestamp_utc": "2026-11-16T07:48:08Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 223,
+    "timestamp_utc": "2026-11-16T07:48:10Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 224,
+    "timestamp_utc": "2026-11-16T07:48:12Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 225,
+    "timestamp_utc": "2026-11-16T07:48:15Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 226,
+    "timestamp_utc": "2026-11-16T07:48:17Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 227,
+    "timestamp_utc": "2026-11-16T07:48:19Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 228,
+    "timestamp_utc": "2026-11-16T07:48:21Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 229,
+    "timestamp_utc": "2026-11-16T07:48:24Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 230,
+    "timestamp_utc": "2026-11-16T07:48:26Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 231,
+    "timestamp_utc": "2026-11-16T07:48:28Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 232,
+    "timestamp_utc": "2026-11-16T07:48:30Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 233,
+    "timestamp_utc": "2026-11-16T07:48:32Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 234,
+    "timestamp_utc": "2026-11-16T07:48:35Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 235,
+    "timestamp_utc": "2026-11-16T07:48:37Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 236,
+    "timestamp_utc": "2026-11-16T07:48:39Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 237,
+    "timestamp_utc": "2026-11-16T07:48:41Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 238,
+    "timestamp_utc": "2026-11-16T07:48:43Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 239,
+    "timestamp_utc": "2026-11-16T07:48:45Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 240,
+    "timestamp_utc": "2026-11-16T07:48:47Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 241,
+    "timestamp_utc": "2026-11-16T07:48:50Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 242,
+    "timestamp_utc": "2026-11-16T07:48:52Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 243,
+    "timestamp_utc": "2026-11-16T07:48:54Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 244,
+    "timestamp_utc": "2026-11-16T07:48:56Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 254,
+    "timestamp_utc": "2026-11-16T07:48:58Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 260,
+    "timestamp_utc": "2026-11-16T07:49:01Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 264,
+    "timestamp_utc": "2026-11-16T07:49:03Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 277,
+    "timestamp_utc": "2026-11-16T07:49:05Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 279,
+    "timestamp_utc": "2026-11-16T07:49:07Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 281,
+    "timestamp_utc": "2026-11-16T07:49:10Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 283,
+    "timestamp_utc": "2026-11-16T07:49:12Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 285,
+    "timestamp_utc": "2026-11-16T07:49:15Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 287,
+    "timestamp_utc": "2026-11-16T07:49:17Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 289,
+    "timestamp_utc": "2026-11-16T07:49:19Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 291,
+    "timestamp_utc": "2026-11-16T07:49:21Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 297,
+    "timestamp_utc": "2026-11-16T07:49:24Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 302,
+    "timestamp_utc": "2026-11-16T07:49:26Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 309,
+    "timestamp_utc": "2026-11-16T07:49:28Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 311,
+    "timestamp_utc": "2026-11-16T07:49:30Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 337,
+    "timestamp_utc": "2026-11-16T07:49:32Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 338,
+    "timestamp_utc": "2026-11-16T07:49:35Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 339,
+    "timestamp_utc": "2026-11-16T07:49:37Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 340,
+    "timestamp_utc": "2026-11-16T07:49:39Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 341,
+    "timestamp_utc": "2026-11-16T07:49:42Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 342,
+    "timestamp_utc": "2026-11-16T07:49:44Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 343,
+    "timestamp_utc": "2026-11-16T07:49:46Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 344,
+    "timestamp_utc": "2026-11-16T07:49:48Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 345,
+    "timestamp_utc": "2026-11-16T07:49:50Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 346,
+    "timestamp_utc": "2026-11-16T07:49:53Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 347,
+    "timestamp_utc": "2026-11-16T07:49:55Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 358,
+    "timestamp_utc": "2026-11-16T07:49:57Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 369,
+    "timestamp_utc": "2026-11-16T07:49:59Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 371,
+    "timestamp_utc": "2026-11-16T07:50:01Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 374,
+    "timestamp_utc": "2026-11-16T07:50:03Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 376,
+    "timestamp_utc": "2026-11-16T07:50:05Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 378,
+    "timestamp_utc": "2026-11-16T07:50:07Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 381,
+    "timestamp_utc": "2026-11-16T07:50:09Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 382,
+    "timestamp_utc": "2026-11-16T07:50:11Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 385,
+    "timestamp_utc": "2026-11-16T07:50:13Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 387,
+    "timestamp_utc": "2026-11-16T07:50:15Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 388,
+    "timestamp_utc": "2026-11-16T07:50:18Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 390,
+    "timestamp_utc": "2026-11-16T07:50:20Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 393,
+    "timestamp_utc": "2026-11-16T07:50:22Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 400,
+    "timestamp_utc": "2026-11-16T07:50:24Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 402,
+    "timestamp_utc": "2026-11-16T07:50:26Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 404,
+    "timestamp_utc": "2026-11-16T07:50:28Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 406,
+    "timestamp_utc": "2026-11-16T07:50:30Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 408,
+    "timestamp_utc": "2026-11-16T07:50:33Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 413,
+    "timestamp_utc": "2026-11-16T07:50:35Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  },
+  {
+    "kind": "issue",
+    "number": 414,
+    "timestamp_utc": "2026-11-16T07:50:37Z",
+    "result": "closed",
+    "state_reason": "not_planned",
+    "resolution_claim": "consolidated into audit; not a completed-feature claim"
+  }
+]

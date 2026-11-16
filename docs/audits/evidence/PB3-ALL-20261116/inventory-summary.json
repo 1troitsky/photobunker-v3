@@ -1,0 +1,19 @@
+{
+  "main": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+  "frontend_source": "f4c7c91fe8100377c10d7af734c7ead90b217e7f",
+  "protected_donor": "783b6a7757b804d06d15426de2457f94e37ca741",
+  "prs": 285,
+  "issues": 129,
+  "remote_branches": 289,
+  "reachable_commits": 3393,
+  "documentation_paths": 495,
+  "documentation_blob_versions": 521,
+  "exact_pr_heads_in_main": 149,
+  "exact_pr_heads_in_frontend412": 162,
+  "exact_pr_heads_in_protected_donor": 171,
+  "ci_heads": {
+    "PASS": 244,
+    "FAIL": 41,
+    "NO_CHECKS": 1
+  }
+}

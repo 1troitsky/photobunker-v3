@@ -1,3 +1,5 @@
+> Аудит16.11.2026: [полный реестр и merge blockers](docs/audits/PB3-ALL-PRS-ISSUES-FRONTEND-MERGE-AUDIT-20261116.md). Эта ветка не слита в main. Все PR/Issues архивно закрыты; незавершённые требования сохранены в отчёте.
+
 # PhotoBunker PB3 — Integrated Fieldwork frontend
 
 This branch is the **original PB3 application**, not a new prototype. It integrates existing Vue 3/strict TypeScript UI and Laravel 13 API with PostgreSQL 18, Garage S3, encryption and real browser journeys. It is a **review candidate**; do not confuse a successful build with full product/release acceptance.

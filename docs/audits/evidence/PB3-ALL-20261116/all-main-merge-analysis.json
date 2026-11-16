@@ -1,0 +1,257 @@
+[
+  {
+    "sha": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+    "parents": [
+      "5aaba8b0509c354f8abb00806180f4ce6cb6ad18",
+      "b24f93990ef3cac9eb10e2e86e6fb562611dfb05"
+    ],
+    "subject": "Merge PR #336: integrated signed Assignments, AV and E2EE Video Editor",
+    "changed_vs_first": 44,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 44,
+    "auto_exit": 0,
+    "auto_tree": "7f2026e3818cae77712d23433475369606f901b0",
+    "actual_tree": "7f2026e3818cae77712d23433475369606f901b0",
+    "auto_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "sha": "b24f93990ef3cac9eb10e2e86e6fb562611dfb05",
+    "parents": [
+      "5aaba8b0509c354f8abb00806180f4ce6cb6ad18",
+      "3114b04750c150c2374295b7c7adc2ca942069c2"
+    ],
+    "subject": "Merge P2 #334 + #335 into isolated integration branch (preserve ancestry)",
+    "changed_vs_first": 44,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 44,
+    "auto_exit": 0,
+    "auto_tree": "7f2026e3818cae77712d23433475369606f901b0",
+    "actual_tree": "7f2026e3818cae77712d23433475369606f901b0",
+    "auto_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "sha": "516b8a3ff558eadd552a4f231f697f4dbbc5ca36",
+    "parents": [
+      "27778dd53c8b469337ba5176e1b51886b6f45e32",
+      "452631f888b246bccc9734f21fe476ca87d47252",
+      "befb8ea4443c629bba9b9bb1443fd510e1b8f920"
+    ],
+    "subject": "integration(p2): combine verified AV + mixed assignments + E2EE QA",
+    "changed_vs_first": 12,
+    "combined_or_new_paths": [
+      "docs/audits/P2-AV-ASSIGNMENTS-PREMAIN-20261114-CHAT-L.md"
+    ],
+    "copied_parent_paths": 11
+  },
+  {
+    "sha": "befb8ea4443c629bba9b9bb1443fd510e1b8f920",
+    "parents": [
+      "9b22c19fbac900fea8dd1d0f3ff5d830ee30ed40",
+      "5aaba8b0509c354f8abb00806180f4ce6cb6ad18"
+    ],
+    "subject": "integration(qa): align #325 P1/P2 tamper QA with patched main ancestry",
+    "changed_vs_first": 1,
+    "combined_or_new_paths": [
+      "docs/audits/PB3-SECURITY-QA-INTEGRATION-20261114.md"
+    ],
+    "copied_parent_paths": 0,
+    "auto_exit": 0,
+    "auto_tree": "8b4d151e8039b452df8162ae01dba92f9b508f54",
+    "actual_tree": "3d5cef763771b8785c975a66a272419490368104",
+    "auto_matches_actual": false,
+    "conflicts": [],
+    "actual_vs_auto_paths": [
+      "docs/audits/PB3-SECURITY-QA-INTEGRATION-20261114.md"
+    ]
+  },
+  {
+    "sha": "5aaba8b0509c354f8abb00806180f4ce6cb6ad18",
+    "parents": [
+      "6565a0fe852882ea5fc26e493df81affed687eee",
+      "7de3a1f738071c5e492dd6874fe3c9162bc82e39"
+    ],
+    "subject": "Merge PR #326: patch Laravel security lock (CVE-2026-128083)",
+    "changed_vs_first": 2,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 2,
+    "auto_exit": 0,
+    "auto_tree": "c2df5002982a8585ef8396ff74512f50e89a409c",
+    "actual_tree": "c2df5002982a8585ef8396ff74512f50e89a409c",
+    "auto_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "sha": "6565a0fe852882ea5fc26e493df81affed687eee",
+    "parents": [
+      "da7327b8c9c440dae3dc864b3245b9f9f4ad14eb",
+      "4521f7b9c954df5af2356311115f425673796d8e"
+    ],
+    "subject": "Merge pull request #293 from 1troitsky/integration/global-acceptance-20261113",
+    "changed_vs_first": 542,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 542,
+    "auto_exit": 0,
+    "auto_tree": "856083aa7bb0dd208f581ff1345d2231458396d5",
+    "actual_tree": "856083aa7bb0dd208f581ff1345d2231458396d5",
+    "auto_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "sha": "f4bce2e1ab3e5ad72ec1d7e8c8f4d7517e286faa",
+    "parents": [
+      "ff9f9f22e298f2e4c08f3159f7acb2da399c7170",
+      "da7327b8c9c440dae3dc864b3245b9f9f4ad14eb"
+    ],
+    "subject": "chore(integration): reconcile main-only progress-table ancestry on isolated review branch (#289)",
+    "changed_vs_first": 0,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 0,
+    "auto_exit": 1,
+    "auto_tree": "374a244b2449b4cbde3811791613ecb296513273",
+    "actual_tree": "1f5c8ecc6d7db5aab15815538d3e23c710379c96",
+    "auto_matches_actual": false,
+    "conflicts": [
+      "CONFLICT (add/add): Merge conflict in TS_PROGRESS_TABLE.md"
+    ]
+  },
+  {
+    "sha": "031268fcef916bf05e69c23226a702325775aefb",
+    "parents": [
+      "ed0392fa83696fa15cf993b1791863d5b07a3a54",
+      "b0b7a9ffbe0b3828ce4f60de31e8f52a1bc120ed"
+    ],
+    "subject": "merge(P2): combine V54 Product QA and accepted UX 01–05 with scoped Viewer assertion",
+    "changed_vs_first": 166,
+    "combined_or_new_paths": [
+      "docs/audits/P2-V54-COMBINED-UX-PRODUCT-QA-20261112.md"
+    ],
+    "copied_parent_paths": 165,
+    "auto_exit": 1,
+    "auto_tree": "fff8a9b7ef43332c84f308522da56f0c5aa5d52a",
+    "actual_tree": "d08fb19188fcff2048aa3a7f3b2bd1b99a3dd183",
+    "auto_matches_actual": false,
+    "conflicts": [
+      "CONFLICT (content): Merge conflict in tests/e2e/p2-browser-file-viewer-index-target.spec.ts"
+    ]
+  },
+  {
+    "sha": "9841f5d000501cbe34a4c5ac1e7af5694fc607f1",
+    "parents": [
+      "fbbdbef4bad53b90ea6b45e0b0eb44efb16854c3",
+      "b887a0ffc993ad21a23eee7cac0d24eb66488215"
+    ],
+    "subject": "merge(integration): advance unified PRODUCT+UX to tested V52 photo text styling",
+    "changed_vs_first": 6,
+    "combined_or_new_paths": [
+      "docs/audits/P2-PRODUCT-UX-V51-INTEGRATION-20261112.md",
+      "docs/ux-integration/GAPS-AND-DECISIONS.md"
+    ],
+    "copied_parent_paths": 4,
+    "auto_exit": 0,
+    "auto_tree": "41dba85f1fa7d0edd1510343086f6d13187d6c87",
+    "actual_tree": "a7d0f35a624739e9d7bfc8277a9376d9030e08e1",
+    "auto_matches_actual": false,
+    "conflicts": [],
+    "actual_vs_auto_paths": [
+      "docs/audits/P2-PRODUCT-UX-V51-INTEGRATION-20261112.md",
+      "docs/ux-integration/GAPS-AND-DECISIONS.md"
+    ]
+  },
+  {
+    "sha": "c99fe952303dabf0c73306a61ce2905ba374e9ba",
+    "parents": [
+      "db22454cca1816a473871109f5dab3d8c9337507",
+      "d439f1b05879ad148ce03c1d5462993fc6e1fbd0",
+      "64f415f0ce92474ecc8a8c64ddb3e7482cab2168",
+      "82c8b1e2568f89d8bfe5e68decba91956f49afa1"
+    ],
+    "subject": "merge(integration): reconcile product V51, UX01–05, accepted PB2 sources and final V41 fixes",
+    "changed_vs_first": 164,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 164
+  },
+  {
+    "sha": "349567c831c9920a31659d3de9c8d12c5cdef544",
+    "parents": [
+      "1c251444413a438e16330a7907b5b1513665dec4",
+      "366d79ffe977c458a57cbfbbcf7f83be3d8df85f"
+    ],
+    "subject": "merge(viewer): preserve #101 exact verified text/identity changes under shape editor",
+    "changed_vs_first": 0,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 0,
+    "auto_exit": 1,
+    "auto_tree": "b8bd8e83e53f6a782d6a16a20dd9eca4fdb63c87",
+    "actual_tree": "318e81d9fc49d68990d3157e9571a653985069da",
+    "auto_matches_actual": false,
+    "conflicts": [
+      "CONFLICT (content): Merge conflict in apps/web/src/views/FileViewerView.vue"
+    ]
+  },
+  {
+    "sha": "29e3ecace7bb7b890dc27d7fe652fe9f18ca9a78",
+    "parents": [
+      "f77bd97f2d08c4aebe7b1c94df93a4a52dfc917b",
+      "cd80449c3561b58b397e3e6eaa4f8e42d0d4ef2f"
+    ],
+    "subject": "merge(viewer): inherit #99 validated E2E bootstrap and archive barriers into photo tonal work",
+    "changed_vs_first": 0,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 0,
+    "auto_exit": 0,
+    "auto_tree": "8c9857187f90ca7f99f2b311d4f5b60e28d7fc10",
+    "actual_tree": "8c9857187f90ca7f99f2b311d4f5b60e28d7fc10",
+    "auto_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "sha": "2c8ad9f6f18da9e87797d8df2cc0d6c3cf4eb7a6",
+    "parents": [
+      "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+      "e216f490c5b98d9783fe88e992248783db4eba5d"
+    ],
+    "subject": "Merge pull request #62 from 1troitsky/integration/p1-teams-audited-20261111",
+    "changed_vs_first": 44,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 44,
+    "auto_exit": 0,
+    "auto_tree": "7f760c8e307d76683df2bff3db939347d6875932",
+    "actual_tree": "7f760c8e307d76683df2bff3db939347d6875932",
+    "auto_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "sha": "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+    "parents": [
+      "d78b06ea609c729ac683c4d7f75a9dc2959e8791",
+      "34d566a0bcb7b1d4cebb493197250be1e4ebfd87"
+    ],
+    "subject": "Merge PR #46: verified P1 integration with scoped grants and rollback guard",
+    "changed_vs_first": 234,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 234,
+    "auto_exit": 0,
+    "auto_tree": "94dae97fbfad605ed11283caad27251aabd39921",
+    "actual_tree": "94dae97fbfad605ed11283caad27251aabd39921",
+    "auto_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "sha": "c9c2ba01968519576f350fdf99c5d0453f3b4d0f",
+    "parents": [
+      "2c1406586dd819357bd3fcc933985f616ce72d39",
+      "a14a3008aa837c37c4f7cafb05f4c4e10471dd3a"
+    ],
+    "subject": "Merge PR #48: guard scoped-grant rollback in P1 integration",
+    "changed_vs_first": 3,
+    "combined_or_new_paths": [],
+    "copied_parent_paths": 3,
+    "auto_exit": 0,
+    "auto_tree": "e09b3d349454dba4a0004ba383c6a191f0a8d70a",
+    "actual_tree": "e09b3d349454dba4a0004ba383c6a191f0a8d70a",
+    "auto_matches_actual": true,
+    "conflicts": []
+  }
+]

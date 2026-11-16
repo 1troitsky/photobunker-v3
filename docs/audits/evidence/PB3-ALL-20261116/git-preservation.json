@@ -1,0 +1,13 @@
+{
+  "bundle": "raw/all-git-history-final.bundle",
+  "bundle_bytes": 7911235,
+  "bundle_sha256": "2ecece22576065e7ac0fef7d68df3cfafed412ba0a4d74fe91e84bea95aaffa7",
+  "verify_exit": 0,
+  "preserved_audit_refs": 874,
+  "source_prs": 285,
+  "source_remote_branches": 289,
+  "main": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+  "frontend_source": "f4c7c91fe8100377c10d7af734c7ead90b217e7f",
+  "protected_donor": "783b6a7757b804d06d15426de2457f94e37ca741",
+  "contains_audit_commit": false
+}
