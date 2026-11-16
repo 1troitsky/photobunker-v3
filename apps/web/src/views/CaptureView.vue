@@ -567,12 +567,16 @@ function refreshHardwareZoom(track:MediaStreamTrack|undefined):void{
     const zoom=caps.zoom
     if(!zoom||!Number.isFinite(zoom.min)||!Number.isFinite(zoom.max)
       ||zoom.min<=0||zoom.max<=zoom.min||zoom.max>200)return
+    // Approved Camera 1.2 exposes 1×–3×, but never fabricates a sensor
+    // control outside what the live native hardware itself reports.
+    const min=Math.max(1,zoom.min),max=Math.min(3,zoom.max)
+    if(max<=min)return
     const step=typeof zoom.step==='number'&&Number.isFinite(zoom.step)
-      &&zoom.step>0&&zoom.step<=zoom.max-zoom.min?zoom.step:0.1
+      &&zoom.step>0&&zoom.step<=max-min?zoom.step:0.1
     const actual=(track.getSettings?.() as MediaTrackSettings & {zoom?:number}|undefined)?.zoom
-    cameraZoomRange.value={min:zoom.min,max:zoom.max,step}
+    cameraZoomRange.value={min,max,step}
     cameraZoom.value=typeof actual==='number'&&Number.isFinite(actual)
-      ?Math.max(zoom.min,Math.min(zoom.max,actual)):zoom.min
+      ?Math.max(min,Math.min(max,actual)):min
   }catch{cameraZoomRange.value=null}
 }
 /**
