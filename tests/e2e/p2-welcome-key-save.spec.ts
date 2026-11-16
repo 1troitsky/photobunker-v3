@@ -59,3 +59,49 @@ test('Settings registration uses same OS-chosen destination and never auto-ACKs 
   })).toBe(true)
   await expect(page.getByRole('button',{name:'Завершить регистрацию'})).toBeDisabled()
 })
+
+test('Welcome cancelled native Save does not acknowledge Recovery Key or silently download',async({page})=>{
+  test.setTimeout(100000)
+  await page.addInitScript(()=>{
+    Object.defineProperty(window,'showSaveFilePicker',{
+      configurable:true,
+      value:async()=>{throw new DOMException('cancelled','AbortError')},
+    })
+  })
+  let downloads=0
+  page.on('download',()=>{downloads++})
+  await page.goto('/welcome/create')
+  await page.getByRole('button',{name:'Создать Recovery Key'}).click()
+  await expect(page.getByTestId('welcome-generated-key')).not.toHaveValue('')
+  await page.getByTestId('welcome-save-key').click()
+  await expect(page.getByTestId('welcome-generated-key')).not.toHaveValue('')
+  await expect(page.getByText('Файл Recovery Key сохранён в выбранном вами месте. Проверьте его.'))
+    .toHaveCount(0)
+  await expect(page.getByTestId('welcome-finish')).toBeDisabled()
+  expect(downloads).toBe(0)
+})
+
+test('Settings unsupported browser offers manual copy without false Save acknowledgement',async({page})=>{
+  test.setTimeout(100000)
+  await page.addInitScript(()=>{
+    Object.defineProperty(window,'showSaveFilePicker',{
+      configurable:true,value:undefined,
+    })
+    Object.defineProperty(navigator,'canShare',{
+      configurable:true,value:undefined,
+    })
+    Object.defineProperty(navigator,'share',{
+      configurable:true,value:undefined,
+    })
+  })
+  let downloads=0
+  page.on('download',()=>{downloads++})
+  await page.goto('/settings')
+  await page.getByRole('button',{name:'Создать ключ'}).click()
+  await expect(page.locator('#generated-key')).not.toHaveValue('')
+  await page.getByTestId('account-save-key').click()
+  await expect(page.getByText('Этот браузер не поддерживает выбор места. Скопируйте Recovery Key и сохраните отдельно.'))
+    .toBeVisible()
+  await expect(page.getByRole('button',{name:'Завершить регистрацию'})).toBeDisabled()
+  expect(downloads).toBe(0)
+})

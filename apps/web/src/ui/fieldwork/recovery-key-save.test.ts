@@ -64,6 +64,14 @@ describe('owner-confirmed OS Recovery Key export',()=>{
     expect(data.files).toHaveLength(1)
     expect(await readBlob(data.files[0]!)).toBe(key+'\n')
   })
+
+  it('does not ACK a cancelled mobile share dialog as saved',async()=>{
+    const share=vi.fn().mockRejectedValue(new DOMException('cancelled','AbortError'))
+    Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true})
+    Object.defineProperty(navigator,'share',{configurable:true,value:share})
+    expect(await saveRecoveryKeyWithSystemDialog(key,'photobunker')).toBe('cancelled')
+    expect(share).toHaveBeenCalledOnce()
+  })
   it('does not create an anchor download when neither supported OS dialog exists',async()=>{
     const click=vi.spyOn(HTMLAnchorElement.prototype,'click')
     expect(await saveRecoveryKeyWithSystemDialog(key,'photobunker')).toBe('unsupported')
