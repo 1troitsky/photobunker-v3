@@ -24,6 +24,12 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('camera-mode-tabs').locator('button')).toHaveCount(3)
   await expect(page.getByTestId('camera-mode-tabs')).toHaveCSS('height','46px')
   await expect(page.getByTestId('camera-stage-controls')).toHaveCSS('min-height','124px')
+  // The approved bottom trio uses icons ABOVE its two context labels.
+  await expect(page.getByTestId('camera-open-assignment').locator('svg')).toHaveCount(1)
+  await expect(page.getByTestId('camera-open-settings').locator('svg')).toHaveCount(1)
+  for(const id of ['camera-open-assignment','camera-open-settings']){
+    await expect(page.getByTestId(id)).toHaveCSS('flex-direction','column')
+  }
   await expect(page.getByTestId('camera-mode-tab-photo')).toHaveAttribute('aria-pressed','true')
   await expect(page.getByTestId('camera-stage')).toBeVisible()
   await expect(page.getByTestId('camera-viewfinder')).toBeVisible()
