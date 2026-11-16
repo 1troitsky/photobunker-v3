@@ -110,7 +110,7 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     expect(mocks.sync).toHaveBeenCalledTimes(1)
     const refresh=el('notifications-refresh') as HTMLButtonElement
     expect(refresh.disabled).toBe(false)
-    el('notification-'+ID).querySelector('button.notification-summary')!.click()
+    el('notification-'+ID).querySelector<HTMLButtonElement>('button.notification-summary')!.click()
     await settle()
     expect(el('notification-open')).not.toBeNull()
     window.dispatchEvent(new Event('offline'))
@@ -129,7 +129,7 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     let complete:((x:{kind:'new-file';targetId:string})=>void)|undefined
     mocks.resolve.mockImplementationOnce(()=>new Promise(resolve=>{complete=resolve}))
     await mount()
-    el('notification-'+ID).querySelector('button.notification-summary')!.click()
+    el('notification-'+ID).querySelector<HTMLButtonElement>('button.notification-summary')!.click()
     await settle()
     el('notification-open').click()
     await settle()
