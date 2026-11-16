@@ -50,6 +50,14 @@ test('P2 #216: real account, encrypted Notifications UI, offline route/settings 
     const dockBox=await dock.boundingBox()
     expect(barBox&&dockBox&&barBox.y+barBox.height<=dockBox.y+2).toBe(true)
     await page.getByTestId('notification-setting-invitations').uncheck()
+    // Approved Notifications 1.5 categories are independent and persist
+    // in the encrypted device-local store even without network connectivity.
+    for(const category of ['newFiles','reviews','backups','subscription']){
+      await expect(page.getByTestId('notification-setting-'+category)).toBeChecked()
+      await page.getByTestId('notification-setting-'+category).uncheck()
+    }
+    await expect(page.getByText('Уведомления безопасности')).toBeVisible()
+    await expect(page.getByText('Пока недоступно')).toBeVisible()
     await page.getByTestId('notification-settings-save').click()
     await expect(page.getByText('Сохранено в зашифрованном хранилище этого устройства.'))
       .toBeVisible()
@@ -59,6 +67,9 @@ test('P2 #216: real account, encrypted Notifications UI, offline route/settings 
     await expect(page).toHaveURL(/\/notifications$/)
     await page.getByTestId('notifications-settings').click()
     await expect(page.getByTestId('notification-setting-invitations')).not.toBeChecked()
+    for(const category of ['newFiles','reviews','backups','subscription']){
+      await expect(page.getByTestId('notification-setting-'+category)).not.toBeChecked()
+    }
     await expect(page.getByTestId('notification-setting-push')).toBeDisabled()
 
     // After logout, no private inbox rows render even if the route is visited.
