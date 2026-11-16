@@ -1,0 +1,46 @@
+{
+  "head": "f4c7c91fe8100377c10d7af734c7ead90b217e7f",
+  "run": 43821489589,
+  "job_counts": [
+    {
+      "job": "Real PostgreSQL + Garage smoke shard 5/6",
+      "count": 24,
+      "result": "passed"
+    },
+    {
+      "job": "Real PostgreSQL + Garage smoke shard 6/6",
+      "count": 20,
+      "result": "passed"
+    },
+    {
+      "job": "Real PostgreSQL + Garage smoke shard 2/6",
+      "count": 5,
+      "result": "failed"
+    },
+    {
+      "job": "Real PostgreSQL + Garage smoke shard 2/6",
+      "count": 18,
+      "result": "passed"
+    },
+    {
+      "job": "Real PostgreSQL + Garage smoke shard 1/6",
+      "count": 6,
+      "result": "failed"
+    },
+    {
+      "job": "Real PostgreSQL + Garage smoke shard 1/6",
+      "count": 17,
+      "result": "passed"
+    },
+    {
+      "job": "Real PostgreSQL + Garage smoke shard 3/6",
+      "count": 23,
+      "result": "passed"
+    },
+    {
+      "job": "Real PostgreSQL + Garage smoke shard 4/6",
+      "count": 22,
+      "result": "passed"
+    }
+  ]
+}

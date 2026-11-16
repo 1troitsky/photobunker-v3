@@ -1,0 +1,11 @@
+{
+  "pb2": "daca24a4a38c62473859b2b54b4999d50400c491",
+  "pb3": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+  "source_count": 117,
+  "main_count": 117,
+  "missing": [],
+  "extra": [],
+  "different": [],
+  "command": "git ls-tree -rz <exact-sha> -- docs/ux/; compare path, mode and Git blob SHA",
+  "exit_code": 0
+}
