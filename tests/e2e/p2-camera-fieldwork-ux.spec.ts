@@ -27,7 +27,9 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('camera-mode-tab-photo')).toHaveAttribute('aria-pressed','true')
   await expect(page.getByTestId('camera-stage')).toBeVisible()
   await expect(page.getByTestId('camera-viewfinder')).toBeVisible()
-  await page.getByTestId('camera-open-assignment').click()
+  await expect(page.getByTestId('camera-details')).toBeHidden()
+  await page.getByTestId('camera-open-settings').click()
+  await expect(page.getByTestId('camera-assignment-panel')).toBeHidden()
   await page.getByTestId('camera-grid-setting').check()
   await expect(page.getByTestId('camera-grid').locator('span')).toHaveCount(4)
   await page.getByTestId('camera-gps-visibility').uncheck()
@@ -36,10 +38,12 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('camera-gps-indicator')).toBeVisible()
   await page.getByTestId('camera-grid-setting').uncheck()
   await expect(page.getByTestId('camera-grid')).toHaveCount(0)
+  await page.getByTestId('camera-sheet-close').click()
+  await expect(page.getByTestId('camera-details')).toBeHidden()
 
-  // The existing mode select remains wired to the native capture pipeline.
+  // Native capture still follows the visible approved mode tabs.
   await page.getByTestId('camera-mode-tab-audio').click()
-  await expect(page.getByTestId('camera-mode')).toHaveValue('audio')
+  await expect(page.getByTestId('camera-mode-tab-audio')).toHaveAttribute('aria-pressed','true')
   await expect(page.getByTestId('camera-audio-view')).toBeVisible()
   await expect(page.getByTestId('camera-header-flip')).toBeDisabled()
   await expect(page.getByTestId('camera-header-torch')).toBeDisabled()
@@ -62,7 +66,7 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(blind).toHaveCount(0)
 
   await page.getByTestId('camera-mode-tab-photo').click()
-  await expect(page.getByTestId('camera-mode')).toHaveValue('photo')
+  await expect(page.getByTestId('camera-mode-tab-photo')).toHaveAttribute('aria-pressed','true')
   await expect(page.getByTestId('camera-header-flip')).toBeEnabled()
   await page.getByTestId('camera-open-settings').click()
   await expect(page.getByTestId('camera-settings-panel')).toHaveCSS('position','fixed')

@@ -156,6 +156,28 @@ afterEach(async () => {
 })
 
 describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',()=>{
+  it('keeps inactive approved Camera sheets absent from the visible capture screen',async()=>{
+    await mount()
+    const details=host.querySelector<HTMLElement>('.camera-details')!
+    const settings=host.querySelector<HTMLElement>('[data-testid="camera-settings-panel"]')!
+    const assignment=host.querySelector<HTMLElement>('[data-testid="camera-assignment-panel"]')!
+    expect(details.style.display).toBe('none')
+    expect(settings.style.display).toBe('none')
+    expect(assignment.style.display).toBe('none')
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-open-settings"]')!.click()
+    await settle()
+    expect(details.style.display).not.toBe('none')
+    expect(settings.style.display).not.toBe('none')
+    expect(assignment.style.display).toBe('none')
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-sheet-close"]')!.click()
+    await settle()
+    expect(details.style.display).toBe('none')
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-open-assignment"]')!.click()
+    await settle()
+    expect(assignment.style.display).not.toBe('none')
+    expect(settings.style.display).toBe('none')
+  })
+
   it('offers real zoom only for a live track with reported capabilities',async()=>{
     const opened=media()
     const apply=vi.fn().mockResolvedValue(undefined)

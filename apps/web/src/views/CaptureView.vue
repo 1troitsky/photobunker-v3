@@ -1507,8 +1507,8 @@ onUnmounted(()=>{
       </div>
       <div v-if="cameraSheet" class="camera-sheet-backdrop"
         data-testid="camera-sheet-backdrop" @click="closeCameraSheet"></div>
-      <div class="camera-details" data-testid="camera-details">
-        <div class="foundation-card camera-config-card"
+      <div class="camera-details" v-show="cameraSheet!==null" data-testid="camera-details">
+        <div v-show="cameraSheet==='settings'" class="foundation-card camera-config-card"
           :class="{'is-camera-sheet':cameraSheet==='settings'}"
           data-testid="camera-settings-panel"
           :role="cameraSheet==='settings'?'dialog':undefined"
@@ -1693,7 +1693,7 @@ onUnmounted(()=>{
             <button type="button" @click="closeCameraSheet">Готово</button>
           </div>
         </div>
-        <div class="foundation-card camera-assignment-card"
+        <div v-show="cameraSheet==='assignment'" class="foundation-card camera-assignment-card"
           :class="{'is-camera-sheet':cameraSheet==='assignment'}"
           data-testid="camera-assignment-panel"
           :role="cameraSheet==='assignment'?'dialog':undefined"
