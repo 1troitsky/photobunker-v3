@@ -151,11 +151,12 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
       .toBeNull()
   })
   it('removes old account media grant states immediately on identity switch',async()=>{
-    m.hydrateGrants.mockResolvedValue([{
-      id:'OLD-GRANT',ownerAccountId:id('1'),
-      recipientAccountId:id('3'),mediaId:id('4'),state:'sent',
-      contract:'',signature:'',
-    }])
+    m.hydrateGrants.mockImplementation(async()=>
+      activeSession.value?.accountId===id('1')?[{
+        id:'OLD-GRANT',ownerAccountId:id('1'),
+        recipientAccountId:id('3'),mediaId:id('4'),state:'sent',
+        contract:'',signature:'',
+      }]:[])
     await mount()
     expect(host.textContent).toContain('OLD-GRAN')
     const input=host.querySelector<HTMLInputElement>('#media-share-peer-id')!
