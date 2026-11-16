@@ -253,6 +253,45 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(host.querySelector('[data-testid="camera-photo-zoom"]')).toBeNull()
     expect(host.querySelector('[data-testid="camera-photo-zoom-unavailable"]')).not.toBeNull()
   })
+  it('offers photo-settings torch only with a live supported track and updates the Header consistently',async()=>{
+    const opened=media()
+    const apply=vi.fn().mockResolvedValue(undefined)
+    const track=Object.assign(opened.track,{
+      getCapabilities:()=>({torch:true}),applyConstraints:apply,
+    })
+    await mount()
+    const torch=host.querySelector<HTMLInputElement>('[data-testid="camera-photo-torch"]')!
+    expect(torch.disabled).toBe(true)
+    requests[0]!.resolve(markRaw({getTracks:()=>[track],getVideoTracks:()=>[track]}) as unknown as MediaStream)
+    await settle()
+    expect(torch.disabled).toBe(false)
+    torch.click();await settle()
+    expect(apply).toHaveBeenCalledWith({advanced:[{torch:true}]})
+    expect(torch.checked).toBe(true)
+    expect(cameraShellActions.value?.torchOn).toBe(true)
+    torch.click();await settle()
+    expect(apply).toHaveBeenLastCalledWith({advanced:[{torch:false}]})
+    expect(torch.checked).toBe(false)
+    expect(cameraShellActions.value?.torchOn).toBe(false)
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    expect(track.stop).not.toHaveBeenCalled()
+  })
+  it('reverts a rejected hardware torch toggle rather than claiming success',async()=>{
+    const opened=media()
+    const apply=vi.fn().mockRejectedValue(new Error('torch rejected'))
+    const track=Object.assign(opened.track,{
+      getCapabilities:()=>({torch:true}),applyConstraints:apply,
+    })
+    await mount()
+    requests[0]!.resolve(markRaw({getTracks:()=>[track],getVideoTracks:()=>[track]}) as unknown as MediaStream)
+    await settle()
+    const torch=host.querySelector<HTMLInputElement>('[data-testid="camera-photo-torch"]')!
+    torch.click();await settle()
+    expect(apply).toHaveBeenCalledOnce()
+    expect(torch.checked).toBe(false)
+    expect(cameraShellActions.value?.torchOn).toBe(false)
+    expect(host.textContent).toContain('Фонарик недоступен на этой камере.')
+  })
   it('keeps the same live MediaStream while entering and exiting the full-screen blind cover',async()=>{
     const opened=media()
     await mount()

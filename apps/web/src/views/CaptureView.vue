@@ -45,6 +45,7 @@ const blindMode=ref(false)
 const cameraSheet=ref<'assignment'|'settings'|null>(null)
 const cameraFacing=ref<'environment'|'user'>('environment')
 const torchOn=ref(false)
+const torchBusy=ref(false)
 // Expose only true hardware zoom, never a CSS-only simulated crop.
 const cameraZoomRange=ref<{min:number;max:number;step:number}|null>(null)
 const cameraZoom=ref(1)
@@ -513,6 +514,7 @@ function stopTracks(opened:MediaStream):void {
 }
 function releaseStream():void {
   torchOn.value=false
+  torchBusy.value=false
   cameraZoomRange.value=null
   cameraZoom.value=1
   cameraZoomBusy.value=false
@@ -578,25 +580,36 @@ async function setCameraZoom(event:Event):Promise<void>{
 }
 /** Light is a real track capability, not a simulated UI toggle. */
 async function toggleTorch():Promise<void>{
-  if(!activeSession.value||!torchSupported.value
+  if(!activeSession.value||!torchSupported.value||torchBusy.value
     ||recording.value||busy.value||starting.value)return
-  const session=cameraIdentity(activeSession.value)
+  const session=cameraIdentity(activeSession.value),generation=cameraGeneration
   const track=stream.value?.getVideoTracks?.()[0]
-  if(!track)return
+  if(!track||track.readyState!=='live')return
   const next=!torchOn.value
+  torchBusy.value=true
   try{
     await track.applyConstraints({
       advanced:[{torch:next}],
     } as unknown as MediaTrackConstraints)
-    if(!disposed&&sameIdentity(session,cameraIdentity(activeSession.value))
-      &&stream.value?.getVideoTracks?.()[0]===track)
+    if(ownsCamera(session,generation)&&stream.value?.getVideoTracks?.()[0]===track)
       torchOn.value=next
   }catch{
-    if(stream.value?.getVideoTracks?.()[0]===track){
-      torchOn.value=false
+    if(ownsCamera(session,generation)&&stream.value?.getVideoTracks?.()[0]===track){
+      // A failed attempt to turn the torch OFF must not claim that it is off.
       error.value='Фонарик недоступен на этой камере.'
     }
+  }finally{
+    if(ownsCamera(session,generation)&&stream.value?.getVideoTracks?.()[0]===track)
+      torchBusy.value=false
   }
+}
+async function setTorchFromSettings(event:Event):Promise<void>{
+  const input=event.target
+  if(!(input instanceof HTMLInputElement))return
+  await toggleTorch()
+  // Native checkbox clicks toggle before the hardware operation resolves.
+  // Restore actual last-confirmed state on rejection or camera replacement.
+  if(input.isConnected)input.checked=torchOn.value
 }
 function toggleBlindMode():void{
   if(!activeSession.value)return
@@ -676,13 +689,13 @@ function closeCameraSheet():void{
 function finishCameraAssignment():void{
   if(canConfirmCameraAssignment.value)closeCameraSheet()
 }
-watch([activeSession,captureMode,stream,recording,busy,starting,torchOn,blindMode],
+watch([activeSession,captureMode,stream,recording,busy,starting,torchOn,torchBusy,blindMode],
   ()=>{
     cameraShellActions.value={
       owner:cameraHeaderOwner,
       canFlip:!!activeSession.value&&captureMode.value!=='audio'
         &&!recording.value&&!busy.value&&!starting.value,
-      canTorch:!!activeSession.value&&torchSupported.value
+      canTorch:!!activeSession.value&&torchSupported.value&&!torchBusy.value
         &&!recording.value&&!busy.value&&!starting.value,
       torchOn:torchOn.value,blind:blindMode.value,
       canBlind:!!activeSession.value,
@@ -1591,6 +1604,14 @@ onUnmounted(()=>{
           <p v-else class="muted" data-testid="camera-photo-zoom-unavailable">
             Масштаб доступен только при поддержке подключённой камеры.
           </p>
+          <label class="camera-appearance-setting">
+            <input type="checkbox" data-testid="camera-photo-torch"
+              :checked="torchOn"
+              :disabled="!torchSupported||torchBusy||busy||recording||starting"
+              @change="setTorchFromSettings">
+            Фонарик
+            <small v-if="!torchSupported">Доступен только при поддержке подключённой камеры.</small>
+          </label>
         </section>
         <section class="camera-preset-options" aria-label="Видео">
           <h3>Видео</h3>
