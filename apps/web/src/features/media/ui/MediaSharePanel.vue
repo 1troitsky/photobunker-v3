@@ -92,36 +92,49 @@ const busy=ref(false)
 const error=ref('')
 const status=ref('')
 let detach:()=>void=()=>{}
+let identityEpoch=0,hydrationEpoch=0
+function currentIdentity(session:typeof activeSession.value,epoch:number):boolean{
+  return epoch===identityEpoch&&sameIdentity(session,activeSession.value)
+}
 async function action(callback:()=>Promise<void>):Promise<void>{
   if(busy.value)return
+  const session=activeSession.value,epoch=identityEpoch
   busy.value=true;error.value='';status.value=''
   try{await callback()}
-  catch(e){error.value=e instanceof Error?e.message:'media_grant.failed'}
-  finally{busy.value=false}
+  catch(e){
+    if(currentIdentity(session,epoch))
+      error.value=e instanceof Error?e.message:'media_grant.failed'
+  }finally{
+    if(currentIdentity(session,epoch))busy.value=false
+  }
 }
 async function hydrate():Promise<void>{
-  const session=activeSession.value
+  const session=activeSession.value,epoch=identityEpoch
+  const run=++hydrationEpoch
   if(!session){outgoing.value=[];incoming.value=[];safeCandidates.value=[];return}
+  const latest=()=>run===hydrationEpoch&&currentIdentity(session,epoch)
   try{
     if(session.online){
       await ensureOwnExchangeKey()
+      if(!latest())return
       await flushMediaGrants()
+      if(!latest())return
       await flushFilePreviewDrafts()
+      if(!latest())return
       await flushEditorialLinks()
+      if(!latest())return
     }
     const [next,localSafe]=await Promise.all([
       listOutgoingMediaGrants(),listSafeDerivativeCandidates(),
     ])
-    if(activeSession.value!==session)return
+    if(!latest())return
+    const received=session.online?await listReceivedMediaGrants():[]
+    if(!latest())return
     outgoing.value=next
     safeCandidates.value=localSafe
-    if(session.online){
-      const result=await listReceivedMediaGrants()
-      if(activeSession.value===session)incoming.value=result
-    }else incoming.value=[]
+    incoming.value=received
   }catch(e){
-    if(activeSession.value===session)
-      error.value=e instanceof Error?e.message:'media_grant.load_failed'
+    if(latest())error.value=e instanceof Error?e.message:'media_grant.load_failed'
   }
 }
 function checkRecipient():void{
@@ -130,7 +143,9 @@ function checkRecipient():void{
     if(!/^[0-9a-f-]{36}$/.test(id))
       throw Error('media_grant.invalid_recipient')
     if(!activeSession.value?.online)await reauthenticate()
+    const session=activeSession.value,epoch=identityEpoch
     const {directory,confirmed}=await inspectPeer(id)
+    if(!currentIdentity(session,epoch))return
     recipientPeer.value={
       id,fingerprint:directory.safetyFingerprint,confirmed,
     }
@@ -142,7 +157,9 @@ function acceptRecipient():void{
     const candidate=recipientPeer.value
     if(!candidate||!acknowledgedRecipient.value)
       throw Error('media_grant.fingerprint_not_confirmed')
+    const session=activeSession.value,epoch=identityEpoch
     await confirmPeer(candidate.id,candidate.fingerprint)
+    if(!currentIdentity(session,epoch))return
     recipientPeer.value={...candidate,confirmed:true}
     status.value='Получатель подтверждён по независимому отпечатку'
   })
@@ -334,7 +351,9 @@ function grantScopeLabel(row:OutgoingMediaGrant):string{
 function checkOwner(id:string):void{
   void action(async()=>{
     if(!activeSession.value?.online)await reauthenticate()
+    const session=activeSession.value,epoch=identityEpoch
     const {directory,confirmed}=await inspectPeer(id)
+    if(!currentIdentity(session,epoch))return
     ownerPeer.value={
       id,fingerprint:directory.safetyFingerprint,confirmed,
     }
@@ -346,7 +365,9 @@ function acceptOwner():void{
     const candidate=ownerPeer.value
     if(!candidate||!acknowledgedOwner.value)
       throw Error('media_grant.fingerprint_not_confirmed')
+    const session=activeSession.value,epoch=identityEpoch
     await confirmPeer(candidate.id,candidate.fingerprint)
+    if(!currentIdentity(session,epoch))return
     ownerPeer.value={...candidate,confirmed:true}
     status.value='Подпись отправителя будет проверена перед чтением'
   })
@@ -356,7 +377,9 @@ function openReceived(grant:ReceivedMediaGrant):void{
     if(ownerPeer.value?.id!==grant.ownerAccountId
       ||!ownerPeer.value?.confirmed)
       throw Error('media_grant.verify_owner_first')
+    const session=activeSession.value,epoch=identityEpoch
     const result=await readReceivedMediaGrant(grant.grantId)
+    if(!currentIdentity(session,epoch))return
     emit('openMedia',result.blob,result.metadata)
     status.value='Медиа расшифровано на устройстве'
   })
@@ -392,8 +415,16 @@ watch(activeSession,(next,previous)=>{
     if(next?.online&&!previous?.online)void hydrate()
     return
   }
+  ++identityEpoch
+  ++hydrationEpoch
+  recipientId.value=''
+  acknowledgedRecipient.value=false
+  acknowledgedOwner.value=false
   recipientPeer.value=null;ownerPeer.value=null
   outgoing.value=[];incoming.value=[];safeCandidates.value=[]
+  busy.value=false
+  error.value=''
+  status.value=''
   previewCandidate.value=null
   previewFields.value=emptyPreviewFields()
   previewRevision.value=0
@@ -416,6 +447,7 @@ onMounted(()=>{
   void hydrate()
 })
 onUnmounted(()=>{
+  ++identityEpoch;++hydrationEpoch
   ++contributorReviewSerial
   contributorReview.value=null
   detach()

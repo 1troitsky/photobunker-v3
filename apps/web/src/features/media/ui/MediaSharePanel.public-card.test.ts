@@ -7,6 +7,7 @@ import MediaSharePanel from './MediaSharePanel.vue'
 
 const m=vi.hoisted(()=>({
   safe:vi.fn(),preview:vi.fn(),hydrateGrants:vi.fn(),prepare:vi.fn(),
+  inspect:vi.fn(),
 }))
 vi.mock('./PublicCardConsentReview.vue',()=>({
   default:{
@@ -29,7 +30,7 @@ vi.mock('../application/media-grants',()=>({
 }))
 vi.mock('../../sharing/key-directory',()=>({
   confirmPeer:vi.fn(),ensureOwnExchangeKey:vi.fn(),
-  inspectPeer:vi.fn(),
+  inspectPeer:m.inspect,
 }))
 vi.mock('../application/media-file-preview-policy',()=>({
   emptyPreviewFields:()=>({
@@ -103,6 +104,7 @@ beforeEach(()=>{
   m.safe.mockResolvedValue([{...candidate}])
   m.hydrateGrants.mockResolvedValue([])
   m.prepare.mockResolvedValue(privateReview)
+  m.inspect.mockResolvedValue({directory:{safetyFingerprint:'CURRENT'},confirmed:false})
 })
 afterEach(()=>{
   app?.unmount();app=undefined
@@ -144,6 +146,60 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
     await settle()
     expect(host.querySelector('[data-testid="media-contributor-public-card-review"]'))
       .toBeNull()
+  })
+  it('removes old account media grant states immediately on identity switch',async()=>{
+    m.hydrateGrants.mockResolvedValue([{
+      id:'OLD-GRANT',accountId:id('1'),mediaId:id('4'),state:'sent',
+      contract:'',signature:'',
+    }])
+    await mount()
+    expect(host.textContent).toContain('OLD-GRAN')
+    const input=host.querySelector<HTMLInputElement>('#media-share-peer-id')!
+    input.value=id('3');input.dispatchEvent(new Event('input',{bubbles:true}))
+    await settle()
+    activeSession.value=session(id('6'))
+    await settle()
+    expect(input.value).toBe('')
+    expect(host.textContent).not.toContain('OLD-GRAN')
+    expect(host.textContent).not.toContain('CURRENT')
+  })
+  it('rejects delayed old-account grant hydration after recovery',async()=>{
+    let resolveOld!:(value:unknown[])=>void
+    m.hydrateGrants.mockImplementation(()=>new Promise<unknown[]>(
+      resolve=>{resolveOld=resolve}))
+    await mount()
+    activeSession.value=session(id('6'))
+    await settle()
+    resolveOld([{
+      id:'OLD-GRANT',mediaId:id('4'),state:'sent',contract:'',signature:'',
+    }])
+    await settle()
+    expect(host.textContent).not.toContain('OLD-GRAN')
+    expect(host.textContent).not.toContain('OLD-GRANT')
+  })
+  it('drops the stale recipient fingerprint from a pending check after account switch',async()=>{
+    const s=session()
+    s.online=true
+    activeSession.value=s
+    let resolvePeer!:(value:{directory:{safetyFingerprint:string};confirmed:boolean})=>void
+    m.inspect.mockImplementationOnce(()=>new Promise(resolve=>{resolvePeer=resolve}))
+    host=document.createElement('div');document.body.append(host)
+    app=createApp({render:()=>h(MediaSharePanel,{localMedia:[]})})
+    app.mount(host)
+    await settle()
+    const input=host.querySelector<HTMLInputElement>('#media-share-peer-id')!
+    input.value=id('3');input.dispatchEvent(new Event('input',{bubbles:true}))
+    await settle()
+    const button=Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(node=>node.textContent?.includes('Проверить получателя медиа'))!
+    button.click()
+    await settle()
+    activeSession.value=session(id('6'))
+    await settle()
+    resolvePeer({directory:{safetyFingerprint:'OLD-SECRET-FINGERPRINT'},confirmed:false})
+    await settle()
+    expect(host.textContent).not.toContain('OLD-SECRET-FINGERPRINT')
+    expect(input.value).toBe('')
   })
   it('reports fail-closed signed-binding error without showing any image',async()=>{
     m.prepare.mockRejectedValue(Error('public_card.source_submission_signature_invalid'))
