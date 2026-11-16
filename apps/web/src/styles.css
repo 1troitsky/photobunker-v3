@@ -1343,8 +1343,6 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .camera-control-trio .camera-shutter-record:disabled,.camera-control-trio .camera-shutter:disabled{
   opacity:.5;cursor:not-allowed
 }
-.camera-recording-timer{text-align:center;font:700 13px ui-monospace,monospace;
-  margin:3px 0 8px;color:#e7b3b3;font-variant-numeric:tabular-nums}
 /* Camera 1.2 stage occupies exactly the free space between Shell header,
    46px mode tabs, 124px controls, and persistent 82px Dock. Only the actual
    finder follows the approved photo aspect preset (4:3 default);
