@@ -71,9 +71,17 @@ const fileQuotaDenominator = computed(()=>{
 const filePercent = computed(()=>fileMax.value!==null && fileMax.value>0 && server.value
   ? Math.min(100,Math.round(server.value.activeLogicalMediaFiles*100/fileMax.value))
   : null)
-const estimatedCloudAfterQueue = computed(()=>server.value && local.value
-  ? formatBytes(server.value.recordedCipherBytes+local.value.pendingCipherBytes)
-  : null)
+// Advisory only: queued ciphertext may already exist in the cloud after a
+// lost ACK; conflicts/expired rows are intentionally excluded. Never display
+// this projection as a server quota receipt or a verified upload.
+const estimatedCloudAfterQueue = computed(()=>{
+  const usage=server.value,queue=local.value
+  if(!usage||!queue||queue.pendingCount===0)return null
+  const bytes=usage.recordedCipherBytes+queue.pendingCipherBytes
+  const files=usage.activeLogicalMediaFiles+queue.pendingCount
+  if(!Number.isSafeInteger(bytes)||!Number.isSafeInteger(files))return null
+  return {bytes:formatBytes(bytes),files}
+})
 const localPhase = ref<Phase>('locked')
 const serverPhase = ref<Phase>('locked')
 const onlineNow = ref(typeof navigator !== 'undefined' && navigator.onLine)
@@ -300,9 +308,13 @@ onUnmounted(() => {
             <strong class="queue-amount">{{pendingQueueTotal}} {{filesNoun(pendingQueueTotal)}} · {{formatBytes(local?.pendingCipherBytes??0)}}</strong>
           </div>
           <p class="queue-footnote">Очередь состоит из локальных зашифрованных файлов и пока не учтена как занятое место в облаке.</p>
-          <p v-if="estimatedCloudAfterQueue" class="queue-footnote">
-            При успешной отправке всех ожидающих материалов общий объём составит примерно {{estimatedCloudAfterQueue}}.
-            Это оценка, не подтверждённая сервером квота и не обещание загрузки.
+          <p v-if="estimatedCloudAfterQueue" class="queue-footnote"
+            data-testid="storage-after-upload-estimate">
+            После успешной отправки ожидающих файлов: примерно {{estimatedCloudAfterQueue.bytes}}
+            и {{estimatedCloudAfterQueue.files}} {{filesNoun(estimatedCloudAfterQueue.files)}}.
+            Это прогноз, а не подтверждение загрузки или свободного места: сервер может
+            уже учитывать часть файлов после потерянного подтверждения. Конфликты
+            и просроченные файлы в оценку не входят.
           </p>
         </div>
         <section v-if="queueOpen && localPhase==='ready'" id="storage-queue-detail"
