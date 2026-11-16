@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
-import {useRoute} from 'vue-router'
+import {onBeforeRouteLeave,useRoute} from 'vue-router'
 import {activeSession} from '../features/identity/application/session'
 import {
   listConfirmedContacts,
@@ -253,6 +253,15 @@ function newConversation():void{
     void nextTick(()=>pickerRef.value?.focus())
   }
 }
+// A Dock/router navigation must not unmount an unsaved local-only draft.
+// Wait for the encrypted IndexedDB write; cancel navigation if it fails or
+// if newer editor content supersedes the in-flight write. Browser hard
+// reload/OS process kill cannot be protected by a Vue Router guard.
+onBeforeRouteLeave(async()=>{
+  if(!threadOpen.value)return true
+  await close()
+  return !threadOpen.value
+})
 watch(threadOpen,open=>setModalBackground(open),{flush:'post'})
 watch(()=>route.query.peer,()=>{
   if(threadOpen.value)return

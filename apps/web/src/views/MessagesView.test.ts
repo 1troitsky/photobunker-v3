@@ -6,8 +6,12 @@ import type {ConfirmedContact} from '../features/people/application/contact-book
 
 const mocks=vi.hoisted(()=>({
   contacts:vi.fn(),drafts:vi.fn(),blocked:vi.fn(),get:vi.fn(),save:vi.fn(),
+  routeGuard:null as null|(()=>Promise<boolean>),
 }))
-vi.mock('vue-router',()=>({useRoute:()=>({query:{}})}))
+vi.mock('vue-router',()=>({
+  useRoute:()=>({query:{}}),
+  onBeforeRouteLeave:(guard:()=>Promise<boolean>)=>{mocks.routeGuard=guard},
+}))
 vi.mock('../features/people/application/contact-book',()=>({
   listConfirmedContacts:mocks.contacts,
 }))
@@ -80,6 +84,7 @@ beforeEach(()=>{
   shell.append(host)
   document.body.append(shell)
   activeSession.value=session()
+  mocks.routeGuard=null
   mocks.contacts.mockReset().mockResolvedValue([contact])
   mocks.drafts.mockReset().mockResolvedValue([])
   mocks.blocked.mockReset().mockResolvedValue([])
@@ -92,6 +97,31 @@ afterEach(()=>{
   activeSession.value=null
 })
 describe('Messages 1.1 local-first draft safety',()=>{
+  it('allows ordinary router navigation with no open draft dialog',async()=>{
+    app=createApp(MessagesView)
+    app.mount(host)
+    await settle()
+    expect(mocks.routeGuard).not.toBeNull()
+    expect(await mocks.routeGuard!()).toBe(true)
+    expect(mocks.save).not.toHaveBeenCalled()
+  })
+  it('blocks router navigation after encrypted draft persistence fails, then retries',async()=>{
+    mocks.save.mockRejectedValueOnce(new Error('IndexedDB quota'))
+    await mountAndOpen()
+    write('PRIVATE_ROUTER_GUARD_DRAFT')
+    expect(await mocks.routeGuard!()).toBe(false)
+    await settle()
+    expect(editor().value).toBe('PRIVATE_ROUTER_GUARD_DRAFT')
+    expect(thread()).not.toBeNull()
+    expect(shell.hasAttribute('inert')).toBe(true)
+    expect(await mocks.routeGuard!()).toBe(true)
+    await settle()
+    expect(thread()).toBeNull()
+    expect(shell.hasAttribute('inert')).toBe(false)
+    expect(mocks.save).toHaveBeenCalledTimes(2)
+    expect(mocks.save).toHaveBeenLastCalledWith(contact,'PRIVATE_ROUTER_GUARD_DRAFT')
+  })
+
   it('makes only the fullscreen dialog interactive, then restores Shell access',async()=>{
     await mountAndOpen()
     expect(shell.hasAttribute('inert')).toBe(true)

@@ -98,6 +98,19 @@ test('P2-01: verified contact → real encrypted message draft → fullscreen ov
     await expect(A.getByTestId('messages-thread')).toHaveCount(0)
     await expect(A.getByTestId('messages-draft-'+peerId)).toBeFocused()
 
+    // A real Vue Router navigation from the open fullscreen composer must
+    // durably seal the draft BEFORE Messages is unmounted.
+    await A.getByTestId('messages-draft-'+peerId).click()
+    await A.getByTestId('messages-editor').fill(content+' ROUTED')
+    await A.evaluate(async()=>{
+      const {router}=await import('/src/router.ts')
+      await router.push('/contacts')
+    })
+    await expect(A).toHaveURL(/\\/contacts$/)
+    await A.goto('/messages')
+    await expect(A.getByTestId('messages-draft-'+peerId))
+      .toContainText(content+' ROUTED')
+
     // Draft edits continue offline, with no simulated Matrix network ACK.
     await ctxA.setOffline(true)
     await A.getByTestId('messages-draft-'+peerId).click()
