@@ -8,6 +8,7 @@ const mocks=vi.hoisted(()=>({
   cached:vi.fn(),syncMembers:vi.fn(),syncInvites:vi.fn(),
   invites:vi.fn(),epochInvites:vi.fn(),ownerEpoch:vi.fn(),
   roster:vi.fn(),epochRoster:vi.fn(),history:vi.fn(),syncRotation:vi.fn(),
+  change:vi.fn(),
 }))
 vi.mock('../features/people/application/team-invitations',()=>({
   listCachedJoinedTeams:mocks.cached,
@@ -15,6 +16,7 @@ vi.mock('../features/people/application/team-invitations',()=>({
   listOwnerTeamRoster:mocks.roster,
   syncTeamMemberOperations:mocks.syncMembers,
   verifiedTeamMembershipHistory:mocks.history,
+  queueTeamMembershipChange:mocks.change,
 }))
 vi.mock('../features/people/application/team-epoch-invitations',()=>({
   listEpochInvites:mocks.epochInvites,
@@ -90,10 +92,54 @@ beforeEach(()=>{
     revision:1,rotationRequired:false,
   })
   mocks.syncRotation.mockReset().mockResolvedValue(undefined)
+  mocks.change.mockReset().mockResolvedValue(undefined)
 })
 afterEach(()=>{
   app?.unmount();app=undefined;host.remove()
   activeSession.value=null
+})
+describe('Approved Team member action sheet',()=>{
+  it('shows the owner menu without offering an unsafe role or self-removal',async()=>{
+    await mount()
+    choose(TEAM_A);await settle()
+    host.querySelector<HTMLButtonElement>(
+      '[data-testid="team-owner-actions"]')!.click()
+    await settle()
+    const sheet=host.querySelector('[data-testid="team-member-sheet"]')!
+    expect(sheet.getAttribute('aria-modal')).toBe('true')
+    expect(sheet.querySelector<HTMLSelectElement>(
+      '[data-testid="team-member-sheet-role"]')?.disabled).toBe(true)
+    expect(sheet.textContent).toContain('Роль владельца')
+    expect(sheet.querySelector('[data-testid="team-member-sheet-remove"]'))
+      .toBeNull()
+    expect(mocks.change).not.toHaveBeenCalled()
+    sheet.querySelector<HTMLButtonElement>(
+      '[data-testid="team-member-sheet-close"]')!.click()
+    await settle()
+    expect(host.querySelector('[data-testid="team-member-sheet"]')).toBeNull()
+  })
+  it('opens the contextual member sheet without changing signed membership',async()=>{
+    mocks.roster.mockResolvedValue([member(PEER_A)])
+    await mount()
+    choose(TEAM_A);await settle()
+    const row=host.querySelector('[data-testid="team-member-'+PEER_A+'"]')!
+    expect(row.querySelector('[data-testid="team-member-sheet-role"]')).toBeNull()
+    row.querySelector<HTMLButtonElement>(
+      '[data-testid="team-member-actions"]')!.click()
+    await settle()
+    const sheet=host.querySelector('[data-testid="team-member-sheet"]')!
+    expect(sheet.textContent).toContain(PEER_A)
+    expect(sheet.querySelector<HTMLSelectElement>(
+      '[data-testid="team-member-sheet-role"]')?.value)
+      .toBe('contributor')
+    expect(sheet.querySelector<HTMLButtonElement>(
+      '[data-testid="team-member-sheet-apply"]')?.disabled).toBe(true)
+    expect(mocks.change).not.toHaveBeenCalled()
+    sheet.querySelector<HTMLButtonElement>(
+      '[data-testid="team-member-sheet-close"]')!.click()
+    await settle()
+    expect(mocks.change).not.toHaveBeenCalled()
+  })
 })
 describe('Verified Team roster / account isolation',()=>{
   it('rejects delayed previous-Team roster after switching Team and back',async()=>{

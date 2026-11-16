@@ -167,6 +167,37 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .contacts-avatar { flex-basis:32px; height:32px; }
   .contacts-list-row button { padding:8px; }
 }
+/* Contacts & Teams 1.1: a single member actions sheet, never inline
+   role/removal controls or an apparent self-service ACL selector. */
+.contacts-member-more{min-width:36px;min-height:36px;flex-shrink:0;
+  border:0;border-radius:7px;background:transparent;color:#ccc;
+  font-size:17px;letter-spacing:1px;cursor:pointer}
+.contacts-member-more:hover{background:#343434}
+.contacts-member-more:focus-visible{outline:2px solid var(--accent)}
+.contacts-member-backdrop{position:fixed;inset:0;z-index:2050;background:#000b}
+.contacts-member-sheet{position:fixed;z-index:2051;left:50%;bottom:0;
+  width:min(500px,100vw);max-height:85dvh;overflow:auto;
+  transform:translateX(-50%);border-radius:12px 12px 0 0;
+  padding:17px 15px max(23px,env(safe-area-inset-bottom));
+  background:#292929;box-shadow:0 -12px 25px #0006}
+.contacts-member-sheet-header{display:flex;align-items:center;
+  justify-content:space-between;gap:12px;margin-bottom:14px}
+.contacts-member-sheet-header strong{font-size:16px}
+.contacts-member-sheet-header button{border:0;background:transparent;
+  color:inherit;font-size:17px;min-width:35px;min-height:35px}
+.contacts-member-sheet-field{display:flex;flex-direction:column;
+  gap:8px;font-size:12px;font-weight:650;margin:14px 0}
+.contacts-member-sheet-field select{min-height:44px;width:100%;padding:9px;
+  border:1px solid #4b4b4b;border-radius:7px;background:#1d1d1d;color:#eee}
+.contacts-member-sheet .muted{font-size:12px;line-height:1.5}
+.contacts-member-sheet>button{display:block;width:100%;min-height:44px;
+  margin-top:10px;padding:10px 12px;border:0;border-radius:7px;
+  background:#393939;color:#eee;font-weight:650}
+.contacts-member-sheet>button.contacts-member-sheet-primary{
+  background:var(--accent);color:#132017}
+.contacts-member-sheet>button:disabled{opacity:.45;cursor:not-allowed}
+.contacts-member-sheet :focus-visible{outline:2px solid var(--accent);
+  outline-offset:2px}
 /* The Team title is an accessible list-row action, not a raised card button.
    Preserve the approved compact one-line row and tap/focus behavior. */
 .contacts-page .contacts-team-open{

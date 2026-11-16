@@ -31,6 +31,15 @@ test('Contacts & Teams 1.1: real encrypted team opens its own card without assum
     await page.getByTestId('team-profile-settings').click()
     await expect(profile.getByTestId('team-membership-panel')).toBeVisible()
     await expect(profile.getByTestId('team-member-selector')).toHaveCount(0)
+    const ownerActions=profile.getByTestId('team-owner-actions')
+    await expect(ownerActions).toBeVisible()
+    await ownerActions.click()
+    const memberSheet=page.getByTestId('team-member-sheet')
+    await expect(memberSheet).toBeVisible()
+    await expect(memberSheet.getByTestId('team-member-sheet-role')).toBeDisabled()
+    await expect(memberSheet.getByTestId('team-member-sheet-remove')).toHaveCount(0)
+    await memberSheet.getByTestId('team-member-sheet-close').click()
+    await expect(memberSheet).toHaveCount(0)
   }else{
     await expect(page.getByTestId('team-profile-settings')).toBeDisabled()
   }
