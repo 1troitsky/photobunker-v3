@@ -42,10 +42,13 @@ describe('Camera 1.2 backwards-compatible native preference settings',()=>{
     for(const malformed of [
       {...legacy,photoZoom:2}, // partial migration, never accept.
       {...catalog.presets[0]!.settings,photoZoom:3.1},
-      {...catalog.presets[0]!.settings,photoZoom:1.05},
       {...catalog.presets[0]!.settings,torchEnabled:'on'},
       {...catalog.presets[0]!.settings,gpsTrackingEnabled:'yes'},
     ])expect(()=>validateCameraPresetSettings(malformed)).toThrow('camera.preset_invalid')
+    // Native MediaTrackCapabilities.zoom.step can be 0.05 or 0.125,
+    // not necessarily 0.1. Preserve the exact actual hardware setting.
+    const fractional={...catalog.presets[0]!.settings,photoZoom:1.125}
+    expect(validateCameraPresetSettings(fractional).photoZoom).toBe(1.125)
   })
   it('decrypts a real legacy AES-GCM v1 catalog without rewriting or losing its ciphertext',async()=>{
     const s=await device();activeSession.value=s
