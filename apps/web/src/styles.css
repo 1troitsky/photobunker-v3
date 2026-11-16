@@ -1236,12 +1236,41 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .camera-details .camera-appearance-setting small{width:100%;padding-left:26px;
   font-size:10px;color:#a4a4a4}
 
+/* Accepted Camera 1.2 Audio stage is full screen stage, not a 4:3
+   camera preview. The video node remains mounted but hidden/stopped. */
+.camera-stage .camera-viewfinder.is-audio{
+  width:100%;max-width:none;height:100%;max-height:100%;aspect-ratio:auto;
+  background:transparent;box-shadow:none
+}
 .camera-audio-view{position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:13px;background:#111512;
-  color:#ededed;text-align:center}
-.camera-audio-view svg{height:76px;width:76px;color:#9baa9e}
-.camera-audio-view strong{font-size:17px}
-.camera-audio-view span{font-size:12px;color:#a3aca6}
+  align-items:center;justify-content:center;gap:14px;background:transparent;
+  color:#eaeaea;text-align:center}
+.camera-audio-view .camera-audio-emblem{
+  width:106px;height:106px;border-radius:50%;border:1px solid #415a49;
+  background:radial-gradient(circle,#22372a,#15201a);
+  display:grid;place-items:center;color:#76e995
+}
+.camera-audio-view .camera-audio-emblem svg{width:43px;height:43px}
+.camera-audio-view strong{font-size:19px;letter-spacing:-.02em}
+.camera-audio-view small{color:#8f9f96;font-size:12px}
+.camera-audio-bars{display:flex;gap:5px;align-items:center;height:43px}
+.camera-audio-bars i{display:block;width:5px;height:var(--h);
+  border-radius:12px;background:#4c9865;opacity:.78;transform-origin:center}
+.camera-audio-bars i:nth-child(1){--h:12px}
+.camera-audio-bars i:nth-child(2){--h:27px}
+.camera-audio-bars i:nth-child(3){--h:17px}
+.camera-audio-bars i:nth-child(4){--h:39px}
+.camera-audio-bars i:nth-child(5){--h:26px}
+.camera-audio-bars i:nth-child(6){--h:36px}
+.camera-audio-bars i:nth-child(7){--h:20px}
+.camera-audio-bars i:nth-child(8){--h:30px}
+.camera-audio-bars i:nth-child(9){--h:12px}
+.camera-audio-view.recording .camera-audio-bars i{
+  animation:camera-audio-bounce .6s ease-in-out infinite alternate;
+  animation-delay:calc(var(--i,1)*70ms);background:var(--accent)
+}
+.camera-audio-bars i:nth-child(even){--i:2}
+@keyframes camera-audio-bounce{from{transform:scaleY(.45)}to{transform:scaleY(1)}}
 .camera-audio-view time{font:700 24px ui-monospace,monospace;font-variant-numeric:tabular-nums}
 .camera-blind-overlay{position:fixed;inset:0;z-index:10000;display:flex;
   align-items:center;justify-content:center;flex-direction:column;gap:11px;
