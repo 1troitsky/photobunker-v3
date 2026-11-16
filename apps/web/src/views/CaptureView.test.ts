@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   allowedMedia: ['photo'] as string[],
   route: {query: {} as Record<string, string>},
   presetDestination:'p1' as 'p1'|'p2',
+  presetChange:vi.fn(),
   presetZoom:1,presetTorch:false,presetGpsTracking:false,
 }))
 vi.mock('vue-router', () => ({
@@ -29,7 +30,8 @@ vi.mock('../features/photo-sync/application/p1-photo', () => ({captureEncrypted:
 // accepted Fieldwork UI must never expose P1/P2 storage implementation IDs.
 vi.mock('../features/media/application/camera-presets',async importOriginal=>{
   const actual=await importOriginal<typeof import('../features/media/application/camera-presets')>()
-  return {...actual,loadCameraPresetCatalog:vi.fn(async()=>{
+  return {...actual,changeCameraPreset:mocks.presetChange,
+    loadCameraPresetCatalog:vi.fn(async()=>{
     const catalog=actual.defaultCameraPresetCatalog()
     catalog.presets[0]!.settings.photoStorage=mocks.presetDestination
     catalog.presets[0]!.settings.photoZoom=mocks.presetZoom
@@ -164,6 +166,7 @@ beforeEach(() => {
   mocks.binding.mockResolvedValue({assignmentId: 'assignment-a', policyRevision: 1})
   mocks.capture.mockResolvedValue({photoId: 'photo-fixture'})
   mocks.presetDestination='p1'
+  mocks.presetChange.mockRejectedValue(Error('camera.preset_invalid'))
   mocks.presetZoom=1
   mocks.presetTorch=false
   mocks.presetGpsTracking=false
@@ -486,6 +489,63 @@ describe('Camera preset hydration preserves the selected encrypted media destina
     await settle()
     expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
     expect(mocks.capture).not.toHaveBeenCalled()
+  })
+})
+
+describe('Camera 1.2 preset selection owns stable device hydration, not wrapper identity',()=>{
+  it('completes a pending encrypted preset save after same-key Session hydration',async()=>{
+    const saved=deferred<import('../features/media/application/camera-presets').CameraPresetCatalog>()
+    mocks.presetChange.mockReturnValue(saved.promise)
+    const session=await mount()
+    const name=host.querySelector<HTMLInputElement>('[data-testid="camera-preset-name"]')!
+    name.value='Hydrated preset';name.dispatchEvent(new Event('input',{bubbles:true}))
+    await settle()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-preset-save"]')!.click()
+    await settle()
+    expect(mocks.presetChange).toHaveBeenCalledOnce()
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="camera-preset-save"]')!.disabled).toBe(true)
+    activeSession.value={...session,online:true,
+      pkg:{...session.pkg},device:{...session.device}}
+    await settle()
+    const catalog={
+      version:1 as const,selectedId:'default',
+      presets:[{id:'default',name:'Hydrated preset',settings:{
+        photoAspect:'4:3' as const,photoQuality:'high' as const,photoStorage:'p1' as const,
+        videoQuality:'720p' as const,videoAudioEnabled:true,
+        videoMaxSeconds:300,audioMaxSeconds:3000,audioTargetBitrate:128000 as const,
+        gridVisible:false,gpsStatusVisible:true,
+        photoZoom:1,torchEnabled:false,gpsTrackingEnabled:false,
+      }}],
+    }
+    saved.resolve(catalog);await settle()
+    expect(host.querySelector('[data-testid="camera-preset-status"]')?.textContent)
+      .toContain('Пресет зашифрован и сохранён')
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="camera-preset-save"]')!.disabled).toBe(false)
+  })
+  it('does not apply a delayed A→B→A preset result to the new identity epoch',async()=>{
+    const saved=deferred<import('../features/media/application/camera-presets').CameraPresetCatalog>()
+    mocks.presetChange.mockReturnValue(saved.promise)
+    const session=await mount()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-preset-save"]')!.click()
+    await settle()
+    const different={...session,accountId:'account-other',
+      pkg:{...session.pkg,accountId:'account-other'}}
+    activeSession.value=different;await settle()
+    activeSession.value=session;await settle()
+    saved.resolve({
+      version:1,selectedId:'default',presets:[{
+        id:'default',name:'WRONG STALE PRESET',settings:{
+          photoAspect:'4:3',photoQuality:'high',photoStorage:'p1',
+          videoQuality:'720p',videoAudioEnabled:true,
+          videoMaxSeconds:300,audioMaxSeconds:3000,audioTargetBitrate:128000,
+          gridVisible:false,gpsStatusVisible:true,photoZoom:1,
+          torchEnabled:false,gpsTrackingEnabled:false,
+        },
+      }],
+    });await settle()
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-preset-name"]')?.value)
+      .not.toBe('WRONG STALE PRESET')
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="camera-preset-save"]')!.disabled).toBe(false)
   })
 })
 
