@@ -7,6 +7,7 @@ on:
       - 'apps/web/src/views/CaptureView.test.ts'
       - 'apps/web/src/styles.css'
       - 'apps/web/src/features/media/domain/camera-photo-format*'
+      - 'apps/web/src/features/media/application/camera-presets*'
       - 'tests/e2e/*camera*.spec.ts'
       - 'tests/playwright.config.ts'
       - '.github/workflows/p2-camera-acceptance.yml'
