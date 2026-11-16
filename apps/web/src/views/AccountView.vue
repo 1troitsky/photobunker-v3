@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {brand} from '../config/brand'
+import {saveRecoveryKeyWithSystemDialog} from '../ui/fieldwork/recovery-key-save'
 import { markInvalidRecoveryKey } from '../features/identity/application/authorization-failure'
 import SettingsHub from '../ui/fieldwork/SettingsHub.vue'
 import GraceStatusPanel from '../features/billing/ui/GraceStatusPanel.vue'
@@ -60,7 +61,29 @@ function signOut():void {
   void perform(async()=>{await logout();status.value='Доступ закрыт на этом устройстве.'})
 }
 async function copyKey():Promise<void> {
-  if(generatedKey.value)await navigator.clipboard.writeText(generatedKey.value)
+  if(!generatedKey.value)return
+  try{
+    await navigator.clipboard.writeText(generatedKey.value)
+    status.value='Recovery Key скопирован. Сохраните его отдельно от устройства.'
+    error.value=''
+  }catch{
+    error.value='Буфер обмена недоступен. Используйте системное сохранение.'
+  }
+}
+async function saveGeneratedKey():Promise<void>{
+  if(!generatedKey.value)return
+  const key=generatedKey.value
+  status.value='';error.value=''
+  const result=await saveRecoveryKeyWithSystemDialog(key,brand.slug)
+  if(key!==generatedKey.value)return
+  if(result==='saved')
+    status.value='Файл Recovery Key сохранён в выбранном месте. Проверьте его.'
+  else if(result==='shared')
+    status.value='Системное меню закрыто. Проверьте сохранение в «Файлы»; не передавайте ключ другим людям.'
+  else if(result==='unsupported')
+    error.value='Этот браузер не поддерживает выбор места. Скопируйте Recovery Key и сохраните отдельно.'
+  else if(result==='failed')
+    error.value='Не удалось сохранить Recovery Key. Ключ остаётся на экране.'
 }
 </script>
 
@@ -89,6 +112,8 @@ async function copyKey():Promise<void> {
           <label for="generated-key">Account Recovery Key — сохраните вне устройства</label>
           <textarea id="generated-key" :value="generatedKey" readonly spellcheck="false" rows="3"/>
           <button type="button" @click="copyKey">Скопировать</button>
+          <button type="button" data-testid="account-save-key"
+            @click="saveGeneratedKey">Сохранить на устройство</button>
           <label class="checkline"><input v-model="acknowledged" type="checkbox"> Я сохранил ключ восстановления</label>
           <button type="button" :disabled="busy||!acknowledged" @click="finish">Завершить регистрацию</button>
         </div>
