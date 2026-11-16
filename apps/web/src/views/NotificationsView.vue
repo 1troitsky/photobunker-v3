@@ -149,6 +149,21 @@ async function expand(row:LocalNotification):Promise<void>{
   }catch{if(current(owner,token))error.value='Не удалось сохранить отметку о прочтении.'}
   finally{finishBusy(owner,generation)}
 }
+async function returnToList():Promise<void>{
+  const opened=expanded.value,owner=scope(),token=run
+  expanded.value=null
+  await nextTick()
+  if(!opened||!current(owner,token))return
+  // The approved expanded card is replaced by the full list. Restore
+  // keyboard focus to the same event, or to the Unread tab if opening
+  // marked the event read and removed it from that filtered list.
+  const list=document.querySelector<HTMLElement>('[data-testid="notifications-list"]')
+  const item=Array.from(list?.querySelectorAll<HTMLElement>('li')??[])
+    .find(row=>row.getAttribute('data-testid')==='notification-'+opened)
+  const summary=item?.querySelector<HTMLButtonElement>('.notification-summary')
+  const fallback=document.querySelector<HTMLButtonElement>('[data-testid="notifications-unread"]')
+  ;(summary??fallback)?.focus({preventScroll:true})
+}
 async function markAll():Promise<void>{
   if(busy.value||unread.value===0)return
   const owner=scope(),token=run
@@ -304,7 +319,7 @@ onUnmounted(()=>{
             </p>
             <button type="button" class="notification-back-to-list"
               data-testid="notifications-back-to-list"
-              @click="expanded=null">К списку уведомлений</button>
+              @click="returnToList">К списку уведомлений</button>
           </div>
         </li>
       </ul>

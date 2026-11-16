@@ -135,6 +135,31 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     expect(host.querySelector('[data-testid="notification-details"]')).toBeNull()
     expect(el('notifications-list').querySelectorAll('li')).toHaveLength(1)
   })
+  it('returns keyboard focus to the original notification summary after expanding',async()=>{
+    await mount()
+    const summary=el('notification-'+ID).querySelector<HTMLButtonElement>(
+      '.notification-summary')!
+    summary.click()
+    await settle()
+    el('notifications-back-to-list').click()
+    await settle()
+    expect(document.activeElement).toBe(summary)
+    expect(el('notifications-list').querySelectorAll('li')).toHaveLength(1)
+  })
+  it('focuses Unread tab if marking the expanded event read removes its row',async()=>{
+    await mount()
+    el('notifications-unread').click()
+    await settle()
+    const summary=el('notification-'+ID).querySelector<HTMLButtonElement>(
+      '.notification-summary')!
+    summary.click()
+    await settle()
+    expect(el('notification-details')).not.toBeNull()
+    el('notifications-back-to-list').click()
+    await settle()
+    expect(el('notifications-empty').textContent).toContain('Непрочитанных')
+    expect(document.activeElement).toBe(el('notifications-unread'))
+  })
   it('shows an explicit informational detail without offering a forged target action',async()=>{
     mocks.rows=[{...mocks.rows[0]!,kind:'security',targetId:null}]
     await mount()
