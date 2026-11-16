@@ -19,6 +19,12 @@ vi.mock('../features/storage/application/storage-status',()=>({
 vi.mock('../features/storage/application/backup-technical-status',()=>({
   readBackupTechnicalStatus:mock.backup,
 }))
+// RouterLink is a UI boundary; quota validation doesn't need navigation.
+// The real vue-router RouterLink requires an installed router and otherwise
+// rejects during test mount, independently of storage state.
+vi.mock('vue-router',()=>({
+  RouterLink:{render:()=>null},
+}))
 import DataStorageView from './DataStorageView.vue'
 
 const ACCOUNT='11111111-1111-4111-8111-111111111111'
@@ -34,7 +40,6 @@ async function flush():Promise<void>{
 }
 async function mount():Promise<void>{
   app=createApp(DataStorageView)
-  app.component('RouterLink',{props:['to'],template:'<a><slot /></a>'})
   app.mount(host)
   await flush()
 }
