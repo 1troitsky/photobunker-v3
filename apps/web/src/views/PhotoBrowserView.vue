@@ -510,7 +510,8 @@ function revokeFolderThumbnails():void{
 const folderThumbnailCandidateKeys=computed(()=>{
   const keys:string[]=[]
   const add=(row:CatalogItem):void=>{
-    if(row.local&&row.type==='photo'&&!keys.includes(row.key))
+    if(row.type==='photo'&&(row.local||row.cloud&&activeSession.value?.online)
+      &&!keys.includes(row.key))
       keys.push(row.key)
   }
   // At most 8 folder cards × 4 cells, capped to 12 decoded images.
@@ -547,13 +548,15 @@ async function warmFolderThumbnails():Promise<void>{
   for(const key of selected){
     if(token!==folderThumbnailEpoch||owner!==activeSession.value)return
     if(folderThumbnailUrls.value[key])continue
-    const row=items.value.find(item=>item.key===key&&item.local
+    const row=items.value.find(item=>item.key===key
       &&item.type==='photo')
     if(!row)continue
     try{
       const blob=row.source==='photo'
-        ?await readLocalPhoto(row.id)
-        :(await readLocalMedia(row.id)).blob
+        // P1's authenticated master contract is JPEG; decryptAsset returns
+        // an untyped Blob. Supply the codec hint, then really decode/re-encode.
+        ?new Blob([row.local?await readLocalPhoto(row.id):await readCloudPhoto(row.id)],{type:'image/jpeg'})
+        :(row.local?await readLocalMedia(row.id):await readCloudMedia(row.id)).blob
       if(token!==folderThumbnailEpoch||owner!==activeSession.value)return
       const jpeg=await makeBrowserFolderThumbnail(blob)
       if(token!==folderThumbnailEpoch||owner!==activeSession.value)return
