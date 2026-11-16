@@ -1648,9 +1648,6 @@ onUnmounted(()=>{
             </svg><strong>Настройки</strong>
           </button>
         </div>
-        <p v-if="recording" class="camera-recording-timer">
-          Запись · {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
-        </p>
       </div>
       <div v-if="cameraSheet" class="camera-sheet-backdrop"
         data-testid="camera-sheet-backdrop" @click="closeCameraSheet"></div>
