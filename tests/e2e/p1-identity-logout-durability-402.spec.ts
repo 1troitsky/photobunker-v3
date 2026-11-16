@@ -102,11 +102,16 @@ test('P1 #402: denied synchronous Web Storage still closes volatile session and 
     // Simulate storage permissions changing while a real Key-Only session is
     // active. The synchronous fence fails; durable IndexedDB is still working.
     // No credential or server receipt is fabricated.
-    await page.evaluate(() => {
-      Object.defineProperty(window, 'localStorage', {
-        configurable: true,
-        get: () => { throw new Error('test.injected_localstorage_denied') },
-      })
+    await page.getByRole('button', { name: 'Выйти' }).evaluate(button => {
+      // Deny storage at the real click's capture phase. Background admission
+      // checks can otherwise close the volatile Session before Playwright
+      // reaches the logout control, leaving no logout operation to examine.
+      button.addEventListener('click', () => {
+        Object.defineProperty(window, 'localStorage', {
+          configurable: true,
+          get: () => { throw new Error('test.injected_localstorage_denied') },
+        })
+      }, { capture: true, once: true })
     })
     await page.getByRole('button', { name: 'Выйти' }).click()
     // Never keep decrypted session active just because the fence write failed.

@@ -1,0 +1,58 @@
+import {expect,test} from '@playwright/test'
+
+test('compiled app: Welcome → offline photo → durable reload → Garage → Viewer',async({page,context})=>{
+  test.setTimeout(180000)
+  await page.goto('/')
+  await expect(page).toHaveURL(/\/welcome$/)
+  await expect(page.locator('.carousel-dot')).toHaveCount(6)
+  await expect(page.locator('.shell-header,.shell-dock')).toHaveCount(0)
+  await page.getByRole('link',{name:'Создать аккаунт'}).click()
+  await page.getByRole('button',{name:'Создать Recovery Key'}).click()
+  await expect(page.getByTestId('welcome-generated-key')).not.toHaveValue('')
+  await expect(page.getByTestId('welcome-finish')).toBeDisabled()
+  await page.getByText('Я сохранил Recovery Key отдельно от устройства.').click()
+  await page.getByTestId('welcome-finish').click()
+  await expect(page).toHaveURL(/\/assignments$/,{timeout:30000})
+  await page.getByRole('link',{name:'Камера',exact:true}).click()
+  await expect.poll(()=>page.locator('video').evaluate(v=>(v as HTMLVideoElement).videoWidth)).toBeGreaterThan(0)
+  await context.setOffline(true)
+  await page.getByRole('button',{name:'Сделать снимок'}).click()
+  await expect(page.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
+  await page.getByRole('link',{name:'Browser',exact:true}).click()
+  await expect(page.locator('.photo-row')).toHaveCount(1)
+  await expect(page.locator('.photo-row')).toContainText('queued')
+  // Shell cold offline reload remains separately BLOCKED by unsigned-SW
+  // policy. Restore transport before reloading, preserving the real outbox.
+  await context.setOffline(false)
+  await page.reload()
+  await expect(page.locator('.photo-row')).toHaveCount(1)
+  await page.getByRole('button',{name:'Синхронизировать',exact:true}).click()
+  await expect(page.locator('.photo-row')).toContainText('synced',{timeout:30000})
+  await page.locator('.photo-row').getByTestId('browser-file-menu-toggle').click()
+  await page.locator('.photo-row').getByRole('link',{name:/Полный просмотр файла/}).click()
+  const image=page.getByTestId('file-viewer-image')
+  await expect(image).toBeVisible()
+  expect(await image.evaluate(node=>(node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  await page.reload()
+  await expect(image).toBeVisible()
+})
+
+test('compiled delivery denies source modules and unsigned workers',async({request})=>{
+  for(const path of ['/src/features/identity/application/session.ts','/sw.js','/@vite/client'])
+    expect((await request.get(path)).status()).toBe(404)
+  const manifest=await request.get('/manifest.webmanifest')
+  expect(manifest.status()).toBe(200)
+  expect((await manifest.json()).start_url).toBe('/')
+})
+
+test('compiled Welcome fits accepted mobile/tablet bounds without Shell or secret export',async({page})=>{
+  for(const size of [{width:375,height:812},{width:812,height:375},{width:768,height:1024}]){
+    await page.setViewportSize(size)
+    await page.emulateMedia({reducedMotion:'reduce'})
+    await page.goto('/welcome')
+    await expect(page.getByTestId('welcome-screen')).toBeVisible()
+    await expect(page.getByRole('link',{name:'Создать аккаунт'})).toBeInViewport()
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+    await page.screenshot({path:test.info().outputPath(`welcome-${size.width}x${size.height}.png`)})
+  }
+})

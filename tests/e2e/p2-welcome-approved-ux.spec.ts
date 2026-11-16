@@ -57,7 +57,9 @@ test('Welcome Loader 1.6 exits after genuine local key hydration even when serve
       const m=await import('/src/features/identity/application/session.ts')
       return !!m.activeSession.value&&!m.sessionBootstrapPending.value
     }),{timeout:30000}).toBe(true)
-    expect(intercepted).toBe(true)
+    // Local-first UI intentionally wins this race. Wait for the background
+    // request to reach the held transport before asserting its offline state.
+    await expect.poll(()=>intercepted).toBe(true)
     const local=await page.evaluate(async()=>{
       const m=await import('/src/features/identity/application/session.ts')
       return {offline:!m.activeSession.value?.online,loading:m.sessionBootstrapPending.value}
