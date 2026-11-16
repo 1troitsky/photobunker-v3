@@ -241,8 +241,11 @@ async function reloadRoster():Promise<void>{
 }
 async function rotateTeam():Promise<void>{
   if(busy.value||!selectedTeam.value||!rotationRequired.value)return
-  const scope=identity(),teamId=selectedTeam.value
-  if(!window.confirm(
+  const scope=identity(),teamId=selectedTeam.value,epoch=rosterEpoch
+  const stillCurrent=()=>identity()===scope
+    &&selectedTeam.value===teamId&&rosterEpoch===epoch
+    &&confirmedOwnTeam(teamId)
+  if(!confirmedOwnTeam(teamId)||!window.confirm(
     'Выпустить новый ключ команды и заново зашифровать её профиль? '+
     'Новый ключ получат только оставшиеся действующие участники. '+
     'Уже сохранённые бывшими участниками данные невозможно отозвать.',
@@ -250,17 +253,19 @@ async function rotateTeam():Promise<void>{
   busy.value=true;error.value='';notice.value=''
   try{
     await queueTeamKeyRotation(teamId)
-    if(identity()!==scope)return
+    if(!stillCurrent())return
     notice.value='Новый ключ подписан и сохранён в зашифрованной очереди.'
     await syncTeamKeyRotations()
-    if(identity()!==scope)return
-    await reloadRoster()
-    if(identity()===scope){
+    if(!stillCurrent())return
+    const pending=reloadRoster(),reloadedEpoch=rosterEpoch
+    await pending
+    if(identity()===scope&&selectedTeam.value===teamId
+      &&rosterEpoch===reloadedEpoch&&confirmedOwnTeam(teamId)){
       notice.value='Новая эпоха подтверждена сервером. Текущий профиль защищён новым ключом.'
       emit('refresh')
     }
   }catch(e){
-    if(identity()===scope)
+    if(stillCurrent())
       error.value=e instanceof Error?e.message:'teams.epoch_rotation_failed'
   }finally{if(identity()===scope)busy.value=false}
 }
@@ -276,31 +281,38 @@ async function memberAction(
     :'Изменить роль участника? Это не выдаёт прав на файлы или задания.'
   if(!window.confirm(label))return
   busy.value=true;error.value='';notice.value=''
-  const scope=identity()
+  const scope=identity(),teamId=selectedTeam.value,epoch=rosterEpoch
+  const stillCurrent=()=>identity()===scope
+    &&selectedTeam.value===teamId&&rosterEpoch===epoch
+    &&confirmedOwnTeam(teamId)
   try{
-    const id=selectedTeam.value
+    // Capture target BEFORE any async queue/encryption. A rapid Team switch
+    // cannot reroute a signed role change to a different Team.
     if(isEpochMember(person))
-      await queueEpochMembershipChange(id,person,action,nextRole)
-    else await queueTeamMembershipChange(id,person,action,nextRole)
-    if(identity()!==scope)return
+      await queueEpochMembershipChange(teamId,person,action,nextRole)
+    else await queueTeamMembershipChange(teamId,person,action,nextRole)
+    if(!stillCurrent())return
     notice.value='Изменение подписано и сохранено в очереди.'
     closeMemberActions()
     try{
       if(isEpochMember(person))
         await syncEpochInvitationOperations()
       else await syncTeamMemberOperations()
-      if(identity()!==scope)return
-      await reloadRoster()
+      if(!stillCurrent())return
+      const pending=reloadRoster(),reloadedEpoch=rosterEpoch
+      await pending
+      if(identity()!==scope||selectedTeam.value!==teamId
+        ||rosterEpoch!==reloadedEpoch||!confirmedOwnTeam(teamId))return
       notice.value=action==='remove'
         ?'Участник исключён сервером. Выдача старого Team DEK заблокирована до ротации.'
         :'Роль изменена и подтверждена сервером.'
       emit('refresh')
     }catch(e){
-      if(identity()===scope)
+      if(stillCurrent())
         error.value=e instanceof Error?e.message:'teams.membership_retry_required'
     }
   }catch(e){
-    if(identity()===scope)
+    if(stillCurrent())
       error.value=e instanceof Error?e.message:'teams.membership_change_failed'
   }finally{if(identity()===scope)busy.value=false}
 }
@@ -313,41 +325,52 @@ watch(()=>props.contacts.map(x=>x.peerAccountId).join('|'),()=>{
 })
 async function sendInvite():Promise<void>{
   if(busy.value||rotationRequired.value
-    ||!selectedTeam.value||!selectedContact.value)return
+    ||!selectedTeam.value||!selectedContact.value
+    ||!confirmedOwnTeam(selectedTeam.value))return
   if(!props.contacts.some(x=>x.peerAccountId===selectedContact.value)){
     selectedContact.value=''
     error.value='teams.invite_contact_not_available'
     return
   }
   busy.value=true;notice.value='';error.value=''
-  const scope=identity(),contact=selectedContact.value
+  const scope=identity(),teamId=selectedTeam.value,
+    contact=selectedContact.value,role=selectedRole.value,
+    epoch=rosterEpoch,encryptedEpoch=keyEpoch.value>1
+  const stillCurrent=()=>identity()===scope
+    &&selectedTeam.value===teamId&&rosterEpoch===epoch
+    &&confirmedOwnTeam(teamId)
   try{
-    // Recheck durable local block storage at signing time. Another tab can block
-    // a peer after an invitation form was opened but before its submit event.
+    // A blocklist read may wait for disk/crypto while the owner switches
+    // Teams. The signed target, role and key epoch belong to the original
+    // explicit submit, never the subsequently selected UI Team.
     const blocked=await listLocallyBlockedPeers()
-    if(identity()!==scope || !props.contacts.some(x=>x.peerAccountId===contact)
-      || blocked.some(x=>x.peerAccountId===contact))
+    if(!stillCurrent())return
+    if(selectedContact.value!==contact
+      ||!props.contacts.some(x=>x.peerAccountId===contact)
+      ||blocked.some(x=>x.peerAccountId===contact))
       throw Error('teams.invite_contact_not_available')
-    if(keyEpoch.value>1)
-      await queueEpochInvitation(selectedTeam.value,contact,selectedRole.value)
-    else await queueTeamInvitation(selectedTeam.value,contact,selectedRole.value)
-    if(identity()!==scope)return
+    if(encryptedEpoch)
+      await queueEpochInvitation(teamId,contact,role)
+    else await queueTeamInvitation(teamId,contact,role)
+    if(!stillCurrent())return
     notice.value='Приглашение сохранено в зашифрованной очереди.'
     showInvite.value=false
     try{
-      if(keyEpoch.value>1)await syncEpochInvitationOperations()
+      if(encryptedEpoch)await syncEpochInvitationOperations()
       else await syncTeamMemberOperations()
-      if(identity()===scope){
-        notice.value='Приглашение отправлено; согласие получателя ещё требуется.'
-        await reloadRoster()
-        emit('refresh')
-      }
+      if(!stillCurrent())return
+      const pending=reloadRoster(),reloadedEpoch=rosterEpoch
+      await pending
+      if(identity()!==scope||selectedTeam.value!==teamId
+        ||rosterEpoch!==reloadedEpoch||!confirmedOwnTeam(teamId))return
+      notice.value='Приглашение отправлено; согласие получателя ещё требуется.'
+      emit('refresh')
     }catch(e){
-      if(identity()===scope)
+      if(stillCurrent())
         error.value=e instanceof Error?e.message:'teams.invite_retry_required'
     }
   }catch(e){
-    if(identity()===scope)
+    if(stillCurrent())
       error.value=e instanceof Error?e.message:'teams.invite_error'
   }finally{if(identity()===scope)busy.value=false}
 }
