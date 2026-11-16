@@ -13,6 +13,7 @@ vi.mock('./features/identity/application/session',async()=>{
     identityBootstrapError:shallowRef(null),
     pendingPinUnlock:shallowRef(null),
     activeSession:shallowRef(null),
+    sessionBootstrapPending:shallowRef(true),
     unlockPinnedDevice:spies.unlockPinnedDevice,
     restoreAccount:spies.restoreAccount,
   }
@@ -20,6 +21,8 @@ vi.mock('./features/identity/application/session',async()=>{
 vi.mock('vue-router',()=>({
   useRoute:()=>({path:'/browser',name:'browser'}),
   useRouter:()=>({push:vi.fn(),replace:vi.fn(),back:vi.fn()}),
+  onBeforeRouteLeave:vi.fn(),
+  onBeforeRouteUpdate:vi.fn(),
 }))
 vi.mock('./features/browser/application/viewer-shell-actions',()=>({
   viewerShellActions:null,
@@ -60,7 +63,9 @@ afterEach(()=>{
 
 describe('P3 #220 protected Identity application shell boundary',()=>{
   it('mounts NO RouterView, Header or Dock while identity bootstrap is unresolved',()=>{
-    expect(root.querySelector('.pin-bootstrap')).not.toBeNull()
+    expect(root.querySelector('[data-testid="welcome-bootstrap-loading"]')).not.toBeNull()
+    expect(root.querySelectorAll('.carousel-dot')).toHaveLength(6)
+    expect(root.querySelectorAll('.welcome-link')).toHaveLength(0)
     expect(root.querySelector('.shell-header')).toBeNull()
     expect(root.querySelector('.shell-dock')).toBeNull()
     expect(root.querySelector('.shell-main')).toBeNull()
@@ -87,7 +92,7 @@ describe('P3 #220 protected Identity application shell boundary',()=>{
     }
     identityBootstrapReady.value=true
     await settle()
-    expect(root.querySelector('.pin-bootstrap')).toBeNull()
+    expect(root.querySelector('.welcome-bootstrap-loading')).toBeNull()
     expect(root.querySelector('.pin-screen')).not.toBeNull()
     expect(root.querySelectorAll('.pin-indicators span')).toHaveLength(6)
     expect(root.querySelector('.shell-header')).toBeNull()
