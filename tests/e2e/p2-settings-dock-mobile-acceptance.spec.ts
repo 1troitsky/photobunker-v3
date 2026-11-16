@@ -143,6 +143,7 @@ test('P2 #214 keyboard drag, mandatory Profile and rollback of draft order',asyn
       'Задания','Browser','Камера','Контакты','Профиль',
     ])
     await page.reload()
+    await expect(dock(page)).toBeVisible()
     expect(await shellNames(page)).toEqual([
       'Задания','Browser','Камера','Контакты','Профиль',
     ])

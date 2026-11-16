@@ -67,7 +67,7 @@ try{
           if(!expected||!app[key]){result.failures.push({viewport:size,screen:name,anchor:key,reason:'missing'});continue}
           for(const dimension of ['x','y','w','h']){
             const delta=app[key][dimension]-expected[dimension]
-            if(Math.abs(delta)>0.02)result.failures.push({viewport:size,screen:name,anchor:key,dimension,delta})
+            if(delta!==0)result.failures.push({viewport:size,screen:name,anchor:key,dimension,delta})
           }
         }
       }
