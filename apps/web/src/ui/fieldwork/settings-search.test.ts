@@ -30,6 +30,12 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
       '/settings/appearance?field=size',
       '/settings/appearance?field=launch',
       '/settings/appearance?field=language', '/notifications',
+      '/notifications/settings?field=invitations',
+      '/notifications/settings?field=deadlines',
+      '/notifications/settings?field=expiry',
+      '/notifications/settings?field=badges',
+      '/notifications/settings?field=quiet',
+      '/notifications/settings?field=delivery',
       '/settings/profile/edit','/settings/security?field=pin',
       '/settings/security?field=relock','/settings/security?field=emergency',
       '/settings/security?field=devices','/settings/security?field=key',
@@ -41,7 +47,18 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
     )
     expect(new Set(settingsSearchEntries.map(entry => entry.id)).size)
       .toBe(settingsSearchEntries.length)
-    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(18)
+    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(24)
+  })
+  it('routes RU/EN notification searches to exact working controls', () => {
+    for(const [word,id,field] of [
+      ['тихие часы','notification-quiet','quiet'],
+      ['quiet hours','notification-quiet','quiet'],
+      ['delivery','notification-delivery','delivery'],
+      ['приглашения','notification-invitations','invitations'],
+    ] as const){
+      expect(searchSettings(word).find(item=>item.id===id)?.to)
+        .toBe('/notifications/settings?field='+field)
+    }
   })
   it('routes security search to the exact approved field, including disabled controls', () => {
     expect(searchSettings('PIN экстренного').find(item => item.id==='emergency-pin')?.to)
