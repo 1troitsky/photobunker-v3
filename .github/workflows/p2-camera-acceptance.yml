@@ -10,6 +10,12 @@ on:
       - 'tests/e2e/*camera*.spec.ts'
       - 'tests/playwright.config.ts'
       - '.github/workflows/p2-camera-acceptance.yml'
+# Only the latest exact-HEAD Camera acceptance matters. Cancel older Camera
+# runs of THIS PR so queued historical commits do not starve its tests.
+# Never cancel unrelated PRs or any of the existing PB3 security gates.
+concurrency:
+  group: pb3-camera-acceptance-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
