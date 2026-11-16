@@ -141,6 +141,27 @@ describe('Data & Storage 1.2 verified file quota',()=>{
     expect(host.querySelector('[data-testid="storage-local-ready"]')).not.toBeNull()
     expect(host.querySelector('[data-testid="storage-after-upload-estimate"]')).toBeNull()
   })
+  it('renders decimal cloud tariff units and combined queue estimate as approved',async()=>{
+    mock.server.mockResolvedValue({
+      planId:'go',recordedCipherBytes:15_000_000_000,
+      activeLogicalMediaFiles:125,enforcedByteCeiling:30_000_000_000,
+      byteUnitPolicy:'DECIMAL_GB_TB_V1',asOfUtc:'2026-11-16T00:00:00Z',
+    })
+    mock.queue.mockResolvedValue({
+      summary:{pendingCount:3,conflictedCount:0,expiredPendingCount:0,
+        pendingCipherBytes:612_000_000,syncedLocalCount:0},
+      entries:[],
+    })
+    await mount()
+    expect(host.querySelector('[data-testid="storage-cloud-quota"]')?.textContent)
+      .toContain('15 ГБ / 30 ГБ')
+    expect(host.querySelector('[data-testid="storage-queue-summary"]')?.textContent)
+      .toContain('3 файла')
+    const estimate=host.querySelector('[data-testid="storage-after-upload-estimate"]')
+    expect(estimate?.textContent).toContain('15,612 ГБ')
+    expect(estimate?.textContent).toContain('128 файлов')
+    expect(estimate?.textContent).toContain('прогноз')
+  })
   it('shows the real limited-plan file count and percentage',async()=>{
     mock.catalog.mockResolvedValue([{
       planId:'go',limits:{maxMediaFiles:250},
