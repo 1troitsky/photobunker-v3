@@ -18,6 +18,20 @@
 - Extend real Playwright coverage from offline photo→ciphertext queued→Garage sync to **Browser→File Viewer→valid decrypted JPEG**. Existing independent-context recovery and 404 outsider ACL are also covered by `tests/e2e/p1-identity-photo.spec.ts`.
 - Native camera/iOS/Android acceptance remains untested by design, per owner instruction. Full remaining style parity and CI cannot be declared PASS without latest-head evidence.
 
+## 2026-11-16 approved 1.2 exact-UI refinement
+- Main Camera fills the Shell without invented horizontal margins or a second mode selector; four finder corner markers, inner white-ring shutter, native red recording/stop disc, centered GPS dot/pill and approved action icons remain positioned in the fixed stage/124px action row.
+- Camera shows the approved white 250ms snapshot flash **only in viewfinder** after a JPEG is rendered. Actual encrypted photo pixels are never altered by this animation. Video shows a live recording timer+red dot over the finder. Dictaphone occupies the full stage (not a 4:3 image) with approved microphone emblem and nine bars.
+- Blind Mode uses the accepted exact Russian copy, icon spacing, always-visible capture button and volume-key fallback note. Showing/hiding it does not restart a live stream.
+- Settings sheet keeps the approved order **Пресеты камеры → Фото → Видео → Аудио → Геолокация → Разрешения устройства**. Grid/torch are inside Фото; all GPS controls inside Геолокация; two permission actions follow GPS. Labels, grab handles and X close controls match selected 1.2. Changing assignment/settings and opening GPS settings during active recording or JPEG sealing is blocked rather than editing an in-flight capture.
+- JPEG maximum/high/medium/low use four actual bounded native-size tiers (1600/1280/960/640 pixels max side) plus respective JPEG quality coefficients. Never upscale sensors; signed metadata/GPS and E2EE persistence are unchanged.
+- Assignment category choices derive from signed owner policy vocabulary (no synthetic category list), with validation of mandatory category, allowed categories, description minimum, GPS and required signed tags. Incomplete photo capture opens the approved assignment sheet *before* JPEG bytes are encoded; server/crypto validation remains authoritative.
+
+## Dedicated acceptance CI — no inheritance from older heads
+- All three owner-selected Camera paths are in scope: Camera 1.2 app, real native camera lifecycle and encrypted media readback. Both previously excluded `p2-camera-fieldwork-ux.spec.ts` and `p2-camera-presets-ux.spec.ts` were added to default `tests/playwright.config.ts` discovery (confirmed passing in old isolated shard4 at `8ec399dd`).
+- New dedicated `.github/workflows/p2-camera-acceptance.yml` runs eight existing Camera test **files** through real Chromium with genuine Laravel 13, PostgreSQL 18 and Garage 2.5. Only media-device hardware is simulated by Chromium; no bypass of encrypted backend, session, receipt or ACL. Full six-shard suite and its security gates remain unchanged; this does not substitute for its aggregate result.
+- **Latest exact-head result PENDING** until GitHub Actions executes; do not propagate the historical `8ec399dd` PASS to later code.
+- Physical iOS/Android/real-camera hardware compatibility remains **NOT TESTED / OWNER LATER**.
+
 ## Invariants preserved
 - Exactly one shared Shell; header has only camera flip/torch/blind, mode tabs and GPS/shutter/actions retain position. No new UI flow or new labels beyond approved permissions.
 - Existing `captureEncrypted` / `enqueueEncryptedMedia`, MediaRecorder ciphertext outbox, signed assignment policy, GPS consent rechecks and caller identity assertions are unchanged. No OS gallery write.
