@@ -21,7 +21,7 @@ test('Accepted Fieldwork routes: one real account, one Shell, no missing pages',
   const routes=[
     ['/assignments','assignment-monthly-usage'],
     ['/browser','browser-v3'],
-    ['/camera','camera-mode'],
+    ['/camera','camera-mode-tabs'],
     ['/contacts','contacts-teams'],
     ['/messages','messages-page'],
     ['/notifications','notifications-page'],
