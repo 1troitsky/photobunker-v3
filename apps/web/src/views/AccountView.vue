@@ -16,6 +16,7 @@ const generatedKey=ref('')
 const inputKey=ref('')
 const acknowledged=ref(false)
 const busy=ref(false)
+const keyExportBusy=ref(false)
 const status=ref('')
 const error=ref('')
 
@@ -71,19 +72,24 @@ async function copyKey():Promise<void> {
   }
 }
 async function saveGeneratedKey():Promise<void>{
-  if(!generatedKey.value)return
+  if(!generatedKey.value||keyExportBusy.value||busy.value)return
+  keyExportBusy.value=true
   const key=generatedKey.value
   status.value='';error.value=''
-  const result=await saveRecoveryKeyWithSystemDialog(key,brand.slug)
-  if(key!==generatedKey.value)return
-  if(result==='saved')
-    status.value='Файл Recovery Key сохранён в выбранном месте. Проверьте его.'
-  else if(result==='shared')
-    status.value='Системное меню закрыто. Проверьте сохранение в «Файлы»; не передавайте ключ другим людям.'
-  else if(result==='unsupported')
-    error.value='Этот браузер не поддерживает выбор места. Скопируйте Recovery Key и сохраните отдельно.'
-  else if(result==='failed')
-    error.value='Не удалось сохранить Recovery Key. Ключ остаётся на экране.'
+  try{
+    const result=await saveRecoveryKeyWithSystemDialog(key,brand.slug)
+    if(key!==generatedKey.value)return
+    if(result==='saved')
+      status.value='Файл Recovery Key сохранён в выбранном месте. Проверьте его.'
+    else if(result==='shared')
+      status.value='Системное меню закрыто. Проверьте сохранение в «Файлы»; не передавайте ключ другим людям.'
+    else if(result==='unsupported')
+      error.value='Этот браузер не поддерживает выбор места. Скопируйте Recovery Key и сохраните отдельно.'
+    else if(result==='failed')
+      error.value='Не удалось сохранить Recovery Key. Ключ остаётся на экране.'
+  }catch{
+    if(key===generatedKey.value)error.value='Не удалось открыть системное сохранение Recovery Key.'
+  }finally{keyExportBusy.value=false}
 }
 </script>
 
@@ -113,6 +119,7 @@ async function saveGeneratedKey():Promise<void>{
           <textarea id="generated-key" :value="generatedKey" readonly spellcheck="false" rows="3"/>
           <button type="button" @click="copyKey">Скопировать</button>
           <button type="button" data-testid="account-save-key"
+            :disabled="keyExportBusy||busy"
             @click="saveGeneratedKey">Сохранить на устройство</button>
           <label class="checkline"><input v-model="acknowledged" type="checkbox"> Я сохранил ключ восстановления</label>
           <button type="button" :disabled="busy||!acknowledged" @click="finish">Завершить регистрацию</button>

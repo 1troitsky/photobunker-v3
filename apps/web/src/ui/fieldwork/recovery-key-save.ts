@@ -56,9 +56,9 @@ export async function saveRecoveryKeyWithSystemDialog(
   // Safari/iOS may expose only the OS share sheet. This is explicit,
   // user-selected and NOT proof the key has been stored locally.
   const share=navigator as FileShareNavigator
-  if(typeof share.canShare==='function'&&typeof share.share==='function'
-    &&share.canShare({files:[file]})){
+  if(typeof share.canShare==='function'&&typeof share.share==='function'){
     try{
+      if(!share.canShare({files:[file]}))return 'unsupported'
       await share.share({files:[file],title:'Recovery Key'})
       return 'shared'
     }catch(e){return wasCancelled(e)?'cancelled':'failed'}

@@ -72,6 +72,15 @@ describe('owner-confirmed OS Recovery Key export',()=>{
     expect(await saveRecoveryKeyWithSystemDialog(key,'photobunker')).toBe('cancelled')
     expect(share).toHaveBeenCalledOnce()
   })
+  it('handles Web Share capability detection throwing without exposing the key',async()=>{
+    const share=vi.fn()
+    Object.defineProperty(navigator,'canShare',{
+      configurable:true,value:()=>{throw Error('permissions denied')},
+    })
+    Object.defineProperty(navigator,'share',{configurable:true,value:share})
+    expect(await saveRecoveryKeyWithSystemDialog(key,'photobunker')).toBe('failed')
+    expect(share).not.toHaveBeenCalled()
+  })
   it('does not create an anchor download when neither supported OS dialog exists',async()=>{
     const click=vi.spyOn(HTMLAnchorElement.prototype,'click')
     expect(await saveRecoveryKeyWithSystemDialog(key,'photobunker')).toBe('unsupported')

@@ -29,6 +29,7 @@ const features:readonly Feature[]=[
   caption:'Emergency PIN',art:'emergency',accent:'#f19d8d'},
 ]
 const slide=ref(0),busy=ref(false),generated=ref(''),acknowledged=ref(false)
+const keyExportBusy=ref(false)
 const recovery=ref(''),error=ref(''),notice=ref('')
 const isCreate=computed(()=>route.path==='/welcome/create')
 const isRecover=computed(()=>route.path==='/welcome/recover')
@@ -124,23 +125,28 @@ async function copyKey():Promise<void>{
  catch{error.value='Не удалось скопировать ключ'}
 }
 async function saveKey():Promise<void>{
- if(!generated.value)return
- // Deliberate user gesture: never auto-download or save a Recovery Key
- // without asking for a local destination through the native OS dialog.
+ if(!generated.value||keyExportBusy.value||busy.value)return
+ // Opening multiple OS pickers can expose redundant plaintext copies.
+ // Keep one in-flight export for this exact registration key.
+ keyExportBusy.value=true
  const key=generated.value
  error.value='';notice.value=''
- const result=await saveRecoveryKeyWithSystemDialog(key,brand.slug)
- // A stale async chooser must never report success for a different key.
- if(key!==generated.value)return
- if(result==='saved')
-   notice.value='Файл Recovery Key сохранён в выбранном вами месте. Проверьте его.'
- else if(result==='shared')
-   notice.value='Системное меню закрыто. Проверьте сохранение в «Файлы». Не передавайте ключ другим людям.'
- else if(result==='unsupported')
-   error.value='Этот браузер не умеет выбирать место для файла. Скопируйте Recovery Key и сохраните отдельно.'
- else if(result==='failed')
-   error.value='Не удалось сохранить Recovery Key. Ключ остаётся на экране — скопируйте его.'
- // A cancelled chooser is not a successfully saved key.
+ try{
+   const result=await saveRecoveryKeyWithSystemDialog(key,brand.slug)
+   // A stale async chooser must never report success for a different key.
+   if(key!==generated.value)return
+   if(result==='saved')
+     notice.value='Файл Recovery Key сохранён в выбранном вами месте. Проверьте его.'
+   else if(result==='shared')
+     notice.value='Системное меню закрыто. Проверьте сохранение в «Файлы». Не передавайте ключ другим людям.'
+   else if(result==='unsupported')
+     error.value='Этот браузер не умеет выбирать место для файла. Скопируйте Recovery Key и сохраните отдельно.'
+   else if(result==='failed')
+     error.value='Не удалось сохранить Recovery Key. Ключ остаётся на экране — скопируйте его.'
+   // A cancelled chooser is not a successfully saved key.
+ }catch{
+   if(key===generated.value)error.value='Не удалось открыть системное сохранение. Скопируйте Recovery Key.'
+ }finally{keyExportBusy.value=false}
 }
 async function createAccount():Promise<void>{
  if(busy.value||!generated.value||!acknowledged.value)return
@@ -243,7 +249,7 @@ async function loadFile(e:Event):Promise<void>{
           <div class="actions-inline">
             <button class="action" type="button" @click="copyKey">Скопировать</button>
             <button class="action" type="button" data-testid="welcome-save-key"
-              @click="saveKey">Сохранить на устройство</button>
+              :disabled="keyExportBusy||busy" @click="saveKey">Сохранить на устройство</button>
           </div>
           <label class="auth-check"><input v-model="acknowledged" type="checkbox">Я сохранил Recovery Key отдельно от устройства.</label>
           <button class="action primary" type="button" data-testid="welcome-finish"
