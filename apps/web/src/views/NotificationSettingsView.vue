@@ -14,6 +14,8 @@ const loading=ref(true)
 const saving=ref(false)
 const error=ref('')
 const status=ref('')
+type DeliveryCheck=Readonly<{internal:string;system:string;permission:string}>
+const deliveryCheck=ref<DeliveryCheck|null>(null)
 const dirty=computed(()=>JSON.stringify(draft.value)!==JSON.stringify(saved.value))
 let version=0
 const choices=[
@@ -23,13 +25,42 @@ const choices=[
   {id:'system' as const,title:'Системные события',hint:'Файлы, резервные копии и подписка'},
   {id:'badges' as const,title:'Индикаторы',hint:'Показывать отметки непрочитанных'},
 ]
+/**
+ * An explicit, read-only availability check. It never requests permission,
+ * subscribes for Web Push, registers a Service Worker, or claims delivery.
+ */
+function checkDelivery():void{
+  if(!activeSession.value)return
+  let permission='Системные уведомления недоступны в этом браузере.'
+  try{
+    if(typeof Notification!=='undefined'){
+      permission=Notification.permission==='granted'
+        ?'Разрешение устройства предоставлено.'
+        :Notification.permission==='denied'
+          ?'Разрешение устройства запрещено. Его можно изменить в настройках браузера.'
+          :'Разрешение устройства ещё не предоставлено.'
+    }
+  }catch{
+    permission='Не удалось определить разрешение устройства.'
+  }
+  const supported=typeof window!=='undefined'&&window.isSecureContext===true
+    &&typeof navigator!=='undefined'&&'serviceWorker' in navigator
+    &&typeof PushManager!=='undefined'
+  deliveryCheck.value={
+    internal:'Внутренние уведомления доступны в зашифрованном списке без разрешения системы.',
+    system:supported
+      ?'Браузер поддерживает системные уведомления, но доставка PhotoBunker пока не подключена.'
+      :'Системная доставка PhotoBunker пока недоступна в этом браузере.',
+    permission,
+  }
+}
 function owner():string{
   const s=activeSession.value
   return s?[s.accountId,s.deviceId,s.pkg.akek,s.pkg.revision].join('|'):''
 }
 async function initialize():Promise<void>{
   const token=++version,scope=owner()
-  error.value='';status.value='';loading.value=true
+  error.value='';status.value='';deliveryCheck.value=null;loading.value=true
   // An old account's pending write must not keep the next account's form
   // locked. The old write's finally is fenced by its captured token.
   saving.value=false
@@ -64,7 +95,7 @@ function changeQuietClock(key:'quietStart'|'quietEnd',value:string):void{
 }
 async function save():Promise<void>{
   if(saving.value||loading.value||!dirty.value)return
-  if(draft.value.quietStart===draft.value.quietEnd){
+  if(draft.value.quietEnabled&&draft.value.quietStart===draft.value.quietEnd){
     error.value='Начало и окончание тихих часов не должны совпадать.'
     return
   }
@@ -141,6 +172,17 @@ onMounted(()=>{void initialize()})
           <input type="checkbox" disabled data-testid="notification-setting-push">
         </div>
       </div>
+      <section v-if="!loading" class="notification-delivery-check"
+        aria-label="Проверка доставки" data-testid="notification-delivery-check">
+        <h2>Доставка и разрешения</h2>
+        <button type="button" data-testid="notification-check-delivery"
+          @click="checkDelivery">Проверить доступность</button>
+        <div v-if="deliveryCheck" role="status" data-testid="notification-delivery-status">
+          <p data-testid="notification-internal-status"><strong>Внутренние события.</strong> {{deliveryCheck.internal}}</p>
+          <p data-testid="notification-system-status"><strong>Системные push.</strong> {{deliveryCheck.system}}</p>
+          <p data-testid="notification-permission-status"><strong>Разрешение устройства.</strong> {{deliveryCheck.permission}}</p>
+        </div>
+      </section>
       <p class="settings-hint">Настройки категорий скрывают записи только в локальном списке. Тихие часы скрывают лишь обычные индикаторы; события безопасности видны всегда. Это не управление OS push. Серверные события продолжают сохраняться; просмотр и доступ к файлам проверяются отдельно. Настройки не синхронизируются между устройствами.</p>
       <p v-if="status" role="status">{{status}}</p>
       <p v-if="error" role="alert">{{error}}</p>
@@ -170,6 +212,11 @@ onMounted(()=>{void initialize()})
 .quiet-hours{justify-content:flex-start;gap:24px}
 .quiet-hours label{display:flex;align-items:center;gap:10px;font-size:12px}
 .quiet-hours input{width:auto;height:auto;color:inherit;background:transparent;border:1px solid var(--outline);border-radius:5px;padding:5px}
+.notification-delivery-check{margin-top:18px;padding:14px 16px;border:1px solid var(--outline);border-radius:10px}
+.notification-delivery-check h2{font-size:14px;margin:0 0 12px}
+.notification-delivery-check button{min-height:42px;padding:8px 14px;border-radius:8px}
+.notification-delivery-check [role="status"]{font-size:12px;line-height:1.6;color:#c8d1c9}
+.notification-delivery-check [role="status"] p{margin:8px 0}
 .settings-hint{margin:20px 0}
 .settings-actions{
   position:sticky;bottom:0;z-index:3;flex:0 0 auto;

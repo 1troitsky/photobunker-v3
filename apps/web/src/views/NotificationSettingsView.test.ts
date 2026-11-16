@@ -38,7 +38,10 @@ beforeEach(()=>{
   mock.push.mockReset().mockResolvedValue(undefined)
   activeSession.value=session()
 })
-afterEach(()=>{app?.unmount();app=undefined;host.remove();activeSession.value=null})
+afterEach(()=>{
+  app?.unmount();app=undefined;host.remove();activeSession.value=null
+  vi.unstubAllGlobals()
+})
 describe('Encrypted device-local notification display settings',()=>{
   it('saves local categories, never exposes push or security opt out',async()=>{
     await mount()
@@ -75,6 +78,39 @@ describe('Encrypted device-local notification display settings',()=>{
     })
     expect(host.textContent).toContain('Всегда включены')
     expect(el('notification-setting-push').disabled).toBe(true)
+  })
+  it('allows editing unrelated options when quiet hours are off and clock fields are equal',async()=>{
+    await mount()
+    const quiet=el('notification-setting-quiet-enabled')
+    quiet.checked=true;quiet.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    const end=el('notification-setting-quiet-end')
+    end.value='22:00';end.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    quiet.checked=false;quiet.dispatchEvent(new Event('change',{bubbles:true}))
+    const expiry=el('notification-setting-expiry')
+    expiry.checked=false;expiry.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    el('notification-settings-save').click();await settle()
+    expect(mock.save).toHaveBeenCalledWith({
+      ...defaults,quietEnabled:false,quietStart:1320,quietEnd:1320,expiry:false,
+    })
+    expect(host.textContent).not.toContain('Начало и окончание тихих часов не должны совпадать.')
+  })
+  it('checks actual device permission without requesting permission or claiming push delivery',async()=>{
+    const requestPermission=vi.fn()
+    vi.stubGlobal('Notification',{permission:'denied',requestPermission})
+    await mount()
+    expect(host.querySelector('[data-testid="notification-delivery-status"]')).toBeNull()
+    const check=el('notification-check-delivery')
+    check.click();await settle()
+    expect(host.querySelector('[data-testid="notification-internal-status"]')?.textContent)
+      .toContain('без разрешения системы')
+    expect(host.querySelector('[data-testid="notification-system-status"]')?.textContent)
+      .toContain('пока')
+    expect(host.querySelector('[data-testid="notification-permission-status"]')?.textContent)
+      .toContain('запрещено')
+    expect(requestPermission).not.toHaveBeenCalled()
   })
   it('clears stale saved confirmation after changing quiet hours again',async()=>{
     await mount()

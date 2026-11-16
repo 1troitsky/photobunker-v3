@@ -247,7 +247,7 @@ function validatePreferences(value:unknown):asserts value is NotificationPrefere
     ||['badges','deadlines','expiry','invitations','system','quietEnabled']
       .some(key=>typeof v[key]!=='boolean')
     ||!minute(v.quietStart)||!minute(v.quietEnd)
-    ||v.quietStart===v.quietEnd)
+    ||v.quietEnabled===true&&v.quietStart===v.quietEnd)
     throw Error('notifications.invalid_preferences')
 }
 function normalizedPreferences(value:unknown):NotificationPreferences{

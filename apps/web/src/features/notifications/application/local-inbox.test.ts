@@ -123,7 +123,7 @@ describe('PB3 encrypted Local-First notifications',()=>{
     for(const value of [
       {...defaultNotificationPreferences,quietStart:1440},
       {...defaultNotificationPreferences,quietEnd:-1},
-      {...defaultNotificationPreferences,quietStart:480,quietEnd:480},
+      {...defaultNotificationPreferences,quietEnabled:true,quietStart:480,quietEnd:480},
       {...defaultNotificationPreferences,quietEnabled:'true'},
       {...defaultNotificationPreferences,quietTimeZone:'private'},
     ]){
@@ -131,6 +131,18 @@ describe('PB3 encrypted Local-First notifications',()=>{
         value as unknown as typeof defaultNotificationPreferences,
       )).rejects.toThrow('notifications.invalid_preferences')
     }
+  })
+  it('accepts a dormant equal-hour draft only when quiet hours are disabled',async()=>{
+    await session()
+    const dormant={...defaultNotificationPreferences,
+      quietEnabled:false,quietStart:480,quietEnd:480,expiry:false}
+    await saveNotificationPreferences(dormant)
+    expect(await readNotificationPreferences()).toEqual(dormant)
+    // Equal clock values must not accidentally hide ordinary notification badges.
+    const at=new Date(2026,10,16,8,30)
+    expect(notificationBadgeVisible('new-file',dormant,at)).toBe(true)
+    await expect(saveNotificationPreferences({...dormant,quietEnabled:true}))
+      .rejects.toThrow('notifications.invalid_preferences')
   })
   it('rejects invalid preference shape and tampered ciphertext without applying it',async()=>{
     await session()
