@@ -55,7 +55,7 @@ function sameTeamIdentity(expected:string,token:number):boolean{
 }
 async function reloadTeams():Promise<void>{
   const token=++teamRun,owner=identity()
-  teams.value=[];teamError.value=''
+  teams.value=[];teamError.value='';teamLoading.value=false
   if(!owner)return
   try{
     const local=await listLocalTeams()
@@ -95,7 +95,7 @@ async function createTeam():Promise<void>{
   }catch(e){
     if(identity()===owner)
       teamError.value=e instanceof Error?e.message:'teams.create_failed'
-  }finally{teamBusy.value=false}
+  }finally{if(identity()===owner)teamBusy.value=false}
 }
 function handleTeamOnline():void{void reloadTeams()}
 
@@ -158,7 +158,7 @@ async function operate(action:()=>Promise<void>):Promise<void>{
   }catch(e){
     if(sessionMatches(owner,token))
       error.value=e instanceof Error?e.message:'contacts.operation_failed'
-  }finally{busy.value=false}
+  }finally{if(sessionMatches(owner,token))busy.value=false}
 }
 function resetSearch():void{
   candidate.value=null;fingerprintAgreed.value=false;alias.value=''
@@ -166,11 +166,16 @@ function resetSearch():void{
 function lookup():void{
   void operate(async()=>{
     const id=query.value.trim().toLowerCase()
+    const owner=identity(),token=run
     if(!uuidPattern.test(id))throw Error('contacts.invalid_account_id')
     if(blocked.value.some(x=>x.peerAccountId===id))
       throw Error('contacts.peer_locally_blocked')
     if(!activeSession.value?.online)await reauthenticate()
+    if(!sessionMatches(owner,token)
+      ||query.value.trim().toLowerCase()!==id)return
     const {directory,confirmed}=await inspectPeer(id)
+    if(!sessionMatches(owner,token)
+      ||query.value.trim().toLowerCase()!==id)return
     candidate.value={
       id,fingerprint:directory.safetyFingerprint,confirmed,
     }
@@ -181,7 +186,9 @@ function approve():void{
   void operate(async()=>{
     const person=candidate.value
     if(!person||!fingerprintAgreed.value)throw Error('contacts.fingerprint_required')
+    const owner=identity(),token=run
     await confirmPeer(person.id,person.fingerprint)
+    if(!sessionMatches(owner,token)||candidate.value!==person)return
     candidate.value={...person,confirmed:true}
     message.value='Отпечаток подтверждён на этом устройстве.'
   })
@@ -192,8 +199,11 @@ function add():void{
     if(!person?.confirmed)throw Error('contacts.fingerprint_required')
     if(blocked.value.some(x=>x.peerAccountId===person.id))
       throw Error('contacts.peer_locally_blocked')
+    const owner=identity(),token=run
     await saveConfirmedContact(person.id,person.fingerprint,alias.value)
+    if(!sessionMatches(owner,token))return
     await refreshVisibleContacts()
+    if(!sessionMatches(owner,token))return
     resetSearch();query.value=''
     message.value='Контакт сохранён в зашифрованной локальной книге.'
   })
@@ -206,9 +216,12 @@ function saveAlias():void{
   void operate(async()=>{
     const item=contacts.value.find(x=>x.peerAccountId===selected.value)
     if(!item)throw Error('contacts.not_found')
+    const owner=identity(),token=run
     await saveConfirmedContact(item.peerAccountId,item.safetyFingerprint,editAlias.value)
+    if(!sessionMatches(owner,token))return
     await refreshVisibleContacts()
-    message.value='Локальное имя обновлено.'
+    if(sessionMatches(owner,token))
+      message.value='Локальное имя обновлено.'
   })
 }
 function remove():void{
@@ -217,8 +230,11 @@ function remove():void{
     'Удалить контакт только из локальной книги? Уже выданные разрешения и приглашения не отзываются.'
   ))return
   void operate(async()=>{
+    const owner=identity(),token=run
     await removeConfirmedContact(id)
+    if(!sessionMatches(owner,token))return
     await refreshVisibleContacts()
+    if(!sessionMatches(owner,token))return
     selected.value=null
     message.value='Контакт удалён из локальной книги. Старые разрешения не изменены.'
   })
@@ -263,8 +279,11 @@ watch(activeSession,(_now,previous)=>{
     previous.pkg.akek,previous.pkg.revision,
   ].join('|'):''
   if(identity()!==prev){
-    resetSearch();query.value='';selected.value=null;contacts.value=[]
-    blocked.value=[];showBlacklist.value=false
+    resetSearch();query.value='';selected.value=null;editAlias.value=''
+    contacts.value=[];blocked.value=[];showBlacklist.value=false
+    busy.value=false;message.value='';error.value=''
+    teamBusy.value=false;teamLoading.value=false;teamError.value=''
+    teamNotice.value=''
     teams.value=[];teamForm.value=false;teamName.value='';teamDescription.value=''
     closeTeamCard()
     ++teamRun
