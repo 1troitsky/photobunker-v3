@@ -50,6 +50,49 @@ function mount():void{
   app.mount(host)
 }
 describe('Security & Privacy 1.3 owner-scoped device list',()=>{
+  it('invalidates an in-flight request on a real browser offline event without a session ref change',async()=>{
+    const request=deferred<{devices:unknown[]}>()
+    mock.api.mockReturnValueOnce(request.promise)
+    activeSession.value=session(A,true)
+    mount();await settle()
+    expect(hasLoading()).toBe(true)
+    window.dispatchEvent(new Event('offline'))
+    await settle()
+    expect(hasLoading()).toBe(false)
+    expect(host.querySelectorAll('[data-testid="account-device"]')).toHaveLength(0)
+    request.resolve({devices:[{id:'STALE_OFFLINE_DEVICE',created_at:'2026-01-01',revoked_at:null}]})
+    await settle()
+    expect(host.textContent).not.toContain('STALE_OFFLINE_DEVICE')
+  })
+  it('retries device loading when network returns but does not trust old offline responses',async()=>{
+    const first=deferred<{devices:unknown[]}>()
+    mock.api.mockReturnValueOnce(first.promise)
+    mock.api.mockResolvedValueOnce({devices:[{
+      id:'33333333-3333-4333-8333-333333333333',
+      created_at:'2026-11-16',revoked_at:null,
+    }]})
+    activeSession.value=session(A,true)
+    mount();await settle()
+    window.dispatchEvent(new Event('offline'))
+    await settle()
+    window.dispatchEvent(new Event('online'))
+    await settle()
+    expect(mock.api).toHaveBeenCalledTimes(2)
+    expect(host.querySelectorAll('[data-testid="account-device"]')).toHaveLength(1)
+    first.resolve({devices:[{id:'STALE_AFTER_RECONNECT',created_at:'2026-01-01',revoked_at:null}]})
+    await settle()
+    expect(host.textContent).not.toContain('STALE_AFTER_RECONNECT')
+  })
+  it('removes network event handlers when the Security screen is unmounted',async()=>{
+    mock.api.mockResolvedValue({devices:[]})
+    activeSession.value=session(A,true)
+    mount();await settle()
+    expect(mock.api).toHaveBeenCalledTimes(1)
+    app?.unmount();app=undefined
+    window.dispatchEvent(new Event('online'))
+    await settle()
+    expect(mock.api).toHaveBeenCalledTimes(1)
+  })
   it('does not keep a server spinner when an online session becomes offline mid-request',async()=>{
     const old=deferred<{devices:unknown[]}>()
     mock.api.mockReturnValueOnce(old.promise)

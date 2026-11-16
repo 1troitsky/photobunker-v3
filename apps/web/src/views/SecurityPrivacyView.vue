@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { activeSession, logout, reauthenticate } from '../features/identity/application/session'
 import { jsonApi } from '../features/identity/infrastructure/api'
@@ -20,7 +20,29 @@ async function focusRequested():Promise<void>{
   if(target instanceof HTMLElement)target.focus({preventScroll:true})
 }
 watch(()=>route.query.field,()=>{void focusRequested()})
-onMounted(()=>{void focusRequested()})
+onMounted(()=>{
+  void focusRequested()
+  window.addEventListener('offline',handleOffline)
+  window.addEventListener('online',handleOnline)
+})
+onUnmounted(()=>{
+  // A completed request after the screen is gone must never render a stale
+  // device list in another account/session.
+  ++request
+  window.removeEventListener('offline',handleOffline)
+  window.removeEventListener('online',handleOnline)
+})
+function handleOffline():void{
+  // Browser connectivity may change without a new activeSession object.
+  // Invalidate the pending request before it can commit or clear a later state.
+  ++request
+  devices.value=[]
+  deviceLoading.value=false
+  deviceError.value=''
+}
+function handleOnline():void{
+  if(activeSession.value?.online)void loadDevices()
+}
 watch(activeSession,()=>{devices.value=[];error.value='';status.value='';void loadDevices()},{immediate:true})
 async function loadDevices():Promise<void>{
   const session=activeSession.value,token=++request
@@ -28,7 +50,8 @@ async function loadDevices():Promise<void>{
   // A superseded online request must not leave a permanent spinner when
   // switching accounts, signing out or going offline during its response.
   deviceLoading.value=false
-  if(!session?.online)return
+  if(!session?.online
+    ||typeof navigator!=='undefined'&&navigator.onLine===false)return
   deviceLoading.value=true
   try{
     const payload=await jsonApi<unknown>('/identity/v2/devices')
