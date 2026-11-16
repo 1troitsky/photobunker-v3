@@ -365,7 +365,7 @@ onUnmounted(()=>{
         <p class="muted">Название и описание шифруются на устройстве. Создание не даёт участникам доступа к файлам или заданиям.</p>
         <div class="action-row">
           <button type="submit" :disabled="teamBusy||!teamName.trim()"
-            data-testid="team-create-submit">Сохранить команду</button>
+            data-testid="team-create-submit">Создать команду</button>
           <button type="button" @click="teamForm=false">Отмена</button>
         </div>
       </form>
