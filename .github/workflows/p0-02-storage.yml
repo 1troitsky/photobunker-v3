@@ -8,9 +8,16 @@ permissions:
   contents: read
 jobs:
   postgres-garage:
-    name: Real PostgreSQL + Garage smoke (disposable)
+    # Each Playwright shard runs in its OWN disposable PG18/Garage stack.
+    # This avoids sharing any identity, S3 or retention state across shards.
+    # The aggregate job below retains the original required check name.
+    name: Real PostgreSQL + Garage smoke shard ${{ matrix.shard }}/3
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     services:
       postgres:
         image: postgres:18
@@ -163,15 +170,29 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8000/api/healthz
           curl -fsS http://127.0.0.1:5173/settings >/dev/null
-          pnpm exec playwright test --config tests/playwright.config.ts
+          # Playwright's deterministic sharding covers the full discovered
+          # 135-test set across 3 jobs, with no --grep, skips or retries.
+          pnpm exec playwright test --config tests/playwright.config.ts --shard=${{ matrix.shard }}/3
       - name: Preserve P1 browser failure traces
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: p1-browser-traces
+          name: p1-browser-traces-shard-${{ matrix.shard }}-of-3
           path: test-results/
           if-no-files-found: ignore
           retention-days: 3
       - name: Stop disposable Garage
         if: always()
         run: docker rm -f pb3-p0-garage >/dev/null 2>&1 || true
+  postgres-garage-gate:
+    # Keep the pre-shard required-check name visible to branch protection,
+    # but fail closed if ANY of the three matrix shards failed or was cancelled.
+    name: Real PostgreSQL + Garage smoke (disposable)
+    needs: [postgres-garage]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require all three isolated Playwright and Garage smoke shards
+        env:
+          SHARDS_RESULT: ${{ needs.postgres-garage.result }}
+        run: test "$SHARDS_RESULT" = "success"
