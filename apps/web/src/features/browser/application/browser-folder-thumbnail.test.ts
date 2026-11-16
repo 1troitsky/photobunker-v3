@@ -28,7 +28,15 @@ describe('authenticated Browser folder JPEG previews',()=>{
     )
     expect(toBlob).toHaveBeenCalledWith(expect.any(Function),'image/jpeg',0.68)
     expect(close).toHaveBeenCalledOnce()
-    expect(await thumb.text()).not.toContain('SENSITIVE-EXIF')
+    // jsdom Blob has no text()/arrayBuffer(); inspect the exact JPEG bytes
+    // through its browser FileReader instead of dropping the privacy assertion.
+    const decoded=await new Promise<string>((resolve,reject)=>{
+      const reader=new FileReader()
+      reader.onload=()=>resolve(new TextDecoder().decode(reader.result as ArrayBuffer))
+      reader.onerror=()=>reject(reader.error)
+      reader.readAsArrayBuffer(thumb)
+    })
+    expect(decoded).not.toContain('SENSITIVE-EXIF')
   })
   it('does not permit non-image types, invalid dimensions or oversized decode',async()=>{
     const original=new Blob(['hi'],{type:'text/html'})
