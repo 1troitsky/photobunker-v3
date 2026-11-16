@@ -506,7 +506,10 @@ describe('Camera Fieldwork owner-signed categories',()=>{
     // A signed policy revision removing the selected category cannot silently
     // approve that stale private value, even if the field is still populated.
     mocks.allowedCategories=['Детали']
-    activeSession.value={...activeSession.value!,online:true}
+    mocks.policies.mockResolvedValue([{
+      assignmentId:'assignment-a',ownerAccountId:'owner-a',policyRevision:3,
+    }])
+    button('Обновить задания').click()
     await settle()
     expect(finish.disabled).toBe(true)
   })
