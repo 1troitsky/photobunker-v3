@@ -435,6 +435,7 @@ async function refreshPolicies():Promise<void> {
 }
 
 const stream=ref<MediaStream|null>(null)
+let releaseCaptureTrackListeners:()=>void=()=>{}
 const torchSupported=computed(()=>{
   if(captureMode.value==='audio'||!stream.value)return false
   const track=stream.value.getVideoTracks?.()[0]
@@ -513,6 +514,10 @@ function stopTracks(opened:MediaStream):void {
   for(const track of opened.getTracks())if(track.readyState!=='ended')track.stop()
 }
 function releaseStream():void {
+  // A stream ended by the OS is not an intentional user Stop. Retire its
+  // listeners before stopping any remaining tracks or clearing the preview.
+  releaseCaptureTrackListeners()
+  releaseCaptureTrackListeners=()=>{}
   torchOn.value=false
   torchBusy.value=false
   cameraZoomRange.value=null
@@ -784,6 +789,30 @@ async function startCamera():Promise<void> {
       return
     }
     stream.value=opened;streamIdentity=identity
+    // Outside a recording, an OS/permission/hardware 'ended' event must
+    // discard the stale preview and prevent capture of the last video frame.
+    // MediaRecorder has its own fail-closed interruption handlers.
+    const tracks=opened.getTracks()
+    const onTrackEnded=()=>{
+      if(stream.value!==opened||!ownsCamera(identity,generation)
+        ||activeRecording||recording.value)return
+      error.value=mode==='audio'?'camera.microphone_interrupted':'camera.stream_ended'
+      closeCamera() // Explicit user retry only through approved Settings permissions.
+    }
+    const listened:MediaStreamTrack[]=[]
+    for(const track of tracks){
+      if(typeof track.addEventListener==='function'){
+        track.addEventListener('ended',onTrackEnded)
+        listened.push(track)
+      }
+    }
+    releaseCaptureTrackListeners=()=>{
+      for(const track of listened)track.removeEventListener('ended',onTrackEnded)
+    }
+    if(tracks.some(track=>track.readyState!=='live')){
+      onTrackEnded()
+      return
+    }
     torchOn.value=false
     refreshHardwareZoom(mode==='audio'?undefined:opened.getVideoTracks?.()[0])
     const preview=video.value
