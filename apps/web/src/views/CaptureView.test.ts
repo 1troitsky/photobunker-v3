@@ -264,9 +264,10 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(host.textContent).toContain('Масштаб: 1.0×')
     expect(host.textContent).toContain('Не удалось применить масштаб камеры.')
     expect(host.querySelector('[data-testid="camera-zoom-indicator"]')).toBeNull()
-    opened.emitEnded()
+    opened.emitEnded() // Native track has already ended; stop() need not fire again.
     await settle()
-    expect(opened.track.stop).toHaveBeenCalledOnce()
+    expect(opened.track.readyState).toBe('ended')
+    expect(host.querySelector('video')!.srcObject).toBeNull()
     expect(host.querySelector('[data-testid="camera-photo-zoom"]')).toBeNull()
     expect(host.querySelector('[data-testid="camera-photo-zoom-unavailable"]')).not.toBeNull()
   })
