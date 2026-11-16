@@ -1480,6 +1480,9 @@ watch(activeSession,session=>{
     devicePermissionStatus.value=''
     cameraSheet.value=null
     blindMode.value=false;torchOn.value=false
+    // Hardware preferences are scoped to the CURRENT encrypted device key.
+    // Never reuse prior account's zoom/torch/GPS intent during a key switch.
+    desiredPhotoZoom.value=1;desiredTorch.value=false;desiredGpsTracking.value=false
     localDrafts.value=[];localDraftError.value=''
     observedIdentity=identity;cameraGeneration++
     releaseStream()
