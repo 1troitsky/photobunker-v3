@@ -142,3 +142,19 @@
 .browser-announcement{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
 
 .browser-v3 .browser-folder-cover.empty-folder{grid-template-columns:1fr;grid-template-rows:1fr;gap:0;padding:0}
+
+/* New-folder dialog from Browser v3. */
+.browser-v3 .browser-new-folder-sheet{width:100%;max-height:86dvh;padding:18px 17px 24px;background:#292929;border:0;border-radius:12px 12px 0 0;box-shadow:none;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal;display:block}
+.browser-v3 .browser-new-folder-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 15px;padding:0;border:0}
+.browser-v3 .browser-new-folder-heading strong{font-size:15px;font-weight:750}
+.browser-v3 .browser-new-folder-heading button{padding:6px;width:auto;height:auto;min-height:0;border:0;background:transparent;color:#ddd;font:inherit}
+.browser-v3 .approved-folder-content{display:grid;gap:10px}
+.browser-v3 .approved-folder-content label{display:grid;gap:5px;margin:0;color:#bbb;font-size:12px;font-weight:400}
+.browser-v3 .approved-folder-content input,.browser-v3 .approved-folder-content select{width:100%;margin:0;background:#1c1c1c;color:#fff;border:1px solid #555;border-radius:6px;padding:10px;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.browser-v3 .approved-folder-content .primary-action{padding:12px;border:0;border-radius:6px;background:var(--green);color:#152119;font-size:13px;font-weight:750;text-align:center;min-height:0}
+@media(min-width:700px){.browser-v3 .browser-new-folder-sheet{max-width:480px;margin-inline:auto}}
+
+.browser-v3 .browser-folders .browser-folder-form.browser-new-folder-sheet{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:100%;margin:0;max-width:none;max-height:86dvh;display:block;padding:18px 17px 24px;border:0;border-radius:12px 12px 0 0;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.browser-v3 .browser-new-folder-sheet .approved-folder-content input,.browser-v3 .browser-new-folder-sheet .approved-folder-content select{min-height:0;height:auto}
+@media(min-width:700px){.browser-v3 .browser-folders .browser-folder-form.browser-new-folder-sheet{max-width:480px}}
+.browser-v3 .browser-new-folder-sheet .approved-folder-content input{max-width:none}

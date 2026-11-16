@@ -14,7 +14,7 @@ test('Browser v3: opening section and folder-first display are real and device-p
     .toHaveAttribute('aria-selected','true')
   await browserHeader(page,'folder')
   await page.getByTestId('browser-folder-name').fill('Local display layout')
-  await page.getByRole('button',{name:'Создать',exact:true}).click()
+  await page.getByRole('button',{name:'Создать папку',exact:true}).click()
   await expect(page.locator('.browser-folder-item')).toHaveCount(1)
 
   await context.setOffline(true)

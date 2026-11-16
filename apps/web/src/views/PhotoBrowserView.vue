@@ -1976,10 +1976,10 @@ onUnmounted(()=>{
           <header class="browser-new-folder-heading">
             <strong>Новая папка</strong>
             <button type="button" data-testid="browser-new-folder-close"
-              :disabled="folderBusy" @click="closeCreateFolder">Закрыть</button>
+              :disabled="folderBusy" aria-label="Закрыть" @click="closeCreateFolder">✕</button>
           </header>
-          <label>Название папки
-            <input v-model="newFolderName" maxlength="80" autocomplete="off"
+          <div class="approved-folder-content"><label>Название
+            <input v-model="newFolderName" maxlength="80" autocomplete="off" placeholder="Новая папка"
               data-testid="browser-folder-name" required>
           </label>
           <label for="browser-new-folder-parent">Расположение
@@ -1990,10 +1990,7 @@ onUnmounted(()=>{
                 :key="folder.id" :value="folder.id">{{folder.label}}</option>
             </select>
           </label>
-          <div class="browser-new-folder-actions">
-            <button type="submit" :disabled="folderBusy">Создать</button>
-            <button type="button" :disabled="folderBusy" @click="closeCreateFolder">
-              Отмена</button>
+          <button class="primary-action" type="submit" :disabled="folderBusy">Создать папку</button>
           </div>
         </form>
         <form v-if="editingFolderId" class="browser-folder-form"

@@ -72,7 +72,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     })
     await a.getByRole('button',{name:'Новая папка'}).click()
     await a.getByTestId('browser-folder-name').fill('Секретный раздел')
-    await a.getByRole('button',{name:'Создать',exact:true}).click()
+    await a.getByRole('button',{name:'Создать папку',exact:true}).click()
     await rows.getByTestId('browser-file-menu-toggle').click()
     await rows.getByRole('combobox',{name:'Папка файла '+movedId})
       .selectOption({label:'Секретный раздел'})
@@ -134,7 +134,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     // cannot inherit that row's encrypted virtual placement.
     await browserHeader(b,'folder')
     await b.getByTestId('browser-folder-name').fill('Only This Private Folder')
-    await b.getByRole('button',{name:'Создать',exact:true}).click()
+    await b.getByRole('button',{name:'Создать папку',exact:true}).click()
     // A folder's actual encrypted IndexedDB commit is distinct from the
     // click. Wait for the new folder to be visible and durably discoverable
     // before selecting its private-search scope; otherwise a racing browser

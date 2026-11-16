@@ -15,7 +15,7 @@ test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selecte
     await expect(page.getByTestId('browser-v3')).toBeVisible()
     await page.getByRole('button',{name:'Новая папка'}).click()
     await page.getByTestId('browser-folder-name').fill('Project Evidence')
-    await page.getByRole('button',{name:'Создать',exact:true}).click()
+    await page.getByRole('button',{name:'Создать папку',exact:true}).click()
     const folder=page.getByRole('button',{name:'Project Evidence',exact:true})
     await expect(folder).toBeVisible()
     // Browser v3 has a single Header-triggered upload sheet. Its embedded

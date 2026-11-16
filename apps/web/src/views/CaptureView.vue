@@ -1761,26 +1761,27 @@ onUnmounted(()=>{
             </button>
           </header>
           <h2 v-else>Настройки камеры</h2>
+          <div class="camera-source-body">
           <section class="camera-preset-section" data-testid="camera-presets">
             <h3>Пресеты камеры</h3>
-            <label for="camera-preset-select">Выбрать пресет</label>
-            <select id="camera-preset-select" v-model="selectedPresetId"
-              data-testid="camera-preset-select"
-              :disabled="presetBusy||busy||recording" @change="pickCameraPreset">
-              <option v-for="preset in cameraPresetCatalog.presets"
-                :key="preset.id" :value="preset.id">{{preset.name}}</option>
-            </select>
-            <label for="camera-preset-name">Название пресета</label>
-            <input id="camera-preset-name" v-model="presetName" maxlength="36"
+            <div class="sheet-pill-row" role="group" aria-label="Пресеты камеры"
+              data-testid="camera-preset-select" :data-selected-preset="selectedPresetId">
+              <button v-for="preset in cameraPresetCatalog.presets" :key="preset.id"
+                type="button" class="preset-pill" :class="{selected:selectedPresetId===preset.id}"
+                :aria-pressed="selectedPresetId===preset.id" :data-preset-id="preset.id"
+                :disabled="presetBusy||busy||recording"
+                @click="selectedPresetId=preset.id;pickCameraPreset()">{{preset.name}}</button>
+            </div>
+            <label class="camera-source-field" for="camera-preset-name">Название пресета<input id="camera-preset-name" v-model="presetName" maxlength="36"
               autocomplete="off" :disabled="presetBusy||busy||recording"
-              data-testid="camera-preset-name">
+              data-testid="camera-preset-name"></label>
             <div class="camera-preset-actions">
               <button type="button" data-testid="camera-preset-save"
                 :disabled="presetBusy||busy||recording||!presetName.trim()"
-                @click="writeCameraPreset('save')">Сохранить пресет</button>
+                @click="writeCameraPreset('save')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 3h14l3 3v15H3V3zM7 3v7h10V3M7 21v-8h10v8"/></svg> Сохранить пресет</button>
               <button type="button" data-testid="camera-preset-add"
                 :disabled="presetBusy||busy||recording||!presetName.trim()"
-                @click="writeCameraPreset('add')">Добавить пресет</button>
+                @click="writeCameraPreset('add')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg> Добавить пресет</button>
             </div>
             <p v-if="presetNotice" data-testid="camera-preset-status"
               role="status" class="muted">{{presetNotice}}</p>
@@ -1790,109 +1791,78 @@ onUnmounted(()=>{
 
         <section class="camera-preset-options" aria-label="Фото">
           <h3>Фото</h3>
-          <label for="camera-photo-aspect">Пропорции</label>
-          <select id="camera-photo-aspect" v-model="photoAspect" :disabled="busy||recording"
+          <label class="camera-source-field" for="camera-photo-aspect">Пропорции<select id="camera-photo-aspect" v-model="photoAspect" :disabled="busy||recording"
             data-testid="camera-photo-aspect">
             <option value="1:1">1:1</option>
             <option value="4:3">4:3</option>
             <option value="3:2">3:2</option>
             <option value="16:9">16:9</option>
-          </select>
-          <label for="camera-photo-quality">Качество фото</label>
-          <select id="camera-photo-quality" v-model="photoQuality" :disabled="busy||recording"
+          </select></label>
+          <label class="camera-source-field" for="camera-photo-quality">Качество фото<select id="camera-photo-quality" v-model="photoQuality" :disabled="busy||recording"
             data-testid="camera-photo-quality">
             <option value="maximum">Максимальное</option>
             <option value="high">Высокое</option>
             <option value="medium">Среднее</option>
             <option value="low">Низкое</option>
-          </select>
+          </select></label>
           <template v-if="cameraZoomRange&&captureMode==='photo'">
-            <label for="camera-photo-zoom">Масштаб: {{cameraZoom.toFixed(1)}}×</label>
-            <input id="camera-photo-zoom" type="range" data-testid="camera-photo-zoom"
+            <label class="camera-source-field" for="camera-photo-zoom">Масштаб: {{cameraZoom.toFixed(1)}}×<input id="camera-photo-zoom" type="range" data-testid="camera-photo-zoom"
               :min="cameraZoomRange.min" :max="cameraZoomRange.max"
               :step="cameraZoomRange.step" :value="cameraZoom"
               :disabled="cameraZoomBusy||busy||recording||starting"
-              @change="setCameraZoom">
+              @change="setCameraZoom"></label>
           </template>
           <p v-else class="muted" data-testid="camera-photo-zoom-unavailable">
             Масштаб доступен только при поддержке подключённой камеры.
           </p>
-        <label class="camera-appearance-setting">
-          <input type="checkbox" v-model="gridVisible" data-testid="camera-grid-setting">
-          Сетка кадрирования 3х3
-          <small>Не показывается на готовых кадрах.</small>
-        </label>
-          <label class="camera-appearance-setting">
-            <input type="checkbox" data-testid="camera-photo-torch"
+        <label class="camera-appearance-setting setting-toggle"><span>Сетка кадрирования 3х3<small>Не показывается на готовых кадрах.</small></span><input type="checkbox" v-model="gridVisible" data-testid="camera-grid-setting"></label>
+          <label class="camera-appearance-setting setting-toggle"><span>Фонарик<small v-if="!torchSupported">Доступен только при поддержке подключённой камеры.</small></span><input type="checkbox" data-testid="camera-photo-torch"
               :checked="torchOn"
               :disabled="!torchSupported||torchBusy||busy||recording||starting"
-              @change="setTorchFromSettings">
-            Фонарик
-            <small v-if="!torchSupported">Доступен только при поддержке подключённой камеры.</small>
-          </label>
+              @change="setTorchFromSettings"></label>
         </section>
         <section class="camera-preset-options" aria-label="Видео">
           <h3>Видео</h3>
-          <label for="camera-video-quality">Качество видео</label>
-          <select id="camera-video-quality" v-model="videoQuality"
+          <label class="camera-source-field" for="camera-video-quality">Качество видео<select id="camera-video-quality" v-model="videoQuality"
             :disabled="busy||recording||starting" data-testid="camera-video-quality">
             <option value="480p">480p</option>
             <option value="720p">720p</option>
             <option value="1080p">1080p</option>
-          </select>
+          </select></label>
           <p class="muted">Разрешение запрашивается при следующем включении камеры.
             Фактическое разрешение зависит от устройства.</p>
-          <label class="camera-appearance-setting">
-            <input type="checkbox" v-model="videoAudioEnabled"
-              :disabled="busy||recording||starting" data-testid="camera-video-audio">
-            Записывать звук в видео
-            <small>При отключении микрофон освобождается; для аудио требуется отдельное разрешение.</small>
-          </label>
-          <label for="camera-video-duration">
-            Максимальная длительность видео: {{videoMaxSeconds}} сек.
-          </label>
-          <input id="camera-video-duration" v-model.number="videoMaxSeconds"
+          <label class="camera-appearance-setting setting-toggle"><span>Записывать звук в видео<small>При отключении микрофон освобождается; для аудио требуется отдельное разрешение.</small></span><input type="checkbox" v-model="videoAudioEnabled"
+              :disabled="busy||recording||starting" data-testid="camera-video-audio"></label>
+          <label class="camera-source-field" for="camera-video-duration">Максимальная длительность видео: {{videoMaxSeconds}} сек.<input id="camera-video-duration" v-model.number="videoMaxSeconds"
             type="range" min="5" max="300" step="5" :disabled="busy||recording"
-            data-testid="camera-video-duration">
+            data-testid="camera-video-duration"></label>
         </section>
         <section class="camera-preset-options" aria-label="Аудио">
           <h3>Аудио</h3>
-          <label for="camera-audio-bitrate">Качество аудио</label>
-          <select id="camera-audio-bitrate" v-model.number="audioTargetBitrate"
+          <label class="camera-source-field" for="camera-audio-bitrate">Качество аудио<select id="camera-audio-bitrate" v-model.number="audioTargetBitrate"
             :disabled="recording||busy" data-testid="camera-audio-bitrate">
             <option v-for="rate in AUDIO_TARGET_BITRATES" :key="rate" :value="rate">
               {{ rate/1000 }} кбит/с
             </option>
-          </select>
-          <label for="camera-audio-duration">
-            Максимальная длительность аудио: {{audioMaxSeconds}} сек.
-          </label>
-          <input id="camera-audio-duration" v-model.number="audioMaxSeconds"
+          </select></label>
+          <label class="camera-source-field" for="camera-audio-duration">Максимальная длительность аудио: {{audioMaxSeconds}} сек.<input id="camera-audio-duration" v-model.number="audioMaxSeconds"
             type="range" min="5" max="3000" step="5" :disabled="busy||recording"
-            data-testid="camera-audio-duration">
+            data-testid="camera-audio-duration"></label>
           <p class="muted">Аудио записывается без видеопотока. Фактический битрейт зависит от браузера и кодека.</p>
         </section>
         <section class="camera-preset-options" data-testid="camera-geolocation-section">
           <h3>Геолокация</h3>
-        <label class="camera-appearance-setting">
-          <input type="checkbox" data-testid="camera-gps-tracking"
+        <label class="camera-appearance-setting setting-toggle"><span>Отслеживать GPS<small>Только после разрешения пользователя. На iOS PWA
+            фоновое отслеживание не гарантируется.</small></span><input type="checkbox" data-testid="camera-gps-tracking"
             :checked="gpsTracking||!!requiredFields?.requiredGps"
             :disabled="!!requiredFields?.requiredGps||gpsLoading||busy||recording"
-            @change="toggleGPSTracking">
-          Отслеживать GPS
-          <small>Только после разрешения пользователя. На iOS PWA
-            фоновое отслеживание не гарантируется.</small>
-        </label>
+            @change="toggleGPSTracking"></label>
         <p v-if="requiredFields?.requiredGps" class="muted"
           data-testid="camera-gps-required">
           Отслеживание геолокации требуется подписанными правилами задания.
           Для получения координат нажмите «Получить GPS».
         </p>
-        <label class="camera-appearance-setting">
-          <input type="checkbox" v-model="gpsStatusVisible" data-testid="camera-gps-visibility">
-          Показывать GPS над кнопкой «Снять»
-          <small>Только видимость индикатора; не изменяет GPS-согласие и требования задания.</small>
-        </label>
+        <label class="camera-appearance-setting setting-toggle"><span>Показывать GPS над кнопкой «Снять»<small>Только видимость индикатора; не изменяет GPS-согласие и требования задания.</small></span><input type="checkbox" v-model="gpsStatusVisible" data-testid="camera-gps-visibility"></label>
         <p v-if="desiredGpsTracking&&!gpsTracking&&!gps" class="muted"
           data-testid="camera-preset-gps-consent">
           Для GPS из пресета требуется новое разрешение. Нажмите «Определить координаты».
@@ -1919,6 +1889,7 @@ onUnmounted(()=>{
             data-testid="camera-permission-status">{{devicePermissionStatus}}</p>
         </section>
 
+          </div>
         </div>
         <div v-show="cameraSheet==='assignment'" class="foundation-card camera-assignment-card"
           :class="{'is-camera-sheet':cameraSheet==='assignment'}"

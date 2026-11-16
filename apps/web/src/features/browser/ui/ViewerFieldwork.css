@@ -38,3 +38,27 @@
 .fullscreen-layer .fullscreen-close{min-height:0;padding:0;font:inherit}
 .fullscreen-pager button{min-height:0}
 @media(prefers-reduced-motion:reduce){.fullscreen-layer.enter,.fullscreen-layer.exit-up,.fullscreen-layer.exit-down{animation:none!important}}
+
+/* Approved Viewer sheets; editor route retains its independent accepted layout. */
+.sheet-handle{width:35px;height:4px;margin:0 auto 14px;border-radius:6px;background:#696969}.sheet-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px}.sheet-heading strong{color:#fff;font-size:16px;font-weight:750}.sheet-heading button{padding:6px;border:0;background:transparent;color:#eee}.sheet-content{display:grid;gap:10px;color:#f2f2f2}.description-card{padding:15px 14px;border:1px solid #484848;border-radius:8px;background:#3a3a3a}.description-card strong{display:block;color:#fff;font-size:13px;font-weight:750;margin-bottom:8px}.description-card p{margin:0;color:#f0f0f0;font-size:13px;line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}.sheet-content dl{margin:0;display:grid}.sheet-content dl>div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #434343;font-size:12px}.sheet-content dt{color:#b5b5b5;flex:0 0 38%}.sheet-content dd{color:#f2f2f2;text-align:right;margin:0;overflow-wrap:anywhere}.sheet-content .note{padding:13px;border-radius:7px;background:#383838;color:#e5e5e5;font-size:12px;line-height:1.6}.sheet-content>button,.editor-actions button{padding:12px;border:0;border-radius:6px;text-align:left;background:#3b3b3b;color:#f1f1f1;font-size:12px}.sheet-content>button.primary,.editor-actions button.primary{background:var(--green);color:#122115;text-align:center;font-weight:750}.sheet-content>button.danger{color:#f0aaaa}.sheet-content label{display:grid;gap:6px;color:#ccc;font-size:12px}.sheet-content input,.sheet-content textarea{width:100%;min-width:0;padding:11px;background:#1d1d1d;border:1px solid #575757;border-radius:6px;color:#f3f3f3;font-size:13px}.sheet-content input[type=range]{padding:0;accent-color:var(--green)}.sheet-content textarea{min-height:85px;resize:vertical}.editor-actions{display:grid;gap:7px}.range-box{display:grid;grid-template-columns:1fr 1fr;gap:12px}.range-box label{font-size:11px}.range-box output{font-variant-numeric:tabular-nums;color:#b6dabc;font-size:11px}
+.file-viewer-overlay:has(>.approved-viewer-sheet){position:fixed;inset:0;z-index:60}
+.approved-viewer-sheet{position:relative;display:block;width:100%;max-height:86dvh;min-height:0;overflow-y:auto;padding:9px 17px 25px;border:0;border-radius:13px 13px 0 0;background:#292929;color:#f2f2f2;box-shadow:none}
+.approved-viewer-sheet .file-viewer-sheet-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px;padding:0;border:0;min-height:0}
+.approved-viewer-sheet .file-viewer-sheet-heading strong{color:#fff;font-size:16px;font-weight:750}
+.approved-viewer-sheet .file-viewer-sheet-heading button{min-height:0;padding:6px;border:0;background:transparent;color:#eee}
+.approved-viewer-sheet .file-viewer-sheet-body{display:grid;gap:10px;overflow:visible;padding:0;color:#f2f2f2}
+.approved-viewer-sheet .file-viewer-information{margin:0;padding:0;background:none;border:0;display:grid;gap:10px}
+.approved-viewer-sheet .file-viewer-information dl{margin:0;display:grid;gap:0}
+.approved-viewer-sheet dl>div{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #434343;font-size:12px}
+.approved-viewer-sheet dt{color:#b5b5b5;flex:0 0 38%;font-weight:400}
+.approved-viewer-sheet dd{color:#f2f2f2;text-align:right;margin:0;overflow-wrap:anywhere;min-width:0}
+@media(min-width:700px){.approved-viewer-sheet{max-width:520px;margin:0 auto}}
+.approved-viewer-sheet{font:16px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.approved-viewer-sheet .file-viewer-information dl{grid-template-columns:minmax(0,1fr)}
+
+.file-viewer-overlay:has(>.approved-viewer-sheet){font:16px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.approved-viewer-sheet .file-viewer-sheet-heading button,.approved-viewer-sheet .file-viewer-information dl{font:inherit}
+
+.download-pop{position:absolute;z-index:50;top:59px;right:33px;width:min(275px,calc(100% - 20px));padding:15px;background:#303030;border:1px solid #575757;border-radius:9px;box-shadow:0 15px 36px #0009;color:#f3f3f3}.download-pop strong{display:block;color:#fff;font-size:13px;font-weight:750}.download-pop p{color:#d4d4d4;font-size:12px;line-height:1.55;margin:8px 0 13px}.download-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}.download-buttons button{min-height:38px;border:0;border-radius:5px;background:#474747;color:#fff;font-size:12px}.download-buttons button:last-child{background:var(--green);color:#122115;font-weight:700}
+.download-pop{position:fixed;--green:#1ed760;font:16px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.download-pop button{min-height:38px;padding:0}

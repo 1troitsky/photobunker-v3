@@ -61,7 +61,7 @@ test('P2 Browser->File Viewer->Browser: restore encrypted folder, filter, privat
     })
     await page.getByRole('button',{name:'Новая папка'}).click()
     await page.getByTestId('browser-folder-name').fill('Приватная папка')
-    await page.getByRole('button',{name:'Создать',exact:true}).click()
+    await page.getByRole('button',{name:'Создать папку',exact:true}).click()
     // Verify a real AES-GCM/IndexedDB write, independently of Vue rendering.
     // A rendered row alone is not durable; a persisted row alone is not UX.
     await expect.poll(()=>page.evaluate(async()=>{

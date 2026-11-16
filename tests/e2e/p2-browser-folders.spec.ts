@@ -34,7 +34,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     })
     await page.getByRole('button',{name:'Новая папка'}).click()
     await page.getByTestId('browser-folder-name').fill('Съёмки')
-    await page.getByRole('button',{name:'Создать',exact:true}).click()
+    await page.getByRole('button',{name:'Создать папку',exact:true}).click()
     await expect(page.locator('.browser-folder-item')).toHaveCount(1)
     const sealed=await page.evaluate(async()=>{
       const request=indexedDB.open('pb3-browser-device-folders-v1')
@@ -63,7 +63,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await expect(item).toHaveCount(1)
     await page.getByRole('button',{name:'Новая папка'}).click()
     await page.getByTestId('browser-folder-name').fill('День 1')
-    await page.getByRole('button',{name:'Создать',exact:true}).click()
+    await page.getByRole('button',{name:'Создать папку',exact:true}).click()
     await ensureFileMenu(item)
     await item.getByRole('combobox',{name:'Папка файла '+id})
       .selectOption({label:'День 1'})
@@ -171,7 +171,7 @@ test('P2 Browser: corrupt encrypted folder snapshot fails closed without overwri
     })
     await expect(page.getByTestId('browser-folder-name'))
       .toHaveValue('SECRET-LOCAL-FOLDER')
-    await page.getByRole('button',{name:'Создать',exact:true}).click()
+    await page.getByRole('button',{name:'Создать папку',exact:true}).click()
     await expect(page.locator('.browser-folder-item')).toHaveCount(1)
 
     const corrupted=await page.evaluate(()=>new Promise<string>((resolve,reject)=>{

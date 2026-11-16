@@ -30,3 +30,27 @@
 .camera-fieldwork .is-camera-sheet h3{font-size:12px;font-weight:780;color:#f4f4f4;margin:0}
 .camera-fieldwork .is-camera-sheet label{font-size:12px;font-weight:630;color:#f0f0f0}
 .camera-fieldwork .is-camera-sheet select,.camera-fieldwork .is-camera-sheet input:not([type=checkbox]):not([type=range]),.camera-fieldwork .is-camera-sheet textarea{border:1px solid #555;border-radius:6px;background:#292929;color:#f3f3f3;padding:10px;font-size:13px;font-weight:400}
+
+/* Reference sheet structure overrides the former stacked-form defaults. */
+.camera-fieldwork .camera-source-body{display:grid;gap:10px}
+.camera-fieldwork .camera-sheet-heading{padding:0;border:0;gap:12px;margin:0 0 15px}
+.camera-fieldwork .camera-sheet-heading button{width:auto;height:auto;min-height:0;padding:6px}
+.camera-fieldwork .camera-preset-section,.camera-fieldwork .camera-preset-options{margin:0;gap:12px}
+.camera-fieldwork .is-camera-sheet .camera-source-field{margin:0;display:grid;gap:7px}
+.camera-fieldwork .is-camera-sheet .camera-source-field input,.camera-fieldwork .is-camera-sheet .camera-source-field select{margin:0}
+.camera-fieldwork .is-camera-sheet .setting-toggle{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0;font-weight:400}
+.camera-fieldwork .setting-toggle>span{display:grid;gap:4px}
+.camera-fieldwork .setting-toggle input{margin:0;width:18px;height:18px;flex:0 0 18px}
+.camera-fieldwork .setting-toggle small{font-weight:400;font-size:11px;line-height:1.3;color:#aaa}
+.camera-fieldwork .is-camera-sheet .muted{font-size:11px;line-height:1.5;color:#acacac;margin:2px 0}
+.camera-fieldwork .camera-preset-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.camera-fieldwork .camera-preset-actions button{background:#424242;border:1px solid #555;border-radius:7px;min-height:42px;padding:10px;font-size:12px;font-weight:680}
+.camera-fieldwork [data-testid="camera-preset-save"]{background:var(--green);color:#0f2416;border-color:var(--green)}
+.camera-fieldwork .camera-preset-actions button{display:flex;justify-content:center;align-items:center;gap:8px}
+.camera-fieldwork .camera-preset-actions button svg{height:18px;width:18px}
+.camera-fieldwork .camera-details .foundation-card.is-camera-sheet{max-height:87dvh;padding:10px 16px max(24px,env(safe-area-inset-bottom));font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.camera-fieldwork .camera-details .is-camera-sheet .preset-pill{min-height:0;font:11px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:8px 10px;line-height:normal}
+.camera-fieldwork .camera-details .camera-source-field input,.camera-fieldwork .camera-details .camera-source-field select{font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.camera-fieldwork .camera-sheet-heading button{display:inline-block;vertical-align:baseline}
+.camera-fieldwork .camera-sheet-heading button svg{display:inline;width:20px;height:20px}
+.camera-fieldwork .camera-details .camera-preset-section .camera-preset-actions{margin:0;gap:8px}

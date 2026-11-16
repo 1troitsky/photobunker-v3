@@ -22,7 +22,7 @@ test('P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder ->
     await expect(a.getByTestId('browser-v3')).toBeVisible()
     await a.getByRole('button',{name:'Новая папка'}).click()
     await a.getByTestId('browser-folder-name').fill('HTTPS Evidence')
-    await a.getByRole('button',{name:'Создать',exact:true}).click()
+    await a.getByRole('button',{name:'Создать папку',exact:true}).click()
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
     await browserHeader(a,'upload')

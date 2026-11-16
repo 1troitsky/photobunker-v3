@@ -13,7 +13,7 @@ test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext
 
   await browserHeader(page,'folder')
   await page.getByTestId('browser-folder-name').fill('Encrypted covers')
-  await page.getByRole('button',{name:'Создать',exact:true}).click()
+  await page.getByRole('button',{name:'Создать папку',exact:true}).click()
   await expect(page.getByRole('button',{name:'Encrypted covers',exact:true}))
     .toBeVisible()
 
