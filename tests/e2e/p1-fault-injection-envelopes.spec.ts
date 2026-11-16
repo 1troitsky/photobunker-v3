@@ -248,7 +248,8 @@ test('P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean 
     expect(before).toBe(0)
 
     poison = false
-    await page.unroute(chunkPattern)
+    // Drain asynchronous route.fetch/fulfill before replacing the interceptor.
+    await page.unrouteAll({ behavior: 'wait' })
     await page.evaluate(async () => {
       const m = await import('/src/features/media/application/media-outbox.ts')
       await m.synchronizeMedia()
@@ -287,7 +288,8 @@ test('P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean 
     }, mediaId)
     expect(tamperedReads).toBeGreaterThan(0)
     expect(corruptRead).toBe('media.chunk_corrupt')
-    await page.unroute(chunkPattern)
+    // Drain asynchronous route.fetch/fulfill before replacing the interceptor.
+    await page.unrouteAll({ behavior: 'wait' })
 
     // The persisted verified remote object still decrypts correctly:
     // interception modified only the response, not Garage.
