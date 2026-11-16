@@ -51,6 +51,9 @@ test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext
   await expect(row).toHaveCount(0)
   await page.getByTestId('browser-tab-active').click()
   await expect(row).toHaveCount(1)
+  // Approved Browser v3: moving a file is performed via its own Actions menu.
+  await row.getByTestId('browser-file-menu-toggle').click()
+  await expect(row.getByTestId('browser-file-menu-panel')).toBeVisible()
   await row.getByRole('combobox',{name:'Папка файла '+id})
     .selectOption({label:'Encrypted covers'})
   await expect(row).toHaveCount(0)

@@ -125,6 +125,8 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
       .toContainText('Файл помещён в архив на сервере.',{timeout:30000})
     await page.getByTestId('browser-tab-archive').click()
     await expect(row).toHaveCount(1)
+    await ensureFileMenu(row)
+    await expect(row.getByRole('button',{name:/Запросить удаление файла/})).toBeVisible()
     page.once('dialog',dialog=>dialog.accept())
     await row.getByRole('button',{name:/Запросить удаление файла/}).click()
     await expect(page.getByTestId('browser-archive-status'))

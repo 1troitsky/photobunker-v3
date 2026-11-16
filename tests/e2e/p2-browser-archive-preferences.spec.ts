@@ -92,6 +92,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     await a.getByTestId('browser-pref-use-archive').uncheck()
     await expect(a.getByTestId('browser-pref-status'))
       .toContainText('подтверждены сервером',{timeout:20000})
+    await ensureFileMenu(row)
     await expect(row.getByRole('button',{name:/Запросить прямое удаление файла/}))
       .toBeVisible()
     a.once('dialog',d=>d.accept())

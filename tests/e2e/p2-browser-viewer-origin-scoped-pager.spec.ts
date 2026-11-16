@@ -74,7 +74,13 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     await page.getByRole('button',{name:'Создать',exact:true}).click()
     await expect(page.locator('.browser-folder-item')).toHaveCount(1)
     for(const row of rows.filter(x=>x.name!=='OUTSIDE.wav')){
-      await page.getByRole('combobox',{name:'Папка файла '+row.id})
+      // The encrypted folder placement is intentionally behind each
+      // file's approved Actions menu, not a permanently exposed select.
+      const item=page.getByTestId('browser-row-media:'+row.id)
+      await expect(item).toBeVisible()
+      await item.getByTestId('browser-file-menu-toggle').click()
+      await expect(item.getByTestId('browser-file-menu-panel')).toBeVisible()
+      await item.getByRole('combobox',{name:'Папка файла '+row.id})
         .selectOption({label:'Только выбранные'})
     }
     await page.locator('.browser-folder-open')
