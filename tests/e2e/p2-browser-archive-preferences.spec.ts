@@ -1,3 +1,4 @@
+import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 import type {Locator} from '@playwright/test'
 
@@ -47,6 +48,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     await expect(b.getByTestId('browser-pref-unconfirmed')).toHaveCount(0)
     await b.getByTestId('browser-settings-close').click()
 
+    await openImportSheet(a)
     await a.getByTestId('media-import-file').setInputFiles({
       name:'PRIVATE-PREF-VOICE.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x31),
@@ -62,6 +64,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
       const m=await import('/src/features/media/application/media-outbox.ts')
       return (await m.listLocalMedia()).filter(x=>x.state==='synced').length
     }),{timeout:30000}).toBe(1)
+    await closeImportSheet(a)
     await a.getByRole('button',{name:'Обновить',exact:true}).first().click()
     const row=a.locator('[data-testid^="browser-row-media:"]')
     await ensureFileMenu(row)

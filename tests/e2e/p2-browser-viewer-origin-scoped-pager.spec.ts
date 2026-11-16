@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
 test('P2 File Viewer: navigate exactly the Browser folder/filter order and return to last viewed encrypted file',async({browser})=>{
@@ -31,7 +32,7 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
       // previous AES-GCM import is still busy. A real user cannot. Prove
       // that the previous encrypted transaction completed before selecting.
       await expect(picker).toBeEnabled({timeout:30000})
-      await picker.setInputFiles({name,mimeType:mime,buffer:Buffer.alloc(8192,fill)})
+      await chooseEncryptedFile(picker,{name,mimeType:mime,buffer:Buffer.alloc(8192,fill)})
       const expectedCount=index+1
       // The IndexedDB media outbox, not a transient DOM notification, is
       // the Local-First commit authority. Check exact file identities too.

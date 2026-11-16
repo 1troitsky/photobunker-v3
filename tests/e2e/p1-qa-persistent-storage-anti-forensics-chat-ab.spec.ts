@@ -1,3 +1,4 @@
+import {openImportSheet} from './helpers/browser-import'
 import { expect, test, type Page } from '@playwright/test'
 
 // #378: this is deliberately a narrow browser-origin anti-forensics check.
@@ -167,6 +168,7 @@ test('P1 #378 genuine encrypted offline media stays private in persistent browse
     // Existing Vite shell stays loaded: this is genuine warm Local-First,
     // not a claimed signed Service Worker or cold offline startup.
     await page.goto('/browser')
+    await openImportSheet(page)
     const importPanel = page.locator('.media-import-p1')
     await expect(importPanel.getByTestId('media-import-file')).toBeEnabled()
     await context.setOffline(true)

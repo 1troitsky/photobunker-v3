@@ -1,3 +1,4 @@
+import {openImportSheet} from './helpers/browser-import'
 import { expect, test, type Page } from '@playwright/test'
 
 /**
@@ -36,6 +37,7 @@ test('P1 ACL matrix: A→B verified grant only, C denied, source namespace denie
   try {
     const a = await enroll(A)
     await A.goto('/browser')
+    await openImportSheet(A)
     const aPanel = A.locator('.media-import-p1')
     await expect(aPanel.getByTestId('media-import-file')).toBeEnabled()
 
@@ -60,6 +62,7 @@ test('P1 ACL matrix: A→B verified grant only, C denied, source namespace denie
 
     const b = await enroll(B)
     await B.goto('/browser')
+    await openImportSheet(B)
     // Browser hydration may temporarily display the local key while its
     // authenticated server cookie has not yet been refreshed. Never
     // treat that local-only state as proof for a signed key publication.

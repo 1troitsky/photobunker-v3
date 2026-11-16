@@ -1,3 +1,4 @@
+import {revokeGeolocation} from './helpers/native-permissions'
 import {expect,test,type Browser,type Page} from '@playwright/test'
 
 async function requestGpsFromApprovedSheet(page:Page):Promise<void>{
@@ -66,8 +67,7 @@ for(const required of [false,true]){
       await cameraReady(page,assignmentId)
       await requestGpsFromApprovedSheet(page)
       await expect(page.getByTestId('camera-gps-indicator')).toContainText('GPS · ±')
-      await context.clearPermissions()
-      await context.grantPermissions(['camera'])
+      await revokeGeolocation(page)
       await expect.poll(()=>page.evaluate(async()=>
         (await navigator.permissions.query({name:'geolocation'})).state)).not.toBe('granted')
       // No second GPS button click: real browser event OR shutter recheck

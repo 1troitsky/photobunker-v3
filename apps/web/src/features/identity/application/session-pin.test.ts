@@ -41,6 +41,8 @@ beforeEach(async()=>{
   vi.useRealTimers()
   activeSession.value=null
   vi.stubGlobal('navigator',{locks:new TestPinLockManager()})
+  const storage=new Map<string,string>()
+  vi.stubGlobal('localStorage',{getItem:(key:string)=>storage.get(key)??null,setItem:(key:string,value:string)=>storage.set(key,value),removeItem:(key:string)=>storage.delete(key)})
   pendingPinUnlock.value=null
   identityBootstrapReady.value=false
   identityBootstrapError.value=null
@@ -611,4 +613,41 @@ describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()
     vi.useRealTimers()
   },145_000)
 
+})
+
+
+describe('PIN settings atomic replacement and durable old-PIN authorization',()=>{
+  it('changes PIN only after authentic old PIN and rejects the old envelope after reload',async()=>{
+    const f=await protectedAccount()
+    const {replacePinSettings}=await import('../../security/application/pin-device-settings')
+    await expect(replacePinSettings({scope:f.scope,candidate:'0000',expectedPackage:f.pkg,change:{kind:'change',newPin:'13579'},isCurrent:()=>true})).rejects.toThrow('pin.invalid')
+    expect((await getDevice(f.scope.accountId,f.scope.deviceId) as unknown as {pinLength:number}).pinLength).toBe(4)
+    await replacePinSettings({scope:f.scope,candidate:'4826',expectedPackage:f.pkg,change:{kind:'change',newPin:'13579'},isCurrent:()=>true})
+    await resumeExistingDevice()
+    expect(pendingPinUnlock.value?.pinLength).toBe(5)
+    expect(await unlockPinnedDevice('4826')).toEqual({status:'invalid',attemptsRemaining:4})
+    expect(await unlockPinnedDevice('13579')).toEqual({status:'app-unlocked'})
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+  },105_000)
+  it('disables PIN through a verified atomic package rewrite and preserves account keys',async()=>{
+    const f=await protectedAccount()
+    const {replacePinSettings}=await import('../../security/application/pin-device-settings')
+    await replacePinSettings({scope:f.scope,candidate:'4826',expectedPackage:f.pkg,change:{kind:'disable'},isCurrent:()=>true})
+    const row=await getDevice(f.scope.accountId,f.scope.deviceId)
+    expect((row as unknown as {pinMode?:string}).pinMode).toBeUndefined()
+    expect(row?.envelope.purpose).toBe('device')
+    await resumeExistingDevice()
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+  },105_000)
+  it('commits an authenticated delay without granting an unlock, and refuses a stale identity',async()=>{
+    const f=await protectedAccount()
+    const {replacePinSettings}=await import('../../security/application/pin-device-settings')
+    await expect(replacePinSettings({scope:f.scope,candidate:'4826',expectedPackage:f.pkg,change:{kind:'disable'},isCurrent:()=>false})).rejects.toThrow('pin.session_changed')
+    const row=await replacePinSettings({scope:f.scope,candidate:'4826',expectedPackage:f.pkg,change:{kind:'delay',delayMs:120000},isCurrent:()=>true})
+    const sealed=row as unknown as import('../../security/application/pin-device-migration').SealedPinDevice
+    const {readVerifiedPinRelockDelay}=await import('../../security/application/pin-verifier')
+    expect(await readVerifiedPinRelockDelay(f.scope,sealed.pinHmacKey,sealed.pinVerifier)).toBe(120000)
+    expect(activeSession.value).toBeNull()
+    await resumeExistingDevice();expect(await unlockPinnedDevice('4826')).toEqual({status:'app-unlocked'})
+  },105_000)
 })

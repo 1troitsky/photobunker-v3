@@ -1,3 +1,4 @@
+import {openImportSheet} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
 test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts',async({browser})=>{
@@ -10,14 +11,18 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
   const A=await ownerCtx.newPage()
   const B=await contributorCtx.newPage()
   async function editCameraFields(fields:{category?:string;description?:string;tags?:string}):Promise<void>{
-    await B.getByTestId('camera-open-assignment').click()
-    if(fields.category!==undefined)await B.locator('#camera-category').fill(fields.category)
+    if(!await B.getByTestId('camera-assignment-panel').isVisible())await B.getByTestId('camera-open-assignment').click()
+    if(fields.category!==undefined){
+      const control=B.locator('#camera-category')
+      if(await control.evaluate(el=>el.tagName)==='SELECT')await control.selectOption(fields.category)
+      else await control.fill(fields.category)
+    }
     if(fields.description!==undefined)await B.locator('#camera-description').fill(fields.description)
     if(fields.tags!==undefined)await B.locator('#camera-tags').fill(fields.tags)
     await B.getByTestId('camera-sheet-close').click()
   }
   async function requestCameraGps():Promise<void>{
-    await B.getByTestId('camera-open-assignment').click()
+    if(!await B.getByTestId('camera-assignment-panel').isVisible())await B.getByTestId('camera-open-assignment').click()
     await B.getByRole('button',{name:'Получить GPS'}).click()
     await expect(B.getByText(/GPS получен · точность/)).toBeVisible({timeout:12000})
     await B.getByTestId('camera-sheet-close').click()
@@ -33,6 +38,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       return identity.requireSession().accountId
     })
     await page.goto('/browser')
+    await openImportSheet(page)
     await expect(page.getByText('Ключ обмена подготовлен'))
       .toBeVisible({timeout:20000})
     return id
@@ -229,10 +235,10 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     // is checked before the independent signed category allowlist.
     await editCameraFields({description:'Verified photo description for signed v6'})
     await B.getByRole('button',{name:'Сделать снимок'}).click()
-    await expect(B.getByText('assignment.category_not_allowed')).toBeVisible()
+    await expect(B.getByTestId('camera-capture-error').filter({hasText:'Выберите категорию из списка задания'})).toBeVisible()
     await editCameraFields({category:'Report'})
     await B.getByRole('button',{name:'Сделать снимок'}).click()
-    await expect(B.getByText('assignment.required_tags_missing')).toBeVisible()
+    await expect(B.getByTestId('camera-capture-error').filter({hasText:'Добавьте обязательные теги по правилам задания'})).toBeVisible()
     await editCameraFields({tags:'photo-evidence'})
     await B.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(B.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
@@ -462,19 +468,20 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await expect(B.getByTestId('camera-start-recording'))
       .toBeEnabled({timeout:20000})
     await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByText('assignment.category_required')).toBeVisible()
-    await editCameraFields({category:'Wrong'})
-    await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByText('assignment.description_too_short')).toBeVisible()
-    await editCameraFields({description:'PRIVATE-AUDIO-CAPTURE-METADATA'})
-    await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByText('assignment.gps_required')).toBeVisible()
-    await requestCameraGps()
-    await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByText('assignment.category_not_allowed')).toBeVisible()
+    await expect(B.getByTestId('camera-capture-error').filter({hasText:'Категория обязательна по правилам задания'})).toBeVisible()
+    // Closed signed allowlist: the approved select cannot manufacture an
+    // invalid category. The lower-level signed submission negatives below
+    // still explicitly reject forged/wrong categories without ciphertext.
+    await expect(B.getByTestId('camera-category-select').locator('option[value="Wrong"]')).toHaveCount(0)
     await editCameraFields({category:'Report'})
     await B.getByTestId('camera-start-recording').click()
-    await expect(B.getByText('assignment.required_tags_missing')).toBeVisible()
+    await expect(B.getByTestId('camera-capture-error').filter({hasText:'Заполните описание по правилам задания'})).toBeVisible()
+    await editCameraFields({description:'PRIVATE-AUDIO-CAPTURE-METADATA'})
+    await B.getByTestId('camera-start-recording').click()
+    await expect(B.getByTestId('camera-capture-error').filter({hasText:'GPS обязателен по правилам задания'})).toBeVisible()
+    await requestCameraGps()
+    await B.getByTestId('camera-start-recording').click()
+    await expect(B.getByTestId('camera-capture-error').filter({hasText:'Добавьте обязательные теги по правилам задания'})).toBeVisible()
     await editCameraFields({tags:'evidence'})
     await B.getByTestId('camera-start-recording').click()
     await expect(B.getByTestId('camera-recording-status')).toBeVisible()
@@ -655,16 +662,26 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await B.goto('/camera?assignmentId='+assignmentId)
     await expect(B.locator('#camera-assignment'))
       .toHaveValue(assignmentId,{timeout:20000})
-    await B.getByTestId('camera-open-settings').click()
-    await B.getByTestId('camera-photo-storage').selectOption('p2')
-    await B.getByTestId('camera-sheet-close').click()
+    // The approved Camera has no technical P1/P2 selector. Exercise
+    // legacy compatibility through its real encrypted persisted preset.
+    await B.evaluate(async()=>{
+      const identity=await import('/src/features/identity/application/session.ts')
+      await identity.reauthenticate()
+      const presets=await import('/src/features/media/application/camera-presets.ts')
+      const catalog=await presets.loadCameraPresetCatalog()
+      const chosen=catalog.presets.find(x=>x.id===catalog.selectedId)!
+      await presets.changeCameraPreset({kind:'save',id:chosen.id,name:chosen.name,settings:{...chosen.settings,photoStorage:'p2'}})
+    })
+    await B.reload()
+    await expect(B.locator('#camera-assignment')).toHaveValue(assignmentId)
     await editCameraFields({category:'Report'})
     await editCameraFields({description:'PRIVATE-P2-CAMERA-PHOTO'})
     await editCameraFields({tags:'photo-evidence'})
     await requestCameraGps()
     // A completed encrypted-preset read or same-key online hydration MUST NOT
     // silently revert the user's selected P2 MediaFile capture destination.
-    await expect(B.getByTestId('camera-photo-storage')).toHaveValue('p2')
+    await expect(B.getByTestId('camera-photo-storage')).toHaveCount(0)
+    expect(await B.evaluate(async()=>{const p=await import('/src/features/media/application/camera-presets.ts');const c=await p.loadCameraPresetCatalog();return c.presets.find(x=>x.id===c.selectedId)!.settings.photoStorage})).toBe('p2')
     await expect(B.getByRole('button',{name:'Сделать снимок'}))
       .toBeEnabled({timeout:20000})
     await B.getByRole('button',{name:'Сделать снимок'}).click()
@@ -855,7 +872,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await expect(B.getByTestId('camera-private-instructions'))
       .not.toContainText('PRIVATE VIDEO MOTION 1')
     // No stale decrypted text may survive assignment deselection.
-    await B.getByTestId('camera-open-assignment').click()
+    if(!await B.getByTestId('camera-assignment-panel').isVisible())await B.getByTestId('camera-open-assignment').click()
     await B.locator('#camera-assignment').selectOption('')
     await expect(B.getByTestId('camera-private-instructions')).toHaveCount(0)
     await B.locator('#camera-assignment').selectOption(assignmentId)
@@ -863,14 +880,14 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       .toContainText('PRIVATE PHOTO FRAMING 2')
     await B.getByTestId('camera-sheet-close').click()
     await B.getByTestId('camera-mode-tab-video').click()
-    await B.getByTestId('camera-open-assignment').click()
+    if(!await B.getByTestId('camera-assignment-panel').isVisible())await B.getByTestId('camera-open-assignment').click()
     await expect(B.getByTestId('camera-media-instruction'))
       .toContainText('PRIVATE VIDEO MOTION 1')
     await expect(B.getByTestId('camera-media-instruction'))
       .not.toContainText('PRIVATE AUDIO NOTES 1')
     await B.getByTestId('camera-sheet-close').click()
     await B.getByTestId('camera-mode-tab-audio').click()
-    await B.getByTestId('camera-open-assignment').click()
+    if(!await B.getByTestId('camera-assignment-panel').isVisible())await B.getByTestId('camera-open-assignment').click()
     await expect(B.getByTestId('camera-media-instruction'))
       .toContainText('PRIVATE AUDIO NOTES 1')
     // Keep the already restored account alive during this warm-offline

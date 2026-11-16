@@ -5,6 +5,11 @@ umask 077
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIR="$ROOT/local-runner"
 fail(){ echo "PhotoBunker launch failed: $*" >&2; exit 1; }
+if [[ -f "$DIR/project-name" ]]; then
+  persisted_project="$(cat "$DIR/project-name")"
+  [[ "$persisted_project" =~ ^[a-z0-9][a-z0-9_-]{1,62}$ ]] || fail "Invalid saved Compose project name"
+  export PB3_COMPOSE_PROJECT="${PB3_COMPOSE_PROJECT:-$persisted_project}"
+fi
 [[ "$(uname -s)" == Darwin ]] || fail "macOS required"
 command -v docker >/dev/null || fail "Install OrbStack or Docker Desktop"
 command -v openssl >/dev/null || fail "openssl missing"
@@ -88,7 +93,11 @@ export PB3_S3_ACCESS_KEY="$(read_key PB3_S3_ACCESS_KEY)"
 export PB3_S3_SECRET_KEY="$(read_key PB3_S3_SECRET_KEY)"
 [[ -n "$PB3_S3_ACCESS_KEY" && -n "$PB3_S3_SECRET_KEY" ]] || fail "Garage credentials missing"
 echo "Building Laravel 13 and the ${PB3_WEB_MODE:-production} Vue application..."
-dc up -d --build api web
+case "${PB3_BUILD_IMAGES:-1}" in
+  1) dc up -d --build api web;;
+  0) dc up -d --no-build api web;;
+  *) fail "PB3_BUILD_IMAGES must be 0 or 1";;
+esac
 ready=0
 for n in $(seq 1 120); do
   if curl -fsS --max-time 3 http://127.0.0.1:8000/api/readyz >/dev/null 2>&1 &&
@@ -100,4 +109,4 @@ done
 if [[ "$ready" != 1 ]]; then dc logs --tail 100 api web; fail "App not ready"; fi
 echo "PhotoBunker PB3 running: http://127.0.0.1:5173"
 echo "Do not delete Docker volumes unless you intend to destroy local encrypted data."
-open "http://127.0.0.1:5173"
+if [[ "${PB3_OPEN_BROWSER:-1}" == 1 ]]; then open "http://127.0.0.1:5173"; fi

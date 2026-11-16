@@ -1,3 +1,4 @@
+import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 import type {Locator} from '@playwright/test'
 
@@ -19,6 +20,7 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
     await page.goto('/browser')
     await expect(page.getByTestId('browser-tab-active')).toBeVisible()
 
+    await openImportSheet(page)
     const picker=page.getByTestId('media-import-file')
     await picker.setInputFiles({
       name:'PRIVATE-ARCHIVE-AUDIO.wav',mimeType:'audio/wav',
@@ -38,6 +40,7 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
       const module=await import('/src/features/media/application/media-outbox.ts')
       return (await module.listLocalMedia()).filter(x=>x.state==='synced').length
     }),{timeout:30000}).toBe(1)
+    await closeImportSheet(page)
     await page.getByRole('button',{name:'Обновить',exact:true}).first().click()
     await ensureFileMenu(row)
     await expect(row.getByRole('button',{name:/Архивировать файл/}))

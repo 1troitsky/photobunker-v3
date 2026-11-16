@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 import type {Locator} from '@playwright/test'
 
@@ -19,7 +20,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await page.goto('/browser')
     await expect(page.getByTestId('browser-folders')).toBeVisible()
     await context.setOffline(true)
-    await page.getByTestId('media-import-file').setInputFiles({
+    await chooseEncryptedFile(page.getByTestId('media-import-file'),{
       name:'PRIVATE-LOCAL-FOLDER-TEST.webm',mimeType:'video/webm',
       buffer:Buffer.alloc(8192,0x45),
     })
@@ -123,12 +124,12 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
 
     // Batch operations commit a single encrypted revision for selected files.
     const filePicker=page.getByTestId('media-import-file')
-    await filePicker.setInputFiles({
+    await chooseEncryptedFile(filePicker,{
       name:'PRIVATE-BATCH-A.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x48),
     })
     await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(1)
-    await filePicker.setInputFiles({
+    await chooseEncryptedFile(filePicker,{
       name:'PRIVATE-BATCH-B.webm',mimeType:'video/webm',
       buffer:Buffer.alloc(8192,0x49),
     })

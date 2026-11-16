@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 
 test('Browser v3: file and encrypted-folder three-dot actions use original local operations',async({page,context})=>{
@@ -16,7 +17,7 @@ test('Browser v3: file and encrypted-folder three-dot actions use original local
     .toBeVisible()
 
   await context.setOffline(true)
-  await page.getByTestId('media-import-file').setInputFiles({
+  await chooseEncryptedFile(page.getByTestId('media-import-file'),{
     name:'ACTION-ENCRYPTED.wav',mimeType:'audio/wav',
     buffer:Buffer.alloc(8192,0x43),
   })

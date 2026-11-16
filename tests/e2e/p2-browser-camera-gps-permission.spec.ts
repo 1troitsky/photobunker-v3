@@ -1,3 +1,4 @@
+import {revokeGeolocation} from './helpers/native-permissions'
 import {expect,test,type Browser,type Page} from '@playwright/test'
 
 async function requestGpsFromApprovedSheet(page:Page):Promise<void>{
@@ -219,9 +220,8 @@ test('P2 #208 revoking geolocation must invalidate old fix before another captur
     // Revoke geolocation while keeping camera. The old fix is recent,
     // so the 2-minute timestamp cutoff alone cannot protect consent.
     // Chromium can retain a prior per-origin geolocation grant across
-    // grantPermissions() updates. Clear it FIRST, then allow camera only.
-    await context.clearPermissions()
-    await context.grantPermissions(['camera'])
+    // Target the native GPS permission; retain the live camera stream.
+    await revokeGeolocation(page)
     // This is a genuine browser permission transition (denied or prompt),
     // not just a mocked API callback or app error string.
     await expect.poll(()=>page.evaluate(async()=>

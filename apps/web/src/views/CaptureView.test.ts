@@ -243,9 +243,10 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     await settle()
     const slider=host.querySelector<HTMLInputElement>('[data-testid="camera-photo-zoom"]')!
     expect(slider).not.toBeNull()
-    expect(slider.value).toBe('1.5')
+    // Approved saved default is 1× and is applied through the native track.
+    expect(slider.value).toBe('1')
     expect(slider.min).toBe('1')
-    expect(slider.max).toBe('4')
+    expect(slider.max).toBe('3')
     slider.value='2.5'
     slider.dispatchEvent(new Event('change',{bubbles:true}))
     await settle()

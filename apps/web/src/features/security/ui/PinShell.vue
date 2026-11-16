@@ -5,6 +5,7 @@ import {
   identityBootstrapError,pendingPinUnlock,restoreAccount,unlockPinnedDevice,
 } from '../../identity/application/session'
 
+const props=withDefaults(defineProps<{mutationPending?:boolean}>(),{mutationPending:false})
 const mode=ref<'pin'|'recover'>('pin')
 const entered=ref('')
 const recoveryKey=ref('')
@@ -27,24 +28,24 @@ function clear():void{
   feedback.value=''
 }
 function toggleRecovery():void{
-  if(busy.value)return
+  if(props.mutationPending||props.mutationPending||busy.value)return
   clear()
   mode.value=mode.value==='pin'?'recover':'pin'
   recoveryKey.value=''
 }
 function digit(value:string):void{
-  if(mode.value!=='pin'||busy.value||!/^[0-9]$/.test(value))return
+  if(mode.value!=='pin'||props.mutationPending||busy.value||!/^[0-9]$/.test(value))return
   if(entered.value.length>=length.value)return
   entered.value+=value
   if(entered.value.length===length.value)void submitPin()
 }
 function erase():void {
-  if(mode.value!=='pin'||busy.value)return
+  if(mode.value!=='pin'||props.mutationPending||busy.value)return
   entered.value=entered.value.slice(0,-1)
   feedback.value=''
 }
 async function submitPin():Promise<void>{
-  if(busy.value||entered.value.length!==length.value)return
+  if(props.mutationPending||props.mutationPending||busy.value||entered.value.length!==length.value)return
   const candidate=entered.value
   const attemptNonce=pendingPinUnlock.value?.sessionNonce
   entered.value='' // no PIN survives in reactive UI state across awaits
@@ -66,7 +67,7 @@ async function submitPin():Promise<void>{
   }
 }
 async function recover():Promise<void>{
-  if(busy.value||!recoveryKey.value.trim())return
+  if(props.mutationPending||props.mutationPending||busy.value||!recoveryKey.value.trim())return
   const key=recoveryKey.value.trim()
   recoveryKey.value=''
   busy.value=true
@@ -124,7 +125,7 @@ onUnmounted(()=>{
             :aria-label="index<=entered.length?'Введено':'Пусто'"/>
         </div>
         <p class="pin-feedback" role="status" aria-live="polite">
-          {{ busy?'Проверка…':feedback }}
+          {{ props.mutationPending?'Сохраняем защиту…':busy?'Проверка…':feedback }}
         </p>
       </div>
       <div v-else class="pin-instructions pin-recovery">
@@ -135,14 +136,14 @@ onUnmounted(()=>{
         <label for="pin-recovery-key">Account Recovery Key</label>
         <textarea id="pin-recovery-key" v-model="recoveryKey"
           rows="3" spellcheck="false" autocapitalize="off"
-          autocomplete="off" autocorrect="off" :disabled="busy"
+          autocomplete="off" autocorrect="off" :disabled="props.mutationPending||busy"
           placeholder="PB2.…"/>
         <button type="button" class="pin-recovery-submit"
-          :disabled="busy||!recoveryKey.trim()" @click="recover">
+          :disabled="props.mutationPending||busy||!recoveryKey.trim()" @click="recover">
           Восстановить аккаунт
         </button>
         <p class="pin-feedback" role="status" aria-live="polite">
-          {{ busy?'Проверка…':feedback }}
+          {{ props.mutationPending?'Сохраняем защиту…':busy?'Проверка…':feedback }}
         </p>
       </div>
       <div v-if="mode==='pin' && !identityBootstrapError" class="keypad"
@@ -151,15 +152,15 @@ onUnmounted(()=>{
           <div v-if="entry===''" class="keypad-spacer" aria-hidden="true"/>
           <button v-else-if="entry==='delete'" type="button"
             class="digit digit-aux" aria-label="Удалить последнюю цифру"
-            :disabled="busy" @click="erase">⌫</button>
+            :disabled="props.mutationPending||busy" @click="erase">⌫</button>
           <button v-else type="button" class="digit"
-            :aria-label="'Цифра '+entry" :disabled="busy" @click="digit(entry)">
+            :aria-label="'Цифра '+entry" :disabled="props.mutationPending||busy" @click="digit(entry)">
             {{ entry }}
           </button>
         </template>
       </div>
       <button v-if="!identityBootstrapError" type="button"
-        class="pin-recovery-toggle" :disabled="busy" @click="toggleRecovery">
+        class="pin-recovery-toggle" :disabled="props.mutationPending||busy" @click="toggleRecovery">
         {{ mode==='pin'?'Восстановить через Recovery Key':'Вернуться к PIN' }}
       </button>
     </section>

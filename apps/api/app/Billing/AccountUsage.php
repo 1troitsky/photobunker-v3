@@ -41,13 +41,18 @@ final class AccountUsage
             ->where('account_id',$accountId)
             ->where('state','!=','deleting')
             ->where('expires_at','>',$nowMs)->sum('cipher_bytes');
+        // Pending and revoked ciphertext still consumes capacity until physical
+        // cleanup. Revoking a URL cannot be abused to bypass storage admission.
+        $cards=DB::table('public_cards_v1')->where('account_id',$accountId);
+        $cardCount=(clone $cards)->count();
+        $cardBytes=(int)$cards->sum('bytes');
         return [
             'asOfUtc'=>$at->format('Y-m-d\TH:i:s\Z'),
             'utcMonthStart'=>$from->format('Y-m-d\TH:i:s\Z'),
             'utcMonthEndExclusive'=>$to->format('Y-m-d\TH:i:s\Z'),
             'assignmentsCreatedThisUtcMonth'=>$assignments,
-            'activeLogicalMediaFiles'=>$photos+$media,
-            'recordedCipherBytes'=>$photoBytes+$mediaBytes,
+            'activeLogicalMediaFiles'=>$photos+$media+$cardCount,
+            'recordedCipherBytes'=>$photoBytes+$mediaBytes+$cardBytes,
             'measurement'=>'read_only_non_atomic',
             'enforcedByteCeiling'=>null,
             'byteUnitPolicy'=>'OPEN_GB_VS_GIB',

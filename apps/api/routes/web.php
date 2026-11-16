@@ -27,6 +27,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/api/healthz', static fn()=>response()->json(['status'=>'ok']));
+// Distinct safe, encrypted personal-photo publication, not original media grants.
+Route::prefix('public-cards/v1')->middleware('throttle:pb3-media')->group(function(){
+    Route::post('/reserve',[\App\Http\Controllers\PublicCardController::class,'reserve']);
+    Route::get('/source/{kind}/{id}',[\App\Http\Controllers\PublicCardController::class,'sourceInfo'])->whereUuid('id');
+    Route::get('/owned/{id}',[\App\Http\Controllers\PublicCardController::class,'showOwned'])->whereUuid('id');
+    Route::put('/owned/{id}/payload',[\App\Http\Controllers\PublicCardController::class,'upload'])->whereUuid('id');
+    Route::post('/owned/{id}/revoke',[\App\Http\Controllers\PublicCardController::class,'revoke'])->whereUuid('id');
+    Route::get('/owned/{kind}/{id}',[\App\Http\Controllers\PublicCardController::class,'index'])->whereUuid('id');
+    Route::get('/{token}',[\App\Http\Controllers\PublicCardController::class,'read']);
+});
 Route::get('/api/readyz', static function(){
  try { DB::select('SELECT 1'); return response()->json(['status'=>'ready']); }
  catch (Throwable) { return response()->json(['status'=>'unavailable'],503); }

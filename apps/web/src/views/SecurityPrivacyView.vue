@@ -2,14 +2,39 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import {
-  activeSession,enrollAppPinWithRecovery,logout,
+  activeSession,enrollAppPinWithRecovery,logout,updateAppPinSettings,
 } from '../features/identity/application/session'
 import { jsonApi } from '../features/identity/infrastructure/api'
 
 const route = useRoute()
-const pinConfigured=computed(()=>Boolean((activeSession.value?.device
-  as {pinMode?:string}|undefined)?.pinMode==='pin-v1'))
+const pinConfigured=computed(()=>Boolean((activeSession.value?.device as {pinMode?:string}|undefined)?.pinMode==='pin-v1'))
 const pinSetupOpen=ref(false)
+const pinSettingsOpen=ref<'change'|'disable'|'delay'|null>(null)
+const currentPin=ref(''),changedPin=ref(''),changedPinRepeat=ref(''),pinSettingAck=ref(false)
+const pinDelayMinutes=ref(0),pinSettingsBusy=ref(false),pinSettingsError=ref('')
+const confirmedPinDelayMinutes=ref(0)
+let policyGeneration=0
+watch(activeSession,async session=>{
+  const generation=++policyGeneration;confirmedPinDelayMinutes.value=0;pinDelayMinutes.value=0
+  if(!session||!pinConfigured.value)return
+  try{
+    const {readVerifiedPinRelockDelay}=await import('../features/security/application/pin-verifier')
+    const device=session.device as unknown as import('../features/security/application/pin-device-migration').SealedPinDevice
+    const delay=await readVerifiedPinRelockDelay({accountId:session.accountId,deviceId:session.deviceId},device.pinHmacKey,device.pinVerifier)
+    if(generation===policyGeneration&&activeSession.value===session){confirmedPinDelayMinutes.value=delay/60000;pinDelayMinutes.value=delay/60000}
+  }catch{ /* The session admission also fails closed for unauthenticated policy. */ }
+},{immediate:true})
+function closePinSettings():void{if(pinSettingsBusy.value)return;pinSettingsOpen.value=null;currentPin.value='';changedPin.value='';changedPinRepeat.value='';pinSettingAck.value=false;pinSettingsError.value=''}
+const validPinChange=computed(()=>/^[0-9]{4,8}$/.test(currentPin.value)&&pinSettingAck.value
+  &&(pinSettingsOpen.value!=='change'||(/^[0-9]{4,8}$/.test(changedPin.value)&&changedPin.value===changedPinRepeat.value)))
+async function savePinSettings():Promise<void>{
+  const mode=pinSettingsOpen.value;if(!mode||!validPinChange.value||pinSettingsBusy.value)return
+  const candidate=currentPin.value,newPin=changedPin.value
+  currentPin.value='';changedPin.value='';changedPinRepeat.value='';pinSettingsBusy.value=true;pinSettingsError.value=''
+  try{await updateAppPinSettings(candidate,mode==='change'?{kind:'change',newPin}:mode==='disable'?{kind:'disable'}:{kind:'delay',delayMs:pinDelayMinutes.value*60000})}
+  catch{pinSettingsError.value='Изменение не подтверждено. Введите действующий PIN на экране блокировки; настройки остаются защищёнными.'}
+  finally{pinSettingsBusy.value=false}
+}
 const pinSetupBusy=ref(false)
 const pinSetupError=ref('')
 const pinSetupCode=ref('')
@@ -72,7 +97,9 @@ onMounted(()=>{
 onUnmounted(()=>{
   // A completed request after the screen is gone must never render a stale
   // device list in another account/session.
-  ++request
+  ++request;policyGeneration++
+  currentPin.value='';changedPin.value='';changedPinRepeat.value=''
+  pinSetupCode.value='';pinSetupRepeat.value='';pinSetupRecovery.value=''
   window.removeEventListener('offline',handleOffline)
   window.removeEventListener('online',handleOnline)
 })
@@ -89,7 +116,11 @@ function handleOnline():void{
   networkOnline.value=typeof navigator==='undefined'||navigator.onLine!==false
   if(networkOnline.value&&activeSession.value?.online)void loadDevices()
 }
-watch(activeSession,()=>{
+watch(activeSession,(next,previous)=>{
+  if(next?.accountId!==previous?.accountId||next?.deviceId!==previous?.deviceId||next?.pkg?.akek!==previous?.pkg?.akek){
+    currentPin.value='';changedPin.value='';changedPinRepeat.value='';pinSettingAck.value=false;pinSettingsOpen.value=null
+    pinSetupCode.value='';pinSetupRepeat.value='';pinSetupRecovery.value='';pinSetupAcknowledged.value=false;pinSetupOpen.value=false
+  }
   devices.value=[];error.value='';status.value=''
   if(!activeSession.value)closePinSetup()
   void loadDevices()
@@ -186,15 +217,12 @@ async function copyDeviceId(id:string):Promise<void>{
               class="small-button emphasis" data-testid="security-pin-create"
               :disabled="busy||!activeSession.online||!networkOnline"
               @click="pinSetupOpen=true">Создать</button>
-            <button v-else type="button" class="small-button" disabled
-              title="Смена PIN требует отдельного подтверждённого обновления криптографического пакета">Изменить</button>
+            <template v-else><button type="button" class="small-button" :disabled="!activeSession.online||!networkOnline" data-testid="security-pin-change" @click="pinSettingsOpen='change'">Изменить</button><button type="button" class="small-button" :disabled="!activeSession.online||!networkOnline" data-testid="security-pin-disable" @click="pinSettingsOpen='disable'">Отключить</button></template>
           </div>
           <div id="setting-relock" class="pin-relock" tabindex="-1">
-            <div class="pin-relock-top"><strong>Через какое время запрашивать PIN</strong><output>Сразу</output></div>
-            <p class="pin-relock-note">{{pinConfigured
-              ?'PIN запрашивается сразу. Изменение задержки требует проверки настройки и подписи.'
-              :'Настройка станет доступна после создания PIN входа.'}}</p>
-            <input class="pin-slider" type="range" min="0" max="5" value="0" step="1" disabled aria-label="Через какое время запрашивать PIN">
+            <div class="pin-relock-top"><strong>Через какое время запрашивать PIN</strong><output>{{confirmedPinDelayMinutes?confirmedPinDelayMinutes+' мин':'Сразу'}}</output></div>
+            <p class="pin-relock-note">{{pinConfigured?'Изменение подтверждается действующим PIN.':'Настройка станет доступна после создания PIN входа.'}}</p>
+            <input v-model.number="pinDelayMinutes" class="pin-slider" type="range" min="0" max="5" step="1" :disabled="!pinConfigured||!activeSession.online||!networkOnline" aria-label="Через какое время запрашивать PIN" @change="pinSettingsOpen='delay'">
             <div class="pin-slider-labels"><span>Сразу</span><span>5 мин</span></div>
           </div>
         </div>
@@ -280,6 +308,16 @@ async function copyDeviceId(id:string):Promise<void>{
           </div>
           <p class="inactivity-card-footer">Удаление аккаунта необратимо. Настройка не продлевает срок хранения файлов. Автоматическое удаление ещё не активировано.</p>
         </div>
+      </section>
+    </div>
+    <div v-if="pinSettingsOpen" class="pin-enrollment-overlay" @click.self="closePinSettings">
+      <section class="pin-enrollment-sheet" role="dialog" aria-modal="true" aria-label="Изменение защиты PIN" data-testid="security-pin-settings-dialog" @keydown.esc.stop.prevent="closePinSettings">
+        <header class="pin-enrollment-heading"><h2>{{pinSettingsOpen==='change'?'Изменить PIN':pinSettingsOpen==='disable'?'Отключить PIN':'Изменить задержку PIN'}}</h2><button type="button" aria-label="Закрыть" :disabled="pinSettingsBusy" @click="closePinSettings">×</button></header>
+        <div class="pin-fields"><label>Действующий PIN<input v-model="currentPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" :disabled="pinSettingsBusy" data-testid="security-pin-current"></label>
+        <template v-if="pinSettingsOpen==='change'"><label>Новый PIN<input v-model="changedPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off" :disabled="pinSettingsBusy" data-testid="security-pin-changed"></label><label>Повторите новый PIN<input v-model="changedPinRepeat" type="password" inputmode="numeric" maxlength="8" autocomplete="off" :disabled="pinSettingsBusy" data-testid="security-pin-changed-repeat"></label></template>
+        <label class="pin-ack-row"><input v-model="pinSettingAck" type="checkbox" :disabled="pinSettingsBusy" data-testid="security-pin-settings-ack">{{pinSettingsOpen==='disable'?'Разрешаю снять локальную PIN-защиту. Аварийный PIN также будет отключён.':pinSettingsOpen==='change'?'Подтверждаю смену PIN. Аварийный PIN, если был настроен, потребуется настроить заново.':'Подтверждаю выбранную задержку повторной блокировки.'}}</label></div>
+        <p class="pin-help">Закройте другие вкладки приложения перед изменением. После подтверждения потребуется PIN; исходные зашифрованные фото не удаляются.</p>
+        <p v-if="pinSettingsError" role="alert">{{pinSettingsError}}</p><button type="button" :disabled="!validPinChange||pinSettingsBusy" data-testid="security-pin-settings-save" @click="savePinSettings">Подтвердить изменение</button>
       </section>
     </div>
     <div v-if="pinSetupOpen" class="pin-enrollment-overlay"

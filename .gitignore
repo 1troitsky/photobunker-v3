@@ -14,6 +14,8 @@
 .DS_Store
 /.phpunit.cache/
 /apps/api/.phpunit.cache/
+/apps/api/.phpunit.result.cache
+/apps/api/storage/framework/testing/
 /coverage/
 /.local-delivery/
 /test-results/

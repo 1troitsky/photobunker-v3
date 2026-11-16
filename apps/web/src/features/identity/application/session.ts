@@ -36,6 +36,7 @@ export const activeSession = shallowRef<Session | null>(null)
 // Welcome Loading 1.6 only reflects the initial local identity bootstrap;
 // it is not a remote-network authorization gate.
 export const sessionBootstrapPending = shallowRef(false)
+export const pinMutationPending = shallowRef(false)
 
 /**
  * A cooperating same-origin tab holds a browser SHARED lock for as long as
@@ -767,6 +768,28 @@ export async function reauthenticate():Promise<Session> {
   await prove('login',{accountId:state.accountId,deviceId:state.deviceId,purpose:'login'},state.device.deviceKey)
   if(activeSession.value!==state)throw new Error('identity.changed')
   return activate(state.pkg,state.device,true)
+}
+
+/** Explicit PIN-authorized changes; never a front-end toggle of an AES gate. */
+export async function updateAppPinSettings(candidate:string,change:import('../../security/application/pin-device-settings').PinSettingsChange):Promise<void>{
+  if(pinEnrollmentInProgress)throw Error('pin.enrollment_busy')
+  await reauthenticate()
+  const before=requireSession()
+  if(!before.online||!isSealedCandidate(before.device))throw Error('pin.online_sealed_device_required')
+  const authority=await jsonApi<{accountId:string;deviceId:string}>('/identity/v2/me')
+  if(activeSession.value!==before||authority.accountId!==before.accountId||authority.deviceId!==before.deviceId)
+    throw Error('pin.device_authority_changed')
+  pinEnrollmentInProgress=true
+  pinMutationPending.value=true
+  try{
+    if(!lockActivePinSession())throw Error('pin.not_configured')
+    const context=pendingPinUnlock.value
+    const {replacePinSettings}=await import('../../security/application/pin-device-settings')
+    const row=await replacePinSettings({scope:{accountId:before.accountId,deviceId:before.deviceId},candidate,expectedPackage:before.pkg,change,isCurrent:()=>pendingPinUnlock.value===context&&!isLogoutFenced()})
+    if(pendingPinUnlock.value!==context||isLogoutFenced())throw Error('pin.session_changed')
+    if(isSealedCandidate(row))pendingPinUnlock.value=pendingPinContext(row)
+    else{pendingPinUnlock.value=null;await resumeExistingDevice()}
+  }finally{pinEnrollmentInProgress=false;pinMutationPending.value=false}
 }
 
 export async function signPhotoContract(json:string):Promise<string> {

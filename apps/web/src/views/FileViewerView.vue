@@ -6,6 +6,8 @@ import {
   peekOriginPager,peekOriginBreadcrumb,noteViewerPosition,
 } from '../features/browser/application/browser-return-context'
 import {activeSession} from '../features/identity/application/session'
+import PublicCardPublication from '../features/media/ui/PublicCardPublication.vue'
+const publicationOpen=ref(false)
 import {pauseViewerPlayback} from '../features/browser/application/viewer-playback'
 import {setViewerShellActions}
   from '../features/browser/application/viewer-shell-actions'
@@ -1242,6 +1244,7 @@ function clearStill():void{
   stillSavedId.value=null
 }
 function clearBlob():void{
+  publicationOpen.value=false
   // The accepted File Viewer keeps media in one fixed stage. Stop BOTH
   // players synchronously before replacing/revoking their encrypted Blob URL;
   // clearing the video trim preview alone did not stop ordinary audio.
@@ -2185,13 +2188,13 @@ onUnmounted(()=>{
             ?new Date(preview.expiresAt).toLocaleDateString('ru-RU'):'—' }}</span>
         </div>
       </section>
+      <PublicCardPublication v-if="publicationOpen&&current&&fileBlob&&preview?.type==='photo'&&preview.expiresAt" :key="current.id" :source-kind="current.protocol" :source-id="current.id" :source="fileBlob" :name="preview.name" :expires-at="preview.expiresAt" @close="publicationOpen=false"/>
       <nav class="file-viewer-actions" aria-label="Действия с файлом"
         data-testid="file-viewer-actions">
         <button type="button" :disabled="!fileUrl" data-testid="viewer-action-info"
           @click="openPanel('info')">Информация</button>
-        <button type="button" disabled
-          title="Публичный предпросмотр требует отдельной проверки Safe-версии и прав доступа">
-          Публичная карточка</button>
+        <button v-if="preview?.type==='photo'" type="button" :disabled="!fileUrl" data-testid="viewer-action-publish" @click="publicationOpen=true" aria-label="Публичная карточка">Публичная карточка</button>
+        <button v-else type="button" disabled title="Публичная публикация доступна только для безопасной JPEG-копии фото">Публичная карточка</button>
         <button type="button" :disabled="!fileUrl" data-testid="viewer-action-edit"
           @click="openPanel('editor')">Редактировать</button>
       </nav>

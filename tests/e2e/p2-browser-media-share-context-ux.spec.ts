@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 
 test('Browser v3: video/audio share uses a scoped E2EE panel without issuing grants',async({page,context})=>{
@@ -11,7 +12,7 @@ test('Browser v3: video/audio share uses a scoped E2EE panel without issuing gra
   await page.goto('/browser')
   await context.setOffline(true)
   const picker=page.getByTestId('media-import-file')
-  await picker.setInputFiles([
+  await chooseEncryptedFile(picker,[
     {name:'PRIVATE-CONTEXT-A.wav',mimeType:'audio/wav',buffer:Buffer.alloc(8192,0x41)},
     {name:'PRIVATE-CONTEXT-B.webm',mimeType:'video/webm',buffer:Buffer.alloc(8192,0x42)},
   ])

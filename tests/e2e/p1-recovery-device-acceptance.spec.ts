@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {expect,test,type Page} from '@playwright/test'
 
 /**
@@ -43,7 +44,7 @@ test('P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and of
       await A.goto('/browser')
       const picker=A.getByTestId('media-import-file')
       await expect(picker).toBeEnabled({timeout:30000})
-      await picker.setInputFiles({
+      await chooseEncryptedFile(picker,{
         name:filename,mimeType:'audio/wav',buffer:Buffer.alloc(expectedLen,expectedByte),
       })
       await expect.poll(()=>A.evaluate(async()=>{

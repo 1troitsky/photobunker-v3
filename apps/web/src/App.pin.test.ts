@@ -14,6 +14,7 @@ vi.mock('./features/identity/application/session',async()=>{
     pendingPinUnlock:shallowRef(null),
     activeSession:shallowRef(null),
     sessionBootstrapPending:shallowRef(true),
+    pinMutationPending:shallowRef(false),
     unlockPinnedDevice:spies.unlockPinnedDevice,
     restoreAccount:spies.restoreAccount,
   }
@@ -30,8 +31,12 @@ vi.mock('./features/browser/application/viewer-shell-actions',()=>({
 vi.mock('./ui/fieldwork/dock-preferences',()=>({
   displayedDock:{value:[]},
   dockDefinitions:{},
+  dockStorageKey:'test-only-dock',
+  allowedDockIds:[],
+  defaultDockIds:[],
 }))
 import App from './App.vue'
+import {brand} from './config/brand'
 import {
   identityBootstrapReady,identityBootstrapError,pendingPinUnlock,
 } from './features/identity/application/session'
@@ -69,7 +74,7 @@ describe('P3 #220 protected Identity application shell boundary',()=>{
     expect(root.querySelector('.shell-header')).toBeNull()
     expect(root.querySelector('.shell-dock')).toBeNull()
     expect(root.querySelector('.shell-main')).toBeNull()
-    expect(root.textContent).toContain('PhotoBunker')
+    expect(root.textContent).toContain(brand.name)
   })
 
   it('preserves the normal Header, Dock and RouterView when no PIN is configured',async()=>{

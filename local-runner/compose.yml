@@ -1,4 +1,4 @@
-name: pb3-local-real
+name: ${PB3_COMPOSE_PROJECT:-pb3-local-real}
 services:
   postgres:
     image: postgres:18
@@ -23,6 +23,7 @@ services:
       - garage-data:/var/lib/garage/data
     restart: unless-stopped
   api:
+    image: ${PB3_API_IMAGE:-pb3-core-api:20261116}
     build:
       context: .
       dockerfile: local-runner/Dockerfile.api
@@ -66,6 +67,7 @@ services:
       - api-storage:/srv/pb3/apps/api/storage
     restart: unless-stopped
   web:
+    image: ${PB3_DEV_WEB_IMAGE:-pb3-core-web-dev:20261116}
     build:
       context: .
       dockerfile: local-runner/Dockerfile.web

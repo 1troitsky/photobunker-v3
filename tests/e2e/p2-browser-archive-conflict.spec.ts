@@ -1,3 +1,4 @@
+import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 import type {Locator} from '@playwright/test'
 
@@ -17,6 +18,7 @@ test('P2 Archive: unresolved signed delete/archival command cannot be discarded;
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
+    await openImportSheet(page)
     await page.getByTestId('media-import-file').setInputFiles({
       name:'PRIVATE-STALENESS.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x37),
@@ -33,6 +35,7 @@ test('P2 Archive: unresolved signed delete/archival command cannot be discarded;
       const module=await import('/src/features/media/application/media-outbox.ts')
       return (await module.listLocalMedia()).filter(x=>x.state==='synced').length
     }),{timeout:30000}).toBe(1)
+    await closeImportSheet(page)
     await page.getByRole('button',{name:'Обновить',exact:true}).first().click()
     const row=page.locator('[data-testid^="browser-row-media:"]')
     await ensureFileMenu(row)

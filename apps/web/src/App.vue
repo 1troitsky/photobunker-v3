@@ -5,7 +5,7 @@ import { displayedDock, dockDefinitions } from './ui/fieldwork/dock-preferences'
 import type { DockDefinition } from './ui/fieldwork/dock-preferences'
 import { brand } from './config/brand'
 import {
-  activeSession,identityBootstrapReady,identityBootstrapError,pendingPinUnlock,
+  activeSession,identityBootstrapReady,identityBootstrapError,pendingPinUnlock,pinMutationPending,
 } from './features/identity/application/session'
 import PinShell from './features/security/ui/PinShell.vue'
 import WelcomeView from './views/WelcomeView.vue'
@@ -91,7 +91,7 @@ const dock = computed(() => displayedDock.value
        All PRIVATE routes remain sealed until trusted device admission. -->
   <RouterView v-if="route.meta?.publicStandalone===true"/>
   <WelcomeView v-else-if="!identityBootstrapReady" bootstrap-only/>
-  <PinShell v-else-if="pendingPinUnlock||identityBootstrapError"/>
+  <PinShell v-else-if="pendingPinUnlock||identityBootstrapError" :mutation-pending="pinMutationPending"/>
   <!-- Welcome remains a standalone route once PIN and local bootstrap settle. -->
   <RouterView v-else-if="route.meta?.standalone"/>
   <div v-else class="shell">

@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 import {finiteDurationWebmBase64} from './fixtures/finite-duration-webm'
 
@@ -17,7 +18,7 @@ test('P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/
       return !!m.activeSession.value?.accountId
     }),{timeout:30000}).toBe(true)
     await context.setOffline(true)
-    await page.getByTestId('media-import-file').setInputFiles({
+    await chooseEncryptedFile(page.getByTestId('media-import-file'),{
       name:'FINITE-PRIVATE-SOURCE.webm',mimeType:'video/webm',
       buffer:Buffer.from(finiteDurationWebmBase64,'base64'),
     })

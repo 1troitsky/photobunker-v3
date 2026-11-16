@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
 // A full navigation remounts the app before async device unseal and server
@@ -44,7 +45,7 @@ test('P2 Browser->File Viewer->Browser: restore encrypted folder, filter, privat
 
     await page.goto('/browser')
     await awaitVerifiedBrowserSession(page,registered)
-    await page.getByTestId('media-import-file').setInputFiles({
+    await chooseEncryptedFile(page.getByTestId('media-import-file'),{
       name:'RETURN-SECRET-AUDIO.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x42),
     })

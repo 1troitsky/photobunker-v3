@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
 test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navigation and logout wipe',async({browser})=>{
@@ -14,13 +15,13 @@ test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navig
     await context.setOffline(true)
 
     const input=page.getByTestId('media-import-file')
-    await input.setInputFiles({
+    await chooseEncryptedFile(input,{
       name:'PRIVATE-VIDEO-WITH-NAME.webm',mimeType:'video/webm',
       buffer:Buffer.alloc(8192,0x41),
     })
     await expect(page.locator('[data-testid^="browser-row-media:"]'))
       .toHaveCount(1,{timeout:30000})
-    await input.setInputFiles({
+    await chooseEncryptedFile(input,{
       name:'PRIVATE-AUDIO-WITH-NAME.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x42),
     })
