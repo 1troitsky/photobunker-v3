@@ -7,6 +7,7 @@ import { markInvalidRecoveryKey } from '../features/identity/application/authori
 import { brand } from '../config/brand'
 import {getPending} from '../features/identity/infrastructure/storage'
 import { saveRecoveryKeyWithSystemDialog } from '../ui/fieldwork/recovery-key-save'
+const props=withDefaults(defineProps<{bootstrapOnly?:boolean}>(),{bootstrapOnly:false})
 const route=useRoute(),router=useRouter()
 type Feature={title:string;desc:string;caption:string;accent:string;art:string}
 const features:readonly Feature[]=[
@@ -35,8 +36,8 @@ const pendingRegistration=ref(false),pendingChecking=ref(false)
 const savedPendingKey=ref('')
 let pendingCheckToken=0
 const recovery=ref(''),error=ref(''),notice=ref('')
-const isCreate=computed(()=>route.path==='/welcome/create')
-const isRecover=computed(()=>route.path==='/welcome/recover')
+const isCreate=computed(()=>!props.bootstrapOnly&&route.path==='/welcome/create')
+const isRecover=computed(()=>!props.bootstrapOnly&&route.path==='/welcome/recover')
 const isHome=computed(()=>!isCreate.value&&!isRecover.value)
 const current=computed(()=>features[slide.value]!)
 // One 5.5 s timer, reset after every manual interaction. A running interval
@@ -124,7 +125,9 @@ watch(()=>route.path,()=>{
   }else if(!generated.value)void checkPendingRegistration()
 })
 watch(activeSession,session=>{
-  if(session)void router.replace(resolveStartRoute())
+  // During pre-PIN device discovery this component is presentation-only.
+  // Do not navigate to a private route before App's PIN gate has settled.
+  if(session&&!props.bootstrapOnly)void router.replace(resolveStartRoute())
 },{immediate:true})
 onMounted(()=>{
   motion=typeof window.matchMedia==='function'
@@ -254,7 +257,7 @@ async function loadFile(e:Event):Promise<void>{
         <div class="welcome-brand-name">{{brand.name}}</div>
       </div>
       <div class="welcome-auth-slot">
-        <div v-if="sessionBootstrapPending" class="welcome-bootstrap-loading"
+        <div v-if="bootstrapOnly||sessionBootstrapPending" class="welcome-bootstrap-loading"
           role="status" aria-live="polite" data-testid="welcome-bootstrap-loading">
           <span class="welcome-spinner" aria-hidden="true"></span>
           <span>Входим в приложение...</span>
