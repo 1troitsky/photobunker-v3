@@ -3,13 +3,16 @@ import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {createApp,nextTick,shallowRef,type App} from 'vue'
 const mock=vi.hoisted(()=>({
   route:{path:'/welcome/create'},
-  routerReplace:vi.fn(),
+  routerReplace:vi.fn(),routeUpdate:null as null|((to:{path:string},from:{path:string})=>boolean),
   pending:vi.fn(),begin:vi.fn(),finish:vi.fn(),restore:vi.fn(),
 }))
 vi.mock('vue-router',()=>({
   useRoute:()=>mock.route,
   useRouter:()=>({replace:mock.routerReplace}),
   onBeforeRouteLeave:vi.fn(),
+  onBeforeRouteUpdate:(guard:(to:{path:string},from:{path:string})=>boolean)=>{
+    mock.routeUpdate=guard
+  },
 }))
 vi.mock('../features/identity/application/session',()=>({
   activeSession:shallowRef(null),
@@ -30,6 +33,7 @@ beforeEach(()=>{
   host=document.createElement('div');document.body.append(host)
   activeSession.value=null
   mock.route.path='/welcome/create'
+  mock.routeUpdate=null
   mock.pending.mockReset().mockResolvedValue(undefined)
   mock.begin.mockReset().mockResolvedValue('TEST_GENERATED_KEY')
   mock.finish.mockReset().mockResolvedValue(undefined)
@@ -87,6 +91,18 @@ describe('Welcome 1.4 interrupted key-only registration',()=>{
     expect(host.querySelector('[data-testid="welcome-pending-registration"]')).not.toBeNull()
     expect(host.textContent).toContain('identity.pending_key_mismatch')
     expect(mock.routerReplace).not.toHaveBeenCalled()
+  })
+  it('blocks an in-place create-to-home route update if the Recovery Key has not been preserved',async()=>{
+    mount();await settle()
+    createButton().click();await settle()
+    const prompt=vi.spyOn(window,'confirm').mockReturnValue(false)
+    const guard=mock.routeUpdate!
+    expect(guard({path:'/welcome'},{path:'/welcome/create'})).toBe(false)
+    expect(host.querySelector<HTMLTextAreaElement>('[data-testid="welcome-generated-key"]')?.value)
+      .toBe('TEST_GENERATED_KEY')
+    prompt.mockReturnValue(true)
+    expect(guard({path:'/welcome'},{path:'/welcome/create'})).toBe(true)
+    prompt.mockRestore()
   })
   it('permits ordinary key generation when no pending reservation exists',async()=>{
     mount();await settle()

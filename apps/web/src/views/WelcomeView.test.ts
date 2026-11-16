@@ -6,6 +6,7 @@ vi.mock('vue-router',()=>({
   useRoute:()=>({path:'/welcome'}),
   useRouter:()=>({replace:vi.fn()}),
   onBeforeRouteLeave:vi.fn(),
+  onBeforeRouteUpdate:vi.fn(),
 }))
 import WelcomeView from './WelcomeView.vue'
 let app:App|undefined,host:HTMLElement

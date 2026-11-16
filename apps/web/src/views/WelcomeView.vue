@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { activeSession, beginRegistration, finishRegistration, restoreAccount, sessionBootstrapPending } from '../features/identity/application/session'
 import { resolveStartRoute } from '../ui/fieldwork/appearance-preferences'
 import { markInvalidRecoveryKey } from '../features/identity/application/authorization-failure'
@@ -115,7 +115,13 @@ function guardHardExit(event:BeforeUnloadEvent):void{
 }
 watch(()=>route.path,()=>{
   error.value='';notice.value='';resetAutoplay()
-  if(isCreate.value&&!generated.value)void checkPendingRegistration()
+  if(!isCreate.value){
+    // Welcome's home/create/recover routes reuse this component. Only clear
+    // volatile plaintext after the corresponding navigation guard approves.
+    generated.value=''
+    savedPendingKey.value=''
+    pendingRegistration.value=false
+  }else if(!generated.value)void checkPendingRegistration()
 })
 watch(activeSession,session=>{
   if(session)void router.replace(resolveStartRoute())
@@ -140,12 +146,20 @@ onUnmounted(()=>{
   motion?.removeEventListener?.('change',resetAutoplay)
   motion=null
 })
-onBeforeRouteLeave(()=>{
+function confirmPendingKeyExit():boolean{
  if(generated.value&&!activeSession.value)
    return window.confirm(
      'Регистрация не завершена. Recovery Key исчезнет с этого экрана. '+
      'Если вы сохранили его отдельно, сможете продолжить позже. Выйти?'
    )
+ return true
+}
+onBeforeRouteLeave(confirmPendingKeyExit)
+// /welcome, /welcome/create and /welcome/recover map to the SAME Vue view;
+// a reused component is updated rather than always being removed.
+onBeforeRouteUpdate((to,from)=>{
+ if(from.path==='/welcome/create'&&to.path!=='/welcome/create')
+   return confirmPendingKeyExit()
  return true
 })
 async function generate():Promise<void>{
