@@ -45,6 +45,10 @@ const blindMode=ref(false)
 const cameraSheet=ref<'assignment'|'settings'|null>(null)
 const cameraFacing=ref<'environment'|'user'>('environment')
 const torchOn=ref(false)
+// Expose only true hardware zoom, never a CSS-only simulated crop.
+const cameraZoomRange=ref<{min:number;max:number;step:number}|null>(null)
+const cameraZoom=ref(1)
+const cameraZoomBusy=ref(false)
 const permissionBusy=ref(false)
 const devicePermissionStatus=ref('')
 const gridVisible=ref(false)
@@ -509,6 +513,9 @@ function stopTracks(opened:MediaStream):void {
 }
 function releaseStream():void {
   torchOn.value=false
+  cameraZoomRange.value=null
+  cameraZoom.value=1
+  cameraZoomBusy.value=false
   discardRecording()
   if(stream.value)stopTracks(stream.value)
   stream.value=null;streamIdentity=null
@@ -522,6 +529,52 @@ function flipCamera():void {
   closeCamera()
   cameraWanted=true
   void nextTick().then(startCamera)
+}
+/** Only available on live tracks that report a genuine zoom capability. */
+function refreshHardwareZoom(track:MediaStreamTrack|undefined):void{
+  cameraZoomRange.value=null
+  cameraZoom.value=1
+  if(!track||track.readyState!=='live'||!track.getCapabilities)return
+  try{
+    const caps=track.getCapabilities() as MediaTrackCapabilities & {
+      zoom?:{min:number;max:number;step?:number}
+    }
+    const zoom=caps.zoom
+    if(!zoom||!Number.isFinite(zoom.min)||!Number.isFinite(zoom.max)
+      ||zoom.min<=0||zoom.max<=zoom.min||zoom.max>200)return
+    const step=typeof zoom.step==='number'&&Number.isFinite(zoom.step)
+      &&zoom.step>0&&zoom.step<=zoom.max-zoom.min?zoom.step:0.1
+    const actual=(track.getSettings?.() as MediaTrackSettings & {zoom?:number}|undefined)?.zoom
+    cameraZoomRange.value={min:zoom.min,max:zoom.max,step}
+    cameraZoom.value=typeof actual==='number'&&Number.isFinite(actual)
+      ?Math.max(zoom.min,Math.min(zoom.max,actual)):zoom.min
+  }catch{cameraZoomRange.value=null}
+}
+async function setCameraZoom(event:Event):Promise<void>{
+  const control=event.target
+  const range=cameraZoomRange.value
+  if(!(control instanceof HTMLInputElement)||!range||cameraZoomBusy.value
+    ||captureMode.value!=='photo'||recording.value||busy.value||starting.value)return
+  const desired=Number(control.value)
+  const track=stream.value?.getVideoTracks?.()[0]
+  const identity=streamIdentity,generation=cameraGeneration
+  if(!Number.isFinite(desired)||desired<range.min||desired>range.max
+    ||!track||track.readyState!=='live'||!ownsCamera(identity,generation))return
+  if(Math.abs(desired-cameraZoom.value)<0.00001)return
+  cameraZoomBusy.value=true
+  try{
+    await track.applyConstraints({advanced:[{zoom:desired}]} as unknown as MediaTrackConstraints)
+    if(ownsCamera(identity,generation)&&track===stream.value?.getVideoTracks?.()[0])
+      cameraZoom.value=desired
+  }catch{
+    if(ownsCamera(identity,generation)&&track===stream.value?.getVideoTracks?.()[0]){
+      control.value=String(cameraZoom.value)
+      error.value='Не удалось применить масштаб камеры.'
+    }
+  }finally{
+    if(ownsCamera(identity,generation)&&track===stream.value?.getVideoTracks?.()[0])
+      cameraZoomBusy.value=false
+  }
 }
 /** Light is a real track capability, not a simulated UI toggle. */
 async function toggleTorch():Promise<void>{
@@ -707,6 +760,7 @@ async function startCamera():Promise<void> {
     }
     stream.value=opened;streamIdentity=identity
     torchOn.value=false
+    refreshHardwareZoom(mode==='audio'?undefined:opened.getVideoTracks?.()[0])
     const preview=video.value
     if(captureMode.value!=='audio'){
       preview.srcObject=opened
@@ -1165,7 +1219,7 @@ async function capture():Promise<void> {
   const v=video.value
   const identity=streamIdentity,generation=cameraGeneration
   const contextGeneration=captureContextGeneration
-  if(busy.value||starting.value||!v||!stream.value||!ownsCamera(identity,generation)
+  if(busy.value||starting.value||cameraZoomBusy.value||!v||!stream.value||!ownsCamera(identity,generation)
     ||v.videoWidth<1||v.videoHeight<1)return
   const assertOwner=()=>{
     if(!cameraWanted||!ownsCamera(identity,generation)
@@ -1395,11 +1449,11 @@ onUnmounted(()=>{
           </time>
           <button v-if="captureMode==='photo'" type="button" class="camera-blind-shutter"
             data-testid="camera-blind-shutter" aria-label="Сделать снимок"
-            :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
+            :disabled="!stream||starting||busy||cameraZoomBusy||gpsLoading||!canCaptureType"
             @click="capture">Снять</button>
           <button v-else-if="!recording" type="button" class="camera-blind-shutter video"
             data-testid="camera-blind-shutter"
-            :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
+            :disabled="!stream||starting||busy||cameraZoomBusy||gpsLoading||!canCaptureType"
             @click="beginRecording">Начать запись</button>
           <button v-else type="button" class="camera-blind-shutter recording"
             data-testid="camera-blind-shutter" @click="endRecording">Остановить запись</button>
@@ -1421,13 +1475,13 @@ onUnmounted(()=>{
             @click="openCameraSheet('assignment')">Задание</button>
           <button v-if="captureMode==='photo'" type="button" class="camera-shutter"
             aria-label="Сделать снимок"
-            :disabled="!stream||starting||busy||gpsLoading||!canCaptureType" @click="capture">
+            :disabled="!stream||starting||busy||cameraZoomBusy||gpsLoading||!canCaptureType" @click="capture">
               <span class="camera-screen-title">Сделать снимок</span>
             </button>
           <button v-else-if="!recording" type="button"
             class="camera-shutter camera-shutter-record"
             data-testid="camera-start-recording" aria-label="Начать запись"
-            :disabled="!stream||starting||busy||gpsLoading||!canCaptureType"
+            :disabled="!stream||starting||busy||cameraZoomBusy||gpsLoading||!canCaptureType"
             @click="beginRecording">
               <span class="camera-screen-title">Начать запись {{captureMode==='video'?'видео':'аудио'}}</span>
             </button>
@@ -1521,6 +1575,17 @@ onUnmounted(()=>{
             <option value="medium">Среднее</option>
             <option value="low">Низкое</option>
           </select>
+          <template v-if="cameraZoomRange&&captureMode==='photo'">
+            <label for="camera-photo-zoom">Масштаб: {{cameraZoom.toFixed(1)}}×</label>
+            <input id="camera-photo-zoom" type="range" data-testid="camera-photo-zoom"
+              :min="cameraZoomRange.min" :max="cameraZoomRange.max"
+              :step="cameraZoomRange.step" :value="cameraZoom"
+              :disabled="cameraZoomBusy||busy||recording||starting"
+              @change="setCameraZoom">
+          </template>
+          <p v-else class="muted" data-testid="camera-photo-zoom-unavailable">
+            Масштаб доступен только при поддержке подключённой камеры.
+          </p>
         </section>
         <section class="camera-preset-options" aria-label="Видео">
           <h3>Видео</h3>
@@ -1554,6 +1619,16 @@ onUnmounted(()=>{
           <input id="camera-audio-duration" v-model.number="audioMaxSeconds"
             type="range" min="5" max="3000" step="5" :disabled="busy||recording"
             data-testid="camera-audio-duration">
+        <div class="camera-preset-options">
+          <label for="camera-audio-bitrate">Целевой битрейт аудио</label>
+          <select id="camera-audio-bitrate" v-model.number="audioTargetBitrate"
+            :disabled="recording||busy" data-testid="camera-audio-bitrate">
+            <option v-for="rate in AUDIO_TARGET_BITRATES" :key="rate" :value="rate">
+              {{ rate/1000 }} кбит/с
+            </option>
+          </select>
+          <p class="muted">Это настройка кодировщика. Фактические качество и формат зависят от браузера.</p>
+        </div>
         </section>
         <label class="camera-appearance-setting">
           <input type="checkbox" v-model="gridVisible" data-testid="camera-grid-setting">
@@ -1594,15 +1669,10 @@ onUnmounted(()=>{
           Показывать GPS над кнопкой съёмки
           <small>Только видимость индикатора; не изменяет GPS-согласие и требования задания.</small>
         </label>
-        <div class="camera-preset-options">
-          <label for="camera-audio-bitrate">Целевой битрейт аудио</label>
-          <select id="camera-audio-bitrate" v-model.number="audioTargetBitrate"
-            :disabled="recording||busy" data-testid="camera-audio-bitrate">
-            <option v-for="rate in AUDIO_TARGET_BITRATES" :key="rate" :value="rate">
-              {{ rate/1000 }} кбит/с
-            </option>
-          </select>
-          <p class="muted">Это настройка кодировщика. Фактические качество и формат зависят от браузера.</p>
+        <div class="camera-preset-options" data-testid="camera-gps-settings-status">
+          <p role="status">{{gps?'GPS · ±'+Math.round(gps.accuracyMeters)+' м':'GPS не получен'}}</p>
+          <button type="button" :disabled="gpsLoading||busy||recording"
+            @click="obtainGPS">{{gpsLoading?'Определяем…':'Определить координаты'}}</button>
         </div>
         <div class="camera-preset-options">
           <label for="camera-photo-storage">Сохранить фото в</label>
