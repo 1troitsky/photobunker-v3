@@ -12,6 +12,7 @@
 
 ## Additional conformity and native safety work
 - Restore **exact approved** assignment/list and settings/gear SVG icons above the two side-action labels with a vertical icon-plus-label layout, preserving the 124px control strip and one Header/Dock.
+- Restore four 18px white viewfinder-corner guides as in the original Camera 1.2; render only on photo/video, not on the recorder, and never draw guides into the captured JPEG.
 - Move successful encrypted capture status and failed camera errors into a single non-interactive toast **inside the fixed stage** (rather than appending extra rows below the controls); status messages never contain protocol names such as "P2 JPEG".
 - Hardware stream may be ended by OS/permission revocation while Camera is idle: listen to `MediaStreamTrack.ended`, detach the existing video preview, disable shutter and require an explicit settings retry. Existing active recording already has its own fail-closed interrupted-recording handler; no change to that pipeline.
 - Extend real Playwright coverage from offline photo→ciphertext queued→Garage sync to **Browser→File Viewer→valid decrypted JPEG**. Existing independent-context recovery and 404 outsider ACL are also covered by `tests/e2e/p1-identity-photo.spec.ts`.
