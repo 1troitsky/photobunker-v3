@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted,onUnmounted,ref,watch } from 'vue'
 import { activeSession } from '../../identity/application/session'
+import {sameSessionDevice} from '../../identity/application/session-device'
 import MediaSharePanel from './MediaSharePanel.vue'
 import MediaVersionPanel from './MediaVersionPanel.vue'
 import {
@@ -130,8 +131,8 @@ async function importFiles(
     }
     const output=await enqueueEncryptedImportBatch(files,
       file=>enqueueEncryptedMedia(file,undefined,metadata),
-      ()=>identity!==null&&identity===activeSession.value)
-    if(identity!==activeSession.value)return false
+      ()=>sameSessionDevice(identity,activeSession.value))
+    if(!sameSessionDevice(identity,activeSession.value))return false
     // The per-file AES-GCM operation is durable already. A failed folder
     // placement must not roll back/delete successful encrypted originals.
     if(output.mediaIds.length){
@@ -150,7 +151,7 @@ async function importFiles(
         +' файлов. Уже зашифрованные оригиналы и очередь сохранены.'
     return saved>0
   }catch(e){
-    if(identity===activeSession.value)error.value=explanation(e)
+    if(sameSessionDevice(identity,activeSession.value))error.value=explanation(e)
     return false
   }finally{busy.value=false}
 }

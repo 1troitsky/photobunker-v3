@@ -20,6 +20,7 @@ import {
   captureBrowserReturnContext,takeBrowserReturn,
 } from '../features/browser/application/browser-return-context'
 import SharePanel from '../features/sharing/SharePanel.vue'
+import {sameSessionDevice} from '../features/identity/application/session-device'
 import MediaImportPanel from '../features/media/ui/MediaImportPanel.vue'
 import MediaSharePanel from '../features/media/ui/MediaSharePanel.vue'
 import {activeSession,reauthenticate} from '../features/identity/application/session'
@@ -110,6 +111,7 @@ let privateSearchTimer:ReturnType<typeof setTimeout>|null=null
 const busy=ref(false)
 const previewBusy=ref(false)
 const status=ref('')
+const syncFeedback=ref('')
 const error=ref('')
 const selectedUrl=ref('')
 const selectedType=ref<CatalogItem['type']|null>(null)
@@ -147,6 +149,7 @@ const shareMediaId=ref<string|null>(null)
 const shareFileKey=ref<string|null>(null)
 let shareFocusReturnKey:string|null=null
 const browserSettingsOpen=ref(false)
+const searchOpen=ref(false)
 const showRemainingDays=ref(readBrowserDaysLeft())
 const browserOpenFirst=ref<BrowserOpeningSection>(readBrowserOpeningSection())
 const foldersFirst=ref(readBrowserFoldersFirst())
@@ -185,6 +188,13 @@ function closeBulkActions():void{
 }
 const fileMenuKey=ref<string|null>(null)
 const folderMenuId=ref<string|null>(null)
+function itemMenuTab(event:KeyboardEvent):void{
+  const root=event.currentTarget as HTMLElement
+  const elements=[...root.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],select:not(:disabled),input:not(:disabled)')].filter(el=>el.getClientRects().length)
+  const first=elements[0],last=elements.at(-1)
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}
+}
 function closeFileMenu():void{
   fileMenuKey.value=null
   folderMenuId.value=null
@@ -202,6 +212,7 @@ function toggleFolderMenu(id:string):void{
   if(!folders.value.some(folder=>folder.id===id))return
   folderMenuId.value=folderMenuId.value===id?null:id
   fileMenuKey.value=null
+  if(folderMenuId.value)void nextTick(()=>document.querySelector<HTMLButtonElement>('[data-testid="browser-folder-menu-panel"] button')?.focus())
 }
 function folderMenuEscape():void{
   const id=folderMenuId.value
@@ -216,6 +227,7 @@ function toggleFileMenu(key:string):void{
   if(!visible.value.some(item=>item.key===key))return
   fileMenuKey.value=fileMenuKey.value===key?null:key
   folderMenuId.value=null
+  if(fileMenuKey.value)void nextTick(()=>document.querySelector<HTMLButtonElement>('[data-testid="browser-file-menu-panel"] button')?.focus())
 }
 function onBrowserMenuPointerDown(event:PointerEvent):void{
   const el=event.target
@@ -411,9 +423,6 @@ function folderLoadedRows(folderId:string):CatalogItem[]{
 function folderLoadedCount(folderId:string):number{
   return folderCoverIndex.value.get(folderId)?.total??0
 }
-function folderCoverSymbol(item:CatalogItem):string{
-  return item.type==='photo'?'▧':item.type==='video'?'▹':'♫'
-}
 function canEditViaPrivateCopy(item:CatalogItem):boolean{
   if(item.source!=='media'||!item.local||item.expiresAt<=Date.now())
     return false
@@ -435,6 +444,9 @@ const treeNodes=computed(()=>{
   walk(null,0)
   return results
 })
+const folderCards=computed(()=>archiveTab.value!=='all'?[]:view.value==='tree'
+  ?treeNodes.value.map(node=>({...folderWorkspace.value.folders[node.id]!,depth:node.depth,children:node.children}))
+  :folders.value.map(folder=>({...folder,depth:0,children:0})))
 function toggleTreeFolder(id:string):void{
   if(!folderWorkspace.value.folders[id])return
   if(treeExpanded.value.includes(id))
@@ -629,15 +641,6 @@ const visible=computed(()=>filterCatalog(searchScope.value,{
 watch([activeSession,folderThumbnailCandidateKeys],
   ()=>{void warmFolderThumbnails()},{immediate:true})
 
-function catalogSizeLabel(bytes:number|null):string{
-  if(bytes===null||!Number.isSafeInteger(bytes)||bytes<0)
-    return 'Размер неизвестен'
-  const units=['Б','КиБ','МиБ','ГиБ','ТиБ'] as const
-  let value=bytes,index=0
-  while(value>=1024&&index<units.length-1){value/=1024;index++}
-  return new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1}).format(value)
-    +' '+units[index]
-}
 function catalogFolderLabel(item:CatalogItem):string{
   const placement=folderWorkspace.value.placements[item.key]??null
   if(!placement)return 'Мои файлы'
@@ -1339,12 +1342,13 @@ async function more():Promise<void>{
 }
 async function sync():Promise<void>{
   if(busy.value)return
-  busy.value=true;error.value='';status.value=''
+  const identity=activeSession.value
+  busy.value=true;error.value='';syncFeedback.value=''
   try{
     if(!activeSession.value?.online)await reauthenticate()
     await flushOutbox()
     await refresh()
-    status.value='Очередь фотографий проверена. Импортированное медиа синхронизируется в блоке импорта.'
+    if(sameSessionDevice(identity,activeSession.value))syncFeedback.value='Статусы фотографий обновлены.'
   }catch(e){error.value=reason(e)}
   finally{busy.value=false}
 }
@@ -1457,6 +1461,7 @@ watch(activeSession,(next,previous)=>{
     treeExpanded.value=[]
     bulkDestination.value=''
     folderNotice.value=''
+    syncFeedback.value=''
     folderSyncStatus.value=''
     mergePlan.value=null
     mergeChoices.value={}
@@ -1695,7 +1700,9 @@ function uploadSheetKeydown(event:KeyboardEvent):void{
 }
 function focusPrivateSearch():void{
   if(!activeSession.value)return
-  scrollToElement('[data-testid="browser-search"]',true)
+  searchOpen.value=!searchOpen.value
+  if(searchOpen.value)void nextTick(()=>scrollToElement('[data-testid="browser-search"]',true))
+  else{search.value='';filter.value='all'}
 }
 function openBrowserSettings():void{
   if(!activeSession.value)return
@@ -1767,6 +1774,7 @@ onMounted(()=>{
   if(restored){
     filter.value=restored.filter;sort.value=restored.sort;view.value=restored.view
     search.value=restored.search
+    searchOpen.value=!!restored.search||restored.filter!=='all'
     searchFolderScope.value=restored.searchFolderScope
     searchSelectedFolder.value=restored.searchSelectedFolder??null
     archiveTab.value=restored.archiveTab
@@ -1812,20 +1820,30 @@ onUnmounted(()=>{
 </script>
 
 <template>
-  <section class="foundation-content browser-v3" data-testid="browser-v3">
-    <div class="browser-title">
-      <div>
+  <section class="foundation-content browser-v3 content-inner" data-testid="browser-v3">
+    <svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden"><defs>
+      <symbol id="browser-glyph-folder" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 3h8v13H3z"/></symbol>
+      <symbol id="browser-glyph-video" viewBox="0 0 24 24"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-3v10l-4-3"/></symbol>
+      <symbol id="browser-glyph-audio" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 9l12-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="18" cy="16" rx="3" ry="2"/></symbol>
+      <symbol id="browser-glyph-photo" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 3 3 3-4 5 5"/></symbol>
+    </defs></svg>
+    <div v-if="fileMenuKey||folderMenuId" class="browser-item-menu-backdrop" aria-hidden="true" @click="closeFileMenu"></div>
+    <div class="browser-title browser-heading">
+      <div class="browser-heading-copy">
         <h1>Browser</h1>
-        <p class="subtitle">Папок: {{ folders.length }} · Файлов: {{ visible.length }}</p>
+        <small>{{ visible.length }} {{ visible.some(item=>item.type!=='photo')?'файлов':'фото' }} · {{ folders.length }} папок</small>
       </div>
-      <div v-if="activeSession" class="browser-view-switch"
+      <div v-if="activeSession" class="browser-view-switch view-switch"
         aria-label="Вид каталога" data-testid="browser-view-switch">
         <button type="button" :aria-pressed="view==='grid'"
-          data-testid="browser-view-grid" @click="view='grid'">Сетка</button>
+          data-testid="browser-view-grid" :class="{selected:view==='grid'}" aria-label="Сетка" title="Сетка" @click="view='grid'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
         <button type="button" :aria-pressed="view==='list'"
-          data-testid="browser-view-list" @click="view='list'">Список</button>
+          data-testid="browser-view-list" :class="{selected:view==='list'}" aria-label="Список" title="Список" @click="view='list'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12M3 6h2M3 12h2M3 18h2"/></svg></button>
         <button type="button" :aria-pressed="view==='tree'"
-          data-testid="browser-view-tree" @click="view='tree'">Дерево</button>
+          data-testid="browser-view-tree" :class="{selected:view==='tree'}" aria-label="Дерево" title="Дерево" @click="view='tree'">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4v16M4 8h5m-5 8h5M11 8h10M11 16h10"/></svg></button>
       </div>
     </div>
     <div v-if="!activeSession" class="foundation-card">
@@ -1833,69 +1851,65 @@ onUnmounted(()=>{
       <RouterLink to="/settings">Открыть доступ</RouterLink>
     </div>
     <template v-else>
-      <nav class="browser-archive-tabs browser-primary-sections"
-        aria-label="Разделы Browser" data-testid="browser-primary-sections">
-        <button type="button" data-testid="browser-tab-active"
-          :aria-pressed="archiveTab==='all'&&primarySection==='all'"
+      <nav class="browser-archive-tabs browser-primary-sections browser-sections"
+        role="tablist" aria-label="Разделы Browser" data-testid="browser-primary-sections">
+        <button type="button" role="tab" data-section="all" data-testid="browser-tab-active" :class="{selected:archiveTab==='all'&&primarySection==='all'}"
+          :aria-selected="archiveTab==='all'&&primarySection==='all'"
           @click="choosePrimarySection('all')">Все</button>
-        <button type="button" data-testid="browser-tab-personal"
-          :aria-pressed="archiveTab==='all'&&primarySection==='personal'"
+        <button type="button" role="tab" data-section="personal" data-testid="browser-tab-personal" :class="{selected:archiveTab==='all'&&primarySection==='personal'}"
+          :aria-selected="archiveTab==='all'&&primarySection==='personal'"
           @click="choosePrimarySection('personal')">Мои фото</button>
-        <button type="button" data-testid="browser-tab-assignments"
-          :aria-pressed="archiveTab==='all'&&primarySection==='assignments'"
+        <button type="button" role="tab" data-section="assignments" data-testid="browser-tab-assignments" :class="{selected:archiveTab==='all'&&primarySection==='assignments'}"
+          :aria-selected="archiveTab==='all'&&primarySection==='assignments'"
           @click="choosePrimarySection('assignments')">Задания</button>
         <button v-if="archivePrefsShown.useArchive" type="button"
-          data-testid="browser-tab-archive"
-          :aria-pressed="archiveTab==='archive'"
+          role="tab" data-section="archive" data-testid="browser-tab-archive" :class="{selected:archiveTab==='archive'}"
+          :aria-selected="archiveTab==='archive'"
           @click="choosePrimarySection('archive')">Архив</button>
       </nav>
-      <p v-if="primarySection==='personal'&&archiveTab==='all'"
+      <p v-if="searchOpen&&primarySection==='personal'&&archiveTab==='all'"
         class="browser-section-note" data-testid="browser-personal-catalog-scope">
         Здесь показаны только доступные на этом устройстве фотографии без
         подписанного контекста задания. Облачные файлы, назначение которых
         ещё не проверено, остаются в разделе «Все».
       </p>
-      <p v-if="primarySection==='assignments'&&archiveTab==='all'"
+      <p v-if="searchOpen&&primarySection==='assignments'&&archiveTab==='all'"
         class="browser-section-note" data-testid="browser-assignment-catalog-scope">
         Показываются только загруженные на этом устройстве материалы с
         сохранённым подписанным контекстом задания. Проверка участия и доступов
         выполняется при открытии файлов; облачные материалы без доказательства
         задания здесь не классифицируются.
       </p>
-      <section class="browser-folders" data-testid="browser-folders">
+      <section class="browser-folders" data-testid="browser-folder-controls">
         <div class="browser-folder-head">
-          <div class="browser-breadcrumb" aria-label="Путь папки">
-            <button type="button" class="browser-folder-up" aria-label="На уровень выше"
-              data-testid="browser-folder-up" :disabled="selectedFolder===null"
-              @click="upOneFolder">
+          <div class="browser-breadcrumb browser-path" aria-label="Путь папки">
+            <button type="button" class="browser-folder-up path-back" aria-label="На уровень выше"
+              data-testid="browser-folder-up" :disabled="selectedFolder===null&&primarySection==='all'&&archiveTab==='all'"
+              @click="selectedFolder===null?choosePrimarySection('all'):upOneFolder()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="1.8" aria-hidden="true">
-                <path d="m14 5-7 7 7 7"/>
+                <path d="m14 5-7 7 7 7M8 12h12"/>
               </svg>
             </button>
-            <button type="button" :aria-current="selectedFolder===null?'location':undefined"
-              @click="selectedFolder=null">Мои файлы</button>
+            <div class="path-breadcrumbs">
+            <button type="button" :data-testid="view==='tree'?'browser-tree-root':undefined" :class="{current:selectedFolder===null&&primarySection==='all'&&archiveTab==='all'}" :aria-current="selectedFolder===null&&primarySection==='all'&&archiveTab==='all'?'location':undefined"
+              @click="choosePrimarySection('all')">Все</button>
+            <template v-if="primarySection!=='all'||archiveTab==='archive'">
+              <span aria-hidden="true">›</span><button type="button" :class="{current:selectedFolder===null}" @click="selectedFolder=null">{{archiveTab==='archive'?'Архив':primarySection==='personal'?'Мои фото':'Задания'}}</button>
+            </template>
             <template v-for="part in breadcrumb" :key="part.id">
-              <span aria-hidden="true">/</span>
+              <span aria-hidden="true">›</span>
               <button type="button"
-                :aria-current="selectedFolder===part.id?'location':undefined"
+                :class="{current:selectedFolder===part.id}" :aria-current="selectedFolder===part.id?'location':undefined"
                 @click="selectedFolder=part.id">{{ part.name }}</button>
             </template>
+            </div>
           </div>
           <!-- Create Folder is the sole shared Header action per Browser v3. -->
         </div>
-        <p class="muted">Названия и состав папок зашифрованы. Изменения сохраняются
+        <p v-if="browserSettingsOpen" class="muted">Названия и состав папок зашифрованы. Изменения сохраняются
           сразу на устройстве, а общий снимок передаётся только после подтверждения сервера.
           Перемещение по папкам не меняет шифротекст медиа и права доступа.</p>
-        <div class="browser-folder-cloud">
-          <button type="button" data-testid="browser-folder-sync"
-            :disabled="folderSyncBusy||folderBusy||!folderReady||!!folderError||!activeSession.online"
-            @click="syncFoldersCloud">
-            {{ folderSyncBusy?'Передаём папки…':'Обновить папки в облаке' }}
-          </button>
-          <span v-if="folderSyncStatus" data-testid="browser-folder-sync-status"
-            role="status" class="muted">{{ folderSyncStatus }}</span>
-        </div>
         <div v-if="folderSyncStatus.includes('Конфликт версий')&&!mergePlan"
           class="browser-merge-entry">
           <button type="button" data-testid="browser-merge-open"
@@ -1982,7 +1996,6 @@ onUnmounted(()=>{
               Отмена</button>
           </div>
         </form>
-        <div id="browser-folder-cards-top" data-testid="browser-folder-cards-top"></div>
         <form v-if="editingFolderId" class="browser-folder-form"
           @submit.prevent="renameCurrentFolder">
           <label>Новое название
@@ -1994,7 +2007,7 @@ onUnmounted(()=>{
         </form>
         <p v-if="!folderReady" role="status" class="muted">Загружаются зашифрованные папки…</p>
         <p v-if="folderError" role="alert" class="error-text">{{ folderError }}</p>
-        <p v-if="folderNotice" role="status" class="muted">{{ folderNotice }}</p>
+        <p v-if="folderNotice" role="status" :class="folderNotice.startsWith('Локальные изменения сохранены.')?'browser-announcement':'muted'">{{ folderNotice }}</p>
       </section>
       <div v-if="browserSettingsOpen" class="browser-settings-backdrop"
         data-testid="browser-settings-backdrop" @click="closeBrowserSettings"></div>
@@ -2038,6 +2051,17 @@ onUnmounted(()=>{
         </label>
         <p class="muted">Меняется только текст срока хранения. Подписанный TTL файла,
           права доступа и очистка на сервере не изменяются.</p>
+        <label>
+          <span class="browser-sr-only">Сортировка</span>
+          <select v-model="sort" data-testid="browser-sort">
+            <option value="newest">Новые сначала</option>
+            <option value="oldest">Старые сначала</option>
+            <option value="name">По имени (NAME-ID)</option>
+            <option value="expiry">Ближайшее удаление</option>
+            <option value="size-largest">Размер: большие</option>
+            <option value="size-smallest">Размер: маленькие</option>
+          </select>
+        </label>
         <h2>Настройки архива</h2>
         <label>
           <input type="checkbox" data-testid="browser-pref-use-archive"
@@ -2071,6 +2095,22 @@ onUnmounted(()=>{
             :disabled="archivePrefsBusy||!activeSession.online"
             @click="acceptServerArchivePrefs">Принять настройки сервера</button>
         </div>
+        <div class="browser-folder-cloud">
+          <button type="button" data-testid="browser-folder-sync"
+            :disabled="folderSyncBusy||folderBusy||!folderReady||!!folderError||!activeSession.online"
+            @click="syncFoldersCloud">
+            {{ folderSyncBusy?'Передаём папки…':'Обновить папки в облаке' }}
+          </button>
+          <span v-if="folderSyncStatus" data-testid="browser-folder-sync-status"
+            role="status" class="muted">{{ folderSyncStatus }}</span>
+        </div>
+      <p v-if="syncFeedback" role="status">{{syncFeedback}}</p>
+      <div class="action-row">
+        <button type="button" :disabled="busy" @click="sync">Синхронизировать</button>
+        <button type="button" :disabled="busy" @click="refresh">Обновить</button>
+      </div>
+        <SharePanel v-if="sharePhotoId===null" v-show="browserSettingsOpen"
+          :local-photos="localPhotos" @open-photo="showReceived"/>
         <div v-if="browserSettingsOpen" class="browser-settings-footer">
           <button type="button" @click="closeBrowserSettings">Готово</button>
         </div>
@@ -2110,20 +2150,15 @@ onUnmounted(()=>{
       <p v-if="archivePendingError" role="alert">{{ archivePendingError }}</p>
       <p v-if="archiveNotice" role="status" data-testid="browser-archive-status">
         {{ archiveNotice }}</p>
-      <nav class="browser-filters" aria-label="Тип файла">
-        <button v-for="tab in (['all','photo','video','audio'] as const)" :key="tab"
-          type="button" :aria-pressed="filter===tab"
-          :class="{selected:filter===tab}" :data-testid="'browser-filter-'+tab"
-          @click="filter=tab">
-          {{ tab==='all'?'Все':tab==='photo'?'Фото':tab==='video'?'Видео':'Аудио' }}
-        </button>
-      </nav>
+
+      <div class="browser-search" v-show="searchOpen" data-testid="browser-search-panel">
       <div class="browser-toolbar">
-        <label class="browser-search">
+        <label class="search-line">
           <span class="browser-sr-only">Приватный поиск по ID, имени, описанию, категории или тегам</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
           <input v-model="search" type="search" autocomplete="off"
             maxlength="160" spellcheck="false"
-            placeholder="ID, название, описание, категория, тег"
+            placeholder="Название или ID файла"
             data-testid="browser-search">
         </label>
         <label v-if="archiveTab==='all'">
@@ -2155,20 +2190,18 @@ onUnmounted(()=>{
             :privateSearchExpanded?'Расширенная проверка включена'
             :'Проверить больше файлов (до 1000)' }}
         </button>
-        <label>
-          <span class="browser-sr-only">Сортировка</span>
-          <select v-model="sort" data-testid="browser-sort">
-            <option value="newest">Новые сначала</option>
-            <option value="oldest">Старые сначала</option>
-            <option value="name">По имени (NAME-ID)</option>
-            <option value="expiry">Ближайшее удаление</option>
-            <option value="size-largest">Размер: большие</option>
-            <option value="size-smallest">Размер: маленькие</option>
-          </select>
-        </label>
 
-        <button type="button" :disabled="busy" @click="refresh">Обновить</button>
+
+
       </div>
+            <nav class="browser-filters type-filters" aria-label="Тип файла">
+        <button v-for="tab in (['all','photo','video','audio'] as const)" :key="tab"
+          type="button" :aria-pressed="filter===tab"
+          :class="{selected:filter===tab}" :data-testid="'browser-filter-'+tab"
+          @click="filter=tab">
+          {{ tab==='all'?'Все файлы':tab==='photo'?'Фото':tab==='video'?'Видео':'Аудио' }}
+        </button>
+      </nav>
       <p class="muted" data-testid="browser-summary">
         {{ visible.length }} файлов в загруженном каталоге
         · {{ pendingCount }} локальных не подтверждены облаком
@@ -2211,6 +2244,7 @@ onUnmounted(()=>{
           <span v-else>Все загруженные файлы проверены.</span>
         </template>
       </p>
+      </div>
       <div class="browser-batch-toolbar"
         v-if="selectionMode&&folderReady&&!folderError"
         data-testid="browser-selection-toolbar">
@@ -2266,34 +2300,12 @@ onUnmounted(()=>{
         data-testid="browser-bulk-progress">
         Подтверждено {{ archiveBatchProgress }} операций.
       </p>
-      <section v-if="view==='tree'&&archiveTab==='all'&&folderReady&&!folderError"
-        class="browser-tree-navigation" data-testid="browser-tree-navigation"
-        aria-label="Дерево папок">
-        <button type="button" class="browser-tree-root"
-          data-testid="browser-tree-root" :aria-current="selectedFolder===null?'location':undefined"
-          @click="selectTreeFolder(null)">Мои файлы</button>
-        <div v-for="node in treeNodes" :key="node.id" class="browser-tree-node"
-          :data-testid="'browser-tree-folder-'+node.id"
-          :style="{paddingLeft:(Math.min(node.depth,10)*15+8)+'px'}">
-          <button type="button" class="browser-tree-expand"
-            :disabled="node.children===0" :aria-label="'Раскрыть '+node.name"
-            :aria-expanded="node.children?treeExpanded.includes(node.id):undefined"
-            @click="toggleTreeFolder(node.id)">
-            {{node.children?(treeExpanded.includes(node.id)?'▾':'▸'):'·'}}
-          </button>
-          <button type="button" class="browser-tree-select"
-            :aria-current="selectedFolder===node.id?'location':undefined"
-            @click="selectTreeFolder(node.id)">
-            <span aria-hidden="true">▣</span> {{node.name}}
-          </button>
-        </div>
-        <p class="muted">Дерево содержит только зашифрованные пользовательские папки.
-          Файлы ниже относятся к выбранной папке.</p>
-      </section>
-      <div :class="['browser-items',view==='grid'?'browser-grid':'browser-list']"
+      <div data-testid="browser-folders">
+      <div :class="['browser-items',view,view==='grid'?'browser-grid':'browser-list']"
         data-testid="browser-catalog">
+        <div id="browser-folder-cards-top" data-testid="browser-folder-cards-top"></div>
         <div v-for="item in visible" :key="item.key"
-          :class="['browser-item', item.source==='photo'?'photo-row':'']"
+          :class="['browser-entry browser-item', item.source==='photo'?'photo-row':'']" :data-sync-state="item.state" :data-plain-bytes="item.bytes" :data-location="item.local?(item.cloud?'local-and-cloud':'local'):'cloud'"
           :data-testid="'browser-row-'+item.key">
           <label v-if="selectionMode&&folderReady&&!folderError
               &&(archiveTab==='all'||archivedByKey.get(item.key)?.state==='archived')"
@@ -2302,31 +2314,27 @@ onUnmounted(()=>{
               :aria-label="'Выбрать файл '+item.id"
               @change="toggleItem(item.key,($event.target as HTMLInputElement).checked)">
           </label>
-          <div class="browser-item-kind" aria-hidden="true">
+          <button v-if="view==='tree'" type="button" class="tree-expand" disabled aria-hidden="true" tabindex="-1"></button>
+          <RouterLink class="entry-open" :to="'/browser/file/'+item.source+'/'+item.id" @click="preserveViewerOrigin(item,$event)">
+          <span class="browser-item-kind entry-preview" aria-hidden="true">
             <img v-if="item.type==='photo'&&folderThumbnailUrls[item.key]"
               :src="folderThumbnailUrls[item.key]" alt="" decoding="async"
               data-testid="browser-file-thumb">
-            <template v-else>{{ item.type==='photo'?'▧':item.type==='video'?'▷':'♫' }}</template>
-          </div>
-          <div class="browser-item-detail">
+            <span v-else class="file-mark" :class="{audio:item.type==='audio'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><use :href="'#browser-glyph-'+item.type"/></svg></span>
+          </span>
+          <span class="browser-item-detail entry-copy">
             <strong>{{ item.id.slice(0,8) }}</strong>
-            <small>{{ item.type==='photo'?'Фото':item.type==='video'?'Видео':'Аудио' }}
-              · {{ item.local?'На устройстве':'Только в облаке' }}
-              <template v-if="item.cloud"> · Подтверждено в облаке</template>
-            </small>
-            <small v-if="item.state">
-              Очередь: {{ item.state }}
-            </small>
-            <small data-testid="browser-item-retention">{{ retentionLabel(item.expiresAt) }}</small>
-            <small>{{ catalogSizeLabel(item.bytes) }}</small>
+            <small>{{ item.createdAt?new Date(item.createdAt).toLocaleDateString('ru-RU',{day:'numeric',month:'short'}):'Фото' }} · <span data-testid="browser-item-retention">{{ retentionLabel(item.expiresAt) }}</span></small>
+            <small v-if="item.state==='queued'||item.state==='retry'||item.state==='conflict'" role="status">{{item.state==='conflict'?'Нужна проверка':item.state==='retry'?'Не отправлено · повторим':'Сохранено на устройстве'}}</small>
             <small v-if="archiveTab==='all'&&search.trim()
               &&(searchFolderScope==='all'||searchFolderScope==='selected')"
               data-testid="browser-search-result-folder">
               Папка: {{ catalogFolderLabel(item) }}
             </small>
-          </div>
+          </span>
+          </RouterLink>
           <div class="browser-file-menu-root" :data-testid="'browser-file-menu-'+item.key">
-            <button type="button" class="browser-file-menu-toggle"
+            <button type="button" class="browser-file-menu-toggle entry-more"
               data-testid="browser-file-menu-toggle"
               :aria-label="'Действия с файлом '+item.id"
               :aria-expanded="fileMenuKey===item.key"
@@ -2334,10 +2342,11 @@ onUnmounted(()=>{
               <span aria-hidden="true">•••</span>
             </button>
             <div v-if="fileMenuKey===item.key"
-              class="browser-item-actions browser-file-menu-panel"
+              class="browser-item-actions browser-file-menu-panel" aria-modal="true"
               :aria-label="'Действия с файлом '+item.id"
               role="dialog" data-testid="browser-file-menu-panel"
-              @keydown.esc.stop.prevent="fileMenuEscape(item.key)">
+              @keydown.esc.stop.prevent="fileMenuEscape(item.key)" @keydown.tab="itemMenuTab">
+              <header class="dialog-heading"><strong>Файл {{item.id.slice(0,8)}}</strong><button type="button" aria-label="Закрыть меню файла" @click="fileMenuEscape(item.key)">×</button></header>
             <label v-if="archiveTab==='all'&&folderReady&&!folderError"
               class="browser-file-move">
               <span>Папка</span>
@@ -2403,20 +2412,25 @@ onUnmounted(()=>{
             </div>
           </div>
         </div>
+        <div id="browser-folder-cards-bottom"></div>
+      </div>
       </div>
       <!-- One live list of folders, teleported ABOVE files when preferred,
            or displayed BELOW files when disabled. No duplicate edit/ACL UI. -->
       <!-- PIN-gated authenticated routes first mount with local data present.
            Resolve this same-root target after its DOM insertion, preserving
            the private bootstrap gate and the single encrypted folder list. -->
-      <Teleport defer to="#browser-folder-cards-top" :disabled="!foldersFirst">
-        <div class="browser-folder-list">
-          <div v-for="folder in folders" :key="folder.id" class="browser-folder-item"
-            :data-testid="'browser-folder-'+folder.id">
-            <button type="button" class="browser-folder-open"
-              :aria-label="folder.name" @click="selectedFolder=folder.id">
-              <span class="browser-folder-cover"
-                :class="{'is-empty':folderLoadedRows(folder.id).length===0}"
+      <Teleport defer :to="foldersFirst?'#browser-folder-cards-top':'#browser-folder-cards-bottom'">
+        <div class="browser-folder-list" :data-testid="view==='tree'?'browser-tree-navigation':undefined" :aria-label="view==='tree'?'Дерево папок':'Папки'">
+          <div v-for="folder in folderCards" :key="folder.id" class="browser-folder-item browser-entry"
+            :data-testid="view==='tree'?'browser-tree-folder-'+folder.id:'browser-folder-'+folder.id" :style="{'--depth':folder.depth}">
+            <button v-if="view==='tree'" type="button" class="browser-tree-expand tree-expand"
+              :disabled="folder.children===0" :aria-label="'Раскрыть '+folder.name" :aria-expanded="folder.children?treeExpanded.includes(folder.id):undefined"
+              @click="toggleTreeFolder(folder.id)">{{treeExpanded.includes(folder.id)?'⌄':'›'}}</button>
+            <button type="button" class="browser-folder-open entry-open" :class="{'browser-tree-select':view==='tree'}"
+              :aria-label="folder.name" :aria-current="view==='tree'&&selectedFolder===folder.id?'location':undefined" @click="view==='tree'?selectTreeFolder(folder.id):(selectedFolder=folder.id)">
+              <span class="browser-folder-cover entry-preview"
+                :class="{'is-empty':folderLoadedRows(folder.id).length===0,'empty-folder':folderLoadedRows(folder.id).length===0,collage:folderLoadedRows(folder.id).length>0}"
                 aria-hidden="true">
                 <template v-if="folderLoadedRows(folder.id).length">
                   <span v-for="index in 4" :key="index" class="browser-folder-cover-cell"
@@ -2425,26 +2439,24 @@ onUnmounted(()=>{
                         &&folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
                       :src="folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
                       alt="" decoding="async" data-testid="browser-folder-thumb">
-                    <template v-else>{{ folderLoadedRows(folder.id)[index-1]
-                      ?folderCoverSymbol(folderLoadedRows(folder.id)[index-1]!):'' }}</template>
+                    <span v-else-if="folderLoadedRows(folder.id)[index-1]" class="file-mark" :class="{audio:folderLoadedRows(folder.id)[index-1]!.type==='audio'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><use :href="'#browser-glyph-'+folderLoadedRows(folder.id)[index-1]!.type"/></svg></span>
                   </span>
                 </template>
                 <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="1.6"><path d="M3 7h6l2 2h10v11H3z"/>
-                  <path d="M3 7V5h7l2 2"/></svg>
-                <span class="browser-folder-badge">
+                  stroke-width="1.6"><use href="#browser-glyph-folder"/></svg>
+                <span class="browser-folder-badge entry-folder-badge">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="1.8"><path d="M3 7h6l2 2h10v11H3z"/></svg>
+                    stroke-width="1.8"><use href="#browser-glyph-folder"/></svg>
                 </span>
               </span>
-              <span class="browser-folder-copy">
+              <span class="browser-folder-copy entry-copy">
                 <strong>{{ folder.name }}</strong>
-                <small>{{ folderLoadedCount(folder.id) }} файлов в загруженном каталоге</small>
+                <small title="Количество файлов в загруженном каталоге">{{ folderLoadedCount(folder.id) }} загружено</small>
               </span>
             </button>
             <div class="browser-folder-menu-root"
               :data-testid="'browser-folder-menu-'+folder.id">
-              <button type="button" class="browser-folder-menu-toggle"
+              <button type="button" class="browser-folder-menu-toggle entry-more"
                 data-testid="browser-folder-menu-toggle"
                 :aria-label="'Действия с папкой '+folder.name"
                 :aria-expanded="folderMenuId===folder.id"
@@ -2452,10 +2464,11 @@ onUnmounted(()=>{
                 <span aria-hidden="true">•••</span>
               </button>
               <div v-if="folderMenuId===folder.id"
-                class="browser-folder-menu-panel" role="dialog"
+                class="browser-folder-menu-panel" aria-modal="true" role="dialog"
                 data-testid="browser-folder-menu-panel"
                 :aria-label="'Действия с папкой '+folder.name"
-                @keydown.esc.stop.prevent="folderMenuEscape">
+                @keydown.esc.stop.prevent="folderMenuEscape" @keydown.tab="itemMenuTab">
+                <header class="dialog-heading"><strong>{{folder.name}}</strong><button type="button" aria-label="Закрыть меню папки" @click="folderMenuEscape">×</button></header>
                 <button type="button" :disabled="folderBusy"
                   :aria-label="'Переименовать '+folder.name"
                   @click="openRename(folder.id,folder.name);closeFileMenu()">Переименовать</button>
@@ -2491,9 +2504,6 @@ onUnmounted(()=>{
       </p>
       <button v-if="photoCursor||mediaCursor" type="button"
         :disabled="busy" @click="more">Загрузить ещё</button>
-      <div class="action-row">
-        <button type="button" :disabled="busy" @click="sync">Синхронизировать</button>
-      </div>
       <div v-if="selectedUrl" class="foundation-card browser-preview"
         data-testid="browser-preview">
         <h2>{{ selectedName }}</h2>
@@ -2513,8 +2523,8 @@ onUnmounted(()=>{
         <button type="button" @click="revokePreview">Закрыть просмотр</button>
       </div>
       <section class="browser-operations" data-testid="browser-import-panel">
-        <h2>Импорт и операции</h2>
-        <p class="muted">Загрузка, выдача доступа и версии используют действующий защищённый pipeline.</p>
+
+
         <div v-if="uploadSheetOpen" class="browser-upload-backdrop"
           data-testid="browser-import-backdrop" @click="closeUploadPanel"></div>
         <div v-show="uploadSheetOpen" class="browser-upload-sheet"
@@ -2537,8 +2547,6 @@ onUnmounted(()=>{
             @media-imported="placeImportedMedia"
             @catalog-change="refresh"/>
         </div>
-        <SharePanel v-if="sharePhotoId===null"
-          :local-photos="localPhotos" @open-photo="showReceived"/>
       </section>
       <div v-if="sharePhotoId" class="browser-share-backdrop"
         data-testid="browser-photo-share-backdrop" @click="closePhotoShare"></div>
@@ -2584,3 +2592,5 @@ onUnmounted(()=>{
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>
   </section>
 </template>
+
+<style scoped src="../features/browser/ui/BrowserV3.css"></style>

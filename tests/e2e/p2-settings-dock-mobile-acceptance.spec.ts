@@ -38,7 +38,7 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
     await expect(page.getByTestId('dock-count')).toHaveText('3 / 6')
     await expect(dock(page).getByRole('link')).toHaveCount(3)
     await expect(page.getByTestId('dock-remove-browser')).toBeDisabled()
-    expect(await shellNames(page)).toEqual(['Задания','Browser','Настройки'])
+    expect(await shellNames(page)).toEqual(['Задания','Browser','Профиль'])
     await expect(page.getByRole('button',{name:'Сохранить',exact:true})).toBeEnabled()
     // Offline mutation is local and must remain durable; no fake server ACK.
     await context.setOffline(true)
@@ -55,7 +55,7 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
     await context.setOffline(false)
     await page.reload()
     await expect(page.getByTestId('dock-count')).toHaveText('3 / 6')
-    expect(await shellNames(page)).toEqual(['Задания','Browser','Настройки'])
+    expect(await shellNames(page)).toEqual(['Задания','Browser','Профиль'])
 
     // Keyboard-only order change: the Up control is reachable/activatable.
     await page.getByTestId('dock-add-camera').click()
@@ -64,13 +64,13 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
     await expect(page.getByTestId('dock-up-camera')).toBeFocused()
     await page.keyboard.press('Enter')
     expect(await shellNames(page)).toEqual([
-      'Задания','Browser','Камера','Настройки',
+      'Задания','Browser','Камера','Профиль',
     ])
     await page.getByRole('button',{name:'Сохранить',exact:true}).click()
     await page.reload()
     await expect(dock(page).getByRole('link')).toHaveCount(4)
     expect(await shellNames(page)).toEqual([
-      'Задания','Browser','Камера','Настройки',
+      'Задания','Browser','Камера','Профиль',
     ])
 
     // Cancel must revert the real Shell preview, not leave hidden dirty state.
@@ -80,7 +80,7 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
     await page.getByRole('button',{name:'Отмена',exact:true}).click()
     await expect(page).toHaveURL(/\/settings$/)
     expect(await shellNames(page)).toEqual([
-      'Задания','Browser','Камера','Настройки',
+      'Задания','Browser','Камера','Профиль',
     ])
     await page.reload()
     await expect(dock(page).getByRole('link')).toHaveCount(4)
@@ -92,7 +92,7 @@ test('P2 #214 mobile 320px: three/four/five real Dock routes, offline save, relo
     await page.reload()
     await expect(page.getByTestId('dock-count')).toHaveText('5 / 6')
     expect(await shellNames(page)).toEqual([
-      'Задания','Browser','Камера','Настройки','Контакты',
+      'Задания','Browser','Камера','Профиль','Контакты',
     ])
 
     // Narrow viewport must not clip a real route, shift Dock or form
@@ -126,13 +126,13 @@ test('P2 #214 keyboard drag, mandatory Profile and rollback of draft order',asyn
     await page.getByTestId('dock-up-settings').focus()
     await page.keyboard.press('Enter')
     expect(await shellNames(page)).toEqual([
-      'Задания','Browser','Камера','Настройки','Контакты',
+      'Задания','Browser','Камера','Профиль','Контакты',
     ])
     // Pointer drag provides an independent order path on non-touch desktop.
     await page.getByTestId('dock-row-settings')
       .dragTo(page.getByTestId('dock-row-assignments'))
     await expect.poll(async()=>shellNames(page)).toEqual([
-      'Настройки','Задания','Browser','Камера','Контакты',
+      'Профиль','Задания','Browser','Камера','Контакты',
     ])
     // No account/storage write without explicit Save.
     expect(await page.evaluate(()=>localStorage.getItem('pb3.appearance.v2')))
@@ -140,11 +140,12 @@ test('P2 #214 keyboard drag, mandatory Profile and rollback of draft order',asyn
     await page.getByRole('button',{name:'Отмена',exact:true}).click()
     await expect(page).toHaveURL(/\/settings$/)
     expect(await shellNames(page)).toEqual([
-      'Задания','Browser','Камера','Контакты','Настройки',
+      'Задания','Browser','Камера','Контакты','Профиль',
     ])
     await page.reload()
+    await expect(dock(page)).toBeVisible()
     expect(await shellNames(page)).toEqual([
-      'Задания','Browser','Камера','Контакты','Настройки',
+      'Задания','Browser','Камера','Контакты','Профиль',
     ])
   }finally{await context.close()}
 })
@@ -158,7 +159,7 @@ test('P2 #214 mobile RU/EN Dock search focus, retap one-level and hidden-section
   try{
     await register(page)
     const navigation=dock(page)
-    const settings=navigation.getByRole('link',{name:'Настройки',exact:true})
+    const settings=navigation.getByRole('link',{name:'Профиль / Настройки',exact:true})
     await page.getByTestId('settings-nav-appearance').click()
     await page.getByTestId('dock-remove-contacts').click()
     await page.getByRole('button',{name:'Сохранить',exact:true}).click()

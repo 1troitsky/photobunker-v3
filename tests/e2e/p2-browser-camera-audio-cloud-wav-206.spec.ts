@@ -16,7 +16,7 @@ async function enroll(page:Page):Promise<{key:string;accountId:string;deviceId:s
   expect(key).toMatch(/^PB2\./)
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   const ids=await page.evaluate(async()=>{
     const auth=await import('/src/features/identity/application/session.ts')
     const local=auth.requireSession()
@@ -121,7 +121,7 @@ test('P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV t
     })).toBe(0)
     await B.locator('#recovery-key').fill(recoveryKey)
     await B.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(B.getByText('Подтверждённая сессия'))
+    await expect(B.locator('[data-testid="shell-status-link"][data-session-state="online"]'))
       .toBeVisible({timeout:30_000})
     const b=await B.evaluate(async()=>{
       const auth=await import('/src/features/identity/application/session.ts')

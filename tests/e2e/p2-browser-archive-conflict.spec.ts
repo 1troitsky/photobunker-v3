@@ -1,3 +1,4 @@
+import {browserControl} from './support/browser-ui'
 import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 import type {Locator} from '@playwright/test'
@@ -16,7 +17,7 @@ test('P2 Archive: unresolved signed delete/archival command cannot be discarded;
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
     await openImportSheet(page)
     await page.getByTestId('media-import-file').setInputFiles({
@@ -36,7 +37,7 @@ test('P2 Archive: unresolved signed delete/archival command cannot be discarded;
       return (await module.listLocalMedia()).filter(x=>x.state==='synced').length
     }),{timeout:30000}).toBe(1)
     await closeImportSheet(page)
-    await page.getByRole('button',{name:'Обновить',exact:true}).first().click()
+    await browserControl(page,'Обновить')
     const row=page.locator('[data-testid^="browser-row-media:"]')
     await ensureFileMenu(row)
     await expect(row.getByRole('button',{name:/Архивировать файл/})).toBeVisible()

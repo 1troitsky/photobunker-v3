@@ -1,3 +1,4 @@
+import {browserControl,browserHeader,searchBrowser} from './support/browser-ui'
 import {expect,test} from '@playwright/test'
 
 test('P2 Browser: offline private metadata search and second-device cloud search without plaintext disclosure',async({browser})=>{
@@ -11,12 +12,12 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     const recoveryKey=await a.locator('#generated-key').inputValue()
     await a.getByLabel('Я сохранил ключ восстановления').check()
     await a.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(a.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(a.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await a.goto('/browser')
     await expect(a.getByTestId('browser-v3')).toBeVisible()
     // Owner-approved Browser v3 places private upload controls in the
     // Header-triggered sheet; none are visible beneath the catalog.
-    await a.getByTestId('browser-header-upload').click()
+    await browserHeader(a,'upload')
     await expect(a.getByTestId('browser-import-sheet')).toBeVisible()
     await a.locator('#media-import-category').fill('Полевые отчёты')
     await a.locator('#media-import-description').fill('Секретная заметка для клиента')
@@ -46,21 +47,21 @@ test('P2 Browser: offline private metadata search and second-device cloud search
       description:'Секретная заметка для клиента',
       tags:['evidence','night'],
     })
-    await a.getByTestId('browser-search').fill(secret)
+    await searchBrowser(a,secret)
     await expect(rows).toHaveCount(1,{timeout:15000})
     await expect(a.getByTestId('browser-private-search-status'))
       .toContainText('Проверено 1 из 1',{timeout:20000})
     for(const text of ['секретная заметка','полевые','evidence night']){
-      await a.getByTestId('browser-search').fill(text)
+      await searchBrowser(a,text)
       await expect(a.getByTestId('browser-private-search-status'))
         .toContainText('Проверено 1 из 1',{timeout:20000})
       await expect(rows).toHaveCount(1)
     }
-    await a.getByTestId('browser-search').fill('НЕСУЩЕСТВУЮЩЕЕ-ПОЛЕ')
+    await searchBrowser(a,'НЕСУЩЕСТВУЮЩЕЕ-ПОЛЕ')
     await expect(a.getByTestId('browser-private-search-status'))
       .toContainText('Все загруженные файлы проверены',{timeout:20000})
     await expect(rows).toHaveCount(0)
-    await a.getByTestId('browser-search').fill('')
+    await searchBrowser(a,'')
     await expect(rows).toHaveCount(1)
 
     // Search across virtual folders must not change encrypted placement or
@@ -76,7 +77,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await rows.getByRole('combobox',{name:'Папка файла '+movedId})
       .selectOption({label:'Секретный раздел'})
     await expect(rows).toHaveCount(0)
-    await a.getByTestId('browser-search').fill('секретная заметка')
+    await searchBrowser(a,'секретная заметка')
     await expect(rows).toHaveCount(0)
     await a.getByTestId('browser-search-folder-scope').selectOption('all')
     await expect(a.getByTestId('browser-private-search-status'))
@@ -86,7 +87,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
       .toHaveText('Папка: Секретный раздел')
     await a.getByTestId('browser-search-folder-scope').selectOption('current')
     await expect(rows).toHaveCount(0)
-    await a.getByTestId('browser-search').fill('')
+    await searchBrowser(a,'')
 
     await aContext.setOffline(false)
     await a.evaluate(async()=>{
@@ -101,7 +102,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await b.goto('/settings')
     await b.locator('#recovery-key').fill(recoveryKey)
     await b.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(b.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(b.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const requests:string[]=[]
     b.on('request',request=>{
       const url=request.url()
@@ -111,8 +112,8 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await b.goto('/browser')
     const remote=b.locator('[data-testid^="browser-row-media:"]')
     await expect(remote).toHaveCount(1,{timeout:25000})
-    await expect(remote.first()).toContainText('Только в облаке')
-    await b.getByTestId('browser-search').fill('секретная заметка')
+    await expect(remote.first()).toHaveAttribute('data-location','cloud')
+    await searchBrowser(b,'секретная заметка')
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Проверено 1 из 1',{timeout:30000})
     await expect(remote).toHaveCount(1)
@@ -123,7 +124,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     expect(requests.join('\n')).not.toContain(secret)
     expect(requests.join('\n')).not.toContain('evidence')
 
-    await b.getByTestId('browser-search').fill('night')
+    await searchBrowser(b,'night')
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Проверено 1 из 1',{timeout:30000})
     await expect(remote).toHaveCount(1)
@@ -131,7 +132,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     // selected-folder search to "All" when wider authorized index pages
     // arrive. The recovered cloud row is in root; the new empty folder
     // cannot inherit that row's encrypted virtual placement.
-    await b.getByTestId('browser-header-folder').click()
+    await browserHeader(b,'folder')
     await b.getByTestId('browser-folder-name').fill('Only This Private Folder')
     await b.getByRole('button',{name:'Создать',exact:true}).click()
     // A folder's actual encrypted IndexedDB commit is distinct from the
@@ -164,7 +165,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     expect(requests.join('\n')).not.toContain('секретная')
     expect(requests.join('\n')).not.toContain(secret)
     expect(requests.join('\n')).not.toContain('night')
-    await b.getByTestId('browser-search').fill('NOT-A-PRIVATE-KEYWORD')
+    await searchBrowser(b,'NOT-A-PRIVATE-KEYWORD')
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Все загруженные файлы проверены',{timeout:30000})
     await expect(remote).toHaveCount(0)
@@ -173,7 +174,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     // Return one REAL signed/ciphertext-authorized row twice to mimic a
     // stale/malicious index. The local-first UI must retain the previous
     // authentic cloud list and cursor, rather than accepting duplicated IDs.
-    await b.getByTestId('browser-header-upload').click()
+    await browserHeader(b,'upload')
     const sheet=b.getByTestId('browser-import-sheet')
     await expect(sheet).toBeVisible()
     const panel=sheet.locator('.media-import-p1')
@@ -190,13 +191,13 @@ test('P2 Browser: offline private metadata search and second-device cloud search
       await route.fulfill({response,contentType:'application/json',
         body:JSON.stringify({...data,items:[data.items[0],data.items[0]]})})
     })
-    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(panel,'Обновить')
     await expect(panel.getByRole('alert'))
       .toContainText('browser.invalid_cloud_catalog_page',{timeout:20000})
     expect(duplicateDelivered).toBeGreaterThan(0)
     await expect(verifiedCloud).toHaveCount(1)
     await b.unroute('**/media/v1')
-    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(panel,'Обновить')
     await expect(panel.getByRole('alert')).toHaveCount(0,{timeout:20000})
     await expect(verifiedCloud).toHaveCount(1)
 
@@ -222,9 +223,9 @@ test('P2 Browser: offline private metadata search and second-device cloud search
       await route.fulfill({response})
       servedNew()
     })
-    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(panel,'Обновить')
     await oldPending
-    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(panel,'Обновить')
     await newFinished
     unlockOld()
     await expect(verifiedCloud).toHaveCount(1,{timeout:20000})

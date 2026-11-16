@@ -9,7 +9,7 @@ test('P2 V-50: five real shape tools stay on one mobile row, fill and stroke fla
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
     await expect.poll(()=>page.evaluate(async()=>{
       const {activeSession}=await import('/src/features/identity/application/session.ts')

@@ -10,7 +10,7 @@ test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navig
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
     await context.setOffline(true)
 
@@ -44,7 +44,7 @@ test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navig
     await expect(page.getByTestId('file-viewer-info'))
       .toContainText('PRIVATE-VIDEO-WITH-NAME.webm')
     await expect(page.getByTestId('file-viewer-video')).toBeVisible()
-    await expect(page.getByTestId('file-viewer-position')).toContainText('2 / 2')
+    await expect(page.getByTestId('file-viewer-position')).toContainText('2 из 2')
     // Newest audio is the previous entry; switch media type without leaving
     // the viewport, which must retire the former blob object URL.
     const oldUrl=await page.getByTestId('file-viewer-video').getAttribute('src')

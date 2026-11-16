@@ -1,3 +1,5 @@
+import {exchangeReady} from './support/browser-ui'
+import {browserControl} from './support/browser-ui'
 import { test, expect } from '@playwright/test'
 
 // Each hard navigation starts asynchronous device unseal + signed reproof.
@@ -35,7 +37,7 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     return page.evaluate(async()=>{
       const s=await import('/src/features/identity/application/session.ts')
       const current=s.requireSession()
@@ -48,7 +50,7 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
     const recipientId=recipientSession.accountId
     await B.goto('/browser')
     await awaitVerifiedPickerSession(B,recipientSession)
-    await expect(B.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
+    await exchangeReady(B)
 
     // Independently fingerprint-confirm a real recipient in the local
     // account-scoped encrypted Contacts book before using the picker.
@@ -86,7 +88,7 @@ test('P1-26: confirmed contact → explicit owner-signed assignment invitation, 
       if(drafts.length!==1)throw Error('qa385.owner_draft_not_unique')
       return drafts[0]!.id
     },ownerSession.accountId)
-    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(A,'Синхронизировать')
     // The real signed ACK is distinct from the optimistic local E2EE row.
     await expect.poll(()=>A.evaluate(async id=>{
       const outbox=await import(

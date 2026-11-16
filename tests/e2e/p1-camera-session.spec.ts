@@ -1,3 +1,4 @@
+import {browserControl} from './support/browser-ui'
 import {test, expect, type Page} from '@playwright/test'
 
 test.use({trace: 'off', screenshot: 'off', video: 'off'})
@@ -7,7 +8,7 @@ async function register(page:Page) {
   await page.getByRole('button', {name: 'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button', {name: 'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 }
 async function confirmed(page:Page) {
   await page.evaluate(async () => {
@@ -176,8 +177,8 @@ test('hydrated camera captures offline against an already verified signed assign
   expect(stored.types).toEqual(['application/octet-stream','application/octet-stream'])
   await context.setOffline(false)
   await page.getByRole('navigation',{name:'Главная навигация'}).getByRole('link',{name:'Browser',exact:true}).click()
-  await page.getByRole('button',{name:'Синхронизировать'}).click()
-  await expect(page.locator('.photo-row').first()).toContainText('synced')
+  await browserControl(page,'Синхронизировать')
+  await expect(page.locator('.photo-row').first()).toHaveAttribute('data-sync-state','synced')
   const digests=await page.evaluate(async()=>{
     const path='/src/features/photo-sync/application/p1-photo.ts'
     return (await (await import(path)).listLocalPhotos())[0].assets.map((a:any)=>a.sha256)

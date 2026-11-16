@@ -9,7 +9,7 @@ test('P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     // Keep the owner/device identity from the actual newly registered
     // cryptographic session. A hard page.goto() briefly restores a local
     // account before the server's genuine signed device reproof completes.

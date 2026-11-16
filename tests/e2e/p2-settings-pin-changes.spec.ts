@@ -6,7 +6,7 @@ test('PIN: genuine enrollment → change length → reload rejects old PIN → a
   await page.goto('/settings');await page.getByRole('button',{name:'Создать ключ'}).click()
   const recovery=await page.locator('#generated-key').inputValue()
   await page.getByLabel('Я сохранил ключ восстановления').check();await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   await page.goto('/settings/security');await page.getByTestId('security-pin-create').click()
   await page.getByTestId('security-pin-new').fill('4826');await page.getByTestId('security-pin-repeat').fill('4826')
   await page.getByTestId('security-pin-recovery').fill(recovery);await page.getByTestId('security-pin-ack').check();await page.getByTestId('security-pin-save').click()

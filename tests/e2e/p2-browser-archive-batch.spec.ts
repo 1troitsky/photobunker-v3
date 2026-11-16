@@ -1,3 +1,4 @@
+import {browserControl,browserHeader} from './support/browser-ui'
 import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 import type {Locator} from '@playwright/test'
@@ -16,7 +17,7 @@ test('P2 Browser: owner-confirmed sequential batch archive and restore use real 
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
     await expect(page.getByTestId('browser-pref-unconfirmed')).toHaveCount(0)
     await openImportSheet(page)
@@ -40,13 +41,13 @@ test('P2 Browser: owner-confirmed sequential batch archive and restore use real 
       return (await module.listLocalMedia()).filter(x=>x.state==='synced').length
     }),{timeout:30000}).toBe(2)
     await closeImportSheet(page)
-    await page.getByRole('button',{name:'Обновить',exact:true}).first().click()
+    await browserControl(page,'Обновить')
     const row=page.locator('[data-testid^="browser-row-media:"]')
     await expect(row).toHaveCount(2,{timeout:15000})
     await ensureFileMenu(row.first())
     await expect(row.first().getByRole('button',{name:/Архивировать файл/}))
       .toBeEnabled()
-    await page.getByTestId('browser-header-select').click()
+    await browserHeader(page,'select')
     await page.getByTestId('browser-selection-actions').click()
     await page.getByRole('button',{name:'Выбрать всё на странице'}).click()
     await expect(page.getByTestId('browser-bulk-archive')).toContainText('(2)')

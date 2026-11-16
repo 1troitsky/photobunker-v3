@@ -15,7 +15,7 @@ async function enroll(page: Page): Promise<string> {
   await page.getByRole('button', { name: 'Создать ключ' }).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button', { name: 'Завершить регистрацию' }).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   await page.evaluate(async () => {
     const identity = await import('/src/features/identity/application/session.ts')
     await identity.reauthenticate()
@@ -52,6 +52,7 @@ test('P1-25 lost finalize ACK: real commit, offline E2EE outbox, idempotent repl
   try {
     const ownerId = await enroll(owner)
     await owner.goto('/browser')
+    await expect(owner.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await openImportSheet(owner)
     const panel = owner.locator('.media-import-p1')
     await expect(panel.getByTestId('media-import-file')).toBeEnabled()
@@ -191,6 +192,7 @@ test('P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean 
   try {
     await enroll(page)
     await page.goto('/browser')
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await openImportSheet(page)
     const panel = page.locator('.media-import-p1')
     await expect(panel.getByTestId('media-import-file')).toBeEnabled()

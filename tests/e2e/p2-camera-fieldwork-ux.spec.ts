@@ -13,7 +13,7 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   await page.goto('/camera')
   await expect(page.getByTestId('camera-fieldwork')).toBeVisible()
   await expect(page.locator('.shell-header')).toHaveCount(1)
@@ -23,7 +23,9 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('verified-plan-link')).toHaveCount(0)
   await expect(page.getByTestId('camera-mode-tabs').locator('button')).toHaveCount(3)
   await expect(page.getByTestId('camera-mode-tabs')).toHaveCSS('height','46px')
-  await expect(page.getByTestId('camera-stage-controls')).toHaveCSS('min-height','124px')
+  // At 390px the approved HTML resolves its 120px flex basis plus content
+  // minimum to 121px. 124px is its wider-screen basis, not mobile min-height.
+  expect((await page.getByTestId('camera-stage-controls').boundingBox())?.height).toBe(121)
   // Exact accepted shutter: black background, white ring and separate inner disc.
   const shutter=page.getByRole('button',{name:'Сделать снимок'})
   await expect(shutter).toHaveCSS('border-top-width','4px')

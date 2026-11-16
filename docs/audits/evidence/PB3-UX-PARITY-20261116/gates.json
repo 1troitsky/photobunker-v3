@@ -1,0 +1,72 @@
+{
+  "productCommit": "ae70365dcdc1694e19618197b50426652c697f72",
+  "appsTree": "147b229eace145da6a2fe64bd6ffa270cc77d9f1",
+  "gates": [
+    {
+      "name": "Vitest",
+      "command": "pnpm test:web",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": 1020,
+      "files": 140,
+      "logSummary": "140 passed (140)\n      Tests  1020 passed (1020)\n   Start at  22:00:36\n   Duration  26.00s (transform 6.22s, setup 0ms, import 24.73s, tests 91.16s, environment 14.02s)"
+    },
+    {
+      "name": "TypeScript",
+      "command": "pnpm typecheck",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "Build",
+      "command": "pnpm build",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "name": "Compiled E2E",
+      "command": "pnpm exec playwright test -c ../ux-parity-acceptance-20261116/playwright.production.config.ts",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": 10
+    },
+    {
+      "name": "Visual geometry",
+      "command": "PB3_UX_BASE_URL=http://127.0.0.1:16175 PB3_UX_VIEWPORTS=375x812,390x844,1280x800 node scripts/ux/capture-core-parity.mjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "screenPairs": 33,
+      "anchors": 228,
+      "coordinates": 912
+    },
+    {
+      "name": "Static pixels",
+      "command": "node scripts/ux/compare-static-pixels.mjs docs/audits/evidence/PB3-UX-PARITY-20261116",
+      "status": "PASS",
+      "exitCode": 0,
+      "pairs": 9,
+      "differentPixels": 0
+    },
+    {
+      "name": "Node",
+      "command": "TMPDIR=/private/tmp node --test docs/ux-integration/check-pr-lane.test.mjs scripts/release-integrity/integrity.test.mjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": 37
+    },
+    {
+      "name": "Chromium E2E",
+      "command": "PATH=\"$PWD/../ux-parity-acceptance-20261116/bin:$PATH\" pnpm exec playwright test -c ../ux-parity-acceptance-20261116/playwright.config.ts",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": 151,
+      "retries": 0,
+      "workers": 1
+    }
+  ],
+  "nativeSafari": {
+    "status": "NOT TESTED",
+    "reason": "safaridriver launch rejected by automatic approval review; owner permission pending"
+  },
+  "physicalDevices": "NOT TESTED"
+}

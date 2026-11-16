@@ -1,3 +1,4 @@
+import {browserHeader} from './support/browser-ui'
 import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 import type {Locator} from '@playwright/test'
@@ -16,9 +17,9 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
-    await expect(page.getByTestId('browser-folders')).toBeVisible()
+    await expect(page.getByTestId('browser-tab-active')).toBeVisible()
     await context.setOffline(true)
     await chooseEncryptedFile(page.getByTestId('media-import-file'),{
       name:'PRIVATE-LOCAL-FOLDER-TEST.webm',mimeType:'video/webm',
@@ -75,6 +76,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     // Approved Browser v3 search supports CURRENT, explicitly SELECTED,
     // and ALL already authenticated folders, without server-side plaintext
     // queries or moving the current breadcrumb.
+    await browserHeader(page,'search')
     const term=page.getByTestId('browser-search')
     const scope=page.getByTestId('browser-search-folder-scope')
     await term.fill(id.slice(0,8))
@@ -102,12 +104,12 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     // accessible without any subsequent cloud API.
     await context.setOffline(false)
     await page.reload()
-    await expect(page.getByTestId('browser-folders')).toBeVisible()
+    await expect(page.getByTestId('browser-tab-active')).toBeVisible()
     await context.setOffline(true)
     await page.locator('.browser-folder-open').filter({hasText:'Съёмки'}).click()
     await page.locator('.browser-folder-open').filter({hasText:'День 1'}).click()
     await expect(item).toHaveCount(1)
-    await page.getByRole('button',{name:'Мои файлы'}).click()
+    await page.locator('.path-breadcrumbs').getByRole('button',{name:'Все',exact:true}).click()
     await page.getByRole('button',{name:'Действия с папкой Съёмки'}).click()
     // Browser v3 never offers an invalid move into a descendant. The domain
     // still rejects forged moves; UI must not invite the user to fail.
@@ -134,7 +136,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
       buffer:Buffer.alloc(8192,0x49),
     })
     await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(2)
-    await page.getByTestId('browser-header-select').click()
+    await browserHeader(page,'select')
     await page.getByTestId('browser-selection-actions').click()
     await page.getByRole('button',{name:'Выбрать всё на странице'}).click()
     await page.getByTestId('browser-bulk-destination').selectOption({label:'Съёмки'})
@@ -155,7 +157,7 @@ test('P2 Browser: corrupt encrypted folder snapshot fails closed without overwri
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
     await page.getByRole('button',{name:'Новая папка'}).click()
     await page.getByTestId('browser-folder-name').fill('SECRET-LOCAL-FOLDER')

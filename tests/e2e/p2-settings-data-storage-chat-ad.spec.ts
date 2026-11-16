@@ -16,7 +16,7 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await page.getByRole('button', { name: 'Создать ключ' }).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button', { name: 'Завершить регистрацию' }).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await expect(page.getByTestId('settings-nav-data-storage'))
       .toHaveAttribute('href', '/settings/storage')
     await page.getByTestId('settings-nav-data-storage').click()

@@ -7,8 +7,8 @@ test('Public Card 1.1: unknown and expired links fail closed without leaking met
     await expect(page.locator('.shell-header')).toHaveCount(0)
     await expect(page.locator('.shell-dock')).toHaveCount(0)
     await expect(page.getByRole('heading',{name:'Карточка недоступна'})).toBeVisible()
-    await expect(page.getByText('Никакие данные файла по этой ссылке не раскрываются.',{exact:false})).toBeVisible()
-    await expect(page.getByRole('button',{name:/скачать/i})).toHaveCount(0)
+    await expect(page.getByText('Ссылка не найдена, срок действия истёк или доступ к файлу закрыт.',{exact:false})).toBeVisible()
+    await expect(page.getByRole('button',{name:/скачать/i})).toBeDisabled()
     // The public Fieldwork header deliberately renders the brand icon.
     // Still forbid ALL media elements outside that single verified logo:
     // neither the denied card nor query-string scopes may reveal file media.
@@ -18,7 +18,7 @@ test('Public Card 1.1: unknown and expired links fail closed without leaking met
     await expect(page.locator('main img,main video,main audio,main canvas,main iframe')).toHaveCount(0)
     await expect(page.getByText(/© 2026 /)).toBeVisible()
   }
-  await page.getByTestId('public-card-install').click()
+  await page.getByRole('link',{name:'Установить приложение'}).click()
   await expect(page).toHaveURL(/\/install$/)
   await expect(page.getByTestId('install-guide-page')).toBeVisible()
 })

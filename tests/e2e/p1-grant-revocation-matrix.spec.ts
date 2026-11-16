@@ -12,7 +12,7 @@ async function enroll(page: Page): Promise<{accountId:string; recoveryKey:string
   expect(recoveryKey).toMatch(/^PB2\./)
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button', { name: 'Завершить регистрацию' }).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   await page.evaluate(async () => {
     const identity = await import('/src/features/identity/application/session.ts')
     await identity.reauthenticate()
@@ -203,7 +203,7 @@ test('P1 ACL matrix: A→B verified grant only, C denied, source namespace denie
     await B2.goto('/settings')
     await B2.locator('#recovery-key').fill(b.recoveryKey)
     await B2.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(B2.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(B2.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const restored = await B2.evaluate(async ({grantId,mediaId}) => {
       const identity = await import('/src/features/identity/application/session.ts')
       await identity.reauthenticate()

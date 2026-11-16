@@ -1,3 +1,4 @@
+import {browserControl,exchangeReady} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
 // Hard route navigation mounts Vue before the asynchronous verified login proof.
@@ -36,7 +37,7 @@ test('P2 contributor: signed imported Photo MediaFile receipt requires scoped E2
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const identity=await page.evaluate(async()=>{
       const auth=await import('/src/features/identity/application/session.ts')
       const current=auth.requireSession()
@@ -44,8 +45,7 @@ test('P2 contributor: signed imported Photo MediaFile receipt requires scoped E2
       return {accountId:current.accountId,deviceId:current.deviceId}
     })
     await page.goto('/browser')
-    await expect(page.getByText('Ключ обмена подготовлен'))
-      .toBeVisible({timeout:25000})
+    await exchangeReady(page,25000)
     await awaitVerifiedSubmissionSession(page,identity)
     return identity
   }
@@ -87,7 +87,7 @@ test('P2 contributor: signed imported Photo MediaFile receipt requires scoped E2
     await owner.locator('#assignment-instructions')
       .fill('Explicit participant consent, not verified camera capture')
     await owner.getByRole('button',{name:'Создать зашифрованное задание'}).click()
-    await owner.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(owner,'Синхронизировать')
     await expect(owner.locator('.assignment-detail code').first())
       .toBeVisible({timeout:30000})
     const assignmentId=(await owner.locator('.assignment-detail code').first()
@@ -107,11 +107,11 @@ test('P2 contributor: signed imported Photo MediaFile receipt requires scoped E2
       .toBeVisible({timeout:20000})
     await owner.getByRole('link',{name:'Назад к заданиям'}).click()
     await owner.getByRole('button',{name:'Открыть',exact:true}).first().click()
-    await owner.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(owner,'Синхронизировать')
 
     await contributor.goto('/assignments')
     await awaitVerifiedSubmissionSession(contributor,contributorIdentity)
-    await contributor.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(contributor,'Обновить')
     await expect(contributor.getByText('Приглашения',{exact:true})).toBeVisible()
     await contributor.getByRole('button',{name:'Ключ владельца'}).click()
     await contributor.getByLabel('Я сверил отпечаток владельца').check()
@@ -168,7 +168,7 @@ test('P2 contributor: signed imported Photo MediaFile receipt requires scoped E2
       return {status:response.status,count:data.items.length}
     },assignmentId)
     expect(serverReceipt).toEqual({status:200,count:1})
-    await owner.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(owner,'Обновить')
     await owner.getByRole('button',{name:'Открыть',exact:true}).first().click()
     // A silently skipped refresh is now an explicit failure: unlike a toast,
     // an actual authenticated endpoint response proves the request ran.
@@ -207,7 +207,7 @@ test('P2 contributor: signed imported Photo MediaFile receipt requires scoped E2
       const g=await import('/src/features/media/application/media-grants.ts')
       await g.revokeMediaGrant(grantId)
     },signed.receipt.mediaGrantId)
-    await owner.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(owner,'Обновить')
     await owner.getByRole('button',{name:'Обновить материалы'}).click()
     await expect(owner.getByTestId('assignment-media-submission')).toHaveCount(0)
     const after=await owner.evaluate(async id=>{

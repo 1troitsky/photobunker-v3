@@ -13,7 +13,7 @@ test('UX: settings hub provides real Contacts route without breaking Key-Only Id
     await expect(page.locator('#generated-key')).toHaveValue(/^PB2\./)
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 
     await expect(page.getByTestId('fieldwork-settings')).toBeVisible()
     await expect(page.getByRole('heading',{name:'Настройки',exact:true})).toBeVisible()
@@ -30,7 +30,7 @@ test('UX: settings hub provides real Contacts route without breaking Key-Only Id
     await expect(page).toHaveURL(/\/contacts$/)
     await expect(page.getByTestId('contacts-teams')).toBeVisible()
     await page.getByRole('navigation',{name:'Главная навигация'})
-      .getByRole('link',{name:'Настройки',exact:true}).click()
+      .getByRole('link',{name:'Профиль / Настройки',exact:true}).click()
     await expect(page.getByTestId('fieldwork-settings')).toBeVisible()
     await expect(page.getByRole('button',{name:'Проверить сессию'})).toBeVisible()
     await expect(page.getByRole('button',{name:'Выйти'})).toBeEnabled()

@@ -6,7 +6,7 @@ async function registerDevice(page: import('@playwright/test').Page): Promise<vo
   await expect(page.locator('#generated-key')).toHaveValue(/^PB2\./)
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button', { name: 'Завершить регистрацию' }).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 }
 
 test('P1 #402: logout survives aborted IndexedDB transaction and immediate hard reload', async ({ browser }) => {
@@ -64,7 +64,7 @@ test('P1 #402: logout survives aborted IndexedDB transaction and immediate hard 
     })
     expect(previousDevicesBlocked).toBe(true)
     await page.reload()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   } finally { await context.close() }
 })
 
@@ -77,7 +77,7 @@ test('P1 #402: committed local logout remains fenced across tabs and reload desp
     await registerDevice(pageA)
     await pageB.goto('/settings')
     // Genuine same-device unseal & signed reproof before the concurrent logout.
-    await expect(pageB.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(pageB.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await expect(pageB.getByTestId('fieldwork-settings')).toBeVisible()
 
     await pageA.route('**/identity/v2/logout', async route => { await route.abort() })

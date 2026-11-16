@@ -164,7 +164,7 @@ describe('P3 owner-accepted full-screen PIN Shell 1.1',()=>{
   it('switches to Recovery Key after lost PIN, uses no secret persistence',async()=>{
     await mount()
     const toggle=[...root.querySelectorAll('button')].find(
-      el=>el.textContent?.includes('Восстановить через Recovery Key'),
+      el=>el.getAttribute('aria-label')==='Восстановить через Recovery Key',
     ) as HTMLButtonElement
     toggle.click()
     await settle()

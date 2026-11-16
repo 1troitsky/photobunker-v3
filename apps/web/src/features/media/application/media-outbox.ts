@@ -1,5 +1,6 @@
 import Dexie,{type Table} from 'dexie'
 import { activeSession, requireSession, reauthenticate } from '../../identity/application/session'
+import {sameSessionDevice} from '../../identity/application/session-device'
 import { jsonApi, putCiphertext, readCiphertext } from '../../identity/infrastructure/api'
 import { importSigner, sign } from '../../identity/infrastructure/crypto'
 import { sha } from '../../local-storage/infrastructure/cipher'
@@ -49,7 +50,7 @@ class MediaDb extends Dexie{
 }
 const db=new MediaDb()
 function same(session:ReturnType<typeof requireSession>):void{
-  if(activeSession.value!==session)throw Error('identity.account_changed')
+  if(!sameSessionDevice(session,activeSession.value))throw Error('identity.account_changed')
 }
 function apiPath(mediaId:string):string{
   return '/media/v1/'+encodeURIComponent(mediaId)
@@ -142,8 +143,10 @@ export async function enqueueEncryptedMedia(
   assertCurrent()
   await db.transaction('rw',db.files,async()=>{
     assertCurrent()
+    same(session)
     await db.files.put(stored)
     assertCurrent()
+    same(session)
   })
   void flushMediaOutbox()
   return contract.mediaId

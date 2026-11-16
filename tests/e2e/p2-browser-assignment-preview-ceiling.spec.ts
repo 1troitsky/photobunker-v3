@@ -1,3 +1,4 @@
+import {browserControl} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
 test('P2 assignment: signed owner-only field ceiling, queued offline revision and NO public grant',async({browser})=>{
@@ -11,7 +12,7 @@ test('P2 assignment: signed owner-only field ceiling, queued offline revision an
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     return page.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       return identity.requireSession().accountId
@@ -26,7 +27,7 @@ test('P2 assignment: signed owner-only field ceiling, queued offline revision an
     await A.locator('#assignment-instructions')
       .fill('No public card, no original rights')
     await A.getByRole('button',{name:'Создать зашифрованное задание'}).click()
-    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(A,'Синхронизировать')
     await expect(A.locator('.assignment-detail code').first()).toBeVisible()
     const assignmentId=(await A.locator('.assignment-detail code').first()
       .textContent())?.trim()??''

@@ -19,7 +19,7 @@ export const dockDefinitions: Readonly<Record<DockId, DockDefinition>> = {
   browser: {id:'browser',name:'Browser',to:'/browser',icon:'folder'},
   camera: {id:'camera',name:'Камера',to:'/camera',icon:'camera'},
   contacts: {id:'contacts',name:'Контакты',to:'/contacts',icon:'users'},
-  settings: {id:'settings',name:'Настройки',to:'/settings',icon:'settings'},
+  settings: {id:'settings',name:'Профиль',to:'/settings',icon:'settings'},
   notifications: {id:'notifications',name:'Уведомления',to:'/notifications',icon:'bell'},
   messages: {id:'messages',name:'Сообщения',to:'/messages',icon:'message'},
 }

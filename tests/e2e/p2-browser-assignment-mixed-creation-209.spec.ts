@@ -1,3 +1,5 @@
+import {exchangeReady,filterBrowser} from './support/browser-ui'
+import {browserControl} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
 // Real signed owner root + revision-2 policy, real database and auth.
@@ -13,9 +15,9 @@ test('P2 #209: mixed photo/video/audio creation is durable offline, two owner si
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
-    await expect(page.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20_000})
+    await exchangeReady(page,20000)
     await page.goto('/assignments')
     await page.getByRole('button',{name:'Создать задание'}).click()
     await page.locator('#assignment-title').fill('P2-209 real signed mixed assignment')
@@ -67,7 +69,7 @@ test('P2 #209: mixed photo/video/audio creation is durable offline, two owner si
       if(!identity.requireSession().online)throw Error('qa.owner_session_not_online')
     })
     await expect(page.getByRole('button',{name:'Синхронизировать'})).toBeVisible()
-    await page.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(page,'Синхронизировать')
     await expect.poll(async()=>page.evaluate(async id=>{
       const outbox=await import('/src/features/assignments/application/assignment-outbox.ts')
       await outbox.flushAssignmentOutbox()

@@ -19,7 +19,7 @@ test('Settings can finish interrupted key-only registration using the original s
   await expect(page.getByRole('button',{name:'Создать ключ'})).toBeDisabled()
   await page.locator('#pending-registration-key').fill(savedKey)
   await page.getByTestId('account-resume-registration').click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   await expect(page.getByTestId('account-pending-registration')).toHaveCount(0)
   await expect(page.getByText('Незавершённая регистрация успешно завершена.'))
     .toBeVisible()

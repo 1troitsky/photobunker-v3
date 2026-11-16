@@ -1,0 +1,113 @@
+{
+  "status": "MEASURED",
+  "method": "Five interleaved fresh Chromium contexts per compiled image, 390x844; local Docker. Concurrent test workload; laboratory data, not RUM or Lighthouse.",
+  "threshold": "No invented acceptance threshold",
+  "samples": [
+    {
+      "trial": 0,
+      "candidate": "baseline",
+      "welcomeVisibleMs": 73.94133399999993,
+      "domContentLoadedMs": 47,
+      "loadMs": 47.70000001788139,
+      "transferredResourceBytes": 1534793,
+      "decodedResourceBytes": 1534193
+    },
+    {
+      "trial": 0,
+      "candidate": "current",
+      "welcomeVisibleMs": 116.93308300000001,
+      "domContentLoadedMs": 53.30000001192093,
+      "loadMs": 54.20000001788139,
+      "transferredResourceBytes": 1618730,
+      "decodedResourceBytes": 1618130
+    },
+    {
+      "trial": 1,
+      "candidate": "baseline",
+      "welcomeVisibleMs": 72.72791699999993,
+      "domContentLoadedMs": 44.10000002384186,
+      "loadMs": 44.80000001192093,
+      "transferredResourceBytes": 1534793,
+      "decodedResourceBytes": 1534193
+    },
+    {
+      "trial": 1,
+      "candidate": "current",
+      "welcomeVisibleMs": 66.37820899999997,
+      "domContentLoadedMs": 40.400000005960464,
+      "loadMs": 41.30000001192093,
+      "transferredResourceBytes": 1618730,
+      "decodedResourceBytes": 1618130
+    },
+    {
+      "trial": 2,
+      "candidate": "baseline",
+      "welcomeVisibleMs": 56.67537500000003,
+      "domContentLoadedMs": 34.5,
+      "loadMs": 35.099999994039536,
+      "transferredResourceBytes": 1534793,
+      "decodedResourceBytes": 1534193
+    },
+    {
+      "trial": 2,
+      "candidate": "current",
+      "welcomeVisibleMs": 56.414999999999964,
+      "domContentLoadedMs": 34.69999998807907,
+      "loadMs": 35.5,
+      "transferredResourceBytes": 1618730,
+      "decodedResourceBytes": 1618130
+    },
+    {
+      "trial": 3,
+      "candidate": "baseline",
+      "welcomeVisibleMs": 61.27883299999985,
+      "domContentLoadedMs": 36.89999997615814,
+      "loadMs": 37.599999994039536,
+      "transferredResourceBytes": 1534793,
+      "decodedResourceBytes": 1534193
+    },
+    {
+      "trial": 3,
+      "candidate": "current",
+      "welcomeVisibleMs": 61.983167000000094,
+      "domContentLoadedMs": 38.30000001192093,
+      "loadMs": 39.20000001788139,
+      "transferredResourceBytes": 1618730,
+      "decodedResourceBytes": 1618130
+    },
+    {
+      "trial": 4,
+      "candidate": "baseline",
+      "welcomeVisibleMs": 61.81029100000001,
+      "domContentLoadedMs": 37.19999998807907,
+      "loadMs": 37.80000001192093,
+      "transferredResourceBytes": 1534793,
+      "decodedResourceBytes": 1534193
+    },
+    {
+      "trial": 4,
+      "candidate": "current",
+      "welcomeVisibleMs": 60.57658300000003,
+      "domContentLoadedMs": 37.900000005960464,
+      "loadMs": 38.599999994039536,
+      "transferredResourceBytes": 1618730,
+      "decodedResourceBytes": 1618130
+    }
+  ],
+  "medians": {
+    "baseline": {
+      "welcomeVisibleMs": 61.81029100000001,
+      "domContentLoadedMs": 37.19999998807907,
+      "loadMs": 37.80000001192093,
+      "transferredResourceBytes": 1534793,
+      "decodedResourceBytes": 1534193
+    },
+    "current": {
+      "welcomeVisibleMs": 61.983167000000094,
+      "domContentLoadedMs": 38.30000001192093,
+      "loadMs": 39.20000001788139,
+      "transferredResourceBytes": 1618730,
+      "decodedResourceBytes": 1618130
+    }
+  }
+}

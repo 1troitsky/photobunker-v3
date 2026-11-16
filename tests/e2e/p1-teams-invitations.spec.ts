@@ -1,3 +1,4 @@
+import {exchangeReady} from './support/browser-ui'
 import { test, expect } from '@playwright/test'
 
 test('P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read',async({browser})=>{
@@ -11,7 +12,7 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     return page.evaluate(async()=>{
       const mod=await import('/src/features/identity/application/session.ts')
       return mod.requireSession().accountId
@@ -19,8 +20,7 @@ test('P1-28: independently confirmed A→B Teams invite → recipient consent �
   }
   async function prepareDirectory(page:typeof A):Promise<void>{
     await page.goto('/browser')
-    await expect(page.getByText('Ключ обмена подготовлен'))
-      .toBeVisible({timeout:20000})
+    await exchangeReady(page)
   }
   async function confirmContact(page:typeof A,id:string,alias:string):Promise<void>{
     await page.goto('/contacts')

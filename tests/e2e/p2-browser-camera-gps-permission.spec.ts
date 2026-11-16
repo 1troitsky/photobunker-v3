@@ -1,3 +1,4 @@
+import {browserControl} from './support/browser-ui'
 import {revokeGeolocation} from './helpers/native-permissions'
 import {expect,test,type Browser,type Page} from '@playwright/test'
 
@@ -15,7 +16,7 @@ async function register(page:Page):Promise<void>{
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 }
 
 async function cameraReady(page:Page,assignmentId?:string):Promise<void>{
@@ -44,7 +45,7 @@ async function makeSignedGpsRequiredAssignment(page:Page):Promise<string>{
   await page.locator('#assignment-title').fill('Synthetic QA GPS consent assignment')
   await page.locator('#assignment-instructions').fill('GPS consent must be requested and checked')
   await page.getByRole('button',{name:'Создать зашифрованное задание'}).click()
-  await page.getByRole('button',{name:'Синхронизировать'}).click()
+  await browserControl(page,'Синхронизировать')
   const code=page.locator('.assignment-detail code').first()
   await expect(code).toBeVisible({timeout:30000})
   const assignmentId=(await code.textContent())?.trim()??''

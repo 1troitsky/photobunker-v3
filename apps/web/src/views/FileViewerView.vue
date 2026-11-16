@@ -6,8 +6,31 @@ import {
   peekOriginPager,peekOriginBreadcrumb,noteViewerPosition,
 } from '../features/browser/application/browser-return-context'
 import {activeSession} from '../features/identity/application/session'
+import {sameSessionDevice} from '../features/identity/application/session-device'
 import PublicCardPublication from '../features/media/ui/PublicCardPublication.vue'
 const publicationOpen=ref(false)
+const photoFullscreen=ref(false)
+const photoFullscreenDialog=ref<HTMLElement|null>(null)
+function closePhotoFullscreen():void{
+  photoFullscreen.value=false
+  void nextTick(()=>photoElement.value?.closest('button')?.focus())
+}
+async function openPhotoFullscreen():Promise<void>{
+  if(!fileUrl.value||preview.value?.type!=='photo')return
+  const source=fileUrl.value,identity=activeSession.value
+  if(document.fullscreenElement){
+    try{await document.exitFullscreen()}catch{return}
+  }
+  if(fileUrl.value!==source||!sameSessionDevice(identity,activeSession.value))return
+  photoFullscreen.value=true
+  void nextTick(()=>photoFullscreenDialog.value?.querySelector<HTMLButtonElement>('button')?.focus())
+}
+function fullscreenTab(event:KeyboardEvent):void{
+  const controls=[...photoFullscreenDialog.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')??[]]
+  const first=controls[0],last=controls.at(-1)
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}
+}
 import {pauseViewerPlayback} from '../features/browser/application/viewer-playback'
 import {setViewerShellActions}
   from '../features/browser/application/viewer-shell-actions'
@@ -1490,6 +1513,14 @@ async function navigate(item:CatalogItem|{source:'photo'|'media';id:string}|null
 }
 function onKeyDown(event:KeyboardEvent):void{
   if(event.defaultPrevented||event.altKey)return
+  if(photoFullscreen.value){
+    if(event.key==='Escape'){event.preventDefault();closePhotoFullscreen()}
+    else if(!event.ctrlKey&&!event.metaKey&&!busy.value){
+      if(event.key==='ArrowLeft'&&adjacent.value.previous){event.preventDefault();void navigate(adjacent.value.previous)}
+      else if(event.key==='ArrowRight'&&adjacent.value.next){event.preventDefault();void navigate(adjacent.value.next)}
+    }
+    return
+  }
   if(editorMode.value){
     if(event.key==='Escape'){event.preventDefault();void cancelEditor();return}
     // The editor uses arrow keys for range/brush movement, not pager history.
@@ -1535,6 +1566,8 @@ function onTouchEnd(event:TouchEvent):void{
   touchStart=null
   if(Math.abs(dx)>75&&Math.abs(dx)>Math.abs(dy)*1.4)
     void navigate(dx>0?adjacent.value.previous:adjacent.value.next)
+  else if(Math.abs(dy)>100&&Math.abs(dy)>Math.abs(dx)*1.4
+    &&photoFullscreen.value)closePhotoFullscreen()
   else if(Math.abs(dy)>100&&Math.abs(dy)>Math.abs(dx)*1.4
     &&document.fullscreenElement)void document.exitFullscreen()
 }
@@ -2021,8 +2054,10 @@ watch([videoTrimStart,videoTrimEnd],()=>{
   if(videoClipBusy.value||videoClipSavedId.value)clearVideoClip()
 })
 watch(editorMode,opened=>{
+  if(opened)photoFullscreen.value=false
   if(!opened&&videoClipBusy.value)clearVideoClip()
 })
+watch(preview,value=>{if(value&&value.type!=='photo')closePhotoFullscreen()})
 // The shared Shell exposes only a callable action. All media content,
 // filenames and permissions remain inside FileViewerView. The callback
 // is cleared on lock, route change and unmount.
@@ -2048,11 +2083,7 @@ watch(activeSession,(next,previous)=>{
   // containing the SAME key package and physical device. Never erase a
   // user's current trim bounds or volatile preview just for online status.
   // A new key package/device/account is a REAL trust boundary: wipe.
-  if(next&&previous
-    &&next.accountId===previous.accountId
-    &&next.deviceId===previous.deviceId
-    &&next.pkg===previous.pkg
-    &&next.device===previous.device){
+  if(next&&previous&&sameSessionDevice(next,previous)){
     void refreshIndex()
     // Bootstrap deliberately exposes cached, offline-only state before the
     // signed device proof completes. A cloud-only deep link attempted during
@@ -2062,6 +2093,7 @@ watch(activeSession,(next,previous)=>{
       void openFile()
     return
   }
+  photoFullscreen.value=false
   clearBlob();clearIndex()
   void refreshIndex()
   void openFile()
@@ -2149,21 +2181,21 @@ onUnmounted(()=>{
       Некорректный адрес файла.
     </div>
     <template v-else>
-      <div class="file-viewer-fixed" data-testid="file-viewer-fixed">
-        <nav class="file-viewer-path browser-breadcrumb"
+      <div class="file-viewer-fixed viewer" data-testid="file-viewer-fixed">
+        <nav class="file-viewer-path browser-path"
           data-testid="file-viewer-path" aria-label="Путь Browser">
-          <RouterLink to="/browser" class="file-viewer-back" aria-label="В Browser">‹</RouterLink>
-          <span class="file-viewer-path-name">Browser
-            <template v-for="(folder,i) in originFolderNames" :key="i"> / {{folder}}</template>
-            / {{ preview?.name??'Файл' }}</span>
+          <RouterLink to="/browser" class="file-viewer-back path-back" aria-label="В Browser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 5-7 7 7 7M8 12h12"/></svg></RouterLink>
+          <div class="path-breadcrumbs"><RouterLink to="/browser">Все</RouterLink>
+            <template v-for="(folder,i) in originFolderNames" :key="i"><span>›</span><RouterLink to="/browser" :class="{current:i===originFolderNames.length-1}">{{folder}}</RouterLink></template>
+          </div>
         </nav>
-      <div ref="stage" class="file-viewer-stage"
+      <div ref="stage" class="file-viewer-stage image-stage"
         data-testid="file-viewer-stage"
         @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
         <div v-if="busy" role="status" class="file-viewer-wait">Открываем защищённый файл…</div>
-        <img v-else-if="!editorMode&&fileUrl&&preview?.type==='photo'" ref="photoElement"
-          :src="fileUrl" :alt="preview?.name??'Фото'" draggable="false"
-          data-testid="file-viewer-image">
+        <button v-else-if="!editorMode&&fileUrl&&preview?.type==='photo'" type="button" class="photo-trigger" aria-label="На весь экран" @click="openPhotoFullscreen">
+          <img ref="photoElement" :src="fileUrl" :alt="preview?.name??'Фото'" draggable="false" data-testid="file-viewer-image">
+        </button>
         <video v-else-if="!editorMode&&fileUrl&&preview?.type==='video'" :key="fileUrl"
           ref="videoElement" :src="fileUrl" controls playsinline preload="metadata"
           data-testid="file-viewer-video"/>
@@ -2174,41 +2206,35 @@ onUnmounted(()=>{
             data-testid="file-viewer-audio"/>
         </div>
         <p v-else class="muted">Файл не открыт.</p>
-        <button type="button" class="file-viewer-stage-fullscreen"
-          aria-label="На весь экран" :disabled="!fileUrl" @click="toggleFullscreen">⛶</button>
+        <button v-if="!editorMode&&preview?.type==='video'" type="button" class="file-viewer-stage-fullscreen video-maximize"
+          aria-label="На весь экран" :disabled="!fileUrl" @click="toggleFullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>
       </div>
-      <section class="file-viewer-summary" data-testid="file-viewer-summary">
-        <div class="file-viewer-summary-name">{{ preview?.name??'Защищённый файл' }}</div>
-        <div class="file-viewer-summary-id">ID: {{ current.id.slice(0,8) }}</div>
-        <p class="file-viewer-summary-description">{{ preview?.description||'Описание не добавлено' }}</p>
-        <div class="file-viewer-summary-dates">
-          <span>Создан: {{ preview?.capturedAt
-            ?new Date(preview.capturedAt).toLocaleDateString('ru-RU'):'—' }}</span>
-          <span>Удаление: {{ preview?.expiresAt
-            ?new Date(preview.expiresAt).toLocaleDateString('ru-RU'):'—' }}</span>
-        </div>
+      <section class="file-viewer-summary photo-summary" data-testid="file-viewer-summary">
+        <div class="name-row"><strong class="photo-name">{{ preview?.name??'Защищённый файл' }}</strong><small class="photo-id">#{{ current.id.slice(0,8) }}</small></div>
+        <p class="photo-description">{{ preview?.description||'Описание не добавлено' }}</p>
+        <div class="date-row"><div><small>Создано</small><span>{{ preview?.capturedAt?new Date(preview.capturedAt).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}):'—' }}</span></div><div><small>Удаление</small><span>{{ preview?.expiresAt?new Date(preview.expiresAt).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}):'—' }}</span></div></div>
       </section>
       <PublicCardPublication v-if="publicationOpen&&current&&fileBlob&&preview?.type==='photo'&&preview.expiresAt" :key="current.id" :source-kind="current.protocol" :source-id="current.id" :source="fileBlob" :name="preview.name" :expires-at="preview.expiresAt" @close="publicationOpen=false"/>
-      <nav class="file-viewer-actions" aria-label="Действия с файлом"
+      <nav class="file-viewer-actions action-tiles" aria-label="Действия с файлом"
         data-testid="file-viewer-actions">
         <button type="button" :disabled="!fileUrl" data-testid="viewer-action-info"
-          @click="openPanel('info')">Информация</button>
-        <button v-if="preview?.type==='photo'" type="button" :disabled="!fileUrl" data-testid="viewer-action-publish" @click="publicationOpen=true" aria-label="Публичная карточка">Публичная карточка</button>
-        <button v-else type="button" disabled title="Публичная публикация доступна только для безопасной JPEG-копии фото">Публичная карточка</button>
+          @click="openPanel('info')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span>Информация</span></button>
+        <button v-if="preview?.type==='photo'" type="button" :disabled="!fileUrl" data-testid="viewer-action-publish" @click="publicationOpen=true" aria-label="Публичная карточка"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 3 3 3-4 5 5"/></svg><span>Публичная карточка</span></button>
+        <button v-else type="button" disabled title="Публичная публикация доступна только для безопасной JPEG-копии фото"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 3 3 3-4 5 5"/></svg><span>Публичная карточка</span></button>
         <button type="button" :disabled="!fileUrl" data-testid="viewer-action-edit"
-          @click="openPanel('editor')">Редактировать</button>
+          @click="openPanel('editor')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16zM13 7l4 4"/></svg><span>Редактировать</span></button>
       </nav>
-      <div class="file-viewer-navigation">
+      <div class="file-viewer-navigation pager">
         <button type="button" aria-label="Предыдущий файл"
           :disabled="!adjacent.previous||busy"
-          @click="navigate(adjacent.previous)">‹</button>
-        <span class="muted" data-testid="file-viewer-position">
-          {{ adjacent.position?adjacent.position+' / '+adjacent.total:
+          @click="navigate(adjacent.previous)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+        <span class="page-count" data-testid="file-viewer-position">
+          {{ adjacent.position?adjacent.position+' из '+adjacent.total:
             'Вне загруженного списка' }}
         </span>
         <button type="button" aria-label="Следующий файл"
           :disabled="!adjacent.next||busy"
-          @click="navigate(adjacent.next)">›</button>
+          @click="navigate(adjacent.next)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
       </div>
       </div>
       <div v-show="panel!==null||editorMode" class="file-viewer-overlay"
@@ -3089,7 +3115,7 @@ onUnmounted(()=>{
               · ±{{ Math.round(preview.gps.accuracyMeters) }} м</dd>
           </template>
           <template v-if="preview.expiresAt">
-            <dt>Хранение до</dt><dd>{{ new Date(preview.expiresAt).toLocaleDateString('ru-RU') }}</dd>
+            <dt>Хранение до</dt><dd>{{ new Date(preview.expiresAt).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}) }}</dd>
           </template>
         </dl>
         <p class="muted">Приватные данные расшифрованы на устройстве.
@@ -3111,6 +3137,22 @@ onUnmounted(()=>{
           </div>
         </section>
       </div>
+      <div v-if="photoFullscreen&&activeSession" ref="photoFullscreenDialog" class="fullscreen-layer enter"
+        data-testid="photo-fullscreen" role="dialog" aria-modal="true" aria-label="Полный экран фото"
+        @keydown.tab="fullscreenTab">
+        <button type="button" class="fullscreen-close" aria-label="Закрыть полный экран" @click="closePhotoFullscreen">✕</button>
+        <div class="fullscreen-media" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+          <div class="full-content">
+            <img v-if="fileUrl&&preview?.type==='photo'" :src="fileUrl" :alt="preview.name" draggable="false" data-testid="photo-fullscreen-image">
+            <p v-else role="status">{{error||'Открываем защищённый файл…'}}</p>
+          </div>
+        </div>
+        <div class="fullscreen-pager">
+          <button type="button" aria-label="Предыдущий файл" :disabled="!adjacent.previous||busy" @click="navigate(adjacent.previous)">‹</button>
+          <span class="fullscreen-count">{{adjacent.position?adjacent.position+' / '+adjacent.total:'Вне загруженного списка'}}</span>
+          <button type="button" aria-label="Следующий файл" :disabled="!adjacent.next||busy" @click="navigate(adjacent.next)">›</button>
+        </div>
+      </div>
       <div class="file-viewer-feedback" aria-live="polite">
       <p v-if="indexIncomplete" class="muted"
         data-testid="file-viewer-index-incomplete">
@@ -3127,3 +3169,5 @@ onUnmounted(()=>{
     </template>
   </section>
 </template>
+
+<style scoped src="../features/browser/ui/ViewerFieldwork.css"></style>

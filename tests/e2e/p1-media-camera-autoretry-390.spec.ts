@@ -19,7 +19,7 @@ test('P1 #390 Camera keeps retrying a verified lost chunk ACK without opening Br
     await page.getByRole('button', { name: 'Создать ключ' }).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button', { name: 'Завершить регистрацию' }).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/camera')
     await page.evaluate(async () => {
       const identity = await import('/src/features/identity/application/session.ts')

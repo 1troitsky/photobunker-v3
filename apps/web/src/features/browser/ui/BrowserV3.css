@@ -1,0 +1,144 @@
+/* Direct component styles from owner-approved docs/ux/browser/style.css.
+ * Preview frame and shared Header/Dock are supplied by the single App Shell. */
+:root{--green:#1ed760}
+.browser-v3{--green:#1ed760;max-width:980px;padding:24px 20px 35px}
+.browser-v3 button{min-height:0;font-family:inherit}
+.browser-heading{display:flex;gap:12px;justify-content:space-between;align-items:center;margin-bottom:14px}.browser-heading-copy{min-width:0;display:flex;flex-direction:column;gap:3px}.browser-heading h1{margin:0;font-size:29px;line-height:1.1;font-weight:800;letter-spacing:-.045em}.browser-heading-copy small{color:#a3a3a3;font-size:11px}.view-switch{flex:0 0 auto;display:flex;gap:3px;border-radius:7px;padding:3px;background:#242424}.view-switch button{display:grid;place-items:center;height:33px;width:35px;padding:0;border:0;border-radius:5px;background:none;color:#aaa}.view-switch button.selected{background:#464646;color:#fff}.view-switch svg{height:18px;width:18px}
+.browser-sections{display:grid;grid-template-columns:.75fr 1.2fr 1.2fr .95fr;border-bottom:1px solid #393939;margin-bottom:12px}.browser-sections button{min-width:0;height:42px;padding:0 2px;border:0;border-bottom:2px solid transparent;background:none;color:#999;font-size:12px;font-weight:650;white-space:nowrap}.browser-sections button.selected{border-bottom-color:var(--green);color:#fff}.browser-path{display:flex;align-items:center;gap:8px;min-height:35px;margin:0 0 19px;border:0;background:transparent}.path-back{display:grid;place-items:center;height:33px;width:27px;flex:0 0 27px;padding:0;border:0;background:transparent;color:#ddd}.path-back svg{width:19px;height:19px}.path-breadcrumbs{display:flex;gap:6px;align-items:center;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}.path-breadcrumbs::-webkit-scrollbar{display:none}.path-breadcrumbs button{flex:0 0 auto;max-width:170px;padding:5px 0;border:0;background:none;color:#999;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;font-size:12px}.path-breadcrumbs button.current{color:#eee;font-weight:680}.path-breadcrumbs span{color:#696969;flex:0 0 auto}
+.browser-search{margin-bottom:14px}.search-line{display:flex;align-items:center;gap:8px;height:43px;padding:0 11px;border:1px solid #454545;border-radius:6px;background:#292929}.search-line svg{width:18px;height:18px;color:#999}.search-line input{width:100%;min-width:0;height:100%;border:0;outline:none;background:transparent;color:#eee;font-size:13px}.tag-filters{display:flex;gap:6px;overflow-x:auto;padding-top:8px;scrollbar-width:none}.tag-filters button{flex:0 0 auto;padding:5px 8px;border:1px solid #444;border-radius:5px;background:#292929;color:#aaa;font-size:11px}.tag-filters button.selected{border-color:#37784a;color:var(--green)}.selection-bar{display:flex;gap:8px;align-items:center;padding:8px 9px;border-radius:7px;margin-bottom:15px;background:#263128}.selection-bar strong{flex:1;font-size:12px;color:#e0eee3;font-weight:700}.selection-bar button{padding:9px 11px;border:0;border-radius:5px;background:#3a453b;color:#eee;font-size:12px}.selection-bar button:last-child{background:var(--green);color:#142216;font-weight:730}
+.browser-items{display:grid;gap:10px}.browser-items.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.browser-entry{position:relative;min-width:0}.browser-entry.selected{outline:2px solid var(--green);outline-offset:-2px;border-radius:8px}.browser-items.grid .browser-entry{overflow:hidden;border:1px solid #343434;border-radius:8px;background:#202020}.entry-open{width:100%;min-width:0;padding:0;border:0;background:transparent;text-align:left}.entry-preview{display:block;width:100%;aspect-ratio:1.35;overflow:hidden;position:relative;background:#303030}.entry-preview svg.scene{display:block;width:100%;height:100%;fill:none;stroke:none}.entry-preview.collage{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:3px;padding:3px;background:#282e2b}.entry-preview.collage svg.scene{width:100%;height:100%;min-width:0;min-height:0}.entry-preview .empty-mini{display:block;background:#383e3a;width:100%;height:100%}.entry-preview.empty-folder{display:grid;place-items:center;color:#aaa}.entry-preview.empty-folder > svg{width:38px;height:38px}.entry-folder-badge{position:absolute;top:8px;left:8px;z-index:1;display:flex;align-items:center;gap:5px;background:#131917e8;color:#fff;border-radius:4px;padding:5px 7px;font-size:9px;font-weight:750;letter-spacing:.035em}.entry-folder-badge svg{width:12px;height:12px}.entry-copy{display:flex;flex-direction:column;gap:5px;min-width:0;padding:10px 30px 13px 10px}.entry-copy strong{color:#f2f2f2;font-size:12px;font-weight:710;line-height:1.35;overflow-wrap:anywhere}.entry-copy small{color:#a3a3a3;font-size:10px;line-height:1.35}.entry-copy .expiring{color:#d9b184}.entry-copy .tags{color:#9bc5a4;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}.entry-more{position:absolute;right:3px;bottom:6px;display:grid;place-items:center;height:30px;width:29px;padding:0;border:0;background:transparent;color:#bbb;font-size:20px}.entry-check{position:absolute;top:9px;right:9px;z-index:2;width:20px;height:20px;accent-color:var(--green)}.tree-expand{display:none}.browser-empty{grid-column:1/-1;text-align:center;padding:40px 20px;background:#222;border-radius:8px;color:#aaa;font-size:13px}
+.browser-items.list,.browser-items.tree{grid-template-columns:minmax(0,1fr);gap:0}.browser-items.list .browser-entry,.browser-items.tree .browser-entry{display:flex;align-items:center;gap:7px;min-height:74px;border-bottom:1px solid #343434}.browser-items.list .entry-open,.browser-items.tree .entry-open{display:flex;flex:1;min-width:0;align-items:center;gap:11px;padding:8px 0}.browser-items.list .entry-preview,.browser-items.tree .entry-preview{width:58px;height:54px;flex:0 0 58px;aspect-ratio:auto;border-radius:6px}.browser-items.list .entry-copy,.browser-items.tree .entry-copy{min-width:0;flex:1;padding:2px 0}.browser-items.list .entry-copy strong,.browser-items.tree .entry-copy strong{font-size:14px}.browser-items.list .entry-folder-badge,.browser-items.tree .entry-folder-badge{display:none}.browser-items.list .entry-more,.browser-items.tree .entry-more{position:static;flex:0 0 31px}.browser-items.list .entry-check,.browser-items.tree .entry-check{position:static;flex:0 0 20px;margin:0 1px}.browser-items.tree .entry-preview{height:43px;width:43px;flex-basis:43px}.browser-items.tree .browser-entry{margin-left:calc(min(var(--depth,0),4)*15px)}.browser-items.tree .tree-expand{display:block;height:31px;width:21px;flex:0 0 21px;border:0;background:none;color:#aaa;font-size:21px}.browser-items.tree .tree-expand:disabled{opacity:0}
+.entry-preview .imported-thumb{display:block;width:100%;height:100%;object-fit:cover}.file-mark{display:grid;place-items:center;width:100%;height:100%;background:#29363b;color:#a9ceda}.file-mark.audio{background:#30313b;color:#b9c5e3}.file-mark svg{height:38%;width:38%;fill:none;stroke:currentColor;stroke-width:1.5}.entry-preview.collage .file-mark svg{width:46%;height:46%}
+
+/* Screenshot: title/sections, breadcrumb and rows align to 20px inner gutter. */
+.content-inner{padding:24px 20px 35px}
+@media(min-width:700px){.browser-v3.content-inner{padding:30px 20px}}
+.browser-items.list .entry-open,.browser-items.tree .entry-open{position:relative}
+/* Keep original subtle row separators rather than boxed cards. */
+.browser-items.list .browser-entry,.browser-items.tree .browser-entry {border-bottom:1px solid #343434}
+
+/* File type filters and explicit folder scope for search */
+.search-controls{display:grid;gap:10px;padding-top:10px}
+.search-scope-label,.upload-destination{display:grid;gap:6px;color:#bbb;font-size:11px;font-weight:600}
+.search-scope-label select,.upload-destination select{min-width:0;width:100%;height:41px;border:1px solid #464646;border-radius:6px;background:#282828;color:#eee;padding:0 10px;font-size:12px}
+.type-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.type-filters button{min-width:0;min-height:35px;border:1px solid #444;border-radius:6px;background:#292929;color:#aaa;padding:5px 2px;font-size:10px;white-space:nowrap}
+.type-filters button.selected{background:#264a32;color:#d9ffe0;border-color:#31834b}
+.entry-location{color:#799b88!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.entry-more{z-index:3;display:grid!important;place-items:center;min-width:32px;min-height:32px;opacity:1!important;color:#d0d0d0;letter-spacing:1px;line-height:1}
+.entry-more:hover,.entry-more:focus-visible{color:#fff;background:#373737;border-radius:5px}
+.browser-items.grid .entry-more{right:3px;bottom:7px}
+.browser-items.list .entry-more,.browser-items.tree .entry-more{position:relative;flex:0 0 34px;margin-left:auto}
+.upload-destination select:focus-visible{outline:2px solid #1ed760}
+
+
+
+
+/* Additional settings and batch editing use the existing bottom sheet. */
+.dialog-content .bulk-summary{padding:9px 11px;background:#263628;color:#d9f2df;border-radius:6px;font-size:12px}
+.dialog-content input:disabled,.dialog-content select:disabled{opacity:.45;cursor:default}
+.entry-copy .entry-category{color:#a8b9aa;font-size:10px}
+.browser-sections button[hidden]{display:none}
+
+
+.browser-sections:has([data-section="archive"][hidden]){grid-template-columns:repeat(3,minmax(0,1fr))}
+
+.entry-open{display:block;color:inherit;text-decoration:none}
+.browser-entry{background:transparent;border-top:0;border-radius:0;padding:0;margin:0}
+.browser-v3 .path-breadcrumbs button{min-height:0;border-radius:0}
+.browser-v3 .browser-folders{margin:0;padding:0;border:0}
+.browser-v3 .browser-folder-list{margin:0;display:grid}
+.browser-v3 .browser-folder-item{background:transparent;border:0;border-bottom:1px solid #343434;border-radius:0;margin:0;padding:0;gap:7px;min-height:74px}
+.browser-v3 .browser-folder-open{background:transparent;border:0;border-radius:0;padding:8px 0;margin:0;gap:11px;min-height:0;min-width:0}
+.browser-v3 .browser-folder-cover{width:58px;height:54px;flex:0 0 58px;border-radius:6px}
+.browser-v3 .browser-folder-copy{font-family:inherit;gap:5px}
+.browser-v3 .browser-folder-copy strong{font-size:14px;font-weight:710}
+.browser-v3 .browser-folder-menu-toggle{width:34px;height:32px;min-width:32px;min-height:32px;padding:0;border:0;border-radius:0;background:transparent;color:#d0d0d0;font-size:20px}
+.browser-v3 .browser-file-menu-root{flex:0 0 34px;margin-left:auto}
+.browser-v3 .browser-file-menu-toggle{width:34px;height:32px;min-width:32px;min-height:32px;padding:0;border:0;border-radius:0;background:transparent;color:#d0d0d0;font-size:20px}
+.browser-v3 .browser-items{margin:0}
+.browser-v3 .browser-title{margin:0 0 14px}
+.browser-v3 .browser-title h1{font-size:29px;font-weight:800;line-height:1.1;letter-spacing:-.045em}
+.browser-v3 .view-switch button{min-width:0;height:33px;width:35px;padding:0;border:0;border-radius:5px;font-size:inherit}
+.browser-v3 .browser-primary-sections{margin:0 0 12px;border-radius:0}
+.browser-v3 .browser-primary-sections button{height:42px;min-height:0;padding:0 2px;border:0;border-bottom:2px solid transparent;border-radius:0;background:transparent;font-size:12px;font-weight:650;color:#999}
+.browser-v3 .browser-primary-sections button.selected{border-bottom-color:var(--green);color:#fff}
+.browser-v3 .browser-toolbar{margin:0;display:grid;gap:10px}
+.browser-v3 .browser-toolbar input{height:43px;min-height:0;background:transparent;padding:0;margin:0;border:0;border-radius:0;font:inherit;color:inherit;width:100%}
+.browser-v3 .browser-toolbar select{width:100%;height:41px;border:1px solid #464646;border-radius:6px;background:#282828;color:#eee;padding:0 10px;font-size:12px}
+.browser-v3 .entry-preview{padding:0}
+.browser-v3 .entry-preview img{width:100%;height:100%;object-fit:cover;display:block}
+.browser-v3 .entry-copy{font-family:inherit}
+.browser-v3 .entry-copy strong{font-family:inherit}
+.browser-v3 .entry-copy small{font-size:10px;line-height:1.35}
+.browser-v3 .browser-grid .entry-preview{height:auto}
+.browser-v3 .browser-grid .browser-file-menu-root{position:absolute;right:3px;bottom:7px}
+.browser-v3 .browser-grid .entry-open{display:block}
+.browser-v3 .browser-grid .entry-preview{aspect-ratio:1.35;width:100%;flex:none}
+.browser-v3 .browser-grid .browser-entry{display:block}
+.browser-v3 .browser-section-note{margin:0 0 12px;font-size:11px}
+@media(max-width:460px){.browser-v3{padding:22px 13px 29px}}
+
+.browser-sections:not(:has([data-section="archive"])){grid-template-columns:repeat(3,minmax(0,1fr))}
+.browser-v3{font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+
+.browser-v3 .browser-heading-copy{gap:3px}
+.browser-v3 .browser-heading-copy>small{font-size:11px;color:#a3a3a3}
+.browser-v3 .browser-item{border:0;border-bottom:1px solid #343434;min-height:74px;gap:7px;background:transparent}
+.browser-v3 .browser-items .entry-open{padding:8px 0}
+.browser-v3 .browser-advanced{margin:0;padding:0;border:0}
+.browser-v3 .entry-more{height:32px;min-height:32px;line-height:20px}
+
+.browser-v3 .browser-title>div:first-child h1{font-size:29px;line-height:1.1;letter-spacing:-.045em;margin:0}
+
+.browser-v3 .browser-operations{margin:0;padding:0;border:0}
+.browser-v3 .browser-item-detail{gap:5px}
+.browser-v3 .browser-heading-copy small{line-height:normal}
+.browser-v3 .browser-item-kind{font:inherit}
+
+.browser-item-menu-backdrop{position:fixed;inset:0;z-index:119;background:#000b}
+.browser-v3 .browser-file-menu-panel,.browser-v3 .browser-folder-menu-panel{position:fixed;inset:auto 0 0;z-index:120;width:100%;max-height:86dvh;padding:18px 17px 24px;background:#292929;border:0;border-radius:12px 12px 0 0;box-shadow:none;gap:10px}
+.browser-v3 .browser-file-menu-panel>button,.browser-v3 .browser-file-menu-panel>a,.browser-v3 .browser-folder-menu-panel>button{padding:12px;border:0;border-radius:6px;background:#393939;color:#eee;font-size:13px}
+.browser-v3 .dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px}
+.browser-v3 .dialog-heading strong{font-size:15px;font-weight:750}
+.browser-v3 .dialog-heading button{padding:6px;width:auto;min-height:0;border:0;background:transparent;color:#ddd}
+.browser-v3 .browser-file-menu-panel .browser-file-move{padding:0;font-size:12px}
+.browser-v3 .browser-file-menu-panel select,.browser-v3 .browser-folder-menu-panel select{background:#1c1c1c;color:#fff;border:1px solid #555;border-radius:6px;padding:10px;font-size:13px}
+@media(min-width:700px){.browser-v3 .browser-file-menu-panel,.browser-v3 .browser-folder-menu-panel{max-width:480px;margin-inline:auto}}
+
+.browser-v3 .browser-file-menu-root{display:block}
+.browser-v3{max-width:none}
+@media(min-width:700px){.browser-v3 .browser-items.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+/* Approved list/grid/tree rules apply to one real catalog, including folders. */
+.browser-v3 #browser-folder-cards-top,.browser-v3 #browser-folder-cards-bottom,.browser-v3 .browser-folder-list{display:contents}
+.browser-v3 .entry-folder-badge{font-size:0;letter-spacing:0;min-width:24px;height:24px;padding:4px;gap:0}
+.browser-v3 .entry-folder-badge svg{width:16px;height:16px}
+.browser-v3 .browser-items.list .entry-folder-badge,.browser-v3 .browser-items.tree .entry-folder-badge{display:grid;place-items:center;position:absolute;top:3px;right:3px;left:auto;min-width:21px;height:20px;padding:3px;border-radius:4px;background:#151a19d9;color:#dce4e0;z-index:3}
+.browser-v3 .browser-items.list .entry-folder-badge svg,.browser-v3 .browser-items.tree .entry-folder-badge svg{width:14px;height:14px}
+.browser-v3 .entry-preview.empty-folder{display:grid;place-items:center;background:#303030;color:#aaa}
+.browser-v3 .entry-preview.empty-folder>svg{width:38px;height:38px;stroke-width:1.8}
+.browser-v3 .browser-folder-cover-cell{min-width:0;min-height:0;width:100%;height:100%}
+.browser-v3 .browser-folder-cover.collage{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:3px;padding:3px;background:#282e2b}
+.browser-v3 .browser-folder-cover-cell.is-blank{background:#383e3a}
+.browser-v3 .file-mark{background:#272e31;color:#d7e0e6}
+.browser-v3 .file-mark.audio{background:#292b35;color:#d9c6ec}
+.browser-v3 .file-mark svg{width:40%;height:40%;stroke-width:1.7}
+.browser-v3 .browser-items.list .file-mark svg,.browser-v3 .browser-items.tree .file-mark svg{width:28px;height:28px}
+.browser-v3 .entry-preview.collage .file-mark svg{width:46%;height:46%}
+.browser-v3 .browser-items.grid .browser-entry{display:block;min-height:0;overflow:hidden;border:1px solid #343434;border-radius:8px;background:#202020}
+.browser-v3 .browser-items.grid .entry-open{display:block;padding:0;min-height:0}
+.browser-v3 .browser-items.grid .entry-preview{width:100%;height:auto;aspect-ratio:1.35;flex:none;border-radius:0}
+.browser-v3 .browser-items.grid .entry-copy{padding:10px 30px 13px 10px}
+.browser-v3 .browser-items.grid .entry-copy strong{font-size:12px}
+.browser-v3 .browser-items.grid .browser-file-menu-root,.browser-v3 .browser-items.grid .browser-folder-menu-root{position:static;margin:0}
+.browser-v3 .browser-items.grid .entry-more{position:absolute;right:3px;bottom:7px;width:29px;height:30px}
+.browser-v3 .browser-items.tree .browser-folder-item{margin-left:calc(min(var(--depth,0),4)*15px)}
+.browser-v3 .browser-items.tree .browser-folder-open{display:flex;flex:1;min-width:0;align-items:center;gap:11px;padding:8px 0;background:transparent;border:0}
+.browser-v3 .browser-items.tree .browser-folder-cover{height:43px;width:43px;flex-basis:43px}
+.browser-v3 .browser-items.tree .tree-expand{display:block;height:31px;min-height:0;width:21px;min-width:0;flex:0 0 21px;border:0;padding:0;background:none;color:#aaa;font-size:21px}
+.browser-v3 .browser-items.tree .tree-expand:disabled{opacity:0}
+
+/* Successful durable writes are announced without adding a permanent catalog row. */
+.browser-announcement{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+
+.browser-v3 .browser-folder-cover.empty-folder{grid-template-columns:1fr;grid-template-rows:1fr;gap:0;padding:0}

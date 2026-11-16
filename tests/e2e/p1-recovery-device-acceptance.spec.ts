@@ -15,7 +15,7 @@ async function register(page:Page):Promise<{key:string;accountId:string;deviceId
   expect(key).toMatch(/^PB2\./)
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   const ids=await page.evaluate(async()=>{
     const m=await import('/src/features/identity/application/session.ts')
     const a=m.requireSession()
@@ -95,7 +95,7 @@ test('P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and of
       })
       await B.locator('#recovery-key').fill(key)
       await B.getByRole('button',{name:'Восстановить',exact:true}).click()
-      await expect(B.getByText('Подтверждённая сессия')).toBeVisible({timeout:30000})
+      await expect(B.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible({timeout:30000})
       const recovery=await B.evaluate(async()=>{
         const session=await import('/src/features/identity/application/session.ts')
         const api=await import('/src/features/identity/infrastructure/api.ts')
@@ -149,7 +149,7 @@ test('P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and of
       // keys. The Recovery Key is NOT sent again after a document reload.
       const initialRequests=requests.length
       await B.reload()
-      await expect(B.getByText('Подтверждённая сессия')).toBeVisible({timeout:30000})
+      await expect(B.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible({timeout:30000})
       await expect.poll(()=>B.evaluate(async()=>{
         const m=await import('/src/features/identity/application/session.ts')
         return m.activeSession.value?.online===true
@@ -223,7 +223,7 @@ test('P1 #199: wrong Recovery Key, invalid signed login proof and other account 
       // checksum/internal error code to the person attempting recovery.
       await expect(C).toHaveURL(/\/authorization-error$/)
       await expect(C.getByRole('alert')).toContainText('Вход с этим ключом невозможен')
-      await expect(C.getByText('Подтверждённая сессия')).toHaveCount(0)
+      await expect(C.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toHaveCount(0)
       // A second, unrelated account can authenticate itself but may not
       // impersonate the original root account's device.
       const outsider=await register(C)

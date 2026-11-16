@@ -1,3 +1,4 @@
+import {browserControl,browserHeader} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
 test('P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder -> Garage -> recovered device, no source URL in API',async({browser})=>{
@@ -16,7 +17,7 @@ test('P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder ->
     const recoveryKey=await a.locator('#generated-key').inputValue()
     await a.getByLabel('Я сохранил ключ восстановления').check()
     await a.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(a.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(a.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await a.goto('/browser')
     await expect(a.getByTestId('browser-v3')).toBeVisible()
     await a.getByRole('button',{name:'Новая папка'}).click()
@@ -24,7 +25,7 @@ test('P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder ->
     await a.getByRole('button',{name:'Создать',exact:true}).click()
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
-    await a.getByTestId('browser-header-upload').click()
+    await browserHeader(a,'upload')
     await expect(a.getByTestId('browser-import-sheet')).toBeVisible()
     await a.locator('#media-import-category').fill('Private HTTPS')
     await a.locator('#media-import-description').fill('Client-side-only CORS source')
@@ -102,7 +103,7 @@ test('P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder ->
     await b.goto('/settings')
     await b.locator('#recovery-key').fill(recoveryKey)
     await b.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(b.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(b.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const received=await b.evaluate(async(id:string)=>{
       const media=await import('/src/features/media/application/media-outbox.ts')
       const found=await media.readCloudMedia(id)
@@ -128,12 +129,12 @@ test('P2 Browser: rejects private/HTTP address locally and never contacts the so
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
     await expect(page.getByTestId('browser-v3')).toBeVisible()
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
-    await page.getByTestId('browser-header-upload').click()
+    await browserHeader(page,'upload')
     await expect(page.getByTestId('browser-import-sheet')).toBeVisible()
     const seen:string[]=[]
     page.on('request',request=>{
@@ -158,7 +159,7 @@ test('P2 Browser: rejects private/HTTP address locally and never contacts the so
       &&new URL(response.url()).pathname==='/media/v1'
       &&response.status()===200,
     )
-    await panel.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(panel,'Обновить')
     const catalogResponse=await catalogGet
     await catalogResponse.finished()
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>resolve(null))))

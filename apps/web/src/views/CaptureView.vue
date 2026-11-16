@@ -2078,3 +2078,5 @@ onUnmounted(()=>{
     </template>
   </section>
 </template>
+
+<style scoped src="../features/photo-sync/ui/CameraFieldwork.css"></style>

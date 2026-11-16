@@ -28,7 +28,7 @@ function clear():void{
   feedback.value=''
 }
 function toggleRecovery():void{
-  if(props.mutationPending||props.mutationPending||busy.value)return
+  if(props.mutationPending||busy.value)return
   clear()
   mode.value=mode.value==='pin'?'recover':'pin'
   recoveryKey.value=''
@@ -45,7 +45,7 @@ function erase():void {
   feedback.value=''
 }
 async function submitPin():Promise<void>{
-  if(props.mutationPending||props.mutationPending||busy.value||entered.value.length!==length.value)return
+  if(props.mutationPending||busy.value||entered.value.length!==length.value)return
   const candidate=entered.value
   const attemptNonce=pendingPinUnlock.value?.sessionNonce
   entered.value='' // no PIN survives in reactive UI state across awaits
@@ -67,7 +67,7 @@ async function submitPin():Promise<void>{
   }
 }
 async function recover():Promise<void>{
-  if(props.mutationPending||props.mutationPending||busy.value||!recoveryKey.value.trim())return
+  if(props.mutationPending||busy.value||!recoveryKey.value.trim())return
   const key=recoveryKey.value.trim()
   recoveryKey.value=''
   busy.value=true
@@ -107,13 +107,7 @@ onUnmounted(()=>{
     <section class="pin-container">
       <div class="pin-brand" :aria-label="brand.name">
         <div class="brand-logo" aria-hidden="true">
-          <svg viewBox="0 0 40 40" fill="none" stroke="currentColor"
-            stroke-width="2.4" stroke-linejoin="round">
-            <rect x="7" y="14" width="26" height="20" rx="5"/>
-            <path d="M13 14V9a7 7 0 0 1 14 0v5"/>
-            <circle cx="20" cy="23" r="3"/>
-            <path d="M20 26v3"/>
-          </svg>
+<svg viewBox="0 0 72 72" fill="none" aria-hidden="true"><rect x="9" y="17" width="54" height="39" rx="10" stroke="currentColor" stroke-width="3"/><path d="m19 17 5-7h24l5 7" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle cx="36" cy="37" r="13" stroke="#18d65c" stroke-width="3"/><path d="M36 26c6 3 9 8 10 13M27 42c5 3 11 4 16 1M32 27c-6 4-8 10-7 15" stroke="#a9f2b9" stroke-width="2.6" stroke-linecap="round"/></svg>
         </div>
         <strong class="brand-title">{{brand.name}}</strong>
       </div>
@@ -151,69 +145,23 @@ onUnmounted(()=>{
         <template v-for="(entry,index) in numbers" :key="index">
           <div v-if="entry===''" class="keypad-spacer" aria-hidden="true"/>
           <button v-else-if="entry==='delete'" type="button"
-            class="digit digit-aux" aria-label="Удалить последнюю цифру"
-            :disabled="props.mutationPending||busy" @click="erase">⌫</button>
+            class="digit digit-aux aux" aria-label="Удалить последнюю цифру"
+            :disabled="props.mutationPending||busy" @click="erase"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H21V19H10L3 12Z"/><path d="m13 9 5 6m0-6-5 6"/></svg></button>
           <button v-else type="button" class="digit"
             :aria-label="'Цифра '+entry" :disabled="props.mutationPending||busy" @click="digit(entry)">
             {{ entry }}
           </button>
         </template>
       </div>
-      <button v-if="!identityBootstrapError" type="button"
-        class="pin-recovery-toggle" :disabled="props.mutationPending||busy" @click="toggleRecovery">
-        {{ mode==='pin'?'Восстановить через Recovery Key':'Вернуться к PIN' }}
-      </button>
+      <footer class="pin-foot">
+        <button v-if="!identityBootstrapError" type="button" class="pin-recovery-toggle"
+          :aria-label="mode==='pin'?'Восстановить через Recovery Key':'Вернуться к PIN'"
+          :disabled="props.mutationPending||busy" @click="toggleRecovery">
+          <span>{{ mode==='pin'&&!feedback?'Защищённый вход':mode==='pin'?'Восстановить через Recovery Key':'Вернуться к PIN' }}</span>
+        </button>
+      </footer>
     </section>
   </main>
 </template>
 
-<style scoped>
-.pin-screen{width:100%;height:100dvh;min-height:0;display:flex;align-items:center;
-  justify-content:center;overflow:hidden;color:#f2f2f2;
-  background:radial-gradient(ellipse 65% 38% at 50% 47%,#1733213a,transparent 72%),#121212}
-.pin-container{height:100%;width:min(100%,390px);min-height:0;
-  display:flex;flex-direction:column;align-items:center;justify-content:space-between;
-  padding:clamp(24px,5.1vh,48px) 18px max(22px,env(safe-area-inset-bottom,0px))}
-.pin-brand{display:flex;align-items:center;flex-direction:column;gap:7px;flex:0 0 auto}
-.brand-logo{width:54px;height:54px;display:grid;place-items:center;
-  border:1px solid #454e45;background:linear-gradient(140deg,#2b382b,#171e18);
-  border-radius:16px;box-shadow:0 8px 24px #0003}
-.brand-logo svg{width:37px;height:37px}
-.brand-title{font-size:20px;line-height:1.2;font-weight:780;letter-spacing:-.055em}
-.pin-instructions{display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:16px;min-height:120px;margin:auto 0}
-.pin-instructions h1{font-size:21px;line-height:1.15;margin:0;font-weight:760;
-  letter-spacing:-.04em;text-align:center}
-.pin-feedback{min-height:20px;max-width:280px;margin:0;text-align:center;
-  color:#c4c4c4;font-size:12px;line-height:1.4}
-.pin-indicators{display:flex;align-items:center;justify-content:center;gap:15px;min-height:20px}
-.pin-indicators span{width:11px;height:11px;border:1.5px solid #8d978f;
-  border-radius:50%;transition:background .12s,border-color .12s,transform .12s}
-.pin-indicators span.filled{background:#1ed760;border-color:#1ed760;transform:scale(1.04)}
-.keypad{width:min(100%,248px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:6px 8px;flex:0 0 auto}
-.digit{height:54px;min-width:0;border:1px solid #383838;background:#232323e8;
-  border-radius:12px;display:flex;align-items:center;justify-content:center;
-  font-size:26px;font-weight:430;line-height:1;color:inherit;cursor:pointer;
-  touch-action:manipulation;user-select:none}
-.digit:hover{background:#303330;border-color:#4e6453}
-.digit:active{background:#32513b}
-.digit:disabled{opacity:.5;cursor:not-allowed}
-.digit-aux{background:transparent;border-color:transparent;color:#b8c0b9}
-.keypad-spacer{min-height:54px}
-.pin-recovery-toggle{flex:0 0 auto;border:0;background:transparent;
-  padding:10px;color:#a7b6aa;font-size:11px;cursor:pointer}
-.pin-recovery-toggle:hover{color:#1ed760}
-.pin-recovery{width:100%;gap:11px}
-.pin-recovery label{align-self:flex-start;font-size:12px;color:#d2d2d2}
-.pin-recovery textarea{width:100%;min-height:85px;resize:vertical;
-  background:#1b1b1b;color:inherit;border:1px solid #555;border-radius:8px;
-  padding:12px;font:13px/1.45 ui-monospace,monospace}
-.pin-recovery-submit{min-height:42px;padding:10px 16px;border-radius:8px;
-  border:1px solid #4d725a;background:#25392b;color:inherit;cursor:pointer}
-.pin-recovery-submit:disabled{opacity:.45;cursor:not-allowed}
-.pin-screen button:focus-visible,.pin-screen textarea:focus-visible{
-  outline:2px solid #a9eeba;outline-offset:3px}
-@media(prefers-reduced-motion:reduce){.pin-screen *, .pin-screen *::before,
-  .pin-screen *::after{transition:none!important;animation:none!important}}
-</style>
+<style scoped src="./PinFieldwork.css"></style>

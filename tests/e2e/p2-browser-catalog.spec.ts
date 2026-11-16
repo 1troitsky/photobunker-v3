@@ -1,3 +1,5 @@
+import {browserHeader,filterBrowser} from './support/browser-ui'
+import {searchBrowser,sortBrowser} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 import type {Locator} from '@playwright/test'
 
@@ -40,7 +42,7 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const registered=await page.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       const current=identity.requireSession()
@@ -49,12 +51,12 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     })
     await page.goto('/browser')
     await expect(page.getByTestId('browser-v3')).toBeVisible()
-    await expect(page.getByTestId('browser-summary')).toContainText('0 файлов')
+    await expect(page.locator('.browser-heading-copy>small')).toContainText('0 фото')
     await awaitVerifiedCatalogSession(page,registered)
 
     await context.setOffline(true)
     // Owner-approved Browser v3: import is opened from Header as one sheet.
-    await page.getByTestId('browser-header-upload').click()
+    await browserHeader(page,'upload')
     await expect(page.getByTestId('browser-import-sheet')).toBeVisible()
     await page.getByTestId('media-import-file').setInputFiles({
       name:'PRIVATE-VIDEO-TEST.webm',mimeType:'video/webm',
@@ -87,18 +89,18 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     })
     const rows=page.locator('[data-testid^="browser-row-media:"]')
     await expect(rows).toHaveCount(1,{timeout:25000})
-    await expect(rows.first()).toContainText('На устройстве')
-    await expect(rows.first()).toContainText('queued')
+    await expect(rows.first()).toContainText(/на устройстве/i)
+    await expect(rows.first()).toHaveAttribute('data-sync-state','queued')
     await page.getByTestId('browser-import-sheet-close').click()
     await expect(page.getByTestId('browser-import-sheet')).toBeHidden()
 
-    await page.getByTestId('browser-filter-photo').click()
+    await filterBrowser(page,'photo')
     await expect(rows).toHaveCount(0)
-    await page.getByTestId('browser-filter-video').click()
+    await filterBrowser(page,'video')
     await expect(rows).toHaveCount(1)
-    await page.getByTestId('browser-search').fill('NOT-THIS-ID')
+    await searchBrowser(page,'NOT-THIS-ID')
     await expect(rows).toHaveCount(0)
-    await page.getByTestId('browser-search').fill('')
+    await searchBrowser(page,'')
     await page.getByRole('button',{name:'Сетка',exact:true}).click()
     await expect(page.getByTestId('browser-catalog')).toHaveClass(/browser-grid/)
     await ensureFileMenu(rows.first())
@@ -129,7 +131,7 @@ test('P2 Browser: sort two genuinely encrypted offline files by confirmed byte s
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const registered=await page.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       const current=identity.requireSession()
@@ -139,7 +141,7 @@ test('P2 Browser: sort two genuinely encrypted offline files by confirmed byte s
     await page.goto('/browser')
     await awaitVerifiedCatalogSession(page,registered)
     await context.setOffline(true)
-    await page.getByTestId('browser-header-upload').click()
+    await browserHeader(page,'upload')
     const picker=page.getByTestId('media-import-file')
     await picker.setInputFiles({
       name:'LOCAL-SMALL.wav',mimeType:'audio/wav',
@@ -158,13 +160,13 @@ test('P2 Browser: sort two genuinely encrypted offline files by confirmed byte s
       if(items.length!==2)throw Error('expected two locally encrypted assets')
       return items.sort((a,b)=>b.plainBytes-a.plainBytes).map(x=>x.mediaId)
     })
-    await page.getByTestId('browser-sort').selectOption('size-largest')
+    await sortBrowser(page,'size-largest')
     await expect(rows.first()).toHaveAttribute('data-testid','browser-row-media:'+bySize[0])
     await expect(rows.last()).toHaveAttribute('data-testid','browser-row-media:'+bySize[1])
-    await expect(rows.first()).toContainText('32 КиБ')
-    await page.getByTestId('browser-sort').selectOption('size-smallest')
+    await expect(rows.first()).toHaveAttribute('data-plain-bytes','32768')
+    await sortBrowser(page,'size-smallest')
     await expect(rows.first()).toHaveAttribute('data-testid','browser-row-media:'+bySize[1])
-    await expect(rows.first()).toContainText('8 КиБ')
+    await expect(rows.first()).toHaveAttribute('data-plain-bytes','8192')
     // Sort never modifies encrypted files, their account or durable outbox.
     expect(await page.evaluate(async()=>{
       const media=await import('/src/features/media/application/media-outbox.ts')

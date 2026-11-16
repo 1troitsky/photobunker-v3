@@ -6,7 +6,7 @@ test('Security & Privacy 1.3 uses approved sections and exact Settings Search an
   await page.getByRole('button', {name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button', {name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 
   await page.goto('/settings/security?field=pin')
   await expect(page.getByTestId('security-privacy-page')).toBeVisible()
@@ -41,7 +41,7 @@ test('Security devices: offline transition clears a pending server spinner and r
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 
   let unblock:undefined|(()=>Promise<void>)
   let seenRequest=false
@@ -94,7 +94,7 @@ test('Security devices: real Chromium offline / online switches clear and reload
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   await page.goto('/settings/security')
   await expect(page.getByTestId('account-device').first()).toBeVisible()
   try{

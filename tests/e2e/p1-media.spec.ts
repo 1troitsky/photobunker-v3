@@ -1,3 +1,4 @@
+import {browserHeader} from './support/browser-ui'
 import {test,expect,type Page} from '@playwright/test'
 
 // Browser v3 keeps the Local-First encrypted uploader and E2EE receiver
@@ -5,7 +6,7 @@ import {test,expect,type Page} from '@playwright/test'
 // always-visible form was deliberately removed. Tests must exercise the real
 // user entry point without weakening any encrypted server/recipient checks.
 async function openImportSheet(page:Page){
-  await page.getByTestId('browser-header-upload').click()
+  await browserHeader(page,'upload')
   const sheet=page.getByTestId('browser-import-sheet')
   await expect(sheet).toBeVisible()
   return sheet
@@ -25,7 +26,7 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     const recovery=await A.locator('#generated-key').inputValue()
     await A.getByLabel('Я сохранил ключ восстановления').check()
     await A.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(A.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(A.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await A.goto('/browser')
     const panel=(await openImportSheet(A)).locator('.media-import-p1')
     await expect(panel).toBeVisible()
@@ -81,7 +82,7 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     await B.goto('/settings')
     await B.locator('#recovery-key').fill(recovery)
     await B.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(B.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(B.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await B.goto('/browser')
     const remote=(await openImportSheet(B)).locator('.media-import-p1')
     await expect(remote.locator('.photo-row')
@@ -108,7 +109,7 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     await C.getByRole('button',{name:'Создать ключ'}).click()
     await C.getByLabel('Я сохранил ключ восстановления').check()
     await C.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(C.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(C.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     // Browser's package display can precede asynchronous cookie/session
     // confirmation. Verify the real enrolled account before asserting 404.
     await C.evaluate(async()=>{
@@ -174,7 +175,7 @@ test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant
     await owner.getByRole('button',{name:'Создать ключ'}).click()
     await owner.getByLabel('Я сохранил ключ восстановления').check()
     await owner.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(owner.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(owner.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const ownerId=await owner.evaluate(async()=>{
       const s=await import('/src/features/identity/application/session.ts')
       return s.requireSession().accountId
@@ -199,7 +200,7 @@ test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant
     await recipient.getByRole('button',{name:'Создать ключ'}).click()
     await recipient.getByLabel('Я сохранил ключ восстановления').check()
     await recipient.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(recipient.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(recipient.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const recipientId=await recipient.evaluate(async()=>{
       const s=await import('/src/features/identity/application/session.ts')
       return s.requireSession().accountId

@@ -21,9 +21,10 @@ test('P2 #215 UI: Video Editor trim → genuine E2EE clip offline; original and 
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 
     await page.goto('/browser')
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const mediaId=await page.evaluate(async base64=>{
       const data=Uint8Array.from(atob(base64),c=>c.charCodeAt(0))
       const source=new File([data],'PRIVATE-SOURCE-VIDEO.webm',{type:'video/webm'})

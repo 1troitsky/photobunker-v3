@@ -1,0 +1,74 @@
+[
+  {
+    "viewport": "1280x800",
+    "screen": "welcome",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "welcome-loading",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "pin",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "welcome",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "welcome-loading",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "pin",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "welcome",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "welcome-loading",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "pin",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  }
+]

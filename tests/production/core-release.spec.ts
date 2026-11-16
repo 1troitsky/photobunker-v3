@@ -1,3 +1,4 @@
+import {browserControl} from '../e2e/support/browser-ui'
 import {expect,test} from '@playwright/test'
 
 test('compiled app: Welcome → offline photo → durable reload → Garage → Viewer',async({page,context})=>{
@@ -10,6 +11,7 @@ test('compiled app: Welcome → offline photo → durable reload → Garage → 
   await page.getByRole('link',{name:'Создать аккаунт'}).click()
   await page.getByRole('button',{name:'Создать Recovery Key'}).click()
   await expect(page.getByTestId('welcome-generated-key')).not.toHaveValue('')
+  const recoveryKey=await page.getByTestId('welcome-generated-key').inputValue()
   await expect(page.getByTestId('welcome-finish')).toBeDisabled()
   await page.getByText('Я сохранил Recovery Key отдельно от устройства.').click()
   await page.getByTestId('welcome-finish').click()
@@ -22,14 +24,14 @@ test('compiled app: Welcome → offline photo → durable reload → Garage → 
   await expect(page.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
   await page.getByRole('link',{name:'Browser',exact:true}).click()
   await expect(page.locator('.photo-row')).toHaveCount(1)
-  await expect(page.locator('.photo-row')).toContainText('queued')
+  await expect(page.locator('.photo-row')).toHaveAttribute('data-sync-state','queued')
   // Shell cold offline reload remains separately BLOCKED by unsigned-SW
   // policy. Restore transport before reloading, preserving the real outbox.
   await context.setOffline(false)
   await page.reload()
   await expect(page.locator('.photo-row')).toHaveCount(1)
-  await page.getByRole('button',{name:'Синхронизировать',exact:true}).click()
-  await expect(page.locator('.photo-row')).toContainText('synced',{timeout:30000})
+  await browserControl(page,'Синхронизировать')
+  await expect(page.locator('.photo-row')).toHaveAttribute('data-sync-state','synced',{timeout:30000})
   await expect(page.getByTestId('browser-file-thumb')).toBeVisible()
   expect(await page.getByTestId('browser-file-thumb').evaluate(node=>(node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await page.evaluate(()=>{document.scrollingElement?.scrollTo(0,0);document.querySelector('.shell-main')?.scrollTo(0,0)})
@@ -42,6 +44,27 @@ test('compiled app: Welcome → offline photo → durable reload → Garage → 
   expect(await image.evaluate(node=>(node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await page.reload()
   await expect(image).toBeVisible()
+  // Preserve the approved content minimum on short screens without moving
+  // Header/Dock offscreen or collapsing the actual decrypted media to zero.
+  await page.setViewportSize({width:844,height:390})
+  await image.scrollIntoViewIfNeeded()
+  expect((await image.boundingBox())!.height).toBeGreaterThan(0)
+  expect((await page.locator('.shell-dock').boundingBox())!.y).toBe(308)
+  await page.getByTestId('viewer-action-info').scrollIntoViewIfNeeded()
+  await expect(page.getByTestId('viewer-action-info')).toBeInViewport()
+  await page.goto('/settings/security')
+  await page.getByTestId('security-pin-create').click()
+  await page.getByTestId('security-pin-new').fill('4826')
+  await page.getByTestId('security-pin-repeat').fill('4826')
+  await page.getByTestId('security-pin-recovery').fill(recoveryKey)
+  await page.getByTestId('security-pin-ack').check()
+  await page.getByTestId('security-pin-save').click()
+  await expect(page.getByRole('heading',{name:'Введите PIN'})).toBeVisible()
+  const zero=page.getByRole('button',{name:'Цифра 0'})
+  await zero.scrollIntoViewIfNeeded()
+  await expect(zero).toBeInViewport()
+  for(const digit of '4826')await page.getByRole('button',{name:'Цифра '+digit}).click()
+  await expect(page.getByTestId('security-privacy-page')).toBeVisible()
 })
 
 test('compiled delivery denies source modules and unsigned workers',async({request})=>{

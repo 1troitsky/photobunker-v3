@@ -1,0 +1,376 @@
+{
+  "schema": 1,
+  "productCommit": "ae70365dcdc1694e19618197b50426652c697f72",
+  "files": [
+    {
+      "path": "1280x800/browser-app.png",
+      "bytes": 36558,
+      "sha256": "e9929480b5fed669ac4229d7c12d4813c0ed38569ab45374503feba37d4998c6"
+    },
+    {
+      "path": "1280x800/browser-grid-app.png",
+      "bytes": 44696,
+      "sha256": "c42da26464e2080bcafcde85314211e4d3cd468b6083df17f8f5b75a035307fe"
+    },
+    {
+      "path": "1280x800/browser-grid-reference.png",
+      "bytes": 46200,
+      "sha256": "dc6cc108e9d02da97238f3415d865009ae281588c767273d49a5b151d2a84ac8"
+    },
+    {
+      "path": "1280x800/browser-reference.png",
+      "bytes": 38729,
+      "sha256": "919c82e54a255b129a7004522d7c44fd8b2300fac122b8c36df774b787afc47a"
+    },
+    {
+      "path": "1280x800/browser-tree-app.png",
+      "bytes": 36131,
+      "sha256": "88108fd9b70a7aa166f6fb6989a9c0b36aaaeb62989637f5960884d6b1702ef5"
+    },
+    {
+      "path": "1280x800/browser-tree-reference.png",
+      "bytes": 38334,
+      "sha256": "2c209de0e601d563198e86b77330c87a2eae088a8adb267c931e8fca681bfef3"
+    },
+    {
+      "path": "1280x800/camera-app.png",
+      "bytes": 26458,
+      "sha256": "5dbfcb71ce82240e929a4e79f88785b87e72b1e6afad5f77154f77fa6f741d15"
+    },
+    {
+      "path": "1280x800/camera-reference.png",
+      "bytes": 74965,
+      "sha256": "c0ec25392cb5fab5835ca1b8391fe1370be16f6c25186d371fbe1a73dab29631"
+    },
+    {
+      "path": "1280x800/pin-app.png",
+      "bytes": 108252,
+      "sha256": "8b04f693e90365d9d1bf35f082f1ee2cbbc5f5e20aaa1e13a15263076f8f0aea"
+    },
+    {
+      "path": "1280x800/pin-reference.png",
+      "bytes": 108252,
+      "sha256": "8b04f693e90365d9d1bf35f082f1ee2cbbc5f5e20aaa1e13a15263076f8f0aea"
+    },
+    {
+      "path": "1280x800/public-card-app.png",
+      "bytes": 32162,
+      "sha256": "788bc3bd913356fbc73fc3222edc9ded28b270f60f9e707156add47884adcbb3"
+    },
+    {
+      "path": "1280x800/public-card-lightbox-app.png",
+      "bytes": 37983,
+      "sha256": "69a62c25a8534c108d205857f19272ba8d9b7d877f3f23049c921b4d37e9d5fc"
+    },
+    {
+      "path": "1280x800/public-card-lightbox-reference.png",
+      "bytes": 35868,
+      "sha256": "439a79e66047b4786a298225d0a7e1b29ddf7612dcd1f0624b2c9c6a0004ec6d"
+    },
+    {
+      "path": "1280x800/public-card-reference.png",
+      "bytes": 89472,
+      "sha256": "23577712197d8d9088241c76cc7e44bbab7081e82f868fd09d2d395c20184afa"
+    },
+    {
+      "path": "1280x800/viewer-app.png",
+      "bytes": 37431,
+      "sha256": "6ddca406e0f4bca61982119360edeef9ea1d24c33d68db04e95b776d373c9d41"
+    },
+    {
+      "path": "1280x800/viewer-fullscreen-app.png",
+      "bytes": 34341,
+      "sha256": "4add22c9fb469695ca89649800daedb3d69580cbd0f4b509ead5684659f6e9f5"
+    },
+    {
+      "path": "1280x800/viewer-fullscreen-reference.png",
+      "bytes": 22637,
+      "sha256": "370c38359d1dfc1bf4b1ec9cac5caa5e43d07360db9fd771ea6fae846c1c681f"
+    },
+    {
+      "path": "1280x800/viewer-reference.png",
+      "bytes": 49242,
+      "sha256": "5f118219039595a409f4cf48ef9ec5827539c26e12cab4a1a657bb17c3fd0bea"
+    },
+    {
+      "path": "1280x800/welcome-app.png",
+      "bytes": 63768,
+      "sha256": "f3853a94955deb0bba1b4f617cd84751c94c706f4c6c4907448c5d11f4b4ddb5"
+    },
+    {
+      "path": "1280x800/welcome-loading-app.png",
+      "bytes": 63190,
+      "sha256": "c121ed07ff60559dc12b2e09c463092de64f132189b02a1ec671aae2fadcea9e"
+    },
+    {
+      "path": "1280x800/welcome-loading-reference.png",
+      "bytes": 63190,
+      "sha256": "c121ed07ff60559dc12b2e09c463092de64f132189b02a1ec671aae2fadcea9e"
+    },
+    {
+      "path": "1280x800/welcome-reference.png",
+      "bytes": 63768,
+      "sha256": "f3853a94955deb0bba1b4f617cd84751c94c706f4c6c4907448c5d11f4b4ddb5"
+    },
+    {
+      "path": "375x812/browser-app.png",
+      "bytes": 31272,
+      "sha256": "4a1ff9384bcb40cefb1628eece249c378cc0d14707551bc2c047c2c794886850"
+    },
+    {
+      "path": "375x812/browser-grid-app.png",
+      "bytes": 34338,
+      "sha256": "2253ddd5b37a21a5de3052d30a3e2499d35a09bc35549bc60813552677c3f633"
+    },
+    {
+      "path": "375x812/browser-grid-reference.png",
+      "bytes": 36143,
+      "sha256": "e4bb5c87c806d6c20f8e4f494e74f289a2d94963310e70c5649c21241f925b3f"
+    },
+    {
+      "path": "375x812/browser-reference.png",
+      "bytes": 33077,
+      "sha256": "d454a721ae4c01c5491235be533849e4ad5d3344cc432563044bb18afea2c7ae"
+    },
+    {
+      "path": "375x812/browser-tree-app.png",
+      "bytes": 30825,
+      "sha256": "7f408a7060128753da4e8c36e158dbe6dadd9d9a95e773217b870c4b9e197088"
+    },
+    {
+      "path": "375x812/browser-tree-reference.png",
+      "bytes": 32585,
+      "sha256": "145aea9db4c2147b506ef87107fc9e1401bcfeea121a26f78ee7f50f25aff27c"
+    },
+    {
+      "path": "375x812/camera-app.png",
+      "bytes": 21745,
+      "sha256": "538c34264b5559f336ee3c6b47661bbcf9512315422b3cd6c7b6c0bce85c6de4"
+    },
+    {
+      "path": "375x812/camera-reference.png",
+      "bytes": 45976,
+      "sha256": "08636e40b4a3548de1d768961608082733e74a31307b1a605837014166abb202"
+    },
+    {
+      "path": "375x812/pin-app.png",
+      "bytes": 55204,
+      "sha256": "bd444a96681ca92e6accf075a619ae7430db56e91ee53dc90789efd3ef8cc373"
+    },
+    {
+      "path": "375x812/pin-reference.png",
+      "bytes": 55204,
+      "sha256": "bd444a96681ca92e6accf075a619ae7430db56e91ee53dc90789efd3ef8cc373"
+    },
+    {
+      "path": "375x812/public-card-app.png",
+      "bytes": 30508,
+      "sha256": "982a88b7469105d812a559c0db32e922959adea8e9b540092c9bc086307811e7"
+    },
+    {
+      "path": "375x812/public-card-lightbox-app.png",
+      "bytes": 15829,
+      "sha256": "693498e6b4f88607f8297f100de09c9c7bdfe349f0479cdfb032c009543616b4"
+    },
+    {
+      "path": "375x812/public-card-lightbox-reference.png",
+      "bytes": 28245,
+      "sha256": "6519437f1519f8226844931ca5d97b595fa2da9e7e034b427bcf11e88f7219a6"
+    },
+    {
+      "path": "375x812/public-card-reference.png",
+      "bytes": 48665,
+      "sha256": "734526157b440bbe94518f287415553a045456537905c1e1d96e407f1b5e9138"
+    },
+    {
+      "path": "375x812/viewer-app.png",
+      "bytes": 29693,
+      "sha256": "5d162f8dde3c90e46b3ada95c53bc69f2826863b02a95fc054f3333650a443ce"
+    },
+    {
+      "path": "375x812/viewer-fullscreen-app.png",
+      "bytes": 7575,
+      "sha256": "e21b7ba09c5b4ea997c5f8aff65734b8c97b5617bdcc8036256590ceecf20a37"
+    },
+    {
+      "path": "375x812/viewer-fullscreen-reference.png",
+      "bytes": 10261,
+      "sha256": "348e4946316e95694fa6231be657d6b247d93c50c5d2c3afeaa08be3d91cea62"
+    },
+    {
+      "path": "375x812/viewer-reference.png",
+      "bytes": 38564,
+      "sha256": "798ccd34857e45e2137e01d10cfa0545577554c66bff875be2e7812b6cba5c53"
+    },
+    {
+      "path": "375x812/welcome-app.png",
+      "bytes": 51485,
+      "sha256": "37c9af36149ee513efaaaa56dbd7c6b8e016c9ed00d53fb4fd93cec80b85da29"
+    },
+    {
+      "path": "375x812/welcome-loading-app.png",
+      "bytes": 50900,
+      "sha256": "d17ffa65719f9f62d838c4a8fda1c5475195e6fe1fd20fbe8a39d0b71bf51a49"
+    },
+    {
+      "path": "375x812/welcome-loading-reference.png",
+      "bytes": 50900,
+      "sha256": "d17ffa65719f9f62d838c4a8fda1c5475195e6fe1fd20fbe8a39d0b71bf51a49"
+    },
+    {
+      "path": "375x812/welcome-reference.png",
+      "bytes": 51485,
+      "sha256": "37c9af36149ee513efaaaa56dbd7c6b8e016c9ed00d53fb4fd93cec80b85da29"
+    },
+    {
+      "path": "390x844/browser-app.png",
+      "bytes": 31347,
+      "sha256": "3c3a81a10dff85c4c7de953e4f1d91c6cdc2ee9adaf079d164e9f6a0d68e66cd"
+    },
+    {
+      "path": "390x844/browser-grid-app.png",
+      "bytes": 33714,
+      "sha256": "f1b4a7171d9f440268731b6fe8378efc32b2df8be5f6ad4eebb16bb70672a371"
+    },
+    {
+      "path": "390x844/browser-grid-reference.png",
+      "bytes": 35776,
+      "sha256": "1cc567085e367bbaa981414d6a4080b46a72852da241c43a7f8888bd6644d930"
+    },
+    {
+      "path": "390x844/browser-reference.png",
+      "bytes": 33207,
+      "sha256": "d63367d0548b3c9737b297dc3707b83d3c8fb785e42c38cc6a9f0406409527c2"
+    },
+    {
+      "path": "390x844/browser-tree-app.png",
+      "bytes": 30921,
+      "sha256": "2e03a5393b95fd250b9375ce03338315141ca8abb81eb0bcffd70cb6ee121eff"
+    },
+    {
+      "path": "390x844/browser-tree-reference.png",
+      "bytes": 32728,
+      "sha256": "37c4ab0e680634512dfcb540cec0bf0203ce0d14a0cab8ce8c0adacb8792f09c"
+    },
+    {
+      "path": "390x844/camera-app.png",
+      "bytes": 21605,
+      "sha256": "01833fc36a61f29c09ab6633a58bc9622fa505ac8f2cfdcf52d3e54d4ee859b1"
+    },
+    {
+      "path": "390x844/camera-reference.png",
+      "bytes": 47214,
+      "sha256": "efd5dafeb1c793e741f22f9f327a50ce717386bfc8c85e8309938ee3ce941889"
+    },
+    {
+      "path": "390x844/pin-app.png",
+      "bytes": 58133,
+      "sha256": "0e47748813d32fadf3223a099f0e6360080d1e85bae7c690110e14136ff73c78"
+    },
+    {
+      "path": "390x844/pin-reference.png",
+      "bytes": 58133,
+      "sha256": "0e47748813d32fadf3223a099f0e6360080d1e85bae7c690110e14136ff73c78"
+    },
+    {
+      "path": "390x844/public-card-app.png",
+      "bytes": 30743,
+      "sha256": "c46fef6d28006e59c710e2ff9d5dcf34920979e6673404d3cc1d27c20425b9af"
+    },
+    {
+      "path": "390x844/public-card-lightbox-app.png",
+      "bytes": 16249,
+      "sha256": "318d463463fc18109b059da1d33f47b70c4c5e471a961bcc3e766e7c55167027"
+    },
+    {
+      "path": "390x844/public-card-lightbox-reference.png",
+      "bytes": 28806,
+      "sha256": "dbd8f81ed80fd82e6ac68e19db91cc502a92456c6c2223026d80071449e997a6"
+    },
+    {
+      "path": "390x844/public-card-reference.png",
+      "bytes": 49676,
+      "sha256": "f138da718856200c1fff6049d9956538bb7ab44ab568dd553121d69afef4b13d"
+    },
+    {
+      "path": "390x844/viewer-app.png",
+      "bytes": 30223,
+      "sha256": "d5904e2b3764fd52003f349ccbbe8d76fd394d358976424a5d94356318152400"
+    },
+    {
+      "path": "390x844/viewer-fullscreen-app.png",
+      "bytes": 8089,
+      "sha256": "7c2ab022118185fec51ddbcb02345eaf2766fca35fdc6b0740503e274f8aa315"
+    },
+    {
+      "path": "390x844/viewer-fullscreen-reference.png",
+      "bytes": 10323,
+      "sha256": "87982d8d59b0b5f86f7c708540aba182ba4cfc5f780b407b7adaf7efacbbfb4f"
+    },
+    {
+      "path": "390x844/viewer-reference.png",
+      "bytes": 38956,
+      "sha256": "f921cdedc76d267fff7dcf532355e41201ce9d99cc6cfdd9a884de14e616e4e3"
+    },
+    {
+      "path": "390x844/welcome-app.png",
+      "bytes": 51707,
+      "sha256": "653a0a508e21771c45daec0379e10a20a675217daaf0747a3922a071d3cbcbd4"
+    },
+    {
+      "path": "390x844/welcome-loading-app.png",
+      "bytes": 51186,
+      "sha256": "753f67064738c8763a4313d34e0a38188e711797bf4bcbc54281d0f42aa64538"
+    },
+    {
+      "path": "390x844/welcome-loading-reference.png",
+      "bytes": 51186,
+      "sha256": "753f67064738c8763a4313d34e0a38188e711797bf4bcbc54281d0f42aa64538"
+    },
+    {
+      "path": "390x844/welcome-reference.png",
+      "bytes": 51707,
+      "sha256": "653a0a508e21771c45daec0379e10a20a675217daaf0747a3922a071d3cbcbd4"
+    },
+    {
+      "path": "canonical-sources.json",
+      "bytes": 17560,
+      "sha256": "5d86db7b80199fa8f7d202359ebd77e10f9b941f3d736d9cecdc171a4a2102df"
+    },
+    {
+      "path": "diagnostics.json",
+      "bytes": 1328,
+      "sha256": "04f371e1b0fbeb86405b296a796ccb8a945e280682b1cd5985431c325311036d"
+    },
+    {
+      "path": "e2e-results.json",
+      "bytes": 38877,
+      "sha256": "1f433a6af46ed80b9beb02c552a7bacc7b287d3155effec0f6da21c2c3bf98c7"
+    },
+    {
+      "path": "gates.json",
+      "bytes": 2220,
+      "sha256": "69133c57c9f7a0c33495082d53ce738f223b16b1c56270f0660ff5c5129b4acf"
+    },
+    {
+      "path": "geometry.json",
+      "bytes": 362889,
+      "sha256": "e5b15f4370ca4832c6ac88681f96b1c7ec235125f967b574fffff53c6e3abff4"
+    },
+    {
+      "path": "pixel-comparison.json",
+      "bytes": 1434,
+      "sha256": "bc78d85e26fa12e905ec62dc85a0e31fb3e1afbcefd326829bbcea5b833839ac"
+    },
+    {
+      "path": "production-e2e.json",
+      "bytes": 2730,
+      "sha256": "96b4b3852d903e3fa4cddfb94bdbb8668bbf8d088a23df21a31575432fe32e4d"
+    },
+    {
+      "path": "welcome-performance.json",
+      "bytes": 3409,
+      "sha256": "4712b19d953af32565b681d00ad75dbb6355128671973cc014c579827ec8eb2a"
+    }
+  ]
+}

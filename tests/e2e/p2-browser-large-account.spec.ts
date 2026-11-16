@@ -1,3 +1,4 @@
+import {browserHeader} from './support/browser-ui'
 import {expect,test} from '@playwright/test'
 
 /**
@@ -180,11 +181,12 @@ test('P2 Browser: 10k index cannot grant access; real E2EE deep link page 2 is s
     const recoveryKey=await a.locator('#generated-key').inputValue()
     await a.getByLabel('Я сохранил ключ восстановления').check()
     await a.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(a.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(a.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await a.goto('/browser')
+    await expect(a.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
-    await a.getByTestId('browser-header-upload').click()
+    await browserHeader(a,'upload')
     await expect(a.getByTestId('browser-import-sheet')).toBeVisible()
     const picker=a.getByTestId('media-import-file')
     await expect(picker).toBeEnabled({timeout:30000})
@@ -208,7 +210,7 @@ test('P2 Browser: 10k index cannot grant access; real E2EE deep link page 2 is s
     await b.goto('/settings')
     await b.locator('#recovery-key').fill(recoveryKey)
     await b.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(b.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(b.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     // Read the real, account-authorized cloud index BEFORE injecting hostile
     // synthetic index rows; the fake rows never carry manifests or keys.
     const authentic=await b.evaluate(async()=>{
@@ -244,7 +246,7 @@ test('P2 Browser: 10k index cannot grant access; real E2EE deep link page 2 is s
     await expect(b.getByTestId('file-viewer-info'))
       .toContainText(secretName,{timeout:40000})
     await expect(b.getByTestId('file-viewer-position'))
-      .toHaveText('51 / 51',{timeout:30000})
+      .toHaveText('51 из 51',{timeout:30000})
     expect(servedFirst).toBeGreaterThan(0)
     expect(servedSecond).toBeGreaterThan(0)
     const plain=await b.evaluate(async targetId=>{
@@ -272,7 +274,7 @@ test('P2 Browser: 10k index cannot grant access; real E2EE deep link page 2 is s
     }))
     await test.info().attach('real-e2ee-two-page-evidence.json',{
       body:JSON.stringify({actualCiphertextAccount:true,realMediaIdVerified:true,
-        serverReceiptVerified:true,viewerPosition:'51 / 51',
+        serverReceiptVerified:true,viewerPosition:'51 из 51',
         firstPageOpaqueRows:50,realSecondPageRows:1,
         fakeIdDenied:true,requestedEndpointCount:requests.length},null,2),
       contentType:'application/json'})

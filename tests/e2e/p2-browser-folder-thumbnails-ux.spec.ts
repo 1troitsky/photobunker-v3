@@ -1,3 +1,4 @@
+import {browserHeader} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
 test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext cache',async({page,context})=>{
@@ -6,11 +7,11 @@ test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   await page.goto('/browser')
   await expect(page.getByTestId('browser-header-folder')).toBeEnabled()
 
-  await page.getByTestId('browser-header-folder').click()
+  await browserHeader(page,'folder')
   await page.getByTestId('browser-folder-name').fill('Encrypted covers')
   await page.getByRole('button',{name:'Создать',exact:true}).click()
   await expect(page.getByRole('button',{name:'Encrypted covers',exact:true}))
@@ -31,7 +32,7 @@ test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext
   })
   expect(Buffer.from(png,'base64').length).toBeGreaterThan(128)
   await context.setOffline(true)
-  await page.getByTestId('browser-header-upload').click()
+  await browserHeader(page,'upload')
   await page.getByTestId('media-import-file').setInputFiles({
     name:'LOCAL-ONLY-PRIVATE-COVER.png',mimeType:'image/png',
     buffer:Buffer.from(png,'base64'),
@@ -45,7 +46,7 @@ test('Browser v3: real offline E2EE folder thumbnail has no persistent plaintext
   })
   await page.getByTestId('browser-import-sheet-close').click()
   await page.getByTestId('browser-tab-personal').click()
-  await expect(page.getByTestId('browser-personal-catalog-scope')).toBeVisible()
+  await expect(page.getByTestId('browser-tab-personal')).toHaveAttribute('aria-selected','true')
   await expect(row).toHaveCount(1)
   await page.getByTestId('browser-tab-assignments').click()
   await expect(row).toHaveCount(0)
