@@ -125,9 +125,12 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(config.getByLabel('Качество аудио')).toBeVisible()
   await expect(page.getByTestId('camera-sheet-backdrop')).toBeVisible()
   await expect(page.getByTestId('camera-sheet-close')).toBeFocused()
+  // Settings uses the approved X-only close, NOT an invented Done action.
+  // Shift+Tab wraps to the last actual permission action in the sheet.
+  await expect(config.getByRole('button',{name:'Готово'})).toHaveCount(0)
   await page.getByTestId('camera-sheet-close').press('Shift+Tab')
-  await expect(page.getByRole('button',{name:'Готово'})).toBeFocused()
-  await page.getByRole('button',{name:'Готово'}).press('Tab')
+  await expect(page.getByTestId('camera-permission-microphone')).toBeFocused()
+  await page.getByTestId('camera-permission-microphone').press('Tab')
   await expect(page.getByTestId('camera-sheet-close')).toBeFocused()
   await page.getByTestId('camera-sheet-close').click()
   await expect(page.getByTestId('camera-sheet-backdrop')).toHaveCount(0)
