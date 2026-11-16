@@ -1661,11 +1661,17 @@ onUnmounted(()=>{
           :aria-label="cameraSheet==='settings'?'Настройки камеры':undefined"
           @keydown.esc.stop.prevent="closeCameraSheet"
           @keydown.tab="trapCameraSheetFocus($event,'settings')">
+          <span v-if="cameraSheet==='settings'" class="camera-sheet-handle" aria-hidden="true"></span>
           <header v-if="cameraSheet==='settings'" class="camera-sheet-heading">
             <strong>Настройки камеры</strong>
             <button type="button" class="camera-sheet-close"
               data-testid="camera-sheet-close" aria-label="Закрыть настройки"
-              @click="closeCameraSheet">Закрыть</button>
+              @click="closeCameraSheet">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <path d="M5 5 19 19M19 5 5 19"/>
+              </svg>
+            </button>
           </header>
           <h2 v-else>Настройки камеры</h2>
           <section class="camera-preset-section" data-testid="camera-presets">
@@ -1834,11 +1840,17 @@ onUnmounted(()=>{
           :aria-label="cameraSheet==='assignment'?'Задание и данные съёмки':undefined"
           @keydown.esc.stop.prevent="closeCameraSheet"
           @keydown.tab="trapCameraSheetFocus($event,'assignment')">
+          <span v-if="cameraSheet==='assignment'" class="camera-sheet-handle" aria-hidden="true"></span>
           <header v-if="cameraSheet==='assignment'" class="camera-sheet-heading">
             <strong>Задание и данные съёмки</strong>
             <button type="button" class="camera-sheet-close"
               data-testid="camera-sheet-close" aria-label="Закрыть задание"
-              @click="closeCameraSheet">Закрыть</button>
+              @click="closeCameraSheet">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <path d="M5 5 19 19M19 5 5 19"/>
+              </svg>
+            </button>
           </header>
           <h2 v-else>Задание и данные съёмки</h2>
         <label for="camera-assignment">Выбрать задание</label>
