@@ -1298,6 +1298,9 @@ function endRecording():void{
 
 function closeCamera():void {
   cameraWanted=false;cameraGeneration++
+  // Do not replay the previous photo's flash on mode/account changes or
+  // after native hardware unexpectedly ends the stream.
+  photoFlashRevision.value=0
   clearGPS()
   releaseStream()
 }
