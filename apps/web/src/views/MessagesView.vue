@@ -55,10 +55,10 @@ function setModalBackground(open:boolean):void{
     const shell=document.querySelector<HTMLElement>('.shell')
     if(!shell)return
     modalBackground=shell
-    previousBackgroundInert=shell.inert
-    shell.inert=true
+    previousBackgroundInert=shell.hasAttribute('inert')
+    shell.setAttribute('inert','')
   }else if(modalBackground){
-    modalBackground.inert=previousBackgroundInert
+    if(!previousBackgroundInert)modalBackground.removeAttribute('inert')
     modalBackground=null
   }
 }

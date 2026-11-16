@@ -59,6 +59,7 @@ async function mountAndOpen():Promise<void>{
   await settle()
   const peer=host.querySelector<HTMLButtonElement>('[data-testid="messages-picker-'+PEER+'"]')
   if(!peer)throw Error('confirmed contact absent')
+  peer.focus()
   peer.click()
   await settle()
   expect(thread()).not.toBeNull()
@@ -93,25 +94,32 @@ afterEach(()=>{
 describe('Messages 1.1 local-first draft safety',()=>{
   it('makes only the fullscreen dialog interactive, then restores Shell access',async()=>{
     await mountAndOpen()
-    expect(shell.inert).toBe(true)
+    expect(shell.hasAttribute('inert')).toBe(true)
     expect(document.activeElement).toBe(editor())
     expect(thread()?.getAttribute('aria-modal')).toBe('true')
     closeThread()
     await settle()
-    expect(shell.inert).toBe(false)
+    expect(shell.hasAttribute('inert')).toBe(false)
     expect(thread()).toBeNull()
     expect(document.activeElement).toBe(
       host.querySelector('[data-testid="messages-compose"]'))
   })
   it('restores the original Shell inert state after unmount while dialog is open',async()=>{
     await mountAndOpen()
-    expect(shell.inert).toBe(true)
+    expect(shell.hasAttribute('inert')).toBe(true)
     app?.unmount()
     app=undefined
     await settle()
-    expect(shell.inert).toBe(false)
+    expect(shell.hasAttribute('inert')).toBe(false)
   })
 
+  it('does not undo an existing Shell inert lock on closing its modal',async()=>{
+    shell.setAttribute('inert','')
+    await mountAndOpen()
+    closeThread()
+    await settle()
+    expect(shell.hasAttribute('inert')).toBe(true)
+  })
   it('keeps unsaved text and the fullscreen editor when encrypted persistence fails',async()=>{
     mocks.save.mockRejectedValueOnce(new Error('IndexedDB quota'))
     await mountAndOpen()
