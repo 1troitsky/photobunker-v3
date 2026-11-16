@@ -141,6 +141,8 @@ let scrollReturnKey:string|null=null
 const createFolderOpen=ref(false)
 const createFolderParent=ref('')
 const uploadSheetOpen=ref(false)
+const sharePhotoId=ref<string|null>(null)
+const shareFileKey=ref<string|null>(null)
 const browserSettingsOpen=ref(false)
 const showRemainingDays=ref(readBrowserDaysLeft())
 const browserOpenFirst=ref<BrowserOpeningSection>(readBrowserOpeningSection())
@@ -1413,6 +1415,8 @@ watch(activeSession,(next,previous)=>{
     createFolderOpen.value=false
     createFolderParent.value=''
     uploadSheetOpen.value=false
+    sharePhotoId.value=null
+    shareFileKey.value=null
     browserSettingsOpen.value=false
     newFolderName.value=''
     editFolderName.value=''
@@ -1533,6 +1537,51 @@ function newFolderSheetKeydown(event:KeyboardEvent):void{
   )??[])
   if(!elements.length)return
   const first=elements[0]!,last=elements[elements.length-1]!
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
+}
+/** The accepted Browser file menu opens the EXISTING audited E2EE grant
+ * pipeline for the selected local photo, never an unrestricted share link.
+ * Received grants remain accessible through the legacy panel until the
+ * incoming-materials UX has an independently accepted destination. */
+function openPhotoShare(item:CatalogItem):void{
+  if(!activeSession.value||item.source!=='photo'||!item.local)return
+  sharePhotoId.value=item.id
+  shareFileKey.value=item.key
+  uploadSheetOpen.value=false
+  createFolderOpen.value=false
+  browserSettingsOpen.value=false
+  closeFileMenu()
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-photo-share-close"]')?.focus()
+  })
+}
+function closePhotoShare():void{
+  const key=shareFileKey.value
+  sharePhotoId.value=null
+  shareFileKey.value=null
+  void nextTick(()=>{
+    if(key)document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-row-'+key+'"] [data-testid="browser-file-menu-toggle"]'
+    )?.focus()
+  })
+}
+function photoShareKeydown(event:KeyboardEvent):void{
+  if(!sharePhotoId.value)return
+  if(event.key==='Escape'){
+    event.preventDefault();closePhotoShare();return
+  }
+  if(event.key!=='Tab')return
+  const root=document.querySelector<HTMLElement>('[data-testid="browser-photo-share-sheet"]')
+  const enabled=Array.from(root?.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]'
+  )??[])
+  if(!enabled.length)return
+  const first=enabled[0]!,last=enabled[enabled.length-1]!
   if(event.shiftKey&&document.activeElement===first){
     event.preventDefault();last.focus()
   }else if(!event.shiftKey&&document.activeElement===last){
@@ -1668,6 +1717,8 @@ onMounted(()=>{
 onUnmounted(()=>{
   document.removeEventListener('pointerdown',onBrowserMenuPointerDown)
   closeFileMenu()
+  sharePhotoId.value=null
+  shareFileKey.value=null
   revokeFolderThumbnails()
   if(retentionTimer!==null){clearInterval(retentionTimer);retentionTimer=null}
   clearBrowserShellActions(browserHeaderOwner)
@@ -2251,6 +2302,13 @@ onUnmounted(()=>{
             <span v-if="archivedByKey.get(item.key)?.state==='deleting'">
               Удаление ожидает подтверждения GC:
               {{ archivedByKey.get(item.key)?.physicalStatus }}</span>
+            <button v-if="item.source==='photo'" type="button"
+              :disabled="!item.local"
+              :aria-label="'Поделиться файлом '+item.id"
+              data-testid="browser-photo-share-action"
+              @click="openPhotoShare(item)">
+              {{item.local?'Поделиться':'Поделиться (требуется локальная копия)'}}
+            </button>
             <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
               :aria-label="'Полный просмотр файла '+item.id"
               @click="preserveViewerOrigin(item,$event)">Открыть файл</RouterLink>
@@ -2399,7 +2457,26 @@ onUnmounted(()=>{
             @media-imported="placeImportedMedia"
             @catalog-change="refresh"/>
         </div>
-        <SharePanel :local-photos="localPhotos" @open-photo="showReceived"/>
+        <SharePanel v-if="sharePhotoId===null"
+          :local-photos="localPhotos" @open-photo="showReceived"/>
+      </section>
+      <div v-if="sharePhotoId" class="browser-share-backdrop"
+        data-testid="browser-photo-share-backdrop" @click="closePhotoShare"></div>
+      <section v-if="sharePhotoId" class="browser-share-sheet"
+        data-testid="browser-photo-share-sheet" role="dialog"
+        aria-modal="true" aria-label="Поделиться фотографией"
+        @keydown="photoShareKeydown">
+        <header class="browser-share-heading">
+          <strong>Поделиться фотографией</strong>
+          <button type="button" data-testid="browser-photo-share-close"
+            aria-label="Закрыть обмен" @click="closePhotoShare">Закрыть</button>
+        </header>
+        <p class="muted">
+          Передача доступна только после подтверждения облака и сверки ключа получателя.
+        </p>
+        <SharePanel
+          :local-photos="localPhotos.filter(photo=>photo.photoId===sharePhotoId)"
+          @open-photo="showReceived"/>
       </section>
     </template>
     <p v-if="status" role="status" class="status-text">{{ status }}</p>
