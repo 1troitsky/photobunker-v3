@@ -21,6 +21,9 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     await expect(page.getByTestId('browser-summary')).toContainText('0 файлов')
 
     await context.setOffline(true)
+    // Owner-approved Browser v3: import is opened from Header as one sheet.
+    await page.getByTestId('browser-header-upload').click()
+    await expect(page.getByTestId('browser-import-sheet')).toBeVisible()
     await page.getByTestId('media-import-file').setInputFiles({
       name:'PRIVATE-VIDEO-TEST.webm',mimeType:'video/webm',
       buffer:Buffer.alloc(8192,0x42),
@@ -32,6 +35,8 @@ test('P2 Browser v3: real anonymous login → offline encrypted media → catalo
     await expect(rows).toHaveCount(1,{timeout:25000})
     await expect(rows.first()).toContainText('На устройстве')
     await expect(rows.first()).toContainText('queued')
+    await page.getByTestId('browser-import-sheet-close').click()
+    await expect(page.getByTestId('browser-import-sheet')).toBeHidden()
 
     await page.getByTestId('browser-filter-photo').click()
     await expect(rows).toHaveCount(0)
@@ -72,6 +77,7 @@ test('P2 Browser: sort two genuinely encrypted offline files by confirmed byte s
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
     await context.setOffline(true)
+    await page.getByTestId('browser-header-upload').click()
     const picker=page.getByTestId('media-import-file')
     await picker.setInputFiles({
       name:'LOCAL-SMALL.wav',mimeType:'audio/wav',

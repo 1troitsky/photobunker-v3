@@ -131,8 +131,12 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
     await row.getByRole('button',{name:/Запросить удаление файла/}).click()
     await expect(page.getByTestId('browser-archive-status'))
       .toContainText('физическая очистка S3 ещё НЕ подтверждена')
-    await expect(row).toContainText('pending_gc')
+    // Archive/GC details live in the approved per-file Actions menu.
+    // Do not mistake unchanged media outbox status ("synced") for a
+    // server-issued physical deletion acknowledgement.
     await ensureFileMenu(row)
+    await expect(row.getByTestId('browser-file-menu-panel'))
+      .toContainText('pending_gc')
     await expect(row.getByRole('button',{name:/Восстановить файл/}))
       .toHaveCount(0)
     const results=await page.evaluate(async mediaId=>{

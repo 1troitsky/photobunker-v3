@@ -136,8 +136,13 @@ test('P2 #208 signed required-GPS policy rejects denied capture offline, then ac
     await expect(page.getByTestId('camera-required-gps'))
       .toHaveText('GPS обязателен по правилам задания')
     await page.getByTestId('camera-sheet-close').click()
-    await requestGpsFromApprovedSheet(page)
-    await expect(page.getByRole('alert').first()).toBeVisible({timeout:18000})
+    // A denied geolocation result belongs to the currently open assignment
+    // sheet. Check it while the user can actually read it, then close it.
+    await page.getByTestId('camera-open-assignment').click()
+    await page.getByRole('button',{name:'Получить GPS'}).click()
+    await expect(page.getByRole('alert').first())
+      .toContainText('camera.gps_permission_required',{timeout:18000})
+    await page.getByTestId('camera-sheet-close').click()
     await expect(page.getByText(/GPS получен/)).toHaveCount(0)
     await context.setOffline(true)
     await page.getByRole('button',{name:'Сделать снимок'}).click()
