@@ -17,3 +17,8 @@
 | Документация | 117/117 canonical UX bytes сохранены; старый аудит 285 PR/130 Issues/289 веток сохранён как исторический снимок | Закрытие PR/Issue не означает owner acceptance функции |
 
 Проверено: Vitest **1013/1013**, TypeScript/build, PHPUnit **323/323 (5136 assertions)** на PHP 8.4.27 и 8.5.12, Node integrity/UX **37/37**. Chromium **151/151** и compiled-image **10/10**, без skips/flaky/retries; результаты зафиксированы в [отчёте](docs/audits/PB3-CORE-RELEASE-INTEGRATION-20261116.md) и [evidence](docs/audits/evidence/PB3-CORE-20261116/). GitHub Actions QUEUED не выдаются за PASS. Это завершение конкретных core journeys, а не декларация полного PB3 production readiness.
+
+
+### Core UX parity — 2026-11-17
+
+Утверждённые HTML/CSS семи core экранов перенесены в продукт; 33 пары на трёх размерах, 912/912 координат, 9 статических пар без отличающихся пикселей. 1020 Vitest, TypeScript/build, 151 Chromium E2E и 10 compiled Chromium PASS. Native Safari/hardware NOT TESTED. Полный статус интеграции и границы: [отчёт](docs/audits/PB3-CORE-UX-PARITY-20261116.md).

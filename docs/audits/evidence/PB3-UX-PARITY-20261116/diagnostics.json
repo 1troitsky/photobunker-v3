@@ -1,0 +1,38 @@
+{
+  "status": "HISTORICAL_DIAGNOSTICS",
+  "runs": [
+    {
+      "command": "pnpm exec playwright test -c ../ux-parity-acceptance-20261116/playwright.config.ts",
+      "exitCode": 1,
+      "passed": 148,
+      "failed": 3,
+      "failures": [
+        {
+          "test": "p2-browser-audio-wav",
+          "cause": "offline Vite dynamic import of router; module must be loaded in current document before disconnect"
+        },
+        {
+          "test": "p2-browser-folders",
+          "cause": "empty catalog wrapper has zero height; wait actual section control"
+        },
+        {
+          "test": "p2-messages-drafts",
+          "cause": "HMR direct import instantiated a second router; real route guard bypassed by test"
+        }
+      ]
+    },
+    {
+      "command": "pnpm exec vitest run src/features/media/application/media-outbox.test.ts",
+      "exitCode": 1,
+      "cause": "real product Session reference race reproduced before fix"
+    },
+    {
+      "command": "pnpm exec vitest run src/features/media/application/media-outbox.test.ts",
+      "exitCode": 0,
+      "passed": 14,
+      "cause": "regression and account/key/device/transaction boundary checks after fix"
+    }
+  ],
+  "boundedRetries": true,
+  "notes": "No tests disabled. HMR stopped before final frozen source run; negative assertions retained."
+}
