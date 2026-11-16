@@ -84,3 +84,55 @@ test('P2 #216: real account, encrypted Notifications UI, offline route/settings 
     await context.close()
   }
 })
+
+
+test('P2 #216: real encrypted offline notification details restore focus to event or filter',async({browser})=>{
+  const context=await browser.newContext({
+    viewport:{width:390,height:844},isMobile:true,hasTouch:true,
+  })
+  const page=await context.newPage()
+  try{
+    await page.goto('/settings')
+    await page.getByRole('button',{name:'Создать ключ'}).click()
+    await page.getByLabel('Я сохранил ключ восстановления').check()
+    await page.getByRole('button',{name:'Завершить регистрацию'}).click()
+    await expect(page.getByTestId('fieldwork-settings')).toBeVisible()
+
+    // Create a genuine owner-key-encrypted LOCAL event in IndexedDB, not
+    // a synthetic Matrix/network notification or unauthenticated DOM row.
+    const id=await page.evaluate(async()=>{
+      const {recordLocalNotification}=await import(
+        '/src/features/notifications/application/local-inbox.ts')
+      const id=crypto.randomUUID()
+      await recordLocalNotification({
+        id,kind:'security',targetId:null,occurredAt:Date.now(),
+      })
+      return id
+    })
+    await context.setOffline(true)
+    await page.getByTestId('settings-nav-notifications').click()
+    const card=page.getByTestId('notification-'+id)
+    const summary=card.locator('button.notification-summary')
+    await expect(card).toBeVisible()
+
+    // An unread event remains expanded after its encrypted read ACK.
+    await page.getByTestId('notifications-unread').click()
+    await summary.click()
+    await expect(page.getByTestId('notification-details')).toBeVisible()
+    await expect(card.locator('.notification-dot.isread')).toBeVisible()
+    await page.getByTestId('notifications-back-to-list').click()
+    await expect(page.getByTestId('notifications-empty')).toBeVisible()
+    await expect(page.getByTestId('notifications-unread')).toBeFocused()
+
+    // In All, the same read event remains present and restores focus to
+    // its own summary, not the document body or another Shell action.
+    await page.getByTestId('notifications-all').click()
+    await summary.click()
+    await expect(page.getByTestId('notification-details')).toBeVisible()
+    await page.getByTestId('notifications-back-to-list').click()
+    await expect(summary).toBeFocused()
+    await expect(page.getByTestId('notification-details')).toHaveCount(0)
+  }finally{
+    await context.close()
+  }
+})
