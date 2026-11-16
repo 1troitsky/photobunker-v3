@@ -575,6 +575,43 @@ function refreshHardwareZoom(track:MediaStreamTrack|undefined):void{
       ?Math.max(zoom.min,Math.min(zoom.max,actual)):zoom.min
   }catch{cameraZoomRange.value=null}
 }
+/**
+ * Camera 1.2 stores hardware preferences in device-key-encrypted presets.
+ * Only a live native track can confirm zoom/torch. Never fake capability,
+ * turn on GPS, or retry a rejected camera permission through this path.
+ */
+async function applyCameraHardwarePreferences():Promise<void>{
+  const identity=streamIdentity,generation=cameraGeneration
+  const track=stream.value?.getVideoTracks?.()[0]
+  if(!track||track.readyState!=='live'||!ownsCamera(identity,generation)
+    ||recording.value||busy.value)return
+  const ownsTrack=()=>ownsCamera(identity,generation)
+    &&stream.value?.getVideoTracks?.()[0]===track&&track.readyState==='live'
+  const range=cameraZoomRange.value
+  if(captureMode.value==='photo'&&range&&!cameraZoomBusy.value){
+    const target=Math.max(range.min,Math.min(range.max,desiredPhotoZoom.value))
+    if(Math.abs(target-cameraZoom.value)>=0.00001){
+      cameraZoomBusy.value=true
+      try{
+        await track.applyConstraints({advanced:[{zoom:target}]} as unknown as MediaTrackConstraints)
+        if(ownsTrack())cameraZoom.value=target
+      }catch{
+        if(ownsTrack())error.value='Не удалось применить масштаб из пресета.'
+      }finally{if(ownsTrack())cameraZoomBusy.value=false}
+    }
+  }
+  if(!ownsTrack()||torchBusy.value||!torchSupported.value
+    ||torchOn.value===desiredTorch.value)return
+  torchBusy.value=true
+  try{
+    await track.applyConstraints({
+      advanced:[{torch:desiredTorch.value}],
+    } as unknown as MediaTrackConstraints)
+    if(ownsTrack())torchOn.value=desiredTorch.value
+  }catch{
+    if(ownsTrack())error.value='Фонарик из пресета недоступен на этой камере.'
+  }finally{if(ownsTrack())torchBusy.value=false}
+}
 async function setCameraZoom(event:Event):Promise<void>{
   const control=event.target
   const range=cameraZoomRange.value
@@ -589,8 +626,10 @@ async function setCameraZoom(event:Event):Promise<void>{
   cameraZoomBusy.value=true
   try{
     await track.applyConstraints({advanced:[{zoom:desired}]} as unknown as MediaTrackConstraints)
-    if(ownsCamera(identity,generation)&&track===stream.value?.getVideoTracks?.()[0])
+    if(ownsCamera(identity,generation)&&track===stream.value?.getVideoTracks?.()[0]){
       cameraZoom.value=desired
+      desiredPhotoZoom.value=Math.min(3,Math.max(1,desired))
+    }
   }catch{
     if(ownsCamera(identity,generation)&&track===stream.value?.getVideoTracks?.()[0]){
       control.value=String(cameraZoom.value)
@@ -614,8 +653,10 @@ async function toggleTorch():Promise<void>{
     await track.applyConstraints({
       advanced:[{torch:next}],
     } as unknown as MediaTrackConstraints)
-    if(ownsCamera(session,generation)&&stream.value?.getVideoTracks?.()[0]===track)
+    if(ownsCamera(session,generation)&&stream.value?.getVideoTracks?.()[0]===track){
       torchOn.value=next
+      desiredTorch.value=next
+    }
   }catch{
     if(ownsCamera(session,generation)&&stream.value?.getVideoTracks?.()[0]===track){
       // A failed attempt to turn the torch OFF must not claim that it is off.
@@ -854,6 +895,7 @@ async function startCamera():Promise<void> {
     }
     torchOn.value=false
     refreshHardwareZoom(mode==='audio'?undefined:opened.getVideoTracks?.()[0])
+    if(mode!=='audio')await applyCameraHardwarePreferences()
     const preview=video.value
     if(captureMode.value!=='audio'){
       preview.srcObject=opened
@@ -954,11 +996,13 @@ async function toggleGPSTracking():Promise<void>{
   }
   gpsTracking.value=!gpsTracking.value
   if(!gpsTracking.value){
+    desiredGpsTracking.value=false
     clearGPS()
     return
   }
   await obtainGPS()
   if(!gps.value)gpsTracking.value=false
+  desiredGpsTracking.value=gpsTracking.value
 }
 function clearGPS():void {
   gpsAttempt++
@@ -1823,6 +1867,10 @@ onUnmounted(()=>{
           Показывать GPS над кнопкой «Снять»
           <small>Только видимость индикатора; не изменяет GPS-согласие и требования задания.</small>
         </label>
+        <p v-if="desiredGpsTracking&&!gpsTracking&&!gps" class="muted"
+          data-testid="camera-preset-gps-consent">
+          Для GPS из пресета требуется новое разрешение. Нажмите «Определить координаты».
+        </p>
         <div class="camera-gps-state" data-testid="camera-gps-settings-status">
           <p role="status">{{gps?'GPS · ±'+Math.round(gps.accuracyMeters)+' м':'GPS не получен'}}</p>
           <button type="button" :disabled="gpsLoading||busy||recording"
