@@ -35,6 +35,11 @@ test('P2 #216: real account, encrypted Notifications UI, offline route/settings 
     await expect(page.getByTestId('notifications-page')).toBeVisible()
     await expect(page.getByTestId('notifications-signed-out')).toHaveCount(0)
     await expect(page.getByTestId('notifications-list')).toHaveCount(0)
+    // A previously signed session may still carry online=true after
+    // Chromium disconnects. The inbox must NOT expose server-only actions.
+    await expect(page.getByText('Локальный режим. Показаны сохранённые зашифрованные уведомления.'))
+      .toBeVisible()
+    await expect(page.getByTestId('notifications-refresh')).toBeDisabled()
     await expect(page.locator('.shell-header').getByTestId('notifications-mark-all')).toBeDisabled()
     await expect(page.locator('.shell-header').getByTestId('notifications-settings')).toBeVisible()
     await expect(page.getByTestId('notifications-page').getByTestId('notifications-mark-all')).toHaveCount(0)

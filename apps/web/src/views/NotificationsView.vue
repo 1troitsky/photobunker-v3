@@ -65,7 +65,11 @@ const visible=computed(()=>expanded.value
   :shown.value.filter(row=>tab.value==='all'||row.readAt===null))
 watch(tab,()=>{expanded.value=null})
 const unread=computed(()=>shown.value.filter(row=>row.readAt===null).length)
-const canSync=computed(()=>activeSession.value?.online===true)
+// The signed identity proof can remain online=true after a real browser
+// network disconnect. Only attempt server calls when BOTH conditions hold.
+const browserOnline=ref(typeof navigator==='undefined'||navigator.onLine!==false)
+let connectivityGeneration=0
+const canSync=computed(()=>activeSession.value?.online===true&&browserOnline.value)
 function time(ms:number):string{
   return new Intl.DateTimeFormat('ru-RU',{
     day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',
@@ -109,25 +113,30 @@ async function reload():Promise<void>{
 }
 let refreshTask:Promise<void>|null=null
 let refreshOwner:string|null=null
+let refreshToken=-1
 async function refresh(token=run,owner=scope()):Promise<void>{
   if(!owner||!canSync.value||!current(owner,token))return
   if(refreshTask){
     // A previous account's in-flight request must not suppress the first
     // refresh of the replacement account. Wait, then re-check identity.
-    if(refreshOwner===owner)return refreshTask
+    // A new online epoch or proof generation MUST retry once the earlier
+    // network request has settled, even if the owner account is unchanged.
+    if(refreshOwner===owner&&refreshToken===token)return refreshTask
     await refreshTask
     if(!current(owner,token)||!canSync.value)return
   }
   syncing.value=true
   refreshOwner=owner
+  refreshToken=token
   const task=(async()=>{
     try{
       await syncServerNotifications()
-      if(current(owner,token))await readLocal(token,owner)
+      if(current(owner,token)&&canSync.value)await readLocal(token,owner)
     }catch{
       // Old encrypted offline records remain visible; a transport error is
       // not evidence that anything was marked read or lost.
-      if(current(owner,token))error.value='Не удалось обновить уведомления. Показаны сохранённые уведомления.'
+      if(current(owner,token)&&canSync.value)
+        error.value='Не удалось обновить уведомления. Показаны сохранённые уведомления.'
     }finally{syncing.value=false}
   })()
   refreshTask=task
@@ -179,13 +188,17 @@ async function openTarget(row:LocalNotification):Promise<void>{
   // The encrypted local target is intentionally NOT used for navigation.
   // Validate the event on the server at click time; read authorization is
   // checked once more by the actual destination.
-  if(busy.value||!activeSession.value?.online)return
+  if(busy.value||!canSync.value)return
   const owner=scope(),token=run
+  // Offline→online cycles invalidate an ACL response started BEFORE loss
+  // of connectivity; a cached local row never becomes a new access grant.
+  const connectivityAtStart=connectivityGeneration
   const generation=beginBusy(owner)
   error.value=''
   try{
     const target=await resolveNotificationTarget(row.id)
-    if(!current(owner,token))return
+    if(!current(owner,token)||!canSync.value
+      ||connectivityGeneration!==connectivityAtStart)return
     if(target.kind==='new-file'){
       await router.push('/browser/file/media/'+target.targetId)
     }else if(target.kind==='assignment-invite'){
@@ -210,10 +223,20 @@ watch([unread,busy],()=>{
   }
 },{immediate:true})
 function wake():void{tickClock();void reload()}
+function browserOffline():void{
+  browserOnline.value=false
+  ++connectivityGeneration
+}
+function browserOnlineAgain():void{
+  browserOnline.value=typeof navigator==='undefined'||navigator.onLine!==false
+  ++connectivityGeneration
+  if(browserOnline.value)wake()
+}
 watch(activeSession,()=>{void reload()})
 onMounted(()=>{
   void reload()
-  window.addEventListener('online',wake)
+  window.addEventListener('offline',browserOffline)
+  window.addEventListener('online',browserOnlineAgain)
   window.addEventListener('focus',tickClock)
   clockTimer=setInterval(tickClock,60_000)
 })
@@ -221,7 +244,8 @@ onUnmounted(()=>{
   clearNotificationShellActions(headerOwner)
   ++run;rows.value=[];expanded.value=null
   busyOwner='';busyGeneration++;busy.value=false
-  window.removeEventListener('online',wake)
+  window.removeEventListener('offline',browserOffline)
+  window.removeEventListener('online',browserOnlineAgain)
   window.removeEventListener('focus',tickClock)
   if(clockTimer!==null){clearInterval(clockTimer);clockTimer=null}
 })
@@ -247,7 +271,7 @@ onUnmounted(()=>{
       <RouterLink to="/settings">Создать или восстановить аккаунт</RouterLink>
     </div>
     <template v-else>
-      <p v-if="!activeSession.online" class="notifications-hint">
+      <p v-if="!canSync" class="notifications-hint">
         Локальный режим. Показаны сохранённые зашифрованные уведомления.
       </p>
       <p v-if="error" class="error-text" role="alert">{{ error }}</p>
