@@ -139,6 +139,46 @@ describe('Camera 1.2 device-scoped encrypted Local-First presets',()=>{
       settings})).rejects.toThrow('camera.preset_duplicate')
   })
 
+  it('keeps encrypted presets available across same-crypto online hydration',async()=>{
+    const s=await device()
+    activeSession.value=s
+    const settings={...defaultCameraPresetCatalog().presets[0]!.settings,
+      photoZoom:1.125,torchEnabled:true,
+    }
+    await changeCameraPreset({kind:'save',id:'default',name:'Hydrated camera',settings})
+    // The UI replaces the wrapper on network hydration but keeps the exact
+    // cryptographic device. This is NOT a sign-out or a new key generation.
+    const hydrated={...s,online:true,device:{...s.device}}
+    activeSession.value=hydrated
+    const catalog=await loadCameraPresetCatalog()
+    expect(catalog.presets[0]!.name).toBe('Hydrated camera')
+    expect(catalog.presets[0]!.settings).toEqual(settings)
+    await changeCameraPreset({kind:'add',name:'Second preset',settings})
+    expect((await loadCameraPresetCatalog()).presets).toHaveLength(2)
+  })
+
+  it('rejects A→B→A during a queued device preset write even when A is the same old wrapper',async()=>{
+    const s=await device(),other=await device()
+    activeSession.value=s
+    const previous=Object.getOwnPropertyDescriptor(navigator,'locks')
+    Object.defineProperty(navigator,'locks',{configurable:true,value:{
+      request:async(_name:string,doWrite:()=>Promise<unknown>)=>{
+        activeSession.value=other
+        activeSession.value=s
+        return doWrite()
+      },
+    }})
+    try{
+      await expect(changeCameraPreset({kind:'save',id:'default',
+        name:'Must never commit',settings:defaultCameraPresetCatalog().presets[0]!.settings,
+      })).rejects.toThrow('identity.account_changed')
+      expect((await loadCameraPresetCatalog()).presets[0]!.name).toBe('По умолчанию')
+    }finally{
+      if(previous)Object.defineProperty(navigator,'locks',previous)
+      else Reflect.deleteProperty(navigator,'locks')
+    }
+  })
+
   it('binds ciphertext to device identity and refuses disclosure after changing account',async()=>{
     const s=await device(),other=await device(s.accountId)
     activeSession.value=s
