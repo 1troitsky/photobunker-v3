@@ -25,7 +25,7 @@ test('P2 #376: real video trim → offline E2EE clip → Garage → recovered-de
     expect(recoveryKey).toMatch(/^PB2\./)
     await A.getByLabel('Я сохранил ключ восстановления').check()
     await A.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(A.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(A.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const accountA=await A.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       return identity.requireSession().accountId
@@ -187,7 +187,7 @@ test('P2 #376: real video trim → offline E2EE clip → Garage → recovered-de
     })).toBe(0)
     await B.locator('#recovery-key').fill(recoveryKey)
     await B.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(B.getByText('Подтверждённая сессия'))
+    await expect(B.locator('[data-testid="shell-status-link"][data-session-state="online"]'))
       .toBeVisible({timeout:30_000})
     const restored=await B.evaluate(async id=>{
       const identity=await import('/src/features/identity/application/session.ts')
@@ -250,7 +250,7 @@ test('P2 #376: real video trim → offline E2EE clip → Garage → recovered-de
     await C.getByRole('button',{name:'Создать ключ'}).click()
     await C.getByLabel('Я сохранил ключ восстановления').check()
     await C.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(C.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(C.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await C.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       await identity.reauthenticate()

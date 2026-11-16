@@ -1,3 +1,6 @@
+import {closeBrowserSettings} from './support/browser-ui'
+import {exchangeReady,openPhotoExchange} from './support/browser-ui'
+import {browserControl} from './support/browser-ui'
 import { test, expect } from '@playwright/test'
 
 test('P1-09: Free monthly quota accepts three signed creates, rejects fourth without deleting local ciphertext',async({browser})=>{
@@ -8,7 +11,7 @@ test('P1-09: Free monthly quota accepts three signed creates, rejects fourth wit
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/assignments')
     await expect(page.getByTestId('assignment-monthly-usage'))
       .toContainText('0 / 3',{timeout:20000})
@@ -73,7 +76,7 @@ test('two browser identities: key-only account, encrypted camera photo, Garage r
     expect(recoveryKey.length).toBeGreaterThan(40)
     await deviceA.getByLabel('Я сохранил ключ восстановления').check()
     await deviceA.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(deviceA.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(deviceA.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 
     // The app shell is already loaded. Capture and navigate while the network
     // is genuinely unavailable. There is no Service Worker yet, so this tests
@@ -86,10 +89,10 @@ test('two browser identities: key-only account, encrypted camera photo, Garage r
     await deviceA.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(deviceA.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
     await deviceA.getByRole('link',{name:'Browser',exact:true}).click()
-    await expect(deviceA.locator('.photo-row').first()).toContainText('queued')
+    await expect(deviceA.locator('.photo-row').first()).toHaveAttribute('data-sync-state','queued')
     await first.setOffline(false)
-    await deviceA.getByRole('button',{name:'Синхронизировать'}).click()
-    await expect(deviceA.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
+    await browserControl(deviceA,'Синхронизировать')
+    await expect(deviceA.locator('.photo-row').first()).toHaveAttribute('data-sync-state','synced',{timeout:30000})
 
     // Retrieve the opaque ID through the genuine authenticated endpoint.
     const photoId=await deviceA.evaluate(async()=>{
@@ -104,7 +107,7 @@ test('two browser identities: key-only account, encrypted camera photo, Garage r
     await deviceB.goto('/settings')
     await deviceB.locator('#recovery-key').fill(recoveryKey)
     await deviceB.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(deviceB.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(deviceB.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await deviceB.goto('/browser')
     const remotePhoto=deviceB.getByTestId('browser-row-photo:'+photoId)
     await expect(remotePhoto).toBeVisible()
@@ -132,7 +135,7 @@ test('two browser identities: key-only account, encrypted camera photo, Garage r
       const otherKey=await outsider.locator('#generated-key').inputValue()
       await outsider.getByLabel('Я сохранил ключ восстановления').check()
       await outsider.getByRole('button',{name:'Завершить регистрацию'}).click()
-      await expect(outsider.getByText('Подтверждённая сессия')).toBeVisible()
+      await expect(outsider.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
       const status=await outsider.evaluate(async id=>
         (await fetch('/photos/v1/'+encodeURIComponent(id)+'/receipt',{credentials:'same-origin'})).status,
       photoId)
@@ -161,11 +164,11 @@ test('P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke',as
     await expect(page.locator('#generated-key')).toHaveValue(/^PB2\./)
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const uuid=(await page.locator('.foundation-card code').first().textContent())?.trim()
     expect(uuid).toMatch(/^[a-f0-9-]{36}$/)
     await page.goto('/browser')
-    await expect(page.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
+    await exchangeReady(page)
     return uuid!
   }
 
@@ -179,11 +182,12 @@ test('P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke',as
     await owner.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(owner.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
     await owner.getByRole('link',{name:'Browser',exact:true}).click()
-    await owner.getByRole('button',{name:'Синхронизировать'}).click()
-    await expect(owner.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
+    await browserControl(owner,'Синхронизировать')
+    await expect(owner.locator('.photo-row').first()).toHaveAttribute('data-sync-state','synced',{timeout:30000})
 
     // First-contact safety verification is explicit; there is no silent TOFU.
-    await owner.locator('#recipient-account-id').fill(recipientId)
+    await openPhotoExchange(owner)
+await owner.locator('#recipient-account-id').fill(recipientId)
     await owner.getByRole('button',{name:'Проверить ключ'}).click()
     await expect(owner.getByText('Отпечаток получателя',{exact:true})).toBeVisible()
     await owner.getByLabel('Я сверил отпечаток получателя').check()
@@ -196,15 +200,18 @@ test('P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke',as
     await expect(owner.getByText(/ · queued/).first()).toBeVisible()
     await ownerContext.setOffline(false)
     await owner.reload() // IndexedDB outbox survives a normal online reload.
+    await openPhotoExchange(owner)
     await expect(owner.getByText(/ · sent/).first()).toBeVisible({timeout:30000})
 
-    await recipient.getByRole('button',{name:'Обновить полученные'}).click()
+    await openPhotoExchange(recipient)
+await recipient.getByRole('button',{name:'Обновить полученные'}).click()
     await expect(recipient.getByRole('button',{name:'Ключ отправителя'})).toBeVisible()
     await recipient.getByRole('button',{name:'Ключ отправителя'}).click()
     await expect(recipient.getByText('Отпечаток отправителя',{exact:true})).toBeVisible()
     await recipient.getByLabel('Я сверил отпечаток отправителя').check()
     await recipient.getByRole('button',{name:'Подтвердить отправителя'}).click()
     await recipient.getByRole('button',{name:'Открыть полученное'}).click()
+    await closeBrowserSettings(recipient)
     const decrypted=recipient.locator('img.decrypted-preview')
     await expect(decrypted).toBeVisible()
     await expect.poll(()=>decrypted.evaluate(el=>(el as HTMLImageElement).naturalWidth))
@@ -255,11 +262,11 @@ test('P1-04: A creates encrypted assignment, B accepts and submits a photo grant
     await expect(page.locator('#generated-key')).toHaveValue(/^PB2\./)
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const id=(await page.locator('.foundation-card code').first().textContent())?.trim()??''
     expect(id).toMatch(/^[a-f0-9-]{36}$/)
     await page.goto('/browser')
-    await expect(page.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
+    await exchangeReady(page)
     return id
   }
   try{
@@ -341,8 +348,8 @@ test('P1-04: A creates encrypted assignment, B accepts and submits a photo grant
     await contributorCtx.setOffline(false)
     await B.getByRole('navigation',{name:'Главная навигация'})
       .getByRole('link',{name:'Browser',exact:true}).click()
-    await B.getByRole('button',{name:'Синхронизировать'}).click()
-    await expect(B.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
+    await browserControl(B,'Синхронизировать')
+    await expect(B.locator('.photo-row').first()).toHaveAttribute('data-sync-state','synced',{timeout:30000})
 
     const {grantId,photoId}=await B.evaluate(async recipientId=>{
       const photosPath='/src/features/photo-sync/application/p1-photo.ts'
@@ -420,11 +427,11 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const id=(await page.locator('.foundation-card code').first().textContent())?.trim()??''
     expect(id).toMatch(/^[0-9a-f-]{36}$/)
     await page.goto('/browser')
-    await expect(page.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
+    await exchangeReady(page)
     return id
   }
   try{
@@ -458,7 +465,7 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
       const result=await fetch('/identity/v2/me',{credentials:'same-origin'})
       return result.status
     }),{timeout:20000}).toBe(200)
-    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(A,'Синхронизировать')
     await expect(A.locator('.assignment-card').first()).toContainText('Активно')
     await expect(A.locator('.assignment-detail code').first()).toBeVisible()
     const assignmentId=(await A.locator('.assignment-detail code').first().textContent())?.trim()??''
@@ -470,10 +477,10 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await A.getByLabel('Я сверил отпечаток исполнителя').check()
     await A.getByRole('button',{name:'Подтвердить исполнителя'}).click()
     await A.getByRole('button',{name:'Пригласить исполнителя'}).click()
-    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(A,'Синхронизировать')
 
     await B.goto('/assignments')
-    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(B,'Обновить')
     await expect(B.getByText('Приглашения',{exact:true})).toBeVisible()
     await B.getByRole('button',{name:'Ключ владельца'}).click()
     await expect(B.getByText('Отпечаток владельца задания')).toBeVisible()
@@ -495,7 +502,7 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await B.route('**/shares/v1/keys/*',route=>route.fulfill({
       status:503,contentType:'application/json',body:'{"error":"synthetic key-directory outage"}',
     }))
-    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(B,'Обновить')
     await expect(B.getByText(/Офлайн: показаны последние проверенные подписью/))
       .toBeVisible()
     await expect(B.locator('.assignment-card-name').getByText('Thirty camera images'))
@@ -579,8 +586,8 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await bCtx.setOffline(false)
     await B.getByRole('navigation',{name:'Главная навигация'})
       .getByRole('link',{name:'Browser',exact:true}).click()
-    await B.getByRole('button',{name:'Синхронизировать'}).click()
-    await expect(B.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
+    await browserControl(B,'Синхронизировать')
+    await expect(B.locator('.photo-row').first()).toHaveAttribute('data-sync-state','synced',{timeout:30000})
     const cloudMetadata=await B.evaluate(async photoId=>{
       const photos=await import('/src/features/photo-sync/application/p1-photo.ts')
       return photos.readCloudPhotoMetadata(photoId)
@@ -599,11 +606,11 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await expect(B.getByText('Владелец подтверждён')).toBeVisible()
     await expect(B.getByRole('button',{name:'Отправить в задание'}).first()).toBeEnabled()
     await B.getByRole('button',{name:'Отправить в задание'}).first().click()
-    await B.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(B,'Синхронизировать')
 
     // Server-derived progress counts only authorized finalized submissions;
     // the target of 30 is not an upload cap.
-    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(A,'Синхронизировать')
     await expect(A.locator('.assignment-card').first())
       .toContainText(/Фото:\s*1\s*\/\s*45/)
 
@@ -634,7 +641,7 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
       await photos.flushOutbox()
       return personal.photoId
     })
-    await B.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(B,'Синхронизировать')
     const personalRow=B.locator('.photo-row')
       .filter({hasText:personalPhotoId.slice(0,8)})
     await expect(personalRow).toContainText('synced',{timeout:20000})
@@ -683,7 +690,7 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
 
     // A finishes without deleting contributor-owned ciphertext or old grants.
     await A.getByRole('button',{name:'Завершить задание'}).click()
-    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(A,'Синхронизировать')
     // Finished assignments leave the Active tab but remain visible in All.
     await expect(A.locator('.assignment-card')).toHaveCount(0)
     await A.getByRole('button',{name:'Все',exact:true}).click()
@@ -697,7 +704,7 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     // Owner-signed resume reopens capture; creation root remains immutable
     // while the latest photo-target amendment is still revision 2.
     await A.getByRole('button',{name:'Возобновить задание'}).click()
-    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(A,'Синхронизировать')
     await expect(A.getByText('Версия состояния: 3')).toBeVisible()
     await expect(A.locator('.assignment-card').first()).toContainText('Активно')
     if(!await B.getByTestId('camera-assignment-panel').isVisible())await B.getByTestId('camera-open-assignment').click()

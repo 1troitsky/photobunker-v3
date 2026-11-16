@@ -27,7 +27,7 @@ test('P2 #216: real account, encrypted Notifications UI, offline route/settings 
     // SPA navigation and encrypted local preferences remain usable offline.
     // Cold HTTP reload offline is NOT claimed: signed PWA SW is still gated.
     await context.setOffline(true)
-    await expect(page.getByTestId('shell-status-link')).toContainText('Локальный режим')
+    await expect(page.getByTestId('shell-status-link')).toHaveAttribute('data-session-state','offline')
     await expect(page.getByTestId('shell-status-link').locator('.status-dot'))
       .not.toHaveClass(/session-online/)
     await dock.getByRole('link',{name:'Уведомления'}).click()

@@ -18,7 +18,7 @@ test('P1/P2 integration: Camera encrypted audio queue → Storage visibility →
     await page.getByRole('button', { name: 'Создать ключ' }).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button', { name: 'Завершить регистрацию' }).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 
     await page.goto('/camera')
     // A real signed session is needed after hard navigation; never mock auth.

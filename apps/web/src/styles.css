@@ -1946,3 +1946,30 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .browser-batch-toolbar>button,
   .browser-batch-actions-root>button{padding:7px 8px;font-size:11px}
 }
+
+/* Unified Fieldwork shell: the approved 64px Header / 82px Dock. */
+@media(max-width:460px){.shell-header{padding:0 9px;gap:5px}.brand-mark{width:34px;height:34px;flex-basis:34px}.shell-dock svg{width:21px;height:21px}}
+
+/* Shared shell geometry from the owner-approved Fieldwork HTML, applied once. */
+.shell-header{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.shell-header .brand-mark{background:#363636;color:#eee;font-size:17px;font-weight:850;letter-spacing:-2px}
+.shell-header .brand-copy{gap:3px}
+.shell-header .brand-copy strong{font-size:14px;font-weight:780;letter-spacing:-.035em;line-height:1.15}
+.shell-header .brand-copy small{font-size:10px;color:#aaa}
+.shell-dock{padding:9px 2px calc(14px + env(safe-area-inset-bottom,0px))}
+.shell-dock a{gap:6px;font-weight:400}
+.shell-dock a small{font-size:10px}
+.shell-dock a svg{width:21px;height:21px}
+.browser-shell-actions button:first-child{color:var(--accent)}
+@media(max-width:460px){.shell-header{padding-inline:9px;gap:5px}.shell-header .brand-mark{height:34px;width:34px;flex-basis:34px}}
+
+.shell-header:has(.browser-header-actions){padding-inline:14px;gap:9px}
+.shell-header:has(.browser-header-actions) .brand-copy{max-width:none}
+.shell-header:has(.browser-header-actions) .brand-copy strong{font-size:14px}
+.shell-header:has(.browser-header-actions) .brand-copy small{font-size:10px}
+.shell-header .shell-header-actions.browser-header-actions button{width:32px;min-width:32px;height:40px;border-radius:5px}
+.shell-header .shell-header-actions.browser-header-actions button svg{width:20px;height:20px}
+.shell-header .browser-header-actions button:first-child{color:var(--accent)}
+@media(max-width:460px){.shell-header:has(.browser-header-actions){padding-inline:9px;gap:5px}.shell-header .shell-header-actions.browser-header-actions button{width:29px;min-width:29px}}
+@media(max-width:365px){.shell-header:has(.browser-header-actions){gap:4px}.shell-header:has(.browser-header-actions) .brand-copy strong{font-size:12px}.shell-header:has(.browser-header-actions) .brand-mark{width:31px;height:31px;flex-basis:31px}}
+@media(max-width:360px){.shell-header .shell-header-actions.browser-header-actions button{width:27px;min-width:27px}}

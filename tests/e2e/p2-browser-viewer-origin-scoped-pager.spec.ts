@@ -1,3 +1,5 @@
+import {filterBrowser} from './support/browser-ui'
+import {sortBrowser} from './support/browser-ui'
 import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
@@ -10,7 +12,7 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
     // Wait for the actual identity bootstrap proof before decrypting any
     // private metadata. Reauthentication can replace the Session object
@@ -86,8 +88,8 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     }
     await page.locator('.browser-folder-open')
       .filter({hasText:'Только выбранные'}).click()
-    await page.getByTestId('browser-filter-audio').click()
-    await page.getByTestId('browser-sort').selectOption('expiry')
+    await filterBrowser(page,'audio')
+    await sortBrowser(page,'expiry')
     const visibleRows=page.locator('[data-testid^="browser-row-media:"]')
     await expect(visibleRows).toHaveCount(2)
     const orderedKeys=await visibleRows.evaluateAll(nodes=>
@@ -100,13 +102,13 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     await page.getByRole('link',{name:'Полный просмотр файла '+firstId}).click()
     await expect(page).toHaveURL(new RegExp('/browser/file/media/'+firstId+'$'))
     await expect(page.getByTestId('file-viewer-audio')).toBeVisible()
-    await expect(page.getByTestId('file-viewer-position')).toHaveText('1 / 2')
+    await expect(page.getByTestId('file-viewer-position')).toHaveText('1 из 2')
     await expect(page.getByRole('button',{name:'Предыдущий файл'})).toBeDisabled()
     await expect(page.getByRole('button',{name:'Следующий файл'})).toBeEnabled()
     await page.getByRole('button',{name:'Следующий файл'}).click()
     await expect(page).toHaveURL(new RegExp('/browser/file/media/'+secondId+'$'))
     await expect(page.getByTestId('file-viewer-audio')).toBeVisible()
-    await expect(page.getByTestId('file-viewer-position')).toHaveText('2 / 2')
+    await expect(page.getByTestId('file-viewer-position')).toHaveText('2 из 2')
     await expect(page.getByRole('button',{name:'Следующий файл'})).toBeDisabled()
     await expect(page.getByRole('button',{name:'Предыдущий файл'})).toBeEnabled()
 

@@ -1,3 +1,4 @@
+import {browserHeader} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
 test('P2 File Viewer: authenticated deep-link target on opaque index page 2, reject replay and preserve ciphertext',async({browser})=>{
@@ -15,11 +16,11 @@ test('P2 File Viewer: authenticated deep-link target on opaque index page 2, rej
     const recoveryKey=await A.locator('#generated-key').inputValue()
     await A.getByLabel('Я сохранил ключ восстановления').check()
     await A.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(A.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(A.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await A.goto('/browser')
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
-    await A.getByTestId('browser-header-upload').click()
+    await browserHeader(A,'upload')
     await expect(A.getByTestId('browser-import-sheet')).toBeVisible()
     await A.getByTestId('media-import-file').setInputFiles({
       name:'VIEWER-PAGE-2-E2EE.wav',mimeType:'audio/wav',
@@ -46,7 +47,7 @@ test('P2 File Viewer: authenticated deep-link target on opaque index page 2, rej
     await B.goto('/settings')
     await B.locator('#recovery-key').fill(recoveryKey)
     await B.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(B.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(B.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     let firstRequests=0,secondRequests=0
     const real=await B.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
@@ -74,7 +75,7 @@ test('P2 File Viewer: authenticated deep-link target on opaque index page 2, rej
     await expect(B.getByTestId('file-viewer-info'))
       .toContainText('VIEWER-PAGE-2-E2EE.wav',{timeout:35000})
     await expect(B.getByTestId('file-viewer-position'))
-      .toHaveText('51 / 51',{timeout:35000})
+      .toHaveText('51 из 51',{timeout:35000})
     expect(firstRequests).toBeGreaterThan(0)
     expect(secondRequests).toBeGreaterThan(0)
     const clear=await B.evaluate(async(id:string)=>{
@@ -107,14 +108,14 @@ test('P2 File Viewer: authenticated deep-link target on opaque index page 2, rej
     })
     await B.reload()
     await expect(B.getByTestId('file-viewer-position'))
-      .toHaveText('50 / 50',{timeout:35000})
+      .toHaveText('50 из 50',{timeout:35000})
     await B.getByTestId('file-viewer-load-more').click()
     // The canonical Shell has its own live status. Assert the *Viewer*
     // warning only; selecting every status on the document is ambiguous.
     await expect(B.locator('.file-viewer-feedback [role="status"]'))
       .toContainText('Ранее проверенные файлы и курсоры сохранены.',{timeout:30000})
     expect(badPageDelivered).toBeGreaterThan(0)
-    await expect(B.getByTestId('file-viewer-position')).toHaveText('50 / 50')
+    await expect(B.getByTestId('file-viewer-position')).toHaveText('50 из 50')
     await expect(B.getByTestId('file-viewer-audio')).toBeVisible()
   }finally{
     await owner.close();await recovered.close()

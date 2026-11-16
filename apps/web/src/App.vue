@@ -103,11 +103,11 @@ const dock = computed(() => displayedDock.value
              owner-key-encrypted local event inbox. This is NOT a complete
              server-operation journal or a promise of push delivery. -->
         <RouterLink to="/notifications" class="shell-status-link"
-          data-testid="shell-status-link" aria-label="Открыть локальные уведомления"
+          data-testid="shell-status-link" :data-session-state="activeSession?(sessionDisplayedOnline?'online':'offline'):'none'" aria-label="Открыть локальные уведомления"
           title="Локальный журнал уведомлений; серверная доставка не подтверждена">
           <small><span class="status-dot"
             :class="{'session-online':sessionDisplayedOnline}"
-            aria-hidden="true"></span>{{activeSession?(sessionDisplayedOnline?'Сессия подтверждена':'Локальный режим'):'Без аккаунта'}}</small>
+            aria-hidden="true"></span>{{activeSession?(sessionDisplayedOnline?'В работе':'Нет сети'):'Без аккаунта'}}</small>
         </RouterLink>
       </div>
       <RouterLink v-if="verifiedPlan&&route.path!=='/notifications'&&route.path!=='/browser'&&route.path!=='/camera'&&route.name!=='browser-viewer'&&route.name!=='browser-editor'"
@@ -183,30 +183,21 @@ const dock = computed(() => displayedDock.value
           aria-label="Перевернуть камеру" title="Переключить переднюю и заднюю камеры"
           :disabled="!cameraShellActions?.canFlip"
           @click="cameraShellActions?.flip()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-            aria-hidden="true"><path d="M3 10a9 9 0 0 1 15.5-5L21 7m0-5v5h-5"/>
-            <path d="M21 14a9 9 0 0 1-15.5 5L3 17m0 5v-5h5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4m14-1v2a3 3 0 0 1-3 3H3"/></svg>
         </button>
         <button type="button" data-testid="camera-header-torch"
           aria-label="Фонарик" title="Фонарик (если поддерживается камерой)"
           :aria-pressed="!!cameraShellActions?.torchOn"
           :disabled="!cameraShellActions?.canTorch"
           @click="cameraShellActions?.toggleTorch()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="1.8" aria-hidden="true">
-            <path d="M7 2h10l-1 8-4 4-4-4zM10 14v7h4v-7"/>
-            <path d="M9 2h6M9 6h6"/>
-          </svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 4 13h7l-1 9 10-12h-7z"/></svg>
         </button>
         <button type="button" data-testid="camera-header-blind"
           aria-label="Слепой режим" title="Скрыть предпросмотр"
           :aria-pressed="!!cameraShellActions?.blind"
           :disabled="!cameraShellActions?.canBlind"
           @click="cameraShellActions?.toggleBlind()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
-            aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/>
-            <circle cx="12" cy="12" r="3"/><path d="m3 3 18 18"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7"></path><path d="M7.3 5.4A11.9 11.9 0 0 1 12 4.4c4.5 0 8 3 10 7.6a16.8 16.8 0 0 1-3 4.3M16.5 18a12 12 0 0 1-4.5 1.6C7.5 19.6 4 16.6 2 12a15.9 15.9 0 0 1 3-4.2"></path></svg>
         </button>
       </div>
       <div class="shell-header-actions browser-header-actions"
@@ -217,7 +208,7 @@ const dock = computed(() => displayedDock.value
           :disabled="!browserShellActions?.canCreateFolder"
           @click="browserShellActions?.createFolder()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-            aria-hidden="true"><path d="M3 7h7l2 3h9v10H3z"/><path d="M16 12v6m-3-3h6"/></svg>
+            aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>
         </button>
         <button type="button" data-testid="browser-header-upload"
           aria-label="Загрузить файлы" title="Открыть импорт файлов"
@@ -247,9 +238,7 @@ const dock = computed(() => displayedDock.value
           aria-label="Настройки Browser" title="Настройки Browser"
           :disabled="!activeSession||!browserShellActions"
           @click="browserShellActions?.openSettings()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-            aria-hidden="true"><circle cx="12" cy="12" r="3"/>
-            <path d="m19 12 2-1-2-4-2 1-2-1V5H9v2L7 8 5 7l-2 4 2 1v2l-2 1 2 4 2-1 2 1v2h6v-2l2-1 2 1 2-4-2-1z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="16" cy="17" r="2"/></svg>
         </button>
       </div>
       <div class="shell-header-actions" v-else-if="route.path.startsWith('/settings')"
@@ -299,16 +288,17 @@ const dock = computed(() => displayedDock.value
         custom v-slot="{ href, navigate }">
         <a :href="href" :class="{ active: isActive(item.to) }"
           :aria-current="isActive(item.to) ? 'page' : undefined"
+          :aria-label="item.to==='/settings'?'Профиль / Настройки':item.name"
           @click="onDockClick($event,item.to,navigate)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <template v-if="item.icon === 'tasks'"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></template>
-          <template v-else-if="item.icon === 'folder'"><path d="M3 6h7l2 3h9v11H3z"/></template>
-          <template v-else-if="item.icon === 'camera'"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="14" r="3"/></template>
-          <template v-else-if="item.icon === 'users'"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M18 8a3 3 0 0 1 0 6M21 20v-2a5 5 0 0 0-4-4"/></template>
+          <template v-if="item.icon === 'tasks'"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9h8M8 14h8"/></template>
+          <template v-else-if="item.icon === 'folder'"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 3h8v13H3z"/></template>
+          <template v-else-if="item.icon === 'camera'"><path d="M3 8h4l2-3h6l2 3h4v12H3z"/><circle cx="12" cy="14" r="4"/></template>
+          <template v-else-if="item.icon === 'users'"><circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M17 6a3 3 0 0 1 0 6m1 5a5 5 0 0 1 3 4"/></template>
           <template v-else-if="item.icon === 'bell'"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></template>
           <template v-else-if="item.icon === 'message'"><path d="M4 5h16v12H9l-5 4zM8 10h8M8 13h5"/></template>
-          <template v-else><circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></template>
+          <template v-else><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></template>
         </svg>
         <small>{{ item.name }}</small>
         </a>

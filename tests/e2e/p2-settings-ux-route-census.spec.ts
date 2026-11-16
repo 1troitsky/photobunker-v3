@@ -12,7 +12,7 @@ test('Accepted Fieldwork routes: one real account, one Shell, no missing pages',
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   // Brand white-labelling must apply to the standalone install page too.
   await page.goto('/install')
   await expect(page.getByRole('heading',{name:configuredBrand+' всегда под рукой'})).toBeVisible()

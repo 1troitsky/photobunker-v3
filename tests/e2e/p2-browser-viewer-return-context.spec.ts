@@ -1,3 +1,5 @@
+import {filterBrowser} from './support/browser-ui'
+import {searchBrowser,sortBrowser} from './support/browser-ui'
 import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
@@ -36,7 +38,7 @@ test('P2 Browser->File Viewer->Browser: restore encrypted folder, filter, privat
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const registered=await page.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       const s=identity.requireSession()
@@ -78,10 +80,10 @@ test('P2 Browser->File Viewer->Browser: restore encrypted folder, filter, privat
       .filter({hasText:'Приватная папка'}).click()
     await expect(row).toHaveCount(1)
 
-    await page.getByTestId('browser-filter-audio').click()
-    await page.getByTestId('browser-sort').selectOption('expiry')
+    await filterBrowser(page,'audio')
+    await sortBrowser(page,'expiry')
     await page.getByRole('button',{name:'Сетка'}).click()
-    await page.getByTestId('browser-search').fill('RETURN-SECRET')
+    await searchBrowser(page,'RETURN-SECRET')
     await expect(row).toHaveCount(1,{timeout:20000})
     await row.getByTestId('browser-file-menu-toggle').click()
     await row.getByRole('link',{name:'Полный просмотр файла '+id}).click()
@@ -90,7 +92,8 @@ test('P2 Browser->File Viewer->Browser: restore encrypted folder, filter, privat
     await expect(page.getByTestId('file-viewer-audio')).toBeVisible()
     // Real Browser v3 breadcrumb, never plaintext in the URL or server query.
     await expect(page.getByTestId('file-viewer-path'))
-      .toContainText('Browser / Приватная папка / RETURN-SECRET-AUDIO.wav')
+      .toContainText('Все›Приватная папка')
+    await expect(page.getByTestId('file-viewer-summary')).toContainText('RETURN-SECRET-AUDIO.wav')
     await expect(page.getByTestId('file-viewer-path')).toHaveCSS('height','45px')
     await expect(page.getByTestId('file-viewer-info'))
       .toContainText('RETURN-SECRET-AUDIO.wav')

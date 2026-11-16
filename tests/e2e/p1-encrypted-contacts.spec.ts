@@ -1,3 +1,4 @@
+import {exchangeReady} from './support/browser-ui'
 import { test, expect } from '@playwright/test'
 
 test('P1-25: verified peer → encrypted Contacts & Teams → offline persistence → local removal',async({browser})=>{
@@ -10,7 +11,7 @@ test('P1-25: verified peer → encrypted Contacts & Teams → offline persistenc
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     return page.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       return identity.requireSession().accountId
@@ -20,8 +21,7 @@ test('P1-25: verified peer → encrypted Contacts & Teams → offline persistenc
     await enroll(A)
     const recipientId=await enroll(B)
     await B.goto('/browser')
-    await expect(B.getByText('Ключ обмена подготовлен'))
-      .toBeVisible({timeout:20000})
+    await exchangeReady(B)
     await A.goto('/contacts')
     await expect(A.getByTestId('contacts-teams')).toBeVisible()
     await expect(A.getByRole('heading',{name:'Контакты и Команды'})).toBeVisible()

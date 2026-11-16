@@ -1,3 +1,5 @@
+import {exchangeReady} from './support/browser-ui'
+import {browserControl} from './support/browser-ui'
 import {openImportSheet} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
@@ -32,15 +34,14 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const id=await page.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       return identity.requireSession().accountId
     })
     await page.goto('/browser')
     await openImportSheet(page)
-    await expect(page.getByText('Ключ обмена подготовлен'))
-      .toBeVisible({timeout:20000})
+    await exchangeReady(page)
     return id
   }
   try{
@@ -77,7 +78,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await A.locator('#assignment-title').fill('Media v3 opt-in assignment')
     await A.locator('#assignment-instructions').fill('Signed E2EE video and audio')
     await A.getByRole('button',{name:'Создать зашифрованное задание'}).click()
-    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(A,'Синхронизировать')
     await expect(A.locator('.assignment-detail code').first()).toBeVisible()
     const assignmentId=(await A.locator('.assignment-detail code').first()
       .textContent())?.trim()??''
@@ -174,7 +175,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       .toContainText('Ожидает принятия',{timeout:20000})
     await A.getByRole('link',{name:'Назад к заданиям'}).click()
     await A.getByRole('button',{name:'Открыть',exact:true}).first().click()
-    await A.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(A,'Синхронизировать')
 
     await B.goto('/assignments')
     await B.getByRole('button',{name:'Обновить',exact:true}).click()
@@ -1141,6 +1142,6 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
 
     expect(ownerId).not.toBe(contributorId)
   }finally{
-    await ownerCtx.close();await contributorCtx.close()
+    await Promise.allSettled([ownerCtx.close(),contributorCtx.close()])
   }
 })

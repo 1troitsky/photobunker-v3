@@ -13,7 +13,7 @@ test('P1-12: immutable owner-signed media versions survive Garage+Recovery Key w
     const key=await A.locator('#generated-key').inputValue()
     await A.getByLabel('Я сохранил ключ восстановления').check()
     await A.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(A.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(A.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await A.goto('/browser')
     await openImportSheet(A)
     const media=A.locator('.media-import-p1')
@@ -98,7 +98,7 @@ test('P1-12: immutable owner-signed media versions survive Garage+Recovery Key w
     await B.goto('/settings')
     await B.locator('#recovery-key').fill(key)
     await B.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(B.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(B.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await B.goto('/browser')
     await openImportSheet(B)
     // Recovery Key proof and trusted-device IndexedDB hydration are distinct

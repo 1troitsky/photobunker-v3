@@ -1,3 +1,4 @@
+import {browserControl,browserHeader} from './support/browser-ui'
 import {expect,test} from '@playwright/test'
 
 test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and revokes read',async({browser})=>{
@@ -11,7 +12,7 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     await owner.getByRole('button',{name:'Создать ключ'}).click()
     await owner.getByLabel('Я сохранил ключ восстановления').check()
     await owner.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(owner.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(owner.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await owner.goto('/browser')
     // Registration can leave the initial browser session offline until
     // account proof is refreshed. Test the real authenticated outbox,
@@ -50,7 +51,7 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     await recipient.getByRole('button',{name:'Создать ключ'}).click()
     await recipient.getByLabel('Я сохранил ключ восстановления').check()
     await recipient.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(recipient.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(recipient.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const recipientId=await recipient.evaluate(async()=>{
       const s=await import('/src/features/identity/application/session.ts')
       return s.requireSession().accountId
@@ -58,7 +59,7 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     await recipient.goto('/browser')
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
-    await recipient.getByTestId('browser-header-upload').click()
+    await browserHeader(recipient,'upload')
     await expect(recipient.getByTestId('browser-import-sheet')).toBeVisible()
     await recipient.evaluate(async()=>{
       const auth=await import('/src/features/identity/application/session.ts')
@@ -140,7 +141,7 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     await owner.goto('/browser')
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
-    await owner.getByTestId('browser-header-upload').click()
+    await browserHeader(owner,'upload')
     await expect(owner.getByTestId('browser-import-sheet')).toBeVisible()
     const share=owner.getByTestId('media-share-panel')
     await expect(share).toBeVisible()
@@ -231,7 +232,7 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     expect(assignmentId).toMatch(/^[0-9a-f-]{36}$/)
     await expect(owner.getByRole('button',{name:'Синхронизировать'}))
       .toBeEnabled({timeout:30000})
-    await owner.getByRole('button',{name:'Синхронизировать'}).click()
+    await browserControl(owner,'Синхронизировать')
     // A button click/optimistic card is not a signed server receipt.
     // Require BOTH a sent operation and the actual authenticated listing.
     await expect.poll(()=>owner.evaluate(async id=>{
@@ -263,7 +264,7 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     await owner.goto('/browser')
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
-    await owner.getByTestId('browser-header-upload').click()
+    await browserHeader(owner,'upload')
     await expect(owner.getByTestId('browser-import-sheet')).toBeVisible()
     const associatedPanel=owner.getByTestId('media-share-panel')
     await expect(associatedPanel.getByTestId('media-safe-candidate'))

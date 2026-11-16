@@ -1,3 +1,4 @@
+import {browserHeader} from './support/browser-ui'
 import {chooseEncryptedFile} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 
@@ -8,9 +9,9 @@ test('Browser v3: file and encrypted-folder three-dot actions use original local
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   await page.goto('/browser')
-  await page.getByTestId('browser-header-folder').click()
+  await browserHeader(page,'folder')
   await page.getByTestId('browser-folder-name').fill('Private Actions')
   await page.getByRole('button',{name:'Создать',exact:true}).click()
   await expect(page.getByRole('button',{name:'Private Actions',exact:true}))
@@ -48,6 +49,7 @@ test('Browser v3: file and encrypted-folder three-dot actions use original local
   await expect(trigger).toBeFocused()
 
   await trigger.click()
+  await panel.getByRole('button',{name:'Закрыть меню файла'}).click()
   await page.getByTestId('browser-tab-personal').click()
   await expect(panel).toHaveCount(0)
   await page.getByTestId('browser-tab-active').click()

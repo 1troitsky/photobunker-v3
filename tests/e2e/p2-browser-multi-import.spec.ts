@@ -1,3 +1,4 @@
+import {browserHeader} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
 test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selected folder persists after reload and cloud sync',async({browser})=>{
@@ -9,7 +10,7 @@ test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selecte
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
     await expect(page.getByTestId('browser-v3')).toBeVisible()
     await page.getByRole('button',{name:'Новая папка'}).click()
@@ -19,7 +20,7 @@ test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selecte
     await expect(folder).toBeVisible()
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
-    await page.getByTestId('browser-header-upload').click()
+    await browserHeader(page,'upload')
     await expect(page.getByTestId('browser-import-sheet')).toBeVisible()
     await page.locator('#media-import-category').fill('PRIVATE-CATEGORY')
     await page.locator('#media-import-description').fill('PRIVATE-BATCH-CASE')
@@ -84,7 +85,7 @@ test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selecte
     await expect(rows).toHaveCount(2,{timeout:20000})
     // Current folder becomes the NEXT import's default destination,
     // with no need to manually browse the folder hierarchy again.
-    await page.getByTestId('browser-header-upload').click()
+    await browserHeader(page,'upload')
     await expect(page.getByTestId('browser-import-sheet')).toBeVisible()
     await expect(dest).toHaveValue(encrypted.folderId)
     await page.evaluate(()=>{

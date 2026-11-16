@@ -18,7 +18,7 @@ async function enroll(page:Page):Promise<string>{
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия'))
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]'))
     .toBeVisible({timeout:30000})
   const account=await page.evaluate(async()=>{
     const {activeSession}=await import('/src/features/identity/application/session.ts')
@@ -53,7 +53,7 @@ for(const {plan,paidDays} of plans){
     // Fresh new browser module session: paid plan comes only from the real
     // account-scoped server endpoint, never from a caller-provided plan.
     await page.reload()
-    await expect(page.getByText('Подтверждённая сессия'))
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]'))
       .toBeVisible({timeout:30000})
     const before=await page.evaluate(async()=>{
       const [auth,hint,photo,media,api]=await Promise.all([
@@ -134,7 +134,7 @@ for(const {plan,paidDays} of plans){
     })
 
     await page.reload()
-    await expect(page.getByText('Подтверждённая сессия'))
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]'))
       .toBeVisible({timeout:30000})
 
     const after=await page.evaluate(async(data)=>{

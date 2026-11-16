@@ -22,7 +22,7 @@ test('P1 #283 unauthenticated billing is denied, enrolled PWA reads own Free ret
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия'))
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]'))
     .toBeVisible({timeout:25000})
 
   const authenticated=await page.evaluate(async()=>{

@@ -1,3 +1,4 @@
+import {browserHeader} from './support/browser-ui'
 import {expect,test} from '@playwright/test'
 
 test('Browser v3: opening section and folder-first display are real and device-persistent',async({page,context})=>{
@@ -7,17 +8,17 @@ test('Browser v3: opening section and folder-first display are real and device-p
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   await page.goto('/browser')
   await expect(page.getByTestId('browser-tab-active'))
-    .toHaveAttribute('aria-pressed','true')
-  await page.getByTestId('browser-header-folder').click()
+    .toHaveAttribute('aria-selected','true')
+  await browserHeader(page,'folder')
   await page.getByTestId('browser-folder-name').fill('Local display layout')
   await page.getByRole('button',{name:'Создать',exact:true}).click()
   await expect(page.locator('.browser-folder-item')).toHaveCount(1)
 
   await context.setOffline(true)
-  await page.getByTestId('browser-header-upload').click()
+  await browserHeader(page,'upload')
   await page.getByTestId('media-import-file').setInputFiles({
     name:'PRESENTATION-ONLY.wav',mimeType:'audio/wav',
     buffer:Buffer.alloc(8192,0x44),
@@ -28,7 +29,7 @@ test('Browser v3: opening section and folder-first display are real and device-p
 
   const top=page.getByTestId('browser-folder-cards-top')
   await expect(top.locator('.browser-folder-item')).toHaveCount(1)
-  await page.getByTestId('browser-header-settings').click()
+  await browserHeader(page,'settings')
   await expect(page.getByTestId('browser-pref-open-first')).toHaveValue('all')
   await expect(page.getByTestId('browser-pref-folders-first')).toBeChecked()
   await page.getByTestId('browser-pref-folders-first').uncheck()
@@ -51,10 +52,10 @@ test('Browser v3: opening section and folder-first display are real and device-p
   await context.setOffline(false)
   await page.reload()
   await expect(page.getByTestId('browser-tab-personal'))
-    .toHaveAttribute('aria-pressed','true')
+    .toHaveAttribute('aria-selected','true')
   await expect(file).toHaveCount(0)
   await expect(top.locator('.browser-folder-item')).toHaveCount(0)
-  await page.getByTestId('browser-header-settings').click()
+  await browserHeader(page,'settings')
   await expect(page.getByTestId('browser-pref-open-first')).toHaveValue('personal')
   await expect(page.getByTestId('browser-pref-folders-first')).not.toBeChecked()
   await page.getByTestId('browser-pref-folders-first').check()

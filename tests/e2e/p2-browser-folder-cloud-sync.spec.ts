@@ -1,3 +1,4 @@
+import {syncBrowserFolders} from './support/browser-ui'
 import {expect,test} from '@playwright/test'
 
 test('P2 Browser: two recovered devices exchange signed E2EE folders, replay Lost ACK and refuse divergent offline edits',async({browser})=>{
@@ -13,7 +14,7 @@ test('P2 Browser: two recovered devices exchange signed E2EE folders, replay Los
     expect(recoveryKey).toMatch(/^PB2\./)
     await a.getByLabel('Я сохранил ключ восстановления').check()
     await a.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(a.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(a.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await a.goto('/browser')
     await expect(a.getByTestId('browser-folder-sync')).toBeEnabled()
     await a.getByRole('button',{name:'Новая папка'}).click()
@@ -39,10 +40,10 @@ test('P2 Browser: two recovered devices exchange signed E2EE folders, replay Los
       expect(response.status()).toBe(201)
       await route.abort('failed')
     })
-    await a.getByTestId('browser-folder-sync').click()
+    await syncBrowserFolders(a)
     await expect(a.getByTestId('browser-folder-sync-status'))
       .toContainText('не подтверждена',{timeout:15000})
-    await a.getByTestId('browser-folder-sync').click()
+    await syncBrowserFolders(a)
     await expect(a.getByTestId('browser-folder-sync-status'))
       .toContainText('подтверждённой облачной версии',{timeout:15000})
     expect(intercepted).toBe(true)
@@ -59,10 +60,10 @@ test('P2 Browser: two recovered devices exchange signed E2EE folders, replay Los
     await b.goto('/settings')
     await b.locator('#recovery-key').fill(recoveryKey)
     await b.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(b.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(b.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await b.goto('/browser')
     await expect(b.getByTestId('browser-folder-sync')).toBeEnabled()
-    await b.getByTestId('browser-folder-sync').click()
+    await syncBrowserFolders(b)
     await expect(b.getByTestId('browser-folder-sync-status'))
       .toContainText('получены и проверены',{timeout:20000})
     await expect(b.locator('.browser-folder-open').filter({hasText:'PRIVATE-E2EE-A'}))
@@ -78,7 +79,7 @@ test('P2 Browser: two recovered devices exchange signed E2EE folders, replay Los
     await a.getByRole('button',{name:'Новая папка'}).click()
     await a.getByTestId('browser-folder-name').fill('PRIVATE-A-ONLINE')
     await a.getByRole('button',{name:'Создать',exact:true}).click()
-    await a.getByTestId('browser-folder-sync').click()
+    await syncBrowserFolders(a)
     await expect(a.getByTestId('browser-folder-sync-status'))
       .toContainText('подтверждён сервером',{timeout:20000})
     const second=await a.evaluate(async()=>{
@@ -90,7 +91,7 @@ test('P2 Browser: two recovered devices exchange signed E2EE folders, replay Los
     expect(second.contract).not.toContain('PRIVATE-B-OFFLINE')
 
     await ctxB.setOffline(false)
-    await b.getByTestId('browser-folder-sync').click()
+    await syncBrowserFolders(b)
     await expect(b.getByTestId('browser-folder-sync-status'))
       .toContainText('Конфликт версий',{timeout:20000})
     await expect(b.locator('.browser-folder-open').filter({hasText:'PRIVATE-B-OFFLINE'}))
@@ -129,14 +130,14 @@ test('P2 Browser: two recovered devices exchange signed E2EE folders, replay Los
 
     // A catches up with the merged cloud snapshot; both sides then change
     // the SAME folder. An explicit choice is required before rev5.
-    await a.getByTestId('browser-folder-sync').click()
+    await syncBrowserFolders(a)
     await expect(a.getByTestId('browser-folder-sync-status'))
       .toContainText('получены и проверены',{timeout:20000})
     await a.getByRole('button',{name:'Действия с папкой PRIVATE-E2EE-A'}).click()
     await a.getByRole('button',{name:'Переименовать PRIVATE-E2EE-A'}).click()
     await a.getByTestId('browser-rename-folder').fill('PRIVATE-A-RENAME')
     await a.getByRole('button',{name:'Сохранить',exact:true}).click()
-    await a.getByTestId('browser-folder-sync').click()
+    await syncBrowserFolders(a)
     await expect(a.getByTestId('browser-folder-sync-status'))
       .toContainText('подтверждён сервером',{timeout:20000})
 
@@ -144,7 +145,7 @@ test('P2 Browser: two recovered devices exchange signed E2EE folders, replay Los
     await b.getByRole('button',{name:'Переименовать PRIVATE-E2EE-A'}).click()
     await b.getByTestId('browser-rename-folder').fill('PRIVATE-B-RENAME')
     await b.getByRole('button',{name:'Сохранить',exact:true}).click()
-    await b.getByTestId('browser-folder-sync').click()
+    await syncBrowserFolders(b)
     await expect(b.getByTestId('browser-folder-sync-status'))
       .toContainText('Конфликт версий',{timeout:20000})
     await b.getByTestId('browser-merge-open').click()

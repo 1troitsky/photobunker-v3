@@ -10,7 +10,7 @@ test('UX Appearance 1.3: Dock draft, cancel, save, device reload and protected S
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 
     await page.getByTestId('settings-nav-appearance').click()
     await expect(page).toHaveURL(/\/settings\/appearance$/)
@@ -34,7 +34,7 @@ test('UX Appearance 1.3: Dock draft, cancel, save, device reload and protected S
     await page.getByTestId('dock-up-settings').click()
     await expect(dock.getByRole('link')).toHaveCount(4)
     const order=await dock.locator('a').allTextContents()
-    expect(order.join('|')).toMatch(/Задания.*Browser.*Настройки.*Камера/s)
+    expect(order.join('|')).toMatch(/Задания.*Browser.*Профиль.*Камера/s)
     await page.getByRole('button',{name:'Сохранить',exact:true}).click()
     await expect(page.getByText('Сохранено на этом устройстве.')).toBeVisible()
     const saved=await page.evaluate(()=>localStorage.getItem('pb3.appearance.v2'))
@@ -54,8 +54,8 @@ test('UX Appearance 1.3: Dock draft, cancel, save, device reload and protected S
     await page.getByRole('button',{name:'Сохранить',exact:true}).click()
     await page.reload()
     await expect(dock.getByRole('link')).toHaveCount(5)
-    await expect(dock.getByRole('link',{name:'Настройки'})).toBeVisible()
-    await dock.getByRole('link',{name:'Настройки'}).click()
+    await expect(dock.getByRole('link',{name:'Профиль'})).toBeVisible()
+    await dock.getByRole('link',{name:'Профиль'}).click()
     await expect(page.getByTestId('fieldwork-settings')).toBeVisible()
     await expect(page.getByRole('button',{name:'Проверить сессию'})).toBeVisible()
   } finally {

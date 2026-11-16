@@ -247,8 +247,8 @@ async function loadFile(e:Event):Promise<void>{
 }
 </script>
 <template>
-<div class="welcome-screen" data-testid="welcome-screen">
-  <main class="welcome-content">
+<div class="welcome-screen app" data-testid="welcome-screen">
+  <main class="app-main"><div id="content" class="content welcome-content">
     <div v-if="isHome" class="welcome-view" data-testid="welcome-main">
       <div class="welcome-brand">
         <div class="welcome-logo" aria-hidden="true">
@@ -257,10 +257,10 @@ async function loadFile(e:Event):Promise<void>{
         <div class="welcome-brand-name">{{brand.name}}</div>
       </div>
       <div class="welcome-auth-slot">
-        <div v-if="bootstrapOnly||sessionBootstrapPending" class="welcome-bootstrap-loading"
+        <div v-if="bootstrapOnly||sessionBootstrapPending" class="welcome-loading welcome-bootstrap-loading"
           role="status" aria-live="polite" data-testid="welcome-bootstrap-loading">
-          <span class="welcome-spinner" aria-hidden="true"></span>
-          <span>Входим в приложение...</span>
+          <span class="welcome-loading-spinner welcome-spinner" aria-hidden="true"></span>
+          <span class="welcome-loading-text">Входим в приложение...</span>
         </div>
         <nav v-else class="welcome-links" aria-label="Вход">
           <RouterLink class="welcome-link primary" to="/welcome/create">Создать аккаунт</RouterLink>
@@ -302,7 +302,7 @@ async function loadFile(e:Event):Promise<void>{
         </div>
       </header>
       <div v-if="busy" class="auth-loading" role="status" data-testid="welcome-loading">
-        <span class="welcome-spinner" aria-hidden="true"></span>Входим в приложение...
+        <span class="welcome-loading-spinner welcome-spinner" aria-hidden="true"></span>Входим в приложение...
       </div>
       <div v-else-if="isRecover" class="auth-panel">
         <label>Recovery Key<textarea v-model="recovery" spellcheck="false" autocomplete="off" autocorrect="off" placeholder="Recovery Key" data-testid="welcome-recovery-key"></textarea></label>
@@ -345,158 +345,8 @@ async function loadFile(e:Event):Promise<void>{
       <p v-if="notice" class="auth-feedback" role="status">{{notice}}</p>
       <p v-if="error" class="auth-feedback error" role="alert">{{error}}</p>
     </div>
-  </main>
+  </div></main>
 </div>
 </template>
-<style scoped>
-/* Owner-approved Welcome 1.4 structure, six original SVGs and copy from docs/ux/welcome/.
-   Only auth and persistent state are changed from prototype to actual Key-Only Identity. */
-.welcome-view{max-width:570px;width:100%;margin:0 auto;min-height:0;display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:20px;padding:8px 0 18px}
-.welcome-brand{display:flex;flex-direction:column;align-items:center;gap:5px;margin-bottom:4px}
-.welcome-logo{width:68px;height:68px;border:1px solid #454e45;background:linear-gradient(140deg,#2b382b,#171e18);border-radius:17px;display:grid;place-items:center;box-shadow:0 9px 25px #0003}
-.welcome-logo svg{width:46px;height:46px;stroke-width:2.5;color:#f3fff4}
-.welcome-brand-name{font-size:25px;font-weight:800;letter-spacing:-.055em;line-height:1.2}
-.welcome-auth-slot{min-height:95px;display:flex;flex-direction:column;justify-content:center}
-.welcome-bootstrap-loading{min-height:95px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;color:#b6e9c2;font-size:12px}
-.welcome-bootstrap-loading .welcome-spinner{width:22px;height:22px;border-width:2px}
-.welcome-links{display:grid;gap:9px}
-.welcome-link{display:flex;align-items:center;justify-content:center;min-height:43px;padding:10px 16px;border:1px solid #4b4b4b;background:#303030;color:#f1f1f1;border-radius:9px;text-decoration:none;font-size:13px;font-weight:730;transition:background .14s,border-color .14s}
-.welcome-link.primary{background:#1ed760;border-color:#1ed760;color:#0c2615}
-.welcome-link:hover{background:#404040}
-.welcome-link.primary:hover{background:#30e971}
-.welcome-link:focus-visible{outline:2px solid #b3f0c2;outline-offset:3px}
-.carousel{--slide-accent:#1ed760;border:1px solid #414641;border-radius:11px;background:linear-gradient(145deg,#242a24,#1e201e 72%);overflow:hidden;min-height:314px;}
-.carousel-body{display:flex;flex-direction:column;gap:0;padding:16px 17px 22px;min-height:314px}
-.carousel-art{height:146px;flex:none;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;border:1px solid #ffffff1a;border-radius:9px;background:radial-gradient(circle at 80% 17%,color-mix(in srgb,var(--slide-accent) 18%,transparent),transparent 46%),#151915}
-.carousel-art:before{content:'';position:absolute;width:230px;height:230px;border-radius:50%;border:1px solid #ffffff12;transform:translate(70px,20px);box-shadow:0 0 0 40px #ffffff06,0 0 0 80px #ffffff05}
-.carousel-art svg{width:156px;height:120px;stroke:var(--slide-accent);stroke-width:3.2;filter:drop-shadow(0 0 12px color-mix(in srgb,var(--slide-accent) 22%,transparent))}
-.carousel-copy h2{margin:15px 0 8px;font-size:clamp(21px,3vw,29px);font-weight:800;line-height:1.14;letter-spacing:-.042em;color:#f3f4f1}
-.carousel-copy p{color:#b8c1b9;font-size:12px;line-height:1.53;margin:0}
-.carousel.fade .carousel-body{animation:slide-in .35s ease both}
-@keyframes slide-in{from{opacity:.35;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-.auth-view{max-width:590px;margin:0 auto;padding:8px 0 22px;display:grid;gap:20px}
-.auth-header{display:flex;align-items:flex-start;gap:10px}
-.auth-header h1{font-size:24px;line-height:1.15;letter-spacing:-.04em;margin:0}
-.auth-header p{font-size:12px;color:#a9a9a9;margin:8px 0 0}
-.auth-back{border:0;background:transparent;width:32px;height:32px;display:grid;place-items:center;padding:2px}
-.auth-panel{border-radius:10px;background:#202020;padding:17px;display:grid;gap:13px}
-.auth-panel label{display:block;font-size:12px;font-weight:650}
-.auth-panel textarea{width:100%;min-height:117px;margin-top:7px;background:#303030;color:#eee;border:1px solid #4b4b4b;padding:11px;border-radius:8px;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
-.auth-panel .action{width:100%;min-height:40px}
-.auth-panel p{margin:0;color:#aaa;font-size:11.5px}
-.auth-panel input[type=file]{display:block;width:100%;margin-top:8px;color:#ccc;font-size:11px}
-.auth-panel .auth-check{display:flex;gap:10px;align-items:flex-start;font-size:12px;font-weight:500;color:#ddd}
-.auth-panel input[type=checkbox]{accent-color:#1ed760}
-.auth-feedback{color:#a3e6b5;font-size:12px;min-height:18px}
-@media(max-width:470px){.content{padding:18px 14px 27px}.welcome-view{gap:16px;padding:2px 0 24px}.welcome-logo{width:65px;height:65px}.welcome-logo svg{width:44px;height:44px}.welcome-brand-name{font-size:23px}.carousel-body{padding:14px;min-height:305px}.carousel{min-height:305px}.carousel-art{height:137px}.carousel-copy h2{font-size:22px}.carousel-copy p{font-size:11.5px}}
-@media(max-width:350px){.welcome-view{gap:13px}.carousel-copy h2{font-size:20px}.carousel-copy p{font-size:11px}.carousel-art{height:124px}.carousel-body{min-height:292px}.carousel{min-height:292px}}
-@media(prefers-reduced-motion:reduce){.carousel.fade .carousel-body{animation:none}.welcome-link{transition:none}}
 
-
-/* Fieldwork Welcome 1.3: no application header/dock, transparent stable carousel. */
-#content{min-height:100%;display:flex;align-items:center;justify-content:center;width:100%}
-.welcome-view{flex:0 0 auto;max-width:540px;margin:auto;justify-content:center}
-.carousel{background:transparent;border:0;border-radius:0;box-shadow:none;height:324px;min-height:324px;position:relative;overflow:hidden}
-.carousel-body{height:294px;min-height:294px;display:grid;grid-template-rows:145px minmax(0,1fr);gap:8px;padding:0 12px;align-items:start}
-.carousel-art{height:145px;border:0;background:transparent;border-radius:0;overflow:hidden;}
-.carousel-art:before{display:none}
-.carousel-art svg{width:162px;height:126px}
-.carousel-copy{width:100%;min-height:0;text-align:center;margin:0 auto;max-width:490px}
-.carousel-copy h2{margin:0 0 9px;text-align:center;font-size:23px;line-height:1.16}
-.carousel-copy p{margin:0 auto;text-align:center;font-size:12px;line-height:1.5;max-width:450px}
-.carousel-dots{display:flex;align-items:center;justify-content:center;gap:8px;position:absolute;bottom:6px;left:0;right:0;height:17px;pointer-events:none}
-.carousel-dot{width:6px;height:6px;border-radius:50%;background:#616961;opacity:.75;transition:background .22s ease,transform .22s ease,opacity .22s ease}
-.carousel-dot.active{background:#1ed760;opacity:1;transform:scale(1.25)}
-@media(max-width:470px){
- .content{padding:12px 13px 16px}
- .welcome-view{gap:16px;padding:8px 0 12px}
- .carousel{height:322px;min-height:322px}
- .carousel-body{height:293px;min-height:293px;grid-template-rows:139px minmax(0,1fr);padding:0 5px}
- .carousel-art{height:139px}
- .carousel-art svg{width:154px;height:118px}
- .carousel-copy h2{font-size:22px;line-height:1.17}
- .carousel-copy p{font-size:11.6px;line-height:1.47}
-}
-@media(max-width:350px){
- .welcome-view{gap:13px;padding:4px 0 7px}
- .carousel{height:319px;min-height:319px}
- .carousel-body{height:292px;min-height:292px;grid-template-rows:125px minmax(0,1fr);padding:0 3px}
- .carousel-art{height:125px}
- .carousel-art svg{width:143px;height:108px}
- .carousel-copy h2{font-size:20px;line-height:1.16;margin-bottom:6px}
- .carousel-copy p{font-size:11.1px;line-height:1.43}
-}
-@media(prefers-reduced-motion:reduce){.carousel-dot{transition:none}}
-
-
-/* Fieldwork Welcome 1.4 — compact actions, balanced whitespace and discreet center glow. */
-#content{min-height:100%;display:flex;align-items:center;justify-content:center;width:100%;}
-.welcome-view{flex:0 0 auto;width:100%;max-width:540px;margin:auto;display:flex;flex-direction:column;justify-content:center;align-items:stretch;gap:23px;padding:58px 0 26px;}
-.welcome-brand{margin-bottom:8px;}
-.welcome-links{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}
-.welcome-link.primary{width:min(252px,84%);max-width:100%;min-height:43px;}
-.welcome-link.recover{min-height:40px;width:auto;max-width:100%;padding:9px 12px;border:0;background:transparent;color:#bde6c7;font-weight:600;}
-.welcome-link.recover:hover{background:transparent;color:#fff;text-decoration:underline;text-underline-offset:4px;}
-.carousel{isolation:isolate;background:transparent;border:0;border-radius:0;box-shadow:none;position:relative;overflow:visible;height:312px;min-height:312px;--slide-accent:#1ed760;touch-action:pan-y;}
-.carousel::before{content:'';position:absolute;z-index:-1;inset:0 -11%;pointer-events:none;background:radial-gradient(ellipse 65% 67% at 50% 48%,color-mix(in srgb,var(--slide-accent) 12%,transparent),transparent 78%);filter:blur(17px);opacity:.82;}
-.carousel-body{height:auto;min-height:0;display:flex;flex-direction:column;align-items:center;gap:0;padding:0 8px;position:relative;z-index:1;}
-.carousel-art{height:136px;flex:0 0 136px;width:100%;border:0;border-radius:0;background:transparent;overflow:visible;}
-.carousel-art:before{display:none;}
-.carousel-art svg{width:160px;height:125px;}
-.carousel-copy{max-width:500px;width:100%;text-align:center;min-height:0;margin:0 auto;}
-.carousel-copy h2{margin:4px auto 8px;line-height:1.15;font-size:clamp(20px,3vw,23px);text-align:center;}
-.carousel-copy p{font-size:12px;line-height:1.5;margin:0 auto;text-align:center;max-width:465px;}
-.carousel-dots{position:relative;left:auto;right:auto;bottom:auto;z-index:2;width:100%;display:flex;justify-content:center;gap:1px;height:26px;margin-top:7px;pointer-events:auto;}
-.carousel-dot{width:25px;height:26px;border:0;background:transparent;display:grid;place-items:center;padding:0;cursor:pointer;opacity:1;border-radius:6px;transition:none;}
-.carousel-dot::after{content:'';display:block;width:6px;height:6px;border-radius:50%;background:#596259;transition:background .2s,transform .2s;}
-.carousel-dot.active{background:transparent;transform:none;opacity:1;}
-.carousel-dot.active::after{background:#1ed760;transform:scale(1.28);}
-.carousel-dot:hover::after{background:#91d7a2;}
-.carousel-dot:focus-visible{outline:2px solid #a0ecb2;outline-offset:1px;}
-#content.is-leaving{animation:welcome-view-exit .18s ease-in both;pointer-events:none;}
-#content.is-entering{animation:welcome-view-enter .3s cubic-bezier(.2,.7,.25,1) both;}
-@keyframes welcome-view-exit{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(-12px)}}
-@keyframes welcome-view-enter{from{opacity:0;transform:translateX(15px)}to{opacity:1;transform:translateX(0)}}
-@media(max-width:470px){
- .content{padding:10px 13px 12px;}
- .welcome-view{gap:20px;padding:56px 0 22px;}
- .welcome-brand{margin-bottom:8px;}
- .carousel{height:314px;min-height:314px;}
- .carousel-art{height:132px;flex-basis:132px;}
- .carousel-art svg{width:151px;height:118px;}
- .carousel-copy h2{font-size:21px;margin-top:2px;margin-bottom:7px;}
- .carousel-copy p{font-size:11.5px;line-height:1.47;}
- .carousel-dots{margin-top:6px;}
-}
-@media(max-width:350px){
- .welcome-view{gap:17px;padding:50px 0 0;}
- .carousel{height:302px;min-height:302px;}
- .carousel-art{height:119px;flex-basis:119px;}
- .carousel-art svg{width:142px;height:108px;}
- .carousel-copy h2{font-size:19px;}
- .carousel-copy p{font-size:11px;line-height:1.42;}
- .carousel-dots{margin-top:4px;}
-}
-@media(prefers-reduced-motion:reduce){
- #content.is-leaving,#content.is-entering{animation:none!important;}
- .carousel-dot::after{transition:none;}
-}
-
-
-.welcome-screen{--green:#1ed760;position:fixed;inset:0;background:#121212;color:#f2f2f2;overflow-y:auto}
-.welcome-content{min-height:100dvh;width:100%;padding:18px 16px;display:flex;justify-content:center;align-items:center;position:relative}
-.welcome-view{flex:0 0 auto}
-.welcome-logo svg{display:block}
-.carousel{position:relative;--slide-accent:#1ada62;padding-bottom:4px;width:100%}
-.carousel-art{background:radial-gradient(circle,color-mix(in srgb,var(--slide-accent) 12%,transparent),transparent 51%)}
-.carousel-art svg{stroke:var(--slide-accent);stroke-width:3.2;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--slide-accent) 22%,transparent))}
-.carousel-copy{min-height:112px}
-.auth-view{width:100%;max-width:540px}
-.auth-back{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:#b6dfbf;font-size:25px}
-.auth-feedback.error{color:#efaca5}
-.auth-loading{display:flex;gap:14px;justify-content:center;align-items:center;color:#b6e9c2;min-height:125px;font-size:12px}
-.welcome-spinner{width:26px;height:26px;border:3px solid #355e41;border-top-color:#1ed760;border-radius:50%;animation:welcome-spin .75s linear infinite}
-@keyframes welcome-spin{to{transform:rotate(360deg)}}
-@media(max-width:470px){.welcome-content{padding:6px 13px}.welcome-view{padding-top:40px}.carousel-copy{min-height:115px}}
-@media(prefers-reduced-motion:reduce){.welcome-spinner{animation:none}}
-</style>
+<style scoped src="../features/identity/ui/WelcomeFieldwork.css"></style>

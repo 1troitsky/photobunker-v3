@@ -2149,21 +2149,21 @@ onUnmounted(()=>{
       Некорректный адрес файла.
     </div>
     <template v-else>
-      <div class="file-viewer-fixed" data-testid="file-viewer-fixed">
-        <nav class="file-viewer-path browser-breadcrumb"
+      <div class="file-viewer-fixed viewer" data-testid="file-viewer-fixed">
+        <nav class="file-viewer-path browser-path"
           data-testid="file-viewer-path" aria-label="Путь Browser">
-          <RouterLink to="/browser" class="file-viewer-back" aria-label="В Browser">‹</RouterLink>
-          <span class="file-viewer-path-name">Browser
-            <template v-for="(folder,i) in originFolderNames" :key="i"> / {{folder}}</template>
-            / {{ preview?.name??'Файл' }}</span>
+          <RouterLink to="/browser" class="file-viewer-back path-back" aria-label="В Browser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 5-7 7 7 7M8 12h12"/></svg></RouterLink>
+          <div class="path-breadcrumbs"><RouterLink to="/browser">Все</RouterLink>
+            <template v-for="(folder,i) in originFolderNames" :key="i"><span>›</span><RouterLink to="/browser" :class="{current:i===originFolderNames.length-1}">{{folder}}</RouterLink></template>
+          </div>
         </nav>
-      <div ref="stage" class="file-viewer-stage"
+      <div ref="stage" class="file-viewer-stage image-stage"
         data-testid="file-viewer-stage"
         @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
         <div v-if="busy" role="status" class="file-viewer-wait">Открываем защищённый файл…</div>
-        <img v-else-if="!editorMode&&fileUrl&&preview?.type==='photo'" ref="photoElement"
-          :src="fileUrl" :alt="preview?.name??'Фото'" draggable="false"
-          data-testid="file-viewer-image">
+        <button v-else-if="!editorMode&&fileUrl&&preview?.type==='photo'" type="button" class="photo-trigger" aria-label="На весь экран" @click="toggleFullscreen">
+          <img ref="photoElement" :src="fileUrl" :alt="preview?.name??'Фото'" draggable="false" data-testid="file-viewer-image">
+        </button>
         <video v-else-if="!editorMode&&fileUrl&&preview?.type==='video'" :key="fileUrl"
           ref="videoElement" :src="fileUrl" controls playsinline preload="metadata"
           data-testid="file-viewer-video"/>
@@ -2174,41 +2174,35 @@ onUnmounted(()=>{
             data-testid="file-viewer-audio"/>
         </div>
         <p v-else class="muted">Файл не открыт.</p>
-        <button type="button" class="file-viewer-stage-fullscreen"
-          aria-label="На весь экран" :disabled="!fileUrl" @click="toggleFullscreen">⛶</button>
+        <button v-if="!editorMode&&preview?.type==='video'" type="button" class="file-viewer-stage-fullscreen video-maximize"
+          aria-label="На весь экран" :disabled="!fileUrl" @click="toggleFullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/></svg></button>
       </div>
-      <section class="file-viewer-summary" data-testid="file-viewer-summary">
-        <div class="file-viewer-summary-name">{{ preview?.name??'Защищённый файл' }}</div>
-        <div class="file-viewer-summary-id">ID: {{ current.id.slice(0,8) }}</div>
-        <p class="file-viewer-summary-description">{{ preview?.description||'Описание не добавлено' }}</p>
-        <div class="file-viewer-summary-dates">
-          <span>Создан: {{ preview?.capturedAt
-            ?new Date(preview.capturedAt).toLocaleDateString('ru-RU'):'—' }}</span>
-          <span>Удаление: {{ preview?.expiresAt
-            ?new Date(preview.expiresAt).toLocaleDateString('ru-RU'):'—' }}</span>
-        </div>
+      <section class="file-viewer-summary photo-summary" data-testid="file-viewer-summary">
+        <div class="name-row"><strong class="photo-name">{{ preview?.name??'Защищённый файл' }}</strong><small class="photo-id">#{{ current.id.slice(0,8) }}</small></div>
+        <p class="photo-description">{{ preview?.description||'Описание не добавлено' }}</p>
+        <div class="date-row"><div><small>Создано</small><span>{{ preview?.capturedAt?new Date(preview.capturedAt).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}):'—' }}</span></div><div><small>Удаление</small><span>{{ preview?.expiresAt?new Date(preview.expiresAt).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}):'—' }}</span></div></div>
       </section>
       <PublicCardPublication v-if="publicationOpen&&current&&fileBlob&&preview?.type==='photo'&&preview.expiresAt" :key="current.id" :source-kind="current.protocol" :source-id="current.id" :source="fileBlob" :name="preview.name" :expires-at="preview.expiresAt" @close="publicationOpen=false"/>
-      <nav class="file-viewer-actions" aria-label="Действия с файлом"
+      <nav class="file-viewer-actions action-tiles" aria-label="Действия с файлом"
         data-testid="file-viewer-actions">
         <button type="button" :disabled="!fileUrl" data-testid="viewer-action-info"
-          @click="openPanel('info')">Информация</button>
-        <button v-if="preview?.type==='photo'" type="button" :disabled="!fileUrl" data-testid="viewer-action-publish" @click="publicationOpen=true" aria-label="Публичная карточка">Публичная карточка</button>
-        <button v-else type="button" disabled title="Публичная публикация доступна только для безопасной JPEG-копии фото">Публичная карточка</button>
+          @click="openPanel('info')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span>Информация</span></button>
+        <button v-if="preview?.type==='photo'" type="button" :disabled="!fileUrl" data-testid="viewer-action-publish" @click="publicationOpen=true" aria-label="Публичная карточка"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 3 3 3-4 5 5"/></svg><span>Публичная карточка</span></button>
+        <button v-else type="button" disabled title="Публичная публикация доступна только для безопасной JPEG-копии фото"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 3 3 3-4 5 5"/></svg><span>Публичная карточка</span></button>
         <button type="button" :disabled="!fileUrl" data-testid="viewer-action-edit"
-          @click="openPanel('editor')">Редактировать</button>
+          @click="openPanel('editor')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 16-.5 4.5L8 20l11-11-4-4L4 16zM13 7l4 4"/></svg><span>Редактировать</span></button>
       </nav>
-      <div class="file-viewer-navigation">
+      <div class="file-viewer-navigation pager">
         <button type="button" aria-label="Предыдущий файл"
           :disabled="!adjacent.previous||busy"
-          @click="navigate(adjacent.previous)">‹</button>
-        <span class="muted" data-testid="file-viewer-position">
-          {{ adjacent.position?adjacent.position+' / '+adjacent.total:
+          @click="navigate(adjacent.previous)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg></button>
+        <span class="page-count" data-testid="file-viewer-position">
+          {{ adjacent.position?adjacent.position+' из '+adjacent.total:
             'Вне загруженного списка' }}
         </span>
         <button type="button" aria-label="Следующий файл"
           :disabled="!adjacent.next||busy"
-          @click="navigate(adjacent.next)">›</button>
+          @click="navigate(adjacent.next)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></button>
       </div>
       </div>
       <div v-show="panel!==null||editorMode" class="file-viewer-overlay"
@@ -3089,7 +3083,7 @@ onUnmounted(()=>{
               · ±{{ Math.round(preview.gps.accuracyMeters) }} м</dd>
           </template>
           <template v-if="preview.expiresAt">
-            <dt>Хранение до</dt><dd>{{ new Date(preview.expiresAt).toLocaleDateString('ru-RU') }}</dd>
+            <dt>Хранение до</dt><dd>{{ new Date(preview.expiresAt).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}) }}</dd>
           </template>
         </dl>
         <p class="muted">Приватные данные расшифрованы на устройстве.
@@ -3127,3 +3121,5 @@ onUnmounted(()=>{
     </template>
   </section>
 </template>
+
+<style scoped src="../features/browser/ui/ViewerFieldwork.css"></style>

@@ -9,7 +9,7 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
     // Document navigation starts async Local-First identity bootstrap.
     // Wait for the resumed DEVICE key before disconnecting; the login text

@@ -7,7 +7,7 @@ test('Browser v3: per-photo share opens existing key-verified E2EE flow, not an 
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 
   const photoId=await page.evaluate(async()=>{
     const canvas=document.createElement('canvas')

@@ -24,46 +24,25 @@ function download():void{if(!image.value||!allowDownload.value||expiresAt.value<
 watch(()=>route.fullPath,()=>{clear();void load()},{immediate:true})
 onUnmounted(()=>{generation++;controller?.abort();if(timer)clearTimeout(timer);clear()})
 </script>
+
 <template>
-<div class="public-card-denied" :data-testid="image?'public-card-live':'public-card-unavailable'">
+<div class="public-page" :data-testid="image?'public-card-live':'public-card-unavailable'">
   <header class="site-head"><RouterLink class="site-logo" to="/welcome" :aria-label="brand.name+' — главная'"><span class="site-logo-mark" aria-hidden="true"><img :src="brand.iconUrl" alt=""></span><strong>{{brand.name}}</strong></RouterLink><RouterLink to="/install" class="install-link" data-testid="public-card-install"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2-5.5-2.9-5.5 2.9 1-6.2-4.5-4.4 6.2-.9Z"/><path d="m9.2 12 2 2 3.6-3.6"/></svg> Установить приложение</RouterLink></header>
-  <main class="card-shell">
+  <main class="page">
     <p v-if="loading&&!image" role="status">Загружаем карточку…</p>
-    <article v-else-if="image" class="live-card">
-      <header class="card-title"><div><h1>{{name}}</h1><span>#{{String(route.params.token).slice(0,8)}}</span></div><nav aria-label="Действия с публичной карточкой"><button type="button" aria-label="Копировать ссылку" @click="copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button><button v-if="allowDownload" type="button" aria-label="Скачать безопасную копию" @click="download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/></svg></button><button type="button" aria-label="Поделиться ссылкой" @click="share"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 14v7h16v-7"/></svg></button></nav></header>
-      <button type="button" class="public-photo" :class="{zoomed}" aria-label="Изменить масштаб фото" :aria-pressed="zoomed" @click="zoomed=!zoomed"><img :src="image" :alt="name" data-testid="public-card-image"></button>
-      <p v-if="description" class="card-description">{{description}}</p><p>Карточка доступна до {{new Date(expiresAt).toLocaleString('ru-RU')}} · осталось {{days}} дн.</p>
-      <label>Ссылка на карточку <input :value="publicUrl" readonly @click="copy"></label><p v-if="notice" role="status">{{notice}}</p>
-    </article>
-    <section v-else class="expired-stage" aria-labelledby="public-unavailable-title"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="14"/><path d="M18 10v9l6 4"/></svg><h1 id="public-unavailable-title">Карточка недоступна</h1><p>Ссылка не найдена, срок действия истёк или доступ к файлу закрыт.</p><p>Никакие данные файла по этой ссылке не раскрываются.</p></section>
+    <template v-else>
+      <div class="card-title"><div class="name-wrap"><h1 class="file-name">{{image?name:'Карточка недоступна'}}</h1><p v-if="image" class="file-id">#<b>{{String(route.params.token).slice(0,8)}}</b></p></div><nav class="file-actions" aria-label="Действия с публичной карточкой"><button class="icon-button" type="button" :disabled="!image" aria-label="Копировать ссылку" @click="copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button><button class="icon-button" type="button" :disabled="!image||!allowDownload" aria-label="Скачать безопасную копию" @click="download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/></svg></button><button class="icon-button" type="button" :disabled="!image" aria-label="Поделиться ссылкой" @click="share"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 14v7h16v-7"/></svg></button></nav></div>
+      <div v-if="image" class="media" :class="{zoomed}"><img :src="image" :alt="name" class="safe-media" data-testid="public-card-image"><button type="button" aria-label="Изменить масштаб фото" :aria-pressed="zoomed" @click="zoomed=!zoomed"></button></div>
+      <section v-else class="expired-stage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4 20 20M12 3a9 9 0 1 1-9 9"/></svg><h2>Доступ закрыт</h2><p>Ссылка не найдена, срок действия истёк или доступ к файлу закрыт.</p></section>
+      <div class="info">
+        <section v-if="image&&description" class="info-section"><h2 class="section-label">Описание</h2><p class="description">{{description}}</p></section>
+        <section class="info-section"><div class="availability"><div class="time-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div><div class="time-title">{{image?'Карточка действует до '+new Date(expiresAt).toLocaleDateString('ru-RU'):'Карточка недоступна'}}</div><div class="time-caption">{{image?'Публичный доступ завершится не позднее этой даты':'Ссылка не найдена, истекла или отозвана'}}</div></div><span class="time-pill" :class="{expired:!image}">{{image?days+' дн.':'Недоступна'}}</span></div></section>
+        <section v-if="image" class="info-section"><h2 class="section-label">Ссылка на карточку</h2><div class="share-row"><span class="share-url">{{publicUrl}}</span><button type="button" class="share-copy" aria-label="Скопировать адрес карточки" @click="copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button></div></section>
+      </div>
+    </template>
+    <footer class="bottom-brand">Опубликовано через <RouterLink to="/install">{{brand.name}}</RouterLink><span class="copyright">© {{new Date().getFullYear()}} {{brand.name}}</span></footer>
+    <p v-if="notice" role="status">{{notice}}</p>
   </main>
-  <footer class="site-footer"><span>Опубликовано через {{brand.name}}</span><RouterLink to="/install">Установка {{brand.name}}</RouterLink><span>© {{new Date().getFullYear()}} {{brand.name}}</span></footer>
 </div>
 </template>
-<style scoped>
-/* Expired/denied state geometry from approved docs/ux/public-card/style.css. */
-.expired-stage{min-height:295px;border:1px solid #404040;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;padding:24px;background:#1c1c1c}.expired-stage svg{width:35px;height:35px;stroke:#c3c3c3;fill:none;stroke-width:1.4}.expired-stage h2{font-size:17px;margin:0}.expired-stage p{color:#b0b0b0;margin:0;max-width:280px;font-size:12px}.app-explain{max-width:525px;margin:auto;min-height:calc(100% - 68px);padding:34px 20px 40px;display:flex;align-items:center;flex-direction:column;justify-content:center;text-align:center}.app-icon{width:78px;height:78px;border-radius:20px;border:1px solid #415a46;background:linear-gradient(140deg,#2b4234,#1d261f);display:grid;place-items:center;margin-bottom:22px}.app-icon svg{height:49px;width:49px}.app-explain h1{font-size:27px;line-height:1.2;letter-spacing:-.06em;margin:0 0 12px}.app-explain>p{max-width:360px;color:#b9b9b9;font-size:13px;margin:0 0 26px}.install-choices{display:flex;gap:7px;background:#272727;padding:4px;border-radius:8px;margin-bottom:16px;flex-wrap:wrap}.install-choices button{background:none;color:#aaa;border:0;border-radius:6px;padding:8px 11px;font-size:11px}.install-choices button.selected{color:#f0f0f0;background:#494949}.install-guide{width:100%;text-align:left;background:#202020;padding:19px 21px;border-radius:10px}.install-guide h2{margin:0 0 13px;font-size:14px}.install-guide ol{margin:0;padding-left:18px;color:#d4d4d4;font-size:12px;line-height:1.8}.install-guide li+li{margin-top:6px}.install-guide p{font-size:11px;color:#9c9c9c;margin:11px 0 0}.back-to-file{margin:22px 0 0;border:0;background:transparent;text-decoration:underline;text-underline-offset:3px;color:#b9ebc5;padding:7px}
-
-.public-card-denied{--green:#1ed760;--muted:#a3a3a3;background:#121212;color:#f2f2f2;
-  min-height:100dvh;display:flex;flex-direction:column;font-size:13px}
-.site-head{min-height:68px;padding:0 clamp(15px,3vw,34px);display:flex;align-items:center;
-  justify-content:space-between;gap:10px;background:#181818;border-bottom:1px solid #292929}
-.site-logo{display:flex;align-items:center;gap:10px;color:#f5f5f5;text-decoration:none}
-.site-logo-mark{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;
-  background:linear-gradient(135deg,#263a2c,#1b211d);border:1px solid #405043}
-.site-logo-mark img{width:23px;height:23px;object-fit:contain}
-.site-logo strong{font-weight:800;font-size:15px}
-.install-link{white-space:nowrap;text-decoration:none;color:#bde9c7;font-size:11px;
-  border:1px solid #367d4b;border-radius:8px;padding:9px 12px;background:#203a27}
-.card-shell{width:min(100%,840px);margin:auto;padding:45px 15px}
-.expired-stage{min-height:295px}
-.expired-stage svg{width:35px;height:35px;fill:none}
-.expired-stage h1{font-size:18px;margin:0}
-.expired-stage p{color:#b0b0b0;font-size:12px;line-height:1.6;max-width:380px;margin:0}
-.site-footer{display:flex;justify-content:center;gap:14px;align-items:center;flex-wrap:wrap;
-  border-top:1px solid #303030;color:#9c9c9c;font-size:11px;padding:20px 14px}
-.site-footer a{color:#a3d9b5;text-decoration:none}
-.public-card-denied a:focus-visible{outline:2px solid #9beab2;outline-offset:2px}
-@media(max-width:470px){.site-head{min-height:61px;padding:0 13px}
-  .install-link{padding:8px;font-size:10px}.card-shell{padding:26px 13px}}
-.live-card{display:grid;gap:18px}.card-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.card-title h1{font-size:21px;margin:0 0 6px}.card-title span{color:#aaa;font-size:12px}.card-title nav{display:flex;gap:8px}.card-title button{display:grid;place-items:center}.card-title button svg,.install-link svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.install-link{display:inline-flex;align-items:center;gap:6px}.install-link svg{width:16px;height:16px;flex:none}.live-card button:focus-visible{outline:2px solid #9beab2;outline-offset:3px}.card-title button{min-width:44px;min-height:44px;background:#202020;border:1px solid #444;border-radius:8px;color:#eee}.public-photo{width:100%;border:0;padding:0;background:#181818;overflow:auto;border-radius:10px}.public-photo img{display:block;width:100%;height:auto}.public-photo.zoomed img{width:auto;max-width:none}.card-description{white-space:pre-wrap;overflow-wrap:anywhere}.live-card p{line-height:1.6;color:#bbb}.live-card input{width:100%;min-height:44px;background:#202020;color:#ccc;border:1px solid #444;padding:8px;border-radius:8px}</style>
+<style scoped src="../features/media/ui/PublicCardFieldwork.css"></style>

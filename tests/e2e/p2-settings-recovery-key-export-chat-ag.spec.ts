@@ -35,7 +35,7 @@ test('P2 #400: explicit system share requires a click and preserves registration
     await expect(page.getByRole('button',{name:'Завершить регистрацию'})).toBeDisabled()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await expect(page.locator('#generated-key')).toHaveCount(0)
     await expect(page.getByTestId('account-save-key')).toHaveCount(0)
     expect(downloads).toBe(0)

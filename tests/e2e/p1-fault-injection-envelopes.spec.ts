@@ -15,7 +15,7 @@ async function enroll(page: Page): Promise<string> {
   await page.getByRole('button', { name: 'Создать ключ' }).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button', { name: 'Завершить регистрацию' }).click()
-  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
   await page.evaluate(async () => {
     const identity = await import('/src/features/identity/application/session.ts')
     await identity.reauthenticate()

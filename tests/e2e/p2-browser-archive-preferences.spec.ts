@@ -1,3 +1,4 @@
+import {browserControl,browserHeader} from './support/browser-ui'
 import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 import type {Locator} from '@playwright/test'
@@ -17,9 +18,9 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     const recoveryKey=await a.locator('#generated-key').inputValue()
     await a.getByLabel('Я сохранил ключ восстановления').check()
     await a.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(a.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(a.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await a.goto('/browser')
-    await a.getByTestId('browser-header-settings').click()
+    await browserHeader(a,'settings')
     await expect(a.getByTestId('browser-pref-use-archive')).toBeChecked()
     await expect(a.getByTestId('browser-pref-auto-delete')).toBeChecked()
     await expect(a.getByTestId('browser-pref-unconfirmed')).toHaveCount(0)
@@ -40,9 +41,9 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     await b.goto('/settings')
     await b.locator('#recovery-key').fill(recoveryKey)
     await b.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(b.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(b.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await b.goto('/browser')
-    await b.getByTestId('browser-header-settings').click()
+    await browserHeader(b,'settings')
     await expect(b.getByTestId('browser-pref-auto-delete')).not.toBeChecked()
     await expect(b.getByTestId('browser-pref-use-archive')).toBeChecked()
     await expect(b.getByTestId('browser-pref-unconfirmed')).toHaveCount(0)
@@ -65,7 +66,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
       return (await m.listLocalMedia()).filter(x=>x.state==='synced').length
     }),{timeout:30000}).toBe(1)
     await closeImportSheet(a)
-    await a.getByRole('button',{name:'Обновить',exact:true}).first().click()
+    await browserControl(a,'Обновить')
     const row=a.locator('[data-testid^="browser-row-media:"]')
     await ensureFileMenu(row)
     await expect(row.getByRole('button',{name:/Архивировать файл/})).toBeVisible()
@@ -96,7 +97,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
 
     // Signed policy opts out of archive; direct owner-confirmed deletion
     // now creates a tombstone, never claims verified physical GC.
-    await a.getByTestId('browser-header-settings').click()
+    await browserHeader(a,'settings')
     await a.getByTestId('browser-pref-use-archive').uncheck()
     await expect(a.getByTestId('browser-pref-status'))
       .toContainText('подтверждены сервером',{timeout:20000})
@@ -125,7 +126,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     // With remote network absent, the option toggles locally, but no
     // destructive action is authorized until a signed server ACK.
     await aContext.setOffline(true)
-    await a.getByTestId('browser-header-settings').click()
+    await browserHeader(a,'settings')
     await a.getByTestId('browser-pref-use-archive').check()
     await expect(a.getByTestId('browser-pref-unconfirmed')).toBeVisible()
     await expect(a.getByTestId('browser-pref-status'))
@@ -137,7 +138,7 @@ test('P2 Browser: Local-First signed archive settings, independent-device recove
     await aContext.setOffline(false)
     await a.route('**/browser/v1/archive/preferences',route=>route.abort('failed'))
     await a.reload()
-    await a.getByTestId('browser-header-settings').click()
+    await browserHeader(a,'settings')
     await expect(a.getByTestId('browser-pref-use-archive')).toBeChecked()
     await expect(a.getByTestId('browser-pref-unconfirmed')).toBeVisible()
     await a.unroute('**/browser/v1/archive/preferences')

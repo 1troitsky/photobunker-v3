@@ -1,3 +1,4 @@
+import {browserControl} from '../e2e/support/browser-ui'
 import {expect,test} from '@playwright/test'
 
 test('compiled app: Welcome → offline photo → durable reload → Garage → Viewer',async({page,context})=>{
@@ -22,14 +23,14 @@ test('compiled app: Welcome → offline photo → durable reload → Garage → 
   await expect(page.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
   await page.getByRole('link',{name:'Browser',exact:true}).click()
   await expect(page.locator('.photo-row')).toHaveCount(1)
-  await expect(page.locator('.photo-row')).toContainText('queued')
+  await expect(page.locator('.photo-row')).toHaveAttribute('data-sync-state','queued')
   // Shell cold offline reload remains separately BLOCKED by unsigned-SW
   // policy. Restore transport before reloading, preserving the real outbox.
   await context.setOffline(false)
   await page.reload()
   await expect(page.locator('.photo-row')).toHaveCount(1)
-  await page.getByRole('button',{name:'Синхронизировать',exact:true}).click()
-  await expect(page.locator('.photo-row')).toContainText('synced',{timeout:30000})
+  await browserControl(page,'Синхронизировать')
+  await expect(page.locator('.photo-row')).toHaveAttribute('data-sync-state','synced',{timeout:30000})
   await expect(page.getByTestId('browser-file-thumb')).toBeVisible()
   expect(await page.getByTestId('browser-file-thumb').evaluate(node=>(node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await page.evaluate(()=>{document.scrollingElement?.scrollTo(0,0);document.querySelector('.shell-main')?.scrollTo(0,0)})

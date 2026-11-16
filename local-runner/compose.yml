@@ -31,7 +31,7 @@ services:
       APP_NAME: PhotoBunker
       APP_SHORT_NAME: PhotoBunker
       APP_SLUG: photobunker
-      APP_MARK: app
+      APP_MARK: pb
       APP_PUBLIC_URL: ${PB3_PUBLIC_ORIGIN:-http://127.0.0.1:5173}
       APP_URL: ${PB3_PUBLIC_ORIGIN:-http://127.0.0.1:5173}
       APP_ENV: local
@@ -75,7 +75,7 @@ services:
       VITE_APP_NAME: PhotoBunker
       VITE_APP_SHORT_NAME: PhotoBunker
       VITE_APP_SLUG: photobunker
-      VITE_APP_MARK: app
+      VITE_APP_MARK: pb
       VITE_APP_PUBLIC_URL: http://127.0.0.1:5173
       VITE_APP_THEME_COLOR: '#1ed760'
       VITE_APP_ICON_URL: /icons/app.svg

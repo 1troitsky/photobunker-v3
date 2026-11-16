@@ -1,3 +1,5 @@
+import {exchangeReady} from './support/browser-ui'
+import {browserControl} from './support/browser-ui'
 import { test, expect } from '@playwright/test'
 
 test('P2 #339: two real trusted peers, encrypted local block, refilter after alias and Team picker',async({browser})=>{
@@ -10,7 +12,7 @@ test('P2 #339: two real trusted peers, encrypted local block, refilter after ali
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     return page.evaluate(async()=>{
       const s=await import('/src/features/identity/application/session.ts')
       return s.requireSession().accountId
@@ -32,8 +34,8 @@ test('P2 #339: two real trusted peers, encrypted local block, refilter after ali
     const idB=await enroll(B),idC=await enroll(C)
     await B.goto('/browser')
     await C.goto('/browser')
-    await expect(B.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
-    await expect(C.getByText('Ключ обмена подготовлен')).toBeVisible({timeout:20000})
+    await exchangeReady(B)
+    await exchangeReady(C)
     await A.goto('/contacts')
     await expect(A.getByTestId('contacts-blacklist-toggle')).toBeEnabled()
     await expect(A.locator('.shell-header').getByTestId('contacts-blacklist-toggle')).toBeVisible()
@@ -122,7 +124,7 @@ test('P2 #339: two real trusted peers, encrypted local block, refilter after ali
     await expect(A.getByTestId('contacts-row-'+idB)).toHaveCount(0)
     await expect(A.getByTestId('contacts-row-'+idC)).toContainText('Allowed after refresh')
     await ctxA.setOffline(true)
-    await A.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(A,'Обновить')
     await expect(A.getByTestId('contacts-row-'+idB)).toHaveCount(0)
     await expect(A.getByTestId('contacts-row-'+idC)).toBeVisible()
   }finally{

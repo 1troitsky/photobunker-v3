@@ -40,7 +40,7 @@ test('P2 Help: real account opens offline FAQ and support draft never submits se
     await page.getByRole('button', { name: 'Создать ключ' }).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button', { name: 'Завершить регистрацию' }).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await expect(page.getByTestId('settings-nav-help')).toHaveAttribute('href', '/settings/help')
     await page.getByTestId('settings-nav-help').click()
     await expect(page).toHaveURL(/\/settings\/help$/)

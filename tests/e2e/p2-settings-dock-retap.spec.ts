@@ -12,7 +12,7 @@ test('UX Dock retap: Settings goes back one in-section screen and root never sta
     await expect(page.getByTestId('fieldwork-settings')).toBeVisible()
 
     const dock=page.getByRole('navigation',{name:'Главная навигация'})
-    const settings=dock.getByRole('link',{name:'Настройки',exact:true})
+    const settings=dock.getByRole('link',{name:'Профиль / Настройки',exact:true})
     const rootPosition=await page.evaluate(()=>window.history.state?.position)
     await settings.click()
     await expect(page).toHaveURL(/\/settings$/)

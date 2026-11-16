@@ -1,3 +1,4 @@
+import {browserControl} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
 test('Public Card: real camera → safe encrypted Garage publication → anonymous read → reload → revoke',async({browser})=>{
@@ -10,14 +11,14 @@ test('Public Card: real camera → safe encrypted Garage publication → anonymo
     const recoveryKey=await page.locator('#generated-key').inputValue()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.getByRole('link',{name:'Камера',exact:true}).click()
     await expect.poll(()=>page.locator('video').evaluate(el=>(el as HTMLVideoElement).videoWidth)).toBeGreaterThan(0)
     await page.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(page.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
     await page.getByRole('link',{name:'Browser',exact:true}).click()
-    await page.getByRole('button',{name:'Синхронизировать',exact:true}).click()
-    await expect(page.locator('.photo-row').first()).toContainText('synced',{timeout:30000})
+    await browserControl(page,'Синхронизировать')
+    await expect(page.locator('.photo-row').first()).toHaveAttribute('data-sync-state','synced',{timeout:30000})
     await page.locator('.photo-row').first().getByTestId('browser-file-menu-toggle').click()
     await page.locator('.photo-row').first().getByRole('link',{name:/Полный просмотр файла/}).click()
     await expect(page.getByTestId('file-viewer-image')).toBeVisible()
@@ -36,7 +37,7 @@ test('Public Card: real camera → safe encrypted Garage publication → anonymo
     await expect(external.getByTestId('public-card-image')).toBeVisible()
     expect(requestPaths.filter(p=>p.startsWith('/identity/'))).toEqual([])
     await expect(external.locator('.shell-header,.shell-dock,.pin-screen')).toHaveCount(0)
-    await expect(external.getByRole('button',{name:'Скачать безопасную копию'})).toHaveCount(0)
+    await expect(external.getByRole('button',{name:'Скачать безопасную копию'})).toBeDisabled()
     await external.reload();await expect(external.getByTestId('public-card-image')).toBeVisible()
     await external.goto(url.split('#')[0]!)
     await expect(external.getByRole('heading',{name:'Карточка недоступна'})).toBeVisible()
@@ -49,7 +50,7 @@ test('Public Card: real camera → safe encrypted Garage publication → anonymo
     const recovered=await recoveredOwner.newPage()
     await recovered.goto('/settings');await recovered.locator('#recovery-key').fill(recoveryKey)
     await recovered.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(recovered.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(recovered.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await recovered.goto('/browser')
     await expect(recovered.getByTestId('browser-file-thumb')).toBeVisible()
     expect(await recovered.getByTestId('browser-file-thumb').evaluate(node=>(node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)

@@ -22,7 +22,7 @@ test('P1 #200 >64MiB ciphertext survives offline, lost ACK, reload and independe
     const key=await A.locator('#generated-key').inputValue()
     await A.getByLabel('Я сохранил ключ восстановления').check()
     await A.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(A.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(A.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await A.goto('/browser')
     await expect(A.getByTestId('media-import-file')).toBeEnabled({timeout:30000})
 
@@ -56,16 +56,15 @@ test('P1 #200 >64MiB ciphertext survives offline, lost ACK, reload and independe
     // but the transport drops its HTTP ACK before delivering it to the PWA.
     // Subsequent exact chunk retries are still signed and idempotent.
     await A.route('**/media/v1/*/chunks/*',async route=>{
+      // The server really accepts the chunk, but its ACK is lost. Keep the
+      // ACK outage in place until the durable retry assertions finish; the
+      // automatic outbox retry must not race the negative observation.
+      const server=await route.fetch()
       if(!simulatedLostAck){
         simulatedLostAck=true
-        const server=await route.fetch()
         forwardedPut=server.status()
-        await route.fulfill({
-          status:503,contentType:'application/json',
-          body:JSON.stringify({error:'simulated_lost_client_ACK'}),
-          headers:{'Cache-Control':'no-store'},
-        })
-      }else await route.continue()
+      }
+      await route.abort('failed')
     })
 
     await ownerContext.setOffline(false)
@@ -128,7 +127,7 @@ test('P1 #200 >64MiB ciphertext survives offline, lost ACK, reload and independe
     await B.goto('/settings')
     await B.locator('#recovery-key').fill(key)
     await B.getByRole('button',{name:'Восстановить',exact:true}).click()
-    await expect(B.getByText('Подтверждённая сессия'))
+    await expect(B.locator('[data-testid="shell-status-link"][data-session-state="online"]'))
       .toBeVisible({timeout:30000})
     await B.goto('/browser')
     await B.evaluate(async()=>{

@@ -1,3 +1,4 @@
+import {browserControl,browserHeader,exchangeReady} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
 // P2 integration QA, not a substitute for physical native iOS/Android.
@@ -31,7 +32,7 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     const device=await page.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       const current=identity.requireSession()
@@ -39,8 +40,7 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
     })
     await page.goto('/browser')
     await waitForVerifiedResume(page,device)
-    await expect(page.getByText('Ключ обмена подготовлен'))
-      .toBeVisible({timeout:20_000})
+    await exchangeReady(page,20000)
     return device
   }
   try{
@@ -54,7 +54,7 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
     // Browser v3 intentionally hides MediaImportPanel in the Header upload
     // sheet. Enter through the owner-approved visible control, instead of
     // trying to click a hidden upload button until Playwright times out.
-    await B.getByTestId('browser-header-upload').click()
+    await browserHeader(B,'upload')
     await expect(B.getByTestId('browser-import-sheet')).toBeVisible()
     const uploader=B.getByTestId('browser-import-sheet')
       .locator('.media-import-p1')
@@ -153,7 +153,7 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
       const identity=await import('/src/features/identity/application/session.ts')
       await identity.reauthenticate()
     })
-    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(B,'Обновить')
     await expect(B.getByText('Приглашения',{exact:true})).toBeVisible()
     await B.getByRole('button',{name:'Ключ владельца'}).click()
     await B.getByLabel('Я сверил отпечаток владельца').check()
@@ -174,7 +174,7 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
       return matches.at(-1)?.state??'not-queued'
     },assignmentId),{timeout:45_000}).toBe('sent')
     console.log('PB3_AV_E2E stage=contributor_accept_sent')
-    await B.getByRole('button',{name:'Обновить',exact:true}).click()
+    await browserControl(B,'Обновить')
     // Recipient B may see only a *fresh* independently verified owner
     // policy once the acceptance is actually acknowledged by the server.
     await expect.poll(()=>B.evaluate(async({id,owner})=>{

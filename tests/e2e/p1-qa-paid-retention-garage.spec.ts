@@ -19,7 +19,7 @@ async function enroll(page:Page):Promise<string>{
   await page.getByRole('button',{name:'Создать ключ'}).click()
   await page.getByLabel('Я сохранил ключ восстановления').check()
   await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-  await expect(page.getByText('Подтверждённая сессия'))
+  await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]'))
     .toBeVisible({timeout:30000})
   const accountId=await page.evaluate(async()=>{
     const {activeSession}=await import('/src/features/identity/application/session.ts')
@@ -69,7 +69,7 @@ for(const {plan,days,serverMax} of plans){
 
     // New authentication refresh invalidates cached 60s Free hint.
     await page.reload()
-    await expect(page.getByText('Подтверждённая сессия'))
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]'))
       .toBeVisible({timeout:30000})
 
     const actual=await page.evaluate(async({expectedPlan})=>{

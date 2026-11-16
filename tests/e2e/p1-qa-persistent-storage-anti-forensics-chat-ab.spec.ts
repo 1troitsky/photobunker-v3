@@ -163,7 +163,7 @@ test('P1 #378 genuine encrypted offline media stays private in persistent browse
     expect(recoveryKey).toMatch(/^PB2\./)
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button', { name: 'Завершить регистрацию' }).click()
-    await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+    await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
 
     // Existing Vite shell stays loaded: this is genuine warm Local-First,
     // not a claimed signed Service Worker or cold offline startup.
