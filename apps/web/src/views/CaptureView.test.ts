@@ -455,7 +455,7 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(getUserMedia).toHaveBeenCalledTimes(2)
     expect(getUserMedia).toHaveBeenLastCalledWith({
       audio:false,
-      video:{facingMode:{ideal:'user'},width:{ideal:1280}},
+      video:{facingMode:{ideal:'user'},width:{ideal:1920}},
     })
   })
 })
