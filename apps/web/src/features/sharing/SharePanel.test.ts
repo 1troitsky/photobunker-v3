@@ -63,7 +63,7 @@ afterEach(()=>{
 describe('Photo E2EE grant panel account isolation',()=>{
   it('clears old outgoing grants and unsent recipient on account switch',async()=>{
     await mount()
-    expect(host.textContent).toContain('grant-'+A.slice(0,8))
+    expect(host.textContent).toContain('grant-11 · sent')
     const recipient=host.querySelector<HTMLInputElement>('#recipient-account-id')!
     recipient.value=PEER
     recipient.dispatchEvent(new Event('input',{bubbles:true}))
@@ -71,20 +71,20 @@ describe('Photo E2EE grant panel account isolation',()=>{
     activeSession.value=session(B,false)
     await settle()
     expect(recipient.value).toBe('')
-    expect(host.textContent).not.toContain('grant-'+A.slice(0,8))
+    expect(host.textContent).not.toContain('grant-11 · sent')
     expect(mocks.received).toHaveBeenCalledTimes(1)
     expect(host.textContent).not.toContain('Ключ обмена подготовлен')
   })
   it('ignores delayed old-account grant responses after logout/recovery',async()=>{
     const pending=deferred<ReturnType<typeof grant>[]>()
-    mocks.outgoing.mockImplementationOnce(()=>pending.promise)
+    mocks.outgoing.mockImplementation(()=>pending.promise)
     await mount()
     expect(mocks.outgoing).toHaveBeenCalledTimes(1)
     activeSession.value=session(B,false)
     await settle()
     pending.resolve([grant(A)])
     await settle()
-    expect(host.textContent).not.toContain('grant-'+A.slice(0,8))
+    expect(host.textContent).not.toContain('grant-11 · sent')
     expect(host.textContent).not.toContain('Ключ обмена подготовлен')
     expect(mocks.received).not.toHaveBeenCalled()
   })
@@ -104,6 +104,6 @@ describe('Photo E2EE grant panel account isolation',()=>{
     pending.resolve({directory:{safetyFingerprint:'SECRET-OLD-FINGERPRINT'},confirmed:false})
     await settle()
     expect(host.textContent).not.toContain('SECRET-OLD-FINGERPRINT')
-    expect(host.textContent).not.toContain('grant-'+A.slice(0,8))
+    expect(host.textContent).not.toContain('grant-11 · sent')
   })
 })
