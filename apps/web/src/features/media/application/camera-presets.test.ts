@@ -47,6 +47,46 @@ describe('Camera 1.2 backwards-compatible native preference settings',()=>{
       {...catalog.presets[0]!.settings,gpsTrackingEnabled:'yes'},
     ])expect(()=>validateCameraPresetSettings(malformed)).toThrow('camera.preset_invalid')
   })
+  it('decrypts a real legacy AES-GCM v1 catalog without rewriting or losing its ciphertext',async()=>{
+    const s=await device();activeSession.value=s
+    const oldSettings={...defaultCameraPresetCatalog().presets[0]!.settings} as Record<string,unknown>
+    delete oldSettings.photoZoom
+    delete oldSettings.torchEnabled
+    delete oldSettings.gpsTrackingEnabled
+    const catalog={version:1,selectedId:'default',presets:[{
+      id:'default',name:'Previously sealed camera',settings:oldSettings,
+    }]}
+    const key=s.accountId+'/'+s.deviceId,revision=1
+    const iv=crypto.getRandomValues(new Uint8Array(12))
+    const additionalData=new TextEncoder().encode(JSON.stringify({
+      domain:'pb3/camera/device-presets/v1',
+      accountId:s.accountId,deviceId:s.deviceId,revision,
+    }))
+    const ciphertext=await crypto.subtle.encrypt({
+      name:'AES-GCM',iv,additionalData,tagLength:128,
+    },s.device.encryptionKey,new TextEncoder().encode(JSON.stringify(catalog)))
+    const peek=new Dexie('pb3-camera-encrypted-presets-v1')
+    peek.version(1).stores({rows:'&key'})
+    const original={key,version:1,revision,iv:b64(iv),ciphertext:b64(ciphertext)}
+    try{
+      await peek.table('rows').put(original)
+      const loaded=await loadCameraPresetCatalog()
+      expect(loaded.presets[0]!.name).toBe('Previously sealed camera')
+      expect(loaded.presets[0]!.settings).toEqual({
+        ...oldSettings,photoZoom:1,torchEnabled:false,gpsTrackingEnabled:false,
+      })
+      expect(await peek.table('rows').get(key)).toEqual(original)
+      const updated={...loaded.presets[0]!.settings,photoZoom:2.2,torchEnabled:true}
+      await changeCameraPreset({
+        kind:'save',id:'default',name:'Previously sealed camera',settings:updated,
+      })
+      expect((await loadCameraPresetCatalog()).presets[0]!.settings).toEqual(updated)
+      const sealed=await peek.table('rows').get(key)
+      expect(sealed.revision).toBe(2)
+      expect(sealed.ciphertext).not.toBe(original.ciphertext)
+      expect(JSON.stringify(sealed)).not.toContain('Previously sealed camera')
+    }finally{peek.close()}
+  })
   it('persists optical zoom, torch and GPS intent only as device AEAD, without granting permissions',async()=>{
     const s=await device();activeSession.value=s
     const settings={...defaultCameraPresetCatalog().presets[0]!.settings,
