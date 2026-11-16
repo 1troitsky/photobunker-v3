@@ -2505,6 +2505,7 @@ onUnmounted(()=>{
         </p>
         <SharePanel
           :local-photos="localPhotos.filter(photo=>photo.photoId===sharePhotoId)"
+          :selected-photo-id="sharePhotoId"
           @open-photo="showReceived"/>
       </section>
       <div v-if="shareMediaId" class="browser-share-backdrop"

@@ -35,6 +35,8 @@ test('Browser v3: per-photo share opens existing key-verified E2EE flow, not an 
   await expect(sheet).toHaveAttribute('aria-modal','true')
   await expect(page.getByTestId('browser-photo-share-close')).toBeFocused()
   await expect(sheet.locator('.share-panel')).toBeVisible()
+  await expect(sheet.getByRole('heading',{name:'Полученные фотографии'})).toHaveCount(0)
+  await expect(sheet.getByRole('heading',{name:'Исходящие разрешения'})).toBeVisible()
   // A local queued ciphertext is not a sent grant or a shareable public URL.
   await expect(sheet).toContainText('сверки ключа получателя')
   await expect(sheet.getByText('Отпечаток получателя')).toHaveCount(0)

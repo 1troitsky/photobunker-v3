@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { activeSession, reauthenticate } from '../identity/application/session'
 import {
   confirmPeer, ensureOwnExchangeKey, inspectPeer,
@@ -11,7 +11,10 @@ import {
 import type { OutgoingGrant, RecipientPhoto } from './grant-flow'
 import type { StoredPhoto } from '../photo-sync/application/p1-photo'
 
-defineProps<{ localPhotos: StoredPhoto[] }>()
+const props=withDefaults(defineProps<{
+  localPhotos:StoredPhoto[]
+  selectedPhotoId?:string|null
+}>(),{selectedPhotoId:null})
 const emit=defineEmits<{ openPhoto:[blob:Blob] }>()
 
 const recipientId=ref('')
@@ -21,6 +24,12 @@ const acknowledgedPeer=ref(false)
 const acknowledgedOwner=ref(false)
 const received=ref<RecipientPhoto[]>([])
 const outgoing=ref<OutgoingGrant[]>([])
+const scopedPhotos=computed(()=>props.selectedPhotoId
+  ?props.localPhotos.filter(photo=>photo.photoId===props.selectedPhotoId)
+  :props.localPhotos)
+const scopedOutgoing=computed(()=>props.selectedPhotoId
+  ?outgoing.value.filter(grant=>grant.photoId===props.selectedPhotoId)
+  :outgoing.value)
 const keyStatus=ref('')
 const status=ref('')
 const error=ref('')
@@ -73,6 +82,8 @@ function approveRecipient():void {
 function send(photoId:string):void {
   void action(async()=>{
     if(!pendingPeer.value?.confirmed)throw new Error('share.peer_not_confirmed')
+    if(props.selectedPhotoId&&props.selectedPhotoId!==photoId)
+      throw new Error('share.context_mismatch')
     const grantId=await queueRecipientGrant(photoId,pendingPeer.value.id)
     outgoing.value=await listOutgoingGrants()
     status.value='Конверт сохранён в локальной очереди: '+grantId.slice(0,8)
@@ -149,14 +160,14 @@ onMounted(()=>{void initialize()})
     </div>
     <div v-if="pendingPeer?.confirmed">
       <h3>Локально подтверждённые фотографии</h3>
-      <div v-for="photo in localPhotos.filter(p=>p.state==='synced')" :key="photo.key" class="photo-row">
+      <div v-for="photo in scopedPhotos.filter(p=>p.state==='synced')" :key="photo.key" class="photo-row">
         <code>{{ photo.photoId.slice(0,8) }}</code>
         <button type="button" :disabled="busy" @click="send(photo.photoId)">Передать</button>
       </div>
     </div>
 
     <h3>Исходящие разрешения</h3>
-    <div v-for="grant in outgoing" :key="grant.id" class="photo-row">
+    <div v-for="grant in scopedOutgoing" :key="grant.id" class="photo-row">
       <div>
         <code>{{ grant.id.slice(0,8) }} · {{ grant.state }}</code>
         <small>{{ grant.recipientAccountId.slice(0,8) }}</small>
@@ -164,6 +175,7 @@ onMounted(()=>{void initialize()})
       <button v-if="grant.state==='sent'" type="button" :disabled="busy" @click="revoke(grant.id)">Отозвать</button>
     </div>
 
+    <template v-if="!props.selectedPhotoId">
     <h3>Полученные фотографии</h3>
     <button type="button" :disabled="busy" @click="refreshGrants">Обновить полученные</button>
     <p v-if="!received.length" class="muted">Нет доступных разрешений</p>
@@ -188,6 +200,7 @@ onMounted(()=>{void initialize()})
       </template>
       <p v-else class="status-text">Подпись отправителя будет проверена перед расшифровкой</p>
     </div>
+    </template>
     <p v-if="status" class="status-text" role="status">{{ status }}</p>
     <p v-if="error" class="error-text" role="alert">{{ error }}</p>
     <p class="muted">Отзыв прекращает будущие серверные выдачи. Уже сохранённые другим человеком копии отозвать криптографически невозможно.</p>
