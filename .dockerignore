@@ -11,3 +11,12 @@ infra/garage/.local
 **/vendor
 **/dist
 **/test-results
+**/.phpunit.result.cache
+**/.phpunit.cache
+**/storage/framework/testing
+**/storage/framework/sessions/*
+**/storage/framework/cache/data/*
+**/storage/framework/views/*
+**/storage/logs/*
+**/storage/app/private/*
+local-runner/project-name

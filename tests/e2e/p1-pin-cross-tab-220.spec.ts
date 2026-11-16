@@ -4,7 +4,7 @@ import {expect,test} from '@playwright/test'
  * Disposable browser-only P3 #220 security acceptance: two genuinely
  * independent Vue/Identity instances sharing one IndexedDB origin.
  *
- * There is deliberately NO production PIN-enrolment UI yet. This test
+ * The genuine enrollment UI is covered separately. This negative test
  * invokes the existing unreleased migration helper on a disposable local
  * fake account only, with no server registration, no user data or wipe.
  */
@@ -45,6 +45,10 @@ test('P3-220: live tab blocks PIN seal; cooperative closure allows guarded PIN +
       const session=await import('/src/features/identity/application/session.ts')
       const {migrateLegacyLocalDeviceToPin}=
         await import('/src/features/security/application/pin-device-migration.ts')
+      // Local UI is intentionally visible before the initial remote proof.
+      // Settle that original resume before deliberately closing its Session;
+      // a pending proof must not be mistaken for a fresh later activation.
+      await session.resumeExistingDevice()
       const s=session.activeSession.value
       if(!s||s.accountId!==expectedId)throw Error('test.other_tab_session_missing')
       const verifiedPackage=s.pkg

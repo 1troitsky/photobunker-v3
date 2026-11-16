@@ -2376,7 +2376,10 @@ onUnmounted(()=>{
       </div>
       <!-- One live list of folders, teleported ABOVE files when preferred,
            or displayed BELOW files when disabled. No duplicate edit/ACL UI. -->
-      <Teleport to="#browser-folder-cards-top" :disabled="!foldersFirst">
+      <!-- PIN-gated authenticated routes first mount with local data present.
+           Resolve this same-root target after its DOM insertion, preserving
+           the private bootstrap gate and the single encrypted folder list. -->
+      <Teleport defer to="#browser-folder-cards-top" :disabled="!foldersFirst">
         <div class="browser-folder-list">
           <div v-for="folder in folders" :key="folder.id" class="browser-folder-item"
             :data-testid="'browser-folder-'+folder.id">
