@@ -45,15 +45,18 @@ const blindMode=ref(false)
 const cameraSheet=ref<'assignment'|'settings'|null>(null)
 const cameraFacing=ref<'environment'|'user'>('environment')
 const torchOn=ref(false)
+const desiredTorch=ref(false)
 const torchBusy=ref(false)
 // Expose only true hardware zoom, never a CSS-only simulated crop.
 const cameraZoomRange=ref<{min:number;max:number;step:number}|null>(null)
 const cameraZoom=ref(1)
+const desiredPhotoZoom=ref(1)
 const cameraZoomBusy=ref(false)
 const permissionBusy=ref(false)
 const devicePermissionStatus=ref('')
 const gridVisible=ref(false)
 const gpsStatusVisible=ref(true)
+const desiredGpsTracking=ref(false)
 const photoAspect=ref<CameraPhotoAspect>('4:3')
 const photoQuality=ref<CameraPhotoQuality>('high')
 const videoQuality=ref<CameraVideoQuality>('720p')
@@ -98,7 +101,8 @@ let applyingCameraPreset=false
 watch([
   photoAspect,photoQuality,photoStorage,videoQuality,videoAudioEnabled,
   videoMaxSeconds,audioMaxSeconds,audioTargetBitrate,gridVisible,
-  gpsStatusVisible,selectedPresetId,presetName,
+  gpsStatusVisible,desiredGpsTracking,desiredPhotoZoom,desiredTorch,
+  selectedPresetId,presetName,
 ],()=>{if(!applyingCameraPreset)presetUiEpoch++},{flush:'sync'})
 function cameraSettingsSnapshot():CameraPresetSettings {
   return {
@@ -108,6 +112,8 @@ function cameraSettingsSnapshot():CameraPresetSettings {
     videoMaxSeconds:videoMaxSeconds.value,audioMaxSeconds:audioMaxSeconds.value,
     audioTargetBitrate:audioTargetBitrate.value,
     gridVisible:gridVisible.value,gpsStatusVisible:gpsStatusVisible.value,
+    photoZoom:desiredPhotoZoom.value,torchEnabled:desiredTorch.value,
+    gpsTrackingEnabled:desiredGpsTracking.value,
   }
 }
 function applyCameraPreset(settings:CameraPresetSettings):void {
@@ -123,6 +129,11 @@ function applyCameraPreset(settings:CameraPresetSettings):void {
     audioTargetBitrate.value=settings.audioTargetBitrate
     gridVisible.value=settings.gridVisible
     gpsStatusVisible.value=settings.gpsStatusVisible
+    desiredPhotoZoom.value=settings.photoZoom
+    desiredTorch.value=settings.torchEnabled
+    // A saved preference is NOT a geolocation grant: only an explicit user
+    // click may start the GPS watcher or show a checked real tracking state.
+    desiredGpsTracking.value=settings.gpsTrackingEnabled
   }finally{applyingCameraPreset=false}
 }
 async function reloadCameraPresets():Promise<void>{
@@ -149,6 +160,7 @@ async function reloadCameraPresets():Promise<void>{
       const chosen=found.presets.find(p=>p.id===found.selectedId)!
       presetName.value=chosen.name
       applyCameraPreset(chosen.settings)
+      void applyCameraHardwarePreferences()
     }finally{applyingCameraPreset=false}
   }catch(e){
     if(sameIdentity(cameraIdentity(session),cameraIdentity(activeSession.value))
@@ -170,7 +182,10 @@ async function pickCameraPreset():Promise<void>{
     cameraPresetCatalog.value=next
     presetName.value=chosen.name
     applyCameraPreset(chosen.settings)
-    presetNotice.value='Пресет выбран. Параметры камеры применяются при следующем запуске.'
+    void applyCameraHardwarePreferences()
+    presetNotice.value=chosen.settings.gpsTrackingEnabled
+      ?'Пресет выбран. Для GPS подтвердите разрешение кнопкой «Определить координаты».'
+      :'Пресет выбран. Параметры камеры применены при поддержке устройства.'
   }catch(e){
     if(session===activeSession.value){
       selectedPresetId.value=cameraPresetCatalog.value.selectedId
