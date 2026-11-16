@@ -41,6 +41,8 @@ const draftSaving=ref(false)
 const closing=ref(false)
 let run=0
 let saveTimer:ReturnType<typeof setTimeout>|null=null
+let lastDurableBody=''
+let inFlightSaves=0
 let returnFocus:HTMLElement|null=null
 let modalBackground:HTMLElement|null=null
 let previousBackgroundInert=false
@@ -137,6 +139,7 @@ async function open(contact:ConfirmedContact):Promise<void>{
       throw Error('messages.peer_blocked_locally')
     const body=await getMessageDraft(contact)
     if(!matches(owner,token))return
+    lastDurableBody=body
     selected.value=contact;editor.value=body
     pickerOpen.value=false;threadOpen.value=true
     await nextTick()
@@ -159,10 +162,12 @@ async function persist(
   peer:ConfirmedContact,body:string,owner:string,token:number,
 ):Promise<boolean>{
   if(!matches(owner,token))return false
+  inFlightSaves++
   draftSaving.value=true
   try{
     await saveMessageDraft(peer,body)
     if(!matches(owner,token)||editor.value!==body)return false
+    lastDurableBody=body
     if(!body.trim()){
       drafts.value=drafts.value.filter(x=>x.peerAccountId!==peer.peerAccountId)
     }else{
@@ -183,7 +188,10 @@ async function persist(
     }
     return false
   }
-  finally{if(matches(owner,token))draftSaving.value=false}
+  finally{
+    inFlightSaves=Math.max(0,inFlightSaves-1)
+    if(matches(owner,token))draftSaving.value=inFlightSaves>0
+  }
 }
 async function close():Promise<void>{
   if(!threadOpen.value||closing.value)return
@@ -222,6 +230,20 @@ function dismissWithoutSave():void{
   selected.value=null;editor.value=''
   pickerOpen.value=false;returnFocus=null
   status.value='';draftSaving.value=false;closing.value=false
+  lastDurableBody=''
+  inFlightSaves=0
+}
+function warnBeforeHardExit(event:BeforeUnloadEvent):void{
+  // Native reload/tab-close cannot await IndexedDB encryption. Let the
+  // browser offer its own confirmation only while an ACTIVE draft can be
+  // lost, not after successful commits or with no open conversation.
+  if(!threadOpen.value||(
+    editor.value===lastDurableBody
+    &&saveTimer===null
+    &&inFlightSaves===0
+  ))return
+  event.preventDefault()
+  event.returnValue=''
 }
 function keyboard(event:KeyboardEvent):void{
   if(!threadOpen.value)return
@@ -280,7 +302,11 @@ watch(activeSession,(_current,old)=>{
     void reload()
   }
 })
-onMounted(()=>{void reload();window.addEventListener('keydown',keyboard)})
+onMounted(()=>{
+  void reload()
+  window.addEventListener('keydown',keyboard)
+  window.addEventListener('beforeunload',warnBeforeHardExit)
+})
 onUnmounted(()=>{
   // An unmounted component never retains decrypted text. The most recent
   // input is committed without network; key/account mismatch fails closed.
@@ -291,6 +317,7 @@ onUnmounted(()=>{
   ++run;dismissWithoutSave();contacts.value=[];drafts.value=[]
   setModalBackground(false)
   window.removeEventListener('keydown',keyboard)
+  window.removeEventListener('beforeunload',warnBeforeHardExit)
 })
 </script>
 

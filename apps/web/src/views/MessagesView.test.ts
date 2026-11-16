@@ -77,6 +77,11 @@ function closeThread():void{
   if(!button)throw Error('close absent')
   button.click()
 }
+function isHardExitPrevented():boolean{
+  const event=new Event('beforeunload',{cancelable:true})
+  window.dispatchEvent(event)
+  return event.defaultPrevented
+}
 beforeEach(()=>{
   shell=document.createElement('div')
   shell.className='shell'
@@ -97,6 +102,38 @@ afterEach(()=>{
   activeSession.value=null
 })
 describe('Messages 1.1 local-first draft safety',()=>{
+  it('warns on hard reload only for an unsaved or in-flight encrypted draft',async()=>{
+    await mountAndOpen()
+    expect(isHardExitPrevented()).toBe(false)
+    write('NOT_YET_PERSISTED')
+    expect(isHardExitPrevented()).toBe(true)
+    closeThread()
+    await settle()
+    expect(mocks.save).toHaveBeenCalledWith(contact,'NOT_YET_PERSISTED')
+    expect(thread()).toBeNull()
+    expect(isHardExitPrevented()).toBe(false)
+  })
+  it('warns during an in-flight write even when editor matches the saved body',async()=>{
+    let resolveWrite:(()=>void)|undefined
+    mocks.save.mockImplementationOnce(()=>new Promise<void>(resolve=>{resolveWrite=resolve}))
+    await mountAndOpen()
+    write('TEXT')
+    closeThread()
+    await settle()
+    expect(isHardExitPrevented()).toBe(true)
+    resolveWrite?.()
+    await settle()
+    expect(isHardExitPrevented()).toBe(false)
+  })
+  it('removes hard-reload handlers on unmount rather than retaining plaintext state',async()=>{
+    await mountAndOpen()
+    write('PRIVATE_UNSAVED_DRAFT')
+    expect(isHardExitPrevented()).toBe(true)
+    app?.unmount()
+    app=undefined
+    await settle()
+    expect(isHardExitPrevented()).toBe(false)
+  })
   it('allows ordinary router navigation with no open draft dialog',async()=>{
     app=createApp(MessagesView)
     app.mount(host)
