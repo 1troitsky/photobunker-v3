@@ -779,7 +779,9 @@ async function startCamera():Promise<void> {
         ?{facingMode:{ideal:cameraFacing.value},
           width:{ideal:mode==='video'
             ?videoQuality.value==='1080p'?1920:videoQuality.value==='480p'?854:1280
-            :1280}}:false,
+            // Request enough native detail for the approved Maximum 1600px
+            // JPEG tier even when the user changes quality without restart.
+            :1920}}:false,
     })
     await nextTick()
     if(!opened.getTracks().length||opened.getTracks().some(track=>track.readyState!=='live'))
