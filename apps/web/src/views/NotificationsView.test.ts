@@ -110,6 +110,34 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
       .not.toBeNull()
   })
 
+  it('expands as a single approved event card without repeating the summary',async()=>{
+    activeSession.value=identity(true)
+    await mount()
+    const card=el('notification-'+ID)
+    const summary=card.querySelector('.notification-copy small')!
+    expect(summary.textContent).toBe('Проверить доступ.')
+    card.querySelector<HTMLButtonElement>('button.notification-summary')!.click()
+    await settle()
+    const details=el('notification-details')
+    expect(details.textContent).not.toContain('Проверить доступ.')
+    expect(details.querySelectorAll('.notification-details')).toHaveLength(0)
+    expect(details.querySelectorAll('button.notification-back-to-list')).toHaveLength(1)
+    expect(details.querySelectorAll('button[data-testid="notification-open"]')).toHaveLength(1)
+    details.querySelector<HTMLButtonElement>('.notification-back-to-list')!.click()
+    await settle()
+    expect(host.querySelector('[data-testid="notification-details"]')).toBeNull()
+    expect(el('notifications-list').querySelectorAll('li')).toHaveLength(1)
+  })
+  it('shows an explicit informational detail without offering a forged target action',async()=>{
+    mocks.rows=[{...mocks.rows[0]!,kind:'security',targetId:null}]
+    await mount()
+    el('notification-'+ID).querySelector('button')!.click()
+    await settle()
+    const details=el('notification-details')
+    expect(details.textContent).toContain('дополнительных действий нет')
+    expect(details.textContent).not.toContain('Проверить доступ.')
+    expect(details.querySelector('[data-testid="notification-open"]')).toBeNull()
+  })
   it('renders cached rows offline, filters unread and persists local read before showing it read',async()=>{
     await mount()
     expect(el('notifications-list').textContent).toContain('Новые материалы')

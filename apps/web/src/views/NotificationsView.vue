@@ -288,14 +288,19 @@ onUnmounted(()=>{
             <time :datetime="new Date(row.occurredAt).toISOString()">{{ time(row.occurredAt) }}</time>
             <span aria-hidden="true" class="notification-chevron">{{ expanded===row.id?'⌃':'⌄' }}</span>
           </button>
-          <div v-if="expanded===row.id" class="notification-details">
-            <p>{{ previewNotification(row).description }}</p>
+          <div v-if="expanded===row.id" class="notification-details"
+            data-testid="notification-details">
+            <!-- The approved card already displays the summary in its header.
+                 Do not repeat it as a second, nested content block. -->
             <button v-if="canOpen(row)" type="button" :disabled="busy"
               data-testid="notification-open" @click="openTarget(row)">
               Проверить и открыть
             </button>
             <p v-else-if="row.targetId!==null" class="notifications-hint">
               Для открытия требуется актуальная проверка доступа на сервере.
+            </p>
+            <p v-else class="notifications-hint">
+              Это информационное событие, дополнительных действий нет.
             </p>
             <button type="button" class="notification-back-to-list"
               data-testid="notifications-back-to-list"
