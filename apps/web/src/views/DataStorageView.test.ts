@@ -40,7 +40,7 @@ async function mount():Promise<void>{
 }
 function quotaText():string{
   return host.querySelector('[data-testid="storage-file-quota-denominator"]')
-    ?.textContent?.replace(/\\s+/g,' ').trim()??''
+    ?.textContent?.replace(/\s+/g,' ').trim()??''
 }
 beforeEach(()=>{
   host=document.createElement('div');document.body.append(host)
