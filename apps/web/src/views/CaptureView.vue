@@ -1550,11 +1550,13 @@ onUnmounted(()=>{
              video surface. Teleport leaves MediaStream/MediaRecorder untouched. -->
         <Teleport to="body">
         <div v-if="blindMode" class="camera-blind-overlay" data-testid="camera-blind-overlay" role="dialog" aria-modal="true" aria-label="Слепой режим" @keydown="onBlindKeydown">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="1.6" aria-hidden="true">
-            <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/>
-            <circle cx="12" cy="12" r="3"/><path d="m3 3 18 18"/>
-          </svg>
+          <span class="camera-blind-emblem" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.15" aria-hidden="true">
+              <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/>
+              <circle cx="12" cy="12" r="3"/><path d="m3 3 18 18"/>
+            </svg>
+          </span>
           <h2>Слепой режим</h2>
           <p>Что-бы другие не видели, что вы делаете 👻</p>
           <time v-if="recording" data-testid="camera-blind-time">
@@ -1570,6 +1572,7 @@ onUnmounted(()=>{
             @click="beginRecording">Начать запись</button>
           <button v-else type="button" class="camera-blind-shutter recording"
             data-testid="camera-blind-shutter" @click="endRecording">Остановить запись</button>
+          <p class="camera-blind-note">Если клавиши громкости недоступны — нажмите кнопку</p>
           <button type="button" class="camera-blind-return"
             @click="toggleBlindMode">Вернуться назад</button>
         </div>
