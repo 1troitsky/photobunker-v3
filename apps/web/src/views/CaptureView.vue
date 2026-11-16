@@ -717,8 +717,10 @@ async function requestDevicePermission(which:'camera'|'microphone'):Promise<void
     devicePermissionStatus.value='Браузер не предоставляет доступ к оборудованию.'
     return
   }
+  // A permission grant from another mode may not start a new capture stream.
+  const permissionMode=captureMode.value
   permissionBusy.value=true;devicePermissionStatus.value=''
-  let temp:MediaStream|null=null
+  let temp:MediaStream|null=null,granted=false
   try{
     temp=await navigator.mediaDevices.getUserMedia(which==='camera'
       ?{audio:false,video:{facingMode:{ideal:cameraFacing.value}}}
@@ -727,9 +729,10 @@ async function requestDevicePermission(which:'camera'|'microphone'):Promise<void
     const tracks=temp.getTracks()
     if(tracks.length===0||tracks.some(t=>t.readyState!=='live'))
       throw Error('camera.permission_stream_ended')
+    granted=true
     devicePermissionStatus.value=which==='camera'
-      ?'Камера доступна для текущей сессии. При следующем запуске разрешение проверяется снова.'
-      :'Микрофон доступен для текущей сессии. При следующей записи разрешение проверяется снова.'
+      ?'Камера доступна для текущей сессии.'
+      :'Микрофон доступен для текущей сессии.'
   }catch(e){
     if(!disposed&&sameIdentity(identity,cameraIdentity(activeSession.value)))
       devicePermissionStatus.value=e instanceof Error?e.message:'camera.permission_denied'
@@ -737,6 +740,15 @@ async function requestDevicePermission(which:'camera'|'microphone'):Promise<void
     if(temp)stopTracks(temp)
     permissionBusy.value=false
   }
+  // The approved UI has ONLY two permission actions inside Camera Settings.
+  // They are also the explicit retry after a denied initial camera start.
+  // First close the temporary preflight stream; do not race two live cameras.
+  const relevant=permissionMode==='photo'?which==='camera'
+    :permissionMode==='audio'?which==='microphone'
+      :which==='camera'||(videoAudioEnabled.value&&which==='microphone')
+  if(granted&&relevant&&!disposed&&captureMode.value===permissionMode
+    &&sameIdentity(identity,cameraIdentity(activeSession.value))
+    &&!stream.value&&!starting.value)await openCamera()
 }
 async function openCamera():Promise<void> {
   cameraWanted=true
@@ -1522,14 +1534,6 @@ onUnmounted(()=>{
         <p v-if="recording" class="camera-recording-timer">
           Запись · {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
         </p>
-        <div class="camera-device-actions">
-          <button type="button" :disabled="!!stream||starting" @click="openCamera">
-            {{captureMode==='audio'?'Включить микрофон':'Включить камеру'}}
-          </button>
-          <button type="button" :disabled="!stream&&!starting" @click="closeCamera">
-            {{recording?'Отменить запись':'Отключить'}}
-          </button>
-        </div>
       </div>
       <div v-if="cameraSheet" class="camera-sheet-backdrop"
         data-testid="camera-sheet-backdrop" @click="closeCameraSheet"></div>
@@ -1576,13 +1580,6 @@ onUnmounted(()=>{
               Не содержат GPS, названия заданий или данных съёмки.</p>
           </section>
 
-        <label for="camera-mode">Режим съёмки</label>
-        <select id="camera-mode" v-model="captureMode" :disabled="recording||busy"
-          data-testid="camera-mode">
-          <option value="photo">Фото</option>
-          <option value="video">Видео</option>
-          <option value="audio">Аудио</option>
-        </select>
         <section class="camera-preset-options" aria-label="Фото">
           <h3>Фото</h3>
           <label for="camera-photo-aspect">Пропорции</label>
@@ -1707,20 +1704,6 @@ onUnmounted(()=>{
           <p role="status">{{gps?'GPS · ±'+Math.round(gps.accuracyMeters)+' м':'GPS не получен'}}</p>
           <button type="button" :disabled="gpsLoading||busy||recording"
             @click="obtainGPS">{{gpsLoading?'Определяем…':'Определить координаты'}}</button>
-        </div>
-        <div class="camera-preset-options">
-          <label for="camera-photo-storage">Сохранить фото в</label>
-          <select id="camera-photo-storage" v-model="photoStorage"
-            :disabled="busy||recording" data-testid="camera-photo-storage">
-            <option value="p1">P1 — зашифрованное фото (по умолчанию)</option>
-            <option value="p2">P2 — Media Library JPEG</option>
-          </select>
-          <p v-if="photoStorage==='p2'" class="muted">
-            Снимок сохраняется сразу в зашифрованный MediaFile без системной
-            галереи. Для задания версия правил и время съёмки подписываются
-            аккаунтом исполнителя. Это заявление клиента, не аппаратная
-            проверка камеры или достоверности GPS.
-          </p>
         </div>
 
           <div v-if="cameraSheet==='settings'" class="camera-sheet-footer">
