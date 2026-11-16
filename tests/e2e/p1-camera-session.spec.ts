@@ -64,7 +64,8 @@ test('late permission survives real online hydration with one live stream',async
   expect(await stats(page)).toEqual({calls:1,maxLive:1,live:1,ended:0})
   // The approved screen has no duplicate Stop action below the shutter;
   // navigating away always releases the camera without touching encrypted data.
-  await page.goto('/browser')
+  await page.getByRole('navigation',{name:'Главная навигация'})
+    .getByRole('link',{name:'Browser',exact:true}).click()
   expect(await stats(page)).toEqual({calls:1,maxLive:1,live:0,ended:1})
 })
 
