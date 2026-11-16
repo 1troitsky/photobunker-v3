@@ -4,7 +4,7 @@ import {
   activeSession,beginRegistration,identityBootstrapError,
   identityBootstrapReady,pendingPinUnlock,restoreAccount,
   resumeExistingDevice,unlockPinnedDevice,refreshPinSessionFence,
-  signPhotoContract,lockActivePinSession,
+  signPhotoContract,lockActivePinSession,enrollAppPinWithRecovery,
 } from './session'
 import {
   b64,canonical,createPB2,digest,freshPackage,hex,random,
@@ -105,6 +105,47 @@ async function simulateForeignPinSeal(f:Awaited<ReturnType<typeof account>>){
   } as unknown as typeof f.device)
 }
 
+describe('P3 #220 first PIN enrollment with real Recovery Key and atomic device seal',()=>{
+  it('requires the authentic server recovery envelope before removing the legacy package',async()=>{
+    const f=await account()
+    await resumeExistingDevice()
+    expect(activeSession.value?.accountId).toBe(f.scope.accountId)
+    const key=(await createPB2()).encoded
+    await expect(enrollAppPinWithRecovery(key,'4826'))
+      .rejects.toThrow('offline')
+    expect(activeSession.value?.accountId).toBe(f.scope.accountId)
+    expect(pendingPinUnlock.value).toBeNull()
+    expect((await getDevice(f.scope.accountId,f.scope.deviceId))?.envelope.purpose)
+      .toBe('device')
+  },90_000)
+  it('seals the existing legacy account only after the exact Recovery Key decrypts',async()=>{
+    const f=await account()
+    const kit=await createPB2()
+    const envelope=await sealRecovery(f.pkg,kit)
+    await resumeExistingDevice()
+    expect(activeSession.value?.accountId).toBe(f.scope.accountId)
+    mocks.jsonApi.mockImplementation(async(path:string)=>{
+      if(path==='/identity/v2/recovery/'+kit.locator)return {
+        accountId:f.scope.accountId,accountSpki:f.pkg.accountSpki,
+        revision:f.pkg.revision,envelope,
+      }
+      throw new Error('offline')
+    })
+    await enrollAppPinWithRecovery(kit.encoded,'4826')
+    expect(identityBootstrapReady.value).toBe(true)
+    expect(activeSession.value).toBeNull()
+    expect(identityBootstrapError.value).toBeNull()
+    expect(pendingPinUnlock.value?.pinLength).toBe(4)
+    const stored=await getDevice(f.scope.accountId,f.scope.deviceId)
+    expect((stored as unknown as {pinMode:string})?.pinMode).toBe('pin-v1')
+    expect(stored?.envelope.purpose).toBe('preunlock-package')
+    expect(await unlockPinnedDevice('0000')).toMatchObject({
+      status:'invalid',attemptsRemaining:4,
+    })
+    expect(await unlockPinnedDevice('4826')).toEqual({status:'app-unlocked'})
+    expect(activeSession.value?.pkg).toEqual(f.pkg)
+  },180_000)
+})
 describe('P3 #220 real Identity PIN preunlock bootstrap (no live enrollment)',()=>{
   it('discovers a saved PIN device without any plaintext PackageV2 or offline session',async()=>{
     const f=await protectedAccount()
