@@ -92,6 +92,29 @@ describe('Data & Storage 1.2 verified file quota',()=>{
     expect(bar?.value).toBe(0)
     expect(bar?.getAttribute('aria-label')).toContain('не ограничено')
   })
+  it('shows a conditional forecast for queued ciphertext and new files, not conflicts',async()=>{
+    mock.queue.mockResolvedValue({
+      summary:{pendingCount:1,conflictedCount:2,expiredPendingCount:3,
+        pendingCipherBytes:1500,syncedLocalCount:0},
+      entries:[],
+    })
+    await mount()
+    const estimate=host.querySelector('[data-testid="storage-after-upload-estimate"]')
+    expect(estimate?.textContent).toContain('13.2 КиБ')
+    expect(estimate?.textContent).toContain('126 файлов')
+    expect(estimate?.textContent).toContain('прогноз')
+    expect(estimate?.textContent).toContain('Конфликты')
+    expect(estimate?.textContent).not.toContain('131 файлов')
+  })
+  it('never projects a future upload without eligible pending files or safe integers',async()=>{
+    mock.queue.mockResolvedValue({
+      summary:{pendingCount:0,conflictedCount:1,expiredPendingCount:1,
+        pendingCipherBytes:0,syncedLocalCount:0},
+      entries:[],
+    })
+    await mount()
+    expect(host.querySelector('[data-testid="storage-after-upload-estimate"]')).toBeNull()
+  })
   it('shows the real limited-plan file count and percentage',async()=>{
     mock.catalog.mockResolvedValue([{
       planId:'go',limits:{maxMediaFiles:250},
