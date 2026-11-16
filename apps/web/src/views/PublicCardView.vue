@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import {computed,onUnmounted,ref,watch} from 'vue'
+import {computed,nextTick,onUnmounted,ref,watch} from 'vue'
 import {RouterLink,useRoute} from 'vue-router'
 import {brand} from '../config/brand'
 import {readPublicCard} from '../features/media/application/public-card-crypto'
 const route=useRoute(),image=ref(''),name=ref(''),description=ref(''),expiresAt=ref(0),allowDownload=ref(false),loading=ref(false),notice=ref('')
 const publicUrl=computed(()=>location.origin+route.fullPath)
 const zoomed=ref(false),days=computed(()=>Math.max(0,Math.ceil((expiresAt.value-Date.now())/86400000)))
+const zoomTrigger=ref<HTMLButtonElement|null>(null),zoomClose=ref<HTMLButtonElement|null>(null)
+watch(zoomed,open=>{void nextTick(()=>{if(open)zoomClose.value?.focus();else zoomTrigger.value?.focus()})})
 let generation=0,controller:AbortController|null=null,timer:ReturnType<typeof setTimeout>|null=null
 function clear():void{if(image.value)URL.revokeObjectURL(image.value);image.value='';name.value='';description.value='';expiresAt.value=0;allowDownload.value=false;zoomed.value=false}
 async function load():Promise<void>{
@@ -13,8 +15,9 @@ async function load():Promise<void>{
   try{
     const result=await readPublicCard(String(route.params.token??''),route.hash.slice(1),controller.signal)
     if(epoch!==generation)return
-    clear();image.value=URL.createObjectURL(result.image);name.value=result.payload.name;description.value=result.payload.description;expiresAt.value=result.contract.expiresAt;allowDownload.value=result.contract.allowDownload
-    timer=setTimeout(()=>{clear();void load()},Math.max(1,Math.min(15000,expiresAt.value-Date.now())))
+    const keepZoom=zoomed.value
+    clear();image.value=URL.createObjectURL(result.image);name.value=result.payload.name;description.value=result.payload.description;expiresAt.value=result.contract.expiresAt;allowDownload.value=result.contract.allowDownload;zoomed.value=keepZoom
+    timer=setTimeout(()=>{if(expiresAt.value<=Date.now())clear();void load()},Math.max(1,Math.min(15000,expiresAt.value-Date.now())))
   }catch{if(epoch===generation)clear()}
   finally{if(epoch===generation)loading.value=false}
 }
@@ -32,7 +35,7 @@ onUnmounted(()=>{generation++;controller?.abort();if(timer)clearTimeout(timer);c
     <p v-if="loading&&!image" role="status">Загружаем карточку…</p>
     <template v-else>
       <div class="card-title"><div class="name-wrap"><h1 class="file-name">{{image?name:'Карточка недоступна'}}</h1><p v-if="image" class="file-id">#<b>{{String(route.params.token).slice(0,8)}}</b></p></div><nav class="file-actions" aria-label="Действия с публичной карточкой"><button class="icon-button" type="button" :disabled="!image" aria-label="Копировать ссылку" @click="copy"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button><button class="icon-button" type="button" :disabled="!image||!allowDownload" aria-label="Скачать безопасную копию" @click="download"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/></svg></button><button class="icon-button" type="button" :disabled="!image" aria-label="Поделиться ссылкой" @click="share"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 14v7h16v-7"/></svg></button></nav></div>
-      <div v-if="image" class="media" :class="{zoomed}"><img :src="image" :alt="name" class="safe-media" data-testid="public-card-image"><button type="button" aria-label="Изменить масштаб фото" :aria-pressed="zoomed" @click="zoomed=!zoomed"></button></div>
+      <div v-if="image" class="media"><img :src="image" :alt="name" class="safe-media" data-testid="public-card-image"><button ref="zoomTrigger" type="button" aria-label="Увеличить изображение" @click="zoomed=true"></button></div>
       <section v-else class="expired-stage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4 20 20M12 3a9 9 0 1 1-9 9"/></svg><h2>Доступ закрыт</h2><p>Ссылка не найдена, срок действия истёк или доступ к файлу закрыт.</p></section>
       <div class="info">
         <section v-if="image&&description" class="info-section"><h2 class="section-label">Описание</h2><p class="description">{{description}}</p></section>
@@ -43,6 +46,11 @@ onUnmounted(()=>{generation++;controller?.abort();if(timer)clearTimeout(timer);c
     <footer class="bottom-brand">Опубликовано через <RouterLink to="/install">{{brand.name}}</RouterLink><span class="copyright">© {{new Date().getFullYear()}} {{brand.name}}</span></footer>
     <p v-if="notice" role="status">{{notice}}</p>
   </main>
+  <div v-if="zoomed&&image" class="lightbox" role="dialog" aria-modal="true" aria-label="Увеличенное фото"
+    data-testid="public-card-lightbox" @keydown.esc.stop.prevent="zoomed=false" @keydown.tab.prevent="zoomClose?.focus()">
+    <button ref="zoomClose" type="button" class="lightbox-close" aria-label="Закрыть увеличенное фото" @click="zoomed=false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 5 14 14M19 5 5 19"/></svg></button>
+    <img :src="image" :alt="name" class="safe-media">
+  </div>
 </div>
 </template>
 <style scoped src="../features/media/ui/PublicCardFieldwork.css"></style>

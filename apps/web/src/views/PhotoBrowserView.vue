@@ -20,6 +20,7 @@ import {
   captureBrowserReturnContext,takeBrowserReturn,
 } from '../features/browser/application/browser-return-context'
 import SharePanel from '../features/sharing/SharePanel.vue'
+import {sameSessionDevice} from '../features/identity/application/session-device'
 import MediaImportPanel from '../features/media/ui/MediaImportPanel.vue'
 import MediaSharePanel from '../features/media/ui/MediaSharePanel.vue'
 import {activeSession,reauthenticate} from '../features/identity/application/session'
@@ -110,6 +111,7 @@ let privateSearchTimer:ReturnType<typeof setTimeout>|null=null
 const busy=ref(false)
 const previewBusy=ref(false)
 const status=ref('')
+const syncFeedback=ref('')
 const error=ref('')
 const selectedUrl=ref('')
 const selectedType=ref<CatalogItem['type']|null>(null)
@@ -421,9 +423,6 @@ function folderLoadedRows(folderId:string):CatalogItem[]{
 function folderLoadedCount(folderId:string):number{
   return folderCoverIndex.value.get(folderId)?.total??0
 }
-function folderCoverSymbol(item:CatalogItem):string{
-  return item.type==='photo'?'▧':item.type==='video'?'▹':'♫'
-}
 function canEditViaPrivateCopy(item:CatalogItem):boolean{
   if(item.source!=='media'||!item.local||item.expiresAt<=Date.now())
     return false
@@ -445,6 +444,9 @@ const treeNodes=computed(()=>{
   walk(null,0)
   return results
 })
+const folderCards=computed(()=>archiveTab.value!=='all'?[]:view.value==='tree'
+  ?treeNodes.value.map(node=>({...folderWorkspace.value.folders[node.id]!,depth:node.depth,children:node.children}))
+  :folders.value.map(folder=>({...folder,depth:0,children:0})))
 function toggleTreeFolder(id:string):void{
   if(!folderWorkspace.value.folders[id])return
   if(treeExpanded.value.includes(id))
@@ -1340,12 +1342,13 @@ async function more():Promise<void>{
 }
 async function sync():Promise<void>{
   if(busy.value)return
-  busy.value=true;error.value='';status.value=''
+  const identity=activeSession.value
+  busy.value=true;error.value='';syncFeedback.value=''
   try{
     if(!activeSession.value?.online)await reauthenticate()
     await flushOutbox()
     await refresh()
-    status.value='Очередь фотографий проверена. Импортированное медиа синхронизируется в блоке импорта.'
+    if(sameSessionDevice(identity,activeSession.value))syncFeedback.value='Статусы фотографий обновлены.'
   }catch(e){error.value=reason(e)}
   finally{busy.value=false}
 }
@@ -1458,6 +1461,7 @@ watch(activeSession,(next,previous)=>{
     treeExpanded.value=[]
     bulkDestination.value=''
     folderNotice.value=''
+    syncFeedback.value=''
     folderSyncStatus.value=''
     mergePlan.value=null
     mergeChoices.value={}
@@ -1817,6 +1821,12 @@ onUnmounted(()=>{
 
 <template>
   <section class="foundation-content browser-v3 content-inner" data-testid="browser-v3">
+    <svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden"><defs>
+      <symbol id="browser-glyph-folder" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 3h8v13H3z"/></symbol>
+      <symbol id="browser-glyph-video" viewBox="0 0 24 24"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-3v10l-4-3"/></symbol>
+      <symbol id="browser-glyph-audio" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 9l12-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="18" cy="16" rx="3" ry="2"/></symbol>
+      <symbol id="browser-glyph-photo" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m4 17 5-5 3 3 3-4 5 5"/></symbol>
+    </defs></svg>
     <div v-if="fileMenuKey||folderMenuId" class="browser-item-menu-backdrop" aria-hidden="true" @click="closeFileMenu"></div>
     <div class="browser-title browser-heading">
       <div class="browser-heading-copy">
@@ -1870,7 +1880,7 @@ onUnmounted(()=>{
         выполняется при открытии файлов; облачные материалы без доказательства
         задания здесь не классифицируются.
       </p>
-      <section class="browser-folders" data-testid="browser-folders">
+      <section class="browser-folders" data-testid="browser-folder-controls">
         <div class="browser-folder-head">
           <div class="browser-breadcrumb browser-path" aria-label="Путь папки">
             <button type="button" class="browser-folder-up path-back" aria-label="На уровень выше"
@@ -1882,7 +1892,7 @@ onUnmounted(()=>{
               </svg>
             </button>
             <div class="path-breadcrumbs">
-            <button type="button" :class="{current:selectedFolder===null}" :aria-current="selectedFolder===null?'location':undefined"
+            <button type="button" :data-testid="view==='tree'?'browser-tree-root':undefined" :class="{current:selectedFolder===null&&primarySection==='all'&&archiveTab==='all'}" :aria-current="selectedFolder===null&&primarySection==='all'&&archiveTab==='all'?'location':undefined"
               @click="choosePrimarySection('all')">Все</button>
             <template v-if="primarySection!=='all'||archiveTab==='archive'">
               <span aria-hidden="true">›</span><button type="button" :class="{current:selectedFolder===null}" @click="selectedFolder=null">{{archiveTab==='archive'?'Архив':primarySection==='personal'?'Мои фото':'Задания'}}</button>
@@ -1986,7 +1996,6 @@ onUnmounted(()=>{
               Отмена</button>
           </div>
         </form>
-        <div id="browser-folder-cards-top" data-testid="browser-folder-cards-top"></div>
         <form v-if="editingFolderId" class="browser-folder-form"
           @submit.prevent="renameCurrentFolder">
           <label>Новое название
@@ -1998,7 +2007,7 @@ onUnmounted(()=>{
         </form>
         <p v-if="!folderReady" role="status" class="muted">Загружаются зашифрованные папки…</p>
         <p v-if="folderError" role="alert" class="error-text">{{ folderError }}</p>
-        <p v-if="folderNotice" role="status" class="muted">{{ folderNotice }}</p>
+        <p v-if="folderNotice" role="status" :class="folderNotice.startsWith('Локальные изменения сохранены.')?'browser-announcement':'muted'">{{ folderNotice }}</p>
       </section>
       <div v-if="browserSettingsOpen" class="browser-settings-backdrop"
         data-testid="browser-settings-backdrop" @click="closeBrowserSettings"></div>
@@ -2095,6 +2104,7 @@ onUnmounted(()=>{
           <span v-if="folderSyncStatus" data-testid="browser-folder-sync-status"
             role="status" class="muted">{{ folderSyncStatus }}</span>
         </div>
+      <p v-if="syncFeedback" role="status">{{syncFeedback}}</p>
       <div class="action-row">
         <button type="button" :disabled="busy" @click="sync">Синхронизировать</button>
         <button type="button" :disabled="busy" @click="refresh">Обновить</button>
@@ -2290,32 +2300,10 @@ onUnmounted(()=>{
         data-testid="browser-bulk-progress">
         Подтверждено {{ archiveBatchProgress }} операций.
       </p>
-      <section v-if="view==='tree'&&archiveTab==='all'&&folderReady&&!folderError"
-        class="browser-tree-navigation" data-testid="browser-tree-navigation"
-        aria-label="Дерево папок">
-        <button type="button" class="browser-tree-root"
-          data-testid="browser-tree-root" :aria-current="selectedFolder===null?'location':undefined"
-          @click="selectTreeFolder(null)">Мои файлы</button>
-        <div v-for="node in treeNodes" :key="node.id" class="browser-tree-node"
-          :data-testid="'browser-tree-folder-'+node.id"
-          :style="{paddingLeft:(Math.min(node.depth,10)*15+8)+'px'}">
-          <button type="button" class="browser-tree-expand"
-            :disabled="node.children===0" :aria-label="'Раскрыть '+node.name"
-            :aria-expanded="node.children?treeExpanded.includes(node.id):undefined"
-            @click="toggleTreeFolder(node.id)">
-            {{node.children?(treeExpanded.includes(node.id)?'▾':'▸'):'·'}}
-          </button>
-          <button type="button" class="browser-tree-select"
-            :aria-current="selectedFolder===node.id?'location':undefined"
-            @click="selectTreeFolder(node.id)">
-            <span aria-hidden="true">▣</span> {{node.name}}
-          </button>
-        </div>
-        <p class="muted">Дерево содержит только зашифрованные пользовательские папки.
-          Файлы ниже относятся к выбранной папке.</p>
-      </section>
+      <div data-testid="browser-folders">
       <div :class="['browser-items',view,view==='grid'?'browser-grid':'browser-list']"
         data-testid="browser-catalog">
+        <div id="browser-folder-cards-top" data-testid="browser-folder-cards-top"></div>
         <div v-for="item in visible" :key="item.key"
           :class="['browser-entry browser-item', item.source==='photo'?'photo-row':'']" :data-sync-state="item.state" :data-plain-bytes="item.bytes" :data-location="item.local?(item.cloud?'local-and-cloud':'local'):'cloud'"
           :data-testid="'browser-row-'+item.key">
@@ -2326,12 +2314,13 @@ onUnmounted(()=>{
               :aria-label="'Выбрать файл '+item.id"
               @change="toggleItem(item.key,($event.target as HTMLInputElement).checked)">
           </label>
+          <button v-if="view==='tree'" type="button" class="tree-expand" disabled aria-hidden="true" tabindex="-1"></button>
           <RouterLink class="entry-open" :to="'/browser/file/'+item.source+'/'+item.id" @click="preserveViewerOrigin(item,$event)">
           <span class="browser-item-kind entry-preview" aria-hidden="true">
             <img v-if="item.type==='photo'&&folderThumbnailUrls[item.key]"
               :src="folderThumbnailUrls[item.key]" alt="" decoding="async"
               data-testid="browser-file-thumb">
-            <span v-else class="file-mark" :class="{audio:item.type==='audio'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path v-if="item.type==='video'" d="M3 5h13v14H3zM16 10l5-3v10l-5-3"/><path v-else-if="item.type==='audio'" d="M9 18V5l11-2v13M9 8l11-2"/><rect v-else x="3" y="3" width="18" height="18" rx="2"/></svg></span>
+            <span v-else class="file-mark" :class="{audio:item.type==='audio'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><use :href="'#browser-glyph-'+item.type"/></svg></span>
           </span>
           <span class="browser-item-detail entry-copy">
             <strong>{{ item.id.slice(0,8) }}</strong>
@@ -2423,20 +2412,25 @@ onUnmounted(()=>{
             </div>
           </div>
         </div>
+        <div id="browser-folder-cards-bottom"></div>
+      </div>
       </div>
       <!-- One live list of folders, teleported ABOVE files when preferred,
            or displayed BELOW files when disabled. No duplicate edit/ACL UI. -->
       <!-- PIN-gated authenticated routes first mount with local data present.
            Resolve this same-root target after its DOM insertion, preserving
            the private bootstrap gate and the single encrypted folder list. -->
-      <Teleport defer to="#browser-folder-cards-top" :disabled="!foldersFirst">
-        <div class="browser-folder-list browser-items" :class="view">
-          <div v-for="folder in folders" :key="folder.id" class="browser-folder-item browser-entry"
-            :data-testid="'browser-folder-'+folder.id">
-            <button type="button" class="browser-folder-open entry-open"
-              :aria-label="folder.name" @click="selectedFolder=folder.id">
+      <Teleport defer :to="foldersFirst?'#browser-folder-cards-top':'#browser-folder-cards-bottom'">
+        <div class="browser-folder-list" :data-testid="view==='tree'?'browser-tree-navigation':undefined" :aria-label="view==='tree'?'Дерево папок':'Папки'">
+          <div v-for="folder in folderCards" :key="folder.id" class="browser-folder-item browser-entry"
+            :data-testid="view==='tree'?'browser-tree-folder-'+folder.id:'browser-folder-'+folder.id" :style="{'--depth':folder.depth}">
+            <button v-if="view==='tree'" type="button" class="browser-tree-expand tree-expand"
+              :disabled="folder.children===0" :aria-label="'Раскрыть '+folder.name" :aria-expanded="folder.children?treeExpanded.includes(folder.id):undefined"
+              @click="toggleTreeFolder(folder.id)">{{treeExpanded.includes(folder.id)?'⌄':'›'}}</button>
+            <button type="button" class="browser-folder-open entry-open" :class="{'browser-tree-select':view==='tree'}"
+              :aria-label="folder.name" :aria-current="view==='tree'&&selectedFolder===folder.id?'location':undefined" @click="view==='tree'?selectTreeFolder(folder.id):(selectedFolder=folder.id)">
               <span class="browser-folder-cover entry-preview"
-                :class="{'is-empty':folderLoadedRows(folder.id).length===0}"
+                :class="{'is-empty':folderLoadedRows(folder.id).length===0,'empty-folder':folderLoadedRows(folder.id).length===0,collage:folderLoadedRows(folder.id).length>0}"
                 aria-hidden="true">
                 <template v-if="folderLoadedRows(folder.id).length">
                   <span v-for="index in 4" :key="index" class="browser-folder-cover-cell"
@@ -2445,26 +2439,24 @@ onUnmounted(()=>{
                         &&folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
                       :src="folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
                       alt="" decoding="async" data-testid="browser-folder-thumb">
-                    <template v-else>{{ folderLoadedRows(folder.id)[index-1]
-                      ?folderCoverSymbol(folderLoadedRows(folder.id)[index-1]!):'' }}</template>
+                    <span v-else-if="folderLoadedRows(folder.id)[index-1]" class="file-mark" :class="{audio:folderLoadedRows(folder.id)[index-1]!.type==='audio'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><use :href="'#browser-glyph-'+folderLoadedRows(folder.id)[index-1]!.type"/></svg></span>
                   </span>
                 </template>
                 <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  stroke-width="1.6"><path d="M3 7h6l2 2h10v11H3z"/>
-                  <path d="M3 7V5h7l2 2"/></svg>
-                <span class="browser-folder-badge">
+                  stroke-width="1.6"><use href="#browser-glyph-folder"/></svg>
+                <span class="browser-folder-badge entry-folder-badge">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="1.8"><path d="M3 7h6l2 2h10v11H3z"/></svg>
+                    stroke-width="1.8"><use href="#browser-glyph-folder"/></svg>
                 </span>
               </span>
               <span class="browser-folder-copy entry-copy">
                 <strong>{{ folder.name }}</strong>
-                <small>{{ folderLoadedCount(folder.id) }} файлов в загруженном каталоге</small>
+                <small title="Количество файлов в загруженном каталоге">{{ folderLoadedCount(folder.id) }} загружено</small>
               </span>
             </button>
             <div class="browser-folder-menu-root"
               :data-testid="'browser-folder-menu-'+folder.id">
-              <button type="button" class="browser-folder-menu-toggle"
+              <button type="button" class="browser-folder-menu-toggle entry-more"
                 data-testid="browser-folder-menu-toggle"
                 :aria-label="'Действия с папкой '+folder.name"
                 :aria-expanded="folderMenuId===folder.id"

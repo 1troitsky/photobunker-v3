@@ -6,8 +6,31 @@ import {
   peekOriginPager,peekOriginBreadcrumb,noteViewerPosition,
 } from '../features/browser/application/browser-return-context'
 import {activeSession} from '../features/identity/application/session'
+import {sameSessionDevice} from '../features/identity/application/session-device'
 import PublicCardPublication from '../features/media/ui/PublicCardPublication.vue'
 const publicationOpen=ref(false)
+const photoFullscreen=ref(false)
+const photoFullscreenDialog=ref<HTMLElement|null>(null)
+function closePhotoFullscreen():void{
+  photoFullscreen.value=false
+  void nextTick(()=>photoElement.value?.closest('button')?.focus())
+}
+async function openPhotoFullscreen():Promise<void>{
+  if(!fileUrl.value||preview.value?.type!=='photo')return
+  const source=fileUrl.value,identity=activeSession.value
+  if(document.fullscreenElement){
+    try{await document.exitFullscreen()}catch{return}
+  }
+  if(fileUrl.value!==source||!sameSessionDevice(identity,activeSession.value))return
+  photoFullscreen.value=true
+  void nextTick(()=>photoFullscreenDialog.value?.querySelector<HTMLButtonElement>('button')?.focus())
+}
+function fullscreenTab(event:KeyboardEvent):void{
+  const controls=[...photoFullscreenDialog.value?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')??[]]
+  const first=controls[0],last=controls.at(-1)
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}
+  else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}
+}
 import {pauseViewerPlayback} from '../features/browser/application/viewer-playback'
 import {setViewerShellActions}
   from '../features/browser/application/viewer-shell-actions'
@@ -1490,6 +1513,14 @@ async function navigate(item:CatalogItem|{source:'photo'|'media';id:string}|null
 }
 function onKeyDown(event:KeyboardEvent):void{
   if(event.defaultPrevented||event.altKey)return
+  if(photoFullscreen.value){
+    if(event.key==='Escape'){event.preventDefault();closePhotoFullscreen()}
+    else if(!event.ctrlKey&&!event.metaKey&&!busy.value){
+      if(event.key==='ArrowLeft'&&adjacent.value.previous){event.preventDefault();void navigate(adjacent.value.previous)}
+      else if(event.key==='ArrowRight'&&adjacent.value.next){event.preventDefault();void navigate(adjacent.value.next)}
+    }
+    return
+  }
   if(editorMode.value){
     if(event.key==='Escape'){event.preventDefault();void cancelEditor();return}
     // The editor uses arrow keys for range/brush movement, not pager history.
@@ -1535,6 +1566,8 @@ function onTouchEnd(event:TouchEvent):void{
   touchStart=null
   if(Math.abs(dx)>75&&Math.abs(dx)>Math.abs(dy)*1.4)
     void navigate(dx>0?adjacent.value.previous:adjacent.value.next)
+  else if(Math.abs(dy)>100&&Math.abs(dy)>Math.abs(dx)*1.4
+    &&photoFullscreen.value)closePhotoFullscreen()
   else if(Math.abs(dy)>100&&Math.abs(dy)>Math.abs(dx)*1.4
     &&document.fullscreenElement)void document.exitFullscreen()
 }
@@ -2021,8 +2054,10 @@ watch([videoTrimStart,videoTrimEnd],()=>{
   if(videoClipBusy.value||videoClipSavedId.value)clearVideoClip()
 })
 watch(editorMode,opened=>{
+  if(opened)photoFullscreen.value=false
   if(!opened&&videoClipBusy.value)clearVideoClip()
 })
+watch(preview,value=>{if(value&&value.type!=='photo')closePhotoFullscreen()})
 // The shared Shell exposes only a callable action. All media content,
 // filenames and permissions remain inside FileViewerView. The callback
 // is cleared on lock, route change and unmount.
@@ -2048,11 +2083,7 @@ watch(activeSession,(next,previous)=>{
   // containing the SAME key package and physical device. Never erase a
   // user's current trim bounds or volatile preview just for online status.
   // A new key package/device/account is a REAL trust boundary: wipe.
-  if(next&&previous
-    &&next.accountId===previous.accountId
-    &&next.deviceId===previous.deviceId
-    &&next.pkg===previous.pkg
-    &&next.device===previous.device){
+  if(next&&previous&&sameSessionDevice(next,previous)){
     void refreshIndex()
     // Bootstrap deliberately exposes cached, offline-only state before the
     // signed device proof completes. A cloud-only deep link attempted during
@@ -2062,6 +2093,7 @@ watch(activeSession,(next,previous)=>{
       void openFile()
     return
   }
+  photoFullscreen.value=false
   clearBlob();clearIndex()
   void refreshIndex()
   void openFile()
@@ -2161,7 +2193,7 @@ onUnmounted(()=>{
         data-testid="file-viewer-stage"
         @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
         <div v-if="busy" role="status" class="file-viewer-wait">Открываем защищённый файл…</div>
-        <button v-else-if="!editorMode&&fileUrl&&preview?.type==='photo'" type="button" class="photo-trigger" aria-label="На весь экран" @click="toggleFullscreen">
+        <button v-else-if="!editorMode&&fileUrl&&preview?.type==='photo'" type="button" class="photo-trigger" aria-label="На весь экран" @click="openPhotoFullscreen">
           <img ref="photoElement" :src="fileUrl" :alt="preview?.name??'Фото'" draggable="false" data-testid="file-viewer-image">
         </button>
         <video v-else-if="!editorMode&&fileUrl&&preview?.type==='video'" :key="fileUrl"
@@ -3104,6 +3136,22 @@ onUnmounted(()=>{
             </section>
           </div>
         </section>
+      </div>
+      <div v-if="photoFullscreen&&activeSession" ref="photoFullscreenDialog" class="fullscreen-layer enter"
+        data-testid="photo-fullscreen" role="dialog" aria-modal="true" aria-label="Полный экран фото"
+        @keydown.tab="fullscreenTab">
+        <button type="button" class="fullscreen-close" aria-label="Закрыть полный экран" @click="closePhotoFullscreen">✕</button>
+        <div class="fullscreen-media" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+          <div class="full-content">
+            <img v-if="fileUrl&&preview?.type==='photo'" :src="fileUrl" :alt="preview.name" draggable="false" data-testid="photo-fullscreen-image">
+            <p v-else role="status">{{error||'Открываем защищённый файл…'}}</p>
+          </div>
+        </div>
+        <div class="fullscreen-pager">
+          <button type="button" aria-label="Предыдущий файл" :disabled="!adjacent.previous||busy" @click="navigate(adjacent.previous)">‹</button>
+          <span class="fullscreen-count">{{adjacent.position?adjacent.position+' / '+adjacent.total:'Вне загруженного списка'}}</span>
+          <button type="button" aria-label="Следующий файл" :disabled="!adjacent.next||busy" @click="navigate(adjacent.next)">›</button>
+        </div>
       </div>
       <div class="file-viewer-feedback" aria-live="polite">
       <p v-if="indexIncomplete" class="muted"

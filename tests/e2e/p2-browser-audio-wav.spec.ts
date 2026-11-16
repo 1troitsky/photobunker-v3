@@ -18,6 +18,8 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
       const m=await import('/src/features/identity/application/session.ts')
       return !!m.activeSession.value?.accountId
     }),{timeout:30000}).toBe(true)
+    // Preload the real router while online; Vite cannot fetch a new module offline.
+    await page.evaluate(async()=>{await import('/src/router.ts')})
     await context.setOffline(true)
 
     const source=await page.evaluate(async()=>{
@@ -52,6 +54,7 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
     await expect.poll(()=>audio.evaluate((el:HTMLAudioElement)=>el.duration),
       {timeout:30000}).toBeGreaterThan(1.9)
     await expect(page.getByTestId('file-viewer-audio-editor')).toBeVisible()
+    await page.evaluate(async()=>{await import('/src/router.ts')})
     await context.setOffline(true)
 
     // Real native keyboard input, rather than mutating a range element's

@@ -20,6 +20,48 @@ async function identity(){
   return accountId
 }
 describe('P1-10 offline media outbox security',()=>{
+  it('continues real local encryption through an equivalent Session clone',async()=>{
+    await identity()
+    const before={...activeSession.value!,online:true}
+    activeSession.value=before
+    const bytes=new Uint8Array(8192).fill(47)
+    const task=enqueueEncryptedMedia(new File([bytes],'SESSION-CONTINUITY.wav',{type:'audio/wav'}))
+    // An actual online/offline update replaces only the Session wrapper.
+    activeSession.value={...before,online:false}
+    const id=await task
+    const rows=await listLocalMedia()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.state).toBe('queued')
+    expect(JSON.stringify(rows[0])).not.toContain('SESSION-CONTINUITY')
+    expect(new Uint8Array(await (await readLocalMedia(id)).blob.arrayBuffer())).toEqual(bytes)
+  })
+  it.each(['account','device id','device key','key package','logout'] as const)(
+    'rejects in-flight encryption after a real %s boundary',async boundary=>{
+      await identity()
+      const before=activeSession.value!
+      const replacement=await newSigning(false)
+      const task=enqueueEncryptedMedia(new File([new Uint8Array(8192)],'BOUNDARY.wav',{type:'audio/wav'}))
+      activeSession.value=boundary==='logout'?null:{...before,
+        ...(boundary==='account'?{accountId:crypto.randomUUID()}:{}),
+        ...(boundary==='device id'?{deviceId:crypto.randomUUID()}:{}),
+        ...(boundary==='device key'?{device:{...before.device,deviceKey:replacement.privateKey}}:{}),
+        ...(boundary==='key package'?{pkg:{...before.pkg,revision:before.pkg.revision+1}}:{}),
+      }
+      await expect(task).rejects.toThrow('identity.account_changed')
+      activeSession.value=before
+      expect(await listLocalMedia()).toHaveLength(0)
+    },
+  )
+  it('aborts the IndexedDB transaction if identity is lost after ciphertext put',async()=>{
+    await identity()
+    const before=activeSession.value!
+    let checks=0
+    await expect(enqueueEncryptedMedia(new File([new Uint8Array(8192)],'ATOMIC.wav',{type:'audio/wav'}),undefined,{},()=>{
+      if(++checks===4)activeSession.value=null
+    })).rejects.toThrow('identity.account_changed')
+    activeSession.value=before
+    expect(await listLocalMedia()).toHaveLength(0)
+  })
   it('durably persists ONLY ciphertext for selected audio, while offline; decrypts by account key',async()=>{
     const accountId=await identity()
     const bytes=new Uint8Array(2048).fill(112)

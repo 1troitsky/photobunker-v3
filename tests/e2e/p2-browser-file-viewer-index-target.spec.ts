@@ -18,6 +18,7 @@ test('P2 File Viewer: authenticated deep-link target on opaque index page 2, rej
     await A.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(A.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await A.goto('/browser')
+    await expect(A.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
     await browserHeader(A,'upload')

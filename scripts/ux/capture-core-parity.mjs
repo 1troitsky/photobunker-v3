@@ -30,9 +30,9 @@ const server=createServer(async(req,res)=>{
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve))
 const refs='http://127.0.0.1:'+server.address().port+'/docs/ux/'
 const browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']})
-const result={schema:1,browser:browser.version(),deviceScaleFactor:1,reducedMotion:'reduce',scope:'Seven approved core screens; Chromium laboratory; real encrypted durable storage',reference:'docs/ux (unchanged files)',fixtureNormalization:'Public reference text and image aspect ratio only; no reference stylesheet changed',viewports:[],failures:[]}
+const result={schema:1,browser:browser.version(),deviceScaleFactor:1,reducedMotion:'reduce',scope:'Seven approved core screens; Chromium laboratory; real encrypted durable storage',reference:'docs/ux (unchanged files)',fixtureNormalization:'Reference sample metadata and media aspect ratio only; no reference stylesheet changed',viewports:[],failures:[]}
 let phase='initialization'
-const frame=`.preview-bar,.preview-note{display:none!important}.preview-stage{padding:0!important;margin:0!important;display:block!important}body>.stage{padding:0!important;display:block!important}.device{width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;min-height:0!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important}.device .app{height:100%!important;border-radius:0!important}html,body{padding:0!important;margin:0!important}`
+const frame=`.preview-bar,.preview-note{display:none!important}.preview-stage{padding:0!important;margin:0!important;display:block!important}body>.stage{padding:0!important;display:block!important}.device{width:100vw!important;height:100dvh!important;position:relative!important;top:0!important;transform:none!important;max-width:none!important;max-height:none!important;min-height:0!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important}.device .app{height:100%!important;border-radius:0!important}html,body{padding:0!important;margin:0!important}`
 async function measure(page,selectors){
   return page.evaluate(selectors=>Object.fromEntries(Object.entries(selectors).map(([key,selector])=>{
     const element=document.querySelector(selector)
@@ -58,9 +58,10 @@ try{
         await openReference(url)
         if(prepare)await prepare(reference,actual)
         await reference.addStyleTag({content:frame})
+        await reference.evaluate(()=>{window.scrollTo(0,0);document.querySelector('.site')?.scrollTo(0,0)})
         await page.mouse.move(0,0);await reference.mouse.move(0,0)
         await reference.screenshot({path:path.join(dir,name+'-reference.png')})
-        await actual.screenshot({path:path.join(dir,name+'-app.png'),mask:name==='public-card'?[actual.locator('.share-url')]:[]})
+        await actual.screenshot({path:path.join(dir,name+'-app.png'),mask:name.startsWith('public-card')?[actual.locator('.share-url')]:[]})
         const source=await measure(reference,selectors),app=await measure(actual,selectors)
         metrics.screens[name]={reference:source,app}
         for(const [key,expected] of Object.entries(source)){
@@ -92,11 +93,41 @@ try{
       await page.getByTestId('browser-settings-close').click()
       await expect(page.locator('.photo-row')).toHaveAttribute('data-sync-state','synced',{timeout:30000})
       await page.getByTestId('browser-tab-personal').click()
-      await pair('browser','browser/',{header:'.app-header,.shell-header',dock:'.app-dock,.shell-dock',heading:'.browser-heading',switch:'.view-switch',tabs:'.browser-sections',path:'.browser-path',firstEntry:'.browser-entry',preview:'.entry-preview',more:'.entry-more'})
-      await page.locator('.browser-entry .entry-open').first().click()
+      for(const title of ['Городские прогулки','Студия']){
+        await page.getByTestId('browser-header-folder').click()
+        await page.getByTestId('browser-folder-name').fill(title)
+        await page.getByRole('button',{name:'Создать',exact:true}).click()
+        await expect(page.getByTestId('browser-new-folder-sheet')).toHaveCount(0)
+      }
+      await expect(page.locator('.browser-folder-item')).toHaveCount(2)
+      const catalogAnchors={header:'.app-header,.shell-header',dock:'.app-dock,.shell-dock',heading:'.browser-heading',switch:'.view-switch',tabs:'.browser-sections',path:'.browser-path',firstEntry:'.browser-entry',preview:'.entry-preview',more:'.entry-more',secondEntry:'.browser-entry:nth-child(2)'}
+      async function browserData(ref,actual,mode){
+        await ref.locator('[data-view="'+mode+'"]').click()
+        // Equal, real text data prevents sample-only wrapping differences.
+        await ref.locator('.browser-entry').evaluateAll(nodes=>nodes.slice(3).forEach(node=>node.remove()))
+        const rows=await actual.locator('.browser-entry').evaluateAll(nodes=>nodes.slice(0,3).map(node=>({title:node.querySelector('.entry-copy strong').textContent,detail:node.querySelector('.entry-copy small').textContent})))
+        await ref.locator('.browser-entry').evaluateAll((nodes,rows)=>rows.forEach((row,i)=>{
+          nodes[i].querySelector('.entry-copy strong').textContent=row.title
+          nodes[i].querySelector('.entry-copy small').textContent=row.detail
+          nodes[i].querySelectorAll('.entry-copy small').forEach((node,index)=>{if(index>0)node.remove()})
+        }),rows)
+      }
+      // Teleport anchors are display:contents, so measure explicit second folder.
+      catalogAnchors.secondEntry='.browser-entry:has(.entry-folder-badge):nth-of-type(2)'
+      for(const mode of ['list','grid','tree']){
+        await page.getByTestId('browser-view-'+mode).click()
+        await pair(mode==='list'?'browser':'browser-'+mode,'browser/',catalogAnchors,page,(ref,actual)=>browserData(ref,actual,mode))
+      }
+      await page.getByTestId('browser-view-list').click()
+      await page.locator('.browser-entry:not(:has(.entry-folder-badge)) .entry-open').first().click()
       await expect(page.getByTestId('file-viewer-image')).toBeVisible()
       await expect(page.getByText('Обновляется список доступных файлов…',{exact:true})).toBeHidden()
       await pair('viewer','browser/viewer/',{header:'.app-header,.shell-header',dock:'.app-dock,.shell-dock',photo:'.photo-trigger',path:'.browser-path',stage:'.image-stage',summary:'.photo-summary',actions:'.action-tiles',pager:'.pager'})
+      await page.locator('.photo-trigger').click()
+      await expect(page.getByTestId('photo-fullscreen')).toBeVisible()
+      await pair('viewer-fullscreen','browser/viewer/',{layer:'.fullscreen-layer',close:'.fullscreen-close',media:'.fullscreen-media',pager:'.fullscreen-pager'},page,ref=>ref.locator('.photo-trigger').click())
+      await page.keyboard.press('Escape')
+      await expect(page.getByTestId('photo-fullscreen')).toHaveCount(0)
       phase='real publication'
       await page.getByTestId('viewer-action-publish').click()
       await page.getByTestId('public-card-publish-review').check()
@@ -116,6 +147,14 @@ try{
           document.querySelector('.safe-media').setAttribute('viewBox',`0 0 ${565*f.ratio} 565`)
         },fixture)
       })
+      await external.getByRole('button',{name:'Увеличить изображение'}).click()
+      await expect(external.getByTestId('public-card-lightbox')).toBeVisible()
+      await pair('public-card-lightbox','public-card/',{layer:'.lightbox',close:'.lightbox-close'},external,async ref=>{
+        await ref.locator('#fixture').selectOption('restricted')
+        await ref.locator('[data-action="zoom"]').click()
+      })
+      await external.keyboard.press('Escape')
+      await expect(external.getByTestId('public-card-lightbox')).toHaveCount(0)
       await external.close()
       await page.goto(base+'/settings/security')
       await page.getByTestId('security-pin-create').click()

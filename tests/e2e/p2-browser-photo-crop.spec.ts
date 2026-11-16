@@ -78,12 +78,15 @@ test('P2 Viewer: real JPEG crop/rotate → preview only → independent encrypte
     await expect(live).toBeVisible()
     await expect.poll(()=>live.evaluate((c:HTMLCanvasElement)=>
       [c.width,c.height])).toEqual([60,100])
-    const grey=await live.evaluate((c:HTMLCanvasElement)=>{
+    // Dimensions remain unchanged while the asynchronous RGB render catches up.
+    // Await the actual pixels; keep the original <=1 greyscale requirement.
+    await expect.poll(()=>live.evaluate((c:HTMLCanvasElement)=>{
       const ctx=c.getContext('2d')
       if(!ctx)throw Error('missing_live_canvas')
-      return [...ctx.getImageData(5,5,1,1).data.slice(0,3)]
-    })
-    expect(Math.max(...grey)-Math.min(...grey)).toBeLessThanOrEqual(1)
+      const rgb=[...ctx.getImageData(5,5,1,1).data.slice(0,3)]
+      return Math.max(...rgb)-Math.min(...rgb)
+    })).toBeLessThanOrEqual(1)
+    const grey=await live.evaluate((c:HTMLCanvasElement)=>[...c.getContext('2d')!.getImageData(5,5,1,1).data])
     await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
     // Photo Editor 3.2: crop/RGB share the SAME 50-entry history as
     // annotations, even before the first actual raster is generated.

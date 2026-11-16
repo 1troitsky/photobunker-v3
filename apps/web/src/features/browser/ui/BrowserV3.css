@@ -109,3 +109,36 @@
 .browser-v3 .browser-file-menu-root{display:block}
 .browser-v3{max-width:none}
 @media(min-width:700px){.browser-v3 .browser-items.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+/* Approved list/grid/tree rules apply to one real catalog, including folders. */
+.browser-v3 #browser-folder-cards-top,.browser-v3 #browser-folder-cards-bottom,.browser-v3 .browser-folder-list{display:contents}
+.browser-v3 .entry-folder-badge{font-size:0;letter-spacing:0;min-width:24px;height:24px;padding:4px;gap:0}
+.browser-v3 .entry-folder-badge svg{width:16px;height:16px}
+.browser-v3 .browser-items.list .entry-folder-badge,.browser-v3 .browser-items.tree .entry-folder-badge{display:grid;place-items:center;position:absolute;top:3px;right:3px;left:auto;min-width:21px;height:20px;padding:3px;border-radius:4px;background:#151a19d9;color:#dce4e0;z-index:3}
+.browser-v3 .browser-items.list .entry-folder-badge svg,.browser-v3 .browser-items.tree .entry-folder-badge svg{width:14px;height:14px}
+.browser-v3 .entry-preview.empty-folder{display:grid;place-items:center;background:#303030;color:#aaa}
+.browser-v3 .entry-preview.empty-folder>svg{width:38px;height:38px;stroke-width:1.8}
+.browser-v3 .browser-folder-cover-cell{min-width:0;min-height:0;width:100%;height:100%}
+.browser-v3 .browser-folder-cover.collage{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:3px;padding:3px;background:#282e2b}
+.browser-v3 .browser-folder-cover-cell.is-blank{background:#383e3a}
+.browser-v3 .file-mark{background:#272e31;color:#d7e0e6}
+.browser-v3 .file-mark.audio{background:#292b35;color:#d9c6ec}
+.browser-v3 .file-mark svg{width:40%;height:40%;stroke-width:1.7}
+.browser-v3 .browser-items.list .file-mark svg,.browser-v3 .browser-items.tree .file-mark svg{width:28px;height:28px}
+.browser-v3 .entry-preview.collage .file-mark svg{width:46%;height:46%}
+.browser-v3 .browser-items.grid .browser-entry{display:block;min-height:0;overflow:hidden;border:1px solid #343434;border-radius:8px;background:#202020}
+.browser-v3 .browser-items.grid .entry-open{display:block;padding:0;min-height:0}
+.browser-v3 .browser-items.grid .entry-preview{width:100%;height:auto;aspect-ratio:1.35;flex:none;border-radius:0}
+.browser-v3 .browser-items.grid .entry-copy{padding:10px 30px 13px 10px}
+.browser-v3 .browser-items.grid .entry-copy strong{font-size:12px}
+.browser-v3 .browser-items.grid .browser-file-menu-root,.browser-v3 .browser-items.grid .browser-folder-menu-root{position:static;margin:0}
+.browser-v3 .browser-items.grid .entry-more{position:absolute;right:3px;bottom:7px;width:29px;height:30px}
+.browser-v3 .browser-items.tree .browser-folder-item{margin-left:calc(min(var(--depth,0),4)*15px)}
+.browser-v3 .browser-items.tree .browser-folder-open{display:flex;flex:1;min-width:0;align-items:center;gap:11px;padding:8px 0;background:transparent;border:0}
+.browser-v3 .browser-items.tree .browser-folder-cover{height:43px;width:43px;flex-basis:43px}
+.browser-v3 .browser-items.tree .tree-expand{display:block;height:31px;min-height:0;width:21px;min-width:0;flex:0 0 21px;border:0;padding:0;background:none;color:#aaa;font-size:21px}
+.browser-v3 .browser-items.tree .tree-expand:disabled{opacity:0}
+
+/* Successful durable writes are announced without adding a permanent catalog row. */
+.browser-announcement{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+
+.browser-v3 .browser-folder-cover.empty-folder{grid-template-columns:1fr;grid-template-rows:1fr;gap:0;padding:0}

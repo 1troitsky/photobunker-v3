@@ -19,7 +19,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await page.goto('/browser')
-    await expect(page.getByTestId('browser-folders')).toBeVisible()
+    await expect(page.getByTestId('browser-tab-active')).toBeVisible()
     await context.setOffline(true)
     await chooseEncryptedFile(page.getByTestId('media-import-file'),{
       name:'PRIVATE-LOCAL-FOLDER-TEST.webm',mimeType:'video/webm',
@@ -104,7 +104,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     // accessible without any subsequent cloud API.
     await context.setOffline(false)
     await page.reload()
-    await expect(page.getByTestId('browser-folders')).toBeVisible()
+    await expect(page.getByTestId('browser-tab-active')).toBeVisible()
     await context.setOffline(true)
     await page.locator('.browser-folder-open').filter({hasText:'Съёмки'}).click()
     await page.locator('.browser-folder-open').filter({hasText:'День 1'}).click()
