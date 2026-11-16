@@ -37,14 +37,14 @@ const current=computed(()=>features[slide.value]!)
 // can otherwise advance a slide immediately after the user selects it.
 let timer:ReturnType<typeof setTimeout>|null=null
 let motion:MediaQueryList|null=null
-let hoverPause:boolean=false,focusPause:boolean=false,touchPause:boolean=false
+const hoverPause=ref(false),focusPause=ref(false),touchPause=ref(false)
 let touchX:number|null=null
 function stopAutoplay():void{
   if(timer!==null)clearTimeout(timer)
   timer=null
 }
 function canAutoplay():boolean{
-  return isHome.value&&!hoverPause&&!focusPause&&!touchPause
+  return isHome.value&&!hoverPause.value&&!focusPause.value&&!touchPause.value
     &&!document.hidden&&!motion?.matches
 }
 function resetAutoplay():void{
@@ -63,7 +63,7 @@ function choose(i:number):void{
 }
 function onTouchStart(e:TouchEvent):void{
   touchX=e.changedTouches[0]?.clientX??null
-  touchPause=true
+  touchPause.value=true
   resetAutoplay()
 }
 function onTouchEnd(e:TouchEvent):void{
@@ -71,21 +71,24 @@ function onTouchEnd(e:TouchEvent):void{
   if(touchX!==null&&end!==null&&Math.abs(end-touchX)>40)
     slide.value=(slide.value+(end<touchX?1:-1)+features.length)%features.length
   touchX=null
-  touchPause=false
+  touchPause.value=false
   resetAutoplay()
 }
 function onTouchCancel():void{
   touchX=null
-  touchPause=false
+  touchPause.value=false
   resetAutoplay()
 }
 function onCarouselFocusOut(e:FocusEvent):void{
   const root=e.currentTarget
   if(root instanceof HTMLElement
     &&e.relatedTarget instanceof Node&&root.contains(e.relatedTarget))return
-  focusPause=false
+  focusPause.value=false
   resetAutoplay()
 }
+function onCarouselMouseEnter():void{hoverPause.value=true;resetAutoplay()}
+function onCarouselMouseLeave():void{hoverPause.value=false;resetAutoplay()}
+function onCarouselFocusIn():void{focusPause.value=true;resetAutoplay()}
 watch(()=>route.path,()=>{error.value='';notice.value='';resetAutoplay()})
 watch(activeSession,session=>{
   if(session)void router.replace(resolveStartRoute())
@@ -179,9 +182,8 @@ async function loadFile(e:Event):Promise<void>{
       </div>
       <section class="carousel" :aria-label="'Почему '+brand.name" aria-roledescription="carousel"
         :style="{'--slide-accent':current.accent}"
-        @mouseenter="hoverPause=true;resetAutoplay()"
-        @mouseleave="hoverPause=false;resetAutoplay()"
-        @focusin="focusPause=true;resetAutoplay()" @focusout="onCarouselFocusOut"
+        @mouseenter="onCarouselMouseEnter" @mouseleave="onCarouselMouseLeave"
+        @focusin="onCarouselFocusIn" @focusout="onCarouselFocusOut"
         @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd"
         @touchcancel.passive="onTouchCancel">
         <div class="carousel-body" aria-live="off">
