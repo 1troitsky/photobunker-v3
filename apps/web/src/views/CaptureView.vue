@@ -1543,7 +1543,13 @@ onUnmounted(()=>{
         </div>
         <div class="camera-control-trio">
           <button type="button" class="camera-side-action" data-testid="camera-open-assignment"
-            @click="openCameraSheet('assignment')">Задание</button>
+            @click="openCameraSheet('assignment')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="4" y="3" width="16" height="18" rx="2"/>
+              <path d="M8 9h8M8 14h8"/>
+            </svg><strong>Задание</strong>
+          </button>
           <button v-if="captureMode==='photo'" type="button" class="camera-shutter"
             aria-label="Сделать снимок"
             :disabled="!stream||starting||busy||cameraZoomBusy||torchBusy||gpsLoading||!canCaptureType" @click="capture">
@@ -1562,7 +1568,13 @@ onUnmounted(()=>{
               <span class="camera-screen-title">Остановить запись</span>
             </button>
           <button type="button" class="camera-side-action" data-testid="camera-open-settings"
-            @click="openCameraSheet('settings')">Настройки</button>
+            @click="openCameraSheet('settings')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="m19.4 15.1 1.2 1.4-2.1 2.1-1.5-1a8 8 0 0 1-2 .9l-.4 1.9h-3l-.5-1.9a8 8 0 0 1-2-.9l-1.6 1-2-2 1.1-1.5a8 8 0 0 1-.8-2L4 12.6v-3l1.9-.5a8 8 0 0 1 .8-2L5.6 5.6l2-2 1.6 1.1a8 8 0 0 1 2-.8l.5-1.9h3l.4 1.9a8 8 0 0 1 2 .8l1.5-1.1 2.1 2-1.2 1.5a8 8 0 0 1 .8 2l1.9.5v3l-1.9.5a8 8 0 0 1-.9 2z"/>
+            </svg><strong>Настройки</strong>
+          </button>
         </div>
         <p v-if="recording" class="camera-recording-timer">
           Запись · {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
