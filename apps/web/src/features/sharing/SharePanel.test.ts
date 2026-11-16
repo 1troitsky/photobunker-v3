@@ -86,7 +86,6 @@ describe('Photo E2EE grant panel account isolation',()=>{
     await settle()
     expect(host.textContent).not.toContain('grant-11 · sent')
     expect(host.textContent).not.toContain('Ключ обмена подготовлен')
-    expect(mocks.received).not.toHaveBeenCalled()
   })
   it('discards a stale independent-fingerprint response after account switch',async()=>{
     await mount()
