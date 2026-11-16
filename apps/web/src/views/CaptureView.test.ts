@@ -625,6 +625,37 @@ describe('private instructions and hardware lifecycle',()=>{
   })
 })
 
+describe('Camera 1.2 active video recording indicator',()=>{
+  it('shows the approved viewfinder badge only during a native MediaRecorder video session',async()=>{
+    class NativeRecorder{
+      static isTypeSupported(_mime:string){return true}
+      state:'inactive'|'recording'='inactive'
+      ondataavailable:((event:{data:Blob})=>void)|null=null
+      onstop:(()=>void)|null=null
+      onerror:(()=>void)|null=null
+      constructor(_stream:MediaStream,_options:{mimeType:string}){}
+      start(){this.state='recording'}
+      stop(){this.state='inactive';this.onstop?.()}
+    }
+    vi.stubGlobal('MediaRecorder',NativeRecorder)
+    await mount()
+    requests[0]!.resolve(media().stream)
+    await settle()
+    expect(host.querySelector('[data-testid="camera-record-badge"]')).toBeNull()
+    selectMode('video')
+    await settle()
+    requests[1]!.resolve(media().stream)
+    await settle()
+    button('Начать запись видео').click()
+    await settle()
+    const badge=host.querySelector('[data-testid="camera-record-badge"]')
+    expect(badge).not.toBeNull()
+    expect(badge?.textContent).toContain('00:00')
+    expect(host.querySelector('[data-testid="camera-snap-flash"]')).toBeNull()
+    expect(host.querySelector('[data-testid="camera-audio-view"]')).toBeNull()
+  })
+})
+
 describe('P1-14 MediaRecorder cancellation and plaintext safety',()=>{
   it('stops microphone and drops unsaved parts when the account changes during audio recording',async()=>{
     class FakeRecorder{
