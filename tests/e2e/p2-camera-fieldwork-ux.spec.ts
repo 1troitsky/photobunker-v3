@@ -24,6 +24,12 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('camera-mode-tabs').locator('button')).toHaveCount(3)
   await expect(page.getByTestId('camera-mode-tabs')).toHaveCSS('height','46px')
   await expect(page.getByTestId('camera-stage-controls')).toHaveCSS('min-height','124px')
+  // Exact accepted shutter: black background, white ring and separate inner disc.
+  const shutter=page.getByRole('button',{name:'Сделать снимок'})
+  await expect(shutter).toHaveCSS('border-top-width','4px')
+  await expect(shutter).toHaveCSS('background-color','rgb(16, 16, 16)')
+  await expect(shutter.locator('.camera-shutter-fill')).toHaveCSS('background-color','rgb(255, 255, 255)')
+  await expect(page.getByTestId('camera-gps-pill')).toBeVisible()
   // The approved bottom trio uses icons ABOVE its two context labels.
   await expect(page.getByTestId('camera-open-assignment').locator('svg')).toHaveCount(1)
   await expect(page.getByTestId('camera-open-settings').locator('svg')).toHaveCount(1)
@@ -54,6 +60,13 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('camera-grid')).toHaveCount(0)
   await page.getByTestId('camera-sheet-close').click()
   await expect(page.getByTestId('camera-details')).toBeHidden()
+  // The approved GPS status is ONE pill leading into camera settings,
+  // not a second inline device permission button below the viewfinder.
+  await expect(page.getByTestId('camera-gps-indicator').locator('button')).toHaveCount(1)
+  await page.getByTestId('camera-gps-pill').click()
+  await expect(page.getByTestId('camera-settings-panel')).toBeVisible()
+  await expect(page.getByTestId('camera-gps-settings-status')).toBeVisible()
+  await page.getByTestId('camera-sheet-close').click()
 
   // Native capture still follows the visible approved mode tabs.
   await page.getByTestId('camera-mode-tab-audio').click()
