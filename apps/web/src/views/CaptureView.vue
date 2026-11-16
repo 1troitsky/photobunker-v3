@@ -678,7 +678,9 @@ function cameraAssignmentBlockReason():string|null{
 }
 const canConfirmCameraAssignment=computed(()=>cameraAssignmentBlockReason()===null)
 function openCameraSheet(which:'assignment'|'settings',focusGps=false):void{
-  if(!activeSession.value)return
+  // Match the approved Fieldwork camera: no editing capture/policy metadata
+  // while the native recorder owns the stream or a photo is being sealed.
+  if(!activeSession.value||recording.value||busy.value)return
   cameraSheet.value=which
   void nextTick().then(()=>{
     if(cameraSheet.value!==which)return
@@ -1600,7 +1602,7 @@ onUnmounted(()=>{
           class="camera-gps-indicator" data-testid="camera-gps-indicator">
           <button type="button" class="camera-gps-pill"
             data-testid="camera-gps-pill" aria-label="Открыть настройки GPS"
-            @click="openCameraSheet('settings',true)">
+            :disabled="recording||busy" @click="openCameraSheet('settings',true)">
             <span class="camera-gps-dot" :class="{ready:!!gps}" aria-hidden="true"></span>
             <span>{{gps?'GPS ±'+Math.round(gps.accuracyMeters)+' м'
               :gpsLoading?'GPS: поиск…'
@@ -1610,7 +1612,7 @@ onUnmounted(()=>{
         </div>
         <div class="camera-control-trio">
           <button type="button" class="camera-side-action" data-testid="camera-open-assignment"
-            @click="openCameraSheet('assignment')">
+            :disabled="recording||busy" @click="openCameraSheet('assignment')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="4" y="3" width="16" height="18" rx="2"/>
@@ -1638,7 +1640,7 @@ onUnmounted(()=>{
               <span class="camera-screen-title">Остановить запись</span>
             </button>
           <button type="button" class="camera-side-action" data-testid="camera-open-settings"
-            @click="openCameraSheet('settings')">
+            :disabled="recording||busy" @click="openCameraSheet('settings')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="3"/>
