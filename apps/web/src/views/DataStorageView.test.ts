@@ -196,6 +196,15 @@ describe('Data & Storage 1.2 verified file quota',()=>{
       expect(host.querySelector('[data-testid="storage-queue-detail"]')).not.toBeNull()
     }
   })
+  it('places the verified quota section ahead of the separate encrypted offline queue',async()=>{
+    await mount()
+    const quota=host.querySelector('[data-testid="storage-cloud-section"]')
+    const queue=host.querySelector('[data-testid="storage-open-queue"]')
+    expect(quota).not.toBeNull()
+    expect(queue).not.toBeNull()
+    expect(quota!.compareDocumentPosition(queue!) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
+  })
   it('shows the real limited-plan file count and percentage',async()=>{
     mock.catalog.mockResolvedValue([{
       planId:'go',limits:{maxMediaFiles:250},

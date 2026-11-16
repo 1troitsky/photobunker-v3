@@ -307,6 +307,72 @@ onUnmounted(() => {
       </div>
     </template>
     <template v-else>
+      <section class="foundation-card storage-section" aria-labelledby="storage-cloud-heading"
+        tabindex="-1" data-testid="storage-cloud-section">
+        <h2 id="storage-cloud-heading">Используемые лимиты</h2>
+        <p v-if="serverPhase==='loading'" role="status" data-testid="storage-server-loading">
+          Проверяем данные на сервере…
+        </p>
+        <p v-else-if="serverPhase==='offline'" role="status" data-testid="storage-server-offline">
+          Нет подтверждённых онлайн-данных. Последний тариф и объём не показываются как актуальные.
+        </p>
+        <p v-else-if="serverPhase==='error'" role="alert" data-testid="storage-server-error">
+          Серверный учёт недоступен; цифры не подтверждены.
+        </p>
+        <div v-else-if="serverPhase==='ready' && server"
+          data-testid="storage-server-ready" class="storage-values">
+          <div class="quota-block" data-testid="storage-cloud-quota">
+            <div class="quota-metric">
+              <strong>Зашифрованное облако</strong>
+              <span>{{formatCloudBytes(server.recordedCipherBytes,server.byteUnitPolicy)}} / {{formatCloudBytes(server.enforcedByteCeiling,server.byteUnitPolicy)}} · {{cloudPercent}}%</span>
+            </div>
+            <progress class="bar" :value="cloudPercent??0" max="100"
+              aria-label="Использованный объём зашифрованного облака"></progress>
+            <p class="quota-note">Предел подтверждён сервером. Кэш и ожидающая отправки очередь не входят в использованный объём облака.</p>
+          </div>
+          <div class="quota-block" data-testid="storage-files-quota">
+            <div class="quota-metric">
+              <strong>Файлы</strong>
+              <span data-testid="storage-file-quota-denominator">
+                {{server.activeLogicalMediaFiles}} / {{fileQuotaDenominator}}
+                <template v-if="filePercent!==null"> · {{filePercent}}%</template>
+              </span>
+            </div>
+            <progress v-if="fileQuotaConfirmed" class="bar"
+              data-testid="storage-file-quota-progress"
+              :value="filePercent??0" max="100"
+              :aria-label="unlimitedFileQuota
+                ?'Количество файлов не ограничено подтверждённым тарифом'
+                :'Использованный лимит количества файлов'"></progress>
+            <p class="quota-note" data-testid="storage-file-quota-note">
+              {{unlimitedFileQuota
+                ?'Количество файлов не ограничено подтверждённым тарифом; ограничения на облачное хранение действуют.'
+                :fileMax===null
+                  ?'Не удалось подтвердить квоту файлов по тарифному каталогу. Это не означает безлимит.'
+                  :'Доля от лимита количества файлов по действующему тарифному каталогу.'}}
+            </p>
+          </div>
+          <div>
+            <span>Тариф для новых операций</span>
+            <strong data-testid="storage-effective-plan">{{ server.planId }}</strong>
+          </div>
+          <div>
+            <span>Учтённые зашифрованные байты</span>
+            <strong data-testid="storage-recorded-cipher-bytes">{{ formatCloudBytes(server.recordedCipherBytes,server.byteUnitPolicy) }}</strong>
+          </div>
+          <div>
+            <span>Учтённые активные файлы</span>
+            <strong>{{ server.activeLogicalMediaFiles }}</strong>
+          </div>
+          <div>
+            <span>Действующий серверный предел размера</span>
+            <strong>{{ formatCloudBytes(server.enforcedByteCeiling,server.byteUnitPolicy) }}</strong>
+          </div>
+          <p class="muted">Проверено: {{ server.asOfUtc }} (UTC). Учёт неатомарный;
+            это не физический размер S3 и не разрешение на загрузку.</p>
+        </div>
+      </section>
+
       <section class="foundation-card storage-section" aria-labelledby="storage-local-heading">
         <div class="storage-row">
           <h2 id="storage-local-heading">Файлы на устройстве</h2>
@@ -412,72 +478,6 @@ onUnmounted(() => {
             состояние облака проверяется отдельно.</p>
         </section>
         <RouterLink to="/browser" class="storage-link">Открыть Browser</RouterLink>
-      </section>
-
-      <section class="foundation-card storage-section" aria-labelledby="storage-cloud-heading"
-        tabindex="-1" data-testid="storage-cloud-section">
-        <h2 id="storage-cloud-heading">Используемые лимиты</h2>
-        <p v-if="serverPhase==='loading'" role="status" data-testid="storage-server-loading">
-          Проверяем данные на сервере…
-        </p>
-        <p v-else-if="serverPhase==='offline'" role="status" data-testid="storage-server-offline">
-          Нет подтверждённых онлайн-данных. Последний тариф и объём не показываются как актуальные.
-        </p>
-        <p v-else-if="serverPhase==='error'" role="alert" data-testid="storage-server-error">
-          Серверный учёт недоступен; цифры не подтверждены.
-        </p>
-        <div v-else-if="serverPhase==='ready' && server"
-          data-testid="storage-server-ready" class="storage-values">
-          <div class="quota-block" data-testid="storage-cloud-quota">
-            <div class="quota-metric">
-              <strong>Зашифрованное облако</strong>
-              <span>{{formatCloudBytes(server.recordedCipherBytes,server.byteUnitPolicy)}} / {{formatCloudBytes(server.enforcedByteCeiling,server.byteUnitPolicy)}} · {{cloudPercent}}%</span>
-            </div>
-            <progress class="bar" :value="cloudPercent??0" max="100"
-              aria-label="Использованный объём зашифрованного облака"></progress>
-            <p class="quota-note">Предел подтверждён сервером. Кэш и ожидающая отправки очередь не входят в использованный объём облака.</p>
-          </div>
-          <div class="quota-block" data-testid="storage-files-quota">
-            <div class="quota-metric">
-              <strong>Файлы</strong>
-              <span data-testid="storage-file-quota-denominator">
-                {{server.activeLogicalMediaFiles}} / {{fileQuotaDenominator}}
-                <template v-if="filePercent!==null"> · {{filePercent}}%</template>
-              </span>
-            </div>
-            <progress v-if="fileQuotaConfirmed" class="bar"
-              data-testid="storage-file-quota-progress"
-              :value="filePercent??0" max="100"
-              :aria-label="unlimitedFileQuota
-                ?'Количество файлов не ограничено подтверждённым тарифом'
-                :'Использованный лимит количества файлов'"></progress>
-            <p class="quota-note" data-testid="storage-file-quota-note">
-              {{unlimitedFileQuota
-                ?'Количество файлов не ограничено подтверждённым тарифом; ограничения на облачное хранение действуют.'
-                :fileMax===null
-                  ?'Не удалось подтвердить квоту файлов по тарифному каталогу. Это не означает безлимит.'
-                  :'Доля от лимита количества файлов по действующему тарифному каталогу.'}}
-            </p>
-          </div>
-          <div>
-            <span>Тариф для новых операций</span>
-            <strong data-testid="storage-effective-plan">{{ server.planId }}</strong>
-          </div>
-          <div>
-            <span>Учтённые зашифрованные байты</span>
-            <strong data-testid="storage-recorded-cipher-bytes">{{ formatCloudBytes(server.recordedCipherBytes,server.byteUnitPolicy) }}</strong>
-          </div>
-          <div>
-            <span>Учтённые активные файлы</span>
-            <strong>{{ server.activeLogicalMediaFiles }}</strong>
-          </div>
-          <div>
-            <span>Действующий серверный предел размера</span>
-            <strong>{{ formatCloudBytes(server.enforcedByteCeiling,server.byteUnitPolicy) }}</strong>
-          </div>
-          <p class="muted">Проверено: {{ server.asOfUtc }} (UTC). Учёт неатомарный;
-            это не физический размер S3 и не разрешение на загрузку.</p>
-        </div>
       </section>
 
       <section class="foundation-card storage-section" aria-labelledby="storage-backup-heading"

@@ -34,6 +34,11 @@ test('P2 Data & Storage: real encrypted offline queue, server usage and logout p
     await expect(page.getByTestId('storage-recorded-cipher-bytes')).toHaveText('0 Б')
     await expect(page.getByTestId('storage-cloud-quota')).toBeVisible()
     await expect(page.getByTestId('storage-files-quota')).toBeVisible()
+    // Owner-approved Storage 1.2: confirmed quota section is visually before
+    // the local queue. Keep the encrypted queue available offline as a sibling.
+    const quotaBox=await page.getByTestId('storage-cloud-section').boundingBox()
+    const localBox=await page.getByTestId('storage-open-queue').boundingBox()
+    expect(quotaBox&&localBox&&quotaBox.y+quotaBox.height<=localBox.y+2).toBe(true)
     await expect(page.getByTestId('storage-cloud-quota').locator('progress')).toHaveAttribute('value','0')
     await expect(page.getByTestId('storage-backup-unavailable')).toBeVisible()
     await expect(page.getByRole('button',{name:'Управление копиями и автообновлением'})).toBeDisabled()
