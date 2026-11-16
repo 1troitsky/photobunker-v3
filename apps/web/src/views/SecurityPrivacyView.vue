@@ -1,10 +1,51 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { activeSession, logout } from '../features/identity/application/session'
+import {
+  activeSession,enrollAppPinWithRecovery,logout,
+} from '../features/identity/application/session'
 import { jsonApi } from '../features/identity/infrastructure/api'
 
 const route = useRoute()
+const pinConfigured=computed(()=>Boolean((activeSession.value?.device
+  as {pinMode?:string}|undefined)?.pinMode==='pin-v1'))
+const pinSetupOpen=ref(false)
+const pinSetupBusy=ref(false)
+const pinSetupError=ref('')
+const pinSetupCode=ref('')
+const pinSetupRepeat=ref('')
+const pinSetupRecovery=ref('')
+const pinSetupAcknowledged=ref(false)
+const pinSetupValid=computed(()=>/^[0-9]{4,8}$/.test(pinSetupCode.value)
+  &&pinSetupCode.value===pinSetupRepeat.value
+  &&pinSetupRecovery.value.trim().startsWith('PB2.')
+  &&pinSetupAcknowledged.value)
+function closePinSetup():void{
+  if(pinSetupBusy.value)return
+  pinSetupOpen.value=false
+  pinSetupCode.value=''
+  pinSetupRepeat.value=''
+  pinSetupRecovery.value=''
+  pinSetupAcknowledged.value=false
+  pinSetupError.value=''
+}
+async function installAppPin():Promise<void>{
+  if(pinSetupBusy.value||!pinSetupValid.value||pinConfigured.value)return
+  const pin=pinSetupCode.value
+  const key=pinSetupRecovery.value.trim()
+  pinSetupBusy.value=true;pinSetupError.value=''
+  // Confirmation values never survive the asynchronous crypto operation.
+  pinSetupCode.value='';pinSetupRepeat.value='';pinSetupRecovery.value=''
+  try{
+    await enrollAppPinWithRecovery(key,pin)
+    // The root app immediately switches to the approved PIN Shell. No
+    // unprotected private screen should remain visible after this point.
+    pinSetupOpen.value=false
+  }catch(error){
+    pinSetupError.value=error instanceof Error?error.message:'pin.unavailable'
+  }finally{pinSetupBusy.value=false}
+}
+
 type TrustedDevice={id:string;created_at:string;revoked_at:string|null}
 const busy=ref(false),status=ref(''),error=ref('')
 const devices=ref<TrustedDevice[]>([])
@@ -48,7 +89,11 @@ function handleOnline():void{
   networkOnline.value=typeof navigator==='undefined'||navigator.onLine!==false
   if(networkOnline.value&&activeSession.value?.online)void loadDevices()
 }
-watch(activeSession,()=>{devices.value=[];error.value='';status.value='';void loadDevices()},{immediate:true})
+watch(activeSession,()=>{
+  devices.value=[];error.value='';status.value=''
+  if(!activeSession.value)closePinSetup()
+  void loadDevices()
+},{immediate:true})
 async function loadDevices():Promise<boolean>{
   const session=activeSession.value,token=++request
   devices.value=[];deviceError.value=''
@@ -133,13 +178,22 @@ async function copyDeviceId(id:string):Promise<void>{
             <div class="security-copy">
               <strong>PIN входа</strong>
               <small>Код из 4–8 цифр для разблокировки приложения.</small>
-              <span class="status">Не установлен</span>
+              <span class="status" :class="{active:pinConfigured}">
+                {{ pinConfigured?'Установлен':'Не установлен' }}
+              </span>
             </div>
-            <button type="button" class="small-button emphasis" disabled title="Подключение PIN Shell и проверки криптографического контракта ещё не завершено">Создать</button>
+            <button v-if="!pinConfigured" type="button"
+              class="small-button emphasis" data-testid="security-pin-create"
+              :disabled="busy||!activeSession.online||!networkOnline"
+              @click="pinSetupOpen=true">Создать</button>
+            <button v-else type="button" class="small-button" disabled
+              title="Смена PIN требует отдельного подтверждённого обновления криптографического пакета">Изменить</button>
           </div>
           <div id="setting-relock" class="pin-relock" tabindex="-1">
             <div class="pin-relock-top"><strong>Через какое время запрашивать PIN</strong><output>Сразу</output></div>
-            <p class="pin-relock-note">Настройка станет доступна после создания PIN входа.</p>
+            <p class="pin-relock-note">{{pinConfigured
+              ?'PIN запрашивается сразу. Изменение задержки требует проверки настройки и подписи.'
+              :'Настройка станет доступна после создания PIN входа.'}}</p>
             <input class="pin-slider" type="range" min="0" max="5" value="0" step="1" disabled aria-label="Через какое время запрашивать PIN">
             <div class="pin-slider-labels"><span>Сразу</span><span>5 мин</span></div>
           </div>
@@ -153,7 +207,9 @@ async function copyDeviceId(id:string):Promise<void>{
             <span class="security-item-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg></span>
             <div class="security-copy">
               <strong>PIN экстренного удаления данных</strong>
-              <span class="status">Сначала создайте PIN входа</span>
+              <span class="status">{{pinConfigured
+                ?'Ожидается безопасное подключение удаления'
+                :'Сначала создайте PIN входа'}}</span>
             </div>
             <button type="button" class="small-button" disabled>Создать</button>
           </div>
@@ -223,6 +279,52 @@ async function copyDeviceId(id:string):Promise<void>{
             </select>
           </div>
           <p class="inactivity-card-footer">Удаление аккаунта необратимо. Настройка не продлевает срок хранения файлов. Автоматическое удаление ещё не активировано.</p>
+        </div>
+      </section>
+    </div>
+    <div v-if="pinSetupOpen" class="pin-enrollment-overlay"
+      data-testid="security-pin-dialog-backdrop" @click.self="closePinSetup">
+      <section class="pin-enrollment-sheet" role="dialog" aria-modal="true"
+        aria-label="Создать PIN входа" data-testid="security-pin-dialog"
+        @keydown.esc.stop.prevent="closePinSetup">
+        <header class="pin-enrollment-heading">
+          <h2>Создать PIN входа</h2>
+          <button type="button" class="pin-close" aria-label="Закрыть"
+            :disabled="pinSetupBusy" @click="closePinSetup">×</button>
+        </header>
+        <div class="pin-fields">
+          <label for="security-pin-new">Новый PIN (4–8 цифр)</label>
+          <input id="security-pin-new" v-model="pinSetupCode" type="password"
+            inputmode="numeric" pattern="[0-9]*" maxlength="8"
+            autocomplete="off" :disabled="pinSetupBusy"
+            data-testid="security-pin-new">
+          <label for="security-pin-repeat">Повторите PIN</label>
+          <input id="security-pin-repeat" v-model="pinSetupRepeat" type="password"
+            inputmode="numeric" pattern="[0-9]*" maxlength="8"
+            autocomplete="off" :disabled="pinSetupBusy"
+            data-testid="security-pin-repeat">
+          <label for="security-pin-recovery">Подтвердите Recovery Key аккаунта</label>
+          <textarea id="security-pin-recovery" v-model="pinSetupRecovery"
+            rows="3" spellcheck="false" autocorrect="off"
+            autocapitalize="off" autocomplete="off"
+            :disabled="pinSetupBusy" placeholder="PB2.…"
+            data-testid="security-pin-recovery"/>
+          <label class="pin-ack-row">
+            <input v-model="pinSetupAcknowledged" type="checkbox"
+              :disabled="pinSetupBusy" data-testid="security-pin-ack">
+            Recovery Key сохранён отдельно и необходим для восстановления.
+          </label>
+        </div>
+        <p class="pin-help">После сохранения приложение будет заблокировано.
+          Для входа потребуется новый PIN. Recovery Key остаётся способом восстановления.</p>
+        <p v-if="pinSetupError" class="pin-error" role="alert">{{pinSetupError}}</p>
+        <div class="pin-buttons">
+          <button type="button" class="small-button" :disabled="pinSetupBusy"
+            @click="closePinSetup">Отмена</button>
+          <button type="button" class="small-button emphasis"
+            data-testid="security-pin-save"
+            :disabled="pinSetupBusy||!pinSetupValid"
+            @click="installAppPin">{{pinSetupBusy?'Проверка…':'Сохранить PIN'}}</button>
         </div>
       </section>
     </div>
@@ -348,4 +450,25 @@ async function copyDeviceId(id:string):Promise<void>{
 .security-page .security-copy{overflow-wrap:anywhere}
 @media(min-width:700px){.security-tiles{grid-template-columns:1fr 1fr;column-gap:18px}.security-tiles #section-pin,.security-tiles #section-emergency{grid-column:span 1}.security-tiles #section-devices,.security-tiles #section-inactivity{grid-column:span 2}}
 @media(max-width:430px){.security-item{padding:13px}.security-item-icon{width:22px;flex-basis:22px}.security-page{padding:19px 12px 100px}}
+
+.pin-enrollment-overlay{position:fixed;inset:0;z-index:90;
+  background:#000b;display:flex;align-items:flex-end;justify-content:center;
+  padding:14px 12px max(16px,env(safe-area-inset-bottom,0px))}
+.pin-enrollment-sheet{width:min(100%,520px);max-height:min(86dvh,740px);
+  overflow:auto;background:#202020;border:1px solid #444;
+  border-radius:14px;padding:18px 17px 22px;box-shadow:0 18px 52px #0009}
+.pin-enrollment-heading{display:flex;justify-content:space-between;
+  align-items:center;gap:12px;margin-bottom:19px}
+.pin-enrollment-heading h2{font-size:16px!important;color:#f2f2f2!important;
+  margin:0!important}
+.pin-close{border:0;background:transparent;color:#ddd;cursor:pointer;
+  font-size:24px;line-height:1;padding:2px 7px}
+.pin-fields textarea{width:100%;min-height:82px;resize:vertical;
+  background:#2d2d2d;color:#f2f2f2;border:1px solid #555;border-radius:9px;
+  padding:10px;font:12px/1.4 ui-monospace,SFMono-Regular,monospace}
+.pin-fields .pin-ack-row{display:flex;align-items:flex-start;gap:9px;
+  margin:4px 0 0;line-height:1.5;color:#d7d7d7}
+.pin-ack-row input{accent-color:#1ed760;flex:none;margin-top:2px}
+.pin-buttons .small-button{flex:1}
+@media(min-width:600px){.pin-enrollment-overlay{align-items:center}}
 </style>
