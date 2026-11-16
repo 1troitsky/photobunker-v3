@@ -21,6 +21,7 @@ import {
 } from '../features/browser/application/browser-return-context'
 import SharePanel from '../features/sharing/SharePanel.vue'
 import MediaImportPanel from '../features/media/ui/MediaImportPanel.vue'
+import MediaSharePanel from '../features/media/ui/MediaSharePanel.vue'
 import {activeSession,reauthenticate} from '../features/identity/application/session'
 import {
   flushOutbox,listLocalPhotos,listCloudPhotos,
@@ -142,6 +143,7 @@ const createFolderOpen=ref(false)
 const createFolderParent=ref('')
 const uploadSheetOpen=ref(false)
 const sharePhotoId=ref<string|null>(null)
+const shareMediaId=ref<string|null>(null)
 const shareFileKey=ref<string|null>(null)
 const browserSettingsOpen=ref(false)
 const showRemainingDays=ref(readBrowserDaysLeft())
@@ -1416,6 +1418,7 @@ watch(activeSession,(next,previous)=>{
     createFolderParent.value=''
     uploadSheetOpen.value=false
     sharePhotoId.value=null
+    shareMediaId.value=null
     shareFileKey.value=null
     browserSettingsOpen.value=false
     newFolderName.value=''
@@ -1550,6 +1553,7 @@ function newFolderSheetKeydown(event:KeyboardEvent):void{
 function openPhotoShare(item:CatalogItem):void{
   if(!activeSession.value||item.source!=='photo'||!item.local)return
   sharePhotoId.value=item.id
+  shareMediaId.value=null
   shareFileKey.value=item.key
   uploadSheetOpen.value=false
   createFolderOpen.value=false
@@ -1560,9 +1564,24 @@ function openPhotoShare(item:CatalogItem):void{
       '[data-testid="browser-photo-share-close"]')?.focus()
   })
 }
+function openMediaShare(item:CatalogItem):void{
+  if(!activeSession.value||item.source!=='media'||!item.local)return
+  sharePhotoId.value=null
+  shareMediaId.value=item.id
+  shareFileKey.value=item.key
+  uploadSheetOpen.value=false
+  createFolderOpen.value=false
+  browserSettingsOpen.value=false
+  closeFileMenu()
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-media-share-close"]')?.focus()
+  })
+}
 function closePhotoShare():void{
   const key=shareFileKey.value
   sharePhotoId.value=null
+  shareMediaId.value=null
   shareFileKey.value=null
   void nextTick(()=>{
     if(key)document.querySelector<HTMLButtonElement>(
@@ -1570,13 +1589,14 @@ function closePhotoShare():void{
     )?.focus()
   })
 }
-function photoShareKeydown(event:KeyboardEvent):void{
-  if(!sharePhotoId.value)return
+function fileShareKeydown(event:KeyboardEvent):void{
+  if(!sharePhotoId.value&&!shareMediaId.value)return
   if(event.key==='Escape'){
     event.preventDefault();closePhotoShare();return
   }
   if(event.key!=='Tab')return
-  const root=document.querySelector<HTMLElement>('[data-testid="browser-photo-share-sheet"]')
+  const root=document.querySelector<HTMLElement>(
+    '[data-testid="browser-photo-share-sheet"],[data-testid="browser-media-share-sheet"]')
   const enabled=Array.from(root?.querySelectorAll<HTMLElement>(
     'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]'
   )??[])
@@ -1718,6 +1738,7 @@ onUnmounted(()=>{
   document.removeEventListener('pointerdown',onBrowserMenuPointerDown)
   closeFileMenu()
   sharePhotoId.value=null
+  shareMediaId.value=null
   shareFileKey.value=null
   revokeFolderThumbnails()
   if(retentionTimer!==null){clearInterval(retentionTimer);retentionTimer=null}
@@ -2309,6 +2330,13 @@ onUnmounted(()=>{
               @click="openPhotoShare(item)">
               {{item.local?'Поделиться':'Поделиться (требуется локальная копия)'}}
             </button>
+            <button v-if="item.source==='media'" type="button"
+              :disabled="!item.local"
+              :aria-label="'Поделиться файлом '+item.id"
+              data-testid="browser-media-share-action"
+              @click="openMediaShare(item)">
+              {{item.local?'Поделиться':'Поделиться (требуется локальная копия)'}}
+            </button>
             <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
               :aria-label="'Полный просмотр файла '+item.id"
               @click="preserveViewerOrigin(item,$event)">Открыть файл</RouterLink>
@@ -2454,6 +2482,7 @@ onUnmounted(()=>{
           <MediaImportPanel
             :destination-folders="importFolderOptions"
             :default-folder-id="selectedFolder"
+            :share-embedded="shareMediaId===null"
             @media-imported="placeImportedMedia"
             @catalog-change="refresh"/>
         </div>
@@ -2465,7 +2494,7 @@ onUnmounted(()=>{
       <section v-if="sharePhotoId" class="browser-share-sheet"
         data-testid="browser-photo-share-sheet" role="dialog"
         aria-modal="true" aria-label="Поделиться фотографией"
-        @keydown="photoShareKeydown">
+        @keydown="fileShareKeydown">
         <header class="browser-share-heading">
           <strong>Поделиться фотографией</strong>
           <button type="button" data-testid="browser-photo-share-close"
@@ -2477,6 +2506,26 @@ onUnmounted(()=>{
         <SharePanel
           :local-photos="localPhotos.filter(photo=>photo.photoId===sharePhotoId)"
           @open-photo="showReceived"/>
+      </section>
+      <div v-if="shareMediaId" class="browser-share-backdrop"
+        data-testid="browser-media-share-backdrop" @click="closePhotoShare"></div>
+      <section v-if="shareMediaId" class="browser-share-sheet"
+        data-testid="browser-media-share-sheet" role="dialog"
+        aria-modal="true" aria-label="Поделиться файлом"
+        @keydown="fileShareKeydown">
+        <header class="browser-share-heading">
+          <strong>Поделиться файлом</strong>
+          <button type="button" data-testid="browser-media-share-close"
+            aria-label="Закрыть обмен" @click="closePhotoShare">Закрыть</button>
+        </header>
+        <p class="muted" data-testid="browser-media-share-selected">
+          Выбран файл {{ shareMediaId.slice(0,8) }}.
+          Передача возможна после подтверждения облака и независимой сверки ключа.
+          Полный доступ к оригиналу и Safe-копия — разные разрешения.
+        </p>
+        <MediaSharePanel
+          :local-media="localMedia.filter(media=>media.mediaId===shareMediaId)"
+          :selected-media-id="shareMediaId"/>
       </section>
     </template>
     <p v-if="status" role="status" class="status-text">{{ status }}</p>

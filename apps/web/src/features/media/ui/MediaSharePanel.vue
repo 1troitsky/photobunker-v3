@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {onMounted,onUnmounted,ref,watch} from 'vue'
+import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {activeSession,reauthenticate} from '../../identity/application/session'
 import {
   confirmPeer,ensureOwnExchangeKey,inspectPeer,
@@ -35,7 +35,10 @@ import {
 import type {AssignmentListing} from '../../assignments/application/assignment-outbox'
 import type {MediaMetadata} from '../domain/media-crypto'
 
-defineProps<{localMedia:StoredMedia[]}>()
+const props=withDefaults(defineProps<{
+  localMedia:StoredMedia[]
+  selectedMediaId?:string|null
+}>(),{selectedMediaId:null})
 const emit=defineEmits<{
   openMedia:[blob:Blob,metadata:MediaMetadata]
 }>()
@@ -51,6 +54,23 @@ const acknowledgedOwner=ref(false)
 const outgoing=ref<OutgoingMediaGrant[]>([])
 const incoming=ref<ReceivedMediaGrant[]>([])
 const safeCandidates=ref<SafeDerivativeCandidate[]>([])
+const scopedLocalMedia=computed(()=>props.selectedMediaId
+  ?props.localMedia.filter(media=>media.mediaId===props.selectedMediaId)
+  :props.localMedia)
+const scopedSafeCandidates=computed(()=>props.selectedMediaId
+  ?safeCandidates.value.filter(candidate=>
+    candidate.sourceMediaId===props.selectedMediaId
+    ||candidate.safeMediaId===props.selectedMediaId)
+  :safeCandidates.value)
+const scopedOutgoing=computed(()=>props.selectedMediaId
+  ?outgoing.value.filter(grant=>{
+    if(grant.mediaId===props.selectedMediaId)return true
+    try{
+      return parseMediaGrantContract(JSON.parse(grant.contract)).sourceMediaId
+        ===props.selectedMediaId
+    }catch{return false}
+  })
+  :outgoing.value)
 const previewCandidate=ref<SafeDerivativeCandidate|null>(null)
 const contributorReview=ref<ContributorReviewSource|null>(null)
 let contributorReviewSerial=0
@@ -131,6 +151,8 @@ function send(mediaId:string):void{
   void action(async()=>{
     const peer=recipientPeer.value
     if(!peer?.confirmed)throw Error('media_grant.peer_not_confirmed')
+    if(props.selectedMediaId&&mediaId!==props.selectedMediaId)
+      throw Error('media_grant.context_mismatch')
     if(safeCandidates.value.some(row=>row.sourceMediaId===mediaId)
       &&!window.confirm('Выбран ПОЛНЫЙ исходный файл, а не закрытая копия. Получатель сможет расшифровать его без масок. Для адресной Safe-передачи используйте специальную кнопку ниже. Всё равно передать оригинал?'))
       return
@@ -145,6 +167,10 @@ function sendSafe(candidate:SafeDerivativeCandidate):void{
   void action(async()=>{
     const peer=recipientPeer.value
     if(!peer?.confirmed)throw Error('media_grant.peer_not_confirmed')
+    if(props.selectedMediaId
+      &&candidate.sourceMediaId!==props.selectedMediaId
+      &&candidate.safeMediaId!==props.selectedMediaId)
+      throw Error('media_grant.context_mismatch')
     if(!window.confirm('Разрешить адресату читать ТОЛЬКО отдельную закрытую JPEG-копию? Оригинал останется под собственными независимыми разрешениями. Убедитесь, что чувствительные области закрыты. Это не публичная ссылка.'))
       return
     const grantId=await queueMediaSafeRecipientGrant(
@@ -429,23 +455,23 @@ onUnmounted(()=>{
       <p class="muted">Кнопка «Передать медиа» выдаёт полный DEK выбранного
         файла. Если это оригинал, получатель увидит его БЕЗ масок.
         Для закрытой копии используйте отдельное действие Safe ниже.</p>
-      <div v-for="media in localMedia.filter(x=>x.state==='synced')"
+      <div v-for="media in scopedLocalMedia.filter(x=>x.state==='synced')"
         :key="media.key" class="photo-row">
         <code>{{ media.mediaType }} · {{ media.mediaId.slice(0,8) }}</code>
         <button type="button" :disabled="busy"
           @click="send(media.mediaId)">Передать медиа</button>
       </div>
     </template>
-    <template v-if="safeCandidates.length||recipientPeer?.confirmed">
+    <template v-if="scopedSafeCandidates.length||recipientPeer?.confirmed">
       <h4>Кандидаты Safe — только отдельные JPEG-копии</h4>
       <p class="muted">Этот раздел доступен только для лично подготовленных
         закрытых копий после подтверждения синхронизации обоих файлов.
         Safe-грант связан с оригиналом, но никогда не выдаёт его DEK.
         Проверьте содержание копии самостоятельно перед отправкой.
         Существующие разрешения на оригинал не отзываются.</p>
-      <p v-if="!safeCandidates.length" class="muted"
+      <p v-if="!scopedSafeCandidates.length" class="muted"
         data-testid="media-safe-empty">Подтверждённых Safe-кандидатов пока нет.</p>
-      <div v-for="candidate in safeCandidates" :key="candidate.key"
+      <div v-for="candidate in scopedSafeCandidates" :key="candidate.key"
         class="photo-row" data-testid="media-safe-candidate">
         <div>
           <small>Личная обработанная копия {{ candidate.safeMediaId.slice(0,8) }}</small>
@@ -544,7 +570,7 @@ onUnmounted(()=>{
         @click="editorialCandidate=null">Закрыть</button>
     </section>
     <h4>Исходящие разрешения медиа</h4>
-    <div v-for="grant in outgoing" :key="grant.id" class="photo-row">
+    <div v-for="grant in scopedOutgoing" :key="grant.id" class="photo-row">
       <div>
         <code>{{ grant.id.slice(0,8) }} · {{ grant.state }}</code>
         <small>{{ grantScopeLabel(grant) }}</small>
@@ -553,11 +579,12 @@ onUnmounted(()=>{
       <button v-if="grant.state==='sent'" type="button"
         :disabled="busy" @click="revoke(grant.id)">Отозвать медиа</button>
     </div>
-    <h4>Полученные файлы</h4>
-    <button type="button" :disabled="busy"
-      @click="refresh">Обновить медиа-разрешения</button>
-    <p v-if="!incoming.length" class="muted">Нет доступных файлов.</p>
-    <div v-for="grant in incoming" :key="grant.grantId" class="photo-row">
+    <h4 v-if="!props.selectedMediaId">Полученные файлы</h4>
+    <template v-if="!props.selectedMediaId">
+      <button type="button" :disabled="busy"
+        @click="refresh">Обновить медиа-разрешения</button>
+      <p v-if="!incoming.length" class="muted">Нет доступных файлов.</p>
+      <div v-for="grant in incoming" :key="grant.grantId" class="photo-row">
       <div>
         <code>{{ grant.mediaType }} · {{ grant.mediaId.slice(0,8) }}</code>
         <small v-if="grant.scope==='safe_read'">
@@ -582,6 +609,7 @@ onUnmounted(()=>{
           @click="acceptOwner">Подтвердить отправителя медиа</button>
       </template>
     </div>
+    </template>
     <p v-if="status" role="status" class="status-text">{{ status }}</p>
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>
     <p class="muted">После отзыва сервер блокирует новые выдачи блоков. Уже скачанную получателем копию отозвать невозможно.</p>
