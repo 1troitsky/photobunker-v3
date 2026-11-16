@@ -86,7 +86,11 @@ const dock = computed(() => displayedDock.value
   <!-- No protected Browser/Camera/Viewer or Header can mount until the
        device has been authenticated and any saved PIN has been entered.
        Even a public route must not render stale private Shell children. -->
-  <WelcomeView v-if="!identityBootstrapReady" bootstrap-only/>
+  <!-- The external Public Card and public install guide are entirely
+       anonymous, do not import Identity keys and must never require a PIN.
+       All PRIVATE routes remain sealed until trusted device admission. -->
+  <RouterView v-if="route.meta?.publicStandalone===true"/>
+  <WelcomeView v-else-if="!identityBootstrapReady" bootstrap-only/>
   <PinShell v-else-if="pendingPinUnlock||identityBootstrapError"/>
   <!-- Welcome remains a standalone route once PIN and local bootstrap settle. -->
   <RouterView v-else-if="route.meta?.standalone"/>
