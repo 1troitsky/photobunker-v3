@@ -1,0 +1,264 @@
+{
+  "command": "python3 .local-delivery/audit-all-20261116/verify-issues-audit.py",
+  "checked_at_utc": "2026-11-16T07:41:27.758417+00:00",
+  "exit_code": 0,
+  "result": "PASS",
+  "scope": "archive/inventory integrity only; NOT product/runtime/security/device acceptance",
+  "checks": [
+    {
+      "name": "raw_sha256_issues-pages.json",
+      "ok": true,
+      "detail": "771a98ff144b155e8f40447c8d7a333d93523d5c2d28b7fe5741226603aa3bbc"
+    },
+    {
+      "name": "pagination_issues-pages.json",
+      "ok": true,
+      "detail": {
+        "pages": 5,
+        "sizes": [
+          100,
+          100,
+          100,
+          100,
+          14
+        ]
+      }
+    },
+    {
+      "name": "raw_sha256_issue-comments-pages.json",
+      "ok": true,
+      "detail": "b8da62e092bfd8b1da1d8a48d26f7be256b2b6f7baf3a3dacdeeaa2711599c19"
+    },
+    {
+      "name": "pagination_issue-comments-pages.json",
+      "ok": true,
+      "detail": {
+        "pages": 14,
+        "sizes": [
+          100,
+          100,
+          100,
+          100,
+          100,
+          100,
+          100,
+          100,
+          100,
+          100,
+          100,
+          100,
+          100,
+          8
+        ]
+      }
+    },
+    {
+      "name": "raw_sha256_review-comments-pages.json",
+      "ok": true,
+      "detail": "cf1cbb66a638b4860a516671fb74850e6ccf787fe6c4c8d29e9c04efe880bd05"
+    },
+    {
+      "name": "pagination_review-comments-pages.json",
+      "ok": true,
+      "detail": {
+        "pages": 1,
+        "sizes": [
+          0
+        ]
+      }
+    },
+    {
+      "name": "source_counts",
+      "ok": true,
+      "detail": {
+        "issues": 129,
+        "prs": 285
+      }
+    },
+    {
+      "name": "source_issue_state",
+      "ok": true,
+      "detail": "pre-closure capture: 128 open, 1 closed"
+    },
+    {
+      "name": "all_issue_ids_once",
+      "ok": true,
+      "detail": {
+        "rows": 129,
+        "unique": 129
+      }
+    },
+    {
+      "name": "no_pr_in_inventory",
+      "ok": true,
+      "detail": "REST pull_request records excluded"
+    },
+    {
+      "name": "source_state_and_labels_preserved",
+      "ok": true,
+      "detail": "source state is not product resolution"
+    },
+    {
+      "name": "every_row_has_requirements_acceptance_remainder_provenance",
+      "ok": true,
+      "detail": "full originals retained privately; sanitized excerpts not complete source replacement"
+    },
+    {
+      "name": "no_completed_claim_from_reacceptance_status",
+      "ok": true,
+      "detail": [
+        "ARCHIVED_COORDINATION",
+        "BLOCKED",
+        "NOT TESTED",
+        "TRANSFERRED_UNRESOLVED"
+      ]
+    },
+    {
+      "name": "all_issue_comments_linked",
+      "ok": true,
+      "detail": {
+        "all_repo_conversation_comments": 1308,
+        "true_issue_comment_count": 1057
+      }
+    },
+    {
+      "name": "no_raw_body_field",
+      "ok": true,
+      "detail": "raw bodies are private files, not inventory fields"
+    },
+    {
+      "name": "no_obvious_credential_pattern_issues-audit.json",
+      "ok": true,
+      "detail": "heuristic sanitizer check only; not a claim that arbitrary secret detection is complete"
+    },
+    {
+      "name": "no_obvious_credential_pattern_issues-audit.csv",
+      "ok": true,
+      "detail": "heuristic sanitizer check only; not a claim that arbitrary secret detection is complete"
+    },
+    {
+      "name": "no_obvious_credential_pattern_issues-audit.md",
+      "ok": true,
+      "detail": "heuristic sanitizer check only; not a claim that arbitrary secret detection is complete"
+    },
+    {
+      "name": "no_obvious_credential_pattern_issue-register.md",
+      "ok": true,
+      "detail": "heuristic sanitizer check only; not a claim that arbitrary secret detection is complete"
+    },
+    {
+      "name": "no_obvious_credential_pattern_issues-runtime-evidence.md",
+      "ok": true,
+      "detail": "heuristic sanitizer check only; not a claim that arbitrary secret detection is complete"
+    },
+    {
+      "name": "csv_matches_issue_ids",
+      "ok": true,
+      "detail": "129 data rows"
+    },
+    {
+      "name": "markdown_register_complete",
+      "ok": true,
+      "detail": "all 129 source Issue IDs included"
+    },
+    {
+      "name": "mandatory_scope_remains_visible",
+      "ok": true,
+      "detail": [
+        171,
+        212,
+        213,
+        218,
+        219,
+        220,
+        221,
+        222,
+        223,
+        225,
+        227,
+        228,
+        229,
+        230,
+        232,
+        233,
+        234,
+        235,
+        236,
+        237,
+        238,
+        239,
+        242,
+        243,
+        413,
+        414
+      ]
+    },
+    {
+      "name": "main_source_path_presence_recorded_correctly",
+      "ok": true,
+      "detail": "paths checked against exact main Git tree"
+    },
+    {
+      "name": "candidate_source_path_presence_recorded_correctly",
+      "ok": true,
+      "detail": "candidate WIP source presence only, no runtime claim"
+    },
+    {
+      "name": "status_axes_on_all_129_rows",
+      "ok": true,
+      "detail": "source presence / past evidence / final-head acceptance separated"
+    },
+    {
+      "name": "prior_runtime_subsets_retained",
+      "ok": true,
+      "detail": "required quota/GPS/drafts/export/logout past successful subsets retained, without full-criteria promotion"
+    },
+    {
+      "name": "current_pr412_head_separate",
+      "ok": true,
+      "detail": "prior edfaaee9 runtime evidence not transferred to different PR412 head"
+    },
+    {
+      "name": "runtime_archive_sha_prior_chromium_110",
+      "ok": true,
+      "detail": "raw/runtime-evidence/pb3-main-candidate-full-e2e-20261115.log"
+    },
+    {
+      "name": "runtime_archive_sha_prior_vitest_666",
+      "ok": true,
+      "detail": "raw/runtime-evidence/pb3-main-candidate-vitest-20261115.log"
+    },
+    {
+      "name": "runtime_archive_sha_prior_php84_314",
+      "ok": true,
+      "detail": "raw/runtime-evidence/pb3-main-candidate-php84-20261115.log"
+    },
+    {
+      "name": "runtime_archive_sha_prior_php85_314",
+      "ok": true,
+      "detail": "raw/runtime-evidence/pb3-main-candidate-php85-20261115.log"
+    },
+    {
+      "name": "runtime_archive_sha_prior_typecheck",
+      "ok": true,
+      "detail": "raw/runtime-evidence/pb3-main-candidate-ts-20261115.log"
+    },
+    {
+      "name": "runtime_archive_sha_prior_build",
+      "ok": true,
+      "detail": "raw/runtime-evidence/pb3-main-candidate-build-20261115.log"
+    },
+    {
+      "name": "runtime_archive_sha_prior_targeted_followup",
+      "ok": true,
+      "detail": "raw/runtime-evidence/pb3-main-candidate-targets-fixed-20261115.log"
+    }
+  ],
+  "sanitized_artifact_sha256": {
+    "issues-audit.json": "d9f04a6d719f01025a9005806f4e3174f91ac6da8816208bf1103ac30e6776b0",
+    "issues-audit.csv": "acdc7a75f4bb2f84fa8bd8527d7de54d7be66422afd860206c58b92cfb4283b1",
+    "issues-audit.md": "9159261e7df28757727e208f0ddecc5133d32126845255766479cbdd002a23e3",
+    "issue-register.md": "8bf00b8ad785edbbc7a07c8ea9abde573d043ca3be3cb869004923858df6c304",
+    "issues-runtime-evidence.md": "b1e69aed14c01c716690ef409105769890d52ddd7f2f555f74bc52a1946c064d"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "initial_issues": 129,
+  "final_issues": 130,
+  "issues": [
+    {
+      "number": 415,
+      "url": "https://github.com/1troitsky/photobunker-v3/issues/415",
+      "title": "[Camera/Photo] Finish owner-approved Fieldwork 1.2 photo UX and verified capture retry",
+      "created_at": "2026-11-16T08:04:30Z",
+      "original_state": "open",
+      "final_state": "closed",
+      "state_reason": "not_planned",
+      "source_requirements": "Scope / exclusive CLAIM for Camera photo on fix/camera-photo-fieldwork-12-20261116, based on archived integration PR #412 exact f4c7c91fe8100377c10d7af734c7ead90b217e7f, accepted source docs/ux/camera/{README.md,index.html,style.css} and docs/ux/UI-SHELL-CONTRACT.md.\n\nPhase 1: remove production-only P1/P2 media destination selector, duplicate mode selector and extra enable/disable controls from the approved Camera main composition; retain encrypted P1/P2 preset compatibility internally (no destructive migration). Provide an actual user-visible device permission retry via the approved \"Разрешить камеру/микрофон\" actions. Add regression tests for UI and deny→retry; preserve production camera, E2EE outbox, signed assignment, GPS, blind mode and video/audio.\n\nFull phase acceptance: compare all Camera 1.2 approved states and styles; prove real photo capture→encrypted local outbox→Browser/Viewer→Garage readback with authentic account/session and strict negative ACL/TTL; TS/Vitest/PHP/security + real PG18/Garage/Chromium exact-head CI. Physical Safari/iOS/Android is OWNER LATER and must be marked NOT TESTED, never PASS.\n\nRules: no docs/ux changes, no false test mocks, no main merge/deploy, no destructive actions; keep Draft until verified. Note PR #412 is closed unmerged, so this is a stacked candidate and not main functionality.",
+      "comments_count": 0,
+      "implementation_presence": "New independent Camera branch observed; source claim preserved, no runtime acceptance in this audit",
+      "available_evidence": {
+        "branch": "refs/heads/fix/camera-photo-fieldwork-12-20261116",
+        "observed_head_sha": "ec3670a1970e9be55c815aed6920b760c8c3ad30",
+        "protected_ref": "refs/audit/20261116/post-snapshot/camera-photo-fieldwork-12",
+        "bundle_private_path": ".local-delivery/audit-all-20261116/raw/post-snapshot-camera-branch.bundle",
+        "bundle_bytes": 5556246,
+        "bundle_sha256": "2cfe56306357c6fedf3f35db6a9590a0db6d3d5e195161a0cd9ff5c8eb6bd37b",
+        "verify_exit": 0,
+        "runtime_acceptance": "NOT TESTED",
+        "scope": "post-initial-snapshot branch; original 289-branch inventory remains unchanged"
+      },
+      "audit_reacceptance_status": "TRANSFERRED_UNRESOLVED",
+      "final_head_acceptance": "NOT TESTED",
+      "closure_event": {
+        "kind": "issue",
+        "number": 415,
+        "timestamp_utc": "2026-11-16T08:07:35.820348+00:00",
+        "result": "closed",
+        "state_reason": "not_planned",
+        "resolution_claim": "consolidated into audit; not a completed-feature claim"
+      }
+    }
+  ],
+  "source": "New Issue created by another repository actor after initial closure; archived and closed under owner instruction. No product work performed."
+}

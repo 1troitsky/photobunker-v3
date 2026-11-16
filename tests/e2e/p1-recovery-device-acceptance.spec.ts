@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {expect,test,type Page} from '@playwright/test'
 
 /**
@@ -43,7 +44,7 @@ test('P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and of
       await A.goto('/browser')
       const picker=A.getByTestId('media-import-file')
       await expect(picker).toBeEnabled({timeout:30000})
-      await picker.setInputFiles({
+      await chooseEncryptedFile(picker,{
         name:filename,mimeType:'audio/wav',buffer:Buffer.alloc(expectedLen,expectedByte),
       })
       await expect.poll(()=>A.evaluate(async()=>{
@@ -218,7 +219,10 @@ test('P1 #199: wrong Recovery Key, invalid signed login proof and other account 
       parts[3]=parts[3]![0]==='A'?'B'+parts[3]!.slice(1):'A'+parts[3]!.slice(1)
       await C.locator('#recovery-key').fill(parts.join('.'))
       await C.getByRole('button',{name:'Восстановить',exact:true}).click()
-      await expect(C.getByRole('alert')).toContainText('identity.invalid_checksum')
+      // The accepted Authorization Error 1.0 never exposes a raw key
+      // checksum/internal error code to the person attempting recovery.
+      await expect(C).toHaveURL(/\/authorization-error$/)
+      await expect(C.getByRole('alert')).toContainText('Вход с этим ключом невозможен')
       await expect(C.getByText('Подтверждённая сессия')).toHaveCount(0)
       // A second, unrelated account can authenticate itself but may not
       // impersonate the original root account's device.

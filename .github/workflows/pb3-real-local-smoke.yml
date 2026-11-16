@@ -1,0 +1,112 @@
+name: PB3 actual local Docker startup
+on:
+  push:
+    branches:
+      - 'delivery/pb3-real-local-run-*'
+      - 'integration/working-main-*'
+  pull_request:
+    paths:
+      - 'local-runner/**'
+      - '.dockerignore'
+      - '.github/workflows/pb3-real-local-smoke.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-stack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [photo, media, mixed-assignment]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate real Mac launcher shell syntax
+        run: bash -n local-runner/Start-PhotoBunker.command local-runner/Stop-PhotoBunker.command local-runner/ci-smoke.sh
+      - name: Run ACTUAL PB3 PHP Laravel + PG18 + Garage + Vue HTTP smoke
+        run: bash local-runner/ci-smoke.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Real Chromium isolated account and encrypted data journey
+        env:
+          SCENARIO: ${{ matrix.scenario }}
+        run: |
+          corepack enable
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm exec playwright install chromium
+          case "$SCENARIO" in
+            photo)
+              corepack pnpm exec playwright test --config tests/playwright.config.ts \
+                tests/e2e/p1-identity-photo.spec.ts \
+                --grep 'two browser identities: key-only account'
+              ;;
+            media)
+              corepack pnpm exec playwright test --config tests/playwright.config.ts \
+                tests/e2e/p1-media.spec.ts --grep 'P1-10'
+              ;;
+            mixed-assignment)
+              corepack pnpm exec playwright test --config tests/playwright.config.ts \
+                tests/e2e/p2-browser-assignment-mixed-creation-209.spec.ts
+              ;;
+            *) echo "Unknown scenario" >&2; exit 2;;
+          esac
+      - name: Inspect container states (failure only)
+        if: failure()
+        run: docker compose --project-directory "$PWD" -f local-runner/compose.yml --env-file local-runner/ci-secrets.env ps || true
+
+  production-browser:
+    name: Compiled frontend user journeys (no Vite source modules)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start isolated real API, PostgreSQL and Garage
+        run: bash local-runner/ci-smoke.sh
+      - name: Replace dev frontend with compiled Nginx application
+        run: |
+          set -euo pipefail
+          docker compose --project-directory "$PWD" --env-file local-runner/ci-secrets.env \
+            -f local-runner/compose.yml -f local-runner/compose.production.yml up -d --build --no-deps web
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:5173/api/readyz
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/src/main.ts)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/sw.js)" = 404
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test ordinary UI, offline queue, cloud recovery and recipient access
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install chromium
+          pnpm exec playwright test --config tests/playwright.config.ts \
+            tests/e2e/p1-identity-photo.spec.ts \
+            --grep 'two browser identities: key-only account|P1-03: signed recipient'
+
+  mac-source-package:
+    name: Full original PB3 source with tested Mac launcher
+    needs: [real-stack, production-browser]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build full original-source ZIP (not launcher-only)
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output=PhotoBunker_PB3_Real_Mac.zip HEAD
+          unzip -Z -1 PhotoBunker_PB3_Real_Mac.zip | grep -qx 'apps/api/artisan'
+          unzip -Z -1 PhotoBunker_PB3_Real_Mac.zip | grep -qx 'apps/web/src/main.ts'
+          unzip -Z -1 PhotoBunker_PB3_Real_Mac.zip | grep -qx 'local-runner/Start-PhotoBunker.command'
+          git ls-tree HEAD local-runner/Start-PhotoBunker.command | grep -q '^100755'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhotoBunker-PB3-Real-Mac
+          path: PhotoBunker_PB3_Real_Mac.zip
+          retention-days: 14
+          if-no-files-found: error

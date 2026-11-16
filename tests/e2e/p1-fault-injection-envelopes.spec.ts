@@ -1,3 +1,4 @@
+import {openImportSheet} from './helpers/browser-import'
 import { test, expect, type Page } from '@playwright/test'
 
 /**
@@ -51,6 +52,7 @@ test('P1-25 lost finalize ACK: real commit, offline E2EE outbox, idempotent repl
   try {
     const ownerId = await enroll(owner)
     await owner.goto('/browser')
+    await openImportSheet(owner)
     const panel = owner.locator('.media-import-p1')
     await expect(panel.getByTestId('media-import-file')).toBeEnabled()
 
@@ -189,6 +191,7 @@ test('P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean 
   try {
     await enroll(page)
     await page.goto('/browser')
+    await openImportSheet(page)
     const panel = page.locator('.media-import-p1')
     await expect(panel.getByTestId('media-import-file')).toBeEnabled()
     await context.setOffline(true)
@@ -245,7 +248,8 @@ test('P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean 
     expect(before).toBe(0)
 
     poison = false
-    await page.unroute(chunkPattern)
+    // Drain asynchronous route.fetch/fulfill before replacing the interceptor.
+    await page.unrouteAll({ behavior: 'wait' })
     await page.evaluate(async () => {
       const m = await import('/src/features/media/application/media-outbox.ts')
       await m.synchronizeMedia()
@@ -284,7 +288,8 @@ test('P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean 
     }, mediaId)
     expect(tamperedReads).toBeGreaterThan(0)
     expect(corruptRead).toBe('media.chunk_corrupt')
-    await page.unroute(chunkPattern)
+    // Drain asynchronous route.fetch/fulfill before replacing the interceptor.
+    await page.unrouteAll({ behavior: 'wait' })
 
     // The persisted verified remote object still decrypts correctly:
     // interception modified only the response, not Garage.

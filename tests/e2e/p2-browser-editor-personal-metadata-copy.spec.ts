@@ -36,12 +36,15 @@ test('P2 V-47: private Info edits create only a separate AES-GCM personal copy w
       return {id,size:blob.size}
     })
     await context.setOffline(false)
-    await page.goto('/browser/file/media/'+source.id)
-    await expect(page.getByTestId('file-viewer-image')).toBeVisible()
-    await page.getByTestId('viewer-action-edit').click()
-    await expect(page).toHaveURL(new RegExp('/browser/file/media/'+source.id+'/edit$'))
-    await page.getByTestId('file-editor-tabs')
-      .getByRole('button',{name:'Информация'}).click()
+    await page.goto('/browser')
+    const personalRow=page.getByTestId('browser-row-media:'+source.id)
+    await expect(personalRow).toBeVisible()
+    await personalRow.getByTestId('browser-file-menu-toggle').click()
+    await personalRow.getByRole('link',{
+      name:'Редактировать личные метаданные файла '+source.id+' (новая копия)',
+    }).click()
+    await expect(page).toHaveURL(
+      new RegExp('/browser/file/media/'+source.id+'/edit\\?tab=info$'))
     const name=page.getByTestId('private-copy-name')
     await expect(name).toBeVisible({timeout:30000})
     await expect(name).toHaveValue('PRIVATE-METADATA-SOURCE.jpg')
@@ -70,7 +73,7 @@ test('P2 V-47: private Info edits create only a separate AES-GCM personal copy w
     // A refused Cancel preserves ALL unsaved private fields and file identity.
     page.once('dialog',d=>d.dismiss())
     await page.getByTestId('editor-shell-cancel').click()
-    await expect(page).toHaveURL(/\/edit$/)
+    await expect(page).toHaveURL(/\/edit\?tab=info$/)
     await expect(name).toHaveValue('PRIVATE-METADATA-EDITED.jpg')
     await expect(page.getByTestId('private-copy-tags'))
       .toContainText('field-notes')

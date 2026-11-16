@@ -1,0 +1,6 @@
+{
+  "command": "compare Git blob SHA and byte size with accepted SOURCE-MANIFEST.json",
+  "files": 117,
+  "mismatch": [],
+  "exitCode": 0
+}

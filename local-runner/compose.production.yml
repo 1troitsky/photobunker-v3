@@ -1,0 +1,13 @@
+services:
+  web:
+    image: ${PB3_WEB_IMAGE:-pb3-core-web:20261116}
+    build:
+      dockerfile: local-runner/Dockerfile.web.production
+      args:
+        VITE_APP_NAME: ${PB3_APP_NAME:-PhotoBunker}
+        VITE_APP_SHORT_NAME: ${PB3_APP_SHORT_NAME:-PhotoBunker}
+        VITE_APP_SLUG: ${PB3_APP_SLUG:-photobunker}
+        VITE_APP_MARK: ${PB3_APP_MARK:-app}
+        VITE_APP_PUBLIC_URL: ${PB3_PUBLIC_ORIGIN:-http://127.0.0.1:5173}
+        VITE_APP_THEME_COLOR: '#1ed760'
+        VITE_APP_ICON_URL: /icons/app.svg

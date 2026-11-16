@@ -1,0 +1,17 @@
+
+> pb3-platform@0.0.0 test:web <repo>
+> pnpm --filter @pb3/web test:unit
+
+
+> @pb3/web@0.0.0 test:unit <repo>/apps/web
+> vitest run
+
+
+ RUN  v4.1.11 <repo>/apps/web
+
+
+ Test Files  140 passed (140)
+      Tests  1013 passed (1013)
+   Start at  17:36:14
+   Duration  21.71s (transform 5.60s, setup 0ms, import 20.69s, tests 83.42s, environment 9.42s)
+

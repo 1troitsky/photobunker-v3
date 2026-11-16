@@ -62,7 +62,10 @@ test('late permission survives real online hydration with one live stream',async
   await release(page,0)
   await playing(page)
   expect(await stats(page)).toEqual({calls:1,maxLive:1,live:1,ended:0})
-  await page.getByRole('button',{name:'Отключить',exact:true}).click()
+  // The approved screen has no duplicate Stop action below the shutter;
+  // navigating away always releases the camera without touching encrypted data.
+  await page.getByRole('navigation',{name:'Главная навигация'})
+    .getByRole('link',{name:'Browser',exact:true}).click()
   expect(await stats(page)).toEqual({calls:1,maxLive:1,live:0,ended:1})
 })
 
@@ -128,7 +131,12 @@ test('denied permission is recoverable by a single explicit retry',async({page})
   await page.goto('/camera');await confirmed(page)
   await expect(page.getByRole('alert')).toContainText('Camera denied fixture')
   await expect(page.getByRole('button',{name:'Сделать снимок'})).toBeDisabled()
-  await page.getByRole('button',{name:'Включить камеру'}).click()
+  // Recover using the two real permission buttons within Camera Settings.
+  // No extra Start/Stop row may appear under the approved capture controls.
+  await expect(page.locator('.camera-device-actions')).toHaveCount(0)
+  await page.getByTestId('camera-open-settings').click()
+  await page.getByTestId('camera-permission-camera').click()
+  await page.getByTestId('camera-sheet-close').click()
   await playing(page)
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
@@ -154,7 +162,8 @@ test('hydrated camera captures offline against an already verified signed assign
   await expect(page.locator('#camera-assignment')).toHaveValue(assignmentId)
   await context.setOffline(true)
   await page.getByRole('button',{name:'Сделать снимок'}).click()
-  await expect(page.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
+  await expect(page.getByTestId('camera-capture-feedback')).toBeVisible()
+  await expect(page.getByTestId('camera-stage')).toContainText('Зашифровано и сохранено локально')
   const stored=await page.evaluate(async()=>{
     const path='/src/features/photo-sync/application/p1-photo.ts'
     const m=await import(path),[photo]=await m.listLocalPhotos()
@@ -174,4 +183,19 @@ test('hydrated camera captures offline against an already verified signed assign
     return (await (await import(path)).listLocalPhotos())[0].assets.map((a:any)=>a.sha256)
   })
   expect(digests).toEqual(stored.digest)
+
+  // The captured ciphertext must also open through the real Browser→Viewer
+  // route and decrypt as an actual JPEG; a synced row alone is insufficient.
+  const capturedId=await page.evaluate(async()=>{
+    const {listLocalPhotos}=await import('/src/features/photo-sync/application/p1-photo.ts')
+    return (await listLocalPhotos())[0]!.photoId
+  })
+  const row=page.getByTestId('browser-row-photo:'+capturedId)
+  await row.getByTestId('browser-file-menu-toggle').click()
+  await row.getByRole('link',{name:'Полный просмотр файла '+capturedId}).click()
+  const image=page.getByTestId('file-viewer-image')
+  await expect(image).toBeVisible()
+  await expect.poll(()=>image.evaluate(el=>(el as HTMLImageElement).naturalWidth))
+    .toBeGreaterThan(0)
+  await expect(page.getByTestId('file-viewer')).toBeVisible()
 })

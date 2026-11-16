@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
 test('P2 File Viewer: navigate exactly the Browser folder/filter order and return to last viewed encrypted file',async({browser})=>{
@@ -31,7 +32,7 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
       // previous AES-GCM import is still busy. A real user cannot. Prove
       // that the previous encrypted transaction completed before selecting.
       await expect(picker).toBeEnabled({timeout:30000})
-      await picker.setInputFiles({name,mimeType:mime,buffer:Buffer.alloc(8192,fill)})
+      await chooseEncryptedFile(picker,{name,mimeType:mime,buffer:Buffer.alloc(8192,fill)})
       const expectedCount=index+1
       // The IndexedDB media outbox, not a transient DOM notification, is
       // the Local-First commit authority. Check exact file identities too.
@@ -74,7 +75,13 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     await page.getByRole('button',{name:'Создать',exact:true}).click()
     await expect(page.locator('.browser-folder-item')).toHaveCount(1)
     for(const row of rows.filter(x=>x.name!=='OUTSIDE.wav')){
-      await page.getByRole('combobox',{name:'Папка файла '+row.id})
+      // The encrypted folder placement is intentionally behind each
+      // file's approved Actions menu, not a permanently exposed select.
+      const item=page.getByTestId('browser-row-media:'+row.id)
+      await expect(item).toBeVisible()
+      await item.getByTestId('browser-file-menu-toggle').click()
+      await expect(item.getByTestId('browser-file-menu-panel')).toBeVisible()
+      await item.getByRole('combobox',{name:'Папка файла '+row.id})
         .selectOption({label:'Только выбранные'})
     }
     await page.locator('.browser-folder-open')
@@ -89,6 +96,7 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     expect(orderedKeys.every(key=>key.startsWith('media:'))).toBe(true)
     const firstId=orderedKeys[0]!.slice('media:'.length)
     const secondId=orderedKeys[1]!.slice('media:'.length)
+    await visibleRows.first().getByTestId('browser-file-menu-toggle').click()
     await page.getByRole('link',{name:'Полный просмотр файла '+firstId}).click()
     await expect(page).toHaveURL(new RegExp('/browser/file/media/'+firstId+'$'))
     await expect(page.getByTestId('file-viewer-audio')).toBeVisible()

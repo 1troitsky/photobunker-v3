@@ -1,0 +1,232 @@
+TAP version 13
+# Subtest: isolated UX files are allowed, including new preview and tests
+ok 1 - isolated UX files are allowed, including new preview and tests
+  ---
+  duration_ms: 0.773708
+  type: 'test'
+  ...
+# Subtest: UX branch cannot alter AppShell, global CSS, Viewer or original UX sources
+ok 2 - UX branch cannot alter AppShell, global CSS, Viewer or original UX sources
+  ---
+  duration_ms: 0.112625
+  type: 'test'
+  ...
+# Subtest: renamed/deleted reserved paths are visible to git --no-renames
+ok 3 - renamed/deleted reserved paths are visible to git --no-renames
+  ---
+  duration_ms: 0.056833
+  type: 'test'
+  ...
+# Subtest: normal product branches are not blocked by UX sandbox path guard
+ok 4 - normal product branches are not blocked by UX sandbox path guard
+  ---
+  duration_ms: 1.041833
+  type: 'test'
+  ...
+# Subtest: integration branch requires explicit dependency and overlap declaration
+ok 5 - integration branch requires explicit dependency and overlap declaration
+  ---
+  duration_ms: 0.268583
+  type: 'test'
+  ...
+# Subtest: identical builds yield byte-for-byte canonical manifests and digest
+ok 6 - identical builds yield byte-for-byte canonical manifests and digest
+  ---
+  duration_ms: 68.586584
+  type: 'test'
+  ...
+# Subtest: one-byte edit changes SHA and is rejected by old manifest
+ok 7 - one-byte edit changes SHA and is rejected by old manifest
+  ---
+  duration_ms: 67.058417
+  type: 'test'
+  ...
+# Subtest: tampered index.html rejected
+ok 8 - tampered index.html rejected
+  ---
+  duration_ms: 37.844417
+  type: 'test'
+  ...
+# Subtest: tampered assets/app.js rejected
+ok 9 - tampered assets/app.js rejected
+  ---
+  duration_ms: 25.288625
+  type: 'test'
+  ...
+# Subtest: tampered assets/app.css rejected
+ok 10 - tampered assets/app.css rejected
+  ---
+  duration_ms: 14.497333
+  type: 'test'
+  ...
+# Subtest: tampered sw.js rejected
+ok 11 - tampered sw.js rejected
+  ---
+  duration_ms: 9.82375
+  type: 'test'
+  ...
+# Subtest: tampered assets/mod.wasm rejected
+ok 12 - tampered assets/mod.wasm rejected
+  ---
+  duration_ms: 6.264625
+  type: 'test'
+  ...
+# Subtest: tampered assets/image.svg rejected
+ok 13 - tampered assets/image.svg rejected
+  ---
+  duration_ms: 6.601292
+  type: 'test'
+  ...
+# Subtest: missing file, unlisted file, missing SW and swapped source fail closed
+ok 14 - missing file, unlisted file, missing SW and swapped source fail closed
+  ---
+  duration_ms: 59.507
+  type: 'test'
+  ...
+# Subtest: manifest has no self-contained authenticity; independently anchored digest detects edited manifest
+ok 15 - manifest has no self-contained authenticity; independently anchored digest detects edited manifest
+  ---
+  duration_ms: 21.514583
+  type: 'test'
+  ...
+# Subtest: trusted minimum release sequence blocks rollback, including different release id
+ok 16 - trusted minimum release sequence blocks rollback, including different release id
+  ---
+  duration_ms: 22.131959
+  type: 'test'
+  ...
+# Subtest: noncanonical, unknown fields, duplicate, unsorted and malformed paths fail
+ok 17 - noncanonical, unknown fields, duplicate, unsorted and malformed paths fail
+  ---
+  duration_ms: 24.936334
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path ""
+ok 18 - forbid unsafe POSIX asset path ""
+  ---
+  duration_ms: 0.182583
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "/absolute"
+ok 19 - forbid unsafe POSIX asset path "/absolute"
+  ---
+  duration_ms: 0.033458
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "../escape"
+ok 20 - forbid unsafe POSIX asset path "../escape"
+  ---
+  duration_ms: 0.031125
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "./dot"
+ok 21 - forbid unsafe POSIX asset path "./dot"
+  ---
+  duration_ms: 0.024666
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "a/../b"
+ok 22 - forbid unsafe POSIX asset path "a/../b"
+  ---
+  duration_ms: 0.027458
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "a/./b"
+ok 23 - forbid unsafe POSIX asset path "a/./b"
+  ---
+  duration_ms: 0.057541
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "a//b"
+ok 24 - forbid unsafe POSIX asset path "a//b"
+  ---
+  duration_ms: 0.158917
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "a/"
+ok 25 - forbid unsafe POSIX asset path "a/"
+  ---
+  duration_ms: 0.073708
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "a\\\\b"
+ok 26 - forbid unsafe POSIX asset path "a\\\\b"
+  ---
+  duration_ms: 0.179416
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "a?b"
+ok 27 - forbid unsafe POSIX asset path "a?b"
+  ---
+  duration_ms: 0.140875
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "a\#fragment"
+ok 28 - forbid unsafe POSIX asset path "a\#fragment"
+  ---
+  duration_ms: 0.090458
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "a%2F..%2Fsecret"
+ok 29 - forbid unsafe POSIX asset path "a%2F..%2Fsecret"
+  ---
+  duration_ms: 0.023916
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "C:/windows"
+ok 30 - forbid unsafe POSIX asset path "C:/windows"
+  ---
+  duration_ms: 0.02125
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "a\\u0000b"
+ok 31 - forbid unsafe POSIX asset path "a\\u0000b"
+  ---
+  duration_ms: 0.330792
+  type: 'test'
+  ...
+# Subtest: forbid unsafe POSIX asset path "a\\nb"
+ok 32 - forbid unsafe POSIX asset path "a\\nb"
+  ---
+  duration_ms: 0.025167
+  type: 'test'
+  ...
+# Subtest: reject symlinks for both files and directory traversal
+ok 33 - reject symlinks for both files and directory traversal
+  ---
+  duration_ms: 20.042708
+  type: 'test'
+  ...
+# Subtest: reject hard-linked assets and unsupported worker ambiguity
+ok 34 - reject hard-linked assets and unsupported worker ambiguity
+  ---
+  duration_ms: 15.443208
+  type: 'test'
+  ...
+# Subtest: nonstandard explicit SW, missing SW and missing required SW reject
+ok 35 - nonstandard explicit SW, missing SW and missing required SW reject
+  ---
+  duration_ms: 7.155625
+  type: 'test'
+  ...
+# Subtest: reject invalid release fields, flags and output path inside inventory
+ok 36 - reject invalid release fields, flags and output path inside inventory
+  ---
+  duration_ms: 3.0725
+  type: 'test'
+  ...
+# Subtest: real CLI build/verify returns unsigned result and nonzero for tampering/rollback
+ok 37 - real CLI build/verify returns unsigned result and nonzero for tampering/rollback
+  ---
+  duration_ms: 631.657208
+  type: 'test'
+  ...
+1..37
+# tests 37
+# suites 0
+# pass 37
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1161.055458

@@ -11,48 +11,83 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
   const contributorCtx=await browser.newContext()
   const A=await ownerCtx.newPage()
   const B=await contributorCtx.newPage()
-  async function enroll(page:typeof A):Promise<string>{
+  // Reviewed #358/PR #360: a hard page.goto remounts the Vue app BEFORE
+  // resumeExistingDevice() finishes real local key unseal + signed proof.
+  // Wait for the SAME account and device, never force online or fabricate
+  // a token/receipt. The QA fix passed 3 independent cold CI runs.
+  async function waitForVerifiedResume(
+    page:typeof A,expected:{accountId:string;deviceId:string},
+  ):Promise<void>{
+    await expect.poll(()=>page.evaluate(async wanted=>{
+      const {activeSession}=await import('/src/features/identity/application/session.ts')
+      const current=activeSession.value
+      if(current&&(current.accountId!==wanted.accountId
+        ||current.deviceId!==wanted.deviceId))throw Error('qa.unexpected_identity')
+      return current?.online===true
+    },expected),{timeout:30_000}).toBe(true)
+  }
+  async function enroll(page:typeof A):Promise<{accountId:string;deviceId:string}>{
     await page.goto('/settings')
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
-    const accountId=await page.evaluate(async()=>{
+    const device=await page.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
-      return identity.requireSession().accountId
+      const current=identity.requireSession()
+      return {accountId:current.accountId,deviceId:current.deviceId}
     })
     await page.goto('/browser')
+    await waitForVerifiedResume(page,device)
     await expect(page.getByText('Ключ обмена подготовлен'))
       .toBeVisible({timeout:20_000})
-    return accountId
+    return device
   }
   try{
-    const ownerId=await enroll(A)
-    const recipientId=await enroll(B)
+    const owner=await enroll(A)
+    const contributor=await enroll(B)
+    const ownerId=owner.accountId
+    const recipientId=contributor.accountId
+    console.log('PB3_AV_E2E stage=enrollment_done')
     // The contributor starts with two genuinely encrypted, server-synced
     // private MediaFiles. No team role grants access to either DEK.
-    const uploader=B.locator('.media-import-p1')
+    // Browser v3 intentionally hides MediaImportPanel in the Header upload
+    // sheet. Enter through the owner-approved visible control, instead of
+    // trying to click a hidden upload button until Playwright times out.
+    await B.getByTestId('browser-header-upload').click()
+    await expect(B.getByTestId('browser-import-sheet')).toBeVisible()
+    const uploader=B.getByTestId('browser-import-sheet')
+      .locator('.media-import-p1')
     for(const [mime,name,fill] of [
       ['audio/wav','A-B-SIGNED-ASSIGNMENT-209.wav',0x42],
       ['video/webm','A-B-SIGNED-ASSIGNMENT-209.webm',0x58],
     ] as const){
-      await expect(uploader.getByTestId('media-import-file'))
-        .toBeEnabled({timeout:30_000})
-      await uploader.getByTestId('media-import-file').setInputFiles({
-        name,mimeType:mime,buffer:Buffer.alloc(2048,fill),
-      })
-      await uploader.getByRole('button',{name:'Отправить медиа'}).click()
-      await B.evaluate(async()=>{
-        const m=await import('/src/features/media/application/media-outbox.ts')
-        await m.synchronizeMedia()
-      })
+      // Bound each real encrypted media upload independently. A hung
+      // IndexedDB/S3 sync must report its specific stage rather than spend
+      // the whole test budget and mask the primary failure in cleanup.
+      await test.step('B signed encrypted media upload '+mime,async()=>{
+        console.log('PB3_AV_E2E stage=media_upload_start kind='+mime)
+        await expect(uploader.getByTestId('media-import-file'))
+          .toBeEnabled({timeout:30_000})
+        await uploader.getByTestId('media-import-file').setInputFiles({
+          name,mimeType:mime,buffer:Buffer.alloc(2048,fill),
+        })
+        await uploader.getByRole('button',{name:'Отправить медиа'}).click()
+        await B.evaluate(async()=>{
+          const m=await import('/src/features/media/application/media-outbox.ts')
+          await m.synchronizeMedia()
+        })
+        console.log('PB3_AV_E2E stage=media_upload_complete kind='+mime)
+      },{timeout:90_000})
     }
     await expect.poll(()=>B.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       return (await m.listLocalMedia()).filter(x=>x.state==='synced').length
     }),{timeout:30_000}).toBe(2)
+    console.log('PB3_AV_E2E stage=media_server_synced')
 
     await A.goto('/assignments')
+    await waitForVerifiedResume(A,owner)
     await A.getByRole('button',{name:'Создать задание'}).click()
     await A.locator('#assignment-title').fill('P2 integrated signed AV handoff')
     await A.locator('#assignment-instructions').fill('Private encrypted owner briefing')
@@ -86,9 +121,11 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
       root:['photo'],policy:['photo','video','audio'],
       version:6,video:2,audio:1,
     }))
+    console.log('PB3_AV_E2E stage=mixed_assignment_signed')
 
     // The assignment creator must explicitly fingerprint-pin recipient B.
     await A.goto('/assignments/'+assignmentId+'/edit')
+    await waitForVerifiedResume(A,owner)
     await A.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       await identity.reauthenticate()
@@ -108,8 +145,10 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
       await a.flushAssignmentOutbox()
     })
+    console.log('PB3_AV_E2E stage=invitation_queued')
 
     await B.goto('/assignments')
+    await waitForVerifiedResume(B,contributor)
     await B.evaluate(async()=>{
       const identity=await import('/src/features/identity/application/session.ts')
       await identity.reauthenticate()
@@ -134,6 +173,7 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
         x.kind==='accept'&&JSON.parse(x.contract).assignmentId===id)
       return matches.at(-1)?.state??'not-queued'
     },assignmentId),{timeout:45_000}).toBe('sent')
+    console.log('PB3_AV_E2E stage=contributor_accept_sent')
     await B.getByRole('button',{name:'Обновить',exact:true}).click()
     // Recipient B may see only a *fresh* independently verified owner
     // policy once the acceptance is actually acknowledged by the server.
@@ -150,6 +190,7 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
     },{id:assignmentId,owner:ownerId}),{timeout:45_000}).toEqual({
       media:['photo','video','audio'],version:2,video:2,audio:1,
     })
+    console.log('PB3_AV_E2E stage=contributor_policy_verified')
 
     await B.getByRole('button',{name:'Открыть',exact:true}).first().click()
     await B.getByRole('button',{name:'Проверить ключ владельца'}).click()
@@ -165,6 +206,7 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
       return (await a.listAssignmentOperations()).filter(x=>
         x.kind==='media-submit'&&x.state==='sent').length
     }),{timeout:45_000}).toBe(2)
+    console.log('PB3_AV_E2E stage=two_media_submits_signed')
 
     // Owner A sees true server-confirmed media receipts per signed kind.
     const confirmed=await expect.poll(()=>A.evaluate(async id=>{
@@ -190,8 +232,12 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
       goals:{photoGoal:null,videoGoal:2,audioGoal:1},
       kinds:['audio','video'],grants:true,
     })
+    console.log('PB3_AV_E2E stage=all_server_receipts_verified')
   }finally{
-    await ownerCtx.close()
-    await contributorCtx.close()
+    // Playwright destroys contexts itself after a test-wide timeout.
+    // Ignore only the resulting disposal error, never an application
+    // assertion or the original test-step timeout.
+    await ownerCtx.close().catch(()=>{})
+    await contributorCtx.close().catch(()=>{})
   }
 })

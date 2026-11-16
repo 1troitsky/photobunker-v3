@@ -1,4 +1,11 @@
+import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
+import type {Locator} from '@playwright/test'
+
+async function ensureFileMenu(row:Locator):Promise<void>{
+  if(await row.getByTestId('browser-file-menu-panel').count()===0)
+    await row.getByTestId('browser-file-menu-toggle').click()
+}
 
 test('P2 Browser: signed owner media archive, restore, then permanent tombstone without fabricated GC ACK',async({browser})=>{
   test.setTimeout(150000)
@@ -13,6 +20,7 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
     await page.goto('/browser')
     await expect(page.getByTestId('browser-tab-active')).toBeVisible()
 
+    await openImportSheet(page)
     const picker=page.getByTestId('media-import-file')
     await picker.setInputFiles({
       name:'PRIVATE-ARCHIVE-AUDIO.wav',mimeType:'audio/wav',
@@ -32,7 +40,9 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
       const module=await import('/src/features/media/application/media-outbox.ts')
       return (await module.listLocalMedia()).filter(x=>x.state==='synced').length
     }),{timeout:30000}).toBe(1)
+    await closeImportSheet(page)
     await page.getByRole('button',{name:'Обновить',exact:true}).first().click()
+    await ensureFileMenu(row)
     await expect(row.getByRole('button',{name:/Архивировать файл/}))
       .toBeVisible({timeout:30000})
     const id=await row.evaluate(element=>
@@ -55,6 +65,7 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
       await route.abort('failed')
     })
     page.once('dialog',dialog=>dialog.accept())
+    await ensureFileMenu(row)
     await row.getByRole('button',{name:/Архивировать файл/}).click()
     await expect(page.getByTestId('browser-archive-status'))
       .toContainText('не подтверждена',{timeout:20000})
@@ -92,8 +103,10 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
     expect(active.items).toHaveLength(0)
     await page.getByTestId('browser-tab-archive').click()
     await expect(row).toHaveCount(1)
+    await ensureFileMenu(row)
     await expect(row.getByRole('button',{name:/Восстановить файл/}))
       .toBeVisible()
+    await ensureFileMenu(row)
     await row.getByRole('button',{name:/Восстановить файл/}).click()
     await expect(page.getByTestId('browser-archive-status'))
       .toContainText('восстановлен из архива')
@@ -107,6 +120,7 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
     expect(recovered.items).toHaveLength(1)
 
     page.once('dialog',dialog=>dialog.accept())
+    await ensureFileMenu(row)
     await row.getByRole('button',{name:/Архивировать файл/}).click()
     // The archive action is asynchronous and writes a signed server event.
     // Do not race a second destructive action against its ACK and refresh.
@@ -114,11 +128,18 @@ test('P2 Browser: signed owner media archive, restore, then permanent tombstone 
       .toContainText('Файл помещён в архив на сервере.',{timeout:30000})
     await page.getByTestId('browser-tab-archive').click()
     await expect(row).toHaveCount(1)
+    await ensureFileMenu(row)
+    await expect(row.getByRole('button',{name:/Запросить удаление файла/})).toBeVisible()
     page.once('dialog',dialog=>dialog.accept())
     await row.getByRole('button',{name:/Запросить удаление файла/}).click()
     await expect(page.getByTestId('browser-archive-status'))
       .toContainText('физическая очистка S3 ещё НЕ подтверждена')
-    await expect(row).toContainText('pending_gc')
+    // Archive/GC details live in the approved per-file Actions menu.
+    // Do not mistake unchanged media outbox status ("synced") for a
+    // server-issued physical deletion acknowledgement.
+    await ensureFileMenu(row)
+    await expect(row.getByTestId('browser-file-menu-panel'))
+      .toContainText('pending_gc')
     await expect(row.getByRole('button',{name:/Восстановить файл/}))
       .toHaveCount(0)
     const results=await page.evaluate(async mediaId=>{

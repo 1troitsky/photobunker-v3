@@ -1,29 +1,59 @@
 import {test,expect} from '@playwright/test'
 
+// Hard route navigation mounts Vue before the asynchronous verified login proof.
+// This QA gate checks the SAME locally unsealed device and genuine server auth.
+// A locked, revoked, wrong-account or persistently offline device must NOT pass.
+async function awaitVerifiedSubmissionSession(
+  page:import('@playwright/test').Page,
+  expected:{accountId:string;deviceId:string},
+):Promise<void>{
+  await expect.poll(()=>page.evaluate(async expected=>{
+    const auth=await import('/src/features/identity/application/session.ts')
+    const current=auth.activeSession.value
+    if(!current)return 'device-unsealing'
+    if(current.accountId!==expected.accountId||current.deviceId!==expected.deviceId)
+      throw Error('qa408.wrong_local_account_or_device')
+    if(!current.online)return 'signed-login-pending'
+    const response=await fetch('/identity/v2/me',{
+      credentials:'same-origin',cache:'no-store',
+    })
+    if(!response.ok)return 'server-session-'+response.status
+    const proof=await response.json() as {accountId:string;deviceId:string}
+    if(proof.accountId!==expected.accountId||proof.deviceId!==expected.deviceId)
+      throw Error('qa408.wrong_server_account_or_device')
+    return 'verified'
+  },expected),{timeout:30000}).toBe('verified')
+}
+
 test('P2 contributor: signed imported Photo MediaFile receipt requires scoped E2EE, owner decrypt and revoke',async({browser})=>{
   test.setTimeout(210000)
   const ownerCtx=await browser.newContext()
   const contributorCtx=await browser.newContext()
   const owner=await ownerCtx.newPage()
   const contributor=await contributorCtx.newPage()
-  async function enroll(page:typeof owner):Promise<string>{
+  async function enroll(page:typeof owner):Promise<{accountId:string;deviceId:string}>{
     await page.goto('/settings')
     await page.getByRole('button',{name:'Создать ключ'}).click()
     await page.getByLabel('Я сохранил ключ восстановления').check()
     await page.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
-    const id=await page.evaluate(async()=>{
+    const identity=await page.evaluate(async()=>{
       const auth=await import('/src/features/identity/application/session.ts')
-      return auth.requireSession().accountId
+      const current=auth.requireSession()
+      if(!current.online)throw Error('qa408.initial_login_not_proven')
+      return {accountId:current.accountId,deviceId:current.deviceId}
     })
     await page.goto('/browser')
     await expect(page.getByText('Ключ обмена подготовлен'))
       .toBeVisible({timeout:25000})
-    return id
+    await awaitVerifiedSubmissionSession(page,identity)
+    return identity
   }
   try{
-    const ownerId=await enroll(owner)
-    const contributorId=await enroll(contributor)
+    const ownerIdentity=await enroll(owner)
+    const contributorIdentity=await enroll(contributor)
+    const ownerId=ownerIdentity.accountId
+    const contributorId=contributorIdentity.accountId
     const imported=await contributor.evaluate(async()=>{
       const canvas=document.createElement('canvas')
       canvas.width=160;canvas.height=110
@@ -50,6 +80,7 @@ test('P2 contributor: signed imported Photo MediaFile receipt requires scoped E2
     },imported.mediaId),{timeout:30000}).toBe('synced')
 
     await owner.goto('/assignments')
+    await awaitVerifiedSubmissionSession(owner,ownerIdentity)
     await owner.getByRole('button',{name:'Создать задание'}).click()
     await owner.locator('#assignment-title')
       .fill('Signed P2 imported photo assignment')
@@ -79,6 +110,7 @@ test('P2 contributor: signed imported Photo MediaFile receipt requires scoped E2
     await owner.getByRole('button',{name:'Синхронизировать'}).click()
 
     await contributor.goto('/assignments')
+    await awaitVerifiedSubmissionSession(contributor,contributorIdentity)
     await contributor.getByRole('button',{name:'Обновить',exact:true}).click()
     await expect(contributor.getByText('Приглашения',{exact:true})).toBeVisible()
     await contributor.getByRole('button',{name:'Ключ владельца'}).click()
@@ -124,9 +156,30 @@ test('P2 contributor: signed imported Photo MediaFile receipt requires scoped E2
     expect(signed.receipt.captureSignature).toBeUndefined()
 
     await owner.goto('/assignments')
+    await awaitVerifiedSubmissionSession(owner,ownerIdentity)
+    // Contributor's HTTP 201 is not proof the owner can read the signed
+    // receipt. First assert real owner-scoped HTTP readback, no mock ACK.
+    const serverReceipt=await owner.evaluate(async id=>{
+      const response=await fetch('/assignments/v1/'+id+'/media-submissions',{
+        credentials:'same-origin',cache:'no-store',
+      })
+      if(!response.ok)return {status:response.status,count:-1}
+      const data=await response.json() as {items:unknown[]}
+      return {status:response.status,count:data.items.length}
+    },assignmentId)
+    expect(serverReceipt).toEqual({status:200,count:1})
     await owner.getByRole('button',{name:'Обновить',exact:true}).click()
     await owner.getByRole('button',{name:'Открыть',exact:true}).first().click()
-    await owner.getByRole('button',{name:'Обновить материалы'}).click()
+    // A silently skipped refresh is now an explicit failure: unlike a toast,
+    // an actual authenticated endpoint response proves the request ran.
+    const [mediaListResponse]=await Promise.all([
+      owner.waitForResponse(response=>response.request().method()==='GET'
+        &&new URL(response.url()).pathname
+          ==='/assignments/v1/'+assignmentId+'/media-submissions',
+        {timeout:20000}),
+      owner.getByRole('button',{name:'Обновить материалы'}).click(),
+    ])
+    expect(mediaListResponse.status()).toBe(200)
     const item=owner.getByTestId('assignment-media-submission')
     await expect(item).toHaveCount(1,{timeout:20000})
     await expect(item).toContainText('Фото P2')

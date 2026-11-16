@@ -1,0 +1,26 @@
+{
+  "timestamp_utc": "2026-11-16T07:57:08.716723+00:00",
+  "prs_total": 285,
+  "issues_total": 129,
+  "open_prs": 0,
+  "open_issues": 0,
+  "open_items_combined": 0,
+  "all_prs_closed": true,
+  "all_issues_closed": true,
+  "missing_pr_ids": [],
+  "missing_issue_ids": [],
+  "new_pr_ids": [],
+  "new_issue_ids": [],
+  "local_main": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+  "remote_main": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+  "source_branches_before": 289,
+  "source_branches_after": 289,
+  "missing_branches": [],
+  "branch_head_changes": {},
+  "issue_state_reasons": {
+    "not_planned": 129
+  },
+  "commands_exit": 0,
+  "merge_executed": false,
+  "new_pr_created": false
+}

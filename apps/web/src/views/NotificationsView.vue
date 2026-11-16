@@ -1,0 +1,395 @@
+<script setup lang="ts">
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { notificationShellActions, clearNotificationShellActions } from '../features/notifications/application/notification-shell-actions'
+import { activeSession } from '../features/identity/application/session'
+import {
+  listLocalNotifications, markNotificationRead, markAllLocalNotificationsRead,
+  previewNotification, type LocalNotification,
+  readNotificationPreferences, notificationIsVisible, notificationBadgeVisible,
+  defaultNotificationPreferences, type NotificationPreferences,
+} from '../features/notifications/application/local-inbox'
+import {
+  syncServerNotifications, resolveNotificationTarget,
+} from '../features/notifications/application/server-event-sync'
+
+const router=useRouter()
+const headerOwner={}
+function openNotificationSettings():void{void router.push('/notifications/settings')}
+const tab=ref<'all'|'unread'>('all')
+const rows=ref<LocalNotification[]>([])
+const expanded=ref<string|null>(null)
+const loading=ref(false)
+const syncing=ref(false)
+const busy=ref(false)
+// A read/ACL operation belongs to one identity and one UI generation.
+// On account switch, release the old lock; stale promises cannot unlock
+// a new account's pending operation.
+let busyOwner=''
+let busyGeneration=0
+function fenceBusy(owner:string):void{
+  if(busyOwner===owner)return
+  busyOwner=owner
+  busyGeneration++
+  busy.value=false
+}
+function beginBusy(owner:string):number{
+  busyOwner=owner
+  busy.value=true
+  return ++busyGeneration
+}
+function finishBusy(owner:string,generation:number):void{
+  if(busyGeneration===generation&&busyOwner===owner&&scope()===owner)
+    busy.value=false
+}
+const error=ref('')
+const preferences=ref<NotificationPreferences>({...defaultNotificationPreferences})
+const clock=ref(new Date())
+let clockTimer:ReturnType<typeof setInterval>|null=null
+function tickClock():void{clock.value=new Date()}
+let run=0
+
+function scope():string{
+  const s=activeSession.value
+  return s?[s.accountId,s.deviceId,s.pkg.akek,
+    s.pkg.accountSpki,s.pkg.revision].join('|'):''
+}
+function current(owner:string,token:number):boolean{
+  return run===token&&scope()===owner
+}
+const shown=computed(()=>rows.value.filter(row=>notificationIsVisible(row.kind,preferences.value)))
+// Expanded events stay visible even after the local read acknowledgment. On
+// Unread tab, opening an item must not make its own content disappear.
+const visible=computed(()=>expanded.value
+  ?shown.value.filter(row=>row.id===expanded.value)
+  :shown.value.filter(row=>tab.value==='all'||row.readAt===null))
+watch(tab,()=>{expanded.value=null})
+const unread=computed(()=>shown.value.filter(row=>row.readAt===null).length)
+// The signed identity proof can remain online=true after a real browser
+// network disconnect. Only attempt server calls when BOTH conditions hold.
+const browserOnline=ref(typeof navigator==='undefined'||navigator.onLine!==false)
+let connectivityGeneration=0
+const canSync=computed(()=>activeSession.value?.online===true&&browserOnline.value)
+function time(ms:number):string{
+  return new Intl.DateTimeFormat('ru-RU',{
+    day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',
+  }).format(ms)
+}
+async function readLocal(token:number,owner:string):Promise<void>{
+  const items=await listLocalNotifications()
+  if(current(owner,token))rows.value=items
+}
+async function reload():Promise<void>{
+  const owner=scope(),token=++run
+  fenceBusy(owner)
+  rows.value=[];expanded.value=null;error.value=''
+  preferences.value={...defaultNotificationPreferences}
+  if(!owner)return
+  loading.value=true
+  // Display preferences are NOT an authorization boundary. Corrupted
+  // preferences must not conceal independently decrypted security notices.
+  try{
+    const items=await listLocalNotifications()
+    if(current(owner,token))rows.value=items
+  }catch{
+    if(current(owner,token))
+      error.value='Не удалось открыть зашифрованные уведомления.'
+  }
+  if(current(owner,token)){
+    try{
+      const settings=await readNotificationPreferences()
+      if(current(owner,token))preferences.value=settings
+    }catch{
+      if(current(owner,token)){
+        preferences.value={...defaultNotificationPreferences}
+        error.value='Настройки отображения повреждены. Показаны все сохранённые уведомления.'
+      }
+    }
+  }
+  if(current(owner,token))loading.value=false
+  if(!current(owner,token)||!canSync.value)return
+  if(typeof navigator!=='undefined'&&!navigator.onLine)return
+  await refresh(token,owner)
+}
+let refreshTask:Promise<void>|null=null
+let refreshOwner:string|null=null
+let refreshToken=-1
+async function refresh(token=run,owner=scope()):Promise<void>{
+  if(!owner||!canSync.value||!current(owner,token))return
+  if(refreshTask){
+    // A previous account's in-flight request must not suppress the first
+    // refresh of the replacement account. Wait, then re-check identity.
+    // A new online epoch or proof generation MUST retry once the earlier
+    // network request has settled, even if the owner account is unchanged.
+    if(refreshOwner===owner&&refreshToken===token)return refreshTask
+    await refreshTask
+    if(!current(owner,token)||!canSync.value)return
+  }
+  syncing.value=true
+  refreshOwner=owner
+  refreshToken=token
+  const task=(async()=>{
+    try{
+      await syncServerNotifications()
+      if(current(owner,token)&&canSync.value)await readLocal(token,owner)
+    }catch{
+      // Old encrypted offline records remain visible; a transport error is
+      // not evidence that anything was marked read or lost.
+      if(current(owner,token)&&canSync.value)
+        error.value='Не удалось обновить уведомления. Показаны сохранённые уведомления.'
+    }finally{syncing.value=false}
+  })()
+  refreshTask=task
+  try{await task}
+  finally{
+    if(refreshTask===task){refreshTask=null;refreshOwner=null}
+  }
+}
+async function expand(row:LocalNotification):Promise<void>{
+  if(busy.value)return
+  const owner=scope(),token=run
+  if(!owner)return
+  expanded.value=expanded.value===row.id?null:row.id
+  if(expanded.value!==row.id||row.readAt!==null)return
+  const generation=beginBusy(owner)
+  try{
+    await markNotificationRead(row.id)
+    if(current(owner,token))await readLocal(token,owner)
+  }catch{if(current(owner,token))error.value='Не удалось сохранить отметку о прочтении.'}
+  finally{finishBusy(owner,generation)}
+}
+async function returnToList():Promise<void>{
+  const opened=expanded.value,owner=scope(),token=run
+  expanded.value=null
+  await nextTick()
+  if(!opened||!current(owner,token))return
+  // The approved expanded card is replaced by the full list. Restore
+  // keyboard focus to the same event, or to the Unread tab if opening
+  // marked the event read and removed it from that filtered list.
+  const list=document.querySelector<HTMLElement>('[data-testid="notifications-list"]')
+  const item=Array.from(list?.querySelectorAll<HTMLElement>('li')??[])
+    .find(row=>row.getAttribute('data-testid')==='notification-'+opened)
+  const summary=item?.querySelector<HTMLButtonElement>('.notification-summary')
+  const fallback=document.querySelector<HTMLButtonElement>('[data-testid="notifications-unread"]')
+  ;(summary??fallback)?.focus({preventScroll:true})
+}
+async function markAll():Promise<void>{
+  if(busy.value||unread.value===0)return
+  const owner=scope(),token=run
+  const generation=beginBusy(owner)
+  try{
+    const ids=shown.value.filter(row=>row.readAt===null).map(row=>row.id)
+    await markAllLocalNotificationsRead(Date.now(),ids)
+    if(current(owner,token))await readLocal(token,owner)
+  }catch{if(current(owner,token))error.value='Не удалось сохранить отметки о прочтении.'}
+  finally{finishBusy(owner,generation)}
+}
+async function openTarget(row:LocalNotification):Promise<void>{
+  // The encrypted local target is intentionally NOT used for navigation.
+  // Validate the event on the server at click time; read authorization is
+  // checked once more by the actual destination.
+  if(busy.value||!canSync.value)return
+  const owner=scope(),token=run
+  // Offline→online cycles invalidate an ACL response started BEFORE loss
+  // of connectivity; a cached local row never becomes a new access grant.
+  const connectivityAtStart=connectivityGeneration
+  const generation=beginBusy(owner)
+  error.value=''
+  try{
+    const target=await resolveNotificationTarget(row.id)
+    if(!current(owner,token)||!canSync.value
+      ||connectivityGeneration!==connectivityAtStart)return
+    if(target.kind==='new-file'){
+      await router.push('/browser/file/media/'+target.targetId)
+    }else if(target.kind==='assignment-invite'){
+      await router.push('/assignments')
+    }else if(target.kind==='team-invite'){
+      await router.push('/contacts')
+    }
+  }catch{
+    if(current(owner,token))
+      error.value='Доступ к событию больше не подтверждён. Проверьте приглашение или файл.'
+  }finally{finishBusy(owner,generation)}
+}
+function canOpen(row:LocalNotification):boolean{
+  return canSync.value&&row.targetId!==null&&
+    ['new-file','assignment-invite','team-invite'].includes(row.kind)
+}
+// Header never operates on a stale notification view after it is unmounted.
+watch([unread,busy],()=>{
+  notificationShellActions.value={
+    owner:headerOwner,canMarkAll:unread.value>0&&!busy.value,
+    markAll,settings:openNotificationSettings,
+  }
+},{immediate:true})
+function wake():void{tickClock();void reload()}
+function browserOffline():void{
+  browserOnline.value=false
+  ++connectivityGeneration
+}
+function browserOnlineAgain():void{
+  browserOnline.value=typeof navigator==='undefined'||navigator.onLine!==false
+  ++connectivityGeneration
+  if(browserOnline.value)wake()
+}
+watch(activeSession,()=>{void reload()})
+onMounted(()=>{
+  void reload()
+  window.addEventListener('offline',browserOffline)
+  window.addEventListener('online',browserOnlineAgain)
+  window.addEventListener('focus',tickClock)
+  clockTimer=setInterval(tickClock,60_000)
+})
+onUnmounted(()=>{
+  clearNotificationShellActions(headerOwner)
+  ++run;rows.value=[];expanded.value=null
+  busyOwner='';busyGeneration++;busy.value=false
+  window.removeEventListener('offline',browserOffline)
+  window.removeEventListener('online',browserOnlineAgain)
+  window.removeEventListener('focus',tickClock)
+  if(clockTimer!==null){clearInterval(clockTimer);clockTimer=null}
+})
+</script>
+
+<template>
+  <section class="foundation-content notifications-page" data-testid="notifications-page">
+    <header class="notifications-heading">
+      <h1>Уведомления</h1>
+    </header>
+    <nav class="notifications-tabs" aria-label="Фильтр уведомлений">
+      <button type="button" :class="{selected:tab==='all'}"
+        :aria-current="tab==='all'?'page':undefined"
+        data-testid="notifications-all" @click="tab='all'">Все</button>
+      <button type="button" :class="{selected:tab==='unread'}"
+        :aria-current="tab==='unread'?'page':undefined"
+        data-testid="notifications-unread" @click="tab='unread'">
+        Непрочитанные <span v-if="unread">({{ unread }})</span>
+      </button>
+    </nav>
+    <div v-if="!activeSession" class="foundation-card" data-testid="notifications-signed-out">
+      <p>Для уведомлений нужен анонимный аккаунт.</p>
+      <RouterLink to="/settings">Создать или восстановить аккаунт</RouterLink>
+    </div>
+    <template v-else>
+      <p v-if="!canSync" class="notifications-hint">
+        Локальный режим. Показаны сохранённые зашифрованные уведомления.
+      </p>
+      <p v-if="error" class="error-text" role="alert">{{ error }}</p>
+      <p v-if="loading" role="status">Открываем зашифрованную историю…</p>
+      <p v-else-if="!visible.length" class="notifications-empty" data-testid="notifications-empty">
+        {{ tab==='unread'?'Непрочитанных уведомлений нет.':'Уведомлений пока нет.' }}
+      </p>
+      <ul v-else class="notifications-list" data-testid="notifications-list">
+        <li v-for="row in visible" :key="row.id"
+          :class="{read:row.readAt!==null,expanded:expanded===row.id}"
+          :data-testid="'notification-'+row.id">
+          <button type="button" class="notification-summary"
+            :aria-expanded="expanded===row.id" :disabled="busy"
+            @click="expand(row)">
+            <span class="notification-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <template v-if="row.kind==='assignment-invite'||row.kind==='team-invite'">
+                  <circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M18 8v8m-4-4h8"/>
+                </template>
+                <template v-else-if="row.kind==='assignment-deadline'">
+                  <circle cx="12" cy="13" r="9"/><path d="M12 8v5l3 2M9 2h6"/>
+                </template>
+                <template v-else-if="row.kind==='new-file'">
+                  <path d="M3 6h7l2 3h9v11H3zM12 12v5m-2.5-2.5h5"/>
+                </template>
+                <template v-else-if="row.kind==='media-review'">
+                  <rect x="3" y="4" width="18" height="16" rx="2"/>
+                  <path d="m7 12 3 3 7-7"/>
+                </template>
+                <template v-else-if="row.kind==='file-expiry'">
+                  <path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14"/>
+                </template>
+                <template v-else-if="row.kind==='backup'">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                  <path d="M3 5v14c0 4 18 4 18 0V5M3 12c0 4 18 4 18 0"/>
+                </template>
+                <template v-else-if="row.kind==='subscription'">
+                  <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>
+                </template>
+                <template v-else>
+                  <path d="M12 2 4 5v7c0 5.5 4 8.5 8 10 4-1.5 8-4.5 8-10V5z"/>
+                  <path d="m9 12 2 2 4-4"/>
+                </template>
+              </svg>
+              <span class="notification-dot"
+                :class="{isread:row.readAt!==null||!notificationBadgeVisible(row.kind,preferences,clock)}"></span>
+            </span>
+            <span class="notification-copy">
+              <strong>{{ previewNotification(row).title }}</strong>
+              <small>{{ previewNotification(row).description }}</small>
+            </span>
+            <time :datetime="new Date(row.occurredAt).toISOString()">{{ time(row.occurredAt) }}</time>
+            <span aria-hidden="true" class="notification-chevron">{{ expanded===row.id?'⌃':'⌄' }}</span>
+          </button>
+          <div v-if="expanded===row.id" class="notification-details"
+            data-testid="notification-details">
+            <!-- The approved card already displays the summary in its header.
+                 Do not repeat it as a second, nested content block. -->
+            <button v-if="canOpen(row)" type="button" :disabled="busy"
+              data-testid="notification-open" @click="openTarget(row)">
+              Проверить и открыть
+            </button>
+            <p v-else-if="row.targetId!==null" class="notifications-hint">
+              Для открытия требуется актуальная проверка доступа на сервере.
+            </p>
+            <p v-else class="notifications-hint">
+              Это информационное событие, дополнительных действий нет.
+            </p>
+            <button type="button" class="notification-back-to-list"
+              data-testid="notifications-back-to-list"
+              @click="returnToList">К списку уведомлений</button>
+          </div>
+        </li>
+      </ul>
+      <div class="notifications-footer">
+        <button type="button" :disabled="!canSync||syncing||loading"
+          data-testid="notifications-refresh" @click="refresh()">
+          {{ syncing?'Обновление…':'Обновить' }}
+        </button>
+      </div>
+    </template>
+  </section>
+</template>
+
+<style scoped>
+.notifications-page{max-width:860px}
+.notifications-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.notifications-tabs{display:flex;margin:20px 0 14px;border-bottom:1px solid var(--outline)}
+.notifications-tabs button{border:0;border-radius:0;background:transparent;color:#aaa;padding:12px 16px;border-bottom:2px solid transparent}
+.notifications-tabs button.selected{color:#fff;border-bottom-color:var(--accent)}
+/* Owner-accepted Notifications Fieldwork 1.5: a single event surface;
+   the unread indicator belongs to the upper-left of the event icon. */
+.notifications-list{list-style:none;margin:0;padding:0;background:transparent}
+.notifications-list li{background:var(--surface);border-radius:9px;overflow:visible;margin-bottom:8px}
+.notifications-list li.read:not(.expanded) .notification-summary{opacity:.60}
+.notification-summary{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:transparent!important;border:0!important;border-radius:9px!important;min-height:88px!important;padding:17px 15px!important}
+.notification-summary:hover{background:#272e29!important}
+.notification-icon{position:relative;display:grid;place-items:center;flex:0 0 31px;width:31px;height:31px;border-radius:8px;background:#343434;color:#bcbcbc}
+.notification-icon svg{width:18px;height:18px;flex:none}
+.notification-dot{position:absolute;top:-4px;left:-4px;width:9px;height:9px;box-sizing:content-box;border-radius:50%;background:var(--accent);border:2px solid var(--surface);z-index:1}
+.notification-dot.isread{background:transparent;border-color:transparent}
+.notification-copy{display:flex;flex:1;min-width:0;flex-direction:column;gap:5px}
+.notification-copy strong{font-size:13px}
+.notification-copy small,.notification-summary time{font-size:11px;color:#aaa}
+.notification-summary time{white-space:nowrap;align-self:flex-start;margin-top:2px}
+.notification-chevron{color:#999}
+.notification-details{padding:0 16px 16px 32px}
+.notification-details p{margin:0 0 13px;color:#aaa;line-height:1.5}
+.notification-back-to-list{display:block;width:100%;padding:14px 0 3px;margin-top:14px;border:0;border-top:1px solid var(--outline);background:transparent;color:#bbdec4;cursor:pointer;font-size:12px;text-align:left}
+.notifications-hint{font-size:11px;color:#aaa}
+.notifications-empty{padding:35px 15px;text-align:center;color:#aaa}
+.notifications-footer{display:flex;justify-content:flex-end;margin-top:15px}
+@media(max-width:550px){
+  .notifications-heading h1{font-size:24px}
+  .notifications-actions button span{display:none}
+  .notification-summary{gap:8px}
+  .notification-summary time{font-size:10px}
+}
+@media(prefers-reduced-motion:reduce){.notifications-page *{transition:none!important}}
+</style>

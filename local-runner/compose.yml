@@ -1,0 +1,90 @@
+name: ${PB3_COMPOSE_PROJECT:-pb3-local-real}
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: pb3
+      POSTGRES_USER: pb3
+      POSTGRES_PASSWORD: ${PB3_DB_PASSWORD:?local DB password required}
+    volumes:
+      - pg18-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pb3 -d pb3"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+    restart: unless-stopped
+  garage:
+    image: dxflrs/garage:v2.5.0
+    command: /garage server
+    volumes:
+      - ./local-runner/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    restart: unless-stopped
+  api:
+    image: ${PB3_API_IMAGE:-pb3-core-api:20261116}
+    build:
+      context: .
+      dockerfile: local-runner/Dockerfile.api
+    environment:
+      APP_NAME: PhotoBunker
+      APP_SHORT_NAME: PhotoBunker
+      APP_SLUG: photobunker
+      APP_MARK: app
+      APP_PUBLIC_URL: ${PB3_PUBLIC_ORIGIN:-http://127.0.0.1:5173}
+      APP_URL: ${PB3_PUBLIC_ORIGIN:-http://127.0.0.1:5173}
+      APP_ENV: local
+      APP_DEBUG: 'false'
+      APP_KEY: ${PB3_APP_KEY:?local Laravel key required}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_DATABASE: pb3
+      DB_USERNAME: pb3
+      DB_PASSWORD: ${PB3_DB_PASSWORD:?local DB password required}
+      DB_SSLMODE: prefer
+      SESSION_DRIVER: file
+      SESSION_SECURE_COOKIE: 'false'
+      CACHE_STORE: file
+      LOG_CHANNEL: stderr
+      QUEUE_CONNECTION: database
+      S3_ENDPOINT: http://garage:3900
+      S3_REGION: garage
+      S3_BUCKET: pb3-local
+      S3_ACCESS_KEY: ${PB3_S3_ACCESS_KEY:?Garage access ID required}
+      S3_SECRET_KEY: ${PB3_S3_SECRET_KEY:?Garage secret required}
+      PB3_ENABLE_PHOTO_CLEANUP: 'false'
+    ports:
+      - '127.0.0.1:5173:5173'
+      - '127.0.0.1:8000:8000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage:
+        condition: service_started
+    volumes:
+      - api-storage:/srv/pb3/apps/api/storage
+    restart: unless-stopped
+  web:
+    image: ${PB3_DEV_WEB_IMAGE:-pb3-core-web-dev:20261116}
+    build:
+      context: .
+      dockerfile: local-runner/Dockerfile.web
+    environment:
+      VITE_APP_NAME: PhotoBunker
+      VITE_APP_SHORT_NAME: PhotoBunker
+      VITE_APP_SLUG: photobunker
+      VITE_APP_MARK: app
+      VITE_APP_PUBLIC_URL: http://127.0.0.1:5173
+      VITE_APP_THEME_COLOR: '#1ed760'
+      VITE_APP_ICON_URL: /icons/app.svg
+    network_mode: 'service:api'
+    depends_on:
+      - api
+    restart: unless-stopped
+volumes:
+  pg18-data:
+  garage-meta:
+  garage-data:
+  api-storage:

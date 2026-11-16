@@ -1,0 +1,55 @@
+{
+  "sourceCommit": "fbb95b1c5da8ddefeae9ea7f0c2039bed1729657",
+  "appsTree": "60d899438a4d2f98c9519749e454b2873973092d",
+  "command": [
+    "docker",
+    "save",
+    "pb3-core-api:20261116",
+    "pb3-core-web:20261116",
+    "postgres:18",
+    "dxflrs/garage:v2.5.0"
+  ],
+  "exitCode": 0,
+  "file": "PB3-Core-linux-arm64-images.tar.gz",
+  "bytes": 461114456,
+  "sha256": "ce667cd4a9e378b94e43d37be959beb9f228dc3bdf9d7d8ad73de9cc24709316",
+  "durationSeconds": 18.3,
+  "images": [
+    {
+      "Id": "sha256:9860d784572171c443c2ebffea60ed14e911480a4c6938849b9162695edd16b1",
+      "RepoTags": [
+        "pb3-core-api:20261116"
+      ],
+      "Os": "linux",
+      "Architecture": "arm64",
+      "Size": 1051814832
+    },
+    {
+      "Id": "sha256:b56e2778768c041b178328b1b662cbb3f94ecfb8cc6e74a43798ba1bb0327d01",
+      "RepoTags": [
+        "pb3-core-web:20261116"
+      ],
+      "Os": "linux",
+      "Architecture": "arm64",
+      "Size": 94991741
+    },
+    {
+      "Id": "sha256:b9f6b8ff03b62f3cfd9d9ba3fe56226a9991c79d3fb46fd46536263bf02be553",
+      "RepoTags": [
+        "postgres:18"
+      ],
+      "Os": "linux",
+      "Architecture": "arm64",
+      "Size": 691668095
+    },
+    {
+      "Id": "sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5",
+      "RepoTags": [
+        "dxflrs/garage:v2.5.0"
+      ],
+      "Os": "linux",
+      "Architecture": "arm64",
+      "Size": 92435513
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "timestamp_utc": "2026-11-16T08:08:29.999091+00:00",
+  "prs_total": 285,
+  "issues_total": 130,
+  "open_prs": 0,
+  "open_issues": 0,
+  "open_items_combined": 0,
+  "all_prs_closed": true,
+  "all_issues_closed": true,
+  "missing_pr_ids": [],
+  "missing_issue_ids": [],
+  "new_pr_ids": [],
+  "new_issue_ids": [
+    415
+  ],
+  "local_main": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+  "remote_main": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+  "source_branches_before": 289,
+  "source_branches_after": 289,
+  "missing_branches": [],
+  "branch_head_changes": {},
+  "issue_state_reasons": {
+    "not_planned": 130
+  },
+  "commands_exit": 0,
+  "merge_executed": false,
+  "new_pr_created": false,
+  "remote_branches_at_final_check": 291,
+  "added_remote_branches": [
+    "refs/heads/audit/all-prs-issues-frontend-20261116",
+    "refs/heads/fix/camera-photo-fieldwork-12-20261116"
+  ]
+}

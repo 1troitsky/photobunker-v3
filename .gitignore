@@ -14,7 +14,11 @@
 .DS_Store
 /.phpunit.cache/
 /apps/api/.phpunit.cache/
+/apps/api/.phpunit.result.cache
+/apps/api/storage/framework/testing/
 /coverage/
+/.local-delivery/
+/test-results/
 /apps/api/bootstrap/cache/*
 !/apps/api/bootstrap/cache/.gitkeep
 /apps/api/storage/logs/*

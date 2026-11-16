@@ -1,0 +1,4 @@
+PHP security floor verified: 8.4.27
+PB3 five-plan tariff configuration and operational defaults verified.
+./composer.json is valid
+No security vulnerability advisories found.

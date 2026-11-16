@@ -1,0 +1,62 @@
+[
+  {
+    "merge": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+    "parents": [
+      "5aaba8b0509c354f8abb00806180f4ce6cb6ad18",
+      "b24f93990ef3cac9eb10e2e86e6fb562611dfb05"
+    ],
+    "exit_code": 0,
+    "expected_auto_tree": "7f2026e3818cae77712d23433475369606f901b0",
+    "actual_tree": "7f2026e3818cae77712d23433475369606f901b0",
+    "auto_tree_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "merge": "5aaba8b0509c354f8abb00806180f4ce6cb6ad18",
+    "parents": [
+      "6565a0fe852882ea5fc26e493df81affed687eee",
+      "7de3a1f738071c5e492dd6874fe3c9162bc82e39"
+    ],
+    "exit_code": 0,
+    "expected_auto_tree": "c2df5002982a8585ef8396ff74512f50e89a409c",
+    "actual_tree": "c2df5002982a8585ef8396ff74512f50e89a409c",
+    "auto_tree_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "merge": "6565a0fe852882ea5fc26e493df81affed687eee",
+    "parents": [
+      "da7327b8c9c440dae3dc864b3245b9f9f4ad14eb",
+      "4521f7b9c954df5af2356311115f425673796d8e"
+    ],
+    "exit_code": 0,
+    "expected_auto_tree": "856083aa7bb0dd208f581ff1345d2231458396d5",
+    "actual_tree": "856083aa7bb0dd208f581ff1345d2231458396d5",
+    "auto_tree_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "merge": "2c8ad9f6f18da9e87797d8df2cc0d6c3cf4eb7a6",
+    "parents": [
+      "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+      "e216f490c5b98d9783fe88e992248783db4eba5d"
+    ],
+    "exit_code": 0,
+    "expected_auto_tree": "7f760c8e307d76683df2bff3db939347d6875932",
+    "actual_tree": "7f760c8e307d76683df2bff3db939347d6875932",
+    "auto_tree_matches_actual": true,
+    "conflicts": []
+  },
+  {
+    "merge": "ee0cbe6836b5359e971319dfc8ae91ef695c7d42",
+    "parents": [
+      "d78b06ea609c729ac683c4d7f75a9dc2959e8791",
+      "34d566a0bcb7b1d4cebb493197250be1e4ebfd87"
+    ],
+    "exit_code": 0,
+    "expected_auto_tree": "94dae97fbfad605ed11283caad27251aabd39921",
+    "actual_tree": "94dae97fbfad605ed11283caad27251aabd39921",
+    "auto_tree_matches_actual": true,
+    "conflicts": []
+  }
+]

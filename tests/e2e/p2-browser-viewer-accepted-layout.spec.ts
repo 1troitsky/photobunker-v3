@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
 test('P2 V-41: File Viewer fixed mobile/desktop geometry, media switching and accessible sheets',async({browser})=>{
@@ -12,13 +13,13 @@ test('P2 V-41: File Viewer fixed mobile/desktop geometry, media switching and ac
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
     const picker=page.getByTestId('media-import-file')
-    await picker.setInputFiles({
+    await chooseEncryptedFile(picker,{
       name:'SCENE-PRIVATE-AUDIO.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x52),
     })
     await expect(page.locator('[data-testid^="browser-row-media:"]'))
       .toHaveCount(1,{timeout:30000})
-    await picker.setInputFiles({
+    await chooseEncryptedFile(picker,{
       name:'SCENE-PRIVATE-VIDEO.webm',mimeType:'video/webm',
       buffer:Buffer.alloc(8192,0x53),
     })

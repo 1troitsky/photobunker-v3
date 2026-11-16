@@ -11,17 +11,17 @@ export interface DockDefinition {
   icon: string
 }
 
-// Appearance 1.3 permits seven choices, but PB3 currently has only five
-// implemented destinations. Never allow a saved Dock button to link to a
-// missing route or an unimplemented messenger.
+// Appearance 1.3: Notifications is an encrypted local inbox; Messages is an
+// encrypted device-local *drafts-only* inbox. Neither route implies delivery,
+// push, Matrix connectivity, or a functioning remote messenger.
 export const dockDefinitions: Readonly<Record<DockId, DockDefinition>> = {
   assignments: {id:'assignments',name:'Задания',to:'/assignments',icon:'tasks'},
   browser: {id:'browser',name:'Browser',to:'/browser',icon:'folder'},
   camera: {id:'camera',name:'Камера',to:'/camera',icon:'camera'},
   contacts: {id:'contacts',name:'Контакты',to:'/contacts',icon:'users'},
   settings: {id:'settings',name:'Настройки',to:'/settings',icon:'settings'},
-  notifications: {id:'notifications',name:'Уведомления',to:null,icon:'bell'},
-  messages: {id:'messages',name:'Сообщения',to:null,icon:'message'},
+  notifications: {id:'notifications',name:'Уведомления',to:'/notifications',icon:'bell'},
+  messages: {id:'messages',name:'Сообщения',to:'/messages',icon:'message'},
 }
 
 export const dockChoices: readonly DockDefinition[] = [

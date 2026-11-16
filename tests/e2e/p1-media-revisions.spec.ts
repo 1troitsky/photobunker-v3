@@ -1,3 +1,4 @@
+import {openImportSheet} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
 test('P1-12: immutable owner-signed media versions survive Garage+Recovery Key without modifying original or inheriting grants',async({browser})=>{
@@ -14,6 +15,7 @@ test('P1-12: immutable owner-signed media versions survive Garage+Recovery Key w
     await A.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(A.getByText('Подтверждённая сессия')).toBeVisible()
     await A.goto('/browser')
+    await openImportSheet(A)
     const media=A.locator('.media-import-p1')
     const snapshots=[
       {name:'PRIVATE-ORIGINAL-VOICE.wav',byte:0x31},
@@ -98,6 +100,7 @@ test('P1-12: immutable owner-signed media versions survive Garage+Recovery Key w
     await B.getByRole('button',{name:'Восстановить',exact:true}).click()
     await expect(B.getByText('Подтверждённая сессия')).toBeVisible()
     await B.goto('/browser')
+    await openImportSheet(B)
     // Recovery Key proof and trusted-device IndexedDB hydration are distinct
     // async steps. Never run account-scoped local reads before unlock.
     await expect.poll(()=>B.evaluate(async()=>{

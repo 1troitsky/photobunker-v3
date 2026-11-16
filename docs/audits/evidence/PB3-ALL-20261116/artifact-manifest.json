@@ -1,0 +1,122 @@
+{
+  "all-commit-graph.json": {
+    "sha256": "f1c8cd5e167cdf26a8549f7b81f6ff1ee4b22c0baabd327d837a380561f571bc",
+    "bytes": 632960
+  },
+  "all-main-merge-analysis.json": {
+    "sha256": "10b2e3f28875720a59c50f15b8f4f9b6dd1b7833afada941f9154f742c1dc1c3",
+    "bytes": 9171
+  },
+  "branch-register.csv": {
+    "sha256": "5dac22b917d29159615ba31b5efac8e7264e8c93674a7e968bb644e22e4bedf3",
+    "bytes": 48306
+  },
+  "branch-register.json": {
+    "sha256": "ee46b9a99898540019cce27f761cd8f376f56503af8cc0e62eadc905bde4ba3c",
+    "bytes": 97326
+  },
+  "ci-head-register.json": {
+    "sha256": "2cdb8f3e0007f743fb78b0e591414c2adc8d85c477b98ab769468238b9f74f4c",
+    "bytes": 818813
+  },
+  "closure-proof-initial.json": {
+    "sha256": "50e74952b75417038cd94ab2f3fd33c7537f6eb52d0511962467277d603ba5f5",
+    "bytes": 687
+  },
+  "closure-proof.json": {
+    "sha256": "a31b33ea4fe31eacbf259ee1d32cdf1efd2b111f314db4230e2e5ddbbeea5c4f",
+    "bytes": 886
+  },
+  "closure-register.csv": {
+    "sha256": "11dfca258d42d658e5212de6824f786712cbaaa4c582407924c0af2e1e2a8aa3",
+    "bytes": 28674
+  },
+  "closure-register.json": {
+    "sha256": "44c9871a70d546be1445bd3bba51d64b87f8d90d12086921dd6be5049f621723",
+    "bytes": 81472
+  },
+  "documentation-catalog.json": {
+    "sha256": "4a54482188e711dc25b96a063ea897bc73c9befab052285f95a58368297697f8",
+    "bytes": 2929913
+  },
+  "frontend-audit.json": {
+    "sha256": "1dde51defe731db111578c0fdc6339f4ffadd6507bff4102f17a9f9a5db36926",
+    "bytes": 952512
+  },
+  "frontend-audit.md": {
+    "sha256": "c1ef2d2506b4f1025e95f5090bdba5ef39a05c1b68e66dd445a9f358e8d20c08",
+    "bytes": 26086
+  },
+  "git-independent-audit.json": {
+    "sha256": "aa1fb3551dafc83e2c708d9b5fb46cee59934823e4a16c3159bc53e6cff10146",
+    "bytes": 2395844
+  },
+  "git-independent-audit.md": {
+    "sha256": "5c0cf230c38c2f9d62da5dec08d94ea14915023b11cc18df4c1771adb8ddc397",
+    "bytes": 15335
+  },
+  "git-preservation.json": {
+    "sha256": "f5f1045ac4d2495b2dba6b687ad66b39fec10e0c200547a815c262be1f2387b7",
+    "bytes": 488
+  },
+  "inventory-summary.json": {
+    "sha256": "402d0b80bffa585d2d5f5630688705a3fcd27d3285441d64ca15f4538f071f6c",
+    "bytes": 653
+  },
+  "issue-register.md": {
+    "sha256": "8bf00b8ad785edbbc7a07c8ea9abde573d043ca3be3cb869004923858df6c304",
+    "bytes": 78060
+  },
+  "issues-audit.csv": {
+    "sha256": "e24d5b2258dcd0a3352ae89e9419903a2296e56cf6893b28bdb666bdf7b521f7",
+    "bytes": 588194
+  },
+  "issues-audit.json": {
+    "sha256": "d9f04a6d719f01025a9005806f4e3174f91ac6da8816208bf1103ac30e6776b0",
+    "bytes": 1934483
+  },
+  "issues-audit.md": {
+    "sha256": "9159261e7df28757727e208f0ddecc5133d32126845255766479cbdd002a23e3",
+    "bytes": 11509
+  },
+  "issues-runtime-evidence.md": {
+    "sha256": "b1e69aed14c01c716690ef409105769890d52ddd7f2f555f74bc52a1946c064d",
+    "bytes": 8717
+  },
+  "issues-verification.json": {
+    "sha256": "346efe67666b1363fe4c80977c891078a30cf49a158c4789ba29b723a647c7c6",
+    "bytes": 7156
+  },
+  "main-merge-reconstruction.json": {
+    "sha256": "7a3450ca593f1c91e73183184d98aa0845a124f218e3ec214c20f50bebb9c7a4",
+    "bytes": 2003
+  },
+  "post-snapshot-issues.json": {
+    "sha256": "94d9ba64ac5914e2076bf90a05b8bb753c6427b086ca7cb1f8fd2a5877bccdcc",
+    "bytes": 3230
+  },
+  "post-snapshot-issues.md": {
+    "sha256": "80537bf0380895aa75f6c5b84949cc32e217eadf1cbeb1c548125a4aeb78c986",
+    "bytes": 2804
+  },
+  "pr-ci-register.json": {
+    "sha256": "b3f8d282062fdf8e7e9e3701e5af462a2f9b0b6d29652cc071d3178e9eb823c3",
+    "bytes": 910212
+  },
+  "pr-register.csv": {
+    "sha256": "898923bff1e4b160027214cb26499a8f8cb55a205c0a8df8fa879edfd83a3c76",
+    "bytes": 84822
+  },
+  "pr-register.json": {
+    "sha256": "6ca8fc2b266708c598f50fb44b31bf8b4e6f8a49b7638265e10c963d17c0b063",
+    "bytes": 1307768
+  },
+  "pr412-ci-summary.json": {
+    "sha256": "92a5edffc6193c3229cbd08006708f8d7e11c588765e4362ae417aec982dde63",
+    "bytes": 1011
+  },
+  "ux-baseline-proof.json": {
+    "sha256": "a4efddb7d660906f58c8ec37f96f371179509ea4d91f4068b71b9f832d92893e",
+    "bytes": 315
+  }
+}

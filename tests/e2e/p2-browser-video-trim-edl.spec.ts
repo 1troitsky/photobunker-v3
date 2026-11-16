@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
 import {finiteDurationWebmBase64} from './fixtures/finite-duration-webm'
 
@@ -17,7 +18,7 @@ test('P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/
       return !!m.activeSession.value?.accountId
     }),{timeout:30000}).toBe(true)
     await context.setOffline(true)
-    await page.getByTestId('media-import-file').setInputFiles({
+    await chooseEncryptedFile(page.getByTestId('media-import-file'),{
       name:'FINITE-PRIVATE-SOURCE.webm',mimeType:'video/webm',
       buffer:Buffer.from(finiteDurationWebmBase64,'base64'),
     })
@@ -71,6 +72,15 @@ test('P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/
       .toContainText('0.2–1.8 с')
     await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
 
+    const hardExitBlocked=()=>page.evaluate(()=>{
+      const event=new Event('beforeunload',{cancelable:true})
+      window.dispatchEvent(event)
+      return event.defaultPrevented
+    })
+    // Unsaved EDL trim changes must trigger the browser's native reload
+    // warning. This synthetic event checks the guard, not an OS prompt.
+    expect(await hardExitBlocked()).toBe(true)
+
     page.once('dialog',dialog=>dialog.dismiss())
     await page.getByTestId('editor-shell-cancel').click()
     await expect(page).toHaveURL(/\/edit$/)
@@ -78,6 +88,7 @@ test('P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/
     await expect(page.getByTestId('file-editor-video-applied')).toHaveCount(0)
     await expect(page.getByTestId('file-editor-video-selected'))
       .toContainText('Выбрано: 2.0 с')
+    expect(await hardExitBlocked()).toBe(false)
     const before=await page.evaluate(async id=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       const files=await m.listLocalMedia()
@@ -88,6 +99,7 @@ test('P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/
     expect(before).toMatchObject({count:1,kind:'video'})
     await page.getByTestId('editor-shell-cancel').click()
     await expect(page).toHaveURL(new RegExp('/browser/file/media/'+sourceId+'$'))
+    expect(await hardExitBlocked()).toBe(false)
     const after=await page.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       const files=await m.listLocalMedia()

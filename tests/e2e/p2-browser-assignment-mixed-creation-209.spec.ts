@@ -54,6 +54,9 @@ test('P2 #209: mixed photo/video/audio creation is durable offline, two owner si
     expect(queued.localIntentSigned).toBe(true)
     expect(queued.operations).toEqual(['queued'])
     expect(queued.localState).toBe('queued')
+    // The UI must observe the locally committed encrypted intent even when
+    // a preceding initial hydration and the create action overlap offline.
+    await expect(page.getByText('Смешанное задание сохранено локально', {exact:false})).toBeVisible()
     await expect(page.getByTestId('assignment-mixed-pending-'+queued.id))
       .toContainText('ещё не подтверждена сервером')
 
@@ -135,6 +138,34 @@ test('P2 #209: mixed photo/video/audio creation is durable offline, two owner si
     expect(persisted).toEqual({
       revision:2,allowed:['photo','video','audio'],pending:false,extraOps:1,
     })
+
+    // Fieldwork 5.0: display verified media types and their independent
+    // optional goals. Do not use local outbox content as confirmed progress.
+    await page.goto('/assignments')
+    const card=page.getByTestId('assignment-card-'+queued.id)
+    await expect(card).toBeVisible({timeout:20000})
+    await expect(card.getByTestId('assignment-media-photo')).toContainText('0 / 2')
+    await expect(card.getByTestId('assignment-media-video')).toContainText('0 / 3')
+    await expect(card.getByTestId('assignment-media-audio')).toContainText('0 / 4')
+    await expect(card.getByTestId('assignment-time-row')).toBeVisible()
+    // The card can navigate to Camera only after a signed accepted policy.
+    // Camera itself revalidates rights; this link is never a grant.
+    await expect(card.getByTestId('assignment-capture-'+queued.id))
+      .toHaveAttribute('href','/camera?assignmentId='+queued.id)
+    await page.getByTestId('assignment-search').fill('Encrypted instructions 209')
+    await expect(card).toBeVisible()
+    await page.getByTestId('assignment-search').fill('аудио')
+    await expect(card).toBeVisible()
+    await page.getByTestId('assignment-search').fill('')
+    await page.getByTestId('assignment-sort').selectOption('deadline')
+    await expect(card).toBeVisible()
+    await page.getByTestId('assignment-sort').selectOption('files')
+    await expect(card).toBeVisible()
+    await page.getByTestId('assignment-sort').selectOption('created')
+    await page.getByRole('button',{name:'Завершённые',exact:true}).click()
+    await expect(card).toHaveCount(0)
+    await page.getByRole('button',{name:'Все',exact:true}).click()
+    await expect(card).toBeVisible()
 
     // A tampered PUBLIC intent in IndexedDB must NEVER be automatically
     // signed into an additional, stronger owner v6 server permission.

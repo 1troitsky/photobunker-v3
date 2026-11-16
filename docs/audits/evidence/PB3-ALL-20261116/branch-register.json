@@ -1,0 +1,3171 @@
+[
+  {
+    "branch": "chatbot/admin-rbac-audit-foundation",
+    "sha": "e2baa0893909cd69a3a5e592efd6c49379abf3a5",
+    "prs": [
+      188
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/chatbot/admin-rbac-audit-foundation"
+  },
+  {
+    "branch": "chatbot/notifications-encrypted-inbox",
+    "sha": "1ea8e18f2cf37b834c7b76391e2a8be4d549bb74",
+    "prs": [
+      186
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/chatbot/notifications-encrypted-inbox"
+  },
+  {
+    "branch": "chatbot/p1-domain-events-contract",
+    "sha": "972585c5b60d727a3b297a6b81a8e91936a633b5",
+    "prs": [
+      247
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/chatbot/p1-domain-events-contract"
+  },
+  {
+    "branch": "chatbot/p1-grants-cross-account-qa",
+    "sha": "2c089dd1cf04f189d0a169523ec2a8a4f00b6452",
+    "prs": [
+      257
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/chatbot/p1-grants-cross-account-qa"
+  },
+  {
+    "branch": "chatbot/p1-media-fault-injection-qa",
+    "sha": "760bf02a5c0d48dcc486782ee3346168047cac5a",
+    "prs": [
+      255
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/chatbot/p1-media-fault-injection-qa"
+  },
+  {
+    "branch": "chatbot/p2-camera-gps-revocation-fail-closed",
+    "sha": "6e2698a316abc5153d38bfb894b53d1b10a6f7a2",
+    "prs": [
+      262
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/chatbot/p2-camera-gps-revocation-fail-closed"
+  },
+  {
+    "branch": "chatbot/p3-privacy-telemetry-contract",
+    "sha": "54e940d51ecd26e579073d73e4583d1f34f9cc26",
+    "prs": [
+      249
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/chatbot/p3-privacy-telemetry-contract"
+  },
+  {
+    "branch": "chatbot/p4-real-garage-outage-fault-matrix",
+    "sha": "b33ecc734f6c3fc5d8df96b4a58177bffd3bad1f",
+    "prs": [
+      259
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/chatbot/p4-real-garage-outage-fault-matrix"
+  },
+  {
+    "branch": "chatbot/p4-storage-adapter-contract-tests",
+    "sha": "c11a77e48d2ac3bef1f403cf11d4c455d415b157",
+    "prs": [
+      251
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/chatbot/p4-storage-adapter-contract-tests"
+  },
+  {
+    "branch": "ci/playwright-chromium-without-apt-mirror",
+    "sha": "15ebdc215969f0486edee5db5a8f189538119d17",
+    "prs": [
+      96
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/ci/playwright-chromium-without-apt-mirror"
+  },
+  {
+    "branch": "delivery/pb3-real-local-run-20261114",
+    "sha": "d7ccec973a58510d065fae18de3e8cc8991fbd86",
+    "prs": [
+      410
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/delivery/pb3-real-local-run-20261114"
+  },
+  {
+    "branch": "docs/p1-main-integration-checkpoint-20261110",
+    "sha": "75b072200e8ec24c87ea819f252b4dd3654c4edb",
+    "prs": [
+      49
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/docs/p1-main-integration-checkpoint-20261110"
+  },
+  {
+    "branch": "docs/p2-browser-progress-20261111",
+    "sha": "d8643cc6340e310833cce206cb26b04940b0da3d",
+    "prs": [
+      84
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/docs/p2-browser-progress-20261111"
+  },
+  {
+    "branch": "docs/p4-239-pwa-trust-threat-model",
+    "sha": "e0bf685f67bb16e8843f311a1297e311e8250423",
+    "prs": [
+      300
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/docs/p4-239-pwa-trust-threat-model"
+  },
+  {
+    "branch": "docs/pb2-pr56-ux-baseline-on-134",
+    "sha": "25fd55d90b453d60b88c9317e7a9438406d7be97",
+    "prs": [
+      135
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/docs/pb2-pr56-ux-baseline-on-134"
+  },
+  {
+    "branch": "docs/pb3-post-336-progress-chat-x-20261114",
+    "sha": "bc3137c79c78e49e6422d32c42da3c250581a5c0",
+    "prs": [
+      366
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/docs/pb3-post-336-progress-chat-x-20261114"
+  },
+  {
+    "branch": "docs/pb3-ux-cross-screen-map",
+    "sha": "64f415f0ce92474ecc8a8c64ddb3e7482cab2168",
+    "prs": [
+      138
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/docs/pb3-ux-cross-screen-map"
+  },
+  {
+    "branch": "docs/progress-table-after-293-20261113",
+    "sha": "81ee4efd81bdd1bf2337b56e1e59e045a7f529de",
+    "prs": [
+      294
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/docs/progress-table-after-293-20261113"
+  },
+  {
+    "branch": "feat/p1-406-durable-event-inbox-chat-ai-20261114",
+    "sha": "5998ed7322c473ac841e31c9195a674d91de0465",
+    "prs": [
+      407
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p1-406-durable-event-inbox-chat-ai-20261114"
+  },
+  {
+    "branch": "feat/p2-198-notification-projection-20261113",
+    "sha": "e49fbb29df9204778c55b092ed303da8fcc00b8b",
+    "prs": [
+      296
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p2-198-notification-projection-20261113"
+  },
+  {
+    "branch": "feat/p2-206-camera-av-duration-20261114",
+    "sha": "44c1aac0332a8db04b5cd6fdb1698440d88cbce1",
+    "prs": [
+      306
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p2-206-camera-av-duration-20261114"
+  },
+  {
+    "branch": "feat/p2-209-mixed-creation-20261114-chat-l",
+    "sha": "452631f888b246bccc9734f21fe476ca87d47252",
+    "prs": [
+      333
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p2-209-mixed-creation-20261114-chat-l"
+  },
+  {
+    "branch": "feat/p2-215-video-clip-engine-chat-n-20261114",
+    "sha": "d8155a471eb8f0acf34883c558d673493bbfdc7b",
+    "prs": [
+      331
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p2-215-video-clip-engine-chat-n-20261114"
+  },
+  {
+    "branch": "feat/p2-400-recovery-key-onboarding-save-chat-ag-20261114",
+    "sha": "53ea2283d608823901380c82fedcbdb54e7ffe9d",
+    "prs": [
+      401
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p2-400-recovery-key-onboarding-save-chat-ag-20261114"
+  },
+  {
+    "branch": "feat/p3-218-vault-generation-chat-o-20261114",
+    "sha": "ebf22831a88a30b9d3bc693e29c8b36c033cdbfc",
+    "prs": [
+      332
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-218-vault-generation-chat-o-20261114"
+  },
+  {
+    "branch": "feat/p3-220-pin-verifier-20261114",
+    "sha": "ef8e965947b3f584b6972d87db2e47db810f9947",
+    "prs": [
+      308
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-220-pin-verifier-20261114"
+  },
+  {
+    "branch": "feat/p3-221-panic-intent-20261114",
+    "sha": "c6a03430385422bf0accc85ba77ab614c1123a7f",
+    "prs": [
+      315
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-221-panic-intent-20261114"
+  },
+  {
+    "branch": "feat/p3-222-remote-wipe-ledger-20261114",
+    "sha": "9e86c157d254f41797c08f2e85c29c35bcbfc749",
+    "prs": [
+      320
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-222-remote-wipe-ledger-20261114"
+  },
+  {
+    "branch": "feat/p3-223-deadman-signed-scheduler-20261114",
+    "sha": "6949974aa303fbfa6f10f02650330f78c8999aab",
+    "prs": [
+      307
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-223-deadman-signed-scheduler-20261114"
+  },
+  {
+    "branch": "feat/p3-225-invoice-state-20261114",
+    "sha": "e3251cfe5e5ed1906aa917c719cd7c1fec466f76",
+    "prs": [
+      316
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-225-invoice-state-20261114"
+  },
+  {
+    "branch": "feat/p3-226-grace-lifecycle-20261114",
+    "sha": "4f3d6a4bc7da3c29d2663d9142cadf85d3d3f091",
+    "prs": [
+      310
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-226-grace-lifecycle-20261114"
+  },
+  {
+    "branch": "feat/p3-227-admin-audit-store-20261114",
+    "sha": "60b3ca52a7cbe3e055cfa025abceeb71c00152e2",
+    "prs": [
+      318
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-227-admin-audit-store-20261114"
+  },
+  {
+    "branch": "feat/p3-228-admin-trial-grants-20261114",
+    "sha": "61bf9dba29d85f8b356c7f2f71417ea082002766",
+    "prs": [
+      324
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-228-admin-trial-grants-20261114"
+  },
+  {
+    "branch": "feat/p3-229-telemetry-db-20261114",
+    "sha": "f29d5b2aab7ae11a0510e293b330cf5d2ac0055c",
+    "prs": [
+      317
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-229-telemetry-db-20261114"
+  },
+  {
+    "branch": "feat/p3-231-backup-rate-status-20261114",
+    "sha": "db79e677d3a98b8267420cfb3a092f2ed608a458",
+    "prs": [
+      314
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p3-231-backup-rate-status-20261114"
+  },
+  {
+    "branch": "feat/p4-233-placement-readiness-20261114",
+    "sha": "6f5859429db31ac2a11d7fba7898b92a479987e0",
+    "prs": [
+      319
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p4-233-placement-readiness-20261114"
+  },
+  {
+    "branch": "feat/p4-234-replication-20261114",
+    "sha": "7d3281e7cfb24465ad182794bbd8c8bb122cf188",
+    "prs": [
+      321
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p4-234-replication-20261114"
+  },
+  {
+    "branch": "feat/p4-235-verified-replica-read-20261114",
+    "sha": "06659a874390dda3619fe4bb62eff7218871b530",
+    "prs": [
+      323
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p4-235-verified-replica-read-20261114"
+  },
+  {
+    "branch": "feat/p4-236-durable-purge-fence-20261114-chat-m",
+    "sha": "2b91506e06b9d0c061a9518ea5f22916c6c39bde",
+    "prs": [
+      328
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p4-236-durable-purge-fence-20261114-chat-m"
+  },
+  {
+    "branch": "feat/p4-237-matrix-homeserver-admission-chat-n-20261114",
+    "sha": "912e892eb8ffd609d123eee6096591fa59d1eb85",
+    "prs": [
+      329
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p4-237-matrix-homeserver-admission-chat-n-20261114"
+  },
+  {
+    "branch": "feat/p4-240-backend-brand-contract-chat-w-20261114",
+    "sha": "a2c6ad7166b0a4237f5a487fe66083d9b7441cdb",
+    "prs": [
+      365
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p4-240-backend-brand-contract-chat-w-20261114"
+  },
+  {
+    "branch": "feat/p4-240-backend-startup-gate-chat-w-20261114",
+    "sha": "40dcefb147f29423501b7b1c630ebfff3c30cb2f",
+    "prs": [
+      368
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p4-240-backend-startup-gate-chat-w-20261114"
+  },
+  {
+    "branch": "feat/p4-244-legal-support-gates-20261114",
+    "sha": "c91408709d353059fc3aeafb9d640c8e93fbea96",
+    "prs": [
+      322
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feat/p4-244-legal-support-gates-20261114"
+  },
+  {
+    "branch": "feature/p2-210-encrypted-local-blacklist-20261114",
+    "sha": "c1a17171348a453167fc99360d01ddb01ee3601d",
+    "prs": [
+      304
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feature/p2-210-encrypted-local-blacklist-20261114"
+  },
+  {
+    "branch": "feature/p2-data-storage-real-queue-chat-ad-20261114",
+    "sha": "53ae9ec2aa0af0bc10934349f33c3fa548169b32",
+    "prs": [
+      397
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/feature/p2-data-storage-real-queue-chat-ad-20261114"
+  },
+  {
+    "branch": "feature/p3-219-signed-restore-preflight-20261114",
+    "sha": "9591d7dde54e30ad8b628a0f2527996000ec9772",
+    "prs": [
+      305
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feature/p3-219-signed-restore-preflight-20261114"
+  },
+  {
+    "branch": "feature/p4-232-byo-s3-endpoint-guard",
+    "sha": "dd46ce45fad4101e5b979a97c16e76ff7822c47d",
+    "prs": [
+      303
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feature/p4-232-byo-s3-endpoint-guard"
+  },
+  {
+    "branch": "feature/pb3-backup-atomic-admission-189",
+    "sha": "a3b835d3e079ddccf204fb6fab0e762d249b07cd",
+    "prs": [
+      246
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feature/pb3-backup-atomic-admission-189"
+  },
+  {
+    "branch": "feature/pb3-matrix-m04a-presend-room-recheck",
+    "sha": "f9c4a2e97f4b42f471b24ba5b8fa7961b946f1ca",
+    "prs": [
+      261
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feature/pb3-matrix-m04a-presend-room-recheck"
+  },
+  {
+    "branch": "feature/pb3-p3-release-integrity-196",
+    "sha": "778a1faf2cb9fb0f259c6517ce01b1456f3641b0",
+    "prs": [
+      250
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feature/pb3-p3-release-integrity-196"
+  },
+  {
+    "branch": "feature/pb3-p3-signed-pwa-verifier-230",
+    "sha": "3789e67b0dc4c4b9e1ccddb1e8ea8f39cfd019d5",
+    "prs": [
+      299
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feature/pb3-p3-signed-pwa-verifier-230"
+  },
+  {
+    "branch": "feature/pb3-s21-help-faq-legal-182",
+    "sha": "84cddbc8d16ef56a752bc22f0efa18ffcad029b7",
+    "prs": [
+      245
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/feature/pb3-s21-help-faq-legal-182"
+  },
+  {
+    "branch": "feature/pb3-s21-help-faq-legal-isolated",
+    "sha": "da7327b8c9c440dae3dc864b3245b9f9f4ad14eb",
+    "prs": [],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/feature/pb3-s21-help-faq-legal-isolated"
+  },
+  {
+    "branch": "fix/p1-29b-verified-revision",
+    "sha": "65f0c1a27a342ebfe5044ee1af7bb8cad27738ed",
+    "prs": [
+      57
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/fix/p1-29b-verified-revision"
+  },
+  {
+    "branch": "fix/p1-29c-invite-role-freshness",
+    "sha": "54f984162451e44e49d374ba5c08cb3a2b7a0536",
+    "prs": [
+      60
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/fix/p1-29c-invite-role-freshness"
+  },
+  {
+    "branch": "fix/p1-402-durable-logout-fence-chat-ag-20261114",
+    "sha": "f56e42ec3224bdd995f75c26abd47220469bda55",
+    "prs": [
+      403
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/fix/p1-402-durable-logout-fence-chat-ag-20261114"
+  },
+  {
+    "branch": "fix/p1-camera-session-race",
+    "sha": "cacfff0911ff6687b1d79d8ae00ceff7aee413b7",
+    "prs": [
+      19
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/fix/p1-camera-session-race"
+  },
+  {
+    "branch": "fix/p1-media-grant-ttl-clock-margin",
+    "sha": "2e2c5711d4f3c6806b9cc8124c992dcaaaac2193",
+    "prs": [
+      63
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/fix/p1-media-grant-ttl-clock-margin"
+  },
+  {
+    "branch": "fix/p2-01-draft-save-navigation-guard",
+    "sha": "f927ce80d3b7e574e5d3afab32ff619216595210",
+    "prs": [
+      66
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/fix/p2-01-draft-save-navigation-guard"
+  },
+  {
+    "branch": "fix/p2-camera-gps-consent",
+    "sha": "e79b438d5f08ed85ba15c7289d94a0423795c54d",
+    "prs": [
+      263
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/fix/p2-camera-gps-consent"
+  },
+  {
+    "branch": "fix/p2-matrix-escrow-versioned-rotation",
+    "sha": "95c1a3e7a9578d3c176f2cc4388705867680a259",
+    "prs": [
+      79
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/fix/p2-matrix-escrow-versioned-rotation"
+  },
+  {
+    "branch": "fix/p2-matrix-vite-api-proxy",
+    "sha": "f77d2f3d319b3cc4d83b2783307e7d7e7675ce62",
+    "prs": [
+      78
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/fix/p2-matrix-vite-api-proxy"
+  },
+  {
+    "branch": "fix/p2-media-submission-archive-visibility",
+    "sha": "401fd12c7d63458739f89091538725935486d7cf",
+    "prs": [
+      112
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/fix/p2-media-submission-archive-visibility"
+  },
+  {
+    "branch": "integration/global-acceptance-20261113",
+    "sha": "4521f7b9c954df5af2356311115f425673796d8e",
+    "prs": [
+      293
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/global-acceptance-20261113"
+  },
+  {
+    "branch": "integration/p0-security-qa-20261114-chat-l",
+    "sha": "befb8ea4443c629bba9b9bb1443fd510e1b8f920",
+    "prs": [
+      325
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p0-security-qa-20261114-chat-l"
+  },
+  {
+    "branch": "integration/p1-media-p2-storage-replay-chat-af-20261114",
+    "sha": "bb391828f34ad4bcf4bc7fd9dfe7b17aa8f7e1be",
+    "prs": [
+      399
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p1-media-p2-storage-replay-chat-af-20261114"
+  },
+  {
+    "branch": "integration/p1-teams-audited-20261111",
+    "sha": "e216f490c5b98d9783fe88e992248783db4eba5d",
+    "prs": [
+      62
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p1-teams-audited-20261111"
+  },
+  {
+    "branch": "integration/p2-205-206-av-video-budget-20261114-chat-l",
+    "sha": "27778dd53c8b469337ba5176e1b51886b6f45e32",
+    "prs": [
+      330
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-205-206-av-video-budget-20261114-chat-l"
+  },
+  {
+    "branch": "integration/p2-215-video-export-on-334-chat-n-20261114",
+    "sha": "3114b04750c150c2374295b7c7adc2ca942069c2",
+    "prs": [
+      335
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-215-video-export-on-334-chat-n-20261114"
+  },
+  {
+    "branch": "integration/p2-216-notifications-ui-on-353-chat-u-20261114",
+    "sha": "a44d8eb5592ba9e505079947a533a1c2b01c0ffb",
+    "prs": [
+      362
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-216-notifications-ui-on-353-chat-u-20261114"
+  },
+  {
+    "branch": "integration/p2-334-335-preserved-20261114-chat-o",
+    "sha": "b24f93990ef3cac9eb10e2e86e6fb562611dfb05",
+    "prs": [
+      336
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-334-335-preserved-20261114-chat-o"
+  },
+  {
+    "branch": "integration/p2-338-notifications-isolated-chat-r-20261114",
+    "sha": "88ddcccd0f73a7b219c08df49ea132f193447961",
+    "prs": [
+      353
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-338-notifications-isolated-chat-r-20261114"
+  },
+  {
+    "branch": "integration/p2-339-contact-blacklist-on-8ed66c-chat-p-20261114",
+    "sha": "b9d49188a206058603e037751bacde828a5b750f",
+    "prs": [
+      349
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-339-contact-blacklist-on-8ed66c-chat-p-20261114"
+  },
+  {
+    "branch": "integration/p2-340-public-card-private-on-8ed66c-chat-p-20261114",
+    "sha": "c3e8e7c56561ed37345a714c4c2d6d8fa756adbf",
+    "prs": [
+      352
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-340-public-card-private-on-8ed66c-chat-p-20261114"
+  },
+  {
+    "branch": "integration/p2-av-assignments-security-20261114-chat-l",
+    "sha": "c2b8b55d38f99c31b746d313b10c136c7aea2597",
+    "prs": [
+      334
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-av-assignments-security-20261114-chat-l"
+  },
+  {
+    "branch": "integration/p2-contacts-notifications-349-353-362-chat-ad-20261114",
+    "sha": "ec6281c7896f1daa1824d65f4eb05ff986965685",
+    "prs": [
+      395
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-contacts-notifications-349-353-362-chat-ad-20261114"
+  },
+  {
+    "branch": "integration/p2-help-settings-on-397-chat-ae-20261114",
+    "sha": "463969c56bc6313a7a4d3ec5cb0ae935051f27e9",
+    "prs": [
+      398
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-help-settings-on-397-chat-ae-20261114"
+  },
+  {
+    "branch": "integration/p2-v54-product-qa-ux-reconciled",
+    "sha": "031268fcef916bf05e69c23226a702325775aefb",
+    "prs": [
+      185
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p2-v54-product-qa-ux-reconciled"
+  },
+  {
+    "branch": "integration/p3-341-billing-grace-backup-chat-q-20261114",
+    "sha": "3f491bcd21e1a5c176ef966b734c876134b2787b",
+    "prs": [
+      351
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p3-341-billing-grace-backup-chat-q-20261114"
+  },
+  {
+    "branch": "integration/p3-342-admin-audit-trial-chat-q-20261114",
+    "sha": "2dbd5c2f0e20b35a69944b619e6642d71e7b9100",
+    "prs": [
+      354
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p3-342-admin-audit-trial-chat-q-20261114"
+  },
+  {
+    "branch": "integration/p3-343-telemetry-db-chat-r-20261114",
+    "sha": "a9f57751a4d68356430189854012d8b9c13caf9b",
+    "prs": [
+      350
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p3-343-telemetry-db-chat-r-20261114"
+  },
+  {
+    "branch": "integration/p3-344-security-preflight-chat-s-20261114",
+    "sha": "4a8bb1dbc9df66b3026e49b2a2867b9720241358",
+    "prs": [
+      355
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p3-344-security-preflight-chat-s-20261114"
+  },
+  {
+    "branch": "integration/p3-345-vault-readonly-chat-u-20261114",
+    "sha": "23a36670000e072dd63b9783a71de8b36a3cc97e",
+    "prs": [
+      357
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p3-345-vault-readonly-chat-u-20261114"
+  },
+  {
+    "branch": "integration/p3-347-release-auth-preflight-chat-q-20261114",
+    "sha": "0c2b9bd0f9a515379ac415cf71f4a914e7ddf1e3",
+    "prs": [
+      348
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p3-347-release-auth-preflight-chat-q-20261114"
+  },
+  {
+    "branch": "integration/p4-346-byo-admission-chat-t-20261114",
+    "sha": "5933426563650b326233af8ea64ec4d3bec29fa4",
+    "prs": [
+      356
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p4-346-byo-admission-chat-t-20261114"
+  },
+  {
+    "branch": "integration/p4-346-placement-preflight-chat-t-20261114",
+    "sha": "3016a8d2ecaf5d0dd24272734fb796533b858260",
+    "prs": [
+      359
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p4-346-placement-preflight-chat-t-20261114"
+  },
+  {
+    "branch": "integration/p4-346-purge-fence-chat-t-20261114",
+    "sha": "29ac58a1e8e020743c8afb40ac0bb3ad665d04cd",
+    "prs": [
+      364
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p4-346-purge-fence-chat-t-20261114"
+  },
+  {
+    "branch": "integration/p4-346-replication-preflight-chat-t-20261114",
+    "sha": "0cc869d9e9bdc62b303439e9a446ad42ea92118d",
+    "prs": [
+      361
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p4-346-replication-preflight-chat-t-20261114"
+  },
+  {
+    "branch": "integration/p4-346-verified-replica-read-chat-t-20261114",
+    "sha": "317ee28c5ffd85d5ac4c4c549835dd6767f45964",
+    "prs": [
+      363
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p4-346-verified-replica-read-chat-t-20261114"
+  },
+  {
+    "branch": "integration/p4-legal-support-322-chat-y-20261114",
+    "sha": "7cd89da4f7d7347a65f65322c255047d3300734e",
+    "prs": [
+      372
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p4-legal-support-322-chat-y-20261114"
+  },
+  {
+    "branch": "integration/p4-matrix-byo-329-chat-y-20261114",
+    "sha": "ec905480d9915bdaa483d1ed7b52d3dabce04de3",
+    "prs": [
+      370
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/p4-matrix-byo-329-chat-y-20261114"
+  },
+  {
+    "branch": "integration/pb3-264-pre-main-verified",
+    "sha": "b5783a731ec565b6abf1158dc86ed13de6ea5c71",
+    "prs": [
+      265
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/pb3-264-pre-main-verified"
+  },
+  {
+    "branch": "integration/pb3-264-wave2-storage-billing-brand",
+    "sha": "1e06b553454258c5317157f76270c4aa66cd913a",
+    "prs": [
+      269
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/pb3-264-wave2-storage-billing-brand"
+  },
+  {
+    "branch": "integration/pb3-main-review-gate-20261113",
+    "sha": "f4bce2e1ab3e5ad72ec1d7e8c8f4d7517e286faa",
+    "prs": [
+      290
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/pb3-main-review-gate-20261113"
+  },
+  {
+    "branch": "integration/pb3-one-frontend-shell-20261115",
+    "sha": "f4c7c91fe8100377c10d7af734c7ead90b217e7f",
+    "prs": [
+      412
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/pb3-one-frontend-shell-20261115"
+  },
+  {
+    "branch": "integration/pb3-p2-account-billing-395-351-chat-ad-20261114",
+    "sha": "4c6ed06d8ad850eb48b54c28f4bb11dc01abfd07",
+    "prs": [
+      396
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/pb3-p2-account-billing-395-351-chat-ad-20261114"
+  },
+  {
+    "branch": "integration/pb3-real-runtime-and-qa-20261115",
+    "sha": "3aac0ac71a982d14086f064ebce63c00ead6b231",
+    "prs": [
+      411
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/pb3-real-runtime-and-qa-20261115"
+  },
+  {
+    "branch": "integration/pb3-reviewed-p4-batch-367-368-370-372-chat-y-20261114",
+    "sha": "a0c35250efbe9161d21a62b4516c6e8905af2b9a",
+    "prs": [
+      375
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/integration/pb3-reviewed-p4-batch-367-368-370-372-chat-y-20261114"
+  },
+  {
+    "branch": "integration/ux-appearance-dock-config",
+    "sha": "c4d0f7e06fbf3467b0cc25663f70d8a3e8421bd0",
+    "prs": [
+      150
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/ux-appearance-dock-config"
+  },
+  {
+    "branch": "integration/ux-appearance-start-page-atomic-preferences",
+    "sha": "b888b3b94ba74a5d7baedb08b80a75608457cfbe",
+    "prs": [
+      153
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/ux-appearance-start-page-atomic-preferences"
+  },
+  {
+    "branch": "integration/ux-dock-active-retap-safe-parent",
+    "sha": "d439f1b05879ad148ce03c1d5462993fc6e1fbd0",
+    "prs": [
+      155
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/ux-dock-active-retap-safe-parent"
+  },
+  {
+    "branch": "integration/ux-product-v51-reconciled",
+    "sha": "b0b7a9ffbe0b3828ce4f60de31e8f52a1bc120ed",
+    "prs": [
+      158
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/ux-product-v51-reconciled"
+  },
+  {
+    "branch": "integration/ux-settings-hub-identity-safe",
+    "sha": "f490dd532624be3b405622af6469f3a2eb1fd5f3",
+    "prs": [
+      146
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/ux-settings-hub-identity-safe"
+  },
+  {
+    "branch": "integration/ux-settings-search-field-routing",
+    "sha": "7539bdd709a9c988b5296661b74a1038f39587f8",
+    "prs": [
+      152
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/integration/ux-settings-search-field-routing"
+  },
+  {
+    "branch": "main",
+    "sha": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+    "prs": [],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/main"
+  },
+  {
+    "branch": "p0/foundation-spec-runtime-guard",
+    "sha": "7e3d44c4faed062aac431a2f3d0f8657eea3fd87",
+    "prs": [
+      1
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p0/foundation-spec-runtime-guard"
+  },
+  {
+    "branch": "p0/02-secure-laravel-vue-foundation",
+    "sha": "176fd52eab1770a2ff21ee71b997f1d020f6031c",
+    "prs": [
+      3
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p0/02-secure-laravel-vue-foundation"
+  },
+  {
+    "branch": "p1/gc-tombstone-isolation-193",
+    "sha": "4007da211b7eaad01eec01c9e72370afa7b956db",
+    "prs": [
+      273
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/gc-tombstone-isolation-193"
+  },
+  {
+    "branch": "p1/hardening-scoped-grant-rollback-guard",
+    "sha": "a14a3008aa837c37c4f7cafb05f4c4e10471dd3a",
+    "prs": [
+      48
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/hardening-scoped-grant-rollback-guard"
+  },
+  {
+    "branch": "p1/integration-contacts-scoped-grants",
+    "sha": "34d566a0bcb7b1d4cebb493197250be1e4ebfd87",
+    "prs": [
+      46
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/integration-contacts-scoped-grants"
+  },
+  {
+    "branch": "p1/media-resumable-200",
+    "sha": "189ee19e4c81fb0f41339e252a58c51c187340c0",
+    "prs": [
+      272
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/media-resumable-200"
+  },
+  {
+    "branch": "p1/qa-192-pg-quota-race",
+    "sha": "1c27a130dfb15fbb65f07c0d58dfe264d684022d",
+    "prs": [
+      280
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/qa-192-pg-quota-race"
+  },
+  {
+    "branch": "p1/storage-resilience-202",
+    "sha": "57f330fb467e1ff695b3c147573f3ee0bcecb94a",
+    "prs": [
+      266
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p1/storage-resilience-202"
+  },
+  {
+    "branch": "p1/01-identity-encrypted-photo-flow",
+    "sha": "55234764da758c6140d97b9abbce2c28126425b4",
+    "prs": [
+      5
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/01-identity-encrypted-photo-flow"
+  },
+  {
+    "branch": "p1/02-retention-gc-safety",
+    "sha": "9462075ac12e59420ee5888517048056e9ce0c1d",
+    "prs": [
+      7
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/02-retention-gc-safety"
+  },
+  {
+    "branch": "p1/03-recipient-key-envelopes",
+    "sha": "c0026b0ba7be8f7d97a9de6a513c9982a2b40819",
+    "prs": [
+      9
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/03-recipient-key-envelopes"
+  },
+  {
+    "branch": "p1/04-assignment-e2ee-capture",
+    "sha": "e72c350d8926bcac17c515acef6eb1dc884c6206",
+    "prs": [
+      11
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/04-assignment-e2ee-capture"
+  },
+  {
+    "branch": "p1/04-authoritative-progress",
+    "sha": "87ebdde325c1a1dd51937a5abb74a70adf98b42f",
+    "prs": [
+      15
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/04-authoritative-progress"
+  },
+  {
+    "branch": "p1/04-camera-timestamp-integration",
+    "sha": "e2215e13d687dca02e0063bc115ffeb31a164355",
+    "prs": [
+      20
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/04-camera-timestamp-integration"
+  },
+  {
+    "branch": "p1/04-exact-state-boundaries",
+    "sha": "bab9a1a450e731e01333ea04d2e3ff424028aafc",
+    "prs": [
+      18
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/04-exact-state-boundaries"
+  },
+  {
+    "branch": "p1/04-offline-accepted-assignments",
+    "sha": "3b6454f079d750994a022f8b85e8ae4dc07c3bb4",
+    "prs": [
+      16
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/04-offline-accepted-assignments"
+  },
+  {
+    "branch": "p1/04-signed-capture-policy",
+    "sha": "5ae003f8a6a6eb4c602301f3eb3d81215ab1a07c",
+    "prs": [
+      12
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/04-signed-capture-policy"
+  },
+  {
+    "branch": "p1/04-signed-state-transitions",
+    "sha": "89fa33d73b6488ccb4fb06315e1fff540776e8b8",
+    "prs": [
+      14
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/04-signed-state-transitions"
+  },
+  {
+    "branch": "p1/05-signed-policy-revisions",
+    "sha": "06cff85c9e04565af50d30da417f7309b3d2112b",
+    "prs": [
+      21
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/05-signed-policy-revisions"
+  },
+  {
+    "branch": "p1/06-encrypted-capture-metadata",
+    "sha": "d3cb8f1ea59e7a6191095bd9c9aeba48d4adcf66",
+    "prs": [
+      22
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/06-encrypted-capture-metadata"
+  },
+  {
+    "branch": "p1/07-signed-capture-requirements",
+    "sha": "b3bc95ec2d45efc7485b9b11059d421fee2392c0",
+    "prs": [
+      23
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/07-signed-capture-requirements"
+  },
+  {
+    "branch": "p1/08-safe-submission-grant-gate",
+    "sha": "039762d3bec173b767cbb8898bda92d01e413f26",
+    "prs": [
+      24
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/08-safe-submission-grant-gate"
+  },
+  {
+    "branch": "p1/09-free-assignment-monthly-quota",
+    "sha": "e1e8d08d287271db760fbc0acb7159527520b953",
+    "prs": [
+      26
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/09-free-assignment-monthly-quota"
+  },
+  {
+    "branch": "p1/10-media-v1-encrypted-chunk-upload",
+    "sha": "9485e549ef4d269bb49e0448b7c9856913444b0d",
+    "prs": [
+      28
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/10-media-v1-encrypted-chunk-upload"
+  },
+  {
+    "branch": "p1/11-media-recipient-e2ee-grants",
+    "sha": "9f066faa32be7fb7b60887975c56c1bcd9297838",
+    "prs": [
+      29
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/11-media-recipient-e2ee-grants"
+  },
+  {
+    "branch": "p1/12-immutable-media-revision-chain",
+    "sha": "603ab03b0d940269842833e7ecb930f5fba9baa1",
+    "prs": [
+      30
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/12-immutable-media-revision-chain"
+  },
+  {
+    "branch": "p1/13-assignment-media-submissions",
+    "sha": "c6d0acbe635c44d016e8f420f47eef5b842b7d6d",
+    "prs": [
+      31
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/13-assignment-media-submissions"
+  },
+  {
+    "branch": "p1/14-signed-assignment-audio-video-capture",
+    "sha": "57bdad994393fd4c68a06059458ad5b64307e9e5",
+    "prs": [
+      32
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/14-signed-assignment-audio-video-capture"
+  },
+  {
+    "branch": "p1/15-signed-per-kind-targets",
+    "sha": "f136d29cab9fe405c53c16fbd064a14592010f0f",
+    "prs": [
+      33
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/15-signed-per-kind-targets"
+  },
+  {
+    "branch": "p1/16-signed-private-media-requirements",
+    "sha": "093a977caa9278491ed555661d6b0730ba8903e8",
+    "prs": [
+      34
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/16-signed-private-media-requirements"
+  },
+  {
+    "branch": "p1/17-signed-categories-required-tags",
+    "sha": "9f292eb6fd9d591887ec009e8f0bdbcfce26c2ec",
+    "prs": [
+      35
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/17-signed-categories-required-tags"
+  },
+  {
+    "branch": "p1/18-fieldwork-assignment-editor-shell",
+    "sha": "4bb56771910fac9e95b84aa6f8529528a9dfbbfe",
+    "prs": [
+      36
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/18-fieldwork-assignment-editor-shell"
+  },
+  {
+    "branch": "p1/19-signed-e2ee-assignment-text-revisions",
+    "sha": "2a1c25b40f3ef2e091e9f2059ac5e8b31b1a7a53",
+    "prs": [
+      37
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/19-signed-e2ee-assignment-text-revisions"
+  },
+  {
+    "branch": "p1/20-signed-assignment-time-windows",
+    "sha": "bb04b62e14ea611ce2dc8cd85dc99fc8df228282",
+    "prs": [
+      38
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/20-signed-assignment-time-windows"
+  },
+  {
+    "branch": "p1/21-assignment-retention-tombstones",
+    "sha": "3c499d672ad108ce1c2109c2b7a58e22f20f235b",
+    "prs": [
+      39
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/21-assignment-retention-tombstones"
+  },
+  {
+    "branch": "p1/22-assignment-scoped-grants",
+    "sha": "3a5f5cf1d5f96c5e903e0099261081919b3236e1",
+    "prs": [
+      45
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p1/22-assignment-scoped-grants"
+  },
+  {
+    "branch": "p1/22-e2ee-per-media-instructions",
+    "sha": "95ec6a61f55dcb181a05f10f67f74664ba3b7f6e",
+    "prs": [
+      40
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/22-e2ee-per-media-instructions"
+  },
+  {
+    "branch": "p1/23-owner-participant-roster",
+    "sha": "2635055ac6d72d6cd200a950efb73079cc466853",
+    "prs": [
+      41
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/23-owner-participant-roster"
+  },
+  {
+    "branch": "p1/24-camera-encrypted-assignment-instructions",
+    "sha": "854eed102956cc728a45150a6fb5854a6928d180",
+    "prs": [
+      42
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/24-camera-encrypted-assignment-instructions"
+  },
+  {
+    "branch": "p1/25-encrypted-confirmed-contacts",
+    "sha": "1e98f6e2b3c865fde97ea2687f55efaf4fcd7d84",
+    "prs": [
+      43
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/25-encrypted-confirmed-contacts"
+  },
+  {
+    "branch": "p1/26-confirmed-contact-assignment-picker",
+    "sha": "f13ad76929916ecfbb2ef0d5fd7a5a284f680e02",
+    "prs": [
+      44
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/26-confirmed-contact-assignment-picker"
+  },
+  {
+    "branch": "p1/27-teams-owner-create-local-first",
+    "sha": "157909c9b414f7d4ea8591b683b69913946a42c3",
+    "prs": [
+      50
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/27-teams-owner-create-local-first"
+  },
+  {
+    "branch": "p1/28-teams-signed-invitations-consent",
+    "sha": "b45028d46b56c37173cafdc7bcd311b65c042e15",
+    "prs": [
+      51
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/28-teams-signed-invitations-consent"
+  },
+  {
+    "branch": "p1/29a-teams-signed-membership-acl-quarantine",
+    "sha": "70d6a1e55b7fee8b56cece70f483fba5589346ef",
+    "prs": [
+      52
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/29a-teams-signed-membership-acl-quarantine"
+  },
+  {
+    "branch": "p1/29b-audit-remediation-pending-proof-epoch-freshness",
+    "sha": "41fa666b3cc54d351ce0d916fecf6e44973c97a5",
+    "prs": [
+      56
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/29b-audit-remediation-pending-proof-epoch-freshness"
+  },
+  {
+    "branch": "p1/29b-team-dek-epoch-rotation",
+    "sha": "03bcc0880521ebcc9145f134233d39be6a339c2c",
+    "prs": [
+      53
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/29b-team-dek-epoch-rotation"
+  },
+  {
+    "branch": "p1/29c-epoch-bound-invites-consent",
+    "sha": "4a4340871ffff2aa553e630373383484fcf401ab",
+    "prs": [
+      54
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p1/29c-epoch-bound-invites-consent"
+  },
+  {
+    "branch": "p1/29c-integrated-epoch-v2-consent",
+    "sha": "ff9c7bab2485c7d2cfd094e67fdb505a1221ee00",
+    "prs": [
+      59
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/29c-integrated-epoch-v2-consent"
+  },
+  {
+    "branch": "p1/192-decimal-byte-quotas",
+    "sha": "54442de1a72ee937abc2da74c84a3dd66ef14dd3",
+    "prs": [
+      275
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/192-decimal-byte-quotas"
+  },
+  {
+    "branch": "p1/192-monthly-assignment-quota",
+    "sha": "f705c7e12446430363172071ea2252922722a12d",
+    "prs": [
+      276
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/192-monthly-assignment-quota"
+  },
+  {
+    "branch": "p1/192-quota-admission",
+    "sha": "734487d022acbc43a8dc8f9d49c73d5b9e543178",
+    "prs": [
+      274
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/192-quota-admission"
+  },
+  {
+    "branch": "p1/277-paid-assignment-usage-client",
+    "sha": "bb68436f698935453102098e2b999e46bfa28040",
+    "prs": [
+      278
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/277-paid-assignment-usage-client"
+  },
+  {
+    "branch": "p1/281-signed-paid-retention-admission",
+    "sha": "33d31028dec4344fb613f5554132c4cdfac25234",
+    "prs": [
+      282
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/281-signed-paid-retention-admission"
+  },
+  {
+    "branch": "p1/283-client-retention-hints",
+    "sha": "e4acbb571937f22658cb049e4a00435e3def3f1f",
+    "prs": [
+      284
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/283-client-retention-hints"
+  },
+  {
+    "branch": "p1/285-qa-paid-browser-garage",
+    "sha": "de2c63fa5701d88c4fb4929cd571218fb0920a95",
+    "prs": [
+      286
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/285-qa-paid-browser-garage"
+  },
+  {
+    "branch": "p1/287-qa-downgrade-retention-garage",
+    "sha": "f906f1490653db98df34b41db55fbda9cb3238e0",
+    "prs": [
+      288
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/287-qa-downgrade-retention-garage"
+  },
+  {
+    "branch": "p1/390-media-camera-retry-chat-ac-20261114",
+    "sha": "49221175dd4a520d64f2a3cc6ee12383be9182a9",
+    "prs": [
+      392
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p1/390-media-camera-retry-chat-ac-20261114"
+  },
+  {
+    "branch": "p2/appearance-dock-local-first",
+    "sha": "c972a8977313b6c437cbef79aaaeeadb255c2490",
+    "prs": [
+      67
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/appearance-dock-local-first"
+  },
+  {
+    "branch": "p2/assignment-inbox-and-overview-pagination",
+    "sha": "97f96d42794e7b50ff1da0a8fe693b106a09097e",
+    "prs": [
+      121
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-inbox-and-overview-pagination"
+  },
+  {
+    "branch": "p2/assignment-media-owner-verified-receipts",
+    "sha": "19eca3bddc015a067af34e528e0baf506371f9fb",
+    "prs": [
+      113
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-media-owner-verified-receipts"
+  },
+  {
+    "branch": "p2/assignment-offline-removal-proof-history",
+    "sha": "8fa6ab81ce6fa2c45418daff89fecb6d3fcaa2d6",
+    "prs": [
+      124
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-offline-removal-proof-history"
+  },
+  {
+    "branch": "p2/assignment-owner-contributor-proof-ux",
+    "sha": "29b2125e9256a7c7720cd10a07d2a33d9a2025fa",
+    "prs": [
+      117
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-owner-contributor-proof-ux"
+  },
+  {
+    "branch": "p2/assignment-owner-legacy-photo-pagination",
+    "sha": "6226bfae7915b34b0c36f9c787362e51df3d6804",
+    "prs": [
+      115
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-owner-legacy-photo-pagination"
+  },
+  {
+    "branch": "p2/assignment-owner-media-receipt-pagination",
+    "sha": "53ddc559b151b7ced722d7defa7a5cea5ce58d3c",
+    "prs": [
+      114
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-owner-media-receipt-pagination"
+  },
+  {
+    "branch": "p2/assignment-owner-verified-p1-photo-receipts",
+    "sha": "b89d0ffa3246edb8f8d5372fb3260a6139565038",
+    "prs": [
+      116
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-owner-verified-p1-photo-receipts"
+  },
+  {
+    "branch": "p2/assignment-public-preview-ceiling-v1",
+    "sha": "1be4759dec3abba0aad94358ec5e590668362de6",
+    "prs": [
+      109
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-public-preview-ceiling-v1"
+  },
+  {
+    "branch": "p2/assignment-recipient-signed-removal-notices",
+    "sha": "ab7914bdc31d8c5f24803bafc2a8909a3456604a",
+    "prs": [
+      120
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-recipient-signed-removal-notices"
+  },
+  {
+    "branch": "p2/assignment-revocation-cache-race-guard",
+    "sha": "9a43a2a848abcd5927b7fbef692c33fc264567bc",
+    "prs": [
+      123
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-revocation-cache-race-guard"
+  },
+  {
+    "branch": "p2/assignment-verified-revocation-cache-fence",
+    "sha": "51ee44ba53e0466d91d2029f3ceab93442dc1433",
+    "prs": [
+      122
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/assignment-verified-revocation-cache-fence"
+  },
+  {
+    "branch": "p2/browser-archive-durable-outbox",
+    "sha": "dd7577e02fc1b5d55a34f95c47ad8a1d779b9f76",
+    "prs": [
+      89
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-archive-durable-outbox"
+  },
+  {
+    "branch": "p2/browser-archive-owner-preferences",
+    "sha": "32c5e21b1e2cb1b5b0da58b1afab3583e4af3d44",
+    "prs": [
+      91
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-archive-owner-preferences"
+  },
+  {
+    "branch": "p2/browser-archive-pending-reconcile",
+    "sha": "cbee6c28dbdfaf0f02ef892e27f02036c13b84e8",
+    "prs": [
+      90
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-archive-pending-reconcile"
+  },
+  {
+    "branch": "p2/browser-archive-safe-batch",
+    "sha": "92c83f95ff327b94131c513d0c1ba65863928b19",
+    "prs": [
+      92
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-archive-safe-batch"
+  },
+  {
+    "branch": "p2/browser-archive-signed-lifecycle",
+    "sha": "bf6634de4ee495c635bcb07aa5948dabcc2ec11d",
+    "prs": [
+      88
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-archive-signed-lifecycle"
+  },
+  {
+    "branch": "p2/browser-authenticated-index-cursor-guard",
+    "sha": "25052de8ba37704964675c947344a9feb1f03474",
+    "prs": [
+      129
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-authenticated-index-cursor-guard"
+  },
+  {
+    "branch": "p2/browser-bounded-expanded-private-search",
+    "sha": "e28bbbd58ed5d7f2d4001c6b3ac4a5a2036d3c35",
+    "prs": [
+      128
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-bounded-expanded-private-search"
+  },
+  {
+    "branch": "p2/browser-e2ee-folder-cloud-sync",
+    "sha": "63bcfb8ae6065feb71e18e386bd39cafd412334c",
+    "prs": [
+      86
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-e2ee-folder-cloud-sync"
+  },
+  {
+    "branch": "p2/browser-encrypted-local-folders",
+    "sha": "c2b27af4d6bc07c0f4d763bfc42c2ed587724a71",
+    "prs": [
+      85
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-encrypted-local-folders"
+  },
+  {
+    "branch": "p2/browser-file-viewer",
+    "sha": "c892eb8dbe499956adadfa3716b27946df62c658",
+    "prs": [
+      83
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-file-viewer"
+  },
+  {
+    "branch": "p2/browser-folder-conflict-resolution",
+    "sha": "3931aab72711c4eec3f105aa4c89ff02f186b784",
+    "prs": [
+      87
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-folder-conflict-resolution"
+  },
+  {
+    "branch": "p2/browser-hardened-https-link-e2ee-import",
+    "sha": "987d619c31698809b1c088a4befa9f50ad79782a",
+    "prs": [
+      132
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-hardened-https-link-e2ee-import"
+  },
+  {
+    "branch": "p2/browser-multi-encrypted-upload-folder-destination",
+    "sha": "7a7c186f3d2527f5ec9199d67099c1d11b7042d0",
+    "prs": [
+      131
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-multi-encrypted-upload-folder-destination"
+  },
+  {
+    "branch": "p2/browser-private-metadata-search",
+    "sha": "d2181146718822abd371334423d3c6a63a3f6db2",
+    "prs": [
+      93
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-private-metadata-search"
+  },
+  {
+    "branch": "p2/browser-search-all-loaded-folders",
+    "sha": "1e403ae4d1f6680cf0b2f53f78c10069c9dfd293",
+    "prs": [
+      94
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-search-all-loaded-folders"
+  },
+  {
+    "branch": "p2/browser-size-sort",
+    "sha": "b4f55dea69a797268d0e29a2e7146e0fef97558d",
+    "prs": [
+      95
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-size-sort"
+  },
+  {
+    "branch": "p2/browser-v3-unified-catalog",
+    "sha": "8e5ab9b92aa32ff3c653bd8342a5a189fb519369",
+    "prs": [
+      82
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-v3-unified-catalog"
+  },
+  {
+    "branch": "p2/browser-viewer-ephemeral-return-context",
+    "sha": "67bf8518a78b68652b0fbec4c5ac4c1b54215401",
+    "prs": [],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-viewer-ephemeral-return-context"
+  },
+  {
+    "branch": "p2/browser-viewer-volatile-return-context",
+    "sha": "88c242ee045b31c49924540f1702f38154519aaf",
+    "prs": [
+      136
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/browser-viewer-volatile-return-context"
+  },
+  {
+    "branch": "p2/camera-signed-photo-media-submission-v4",
+    "sha": "75298149a17ebcd2c3986c8a9fcc1087b3196266",
+    "prs": [
+      125
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/camera-signed-photo-media-submission-v4"
+  },
+  {
+    "branch": "p2/contributor-photo-media-submission-v1",
+    "sha": "8a9d8f58aba1b7143986c968792101e3205a3e5f",
+    "prs": [
+      111
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/contributor-photo-media-submission-v1"
+  },
+  {
+    "branch": "p2/editor-integration-overlap-preflight",
+    "sha": "7efbe1dbe1d0a64d82041695eb6ae8d200ca796b",
+    "prs": [
+      143
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/editor-integration-overlap-preflight"
+  },
+  {
+    "branch": "p2/editor-personal-encrypted-metadata-copy",
+    "sha": "6324daf1f9821b70b5234824a484d227975ac2a1",
+    "prs": [
+      147
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/editor-personal-encrypted-metadata-copy"
+  },
+  {
+    "branch": "p2/editor-route-shared-e2ee-journey",
+    "sha": "a9bc0aead3c86daa1f114430f49ac31d96b69513",
+    "prs": [
+      144
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/editor-route-shared-e2ee-journey"
+  },
+  {
+    "branch": "p2/file-viewer-accepted-fixed-scene-and-sheets",
+    "sha": "82c8b1e2568f89d8bfe5e68decba91956f49afa1",
+    "prs": [
+      139
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/file-viewer-accepted-fixed-scene-and-sheets"
+  },
+  {
+    "branch": "p2/file-viewer-mixed-media-secure-pager",
+    "sha": "987d619c31698809b1c088a4befa9f50ad79782a",
+    "prs": [],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/file-viewer-mixed-media-secure-pager"
+  },
+  {
+    "branch": "p2/file-viewer-replace-swipe-history",
+    "sha": "17b0e47887cc91f2d361a815ba02e81077de2cce",
+    "prs": [
+      140
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/file-viewer-replace-swipe-history"
+  },
+  {
+    "branch": "p2/file-viewer-verified-cursor-target-navigation",
+    "sha": "07fa2832043fc6799c0b5acd127cbafdd5c72eee",
+    "prs": [
+      134
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/file-viewer-verified-cursor-target-navigation"
+  },
+  {
+    "branch": "p2/media-grant-verified-policy-bounded-cursors",
+    "sha": "0a99ce1892a0e71adc1adfe2472cb447ab64ec64",
+    "prs": [
+      127
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/media-grant-verified-policy-bounded-cursors"
+  },
+  {
+    "branch": "p2/media-import-authorized-cursor-generation-fence",
+    "sha": "b26938a7afd8ae275aadf3557c5d64ddd7fbb250",
+    "prs": [
+      130
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/media-import-authorized-cursor-generation-fence"
+  },
+  {
+    "branch": "p2/p1-assignment-grant-membership-alignment",
+    "sha": "ca00b66fdfc6ee8050695eace90f76f9582edfd5",
+    "prs": [
+      119
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/p1-assignment-grant-membership-alignment"
+  },
+  {
+    "branch": "p2/p1-photo-grant-effective-access",
+    "sha": "3eea33570ea7858503c911699d33d419d05e12d7",
+    "prs": [
+      118
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/p1-photo-grant-effective-access"
+  },
+  {
+    "branch": "p2/photo-editor-draw-three-tools-row",
+    "sha": "db22454cca1816a473871109f5dab3d8c9337507",
+    "prs": [
+      156
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/photo-editor-draw-three-tools-row"
+  },
+  {
+    "branch": "p2/photo-editor-preserve-layers-on-adjustments",
+    "sha": "f9c781d61495472ce3d6dd546b2cc067c7d4f2aa",
+    "prs": [
+      159
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/photo-editor-preserve-layers-on-adjustments"
+  },
+  {
+    "branch": "p2/photo-editor-real-crop-aspect-presets",
+    "sha": "c1eb47ce9ee78d86f816fda75aea1e288f52e63b",
+    "prs": [
+      148
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/photo-editor-real-crop-aspect-presets"
+  },
+  {
+    "branch": "p2/photo-five-shape-toolbar-stroke-fill",
+    "sha": "e3aa6c7b24d1be49fcb5ab9b453de1fdc47ed755",
+    "prs": [
+      151
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/photo-five-shape-toolbar-stroke-fill"
+  },
+  {
+    "branch": "p2/photo-inline-text-canvas-ux",
+    "sha": "37f6c9aa018b5919a5c05ddf2b323972f2893fda",
+    "prs": [
+      149
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/photo-inline-text-canvas-ux"
+  },
+  {
+    "branch": "p2/photo-text-color-size-mobile-row",
+    "sha": "b887a0ffc993ad21a23eee7cac0d24eb66488215",
+    "prs": [
+      157
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/photo-text-color-size-mobile-row"
+  },
+  {
+    "branch": "p2/photo-unified-undo-crop-effects",
+    "sha": "5ed67d74d72c207a3b50ac7d623ec29a3790d2f5",
+    "prs": [
+      160
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/photo-unified-undo-crop-effects"
+  },
+  {
+    "branch": "p2/qa-208-gps-revocation-repro-base",
+    "sha": "16ecbfa5720e93ebc0ebb2fd12ab4a5c0e3a5283",
+    "prs": [],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/qa-208-gps-revocation-repro-base"
+  },
+  {
+    "branch": "p2/qa-async-e2ee-browser-camera-readiness",
+    "sha": "1f4c6a1d5ece34b203e6cb1bf97d26da5e3ba86d",
+    "prs": [
+      154
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/qa-async-e2ee-browser-camera-readiness"
+  },
+  {
+    "branch": "p2/qa-https-import-catalog-error-isolation",
+    "sha": "7a309508cc140897ae6dd75f8d473a89c7296be2",
+    "prs": [
+      187
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/qa-https-import-catalog-error-isolation"
+  },
+  {
+    "branch": "p2/qa-identity-proof-and-viewer-status-scope",
+    "sha": "ed0392fa83696fa15cf993b1791863d5b07a3a54",
+    "prs": [
+      162
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/qa-identity-proof-and-viewer-status-scope"
+  },
+  {
+    "branch": "p2/revoked-member-media-record-and-submit-local-guard",
+    "sha": "9b1d2321cdfd34f2b72398e618133f01ba03791e",
+    "prs": [
+      126
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/revoked-member-media-record-and-submit-local-guard"
+  },
+  {
+    "branch": "p2/safe-assignment-editorial-binding-v1",
+    "sha": "ffe54c0ddcd17ad961a3fdde4e8026cea16a1511",
+    "prs": [
+      110
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/safe-assignment-editorial-binding-v1"
+  },
+  {
+    "branch": "p2/safe-file-preview-policy-v1",
+    "sha": "28f031627ef2809081e1920729eecaca00e326ea",
+    "prs": [
+      108
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/safe-file-preview-policy-v1"
+  },
+  {
+    "branch": "p2/safe-media-effective-access-v4",
+    "sha": "498fb06a76bec79ee7c88b45a351bb6c1eaaa322",
+    "prs": [
+      107
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/safe-media-effective-access-v4"
+  },
+  {
+    "branch": "p2/safe-media-recipient-grant-v3",
+    "sha": "6d2c3bd4ee540f567e7905e367c61d96f82589fb",
+    "prs": [
+      106
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/safe-media-recipient-grant-v3"
+  },
+  {
+    "branch": "p2/v55-full-resolution-export",
+    "sha": "f4c8ebdfae54d9c526133a723d2f2fbb0edc7d45",
+    "prs": [
+      248
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/v55-full-resolution-export"
+  },
+  {
+    "branch": "p2/v55-photo-live-preview",
+    "sha": "6899df3e8f3f206a51ee5d8460ab883a2b5a94ad",
+    "prs": [
+      207
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/v55-photo-live-preview"
+  },
+  {
+    "branch": "p2/video-editor-local-trim-preview",
+    "sha": "d62c4cae599b5e3c3de300f808242566f3ee124a",
+    "prs": [
+      145
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/video-editor-local-trim-preview"
+  },
+  {
+    "branch": "p2/viewer-audio-trim-wav",
+    "sha": "bc001551ec93424ce916faf387a1ae06c06a335f",
+    "prs": [
+      98
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-audio-trim-wav"
+  },
+  {
+    "branch": "p2/viewer-browser-origin-scoped-pager",
+    "sha": "98e62fd179021885331f7e4108b0dce2695a627b",
+    "prs": [
+      137
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-browser-origin-scoped-pager"
+  },
+  {
+    "branch": "p2/viewer-photo-before-after",
+    "sha": "5cf2b021fa49e6bf1416bcf19532778cd3a16d81",
+    "prs": [
+      104
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-photo-before-after"
+  },
+  {
+    "branch": "p2/viewer-photo-blackout-regions",
+    "sha": "85ed8a2097e2287beb6853d4ec0c5ed52485c4e3",
+    "prs": [
+      105
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-photo-blackout-regions"
+  },
+  {
+    "branch": "p2/viewer-photo-crop-rotate",
+    "sha": "cd80449c3561b58b397e3e6eaa4f8e42d0d4ef2f",
+    "prs": [
+      99
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-photo-crop-rotate"
+  },
+  {
+    "branch": "p2/viewer-photo-shapes",
+    "sha": "349567c831c9920a31659d3de9c8d12c5cdef544",
+    "prs": [
+      102
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-photo-shapes"
+  },
+  {
+    "branch": "p2/viewer-photo-strokes-undo",
+    "sha": "8f7bf507f2b1a5531c9b4d3ec062dc2a1951c167",
+    "prs": [
+      103
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-photo-strokes-undo"
+  },
+  {
+    "branch": "p2/viewer-photo-text-annotations",
+    "sha": "366d79ffe977c458a57cbfbbcf7f83be3d8df85f",
+    "prs": [
+      101
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-photo-text-annotations"
+  },
+  {
+    "branch": "p2/viewer-photo-tonal-adjustments",
+    "sha": "29e3ecace7bb7b890dc27d7fe652fe9f18ca9a78",
+    "prs": [
+      100
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-photo-tonal-adjustments"
+  },
+  {
+    "branch": "p2/viewer-shell-header-safe-actions",
+    "sha": "2e40c7097ac0fcad477302b56df1f59a1541369d",
+    "prs": [
+      141
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-shell-header-safe-actions"
+  },
+  {
+    "branch": "p2/viewer-video-still-e2ee",
+    "sha": "16a8bdcc7052c3aa6aeffac4051b7562601e9162",
+    "prs": [
+      97
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/viewer-video-still-e2ee"
+  },
+  {
+    "branch": "p2/01-messages-shell-encrypted-drafts",
+    "sha": "fbf09ab796aa60cbce539c62277cdfaed53984db",
+    "prs": [
+      64
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/01-messages-shell-encrypted-drafts"
+  },
+  {
+    "branch": "p2/02a-matrix-signed-binding",
+    "sha": "b8e0e13f9b2d4ce6915c9cb417b13f0e2991000c",
+    "prs": [
+      68
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/02a-matrix-signed-binding"
+  },
+  {
+    "branch": "p2/02b-rust-matrix-client",
+    "sha": "163a4cfd83507e2a9ac059dd395aeb960bcbe136",
+    "prs": [
+      69
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/02b-rust-matrix-client"
+  },
+  {
+    "branch": "p2/02c-disposable-matrix-e2ee",
+    "sha": "e2ac226583ce12a3f0a01c9d57643df523ec7e17",
+    "prs": [
+      70
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/02c-disposable-matrix-e2ee"
+  },
+  {
+    "branch": "p2/02d2-signed-matrix-peer-card",
+    "sha": "fdbaf8ee89453aff2043051c66b2fd74a7faa2e4",
+    "prs": [
+      72
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/02d2-signed-matrix-peer-card"
+  },
+  {
+    "branch": "p2/02d3-matrix-verified-device-trust",
+    "sha": "d4d9bc9316a32ee284dbfcdbf8931da315e1ad49",
+    "prs": [
+      73
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/02d3-matrix-verified-device-trust"
+  },
+  {
+    "branch": "p2/02d-keyonly-matrix-recovery-escrow",
+    "sha": "5fde4baa055771665b3f21d015fab2cbc5e40e53",
+    "prs": [
+      71
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/02d-keyonly-matrix-recovery-escrow"
+  },
+  {
+    "branch": "p2/02e2-real-synapse-outbox-gate",
+    "sha": "e39b619dc9ec36eefc9ac322367e2d4348a1508e",
+    "prs": [
+      75
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/02e2-real-synapse-outbox-gate"
+  },
+  {
+    "branch": "p2/02e-matrix-encrypted-text-outbox",
+    "sha": "2b1c66740064a1e28c46f3ca013014ee2eddd028",
+    "prs": [
+      74
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/02e-matrix-encrypted-text-outbox"
+  },
+  {
+    "branch": "p2/03a-signed-pb3-device-revocation",
+    "sha": "97d73fffaab26af79df4bd4b5db48a698c2a5342",
+    "prs": [
+      80
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/03a-signed-pb3-device-revocation"
+  },
+  {
+    "branch": "p2/03b-own-matrix-token-logout",
+    "sha": "5f13992b94b90157a38d25b3fe27543e3e8642f1",
+    "prs": [
+      81
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/03b-own-matrix-token-logout"
+  },
+  {
+    "branch": "p2/205-video-300s-guard",
+    "sha": "35978914689b7c9b863a7e22719dee46ecca90f3",
+    "prs": [
+      295
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/205-video-300s-guard"
+  },
+  {
+    "branch": "p2/211-public-card-policy-preflight-20261113",
+    "sha": "6507d15767bdc79c4ea68dd166c8cc8d4ab1b01b",
+    "prs": [
+      301
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p2/211-public-card-policy-preflight-20261113"
+  },
+  {
+    "branch": "p2/291-messages-local-drafts-integration",
+    "sha": "034deb1140d17e62eaf136606fac714dc747e414",
+    "prs": [
+      292
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p2/291-messages-local-drafts-integration"
+  },
+  {
+    "branch": "p3/billing-versioned-entitlement-224",
+    "sha": "89b40310bb26b719a9defa5811f46ea2694b994d",
+    "prs": [
+      267
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/p3/billing-versioned-entitlement-224"
+  },
+  {
+    "branch": "p4/branding-240-web-config",
+    "sha": "33be05bd14d039da1a15281258b324a73ff8c150",
+    "prs": [
+      268
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p4/branding-240-web-config"
+  },
+  {
+    "branch": "p4/qa-storage-retry-ledger-live-264",
+    "sha": "cbd9965dac1896bf4a62654503c281f2aa86ba34",
+    "prs": [
+      271
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/p4/qa-storage-retry-ledger-live-264"
+  },
+  {
+    "branch": "planning/pb3-kanban-board-bootstrap",
+    "sha": "3e56dc8759fa1c07eccd3661a6971c7b45116a45",
+    "prs": [
+      184
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/planning/pb3-kanban-board-bootstrap"
+  },
+  {
+    "branch": "qa/p1-26-integration-audit",
+    "sha": "98f2545dd70b8c03a0f13015d8d3cd9aa22f459b",
+    "prs": [
+      47
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-26-integration-audit"
+  },
+  {
+    "branch": "qa/p1-29b-remediation-reaudit",
+    "sha": "b95e0b089ad6958747d8c0e055f6b8207e41ee88",
+    "prs": [
+      58
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-29b-remediation-reaudit"
+  },
+  {
+    "branch": "qa/p1-29b-team-crypto-audit",
+    "sha": "7f653a590ab4a0b44a1e576ee4e5ea9ad07183bc",
+    "prs": [
+      55
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-29b-team-crypto-audit"
+  },
+  {
+    "branch": "qa/p1-29c-independent-audit",
+    "sha": "31f6334415f8417ff00b09015a22aafb85fe1a96",
+    "prs": [
+      61
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-29c-independent-audit"
+  },
+  {
+    "branch": "qa/p1-201-photo-grant-expiry-chat-ab-20261114",
+    "sha": "619235290ed28d367d2195f7afea95a510fca1a8",
+    "prs": [
+      394
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-201-photo-grant-expiry-chat-ab-20261114"
+  },
+  {
+    "branch": "qa/p1-204-media-grant-expiry-chat-ab-20261114",
+    "sha": "371ba3aa54b07a3d635ee588ff06152eb6ef8dd1",
+    "prs": [
+      389
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-204-media-grant-expiry-chat-ab-20261114"
+  },
+  {
+    "branch": "qa/p1-311-identity-ciphertext-tamper-20261114",
+    "sha": "5be3834fc03c9bcf2e47ec0dfac3415ed5903115",
+    "prs": [
+      312
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-311-identity-ciphertext-tamper-20261114"
+  },
+  {
+    "branch": "qa/p1-378-anti-forensics-browser-storage-chat-ab-20261114",
+    "sha": "ccf75055f20560465f5e2f58dfc30ed0e6ed86ba",
+    "prs": [
+      380
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-378-anti-forensics-browser-storage-chat-ab-20261114"
+  },
+  {
+    "branch": "qa/p1-acceptance-round2",
+    "sha": "07297a690265a362f8dbaa22f74976e2ebb74405",
+    "prs": [
+      17
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-acceptance-round2"
+  },
+  {
+    "branch": "qa/p1-acceptance-round3",
+    "sha": "aac9353793987da84d04ff8c01d20309bcfb74f4",
+    "prs": [
+      27
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-acceptance-round3"
+  },
+  {
+    "branch": "qa/p1-local-acceptance",
+    "sha": "5d6116ae222b0694344f42f2b9a8d5a853682dc4",
+    "prs": [
+      13
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p1-local-acceptance"
+  },
+  {
+    "branch": "qa/p2-206-av-patched-main-20261114-chat-l",
+    "sha": "9b770407c64fb157100f84963a44dd7e7594ce27",
+    "prs": [
+      327
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-206-av-patched-main-20261114-chat-l"
+  },
+  {
+    "branch": "qa/p2-208-camera-gps-permission",
+    "sha": "16ecbfa5720e93ebc0ebb2fd12ab4a5c0e3a5283",
+    "prs": [
+      258
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-208-camera-gps-permission"
+  },
+  {
+    "branch": "qa/p2-214-dock-mobile-acceptance",
+    "sha": "a3bd912e783c09af6720c40f91b3a55a1df06812",
+    "prs": [
+      252
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-214-dock-mobile-acceptance"
+  },
+  {
+    "branch": "qa/p2-217-device-evidence-chat-y-20261114",
+    "sha": "2bce0915617369093e2c9a9ca0606d26de418823",
+    "prs": [
+      367
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-217-device-evidence-chat-y-20261114"
+  },
+  {
+    "branch": "qa/p2-309-folder-sync-ciphertext-tamper-20261114",
+    "sha": "f69afd2cc3ebb7c55eb7ecd86eb587bf2c1f75a3",
+    "prs": [
+      313
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-309-folder-sync-ciphertext-tamper-20261114"
+  },
+  {
+    "branch": "qa/p2-358-session-race-chat-v-20261114",
+    "sha": "112ce16be7c76cfc6dbc0f3c185ab536e1d2e866",
+    "prs": [
+      360
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-358-session-race-chat-v-20261114"
+  },
+  {
+    "branch": "qa/p2-376-video-clip-recovered-garage-chat-aa-20261114",
+    "sha": "3b6d857470e68a5dded5e1c1c1abcc79703ec875",
+    "prs": [
+      377
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-376-video-clip-recovered-garage-chat-aa-20261114"
+  },
+  {
+    "branch": "qa/p2-382-real-pg-media-index-chat-aa-20261114",
+    "sha": "4af3c8a36a5490803fb8be081d408c9d8d732b13",
+    "prs": [
+      384
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-382-real-pg-media-index-chat-aa-20261114"
+  },
+  {
+    "branch": "qa/p2-385-browser-assignment-bootstrap-chat-aa-20261114",
+    "sha": "6fa8a579242e90de1176266f650fb7ee17c98eac",
+    "prs": [
+      386
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-385-browser-assignment-bootstrap-chat-aa-20261114"
+  },
+  {
+    "branch": "qa/p2-404-browser-catalog-bootstrap-chat-ah-20261114",
+    "sha": "6004aec2807521257e95e7a98b605a852eddff4b",
+    "prs": [
+      405
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-404-browser-catalog-bootstrap-chat-ah-20261114"
+  },
+  {
+    "branch": "qa/p2-408-owner-media-session-chat-ai-20261114",
+    "sha": "b711fde7b56ec3616f4fa96d52d9df76df7f977d",
+    "prs": [
+      409
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-408-owner-media-session-chat-ai-20261114"
+  },
+  {
+    "branch": "qa/p2-matrix-independent-local-20261111",
+    "sha": "33d5c7fb8df55ccd86a3b5749a4476e9f1cf976e",
+    "prs": [
+      77
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-matrix-independent-local-20261111"
+  },
+  {
+    "branch": "qa/p2-matrix-reacceptance-20261112",
+    "sha": "0aa993e3944e02d7c87908cca8a4573cc61a9ea0",
+    "prs": [
+      133
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-matrix-reacceptance-20261112"
+  },
+  {
+    "branch": "qa/p2-matrix-stack-audit-20261111",
+    "sha": "41b46bc8b5ac24ea42ee3af231e9d082c6cebee1",
+    "prs": [
+      76
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p2-matrix-stack-audit-20261111"
+  },
+  {
+    "branch": "qa/p4-238-two-matrix-servers-chat-z-20261114",
+    "sha": "26438426995a16f9f0e3839588795bbf3873a84a",
+    "prs": [
+      379
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p4-238-two-matrix-servers-chat-z-20261114"
+  },
+  {
+    "branch": "qa/p4-241-real-postgres-outage-chat-w-20261114",
+    "sha": "f4f4a3fac941c9d41fe8a3e446f45e455155bd32",
+    "prs": [
+      373
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p4-241-real-postgres-outage-chat-w-20261114"
+  },
+  {
+    "branch": "qa/p4-264-independent-acceptance-20261112",
+    "sha": "a77e9e7e8621c493af159de56bc52e6891ef904f",
+    "prs": [
+      270
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p4-264-independent-acceptance-20261112"
+  },
+  {
+    "branch": "qa/p4-381-real-two-synapse-chat-z-20261114",
+    "sha": "f4408862c439583efc0bfb1660d4caa54f3b939d",
+    "prs": [
+      383
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p4-381-real-two-synapse-chat-z-20261114"
+  },
+  {
+    "branch": "qa/p4-388-matrix-sdk-real-e2ee-chat-z-20261114",
+    "sha": "0133dbab2ac56d1ca78eac39cacccbb999b879cb",
+    "prs": [
+      391
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/p4-388-matrix-sdk-real-e2ee-chat-z-20261114"
+  },
+  {
+    "branch": "qa/pb3-p1-recovery-device-acceptance-199",
+    "sha": "bbd683339fa1699bc1178487a38077d0402e554c",
+    "prs": [
+      256
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/pb3-p1-recovery-device-acceptance-199"
+  },
+  {
+    "branch": "qa/pb3-p2-browser-large-account-194",
+    "sha": "21ac289c56a809378fa954a1218ae43bf2a7520d",
+    "prs": [
+      253
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/qa/pb3-p2-browser-large-account-194"
+  },
+  {
+    "branch": "security/p0-laravel-298-clean-integration-20261114-chat-l",
+    "sha": "7de3a1f738071c5e492dd6874fe3c9162bc82e39",
+    "prs": [
+      326
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/security/p0-laravel-298-clean-integration-20261114-chat-l"
+  },
+  {
+    "branch": "security/297-laravel-13-audit-20261113",
+    "sha": "60407676c7cb9bdb649f5017cf9450aff25eedab",
+    "prs": [
+      298
+    ],
+    "head_in_main": false,
+    "head_in_frontend412": false,
+    "head_in_protected_donor": false,
+    "preserved_ref": "refs/audit/20261116/branch/security/297-laravel-13-audit-20261113"
+  },
+  {
+    "branch": "ux/visual-source-review",
+    "sha": "f03d3741509dc9f28f8cac8b2506cbe8820676b6",
+    "prs": [
+      142
+    ],
+    "head_in_main": true,
+    "head_in_frontend412": true,
+    "head_in_protected_donor": true,
+    "preserved_ref": "refs/audit/20261116/branch/ux/visual-source-review"
+  }
+]

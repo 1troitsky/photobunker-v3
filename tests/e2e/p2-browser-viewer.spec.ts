@@ -1,3 +1,4 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
 test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navigation and logout wipe',async({browser})=>{
@@ -14,13 +15,13 @@ test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navig
     await context.setOffline(true)
 
     const input=page.getByTestId('media-import-file')
-    await input.setInputFiles({
+    await chooseEncryptedFile(input,{
       name:'PRIVATE-VIDEO-WITH-NAME.webm',mimeType:'video/webm',
       buffer:Buffer.alloc(8192,0x41),
     })
     await expect(page.locator('[data-testid^="browser-row-media:"]'))
       .toHaveCount(1,{timeout:30000})
-    await input.setInputFiles({
+    await chooseEncryptedFile(input,{
       name:'PRIVATE-AUDIO-WITH-NAME.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x42),
     })
@@ -35,6 +36,8 @@ test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navig
       return {video:video.mediaId,audio:audio.mediaId}
     })
 
+    await page.getByTestId('browser-row-media:'+ids.video)
+      .getByTestId('browser-file-menu-toggle').click()
     await page.getByTestId('browser-row-media:'+ids.video)
       .getByRole('link',{name:'Полный просмотр файла '+ids.video}).click()
     await expect(page.getByTestId('file-viewer')).toBeVisible()

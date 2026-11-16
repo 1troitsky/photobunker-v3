@@ -1,5 +1,11 @@
+import {revokeGeolocation} from './helpers/native-permissions'
 import {expect,test,type Browser,type Page} from '@playwright/test'
 
+async function requestGpsFromApprovedSheet(page:Page):Promise<void>{
+  await page.getByTestId('camera-open-assignment').click()
+  await page.getByRole('button',{name:'Получить GPS'}).click()
+  await page.getByTestId('camera-sheet-close').click()
+}
 type GeoOptions=Readonly<{enableHighAccuracy?:boolean;maximumAge?:number;timeout?:number}>
 type SyntheticPosition={latitude:number;longitude:number;accuracy:number}
 const validFix:SyntheticPosition={latitude:38.487329,longitude:-122.893741,accuracy:4.5}
@@ -83,9 +89,8 @@ test('P2 #208 explicit high-accuracy GPS request, private AES-GCM capture and no
     await cameraReady(page)
     expect(await page.evaluate(()=>(window as any).__p2gpsOptions?.length)).toBe(0)
     await expect(page.getByText(/GPS получен/)).toHaveCount(0)
-    await page.getByRole('button',{name:'Получить GPS'}).click()
-    await expect(page.getByText(/GPS получен · точность/))
-      .toBeVisible({timeout:20000})
+    await requestGpsFromApprovedSheet(page)
+    await expect(page.getByTestId('camera-gps-indicator')).toContainText('GPS · ±',{timeout:20000})
     expect(await page.evaluate(()=>(window as any).__p2gpsOptions)).toEqual([{
       enableHighAccuracy:true,maximumAge:0,timeout:12000,
     }])
@@ -128,20 +133,32 @@ test('P2 #208 signed required-GPS policy rejects denied capture offline, then ac
     await register(page)
     const assignmentId=await makeSignedGpsRequiredAssignment(page)
     await cameraReady(page,assignmentId)
-    await expect(page.getByText(/GPS обязателен/)).toBeVisible()
+    await page.getByTestId('camera-open-assignment').click()
+    await expect(page.getByTestId('camera-required-gps'))
+      .toHaveText('GPS обязателен по правилам задания')
+    await page.getByTestId('camera-sheet-close').click()
+    // A denied geolocation result belongs to the currently open assignment
+    // sheet. Check it while the user can actually read it, then close it.
+    await page.getByTestId('camera-open-assignment').click()
     await page.getByRole('button',{name:'Получить GPS'}).click()
-    await expect(page.getByRole('alert').first()).toBeVisible({timeout:18000})
+    await expect(page.getByRole('alert').first())
+      .toContainText('camera.gps_permission_required',{timeout:18000})
+    await page.getByTestId('camera-sheet-close').click()
     await expect(page.getByText(/GPS получен/)).toHaveCount(0)
     await context.setOffline(true)
     await page.getByRole('button',{name:'Сделать снимок'}).click()
-    await expect(page.getByText('assignment.gps_required')).toBeVisible({timeout:30000})
+    // The approved Camera 1.2 shows the owner's signed mandatory GPS rule
+    // in the assignment sheet, not a raw internal error code.
+    await expect(page.getByTestId('camera-assignment-panel')).toBeVisible({timeout:30000})
+    await expect(page.getByTestId('camera-required-gps'))
+      .toHaveText('GPS обязателен по правилам задания')
+    await page.getByTestId('camera-sheet-close').click()
     expect(await localPhotos(page)).toHaveLength(0)
     // Same signed, cached owner policy; permission is granted explicitly.
     await context.grantPermissions(['camera','geolocation'])
     await context.setGeolocation(validFix)
-    await page.getByRole('button',{name:'Получить GPS'}).click()
-    await expect(page.getByText(/GPS получен · точность/))
-      .toBeVisible({timeout:15000})
+    await requestGpsFromApprovedSheet(page)
+    await expect(page.getByTestId('camera-gps-indicator')).toContainText('GPS · ±',{timeout:15000})
     await page.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(page.getByText(/Зашифровано и сохранено локально/))
       .toBeVisible({timeout:30000})
@@ -179,8 +196,8 @@ test('P2 #208 3-minute-old GPS provider fix fails closed even with earlier conse
       })
     })
     await cameraReady(page)
-    await page.getByRole('button',{name:'Получить GPS'}).click()
-    await expect(page.getByText(/GPS получен/)).toBeVisible()
+    await requestGpsFromApprovedSheet(page)
+    await expect(page.getByTestId('camera-gps-indicator')).toContainText('GPS · ±')
     await context.setOffline(true)
     await page.getByRole('button',{name:'Сделать снимок'}).click()
     await expect(page.getByText('capture.invalid_or_stale_gps'))
@@ -198,20 +215,19 @@ test('P2 #208 revoking geolocation must invalidate old fix before another captur
   try{
     await register(page)
     await cameraReady(page)
-    await page.getByRole('button',{name:'Получить GPS'}).click()
-    await expect(page.getByText(/GPS получен/)).toBeVisible()
+    await requestGpsFromApprovedSheet(page)
+    await expect(page.getByTestId('camera-gps-indicator')).toContainText('GPS · ±')
     // Revoke geolocation while keeping camera. The old fix is recent,
     // so the 2-minute timestamp cutoff alone cannot protect consent.
     // Chromium can retain a prior per-origin geolocation grant across
-    // grantPermissions() updates. Clear it FIRST, then allow camera only.
-    await context.clearPermissions()
-    await context.grantPermissions(['camera'])
+    // Target the native GPS permission; retain the live camera stream.
+    await revokeGeolocation(page)
     // This is a genuine browser permission transition (denied or prompt),
     // not just a mocked API callback or app error string.
     await expect.poll(()=>page.evaluate(async()=>
       (await navigator.permissions.query({name:'geolocation'})).state,
     )).not.toBe('granted')
-    await page.getByRole('button',{name:'Получить GPS'}).click()
+    await requestGpsFromApprovedSheet(page)
     // A refused repeat must not leave prior consent/location visible even
     // if the browser never dispatches a conventional error callback.
     await expect.soft(page.getByText(/GPS получен/)).toHaveCount(0)

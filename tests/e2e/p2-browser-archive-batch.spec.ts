@@ -1,4 +1,11 @@
+import {openImportSheet,closeImportSheet} from './helpers/browser-import'
 import {expect,test} from '@playwright/test'
+import type {Locator} from '@playwright/test'
+
+async function ensureFileMenu(row:Locator):Promise<void>{
+  if(await row.getByTestId('browser-file-menu-panel').count()===0)
+    await row.getByTestId('browser-file-menu-toggle').click()
+}
 
 test('P2 Browser: owner-confirmed sequential batch archive and restore use real signed per-file ledger',async({browser})=>{
   test.setTimeout(175000)
@@ -12,6 +19,7 @@ test('P2 Browser: owner-confirmed sequential batch archive and restore use real 
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
     await expect(page.getByTestId('browser-pref-unconfirmed')).toHaveCount(0)
+    await openImportSheet(page)
     const picker=page.getByTestId('media-import-file')
     for(const [i,label] of ['AUDIO-A','AUDIO-B'].entries()){
       await picker.setInputFiles({
@@ -31,11 +39,15 @@ test('P2 Browser: owner-confirmed sequential batch archive and restore use real 
       const module=await import('/src/features/media/application/media-outbox.ts')
       return (await module.listLocalMedia()).filter(x=>x.state==='synced').length
     }),{timeout:30000}).toBe(2)
+    await closeImportSheet(page)
     await page.getByRole('button',{name:'Обновить',exact:true}).first().click()
     const row=page.locator('[data-testid^="browser-row-media:"]')
     await expect(row).toHaveCount(2,{timeout:15000})
+    await ensureFileMenu(row.first())
     await expect(row.first().getByRole('button',{name:/Архивировать файл/}))
       .toBeEnabled()
+    await page.getByTestId('browser-header-select').click()
+    await page.getByTestId('browser-selection-actions').click()
     await page.getByRole('button',{name:'Выбрать всё на странице'}).click()
     await expect(page.getByTestId('browser-bulk-archive')).toContainText('(2)')
     page.once('dialog',d=>d.accept())
@@ -45,6 +57,7 @@ test('P2 Browser: owner-confirmed sequential batch archive and restore use real 
     await expect(row).toHaveCount(0)
     await page.getByTestId('browser-tab-archive').click()
     await expect(row).toHaveCount(2)
+    await page.getByTestId('browser-selection-actions').click()
     await page.getByRole('button',{name:'Выбрать всё на странице'}).click()
     page.once('dialog',d=>d.accept())
     await page.getByTestId('browser-bulk-restore').click()

@@ -14,6 +14,40 @@ use Illuminate\Support\Facades\DB;
  */
 final class StorageManager
 {
+    /** Separate revocable encrypted Public Card derivatives; never original media. */
+    public function writePublicCard(string $id,string $bytes):void
+    {
+        $row=DB::table('public_cards_v1')->where('id',$id)->first();
+        if(!$row||!in_array($row->state,['pending','active'],true)
+            ||strlen($bytes)!==(int)$row->bytes||!hash_equals($row->sha256,hash('sha256',$bytes)))
+            throw new \RuntimeException('storage.invalid_public_card');
+        $this->io('app_s3',static function(StorageAdapter $a)use($row,$bytes):bool{
+            $stream=fopen('php://temp','w+b');
+            try{fwrite($stream,$bytes);rewind($stream);
+                return $a->putStream($row->object_key,$stream);
+            }finally{fclose($stream);}
+        },true);
+        if(!hash_equals($bytes,$this->readPublicCard($id)))
+            throw new \RuntimeException('storage.public_card_verification_failed');
+    }
+
+    public function readPublicCard(string $id):string
+    {
+        $row=DB::table('public_cards_v1')->where('id',$id)->first();
+        if(!$row||!in_array($row->state,['pending','active'],true))
+            throw new \RuntimeException('storage.public_card_unavailable');
+        return $this->io('app_s3',static function(StorageAdapter $a)use($row):string{
+            if(!$a->exists($row->object_key))throw new \RuntimeException('storage.public_card_missing');
+            $stream=$a->readStream($row->object_key);
+            if(!is_resource($stream))throw new \RuntimeException('storage.public_card_missing');
+            try{$bytes=stream_get_contents($stream,(int)$row->bytes+1);}
+            finally{fclose($stream);}
+            if(strlen($bytes)!==(int)$row->bytes||!hash_equals($row->sha256,hash('sha256',$bytes)))
+                throw new \RuntimeException('storage.public_card_corrupt');
+            return $bytes;
+        });
+    }
+
     public function __construct(private readonly StorageAdapter $appS3) {}
 
     private function adapter(string $provider): StorageAdapter

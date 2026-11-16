@@ -1,4 +1,15 @@
-import { shallowRef } from 'vue'
+import { shallowRef, watch } from 'vue'
+import {readVerifiedPinRelockDelay} from '../../security/application/pin-verifier'
+import type { PinAttempt } from '../../security/application/pin-verifier'
+import type { SealedPinDevice } from '../../security/application/pin-device-migration'
+import {watchPinDeviceSealed} from '../../security/application/pin-tab-fence'
+import {acquirePinSessionLease} from '../../security/application/pin-session-lease'
+import {PIN_RELOCK_DEFAULT_MS,mustRelockPinAfterBackground} from '../../security/application/pin-relock-policy'
+import type {PinSessionLease} from '../../security/application/pin-session-lease'
+import {
+  clearLogoutFenceAfterExplicitProof, establishLogoutFence,
+  isLogoutFenced, isLogoutFenceStorageEvent,
+} from './logout-fence'
 import { jsonApi, resetCsrf } from '../infrastructure/api'
 import {
   b64, canonical, createPB2, digest, freshPackage, hex,
@@ -8,7 +19,7 @@ import {
 import type { PackageV2, Challenge, RecoveryEnvelope } from '../infrastructure/crypto'
 import {
   dropPending, dropRecoveryPending, getPending, getRecoveryPending,
-  listDevices, newLocalDevice, probeCapabilities, putPending, reservePending,
+  getDevice, listDevices, newLocalDevice, probeCapabilities, putPending, reservePending,
   saveDevice, saveRecoveryPending, isSignedOut, markSignedOut,
 } from '../infrastructure/storage'
 import type { LocalDevice } from '../infrastructure/storage'
@@ -22,10 +33,109 @@ export interface Session {
 }
 
 export const activeSession = shallowRef<Session | null>(null)
+// Welcome Loading 1.6 only reflects the initial local identity bootstrap;
+// it is not a remote-network authorization gate.
+export const sessionBootstrapPending = shallowRef(false)
+export const pinMutationPending = shallowRef(false)
+
+/**
+ * A cooperating same-origin tab holds a browser SHARED lock for as long as
+ * it can expose PackageV2. PIN migration needs EXCLUSIVE Web Lock and MUST
+ * refuse while any such tab has a live lease.
+ *
+ * Older tabs/workers/copied keys are NOT covered. This is not a revocation
+ * or proof of all-device quiescence.
+ */
+let activeDeviceLease:PinSessionLease|null=null
+/** Volatile and HMAC-verified ONLY after a successful app PIN. */
+let activePinRelockDelayMs=PIN_RELOCK_DEFAULT_MS
+let pinRelockTimer:ReturnType<typeof setTimeout>|null=null
+function clearPinRelockTimer():void{
+  if(pinRelockTimer!==null){
+    clearTimeout(pinRelockTimer)
+    pinRelockTimer=null
+  }
+}
+function sameDeviceLease(
+  lease:PinSessionLease,
+  device:Readonly<{accountId:string;deviceId:string}>,
+):boolean{
+  return lease.scope.accountId===device.accountId &&
+    lease.scope.deviceId===device.deviceId
+}
+function releaseDeviceLease():void{
+  activeDeviceLease?.release()
+  activeDeviceLease=null
+}
+watch(activeSession,next=>{
+  if(activeDeviceLease && (!next||!sameDeviceLease(activeDeviceLease,next)))
+    releaseDeviceLease()
+  if(!next){
+    clearPinRelockTimer()
+    activePinRelockDelayMs=PIN_RELOCK_DEFAULT_MS
+  }
+},{flush:'sync'})
+let acquiringDeviceLease:{
+  device:Readonly<{accountId:string;deviceId:string}>
+  task:Promise<void>
+}|null=null
+async function ensureDeviceLease(
+  device:Readonly<{accountId:string;deviceId:string}>,
+):Promise<void>{
+  if(activeDeviceLease&&sameDeviceLease(activeDeviceLease,device))return
+  // Two overlapping local starts for the same device MUST share one SHARED
+  // lock rather than leak an untracked second lock after one is replaced.
+  if(acquiringDeviceLease){
+    const pending=acquiringDeviceLease
+    if(pending.device.accountId!==device.accountId||
+       pending.device.deviceId!==device.deviceId)
+      throw new Error('identity.concurrent_device_activation')
+    return pending.task
+  }
+  let task!:Promise<void>
+  task=(async()=>{
+    const acquired=await acquirePinSessionLease(device)
+    if(activeDeviceLease&&!sameDeviceLease(activeDeviceLease,device))
+      releaseDeviceLease()
+    activeDeviceLease=acquired
+  })().finally(()=>{
+    if(acquiringDeviceLease?.task===task)acquiringDeviceLease=null
+  })
+  acquiringDeviceLease={device:{...device},task}
+  return task
+}
+
+
+/** In-memory discovery only: NEVER contains a decrypted package or PIN. */
+export type PendingPinUnlock = Readonly<{
+  accountId:string
+  deviceId:string
+  packageRevision:number
+  sessionNonce:string
+  pinLength:number
+}>
+export const pendingPinUnlock = shallowRef<PendingPinUnlock|null>(null)
+export const identityBootstrapReady = shallowRef(false)
+/** Fail closed if a saved Identity row is corrupt or mixed with a legacy copy. */
+export const identityBootstrapError = shallowRef<string|null>(null)
+
+// Another tab may sign out while this one still holds volatile decrypted keys.
+// A delayed storage event cannot grant privileged requireSession operations.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', event => {
+    if (isLogoutFenceStorageEvent(event)) {
+      activeSession.value = null
+      resetCsrf()
+    }
+  })
+}
 
 export function requireSession(): Session {
   const state = activeSession.value
-  if (!state) throw new Error('identity.account_locked')
+  if (!state || isLogoutFenced()) {
+    activeSession.value = null
+    throw new Error('identity.account_locked')
+  }
   return state
 }
 
@@ -54,12 +164,14 @@ async function prove(
 }
 
 function activate(pkg:PackageV2, device:LocalDevice, online:boolean):Session {
+  if (isLogoutFenced()) throw new Error('identity.account_locked')
   const s:Session={accountId:pkg.accountId,deviceId:device.deviceId,device,pkg,online}
   activeSession.value=s
   return s
 }
 
 export async function beginRegistration():Promise<string> {
+  if(pendingPinUnlock.value)throw new Error('identity.pin_locked')
   await probeCapabilities()
   if (await getPending()) throw new Error('identity.pending_requires_original_key')
   const kit=await createPB2(), device=await newLocalDevice('')
@@ -72,7 +184,25 @@ export async function beginRegistration():Promise<string> {
   return kit.encoded
 }
 
+async function admitExplicitDeviceAfterProof(device: LocalDevice): Promise<void> {
+  // A failed/crash-interrupted logout can leave the previous device IDB row
+  // unsigned-out, even though the origin-wide synchronous fence is present.
+  // Before explicit Key-Only admission clears that fence, durably block all
+  // OTHER devices retained in this browser. Never drop their encrypted keys.
+  // Other physical devices and server grants are outside this local action.
+  if (isLogoutFenced()) {
+    for (const previous of await listDevices()) {
+      if (previous.deviceId !== device.deviceId) {
+        await markSignedOut(previous.accountId, previous.deviceId, true)
+      }
+    }
+  }
+  await markSignedOut(device.accountId,device.deviceId,false)
+  clearLogoutFenceAfterExplicitProof()
+}
+
 export async function finishRegistration(recoveryKey:string):Promise<Session> {
+  if(pendingPinUnlock.value)throw new Error('identity.pin_locked')
   await probeCapabilities()
   const kit=await parsePB2(recoveryKey), pending=await getPending()
   if (!pending || kit.locator!==pending.kitLocator) throw new Error('identity.pending_key_mismatch')
@@ -109,7 +239,10 @@ export async function finishRegistration(recoveryKey:string):Promise<Session> {
   }
   await saveDevice(device)
   await dropPending(pending.operationId)
-  await markSignedOut(device.accountId,device.deviceId,false)
+  await admitExplicitDeviceAfterProof(device)
+  identityBootstrapError.value=null
+  identityBootstrapReady.value=true
+  await ensureDeviceLease(device)
   return activate(pkg,device,true)
 }
 
@@ -137,17 +270,245 @@ export async function restoreAccount(recoveryKey:string):Promise<Session> {
   await prove('recover',payload,await importSigner(pkg.accountPkcs8),device.deviceKey)
   await saveDevice(device)
   await dropRecoveryPending(kit.locator)
-  await markSignedOut(device.accountId,device.deviceId,false)
+  // The Recovery Key plus successful server proof is the *only* accepted
+  // alternate to a corrupt/lost PIN device. Sign out all old saved devices
+  // for this recovered account, including malformed sealed rows that could
+  // not publish pendingPinUnlock, BEFORE allowing the new device to auto-resume.
+  // These are local signed-out markers, not server revocation or key erasure.
+  const previous=pendingPinUnlock.value
+  const localDevices=await listDevices()
+  for(const former of localDevices){
+    if(former.deviceId!==device.deviceId &&
+       (former.accountId===device.accountId ||
+        former.deviceId===previous?.deviceId))
+      await markSignedOut(former.accountId,former.deviceId,true)
+  }
+  await admitExplicitDeviceAfterProof(device)
+  pendingPinUnlock.value=null
+  identityBootstrapError.value=null
+  identityBootstrapReady.value=true
+  await ensureDeviceLease(device)
   return activate(pkg,device,true)
 }
 
 let pendingSessionResume:Promise<Session|null>|null=null
 export function resumeExistingDevice():Promise<Session|null> {
+  installPinTabReconciliation()
   if (pendingSessionResume) return pendingSessionResume
-  pendingSessionResume=resumeLocalDevice().finally(()=>{pendingSessionResume=null})
+  pendingSessionResume=resumeLocalDevice().catch(error=>{
+    identityBootstrapError.value=error instanceof Error?error.message:
+      'identity.storage_unavailable'
+    throw error
+  }).finally(()=>{
+    pendingSessionResume=null
+    identityBootstrapReady.value=true
+  })
   return pendingSessionResume
 }
+function isSealedCandidate(row:LocalDevice):boolean {
+  const mode=(row as unknown as Partial<SealedPinDevice>).pinMode
+  const purpose=(row.envelope as {purpose?:unknown}|undefined)?.purpose
+  return mode!==undefined || purpose==='preunlock-package'
+}
+
+/**
+ * Recognize a sealed row BEFORE legacy openDevice can unwrap any account key.
+ * Invalid or mixed legacy/sealed copies of the same account fail closed.
+ */
+function pendingPinContext(row:LocalDevice):PendingPinUnlock {
+  const sealed=row as unknown as SealedPinDevice
+  if(sealed.pinMode!=='pin-v1' ||
+     sealed.envelope?.purpose!=='preunlock-package' ||
+     sealed.envelope.accountId!==row.accountId ||
+     sealed.envelope.deviceId!==row.deviceId ||
+     !Number.isSafeInteger(sealed.envelope.packageRevision)||
+     sealed.envelope.packageRevision<1 ||
+     !Number.isInteger(sealed.pinLength) ||
+     sealed.pinLength<4 || sealed.pinLength>8 ||
+     sealed.pinVerifier?.accountId!==row.accountId ||
+     sealed.pinVerifier?.deviceId!==row.deviceId)
+    throw new Error('identity.invalid_sealed_device')
+  return Object.freeze({
+    accountId:row.accountId,
+    deviceId:row.deviceId,
+    packageRevision:sealed.envelope.packageRevision,
+    pinLength:sealed.pinLength,
+    sessionNonce:crypto.randomUUID(),
+  })
+}
+
+
+/**
+ * Reconcile ONLY already-active sessions with a persisted IDB identity row.
+ * An incoming BroadcastChannel message is an UNTRUSTED hint, not a grant
+ * or revocation proof. On a mismatch, lock the UI before another operation
+ * can use requireSession(). This cannot zero copied keys in other contexts.
+ */
+export async function refreshPinSessionFence():Promise<boolean>{
+  const before=activeSession.value
+  if(!before)return false
+  let stored:LocalDevice|undefined
+  let signedOut:boolean
+  try{
+    [stored,signedOut]=await Promise.all([
+      getDevice(before.accountId,before.deviceId),
+      isSignedOut(before.accountId,before.deviceId),
+    ])
+  }catch{
+    const now=activeSession.value
+    if(!now||now.accountId!==before.accountId||
+       now.deviceId!==before.deviceId)return false
+    activeSession.value=null
+    pendingPinUnlock.value=null
+    identityBootstrapError.value='identity.storage_unavailable'
+    resetCsrf()
+    return true
+  }
+  // Online proof may have promoted this SAME device to a new Session
+  // object while the IndexedDB read was pending. Do not skip revocation
+  // merely because Session object identity changed (offline -> online).
+  const current=activeSession.value
+  if(!current||current.accountId!==before.accountId||
+     current.deviceId!==before.deviceId)return false
+  const hadPin=isSealedCandidate(current.device)
+  const hasPin=stored!==undefined && isSealedCandidate(stored)
+  const oldRev=hadPin
+    ?(current.device as unknown as SealedPinDevice).pinVerifier?.revision:null
+  const newRev=hasPin
+    ?(stored as unknown as SealedPinDevice).pinVerifier?.revision:null
+  if(!signedOut && stored &&
+     (hadPin===hasPin && (!hadPin||oldRev===newRev)))
+    return false
+
+  activeSession.value=null
+  resetCsrf()
+  pendingPinUnlock.value=null
+  if(hasPin && stored && !signedOut){
+    try{
+      pendingPinUnlock.value=pendingPinContext(stored)
+      identityBootstrapError.value=null
+    }catch{
+      identityBootstrapError.value='identity.invalid_sealed_device'
+    }
+  }else{
+    identityBootstrapError.value='identity.device_changed'
+  }
+  identityBootstrapReady.value=true
+  return true
+}
+
+/**
+ * Local-only PIN re-lock: synchronous so App.vue unmounts the normal router,
+ * media viewer, Header and Dock without awaiting IndexedDB or the network.
+ *
+ * Does not sign out a device, delete encrypted data, revoke server sessions,
+ * erase already-copied keys or trigger Emergency/Panic.
+ *
+ * The current accepted 0–5 minute selector is NOT wired to authenticated
+ * configuration; until then, protected sessions use Immediate (0 ms).
+ */
+export function lockActivePinSession():boolean {
+  const current=activeSession.value
+  if(!current||!isSealedCandidate(current.device))return false
+  let context:PendingPinUnlock|null=null
+  let error:string|null=null
+  try{context=pendingPinContext(current.device)}
+  catch{error='identity.invalid_sealed_device'}
+  // The synchronous Session watcher also releases the shared Web Lock.
+  clearPinRelockTimer()
+  pinLastBackgroundAtMs=null
+  activeSession.value=null
+  pendingPinUnlock.value=context
+  identityBootstrapError.value=error
+  identityBootstrapReady.value=true
+  resetCsrf()
+  return true
+}
+
+let pinLastBackgroundAtMs:number|null=null
+function onPinAppBackground():void{
+  const current=activeSession.value
+  // A PIN verification can still be in PBKDF2/AES-GCM while the user
+  // switches tabs. Rotate the volatile admission nonce on background so
+  // that the pending asynchronous attempt can NEVER publish PackageV2
+  // while the app is hidden, even if it had begun before this event.
+  if(!current){
+    const pending=pendingPinUnlock.value
+    if(pending){
+      pendingPinUnlock.value=Object.freeze({
+        ...pending,sessionNonce:crypto.randomUUID(),
+      })
+    }
+    return
+  }
+  if(!isSealedCandidate(current.device))return
+  // blur + pagehide + hidden events can arrive for ONE suspension.
+  // Never restart the grace deadline on repeated background events.
+  if(pinLastBackgroundAtMs===null)pinLastBackgroundAtMs=Date.now()
+  if(mustRelockPinAfterBackground(
+    pinLastBackgroundAtMs,Date.now(),activePinRelockDelayMs,
+  )){
+    lockActivePinSession()
+    return
+  }
+  if(pinRelockTimer===null){
+    const elapsed=Math.max(0,Date.now()-pinLastBackgroundAtMs)
+    pinRelockTimer=setTimeout(()=>{
+      pinRelockTimer=null
+      if(pinLastBackgroundAtMs!==null && activeSession.value &&
+         isSealedCandidate(activeSession.value.device) &&
+         mustRelockPinAfterBackground(
+           pinLastBackgroundAtMs,Date.now(),activePinRelockDelayMs,
+         ))lockActivePinSession()
+    },Math.max(0,activePinRelockDelayMs-elapsed))
+  }
+}
+function onPinAppForeground():void{
+  clearPinRelockTimer()
+  if(pinLastBackgroundAtMs!==null){
+    const current=activeSession.value
+    if(current&&isSealedCandidate(current.device)&&
+       mustRelockPinAfterBackground(
+         pinLastBackgroundAtMs,Date.now(),activePinRelockDelayMs,
+       )){
+      lockActivePinSession()
+    }
+  }
+  pinLastBackgroundAtMs=null
+  // A missed cross-tab hint must be verified against persistent state, not
+  // trusted as an ACK. This is independent from local background re-lock.
+  void refreshPinSessionFence()
+}
+
+let pinTabWatchInstalled=false
+function installPinTabReconciliation():void {
+  if(pinTabWatchInstalled || typeof window==='undefined')return
+  pinTabWatchInstalled=true
+  // BroadcastChannel has no trusted sender. It *only* triggers a persisted
+  // row check, and an unrelated account never sees its content or keys.
+  watchPinDeviceSealed(notice=>{
+    const active=activeSession.value
+    if(active?.accountId===notice.accountId &&
+       active.deviceId===notice.deviceId)
+      void refreshPinSessionFence()
+  })
+  // A suspended tab may MISS messages entirely. At least ensure it
+  // validates the IDB row as it returns to foreground.
+  // A PIN-protected session cannot keep showing plaintext after the app
+  // loses focus or is sent to the background. Do not await any async proof.
+  window.addEventListener('blur',onPinAppBackground)
+  window.addEventListener('pagehide',onPinAppBackground)
+  window.addEventListener('focus',onPinAppForeground)
+  window.addEventListener('pageshow',onPinAppForeground)
+  document.addEventListener('visibilitychange',()=>{
+    if(document.visibilityState==='hidden')onPinAppBackground()
+    else if(document.visibilityState==='visible')onPinAppForeground()
+  })
+}
+
 async function resumeLocalDevice():Promise<Session|null> {
+  if (isLogoutFenced()) return null
+  if(activeSession.value)return activeSession.value
   await probeCapabilities()
   const devices=await listDevices()
   let saved:LocalDevice|undefined
@@ -157,45 +518,309 @@ async function resumeLocalDevice():Promise<Session|null> {
       break
     }
   }
-  if (!saved) return null
+  if(isLogoutFenced())return null
+  if(!saved){pendingPinUnlock.value=null;identityBootstrapError.value=null;return null}
+  if(isSealedCandidate(saved)){
+    if(devices.some(other=>other.deviceId!==saved.deviceId &&
+      other.accountId===saved.accountId))
+      throw new Error('identity.mixed_sealed_devices')
+    pendingPinUnlock.value=pendingPinContext(saved)
+    identityBootstrapError.value=null
+    return null
+  }
+  if(devices.some(other=>other.accountId===saved.accountId &&
+      other.deviceId!==saved.deviceId && isSealedCandidate(other)))
+    throw new Error('identity.mixed_sealed_devices')
+  // Do not even open the legacy DeviceEnvelope until this tab holds
+  // a SHARED Web Lock. An exclusive migration in a different tab must
+  // finish before we can publish/capture the old PackageV2.
+  await ensureDeviceLease(saved)
+  let activated=false
+  try {
   const pkg=await openDevice(saved.envelope,saved.encryptionKey,saved.accountId,saved.deviceId)
-  // Open cached state immediately. A remote claim is never made until proof passes.
+  // A second tab may have sealed/replaced this device WHILE our legacy
+  // AES-GCM decrypt was in progress. Never activate a stale DB snapshot.
+  // The verified IDB row must still be the same unsealed revision, and this
+  // device must still be locally authorized. No async gap after this fence
+  // before activate() publishes a Session.
+  const latest=await getDevice(saved.accountId,saved.deviceId)
+  if(!latest || isSealedCandidate(latest) ||
+     latest.deviceSpki!==saved.deviceSpki ||
+     canonical(latest.envelope as unknown as Record<string,unknown>) !==
+       canonical(saved.envelope as unknown as Record<string,unknown>) ||
+     await isSignedOut(saved.accountId,saved.deviceId) || isLogoutFenced())
+    throw new Error('identity.device_changed')
+  if(activeSession.value)return activeSession.value
+  // Unprotected legacy devices preserve their prior behavior.
+  pendingPinUnlock.value=null
   const local=activate(pkg,saved,false)
+  activated=true
+  // Local-First: cached content is available as soon as the local envelope
+  // has been opened, not after a potentially stalled offline server proof.
+  // PIN-protected rows NEVER reach this legacy path.
+  identityBootstrapReady.value=true
   try {
     await prove('login',{accountId:saved.accountId,deviceId:saved.deviceId,purpose:'login'},saved.deviceKey)
-    if (activeSession.value===local) activate(pkg,saved,true)
+    if (activeSession.value===local) {
+      const revoked=await isSignedOut(saved.accountId,saved.deviceId)
+      if (activeSession.value===local) {
+        if (revoked || isLogoutFenced()) {
+          activeSession.value=null
+          resetCsrf()
+        } else activate(pkg,saved,true)
+      }
+    }
   } catch {
     // Offline or revoked: only locally available encrypted media remains.
   }
   return activeSession.value
+  }finally{
+    if(!activated && activeSession.value===null)releaseDeviceLease()
+  }
+}
+
+let pendingPinAttempt:Promise<PinAttempt>|null=null
+
+/**
+ * PIN-verified LOCAL unlock on a stored sealed device. A successful result
+ * must commit the HMAC ledger CAS and validate the exact receipt before the
+ * AES-GCM package is decrypted. Emergency PIN never activates a session.
+ * This is not a remote revocation or secure-clock guarantee.
+ */
+export function unlockPinnedDevice(candidate:string):Promise<PinAttempt> {
+  if(pendingPinAttempt)return pendingPinAttempt
+  pendingPinAttempt=unlockPinnedDeviceInternal(candidate).finally(()=>{
+    pendingPinAttempt=null
+  })
+  return pendingPinAttempt
+}
+async function unlockPinnedDeviceInternal(candidate:string):Promise<PinAttempt> {
+  const context=pendingPinUnlock.value
+  if(!context||activeSession.value)
+    throw new Error('identity.pin_not_required')
+  const scope={accountId:context.accountId,deviceId:context.deviceId}
+  const {admitCoLocatedPinDevice}=await import(
+    '../../security/application/pin-device-admission'
+  )
+  if(pendingPinUnlock.value!==context)
+    throw new Error('identity.pin_session_changed')
+  const attempt=await admitCoLocatedPinDevice({
+    scope,candidate,
+    readTrustedContext:()=>{
+      return pendingPinUnlock.value===context?{
+        accountId:context.accountId,deviceId:context.deviceId,
+        packageRevision:context.packageRevision,
+        sessionNonce:context.sessionNonce,
+      }:null
+    },
+  })
+  if(attempt.status!=='unlocked')return attempt
+  if(pendingPinUnlock.value!==context||activeSession.value)
+    throw new Error('identity.pin_session_changed')
+  const device=await getDevice(scope.accountId,scope.deviceId)
+  if(!device||!isSealedCandidate(device)||
+     (device as unknown as SealedPinDevice).pinMode!=='pin-v1' ||
+     await isSignedOut(scope.accountId,scope.deviceId)||
+     pendingPinUnlock.value!==context||activeSession.value)
+    throw new Error('identity.pin_device_changed')
+  // Re-verify the persisted HMAC ledger (including optional 0..5min
+  // relock policy) after successful app-PIN crypto. Missing old v1 policy
+  // is authenticated as Immediate; invalid or altered policy fails closed.
+  // This value is IN-MEMORY ONLY and has no unauthenticated settings UI.
+  const sealed=device as unknown as SealedPinDevice
+  const relockDelay=await readVerifiedPinRelockDelay(
+    scope,sealed.pinHmacKey,sealed.pinVerifier,
+  )
+  if(pendingPinUnlock.value!==context||activeSession.value)
+    throw new Error('identity.pin_session_changed')
+  // Do not publish the decrypted PackageV2 until our tab holds its
+  // SHARED device lifetime lease. A stale row change is still checked by
+  // the existing preunlock HMAC receipt and IDB scope/revision guards.
+  await ensureDeviceLease(device)
+  if(pendingPinUnlock.value!==context || activeSession.value){
+    releaseDeviceLease()
+    throw new Error('identity.pin_session_changed')
+  }
+  // Keep sealed envelope: never generate/write a legacy device-only fallback.
+  pendingPinUnlock.value=null
+  identityBootstrapError.value=null
+  activePinRelockDelayMs=relockDelay
+  pinLastBackgroundAtMs=null
+  clearPinRelockTimer()
+  const local=activate(attempt.pkg,device,false)
+  try{
+    await prove('login',{
+      accountId:scope.accountId,deviceId:scope.deviceId,purpose:'login',
+    },device.deviceKey)
+    if(activeSession.value===local)activate(attempt.pkg,device,true)
+  }catch{
+    // Local-First offline access after correct PIN, NOT a remote auth claim.
+  }
+  return {status:'app-unlocked'}
+}
+
+/**
+ * Enable a first app PIN on an existing, fully authenticated legacy device.
+ * The caller must supply the REAL Recovery Key; a checkbox or the current
+ * device's unlocked package alone is never sufficient to seal away the only
+ * copy of account access.
+ *
+ * UI is blocked before migration; a persisted PIN-sealed device is never
+ * automatically unlocked. An emergency PIN is deliberately NOT enrolled by
+ * this flow until signed destructive handling and acknowledgement exist.
+ */
+let pinEnrollmentInProgress=false
+export async function enrollAppPinWithRecovery(
+  recoveryKey:string,appPin:string,
+):Promise<void>{
+  if(pinEnrollmentInProgress)throw new Error('pin.enrollment_busy')
+  if(!/^[0-9]{4,8}$/.test(appPin))throw new Error('pin.invalid_format')
+  const session=requireSession()
+  if(!session.online||typeof navigator!=='undefined'&&navigator.onLine===false)
+    throw new Error('pin.online_recovery_proof_required')
+  if(isSealedCandidate(session.device))throw new Error('pin.already_configured')
+  pinEnrollmentInProgress=true
+  try{
+    // Do not accept a recovery-key checksum as proof of ownership: decrypt
+    // the server's genuine recovery envelope, verify its account signing
+    // key and require exact PackageV2 equality with this live session.
+    const kit=await parsePB2(recoveryKey)
+    const row=await jsonApi<{
+      accountId:string;accountSpki:string;revision:number;envelope:unknown
+    }>('/identity/v2/recovery/'+encodeURIComponent(kit.locator))
+    if(activeSession.value!==session || row.accountId!==session.accountId)
+      throw new Error('pin.account_changed')
+    const recovered=await openRecovery(row.envelope,kit,row.accountId)
+    if(recovered.accountSpki!==row.accountSpki ||
+       recovered.revision!==row.revision ||
+       canonical(recovered as unknown as Record<string,unknown>)!==
+         canonical(session.pkg as unknown as Record<string,unknown>))
+      throw new Error('pin.recovery_key_mismatch')
+    if(activeSession.value!==session)throw new Error('pin.account_changed')
+    // Remove private route trees BEFORE any asynchronous migration. The
+    // synchronous activeSession watcher releases this tab's shared Web Lock.
+    identityBootstrapReady.value=false
+    activeSession.value=null
+    let sealed=false
+    try{
+      const {migrateLegacyLocalDeviceToPin} = await import(
+        '../../security/application/pin-device-migration'
+      )
+      await migrateLegacyLocalDeviceToPin({
+        scope:{accountId:session.accountId,deviceId:session.deviceId},
+        verifiedPackage:session.pkg,appPin,emergencyPin:null,
+      })
+      sealed=true
+      const stored=await getDevice(session.accountId,session.deviceId)
+      if(!stored)throw new Error('pin.sealed_device_unavailable')
+      pendingPinUnlock.value=pendingPinContext(stored)
+      identityBootstrapError.value=null
+    }catch(error){
+      // Never reactivate a legacy envelope if the migration may have
+      // committed. Recovery Key remains the fallback after an unclear
+      // storage result; no silent device-only PIN bypass.
+      const latest=await getDevice(session.accountId,session.deviceId)
+        .catch(()=>undefined)
+      if(latest&&isSealedCandidate(latest)){
+        try{
+          pendingPinUnlock.value=pendingPinContext(latest)
+          identityBootstrapError.value=null
+        }catch{identityBootstrapError.value='identity.invalid_sealed_device'}
+      }else if(!sealed&&latest&&!isSealedCandidate(latest)&&
+        latest.deviceSpki===session.device.deviceSpki &&
+        canonical(latest.envelope as unknown as Record<string,unknown>)===
+        canonical(session.device.envelope as unknown as Record<string,unknown>) &&
+        !(await isSignedOut(session.accountId,session.deviceId).catch(()=>true))){
+        // Another tab's exclusive seal cannot have succeeded; use the
+        // identical, rechecked legacy device. A competing exclusive lock
+        // is refused by the existing Web Locks admission mechanism.
+        await ensureDeviceLease(session.device)
+        const check=await getDevice(session.accountId,session.deviceId)
+        if(check&&!isSealedCandidate(check)&&
+          canonical(check.envelope as unknown as Record<string,unknown>)===
+          canonical(session.device.envelope as unknown as Record<string,unknown>) &&
+          !(await isSignedOut(session.accountId,session.deviceId)))
+          activeSession.value=session
+        else releaseDeviceLease()
+      }
+      // A failed storage read or concurrent replacement must NOT expose the
+      // private Shell merely because no valid PIN context was recovered.
+      if(!activeSession.value&&!pendingPinUnlock.value&&!identityBootstrapError.value)
+        identityBootstrapError.value='identity.device_changed'
+      throw error
+    }finally{
+      identityBootstrapReady.value=true
+    }
+  }finally{
+    pinEnrollmentInProgress=false
+  }
 }
 
 export async function reauthenticate():Promise<Session> {
   // Do not race a second login/proof against the automatic session bootstrap:
   // either proof can rotate the cookie/CSRF state while an S3 PUT is in flight.
   if(pendingSessionResume) await pendingSessionResume
+  const before=requireSession()
+  await refreshPinSessionFence()
+  if(activeSession.value!==before)throw new Error('identity.changed')
   const state=requireSession()
   if(state.online) return state
   await prove('login',{accountId:state.accountId,deviceId:state.deviceId,purpose:'login'},state.device.deviceKey)
+  if(activeSession.value!==state)throw new Error('identity.changed')
   return activate(state.pkg,state.device,true)
 }
 
+/** Explicit PIN-authorized changes; never a front-end toggle of an AES gate. */
+export async function updateAppPinSettings(candidate:string,change:import('../../security/application/pin-device-settings').PinSettingsChange):Promise<void>{
+  if(pinEnrollmentInProgress)throw Error('pin.enrollment_busy')
+  await reauthenticate()
+  const before=requireSession()
+  if(!before.online||!isSealedCandidate(before.device))throw Error('pin.online_sealed_device_required')
+  const authority=await jsonApi<{accountId:string;deviceId:string}>('/identity/v2/me')
+  if(activeSession.value!==before||authority.accountId!==before.accountId||authority.deviceId!==before.deviceId)
+    throw Error('pin.device_authority_changed')
+  pinEnrollmentInProgress=true
+  pinMutationPending.value=true
+  try{
+    if(!lockActivePinSession())throw Error('pin.not_configured')
+    const context=pendingPinUnlock.value
+    const {replacePinSettings}=await import('../../security/application/pin-device-settings')
+    const row=await replacePinSettings({scope:{accountId:before.accountId,deviceId:before.deviceId},candidate,expectedPackage:before.pkg,change,isCurrent:()=>pendingPinUnlock.value===context&&!isLogoutFenced()})
+    if(pendingPinUnlock.value!==context||isLogoutFenced())throw Error('pin.session_changed')
+    if(isSealedCandidate(row))pendingPinUnlock.value=pendingPinContext(row)
+    else{pendingPinUnlock.value=null;await resumeExistingDevice()}
+  }finally{pinEnrollmentInProgress=false;pinMutationPending.value=false}
+}
+
 export async function signPhotoContract(json:string):Promise<string> {
+  const before=requireSession()
+  await refreshPinSessionFence()
+  if(activeSession.value!==before)throw new Error('identity.changed')
   const current=requireSession()
   if(!current.online) throw new Error('identity.offline')
   const signature=await sign(current.device.deviceKey,'photobunker.photo-sync.v1\n'+json)
-  if(activeSession.value!==current) throw new Error('identity.changed')
+  if(activeSession.value!==current || isLogoutFenced()) throw new Error('identity.changed')
   return signature
 }
 
 export async function logout():Promise<void> {
   const state=activeSession.value
+  if (!state) { resetCsrf(); return }
+  // Never publish a signed-out UI before a synchronous origin-wide fence;
+  // IndexedDB writes can be aborted by a hard reload before oncomplete.
+  let fenceFailure:unknown=null
+  try { establishLogoutFence() } catch(error) { fenceFailure=error }
+  // Even if origin Web Storage is blocked, immediately close the volatile UI
+  // and attempt the independent durable device IDB marker. Never claim
+  // success if either safety guard was unavailable.
   activeSession.value=null
-  if(state){
-    await markSignedOut(state.accountId,state.deviceId,true)
-    if(state.online) {
-      try { await jsonApi('/identity/v2/logout','POST',{}) } catch { /* local sign-out still succeeds */ }
-    }
-  }
   resetCsrf()
+  let durableFailure:unknown=null
+  try { await markSignedOut(state.accountId,state.deviceId,true) }
+  catch(error) { durableFailure=error }
+  if(state.online) {
+    try { await jsonApi('/identity/v2/logout','POST',{}) } catch { /* best effort; no fake ACK */ }
+  }
+  if (durableFailure) throw durableFailure
+  if (fenceFailure) throw fenceFailure
 }

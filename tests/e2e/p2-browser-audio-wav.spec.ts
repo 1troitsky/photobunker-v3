@@ -79,6 +79,45 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
       .toContainText('Начало · 0.2 с')
     await expect(page.getByTestId('file-viewer-audio-editor'))
       .toContainText('Конец · 0.7 с')
+    // A new file ID within /browser/file/:protocol/:id/edit REUSES the
+    // component, so onBeforeRouteLeave alone cannot protect trim edits.
+    const editorUrl=page.url()
+    let discardPrompts=0
+    page.once('dialog',async dialog=>{
+      expect(dialog.type()).toBe('confirm')
+      discardPrompts++
+      await dialog.dismiss()
+    })
+    await page.evaluate(async()=>{
+      const {router}=await import('/src/router.ts')
+      await router.replace({
+        name:'browser-editor',
+        params:{protocol:'media',id:crypto.randomUUID()},
+      })
+    })
+    expect(discardPrompts).toBe(1)
+    expect(page.url()).toBe(editorUrl)
+    // A direct link to Viewer for the SAME media ID must not discard
+    // unsaved edits. Vue Router may reuse the editor's component.
+    page.once('dialog',async dialog=>{
+      expect(dialog.type()).toBe('confirm')
+      discardPrompts++
+      await dialog.dismiss()
+    })
+    await page.evaluate(async()=>{
+      const {router}=await import('/src/router.ts')
+      const current=router.currentRoute.value
+      await router.replace({
+        name:'browser-viewer',
+        params:{protocol:current.params.protocol,id:current.params.id},
+      })
+    })
+    expect(discardPrompts).toBe(2)
+    expect(page.url()).toBe(editorUrl)
+    await expect(page.getByTestId('file-viewer-audio-editor'))
+      .toContainText('Начало · 0.2 с')
+    await expect(page.getByTestId('file-viewer-audio-editor'))
+      .toContainText('Конец · 0.7 с')
     let downloadCount=0
     page.on('download',()=>{downloadCount++})
     await page.getByTestId('file-viewer-make-wav').click()
@@ -137,10 +176,24 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
     expect((await download).suggestedFilename()).toBe(saved.name)
     const url=await page.getByTestId('file-viewer-wav-preview')
       .getAttribute('src')
+    // A real audio element must be paused BEFORE logout removes its native
+    // player and revokes the decrypted original media Blob URL.
+    await page.getByTestId('file-viewer-audio').evaluate((element:HTMLAudioElement)=>{
+      const w=window as Window & {__viewerPauseCount?:number}
+      w.__viewerPauseCount=0
+      const original=element.pause.bind(element)
+      element.pause=()=>{
+        w.__viewerPauseCount=(w.__viewerPauseCount??0)+1
+        original()
+      }
+    })
     await page.evaluate(async()=>{
       const {logout}=await import('/src/features/identity/application/session.ts')
       await logout()
     })
+    expect(await page.evaluate(()=>(
+      window as Window & {__viewerPauseCount?:number}
+    ).__viewerPauseCount??0)).toBeGreaterThan(0)
     await expect(page.getByTestId('file-viewer-wav-preview')).toHaveCount(0)
     expect(await page.evaluate(async source=>{
       try{const res=await fetch(source!);return res.ok}catch{return false}

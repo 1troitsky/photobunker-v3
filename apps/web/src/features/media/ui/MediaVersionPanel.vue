@@ -72,7 +72,7 @@ onUnmounted(()=>detach())
 </script>
 <template>
   <section class="media-revisions" data-testid="media-revision-panel">
-    <h3>Версии зашифрованных файлов · P1</h3>
+    <h3>Версии файлов</h3>
     <p class="muted">
       Каждая версия — самостоятельный файл с отдельным ключом и сроком
       хранения. История подписывается владельцем; прежняя версия не

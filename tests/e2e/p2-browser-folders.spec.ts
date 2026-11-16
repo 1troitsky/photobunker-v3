@@ -1,4 +1,11 @@
+import {chooseEncryptedFile} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
+import type {Locator} from '@playwright/test'
+
+async function ensureFileMenu(row:Locator):Promise<void>{
+  if(await row.getByTestId('browser-file-menu-panel').count()===0)
+    await row.getByTestId('browser-file-menu-toggle').click()
+}
 
 test('P2 Browser: encrypted device-local nested folders survive reload and never move media ciphertext',async({browser})=>{
   test.setTimeout(140000)
@@ -13,7 +20,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await page.goto('/browser')
     await expect(page.getByTestId('browser-folders')).toBeVisible()
     await context.setOffline(true)
-    await page.getByTestId('media-import-file').setInputFiles({
+    await chooseEncryptedFile(page.getByTestId('media-import-file'),{
       name:'PRIVATE-LOCAL-FOLDER-TEST.webm',mimeType:'video/webm',
       buffer:Buffer.alloc(8192,0x45),
     })
@@ -47,6 +54,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     expect(sealed).not.toContain(id)
     expect(sealed).not.toContain('PRIVATE-LOCAL-FOLDER')
 
+    await ensureFileMenu(item)
     await item.getByRole('combobox',{name:'Папка файла '+id})
       .selectOption({label:'Съёмки'})
     await expect(item).toHaveCount(0)
@@ -55,6 +63,7 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await page.getByRole('button',{name:'Новая папка'}).click()
     await page.getByTestId('browser-folder-name').fill('День 1')
     await page.getByRole('button',{name:'Создать',exact:true}).click()
+    await ensureFileMenu(item)
     await item.getByRole('combobox',{name:'Папка файла '+id})
       .selectOption({label:'День 1'})
     await expect(item).toHaveCount(0)
@@ -62,6 +71,25 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await expect(item).toHaveCount(1)
     await expect(page.getByLabel('Путь папки')).toContainText('Съёмки')
     await expect(page.getByLabel('Путь папки')).toContainText('День 1')
+
+    // Approved Browser v3 search supports CURRENT, explicitly SELECTED,
+    // and ALL already authenticated folders, without server-side plaintext
+    // queries or moving the current breadcrumb.
+    const term=page.getByTestId('browser-search')
+    const scope=page.getByTestId('browser-search-folder-scope')
+    await term.fill(id.slice(0,8))
+    await scope.selectOption('selected')
+    const target=page.getByTestId('browser-search-folder-target')
+    await target.selectOption({label:'Съёмки / День 1'})
+    await expect(item).toHaveCount(1)
+    await target.selectOption({label:'Съёмки'})
+    await expect(item).toHaveCount(0)
+    await expect(page.getByLabel('Путь папки')).toContainText('День 1')
+    await scope.selectOption('all')
+    await expect(item).toHaveCount(1)
+    await scope.selectOption('current')
+    await expect(item).toHaveCount(1)
+    await term.fill('')
 
     // The virtual membership must not change actual immutable media bytes.
     const bytes=await page.evaluate(async mediaId=>{
@@ -80,6 +108,13 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
     await page.locator('.browser-folder-open').filter({hasText:'День 1'}).click()
     await expect(item).toHaveCount(1)
     await page.getByRole('button',{name:'Мои файлы'}).click()
+    await page.getByRole('button',{name:'Действия с папкой Съёмки'}).click()
+    // Browser v3 never offers an invalid move into a descendant. The domain
+    // still rejects forged moves; UI must not invite the user to fail.
+    const moveParent=page.getByRole('combobox',{name:'Переместить папку Съёмки'})
+    await expect(moveParent.locator('option',{hasText:'День 1'})).toHaveCount(0)
+    await expect(moveParent.locator('option',{hasText:'Съёмки'})).toHaveCount(0)
+    await expect(moveParent.locator('option',{hasText:'Корень'})).toHaveCount(1)
     const remove=page.getByRole('button',{name:'Удалить пустую папку Съёмки'})
     page.once('dialog',d=>d.accept())
     await remove.click()
@@ -89,16 +124,18 @@ test('P2 Browser: encrypted device-local nested folders survive reload and never
 
     // Batch operations commit a single encrypted revision for selected files.
     const filePicker=page.getByTestId('media-import-file')
-    await filePicker.setInputFiles({
+    await chooseEncryptedFile(filePicker,{
       name:'PRIVATE-BATCH-A.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x48),
     })
     await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(1)
-    await filePicker.setInputFiles({
+    await chooseEncryptedFile(filePicker,{
       name:'PRIVATE-BATCH-B.webm',mimeType:'video/webm',
       buffer:Buffer.alloc(8192,0x49),
     })
     await expect(page.locator('[data-testid^="browser-row-media:"]')).toHaveCount(2)
+    await page.getByTestId('browser-header-select').click()
+    await page.getByTestId('browser-selection-actions').click()
     await page.getByRole('button',{name:'Выбрать всё на странице'}).click()
     await page.getByTestId('browser-bulk-destination').selectOption({label:'Съёмки'})
     await page.getByRole('button',{name:/Переместить выбранные/}).click()

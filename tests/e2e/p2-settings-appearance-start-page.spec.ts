@@ -37,6 +37,7 @@ test('UX Appearance 1.3: atomic Dock and Start Page, Cancel, reload, exact searc
       version:2,
       dock:['assignments','browser','camera','settings'],
       launch:'browser',
+      visual:{theme:'dark',accent:'green',size:'normal',language:'ru'},
     })
     await page.reload()
     await expect(page.getByTestId('launch-page-browser')).toBeChecked()

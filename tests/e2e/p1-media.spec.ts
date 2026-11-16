@@ -1,4 +1,15 @@
-import {test,expect} from '@playwright/test'
+import {test,expect,type Page} from '@playwright/test'
+
+// Browser v3 keeps the Local-First encrypted uploader and E2EE receiver
+// mounted inside its approved Header-triggered bottom sheet. The old
+// always-visible form was deliberately removed. Tests must exercise the real
+// user entry point without weakening any encrypted server/recipient checks.
+async function openImportSheet(page:Page){
+  await page.getByTestId('browser-header-upload').click()
+  const sheet=page.getByTestId('browser-import-sheet')
+  await expect(sheet).toBeVisible()
+  return sheet
+}
 
 test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → independent recovered owner decrypt',async({browser})=>{
   test.setTimeout(140000)
@@ -16,7 +27,7 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     await A.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(A.getByText('Подтверждённая сессия')).toBeVisible()
     await A.goto('/browser')
-    const panel=A.locator('.media-import-p1')
+    const panel=(await openImportSheet(A)).locator('.media-import-p1')
     await expect(panel).toBeVisible()
 
     // Real Local-First: the application is loaded, then network disappears
@@ -72,7 +83,7 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     await B.getByRole('button',{name:'Восстановить',exact:true}).click()
     await expect(B.getByText('Подтверждённая сессия')).toBeVisible()
     await B.goto('/browser')
-    const remote=B.locator('.media-import-p1')
+    const remote=(await openImportSheet(B)).locator('.media-import-p1')
     await expect(remote.locator('.photo-row')
       .filter({hasText:local.mediaId.slice(0,8)})).toBeVisible({timeout:20000})
     await remote.getByRole('button',{name:'Проверить из облака'}).click()
@@ -120,7 +131,7 @@ test('P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → indepen
     // Audio uses the same real upload/decryption route without requiring
     // camera permissions or auto-writing the OS gallery.
     await A.goto('/browser')
-    const again=A.locator('.media-import-p1')
+    const again=(await openImportSheet(A)).locator('.media-import-p1')
     await again.getByTestId('media-import-file').setInputFiles({
       name:'SENSITIVE-VOICE.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(4096,0x5a),
@@ -169,7 +180,7 @@ test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant
       return s.requireSession().accountId
     })
     await owner.goto('/browser')
-    const ownerPanel=owner.locator('.media-import-p1')
+    const ownerPanel=(await openImportSheet(owner)).locator('.media-import-p1')
     await ownerPanel.getByTestId('media-import-file').setInputFiles({
       name:'SENSITIVE-RECIPIENT-AUDIO.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(16427,0x5e),
@@ -194,6 +205,7 @@ test('P1-11: two independently verified accounts exchange 1-key E2EE audio grant
       return s.requireSession().accountId
     })
     await recipient.goto('/browser')
+    await openImportSheet(recipient)
     await expect(recipient.getByTestId('media-share-panel')).toBeVisible()
     // Registration UI and online session proof complete independently.
     // Verify the server account before publishing an account-signed ECDH key.

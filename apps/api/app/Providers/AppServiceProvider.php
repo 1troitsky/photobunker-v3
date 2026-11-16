@@ -19,6 +19,30 @@ final class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Preserve each existing budget while isolating signed-in accounts
+        // behind one NAT. Anonymous callers retain the original IP budget.
+        foreach (['billing' => 40, 'sharing' => 40, 'photos' => 120] as $scope => $maximum) {
+            RateLimiter::for('pb3-'.$scope, static function(Request $request) use ($scope, $maximum): Limit {
+                $account = $request->session()->get('identity_account');
+                $authenticated = is_string($account)
+                    && preg_match('/^[a-f0-9-]{36}$/D', $account) === 1;
+                return Limit::perMinute($maximum)->by($authenticated
+                    ? $scope.'-account:'.$account
+                    : $scope.'-ip:'.($request->ip() ?? 'unknown'));
+            });
+        }
+        // Anonymous key-only registration/recovery must stay IP bounded, but
+        // after a genuine server-issued Identity session another account on
+        // the same office/hotel NAT must have its OWN 40/min login budget.
+        // Never trust request-provided account IDs or headers for this key.
+        RateLimiter::for('pb3-identity',static function(Request $request):Limit{
+            $account=$request->session()->get('identity_account');
+            $authenticated=is_string($account)
+                &&preg_match('/^[a-f0-9-]{36}$/D',$account)===1;
+            return Limit::perMinute(40)->by($authenticated
+                ?'identity-account:'.$account
+                :'identity-ip:'.($request->ip()??'unknown'));
+        });
         // A shared office/hotel NAT must never cause one legitimate account
         // to consume another account's technical request budget. The account
         // ID comes only from authenticated server-side Laravel session state,

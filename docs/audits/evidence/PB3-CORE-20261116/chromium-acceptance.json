@@ -1,0 +1,1688 @@
+{
+  "sourceCommit": "fbb95b1c5da8ddefeae9ea7f0c2039bed1729657",
+  "appsTree": "60d899438a4d2f98c9519749e454b2873973092d",
+  "command": [
+    "pnpm",
+    "exec",
+    "playwright",
+    "test",
+    "--config",
+    "<private-qa>/playwright.config.ts",
+    "--workers=1",
+    "--output=<private-qa>/shipping-suite-results",
+    "--reporter=line,json"
+  ],
+  "exitCode": 0,
+  "durationSeconds": 469.52,
+  "stats": {
+    "startTime": "2026-11-16T13:38:22.486Z",
+    "duration": 468731.56,
+    "expected": 151,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "scenarios": [
+    {
+      "file": "p1-assignment-media.spec.ts",
+      "title": "P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 39822
+        }
+      ]
+    },
+    {
+      "file": "p1-billing-retention-proxy.spec.ts",
+      "title": "P1 #283 unauthenticated billing is denied, enrolled PWA reads own Free retention cap",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 769
+        }
+      ]
+    },
+    {
+      "file": "p1-camera-session.spec.ts",
+      "title": "late permission survives real online hydration with one live stream",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1460
+        }
+      ]
+    },
+    {
+      "file": "p1-camera-session.spec.ts",
+      "title": "equivalent Session replacement keeps the existing stream",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 887
+        }
+      ]
+    },
+    {
+      "file": "p1-camera-session.spec.ts",
+      "title": "real account switch during permission stops the stale result before opening another",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1247
+        }
+      ]
+    },
+    {
+      "file": "p1-camera-session.spec.ts",
+      "title": "leaving before permission resolves releases every late track without reopening",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1012
+        }
+      ]
+    },
+    {
+      "file": "p1-camera-session.spec.ts",
+      "title": "denied permission is recoverable by a single explicit retry",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1189
+        }
+      ]
+    },
+    {
+      "file": "p1-camera-session.spec.ts",
+      "title": "hydrated camera captures offline against an already verified signed assignment policy",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2049
+        }
+      ]
+    },
+    {
+      "file": "p1-contact-assignment-picker.spec.ts",
+      "title": "P1-26: confirmed contact → explicit owner-signed assignment invitation, no implicit access",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 6073
+        }
+      ]
+    },
+    {
+      "file": "p1-encrypted-contacts.spec.ts",
+      "title": "P1-25: verified peer → encrypted Contacts & Teams → offline persistence → local removal",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3707
+        }
+      ]
+    },
+    {
+      "file": "p1-fault-injection-envelopes.spec.ts",
+      "title": "P1-25 lost finalize ACK: real commit, offline E2EE outbox, idempotent replay, stranger denied",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2601
+        }
+      ]
+    },
+    {
+      "file": "p1-fault-injection-envelopes.spec.ts",
+      "title": "P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean retry",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1881
+        }
+      ]
+    },
+    {
+      "file": "p1-grant-revocation-matrix.spec.ts",
+      "title": "P1 ACL matrix: A→B verified grant only, C denied, source namespace denied, revoke blocks B and recovered B2",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 6130
+        }
+      ]
+    },
+    {
+      "file": "p1-identity-logout-durability-402.spec.ts",
+      "title": "P1 #402: logout survives aborted IndexedDB transaction and immediate hard reload",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2073
+        }
+      ]
+    },
+    {
+      "file": "p1-identity-logout-durability-402.spec.ts",
+      "title": "P1 #402: committed local logout remains fenced across tabs and reload despite network outage",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1496
+        }
+      ]
+    },
+    {
+      "file": "p1-identity-logout-durability-402.spec.ts",
+      "title": "P1 #402: denied synchronous Web Storage still closes volatile session and commits IDB signout",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1170
+        }
+      ]
+    },
+    {
+      "file": "p1-identity-photo.spec.ts",
+      "title": "P1-09: Free monthly quota accepts three signed creates, rejects fourth without deleting local ciphertext",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2273
+        }
+      ]
+    },
+    {
+      "file": "p1-identity-photo.spec.ts",
+      "title": "two browser identities: key-only account, encrypted camera photo, Garage recovery",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 4887
+        }
+      ]
+    },
+    {
+      "file": "p1-identity-photo.spec.ts",
+      "title": "P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 6989
+        }
+      ]
+    },
+    {
+      "file": "p1-identity-photo.spec.ts",
+      "title": "P1-04: A creates encrypted assignment, B accepts and submits a photo grant, A decrypts",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 5495
+        }
+      ]
+    },
+    {
+      "file": "p1-identity-photo.spec.ts",
+      "title": "P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 13695
+        }
+      ]
+    },
+    {
+      "file": "p1-media-camera-autoretry-390.spec.ts",
+      "title": "P1 #390 Camera keeps retrying a verified lost chunk ACK without opening Browser",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 7484
+        }
+      ]
+    },
+    {
+      "file": "p1-media-resumable-large.spec.ts",
+      "title": "P1 #200 >64MiB ciphertext survives offline, lost ACK, reload and independent E2EE readback",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 16074
+        }
+      ]
+    },
+    {
+      "file": "p1-media-revisions.spec.ts",
+      "title": "P1-12: immutable owner-signed media versions survive Garage+Recovery Key without modifying original or inheriting grants",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3868
+        }
+      ]
+    },
+    {
+      "file": "p1-media-storage-queue-integration-chat-af.spec.ts",
+      "title": "P1/P2 integration: Camera encrypted audio queue → Storage visibility → automatic server replay",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 8018
+        }
+      ]
+    },
+    {
+      "file": "p1-media.spec.ts",
+      "title": "P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → independent recovered owner decrypt",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 5842
+        }
+      ]
+    },
+    {
+      "file": "p1-media.spec.ts",
+      "title": "P1-11: two independently verified accounts exchange 1-key E2EE audio grant, recipient decrypts and owner revokes without deleting original",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 4371
+        }
+      ]
+    },
+    {
+      "file": "p1-pin-cross-tab-220.spec.ts",
+      "title": "P3-220: live tab blocks PIN seal; cooperative closure allows guarded PIN + reload",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2407
+        }
+      ]
+    },
+    {
+      "file": "p1-qa-paid-downgrade-retention.spec.ts",
+      "title": "P1 #287 synthetic go to Free retains original E2EE and new Free13 writes",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3254
+        }
+      ]
+    },
+    {
+      "file": "p1-qa-paid-downgrade-retention.spec.ts",
+      "title": "P1 #287 synthetic pro to Free retains original E2EE and new Free13 writes",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2708
+        }
+      ]
+    },
+    {
+      "file": "p1-qa-paid-retention-garage.spec.ts",
+      "title": "P1 #285 synthetic verified go signed 29d Photo+Media E2EE to real Garage",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2051
+        }
+      ]
+    },
+    {
+      "file": "p1-qa-paid-retention-garage.spec.ts",
+      "title": "P1 #285 synthetic verified pro signed 89d Photo+Media E2EE to real Garage",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1974
+        }
+      ]
+    },
+    {
+      "file": "p1-qa-persistent-storage-anti-forensics-chat-ab.spec.ts",
+      "title": "P1 #378 genuine encrypted offline media stays private in persistent browser stores and logout revokes decoded blob",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1275
+        }
+      ]
+    },
+    {
+      "file": "p1-recovery-device-acceptance.spec.ts",
+      "title": "P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and offline access boundary",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3952
+        }
+      ]
+    },
+    {
+      "file": "p1-recovery-device-acceptance.spec.ts",
+      "title": "P1 #199: wrong Recovery Key, invalid signed login proof and other account denied",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1896
+        }
+      ]
+    },
+    {
+      "file": "p1-teams-invitations.spec.ts",
+      "title": "P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 19865
+        }
+      ]
+    },
+    {
+      "file": "p1-teams-owner.spec.ts",
+      "title": "P1-27: owner-signed encrypted Team → durable local queue → server ACL → offline local read",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2203
+        }
+      ]
+    },
+    {
+      "file": "p2-authorization-error-approved-ux.spec.ts",
+      "title": "Authorization Error 1.0 only appears after a proven invalid Recovery Key, never URL claims",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 623
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-archive-batch.spec.ts",
+      "title": "P2 Browser: owner-confirmed sequential batch archive and restore use real signed per-file ledger",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2797
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-archive-conflict.spec.ts",
+      "title": "P2 Archive: unresolved signed delete/archival command cannot be discarded; obsolete CAS can",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2316
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-archive-preferences.spec.ts",
+      "title": "P2 Browser: Local-First signed archive settings, independent-device recovery, no auto-TTL extension and direct delete",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 4644
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-archive.spec.ts",
+      "title": "P2 Browser: signed owner media archive, restore, then permanent tombstone without fabricated GC ACK",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3089
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-assignment-mixed-creation-209.spec.ts",
+      "title": "P2 #209: mixed photo/video/audio creation is durable offline, two owner signatures, two live server ACKs",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3056
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-assignment-preview-ceiling.spec.ts",
+      "title": "P2 assignment: signed owner-only field ceiling, queued offline revision and NO public grant",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3359
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-audio-wav.spec.ts",
+      "title": "P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser with separate OS export",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1907
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-av-assignments-premerge-20261114.spec.ts",
+      "title": "P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grants → server progress",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 5910
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-audio-cloud-wav-206.spec.ts",
+      "title": "P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV trim → new encrypted Garage file",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 12396
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-gps-consent-race.spec.ts",
+      "title": "Issue #260 revoke between fix and shutter without re-request; required=false",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1412
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-gps-consent-race.spec.ts",
+      "title": "Issue #260 revoke between fix and shutter without re-request; required=true",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2032
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-gps-permission.spec.ts",
+      "title": "P2 #208 explicit high-accuracy GPS request, private AES-GCM capture and no plaintext network leak",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1422
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-gps-permission.spec.ts",
+      "title": "P2 #208 signed required-GPS policy rejects denied capture offline, then accepts genuine consent",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2834
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-gps-permission.spec.ts",
+      "title": "P2 #208 3-minute-old GPS provider fix fails closed even with earlier consent",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1267
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-gps-permission.spec.ts",
+      "title": "P2 #208 revoking geolocation must invalidate old fix before another capture",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1617
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-microphone-interruption-206.spec.ts",
+      "title": "P2 #206 genuine Chromium microphone denial requires explicit retry, without private UA error leakage",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1389
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-microphone-interruption-206.spec.ts",
+      "title": "P2 #206 native MediaStreamTrack ended aborts an otherwise long enough real audio capture",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 7676
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-microphone-interruption-206.spec.ts",
+      "title": "P2 #206 true native audio timeslices are ciphertext before Stop and GC after signed E2EE save",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 10168
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-camera-microphone-interruption-206.spec.ts",
+      "title": "P2 #206 separate live tab cannot steal recording, closed writer permits explicit encrypted-only adoption",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3891
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-catalog.spec.ts",
+      "title": "P2 Browser v3: real anonymous login → offline encrypted media → catalog filters and decrypted viewer",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2063
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-catalog.spec.ts",
+      "title": "P2 Browser: sort two genuinely encrypted offline files by confirmed byte size",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1170
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-contacts-blacklist-339.spec.ts",
+      "title": "P2 #339: two real trusted peers, encrypted local block, refilter after alias and Team picker",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 6720
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-contributor-photo-submission.spec.ts",
+      "title": "P2 contributor: signed imported Photo MediaFile receipt requires scoped E2EE, owner decrypt and revoke",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 8097
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-display-preferences-ux.spec.ts",
+      "title": "Browser v3: opening section and folder-first display are real and device-persistent",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1663
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-editor-personal-metadata-copy.spec.ts",
+      "title": "P2 V-47: private Info edits create only a separate AES-GCM personal copy without GPS/ACL inheritance",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1908
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-editor-route-journey.spec.ts",
+      "title": "P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save → same Viewer → Browser",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2252
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-file-viewer-index-target.spec.ts",
+      "title": "P2 File Viewer: authenticated deep-link target on opaque index page 2, reject replay and preserve ciphertext",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3679
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-folder-cloud-sync.spec.ts",
+      "title": "P2 Browser: two recovered devices exchange signed E2EE folders, replay Lost ACK and refuse divergent offline edits",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 4504
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-folder-thumbnails-ux.spec.ts",
+      "title": "Browser v3: real offline E2EE folder thumbnail has no persistent plaintext cache",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1803
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-folders.spec.ts",
+      "title": "P2 Browser: encrypted device-local nested folders survive reload and never move media ciphertext",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2820
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-folders.spec.ts",
+      "title": "P2 Browser: corrupt encrypted folder snapshot fails closed without overwriting ciphertext",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1404
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-header-actions-ux.spec.ts",
+      "title": "Browser v3: five owner-approved Header actions control the real encrypted catalog",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2767
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-https-link-import.spec.ts",
+      "title": "P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder -> Garage -> recovered device, no source URL in API",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2762
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-https-link-import.spec.ts",
+      "title": "P2 Browser: rejects private/HTTP address locally and never contacts the source",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1224
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-item-menus-ux.spec.ts",
+      "title": "Browser v3: file and encrypted-folder three-dot actions use original local operations",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1743
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-large-account.spec.ts",
+      "title": "P2 Browser 10k+ metadata: AES-GCM fixtures, 201 cursor pages, bounded search, stable sort",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 433
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-large-account.spec.ts",
+      "title": "P2 Browser: 10k index cannot grant access; real E2EE deep link page 2 is server-authorized",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3097
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-media-grant-clock-margin.spec.ts",
+      "title": "Integration #63: +2min client clock, real signed media grant/replay/readback/revoke",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2473
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-media-share-context-ux.spec.ts",
+      "title": "Browser v3: video/audio share uses a scoped E2EE panel without issuing grants",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1294
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-multi-import.spec.ts",
+      "title": "P2 Browser: offline multi-select and drag-drop AES-GCM import into selected folder persists after reload and cloud sync",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2670
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-aspect-presets.spec.ts",
+      "title": "P2 V-48: authenticated JPEG ratio presets and +90° rotate are real raster pixels, then E2EE save",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2085
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-before-after.spec.ts",
+      "title": "P2 Viewer: before/after shows original without exporting or changing edited E2EE derivative",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1999
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-blackouts.spec.ts",
+      "title": "P2 Viewer: opaque blackout overwrites JPEG pixels only in a new encrypted personal derivative",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2451
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-crop.spec.ts",
+      "title": "P2 Viewer: real JPEG crop/rotate → preview only → independent encrypted Browser copy",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2678
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-five-shape-toolbar.spec.ts",
+      "title": "P2 V-50: five real shape tools stay on one mobile row, fill and stroke flatten into encrypted JPEG",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2768
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-fullresolution-export.spec.ts",
+      "title": "P2 V55: >4096px / >16.8MP encrypted JPEG preserves native pixels; low-memory fails closed",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2687
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-inline-text.spec.ts",
+      "title": "P2 V-49: tap a photo to type text inline, synchronize list/undo/redo, save genuine encrypted JPEG",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2813
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-shapes.spec.ts",
+      "title": "P2 Viewer: shape stroke and fill flatten into separate E2EE JPEG without leaking mark data",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2238
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-share-context-ux.spec.ts",
+      "title": "Browser v3: per-photo share opens existing key-verified E2EE flow, not an unrestricted link",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1125
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-strokes.spec.ts",
+      "title": "P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixels",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3613
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-photo-text.spec.ts",
+      "title": "P2 Viewer: editable movable photo text is flattened only into new E2EE JPEG",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2284
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-private-search.spec.ts",
+      "title": "P2 Browser: offline private metadata search and second-device cloud search without plaintext disclosure",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 8106
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-public-card-anonymous-pin.spec.ts",
+      "title": "Public Card 1.1 stays anonymous while private device is PIN locked",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 518
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-public-card-live.spec.ts",
+      "title": "Public Card: real camera → safe encrypted Garage publication → anonymous read → reload → revoke",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 5632
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-public-card-safe-jpeg.spec.ts",
+      "title": "real Chromium strips source JPEG APP1 EXIF while preserving safe pixels",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 306
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-safe-recipient.spec.ts",
+      "title": "P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and revokes read",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 8152
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-video-clip-215.spec.ts",
+      "title": "P2 #215: real decoded video → NEW encoded clip → encrypted local MediaFile; no OS gallery",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2505
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-video-clip-recovered-cloud-qa-chat-aa.spec.ts",
+      "title": "P2 #376: real video trim → offline E2EE clip → Garage → recovered-device decoder; outsider denied",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 5899
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-video-clip-ui-215.spec.ts",
+      "title": "P2 #215 UI: Video Editor trim → genuine E2EE clip offline; original and source permissions unchanged",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3382
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-video-still.spec.ts",
+      "title": "P2 Viewer: decoded video frame → volatile JPEG → offline E2EE Browser file and confirmed device download",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3071
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-video-trim-edl.spec.ts",
+      "title": "P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/undo without MP4 export",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 4051
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-viewer-accepted-layout.spec.ts",
+      "title": "P2 V-41: File Viewer fixed mobile/desktop geometry, media switching and accessible sheets",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2385
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-viewer-origin-scoped-pager.spec.ts",
+      "title": "P2 File Viewer: navigate exactly the Browser folder/filter order and return to last viewed encrypted file",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2308
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-viewer-return-context.spec.ts",
+      "title": "P2 Browser->File Viewer->Browser: restore encrypted folder, filter, private search and list anchor",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2462
+        }
+      ]
+    },
+    {
+      "file": "p2-browser-viewer.spec.ts",
+      "title": "P2 File Viewer: actual encrypted media, same-origin export, keyboard navigation and logout wipe",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1514
+        }
+      ]
+    },
+    {
+      "file": "p2-camera-fieldwork-ux.spec.ts",
+      "title": "Fieldwork Camera 1.2: one Shell, three context actions, real modes and non-destructive blind overlay",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2123
+        }
+      ]
+    },
+    {
+      "file": "p2-camera-presets-ux.spec.ts",
+      "title": "Camera Fieldwork 1.2: encrypted device preset with real photo, video and audio options survives reload",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1788
+        }
+      ]
+    },
+    {
+      "file": "p2-contacts-team-profile-ux.spec.ts",
+      "title": "Contacts & Teams 1.1: real encrypted team opens its own card without assuming server rights",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1385
+        }
+      ]
+    },
+    {
+      "file": "p2-messages-drafts.spec.ts",
+      "title": "P2-01: verified contact → real encrypted message draft → fullscreen overlay → offline restore",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 4973
+        }
+      ]
+    },
+    {
+      "file": "p2-messages-drafts.spec.ts",
+      "title": "P2-01: optional Messages Dock route uses current Shell and never promises Matrix delivery",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 393
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-account-grace-notifications-chat-ad.spec.ts",
+      "title": "P2+P3: one Key-Only account keeps verified Free status across Contacts and Notifications",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1359
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-account-navigation.spec.ts",
+      "title": "P2: Security / Billing / Profile routes live inside one Fieldwork Shell without fake success",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 930
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-appearance-dock.spec.ts",
+      "title": "UX Appearance 1.3: Dock draft, cancel, save, device reload and protected Settings",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1597
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-appearance-start-page.spec.ts",
+      "title": "UX Appearance 1.3: atomic Dock and Start Page, Cancel, reload, exact search and deep links",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2156
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-appearance-visual-approved.spec.ts",
+      "title": "Fieldwork Appearance 1.3: all visual options preview, cancel and persist atomically",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1190
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-checkout-approved-ux.spec.ts",
+      "title": "Checkout 1.0: real catalog price, edit order and no fake DePay success",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 627
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-checkout-approved-ux.spec.ts",
+      "title": "Checkout 1.0: unsupported URL prices and fake status cannot activate payment",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 279
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-data-storage-chat-ad.spec.ts",
+      "title": "P2 Data & Storage: real encrypted offline queue, server usage and logout privacy",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2302
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-dock-mobile-acceptance.spec.ts",
+      "title": "P2 #214 mobile 320px: three/four/five real Dock routes, offline save, reload and Cancel",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1884
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-dock-mobile-acceptance.spec.ts",
+      "title": "P2 #214 keyboard drag, mandatory Profile and rollback of draft order",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1274
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-dock-mobile-acceptance.spec.ts",
+      "title": "P2 #214 mobile RU/EN Dock search focus, retap one-level and hidden-section navigation",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1437
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-dock-retap.spec.ts",
+      "title": "UX Dock retap: Settings goes back one in-section screen and root never stacks",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1201
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-dock-retap.spec.ts",
+      "title": "UX Dock retap: editor -> viewer -> browser without external history back",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 419
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-help-chat-ae.spec.ts",
+      "title": "P2 Help: signed-out RU/EN FAQ and legal drafts are honest and navigable",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 605
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-help-chat-ae.spec.ts",
+      "title": "P2 Help: real account opens offline FAQ and support draft never submits secrets",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1137
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-hub-identity-safe.spec.ts",
+      "title": "UX: settings hub provides real Contacts route without breaking Key-Only Identity",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1020
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-install-guide-public.spec.ts",
+      "title": "Public Card 1.1: installation instructions stand alone, never claim an installed PWA",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 400
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-install-guide-public.spec.ts",
+      "title": "Accepted Help links to the installation guide without duplicating the Shell",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 298
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-notifications-shell-216.spec.ts",
+      "title": "P2 #216: real account, encrypted Notifications UI, offline route/settings and no unauthenticated leak",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1871
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-notifications-shell-216.spec.ts",
+      "title": "P2 #216: real encrypted offline notification details restore focus to event or filter",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1304
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-payments-approved-ux.spec.ts",
+      "title": "Payments & Tariffs Fieldwork 1.1 uses live plan catalog and never fabricates paid orders",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 661
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-pending-registration-recovery.spec.ts",
+      "title": "Settings can finish interrupted key-only registration using the original saved Recovery Key",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 982
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-pending-registration-recovery.spec.ts",
+      "title": "Welcome resumes interrupted registration with saved Recovery Key and without generating a second key",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 974
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-pin-changes.spec.ts",
+      "title": "PIN: genuine enrollment → change length → reload rejects old PIN → authenticated delay → disable",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 4885
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-pin-enrollment-ux.spec.ts",
+      "title": "PIN Shell 1.1: authentic Recovery Key seals legacy device; no private UI before normal PIN",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 2487
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-profile-encrypted.spec.ts",
+      "title": "P2 profile: real Key-Only identity, AES-GCM local profile, reload and no plaintext IndexedDB",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1583
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-public-card-deny.spec.ts",
+      "title": "Public Card 1.1: unknown and expired links fail closed without leaking metadata",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 461
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-recovery-key-export-chat-ag.spec.ts",
+      "title": "P2 #400: explicit system share requires a click and preserves registration",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1005
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-recovery-key-export-chat-ag.spec.ts",
+      "title": "P2 #400: native picker writes only after user action without network or local storage",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 546
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-search-deep-link.spec.ts",
+      "title": "UX Settings search: Header, RU/EN synonym, exact Dock and Language fields and Back",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1560
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-security-approved-ux.spec.ts",
+      "title": "Security & Privacy 1.3 uses approved sections and exact Settings Search anchors",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1405
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-security-approved-ux.spec.ts",
+      "title": "Security devices: offline transition clears a pending server spinner and rejects stale device rows",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1164
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-security-approved-ux.spec.ts",
+      "title": "Security devices: real Chromium offline / online switches clear and reload authenticated rows",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1181
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-ux-route-census.spec.ts",
+      "title": "Accepted Fieldwork routes: one real account, one Shell, no missing pages",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 3638
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-ux-route-census.spec.ts",
+      "title": "Mobile Fieldwork Shell has one header and dock across primary sections",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 763
+        }
+      ]
+    },
+    {
+      "file": "p2-settings-ux-route-census.spec.ts",
+      "title": "Owner-approved header icons never grow into framed cards or overflow the 64px Shell",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1074
+        }
+      ]
+    },
+    {
+      "file": "p2-welcome-approved-ux.spec.ts",
+      "title": "Welcome 1.4 routes anonymously, uses original six SVG slides and real key-only account",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 901
+        }
+      ]
+    },
+    {
+      "file": "p2-welcome-approved-ux.spec.ts",
+      "title": "Welcome Loader 1.6 exits after genuine local key hydration even when server login stalls",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 1300
+        }
+      ]
+    },
+    {
+      "file": "p2-welcome-key-save.spec.ts",
+      "title": "Welcome Recovery Key uses explicit native chooser and never auto-downloads plaintext",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 603
+        }
+      ]
+    },
+    {
+      "file": "p2-welcome-key-save.spec.ts",
+      "title": "Settings registration uses same OS-chosen destination and never auto-ACKs the Recovery Key",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 571
+        }
+      ]
+    },
+    {
+      "file": "p2-welcome-key-save.spec.ts",
+      "title": "Welcome cancelled native Save does not acknowledge Recovery Key or silently download",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 509
+        }
+      ]
+    },
+    {
+      "file": "p2-welcome-key-save.spec.ts",
+      "title": "Settings unsupported browser offers manual copy without false Save acknowledgement",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 445
+        }
+      ]
+    },
+    {
+      "file": "p2-welcome-key-save.spec.ts",
+      "title": "Welcome opens a single native chooser despite repeated Save attempts",
+      "status": "expected",
+      "results": [
+        {
+          "status": "passed",
+          "durationMs": 435
+        }
+      ]
+    }
+  ]
+}
