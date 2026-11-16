@@ -11,6 +11,9 @@ export type BrowserReturnContext={
   deviceId:string
   fileKey:string
   folderId:string|null
+  // Decrypted folder names are volatile tab-only breadcrumbs. Never put them
+  // in URLs, server request metadata, storage or logs.
+  folderNames?:readonly string[]
   filter:CatalogFilter
   sort:CatalogSort
   view:CatalogView
@@ -29,11 +32,15 @@ let armed=false
 export function captureBrowserReturnContext(context:BrowserReturnContext):void{
   // Avoid storing a huge or ambiguous navigation list in volatile memory.
   const keys=context.fileKeys
+  const names=context.folderNames??[]
   if(keys.length>10000||new Set(keys).size!==keys.length
-    ||!keys.includes(context.fileKey)){
+    ||!keys.includes(context.fileKey)||names.length>300
+    ||names.some(name=>typeof name!=='string'||name.length<1
+      ||name.length>80||/[\\/\u0000-\u001f\u007f]/.test(name))){
     source=null;armed=false;return
   }
-  source={...context,fileKeys:[...keys]}
+  source={...context,fileKeys:[...keys],
+    ...(context.folderNames?{folderNames:[...context.folderNames]}:{})}
   armed=false
 }
 export function discardBrowserReturnContext():void{
@@ -67,6 +74,16 @@ export function peekOriginPager(
     next:parseNeighbor(source.fileKeys[index+1]),
     position:index+1,total:source.fileKeys.length,
   }
+}
+/** Browser v3 → File Viewer 1.0 shows the actual locally decrypted
+ * folder path. No private string is returned for other identities or files
+ * outside the original authorized pager. */
+export function peekOriginBreadcrumb(
+  accountId:string,deviceId:string,currentKey:string,
+):readonly string[]{
+  if(!source||source.accountId!==accountId||source.deviceId!==deviceId
+    ||!source.fileKeys.includes(currentKey))return []
+  return [...(source.folderNames??[])]
 }
 /** After Viewer next/previous, return to the current file in Browser. */
 export function noteViewerPosition(
