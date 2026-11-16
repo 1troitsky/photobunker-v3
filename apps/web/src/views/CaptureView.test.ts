@@ -495,9 +495,11 @@ describe('Camera 1.2 native hardware preferences and private GPS consent',()=>{
     mocks.presetTorch=true
     mocks.presetGpsTracking=true
     const getGPS=vi.fn()
+    const originalGeolocation=Object.getOwnPropertyDescriptor(navigator,'geolocation')
     Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
       getCurrentPosition:getGPS,watchPosition:vi.fn(),clearWatch:vi.fn(),
     }})
+    try{
     await mount()
     const opened=media()
     const applied=vi.fn().mockResolvedValue(undefined)
@@ -522,6 +524,10 @@ describe('Camera 1.2 native hardware preferences and private GPS consent',()=>{
       .toContain('требуется новое разрешение')
     expect(host.querySelector<HTMLInputElement>('[data-testid="camera-gps-tracking"]')?.checked)
       .toBe(false)
+    }finally{
+      if(originalGeolocation)Object.defineProperty(navigator,'geolocation',originalGeolocation)
+      else Reflect.deleteProperty(navigator,'geolocation')
+    }
   })
 })
 
