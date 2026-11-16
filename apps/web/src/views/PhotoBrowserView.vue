@@ -1401,6 +1401,7 @@ function preserveViewerOrigin(item:CatalogItem,event:MouseEvent):void{
   captureBrowserReturnContext({
     accountId:identity.accountId,deviceId:identity.deviceId,
     fileKey:item.key,folderId:selectedFolder.value,
+    folderNames:breadcrumb.value.map(folder=>folder.name),
     filter:filter.value,sort:sort.value,view:view.value,
     search:search.value,searchFolderScope:searchFolderScope.value,
     searchSelectedFolder:searchSelectedFolder.value,
