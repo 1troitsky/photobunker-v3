@@ -1287,17 +1287,13 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 }
 .camera-recording-timer{text-align:center;font:700 13px ui-monospace,monospace;
   margin:3px 0 8px;color:#e7b3b3;font-variant-numeric:tabular-nums}
-.camera-device-actions{display:flex;justify-content:center;align-items:center;gap:9px;
-  margin:4px 0 6px}
-.camera-fieldwork .camera-device-actions button{min-height:32px;font-size:11px;
-  padding:6px 11px;background:#232723;color:#c3ccc4;border:0;border-radius:7px}
 /* Camera 1.2 stage occupies exactly the free space between Shell header,
    46px mode tabs, 124px controls, and persistent 82px Dock. Only the actual
    finder follows the approved photo aspect preset (4:3 default);
    the neutral stage letterbox remains outside the sensor image. */
 .camera-mode-tabs{height:46px;margin-bottom:0;background:#151515;border-bottom:1px solid #303030}
 .camera-fieldwork .camera-mode-tabs button{height:46px;min-height:46px}
-.camera-stage{width:100%;height:clamp(260px,
+.camera-stage{position:relative;width:100%;height:clamp(260px,
   calc(100dvh - 64px - 82px - env(safe-area-inset-bottom,0px) - 46px - 124px),
   760px);
   min-height:0;padding:8px;overflow:hidden;background:#0a0c0b;
@@ -1307,6 +1303,16 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   height:auto;aspect-ratio:4/3;background:#172423;box-shadow:0 0 0 1px #ffffff12
 }
 .camera-stage .camera-viewfinder .video-frame video{object-fit:cover}
+/* Camera 1.2 single feedback toast. Absolute overlay never enlarges the stage,
+   blocks the shutter or shifts the global Dock during offline capture. */
+.camera-stage .camera-toast{
+  position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+  z-index:6;max-width:min(94%,460px);width:max-content;margin:0;
+  border:1px solid #38634a;border-radius:8px;padding:9px 13px;
+  background:#17261feE;color:#b9f3c6;font-size:12px;line-height:1.45;
+  text-align:center;overflow-wrap:anywhere;pointer-events:none;
+}
+.camera-stage .camera-toast-error{border-color:#8d4a48;color:#ffb8b5;background:#302020ef}
 .camera-photo-zoom-indicator{
   position:absolute;z-index:5;bottom:9px;left:50%;
   transform:translateX(-50%);color:#eee;font-size:11px;
@@ -1321,10 +1327,6 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .camera-stage-controls .camera-control-trio{
   grid-template-columns:minmax(0,1fr) 106px minmax(0,1fr);
   height:84px;min-height:84px;gap:4px
-}
-.camera-stage-controls .camera-device-actions{
-  position:absolute;left:12px;top:-44px;z-index:4;justify-content:flex-start;
-  margin:0;gap:5px
 }
 .camera-stage-controls .camera-gps-indicator{height:24px;min-height:24px}
 .camera-stage-controls .camera-control-trio .camera-shutter{height:72px;width:72px;min-height:72px}
