@@ -76,8 +76,8 @@ test('P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/
       window.dispatchEvent(event)
       return event.defaultPrevented
     })
-    // Unsaved video clip/EDL bounds are VOLATILE. Hard reload must offer
-    // the browser's native unsaved-changes warning, unlike clean Viewer.
+    // Unsaved EDL trim changes must trigger the browser's native reload
+    // warning. This synthetic event checks the guard, not an OS prompt.
     expect(await hardExitBlocked()).toBe(true)
 
     page.once('dialog',dialog=>dialog.dismiss())
@@ -97,17 +97,7 @@ test('P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/
     },sourceId)
     expect(before).toMatchObject({count:1,kind:'video'})
     await page.getByTestId('editor-shell-cancel').click()
-    await expect(page).toHaveURL(new RegExp('/browser/file/media/'+sourceId+'await page.evaluate(async()=>{
-      const m=await import('/src/features/media/application/media-outbox.ts')
-      const files=await m.listLocalMedia()
-      return {count:files.length,bytes:files[0]?.plainBytes}
-    })
-    expect(after).toEqual({count:1,bytes:before.bytes})
-    await page.goBack()
-    await expect(page).toHaveURL(/\/browser$/)
-  }finally{await context.close()}
-})
-))
+    await expect(page).toHaveURL(new RegExp('/browser/file/media/'+sourceId+'$'))
     expect(await hardExitBlocked()).toBe(false)
     const after=await page.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
