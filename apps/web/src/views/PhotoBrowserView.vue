@@ -1232,12 +1232,12 @@ function revokePreview():void{
   selectedCaptured.value=null
   selectedExpiry.value=null
 }
-function clearCatalog():void{
+function clearCatalog(keepLocal=false):void{
   ++privateExpansionEpoch
   privateExpansionBusy.value=false
   privateSearchExpanded.value=false
   privateExpansionStatus.value=''
-  localPhotos.value=[];localMedia.value=[]
+  if(!keepLocal){localPhotos.value=[];localMedia.value=[]}
   cloudPhotos.value=[];cloudMedia.value=[]
   photoCursor.value=null;mediaCursor.value=null
 }
@@ -1247,7 +1247,9 @@ function reason(e:unknown):string{
 
 async function refresh():Promise<void>{
   const identity=activeSession.value,token=++generation
-  clearCatalog();error.value='';status.value=''
+  // Existing durable local rows stay usable while this same identity is
+  // refreshed. Remote ACL/index data is always invalidated independently.
+  clearCatalog(!!identity);error.value='';status.value=''
   if(!identity)return
   busy.value=true
   try{
@@ -1426,12 +1428,12 @@ watch(activeSession,(next,previous)=>{
   // the user's workspace. Retain typed folder forms and breadcrumb location.
   // A real account/device change must clear all formerly decrypted UI state.
   revokePreview()
-  clearCatalog()
   if(next?.accountId!==previous?.accountId
     ||next?.deviceId!==previous?.deviceId
     ||next?.pkg.accountSpki!==previous?.pkg.accountSpki
     ||next?.pkg.akek!==previous?.pkg.akek
     ||next?.pkg.revision!==previous?.pkg.revision){
+    clearCatalog()
     shareFocusReturnKey=null
     requestedFolderReturn=undefined
     scrollReturnKey=null
@@ -1480,10 +1482,13 @@ watch(activeSession,(next,previous)=>{
     void refreshArchivePending()
     void loadFolders()
     void loadMergeBackups()
-  }else if(next&&!folderReady.value){
-    // A first load could have been fenced out while bootstrap upgraded the
-    // same device to an online Session; retry without losing a typed form.
-    void loadFolders()
+  }else{
+    clearCatalog(true)
+    if(next&&!folderReady.value){
+      // A first load could have been fenced out while bootstrap upgraded the
+      // same device to an online Session; retry without losing a typed form.
+      void loadFolders()
+    }
   }
   // Reauthentication creates a new Session object for the SAME device.
   // Retry authoritative preference loading after the upgrade, without

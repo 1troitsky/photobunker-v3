@@ -138,7 +138,10 @@ final class PublicCardController extends Controller
         $bytes=stream_get_contents($stream,self::MAX_BYTES+1);fclose($stream);
         abort_unless(strlen($bytes)===(int)$card->bytes&&hash_equals($card->sha256,hash('sha256',$bytes)),422);
         $this->storage->writePublicCard($card->id,$bytes);
-        DB::transaction(function()use($card){
+        DB::transaction(function()use($card,$r){
+            // Storage verification can outlive the browser/device admission.
+            // A revocation during S3 I/O cannot activate a new publication.
+            $this->sync->actor($r);
             $row=DB::table('public_cards_v1')->where('id',$card->id)->lockForUpdate()->first();
             abort_unless($row&&in_array($row->state,['pending','active'],true)
                 &&(int)$row->expires_at>PhotoSync::nowMs(),410);
@@ -200,7 +203,14 @@ final class PublicCardController extends Controller
 
     private function publicSource(object $card):object
     {
-        try{return $this->source($card->source_kind,$card->source_id,$card->account_id);}
+        $owner=DB::table('identity_accounts')->where('id',$card->account_id)
+            ->where('status','ready')->first();
+        abort_unless($owner&&P::verify($owner->account_spki,self::DOMAIN.$card->contract_json,$card->signature),404);
+        try{
+            $source=$this->source($card->source_kind,$card->source_id,$card->account_id);
+            abort_unless(hash_equals($source->contract_hash,$card->source_contract_hash),404);
+            return $source;
+        }
         catch(\Symfony\Component\HttpKernel\Exception\HttpException){abort(404);}
     }
 }

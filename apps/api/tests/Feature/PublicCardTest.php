@@ -119,4 +119,36 @@ final class PublicCardTest extends TestCase
         $this->reserve()->assertUnauthorized();
         $this->getJson('/public-cards/v1/'.P::encode(random_bytes(32)))->assertNotFound();
     }
+    private function duringStorageRead(callable $change):void
+    {
+        $this->app->instance(\App\Storage\StorageAdapter::class,new class(
+            $this->app->make(\App\Storage\StorageAdapter::class),$change,
+        ) implements \App\Storage\StorageAdapter {
+            private bool $changed=false;
+            public function __construct(private $inner,private $change){}
+            public function putStream(string $key,mixed $stream):bool{return $this->inner->putStream($key,$stream);}
+            public function readStream(string $key):mixed{
+                if(!$this->changed){$this->changed=true;($this->change)();}
+                return $this->inner->readStream($key);
+            }
+            public function exists(string $key):bool{return $this->inner->exists($key);}
+            public function size(string $key):int{return $this->inner->size($key);}
+            public function delete(string $key):bool{return $this->inner->delete($key);}
+        });
+    }
+    public function test_account_admission_change_during_storage_read_denies_public_response():void
+    {
+        $this->reserve()->assertCreated();$this->upload()->assertOk();
+        $this->duringStorageRead(fn()=>DB::table('identity_accounts')
+            ->where('id',$this->account)->update(['status'=>'reserved']));
+        $this->getJson('/public-cards/v1/'.$this->token)->assertNotFound();
+    }
+    public function test_device_revocation_during_upload_readback_cannot_activate_publication():void
+    {
+        $this->reserve()->assertCreated();
+        $this->duringStorageRead(fn()=>DB::table('identity_devices')
+            ->where('id',$this->device)->update(['revoked_at'=>now()]));
+        $this->upload()->assertUnauthorized();
+        $this->assertDatabaseHas('public_cards_v1',['id'=>$this->contract['cardId'],'state'=>'pending']);
+    }
 }

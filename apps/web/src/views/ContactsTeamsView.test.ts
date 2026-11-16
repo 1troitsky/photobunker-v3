@@ -98,6 +98,19 @@ afterEach(()=>{
   activeSession.value=null
 })
 describe('Approved local-first Team navigation',()=>{
+  it('automatically retries an encrypted queued Team when the same device becomes online',async()=>{
+    activeSession.value={...session(),online:false}
+    mock.teams.mockResolvedValue([{...SERVER_TEAM,delivery:'queued'}])
+    mock.refreshTeams.mockResolvedValue([SERVER_TEAM])
+    await mount()
+    expect(mock.refreshTeams).not.toHaveBeenCalled()
+    activeSession.value={...session(),online:true}
+    await settle()
+    expect(mock.refreshTeams).toHaveBeenCalledTimes(1)
+    click('Команды (1)');await settle()
+    expect(host.querySelector('[data-testid="team-row-'+TEAM+'"]')?.textContent)
+      .toContain('В облаке')
+  })
   it('keeps an encrypted Team row during same-account local refresh',async()=>{
     mock.teams.mockResolvedValue([SERVER_TEAM])
     mock.refreshTeams.mockResolvedValue([SERVER_TEAM])

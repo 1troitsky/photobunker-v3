@@ -288,7 +288,7 @@ function matches(person:ConfirmedContact):boolean{
   return !search||person.alias.toLocaleLowerCase().includes(search)
     ||person.peerAccountId.includes(search)
 }
-watch(activeSession,(_now,previous)=>{
+watch(activeSession,(now,previous)=>{
   const prev=previous?[
     previous.accountId,previous.deviceId,previous.pkg.accountSpki,
     previous.pkg.akek,previous.pkg.revision,
@@ -305,6 +305,10 @@ watch(activeSession,(_now,previous)=>{
     closeTeamCard()
     ++teamRun
     void reload();void reloadTeams()
+  }else if(now?.online&&!previous?.online){
+    // Local-first creation can precede the genuine online proof. Retry the
+    // durable signed Team outbox when that proof completes for this identity.
+    void reloadTeams()
   }
 })
 onMounted(()=>{
