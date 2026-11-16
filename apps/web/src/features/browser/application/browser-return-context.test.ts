@@ -1,7 +1,7 @@
 import {afterEach,describe,expect,it} from 'vitest'
 import {
   armBrowserReturn,captureBrowserReturnContext,discardBrowserReturnContext,
-  takeBrowserReturn,peekOriginPager,noteViewerPosition,
+  takeBrowserReturn,peekOriginPager,peekOriginBreadcrumb,noteViewerPosition,
 } from './browser-return-context'
 
 const id=(n:number)=>'00000000-0000-4000-8000-'+n.toString().padStart(12,'0')
@@ -41,6 +41,21 @@ describe('P2 V-39 Browser/File Viewer volatile navigation context',()=>{
     discardBrowserReturnContext()
     armBrowserReturn('account-a','device-1')
     expect(takeBrowserReturn('account-a','device-1')).toBeNull()
+  })
+  it('shows only same-tab, same-identity decrypted folder breadcrumbs',()=>{
+    const folderNames=['Съёмки','День 1']
+    captureBrowserReturnContext({...context,folderNames})
+    folderNames[0]='CHANGED AFTER CAPTURE'
+    expect(peekOriginBreadcrumb('account-a','device-1','media:'+id(2)))
+      .toEqual(['Съёмки','День 1'])
+    expect(peekOriginBreadcrumb('account-a','device-1','media:'+id(3)))
+      .toEqual(['Съёмки','День 1'])
+    expect(peekOriginBreadcrumb('account-b','device-1','media:'+id(2))).toEqual([])
+    expect(peekOriginBreadcrumb('account-a','different-device','media:'+id(2)))
+      .toEqual([])
+    expect(peekOriginBreadcrumb('account-a','device-1','media:'+id(99))).toEqual([])
+    captureBrowserReturnContext({...context,folderNames:['name/forged']})
+    expect(peekOriginBreadcrumb('account-a','device-1','media:'+id(2))).toEqual([])
   })
   it('paginates in exactly Browser-visible mixed-file order',()=>{
     captureBrowserReturnContext(context)

@@ -17,6 +17,10 @@ test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selecte
     await page.getByRole('button',{name:'Создать',exact:true}).click()
     const folder=page.getByRole('button',{name:'Project Evidence',exact:true})
     await expect(folder).toBeVisible()
+    // Browser v3 has a single Header-triggered upload sheet. Its embedded
+    // encrypted MediaImportPanel is correctly hidden until explicitly opened.
+    await page.getByTestId('browser-header-upload').click()
+    await expect(page.getByTestId('browser-import-sheet')).toBeVisible()
     await page.locator('#media-import-category').fill('PRIVATE-CATEGORY')
     await page.locator('#media-import-description').fill('PRIVATE-BATCH-CASE')
     await page.locator('#media-import-tags').fill('confidential, field')
@@ -73,10 +77,15 @@ test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selecte
     // opened. Neither folder path nor plaintext filename enters cloud API.
     const rows=page.locator('[data-testid^="browser-row-media:"]')
     await expect(rows).toHaveCount(0)
+    // Close the modal before selecting the folder in the underlying catalog.
+    await page.getByTestId('browser-import-sheet-close').click()
+    await expect(page.getByTestId('browser-import-sheet')).toBeHidden()
     await folder.click()
     await expect(rows).toHaveCount(2,{timeout:20000})
     // Current folder becomes the NEXT import's default destination,
     // with no need to manually browse the folder hierarchy again.
+    await page.getByTestId('browser-header-upload').click()
+    await expect(page.getByTestId('browser-import-sheet')).toBeVisible()
     await expect(dest).toHaveValue(encrypted.folderId)
     await page.evaluate(()=>{
       const transfer=new DataTransfer()

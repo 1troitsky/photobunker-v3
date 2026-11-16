@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {onMounted,onUnmounted,ref,watch} from 'vue'
+import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {activeSession,reauthenticate} from '../../identity/application/session'
 import {
   confirmPeer,ensureOwnExchangeKey,inspectPeer,
@@ -16,6 +16,9 @@ import type {
 import type {StoredMedia} from '../application/media-outbox'
 import {listSafeDerivativeCandidates} from '../application/safe-derivatives'
 import type {SafeDerivativeCandidate} from '../application/safe-derivatives'
+import {prepareContributorReviewSource} from '../application/public-card-contributor-source'
+import type {ContributorReviewSource} from '../application/public-card-contributor-source'
+import PublicCardConsentReview from './PublicCardConsentReview.vue'
 import {
   emptyPreviewFields,loadFilePreviewDraft,queueFilePreviewDraft,
   flushFilePreviewDrafts,filePreviewDraftStatus,PREVIEW_FIELD_KEYS,
@@ -32,7 +35,10 @@ import {
 import type {AssignmentListing} from '../../assignments/application/assignment-outbox'
 import type {MediaMetadata} from '../domain/media-crypto'
 
-defineProps<{localMedia:StoredMedia[]}>()
+const props=withDefaults(defineProps<{
+  localMedia:StoredMedia[]
+  selectedMediaId?:string|null
+}>(),{selectedMediaId:null})
 const emit=defineEmits<{
   openMedia:[blob:Blob,metadata:MediaMetadata]
 }>()
@@ -48,7 +54,26 @@ const acknowledgedOwner=ref(false)
 const outgoing=ref<OutgoingMediaGrant[]>([])
 const incoming=ref<ReceivedMediaGrant[]>([])
 const safeCandidates=ref<SafeDerivativeCandidate[]>([])
+const scopedLocalMedia=computed(()=>props.selectedMediaId
+  ?props.localMedia.filter(media=>media.mediaId===props.selectedMediaId)
+  :props.localMedia)
+const scopedSafeCandidates=computed(()=>props.selectedMediaId
+  ?safeCandidates.value.filter(candidate=>
+    candidate.sourceMediaId===props.selectedMediaId
+    ||candidate.safeMediaId===props.selectedMediaId)
+  :safeCandidates.value)
+const scopedOutgoing=computed(()=>props.selectedMediaId
+  ?outgoing.value.filter(grant=>{
+    if(grant.mediaId===props.selectedMediaId)return true
+    try{
+      return parseMediaGrantContract(JSON.parse(grant.contract)).sourceMediaId
+        ===props.selectedMediaId
+    }catch{return false}
+  })
+  :outgoing.value)
 const previewCandidate=ref<SafeDerivativeCandidate|null>(null)
+const contributorReview=ref<ContributorReviewSource|null>(null)
+let contributorReviewSerial=0
 const previewFields=ref<PreviewFields>(emptyPreviewFields())
 const previewRevision=ref(0)
 const previewStatus=ref('none')
@@ -67,36 +92,49 @@ const busy=ref(false)
 const error=ref('')
 const status=ref('')
 let detach:()=>void=()=>{}
+let identityEpoch=0,hydrationEpoch=0
+function currentIdentity(session:typeof activeSession.value,epoch:number):boolean{
+  return epoch===identityEpoch&&sameIdentity(session,activeSession.value)
+}
 async function action(callback:()=>Promise<void>):Promise<void>{
   if(busy.value)return
+  const session=activeSession.value,epoch=identityEpoch
   busy.value=true;error.value='';status.value=''
   try{await callback()}
-  catch(e){error.value=e instanceof Error?e.message:'media_grant.failed'}
-  finally{busy.value=false}
+  catch(e){
+    if(currentIdentity(session,epoch))
+      error.value=e instanceof Error?e.message:'media_grant.failed'
+  }finally{
+    if(currentIdentity(session,epoch))busy.value=false
+  }
 }
 async function hydrate():Promise<void>{
-  const session=activeSession.value
+  const session=activeSession.value,epoch=identityEpoch
+  const run=++hydrationEpoch
   if(!session){outgoing.value=[];incoming.value=[];safeCandidates.value=[];return}
+  const latest=()=>run===hydrationEpoch&&currentIdentity(session,epoch)
   try{
     if(session.online){
       await ensureOwnExchangeKey()
+      if(!latest())return
       await flushMediaGrants()
+      if(!latest())return
       await flushFilePreviewDrafts()
+      if(!latest())return
       await flushEditorialLinks()
+      if(!latest())return
     }
     const [next,localSafe]=await Promise.all([
       listOutgoingMediaGrants(),listSafeDerivativeCandidates(),
     ])
-    if(activeSession.value!==session)return
+    if(!latest())return
+    const received=session.online?await listReceivedMediaGrants():[]
+    if(!latest())return
     outgoing.value=next
     safeCandidates.value=localSafe
-    if(session.online){
-      const result=await listReceivedMediaGrants()
-      if(activeSession.value===session)incoming.value=result
-    }else incoming.value=[]
+    incoming.value=received
   }catch(e){
-    if(activeSession.value===session)
-      error.value=e instanceof Error?e.message:'media_grant.load_failed'
+    if(latest())error.value=e instanceof Error?e.message:'media_grant.load_failed'
   }
 }
 function checkRecipient():void{
@@ -105,7 +143,9 @@ function checkRecipient():void{
     if(!/^[0-9a-f-]{36}$/.test(id))
       throw Error('media_grant.invalid_recipient')
     if(!activeSession.value?.online)await reauthenticate()
+    const session=activeSession.value,epoch=identityEpoch
     const {directory,confirmed}=await inspectPeer(id)
+    if(!currentIdentity(session,epoch))return
     recipientPeer.value={
       id,fingerprint:directory.safetyFingerprint,confirmed,
     }
@@ -117,7 +157,9 @@ function acceptRecipient():void{
     const candidate=recipientPeer.value
     if(!candidate||!acknowledgedRecipient.value)
       throw Error('media_grant.fingerprint_not_confirmed')
+    const session=activeSession.value,epoch=identityEpoch
     await confirmPeer(candidate.id,candidate.fingerprint)
+    if(!currentIdentity(session,epoch))return
     recipientPeer.value={...candidate,confirmed:true}
     status.value='Получатель подтверждён по независимому отпечатку'
   })
@@ -126,13 +168,22 @@ function send(mediaId:string):void{
   void action(async()=>{
     const peer=recipientPeer.value
     if(!peer?.confirmed)throw Error('media_grant.peer_not_confirmed')
+    if(props.selectedMediaId&&mediaId!==props.selectedMediaId)
+      throw Error('media_grant.context_mismatch')
     if(safeCandidates.value.some(row=>row.sourceMediaId===mediaId)
       &&!window.confirm('Выбран ПОЛНЫЙ исходный файл, а не закрытая копия. Получатель сможет расшифровать его без масок. Для адресной Safe-передачи используйте специальную кнопку ниже. Всё равно передать оригинал?'))
       return
+    const session=activeSession.value,epoch=identityEpoch
     const grantId=await queueMediaRecipientGrant(mediaId,peer.id)
-    outgoing.value=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    const pending=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    outgoing.value=pending
     await flushMediaGrants()
-    outgoing.value=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    const settled=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    outgoing.value=settled
     status.value='Разрешение сохранено: '+grantId.slice(0,8)
   })
 }
@@ -140,19 +191,48 @@ function sendSafe(candidate:SafeDerivativeCandidate):void{
   void action(async()=>{
     const peer=recipientPeer.value
     if(!peer?.confirmed)throw Error('media_grant.peer_not_confirmed')
+    if(props.selectedMediaId
+      &&candidate.sourceMediaId!==props.selectedMediaId
+      &&candidate.safeMediaId!==props.selectedMediaId)
+      throw Error('media_grant.context_mismatch')
     if(!window.confirm('Разрешить адресату читать ТОЛЬКО отдельную закрытую JPEG-копию? Оригинал останется под собственными независимыми разрешениями. Убедитесь, что чувствительные области закрыты. Это не публичная ссылка.'))
       return
+    const session=activeSession.value,epoch=identityEpoch
     const grantId=await queueMediaSafeRecipientGrant(
       candidate.sourceMediaId,candidate.safeMediaId,peer.id)
-    outgoing.value=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    const pending=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    outgoing.value=pending
     await flushMediaGrants()
-    outgoing.value=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    const settled=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    outgoing.value=settled
     status.value='Адресный Safe-грант записан: '+grantId.slice(0,8)
+  })
+}
+function openContributorReview(candidate:SafeDerivativeCandidate):void{
+  const serial=++contributorReviewSerial
+  contributorReview.value=null
+  void action(async()=>{
+    const session=activeSession.value
+    if(!session)throw Error('public_card.source_logged_out')
+    const review=await prepareContributorReviewSource(candidate)
+    // No asynchronous result from a previous image/account can become
+    // visible when a newer user selection or identity has superseded it.
+    if(serial!==contributorReviewSerial||activeSession.value!==session)return
+    if(review.published!==false||review.publicAuthorized!==false)
+      throw Error('public_card.source_unexpected_public_capability')
+    contributorReview.value=review
+    status.value='Открыта локальная проверка безопасного JPEG. Публикация выключена.'
   })
 }
 function openPreviewDraft(candidate:SafeDerivativeCandidate):void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     const data=await loadFilePreviewDraft(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
     previewCandidate.value=candidate
     previewFields.value=data.contract
       ?{...data.contract.fields}:emptyPreviewFields()
@@ -163,14 +243,19 @@ function openPreviewDraft(candidate:SafeDerivativeCandidate):void{
 }
 function savePreviewDraft():void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     const candidate=previewCandidate.value
     if(!candidate)throw Error('file_preview.no_candidate')
     const rev=await queueFilePreviewDraft(
       candidate.sourceMediaId,candidate.safeMediaId,previewFields.value)
+    if(!currentIdentity(session,epoch))return
     await flushFilePreviewDrafts()
+    if(!currentIdentity(session,epoch))return
+    const nextStatus=await filePreviewDraftStatus(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
     previewRevision.value=rev
-    previewStatus.value=await filePreviewDraftStatus(candidate.safeMediaId)
-    status.value=previewStatus.value==='sent'
+    previewStatus.value=nextStatus
+    status.value=nextStatus==='sent'
       ?'Подписанный черновик сохранён. Публикация выключена.'
       :'Подписанный черновик в локальной очереди. Публикация выключена.'
   })
@@ -183,45 +268,61 @@ function togglePreviewField(field:PreviewField,event:Event):void{
 }
 function openEditorial(candidate:SafeDerivativeCandidate):void{
   void action(async()=>{
-    if(!activeSession.value?.online)await reauthenticate()
+    const session=activeSession.value,epoch=identityEpoch
+    if(!session?.online)await reauthenticate()
+    if(!currentIdentity(session,epoch))return
     editorialCandidate.value=candidate
     editorialBinding.value=null
     editorialAssignments.value=[]
     editorialSelection.value=''
+    const verified:AssignmentListing[]=[]
     let cursor:string|undefined
     do{
       const page=await listServerAssignments(cursor)
+      if(!currentIdentity(session,epoch))return
       for(const row of page.items){
-        if(row.ownerAccountId!==activeSession.value?.accountId)continue
+        if(row.ownerAccountId!==session!.accountId)continue
         await verifySignedAssignmentPolicy(row,false)
-        editorialAssignments.value.push(row)
+        if(!currentIdentity(session,epoch))return
+        verified.push(row)
       }
       cursor=page.nextCursor??undefined
-    }while(cursor&&editorialAssignments.value.length<60)
-    editorialState.value=await editorialLinkState(candidate.safeMediaId)
-    editorialBinding.value=await readEditorialLink(candidate.safeMediaId)
-    if(editorialBinding.value)
-      editorialSelection.value=editorialBinding.value.assignmentId
-    status.value=editorialBinding.value
+    }while(cursor&&verified.length<60)
+    const nextState=await editorialLinkState(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    const nextBinding=await readEditorialLink(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    editorialAssignments.value=verified
+    editorialState.value=nextState
+    editorialBinding.value=nextBinding
+    if(nextBinding)editorialSelection.value=nextBinding.assignmentId
+    status.value=nextBinding
       ?'Редакционная привязка подписана и подтверждена сервером. Публичный доступ выключен.'
       :'Выберите своё задание для явной редакционной привязки. Это не отчёт исполнителя и не публикация.'
   })
 }
 function refreshEditorial():void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     const candidate=editorialCandidate.value
     if(!candidate)throw Error('safe_editorial.missing_candidate')
-    if(!activeSession.value?.online)await reauthenticate()
+    if(!session?.online)await reauthenticate()
+    if(!currentIdentity(session,epoch))return
     await flushEditorialLinks()
-    editorialState.value=await editorialLinkState(candidate.safeMediaId)
-    if(editorialState.value==='conflict')
-      throw Error('safe_editorial.conflict_requires_reconciliation')
-    if(editorialState.value!=='sent'){
+    if(!currentIdentity(session,epoch))return
+    const nextState=await editorialLinkState(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    if(nextState==='conflict')throw Error('safe_editorial.conflict_requires_reconciliation')
+    if(nextState!=='sent'){
+      editorialState.value=nextState
       status.value='Подписанная операция остаётся в очереди до подтверждения сервера.'
       return
     }
-    try{editorialBinding.value=await readEditorialLink(candidate.safeMediaId)}
-    catch(e){
+    let nextBinding:EditorialBinding|null
+    try{
+      nextBinding=await readEditorialLink(candidate.safeMediaId)
+    }catch(e){
+      if(!currentIdentity(session,epoch))return
       if(e instanceof Error&&e.message==='api.http_410'){
         editorialBinding.value=null
         editorialState.value='detached'
@@ -230,13 +331,17 @@ function refreshEditorial():void{
       }
       throw e
     }
-    status.value=editorialBinding.value
+    if(!currentIdentity(session,epoch))return
+    editorialState.value=nextState
+    editorialBinding.value=nextBinding
+    status.value=nextBinding
       ?'Подпись редакционной привязки проверена, все публичные права выключены.'
       :'Подписанной редакционной привязки ещё нет.'
   })
 }
 function bindEditorial():void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     const candidate=editorialCandidate.value
     const assignment=editorialAssignments.value.find(
       a=>a.assignmentId===editorialSelection.value)
@@ -245,32 +350,41 @@ function bindEditorial():void{
     if(!window.confirm('Связать вашу собственную закрытую копию с ВАШИМ заданием? Это только редакционная привязка, не доказательство выполнения другим участником и не публичная ссылка.'))
       return
     await queueEditorialLink(candidate,assignment)
+    if(!currentIdentity(session,epoch))return
     await flushEditorialLinks()
-    editorialState.value=await editorialLinkState(candidate.safeMediaId)
-    if(editorialState.value==='conflict')
-      throw Error('safe_editorial.server_rejected_binding')
-    if(editorialState.value!=='sent'){
+    if(!currentIdentity(session,epoch))return
+    const nextState=await editorialLinkState(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    if(nextState==='conflict')throw Error('safe_editorial.server_rejected_binding')
+    if(nextState!=='sent'){
+      editorialState.value=nextState
       status.value='Привязка подписана локально и ожидает подтверждения сервера. Публичный доступ выключен.'
       return
     }
-    editorialBinding.value=await readEditorialLink(candidate.safeMediaId)
-    if(!editorialBinding.value)
-      throw Error('safe_editorial.missing_server_receipt')
+    const nextBinding=await readEditorialLink(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    if(!nextBinding)throw Error('safe_editorial.missing_server_receipt')
+    editorialState.value=nextState
+    editorialBinding.value=nextBinding
     status.value='Подписанная редакционная привязка подтверждена. Публичные поля все закрыты.'
   })
 }
 function detachEditorial():void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     const prior=editorialBinding.value
     if(!prior)return
     if(!window.confirm('Отвязать закрытую копию от задания? Подписанная история сохраняется; повторная привязка этой копии пока запрещена. Сам файл и E2EE-разрешения не удаляются.'))
       return
     await queueEditorialDetach(prior)
+    if(!currentIdentity(session,epoch))return
     await flushEditorialLinks()
-    editorialState.value=await editorialLinkState(prior.safeMediaId)
-    if(editorialState.value==='conflict')
-      throw Error('safe_editorial.server_rejected_detach')
-    if(editorialState.value!=='sent'){
+    if(!currentIdentity(session,epoch))return
+    const nextState=await editorialLinkState(prior.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    if(nextState==='conflict')throw Error('safe_editorial.server_rejected_detach')
+    editorialState.value=nextState
+    if(nextState!=='sent'){
       status.value='Подписанный отзыв ожидает сервера. Прежняя привязка может оставаться действующей.'
       return
     }
@@ -287,7 +401,9 @@ function grantScopeLabel(row:OutgoingMediaGrant):string{
 function checkOwner(id:string):void{
   void action(async()=>{
     if(!activeSession.value?.online)await reauthenticate()
+    const session=activeSession.value,epoch=identityEpoch
     const {directory,confirmed}=await inspectPeer(id)
+    if(!currentIdentity(session,epoch))return
     ownerPeer.value={
       id,fingerprint:directory.safetyFingerprint,confirmed,
     }
@@ -299,7 +415,9 @@ function acceptOwner():void{
     const candidate=ownerPeer.value
     if(!candidate||!acknowledgedOwner.value)
       throw Error('media_grant.fingerprint_not_confirmed')
+    const session=activeSession.value,epoch=identityEpoch
     await confirmPeer(candidate.id,candidate.fingerprint)
+    if(!currentIdentity(session,epoch))return
     ownerPeer.value={...candidate,confirmed:true}
     status.value='Подпись отправителя будет проверена перед чтением'
   })
@@ -309,15 +427,21 @@ function openReceived(grant:ReceivedMediaGrant):void{
     if(ownerPeer.value?.id!==grant.ownerAccountId
       ||!ownerPeer.value?.confirmed)
       throw Error('media_grant.verify_owner_first')
+    const session=activeSession.value,epoch=identityEpoch
     const result=await readReceivedMediaGrant(grant.grantId)
+    if(!currentIdentity(session,epoch))return
     emit('openMedia',result.blob,result.metadata)
     status.value='Медиа расшифровано на устройстве'
   })
 }
 function revoke(grantId:string):void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     await revokeMediaGrant(grantId)
-    outgoing.value=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    const next=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    outgoing.value=next
     status.value='Серверный доступ отозван'
   })
 }
@@ -336,6 +460,8 @@ function sameIdentity(
     &&a.pkg.revision===b.pkg.revision
 }
 watch(activeSession,(next,previous)=>{
+  ++contributorReviewSerial
+  contributorReview.value=null
   // Background proof/online refresh may replace the Session object while
   // a user is editing a private preview or signing an editorial link.
   // Never destroy that work unless the cryptographic identity changed.
@@ -343,8 +469,16 @@ watch(activeSession,(next,previous)=>{
     if(next?.online&&!previous?.online)void hydrate()
     return
   }
+  ++identityEpoch
+  ++hydrationEpoch
+  recipientId.value=''
+  acknowledgedRecipient.value=false
+  acknowledgedOwner.value=false
   recipientPeer.value=null;ownerPeer.value=null
   outgoing.value=[];incoming.value=[];safeCandidates.value=[]
+  busy.value=false
+  error.value=''
+  status.value=''
   previewCandidate.value=null
   previewFields.value=emptyPreviewFields()
   previewRevision.value=0
@@ -367,6 +501,9 @@ onMounted(()=>{
   void hydrate()
 })
 onUnmounted(()=>{
+  ++identityEpoch;++hydrationEpoch
+  ++contributorReviewSerial
+  contributorReview.value=null
   detach()
   window.removeEventListener('online',refreshPreviewOutbox)
   document.removeEventListener('visibilitychange',refreshPreviewOutbox)
@@ -375,7 +512,7 @@ onUnmounted(()=>{
 
 <template>
   <section class="media-share-panel" data-testid="media-share-panel">
-    <h3>E2EE-передача файлов · P1</h3>
+    <h3>Защищённая передача файлов</h3>
     <p class="muted">
       Только подтверждённый получатель. Сверьте отпечаток вне приложения.
       Разрешение «Чтение» передаёт ключ всего файла и его метаданных;
@@ -404,23 +541,23 @@ onUnmounted(()=>{
       <p class="muted">Кнопка «Передать медиа» выдаёт полный DEK выбранного
         файла. Если это оригинал, получатель увидит его БЕЗ масок.
         Для закрытой копии используйте отдельное действие Safe ниже.</p>
-      <div v-for="media in localMedia.filter(x=>x.state==='synced')"
+      <div v-for="media in scopedLocalMedia.filter(x=>x.state==='synced')"
         :key="media.key" class="photo-row">
         <code>{{ media.mediaType }} · {{ media.mediaId.slice(0,8) }}</code>
         <button type="button" :disabled="busy"
           @click="send(media.mediaId)">Передать медиа</button>
       </div>
     </template>
-    <template v-if="safeCandidates.length||recipientPeer?.confirmed">
+    <template v-if="scopedSafeCandidates.length||recipientPeer?.confirmed">
       <h4>Кандидаты Safe — только отдельные JPEG-копии</h4>
       <p class="muted">Этот раздел доступен только для лично подготовленных
         закрытых копий после подтверждения синхронизации обоих файлов.
         Safe-грант связан с оригиналом, но никогда не выдаёт его DEK.
         Проверьте содержание копии самостоятельно перед отправкой.
         Существующие разрешения на оригинал не отзываются.</p>
-      <p v-if="!safeCandidates.length" class="muted"
+      <p v-if="!scopedSafeCandidates.length" class="muted"
         data-testid="media-safe-empty">Подтверждённых Safe-кандидатов пока нет.</p>
-      <div v-for="candidate in safeCandidates" :key="candidate.key"
+      <div v-for="candidate in scopedSafeCandidates" :key="candidate.key"
         class="photo-row" data-testid="media-safe-candidate">
         <div>
           <small>Личная обработанная копия {{ candidate.safeMediaId.slice(0,8) }}</small>
@@ -435,8 +572,18 @@ onUnmounted(()=>{
         <button type="button" :disabled="busy"
           data-testid="media-open-editorial-binding"
           @click="openEditorial(candidate)">Связать с моим заданием</button>
+        <button type="button" :disabled="busy"
+          data-testid="media-open-public-card-consent-review"
+          @click="openContributorReview(candidate)">
+          Проверить Safe-копию для локального согласия
+        </button>
       </div>
     </template>
+    <PublicCardConsentReview
+      v-if="contributorReview"
+      :prepared="contributorReview.prepared"
+      :binding="contributorReview.binding"
+      data-testid="media-contributor-public-card-review"/>
     <section v-if="previewCandidate" class="file-preview-settings"
       data-testid="media-file-preview-settings">
       <strong>Черновик Public Card · публикация выключена</strong>
@@ -509,7 +656,7 @@ onUnmounted(()=>{
         @click="editorialCandidate=null">Закрыть</button>
     </section>
     <h4>Исходящие разрешения медиа</h4>
-    <div v-for="grant in outgoing" :key="grant.id" class="photo-row">
+    <div v-for="grant in scopedOutgoing" :key="grant.id" class="photo-row">
       <div>
         <code>{{ grant.id.slice(0,8) }} · {{ grant.state }}</code>
         <small>{{ grantScopeLabel(grant) }}</small>
@@ -518,11 +665,12 @@ onUnmounted(()=>{
       <button v-if="grant.state==='sent'" type="button"
         :disabled="busy" @click="revoke(grant.id)">Отозвать медиа</button>
     </div>
-    <h4>Полученные файлы</h4>
-    <button type="button" :disabled="busy"
-      @click="refresh">Обновить медиа-разрешения</button>
-    <p v-if="!incoming.length" class="muted">Нет доступных файлов.</p>
-    <div v-for="grant in incoming" :key="grant.grantId" class="photo-row">
+    <h4 v-if="!props.selectedMediaId">Полученные файлы</h4>
+    <template v-if="!props.selectedMediaId">
+      <button type="button" :disabled="busy"
+        @click="refresh">Обновить медиа-разрешения</button>
+      <p v-if="!incoming.length" class="muted">Нет доступных файлов.</p>
+      <div v-for="grant in incoming" :key="grant.grantId" class="photo-row">
       <div>
         <code>{{ grant.mediaType }} · {{ grant.mediaId.slice(0,8) }}</code>
         <small v-if="grant.scope==='safe_read'">
@@ -547,6 +695,7 @@ onUnmounted(()=>{
           @click="acceptOwner">Подтвердить отправителя медиа</button>
       </template>
     </div>
+    </template>
     <p v-if="status" role="status" class="status-text">{{ status }}</p>
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>
     <p class="muted">После отзыва сервер блокирует новые выдачи блоков. Уже скачанную получателем копию отозвать невозможно.</p>

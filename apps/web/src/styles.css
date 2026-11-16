@@ -28,6 +28,18 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .brand-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .brand-copy strong { font-size: 14px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
 .brand-copy small { color: #a4a4a4; font-size: 10px; display: flex; gap: 6px; align-items: center; }
+/* The unified status remains visually unchanged, but its LOCAL event inbox
+   is keyboard/touch accessible without adding a second Header control. */
+.shell-header .brand-copy .shell-status-link {
+  display: inline-flex; width: fit-content; max-width: 100%;
+  min-width: 0; color: inherit; text-decoration: none; border-radius: 3px;
+}
+.shell-header .brand-copy .shell-status-link:hover small {
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.shell-header .brand-copy .shell-status-link:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px;
+}
 .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #888; }
 .shell-main { flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .foundation-content { max-width: 720px; margin: auto; padding: 28px 16px; }
@@ -167,12 +179,119 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   .contacts-avatar { flex-basis:32px; height:32px; }
   .contacts-list-row button { padding:8px; }
 }
+/* Contacts & Teams 1.1: a single member actions sheet, never inline
+   role/removal controls or an apparent self-service ACL selector. */
+.contacts-member-more{min-width:36px;min-height:36px;flex-shrink:0;
+  border:0;border-radius:7px;background:transparent;color:#ccc;
+  font-size:17px;letter-spacing:1px;cursor:pointer}
+.contacts-member-more:hover{background:#343434}
+.contacts-member-more:focus-visible{outline:2px solid var(--accent)}
+.contacts-member-backdrop{position:fixed;inset:0;z-index:2050;background:#000b}
+.contacts-member-sheet{position:fixed;z-index:2051;left:50%;bottom:0;
+  width:min(500px,100vw);max-height:85dvh;overflow:auto;
+  transform:translateX(-50%);border-radius:12px 12px 0 0;
+  padding:17px 15px max(23px,env(safe-area-inset-bottom));
+  background:#292929;box-shadow:0 -12px 25px #0006}
+.contacts-member-sheet-header{display:flex;align-items:center;
+  justify-content:space-between;gap:12px;margin-bottom:14px}
+.contacts-member-sheet-header strong{font-size:16px}
+.contacts-member-sheet-header button{border:0;background:transparent;
+  color:inherit;font-size:17px;min-width:35px;min-height:35px}
+.contacts-member-sheet-field{display:flex;flex-direction:column;
+  gap:8px;font-size:12px;font-weight:650;margin:14px 0}
+.contacts-member-sheet-field select{min-height:44px;width:100%;padding:9px;
+  border:1px solid #4b4b4b;border-radius:7px;background:#1d1d1d;color:#eee}
+.contacts-member-sheet .muted{font-size:12px;line-height:1.5}
+.contacts-member-sheet>button{display:block;width:100%;min-height:44px;
+  margin-top:10px;padding:10px 12px;border:0;border-radius:7px;
+  background:#393939;color:#eee;font-weight:650}
+.contacts-member-sheet>button.contacts-member-sheet-primary{
+  background:var(--accent);color:#132017}
+.contacts-member-sheet>button:disabled{opacity:.45;cursor:not-allowed}
+.contacts-member-sheet :focus-visible{outline:2px solid var(--accent);
+  outline-offset:2px}
+/* The Team row has only authenticated navigation/owner actions.
+   Queued or conflicting local teams must never expose server-only settings. */
+.contacts-team-menu-wrap{position:relative;flex:0 0 auto}
+.contacts-team-actions-menu{position:absolute;right:0;top:100%;z-index:110;
+  display:flex;flex-direction:column;gap:3px;min-width:180px;
+  padding:6px;border:1px solid #454545;border-radius:8px;
+  background:#292929;box-shadow:0 8px 24px #0008}
+.contacts-team-actions-menu button{display:block;width:100%;min-height:40px;
+  text-align:left;border:0;border-radius:5px;background:transparent;
+  color:inherit;padding:8px 11px}
+.contacts-team-actions-menu button:hover{background:#414141}
+.contacts-team-actions-menu button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:-2px}
+.contacts-team-settings{min-width:40px;min-height:40px;border:0;
+  background:transparent;border-radius:8px;color:inherit;
+  font-size:23px;line-height:1}
+.contacts-team-settings:focus-visible{outline:2px solid var(--accent)}
+/* The Team title is an accessible list-row action, not a raised card button.
+   Preserve the approved compact one-line row and tap/focus behavior. */
+.contacts-page .contacts-team-open{
+  display:block;align-self:flex-start;max-width:100%;min-height:32px;
+  border:0;border-radius:3px;background:transparent;color:inherit;
+  padding:4px 0;text-align:left;font-size:13px;font-weight:700;
+  white-space:normal;overflow-wrap:anywhere;cursor:pointer
+}
+.contacts-page .contacts-team-open:hover{text-decoration:underline}
+.contacts-page .contacts-team-open:focus-visible{
+  outline:2px solid var(--accent);outline-offset:3px
+}
+.contacts-page [data-testid="team-profile"] h2{overflow-wrap:anywhere}
 
-.shell-header-actions { margin-left:auto; flex:0 0 auto; }
-.shell-header-actions button { background:transparent; color:#999; border:1px solid #424242;
-  border-radius:8px; padding:8px 10px; font:inherit; }
+.shell-header-actions { margin-left:auto; flex:0 0 auto; display:flex;align-items:center;gap:0; }
+/* UI-SHELL-CONTRACT: context icons are unframed 36px actions in the fixed
+   64px header. Do not alter the separate Editor text actions or Viewer. */
+.shell-header-actions:not(.viewer-header-actions):not(.editor-header-actions) button {
+  display:grid;place-items:center;width:36px;height:36px;min-width:36px;
+  padding:0;border:0;border-radius:7px;background:transparent;color:#d7d7d7;
+  font:inherit;cursor:pointer;touch-action:manipulation;
+}
+.shell-header-actions:not(.viewer-header-actions):not(.editor-header-actions) button svg {
+  display:block;width:20px;height:20px;stroke-linecap:round;stroke-linejoin:round;
+}
+.shell-header-actions:not(.viewer-header-actions):not(.editor-header-actions) button:hover:not(:disabled) {
+  background:#303a32;color:var(--accent);
+}
+.shell-header-actions:not(.viewer-header-actions):not(.editor-header-actions) button:focus-visible {
+  outline:2px solid var(--accent);outline-offset:2px;
+}
 .shell-header-actions button:disabled { opacity:.5; cursor:not-allowed; }
 
+
+/* The accepted Browser v3 uses five CONTEXT icons in the common header.
+   Reserve room for the brand and status on 320px portrait devices; no
+   duplicate toolbar or new Shell. */
+.browser-header-actions{display:flex;align-items:center;gap:0;white-space:nowrap}
+@media(max-width:470px){
+  .shell-header:has(.browser-header-actions){padding-inline:7px;gap:5px}
+  .shell-header:has(.browser-header-actions) .brand-mark{
+    width:34px;height:34px;flex-basis:34px
+  }
+  .shell-header:has(.browser-header-actions) .brand-copy{
+    max-width:clamp(74px,25vw,113px)
+  }
+  .shell-header:has(.browser-header-actions) .brand-copy strong{
+    font-size:12px;overflow:hidden;text-overflow:ellipsis
+  }
+  .shell-header:has(.browser-header-actions) .brand-copy small{
+    font-size:9px;overflow:hidden;white-space:nowrap
+  }
+  .shell-header .shell-header-actions.browser-header-actions button{
+    width:30px;min-width:30px;height:36px
+  }
+  .shell-header .shell-header-actions.browser-header-actions button svg{
+    width:19px;height:19px
+  }
+}
+@media(max-width:355px){
+  .shell-header .shell-header-actions.browser-header-actions button{
+    width:28px;min-width:28px
+  }
+  .shell-header:has(.browser-header-actions) .brand-copy strong{font-size:11px}
+}
 
 /* P2 Browser v3: real encrypted local/cloud catalog, independent of Matrix. */
 .browser-v3{max-width:980px}
@@ -198,6 +317,9 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
   border-radius:9px;margin:7px 0}
 .browser-item-kind{font-size:22px;width:42px;height:42px;flex:0 0 42px;
   display:grid;place-items:center;background:#292f2b;border-radius:8px}
+.browser-item-kind:has(img){overflow:hidden;padding:0}
+.browser-item-kind img{display:block;width:100%;height:100%;
+  object-fit:cover;background:#1c241e;pointer-events:none;user-select:none}
 .browser-item-detail{display:flex;flex:1;flex-direction:column;min-width:0;gap:4px}
 .browser-item-detail strong{font-size:13px;font-family:ui-monospace,monospace}
 .browser-item-detail small{font-size:11px;color:#aaa;overflow-wrap:anywhere}
@@ -370,6 +492,14 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .browser-folders{margin:18px 0 20px;padding-bottom:17px;border-bottom:1px solid #393939}
 .browser-folder-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .browser-breadcrumb{display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-width:0;flex:1}
+.browser-breadcrumb .browser-folder-up{
+  display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;
+  padding:4px;color:#dedede;border:0
+}
+.browser-breadcrumb .browser-folder-up svg{width:19px;height:19px;flex:none}
+.browser-breadcrumb .browser-folder-up:disabled{opacity:.35;cursor:default}
+.browser-breadcrumb .browser-folder-up:not(:disabled):hover{background:#2a352c}
+
 .browser-breadcrumb button{background:transparent;border:1px solid transparent;
   border-radius:6px;padding:7px;color:#a9d8b2;font:inherit;overflow-wrap:anywhere}
 .browser-breadcrumb button[aria-current=location]{color:#fff;border-color:#4c5e50}
@@ -908,4 +1038,911 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 }
 @media(max-width:430px){
   .file-viewer-photo-text-color-size{gap:8px}
+}
+
+
+/* #291: owner-approved Messages 1.1 beta, isolated full-screen overlay.
+   Appends scoped selectors only; does NOT replace any current Shell styling,
+   camera, editor, Settings, Dock or UX source content. */
+.messages-page{max-width:920px;min-height:100%;margin:0 auto;padding:26px 16px 46px;color:#f0f1f0}
+.messages-heading,.messages-title,.messages-tools,.messages-section-title{
+  display:flex;align-items:center;gap:12px}
+.messages-heading,.messages-section-title{justify-content:space-between}
+.messages-title h1{font-size:26px;letter-spacing:-.03em;line-height:1.2;margin:0}
+.messages-local-tag{font-size:10px;line-height:1.2;padding:5px 8px;border-radius:8px;
+  background:#263229;color:#b2d4bd;white-space:nowrap}
+.messages-tools{gap:7px}
+.messages-page button,.messages-thread button{border:1px solid #444b44;border-radius:9px;
+  background:#252825;color:#eef2ee;padding:9px 12px;font:inherit;cursor:pointer}
+.messages-page button:disabled,.messages-thread button:disabled{opacity:.45;cursor:not-allowed}
+.messages-page button:focus-visible,.messages-thread button:focus-visible,
+.messages-page input:focus-visible,.messages-thread textarea:focus-visible{
+  outline:2px solid #98e0b0;outline-offset:2px}
+.messages-tabs{display:flex;gap:2px;margin:20px 0 10px;border-bottom:1px solid #343834}
+.messages-tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;
+  background:transparent;color:#969c96;min-height:43px;flex:1}
+.messages-tabs button.selected{border-bottom-color:#7ecfa0;color:#f4f6f4}
+.messages-search{display:block;margin:12px 0}
+.messages-search input{width:100%;min-height:43px;padding:10px 12px;color:#f1f3f1;
+  border:1px solid #404640;border-radius:8px;background:#181b18;font:inherit}
+.messages-notice{font-size:11px;line-height:1.6;padding:11px 12px;color:#afb9af;
+  border:1px solid #343b34;border-radius:8px;background:#1b201b;margin:13px 0 18px}
+.messages-error{color:#ffa7a7;font-size:12px;overflow-wrap:anywhere}
+.messages-saved{color:#9ddeb1;font-size:11px}
+.messages-muted{color:#929d94}
+.messages-empty{padding:34px 16px;text-align:center;color:#a9b0a9;line-height:1.7}
+.messages-list,.messages-picker{min-height:240px}
+.messages-picker{outline:0}
+.messages-section-title{margin:0 0 13px}
+.messages-row{display:flex;align-items:center;gap:12px;min-width:0;width:100%;
+  text-align:left;margin:0!important;padding:15px 10px!important;border:0!important;
+  border-bottom:1px solid #303630!important;border-radius:0!important;background:transparent!important}
+.messages-row:hover,.messages-row:focus-visible{background:#232923!important}
+.messages-avatar{flex:0 0 43px;width:43px;height:43px;border-radius:50%;display:grid;
+  place-items:center;background:#324336;color:#d5ead8;font-weight:700;font-size:17px}
+.messages-row-text{min-width:0;flex:1;display:flex;flex-direction:column;gap:6px}
+.messages-row-text strong{font-size:13px;overflow-wrap:anywhere}
+.messages-row-text small{color:#9ea79f;font-size:11px}
+.messages-row-text .messages-preview{white-space:nowrap;text-overflow:ellipsis;overflow:hidden;max-width:100%}
+.messages-draft-marker{font-size:10px;color:#99cdad;padding:4px 7px;background:#253329;
+  border-radius:6px;flex:0 0 auto}
+.messages-sr-only{position:absolute!important;clip:rect(0,0,0,0);height:1px;width:1px;
+  overflow:hidden;white-space:nowrap}
+.messages-thread{position:fixed;inset:0;z-index:1200;display:flex;flex-direction:column;
+  width:100%;height:100dvh;background:#101210;color:#f0f2f0;overflow:hidden}
+.messages-thread-top{flex:0 0 66px;display:flex;align-items:center;gap:12px;
+  padding:9px max(16px,env(safe-area-inset-right,0px));background:#191d19;
+  border-bottom:1px solid #323932}
+.messages-thread-top>button{min-width:42px;min-height:42px}
+.messages-thread-identity{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
+.messages-thread-identity strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.messages-thread-identity small{color:#a4ada4;font-size:11px}
+.messages-thread-content{flex:1 1 auto;min-height:0;overflow:auto;padding:24px 16px;
+  display:flex;align-items:center;justify-content:center;overscroll-behavior:contain}
+.messages-thread-placeholder{text-align:center;max-width:420px;line-height:1.7;color:#b8bdb8;
+  background:#181c18;border:1px solid #282e28;border-radius:13px;padding:20px}
+.messages-thread-placeholder strong{color:#e5eee5;font-size:14px}
+.messages-thread-placeholder p{font-size:12px;margin:12px 0 0}
+.messages-composer{flex:0 0 auto;min-width:0;padding:13px 15px
+  calc(16px + env(safe-area-inset-bottom,0px));background:#1b201b;border-top:1px solid #343a34}
+.messages-compose-line{display:flex;gap:8px;align-items:end}
+.messages-compose-line button{flex:0 0 auto;min-height:43px}
+.messages-compose-line textarea{min-width:0;flex:1;min-height:44px;max-height:130px;
+  padding:10px 12px;border:1px solid #464e46;border-radius:10px;resize:vertical;
+  background:#111511;color:#eff3ef;font:inherit;line-height:1.5}
+.messages-composer>small{display:block;color:#9ea79e;font-size:10px;margin:9px 0 0}
+.messages-overlay-enter-active,.messages-overlay-leave-active{transition:opacity 160ms ease,transform 160ms ease}
+.messages-overlay-enter-from,.messages-overlay-leave-to{opacity:0;transform:translateY(10px)}
+@media(max-width:410px){
+  .messages-page{padding:20px 12px 35px}
+  .messages-heading{gap:6px}
+  .messages-title h1{font-size:23px}
+  .messages-tools{gap:4px}
+  .messages-tools button{padding:8px}
+  .messages-compose-line button{padding:8px}
+  .messages-thread-top{padding-left:10px;padding-right:10px}
+}
+@media(prefers-reduced-motion:reduce){
+  .messages-overlay-enter-active,.messages-overlay-leave-active{transition:none}
+}
+
+/* Owner-approved Fieldwork tariff pill: only authenticated server-verified plan. */
+.shell-header .shell-plan-pill{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;flex:0 1 auto;min-height:32px;padding:0 10px;max-width:175px;min-width:0;border:1px solid #408653;background:#24432f;color:#d8f9e1;border-radius:8px;text-decoration:none;font-size:11px;font-weight:690;white-space:nowrap}
+.shell-header .shell-plan-pill:hover{background:#2c5038}
+.shell-header .status-dot.session-online{background:var(--accent)}
+.shell-header .shell-plan-pill:focus-visible{outline:2px solid #a3edb6;outline-offset:2px}
+@media(max-width:410px){.shell-header .shell-plan-pill{font-size:9px;padding:0 7px;max-width:124px}.shell-header .brand-copy{max-width:128px}}
+
+/* Approved device-local Appearance controls: root tokens, no media pixel inversion. */
+:root{--ui-text-scale:1}
+.shell-main{zoom:var(--ui-text-scale)}
+:root[data-ui-scheme="light"] .shell,:root[data-ui-scheme="light"] .shell-header,
+:root[data-ui-scheme="light"] .shell-dock{color:#17251b}
+:root[data-ui-scheme="light"] .shell-header .brand-copy small{color:#526357}
+:root[data-ui-scheme="light"] .shell-dock a{color:#526357}
+:root[data-ui-scheme="light"] .shell-dock a.active{color:var(--accent)}
+
+/* Assignment Fieldwork 5.0: media-only-confirmed progress and card geometry.
+   Owner-approved docs/ux/assignments/v5, reused in the actual E2EE list.
+   No fake local queue receipts, fabricated archive or inferred team ownership. */
+.assignments-p1 .assignment-list-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.assignments-p1 .assignment-list-tools .assignment-tabs{display:flex;gap:3px;flex-shrink:0}
+.assignments-p1 .assignment-list-tools>input{flex:1 1 190px;min-width:150px}
+.assignments-p1 .assignment-sort-label{display:flex;align-items:center;gap:7px;color:#aab4ac;font-size:11px;min-width:0}
+.assignments-p1 .assignment-sort-label select{min-height:37px;background:#282d29;border:1px solid #4c594d;
+  color:#e0ece2;border-radius:7px;padding:7px 10px;font-size:11px;max-width:240px}
+.assignments-p1 .task-card{min-width:0;padding:16px 15px 15px;background:var(--surface);border-radius:9px}
+.assignments-p1 .assignment-time-row{display:flex;flex-wrap:wrap;gap:6px 16px;
+  border-top:1px solid #363b36;margin-top:12px;padding-top:11px;color:#b5c0b7;font-size:11px}
+.assignments-p1 .assignment-auto-removal{display:flex;gap:5px 12px;flex-wrap:wrap;margin-top:5px;
+  font-size:10px;color:#a5deb5}
+.assignments-p1 .assignment-media-line{display:flex;flex-direction:column;align-items:stretch;gap:5px;
+  min-width:0;color:#d5e2d8;font-size:11px}
+.assignments-p1 .assignment-media-line strong{font-weight:740;color:#f2f5f2}
+.assignments-p1 .assignment-media-line progress{display:block;width:100%;max-width:225px;
+  height:5px;border:0;accent-color:var(--accent);border-radius:4px}
+.assignments-p1 .assignment-total-progress{display:flex;flex-direction:column;gap:4px;
+  margin-top:4px;font-size:11px;font-weight:720;color:#a8e6b5}
+.assignments-p1 .assignment-total-progress progress{width:100%;max-width:225px;height:6px;accent-color:var(--accent)}
+.assignments-p1 .assignment-card-bottom{align-items:flex-end}
+.assignments-p1 .assignment-card-progress{gap:10px}
+@media(max-width:580px){
+  .assignments-p1 .assignment-list-tools .assignment-tabs{width:100%}
+  .assignments-p1 .assignment-list-tools .assignment-tabs button{flex:1}
+  .assignments-p1 .assignment-list-tools .assignment-sort-label{width:100%;justify-content:space-between}
+  .assignments-p1 .assignment-list-tools .assignment-sort-label select{flex:1;max-width:260px}
+}
+
+/* Cards retain real authenticated Camera navigation without a second Shell. */
+.assignments-p1 .assignment-card-actions{display:flex;align-items:center;flex-wrap:wrap;
+  justify-content:flex-end;gap:8px}
+.assignments-p1 .assignment-capture-action{display:inline-flex;align-items:center;justify-content:center;
+  min-height:37px;padding:8px 12px;border-radius:7px;border:1px solid #3d7650;
+  background:#213b2a;color:#c8f0d1;text-decoration:none;font-size:11px;font-weight:700}
+.assignments-p1 .assignment-capture-action:hover{background:#2b4935}
+.assignments-p1 .assignment-capture-action:focus-visible{outline:2px solid #9be4a9;outline-offset:2px}
+@media(max-width:480px){.assignments-p1 .assignment-card-bottom{flex-wrap:wrap}
+  .assignments-p1 .assignment-card-actions{width:100%}
+  .assignments-p1 .assignment-card-actions>*{flex:1}}
+
+/* A trusted contact opens only a LOCAL encrypted draft; no Matrix delivery. */
+.contacts-page .action-row .contacts-draft-link{display:inline-flex;align-items:center;
+  justify-content:center;min-height:38px;border-radius:7px;border:1px solid #3d7650;
+  background:#213b2a;color:#c8f0d1;text-decoration:none;font-size:12px;font-weight:700}
+.contacts-page .action-row .contacts-draft-link:hover{background:#2b4935}
+.contacts-page .action-row .contacts-draft-link:focus-visible{outline:2px solid #9be4a9;outline-offset:2px}
+
+
+/* Camera Fieldwork 1.2: one App Shell; live camera stream never remounted
+   by the blind overlay. Technical encrypted/policy forms remain available
+   BELOW the active viewfinder until approved bottom-sheet migration. */
+.camera-fieldwork{max-width:none;margin:0;padding:0;min-width:0}
+.camera-fieldwork .camera-screen-title{
+  position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0;padding:0
+}
+.camera-mode-tabs{height:48px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  align-items:stretch;border-bottom:1px solid #3a3a3a;background:var(--background);
+  margin-bottom:11px;position:sticky;top:0;z-index:5}
+.camera-fieldwork .camera-mode-tabs button{
+  min-height:48px;border:0;border-bottom:2px solid transparent;border-radius:0;
+  background:transparent;color:#a7a7a7;padding:11px 7px;font-size:13px;font-weight:690
+}
+.camera-fieldwork .camera-mode-tabs button.selected{
+  border-bottom-color:var(--accent);color:#f3f3f3
+}
+.camera-mode-tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-4px}
+.camera-viewfinder{position:relative;width:100%;max-width:740px;margin:0 auto;
+  aspect-ratio:4/3;min-height:210px;max-height:min(58dvh,520px);
+  overflow:hidden;background:#080a09;border-radius:4px}
+.camera-viewfinder .video-frame{position:absolute;inset:0;width:100%;height:100%;
+  aspect-ratio:auto;margin:0;border:0;border-radius:0;background:#080a09}
+.camera-viewfinder .video-frame video{width:100%;height:100%;object-fit:contain}
+.camera-grid-3x3{position:absolute;inset:0;z-index:1;pointer-events:none}
+.camera-grid-3x3 span{position:absolute;display:block;opacity:.62}
+.camera-grid-3x3 span:nth-child(1),.camera-grid-3x3 span:nth-child(2){
+  top:0;bottom:0;width:1px;background:#e1e1e1
+}
+.camera-grid-3x3 span:nth-child(1){left:33.3333%}
+.camera-grid-3x3 span:nth-child(2){left:66.6667%}
+.camera-grid-3x3 span:nth-child(3),.camera-grid-3x3 span:nth-child(4){
+  left:0;right:0;height:1px;background:#e1e1e1
+}
+.camera-grid-3x3 span:nth-child(3){top:33.3333%}
+.camera-grid-3x3 span:nth-child(4){top:66.6667%}
+.camera-details .camera-appearance-setting{display:flex;align-items:center;gap:9px;
+  flex-wrap:wrap;padding:8px 0;margin:7px 0;color:#eee;font-size:12px}
+.camera-details .camera-appearance-setting input{accent-color:var(--accent);width:17px;height:17px}
+.camera-details .camera-appearance-setting small{width:100%;padding-left:26px;
+  font-size:10px;color:#a4a4a4}
+
+/* Accepted Camera 1.2 Audio stage is full screen stage, not a 4:3
+   camera preview. The video node remains mounted but hidden/stopped. */
+.camera-stage .camera-viewfinder.is-audio{
+  width:100%;max-width:none;height:100%;max-height:100%;aspect-ratio:auto;
+  background:transparent;box-shadow:none
+}
+.camera-audio-view{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;background:transparent;
+  color:#eaeaea;text-align:center}
+.camera-audio-view .camera-audio-emblem{
+  width:106px;height:106px;border-radius:50%;border:1px solid #415a49;
+  background:radial-gradient(circle,#22372a,#15201a);
+  display:grid;place-items:center;color:#76e995
+}
+.camera-audio-view .camera-audio-emblem svg{width:43px;height:43px}
+.camera-audio-view strong{font-size:19px;letter-spacing:-.02em}
+.camera-audio-view small{color:#8f9f96;font-size:12px}
+.camera-audio-bars{display:flex;gap:5px;align-items:center;height:43px}
+.camera-audio-bars i{display:block;width:5px;height:var(--h);
+  border-radius:12px;background:#4c9865;opacity:.78;transform-origin:center}
+.camera-audio-bars i:nth-child(1){--h:12px}
+.camera-audio-bars i:nth-child(2){--h:27px}
+.camera-audio-bars i:nth-child(3){--h:17px}
+.camera-audio-bars i:nth-child(4){--h:39px}
+.camera-audio-bars i:nth-child(5){--h:26px}
+.camera-audio-bars i:nth-child(6){--h:36px}
+.camera-audio-bars i:nth-child(7){--h:20px}
+.camera-audio-bars i:nth-child(8){--h:30px}
+.camera-audio-bars i:nth-child(9){--h:12px}
+.camera-audio-view.recording .camera-audio-bars i{
+  animation:camera-audio-bounce .6s ease-in-out infinite alternate;
+  animation-delay:calc(var(--i,1)*70ms);background:var(--accent)
+}
+.camera-audio-bars i:nth-child(even){--i:2}
+@keyframes camera-audio-bounce{from{transform:scaleY(.45)}to{transform:scaleY(1)}}
+.camera-audio-view time{font:700 24px ui-monospace,monospace;font-variant-numeric:tabular-nums}
+.camera-blind-overlay{position:fixed;inset:0;z-index:10000;display:flex;
+  align-items:center;justify-content:center;flex-direction:column;gap:0;
+  padding:max(28px,env(safe-area-inset-top)) 28px max(28px,env(safe-area-inset-bottom));
+  background:#090a09;color:#f5f5f5;overflow-y:auto;text-align:center}
+.camera-blind-emblem{display:grid;place-items:center;width:72px;height:72px;
+  color:#b8b8b8;margin-bottom:20px}
+.camera-blind-overlay .camera-blind-emblem svg{
+  height:57px;width:57px;stroke-width:1.15;flex-shrink:0
+}
+.camera-blind-overlay h2{font-size:24px;letter-spacing:-.045em;margin:0 0 13px}
+.camera-blind-overlay p{font-size:13px;color:#aaa;max-width:310px;line-height:1.65;margin:0}
+.camera-blind-overlay time{font:700 13px ui-monospace,monospace;
+  margin-top:16px;color:#ff7a81;font-variant-numeric:tabular-nums}
+.camera-blind-overlay .camera-blind-note{margin-top:15px;font-size:11px;color:#a5a5a5}
+/* The opaque cover is teleported OUTSIDE the zoomed/scrolled Shell.
+   Use real on-screen controls rather than assuming volume-key events exist. */
+.camera-blind-shutter{width:76px;height:76px;min-height:76px;min-width:76px;
+  display:grid;place-items:center;border-radius:50%;border:4px solid #f6f6f6;
+  background:#101010;padding:5px;margin-top:28px;
+  font-size:0;color:transparent;cursor:pointer}
+.camera-blind-shutter:before{content:'';display:block;width:100%;height:100%;
+  background:#fff;border-radius:50%}
+.camera-blind-shutter.video:before{background:#ee454c}
+.camera-blind-shutter.recording:before{width:26px;height:26px;
+  background:#ee454c;border-radius:5px}
+.camera-blind-shutter:disabled{opacity:.48;cursor:not-allowed}
+.camera-blind-return{min-width:185px;min-height:42px;margin-top:30px;
+  border:1px solid #595959;background:#272727;color:#f3f3f3;
+  border-radius:8px;font-size:12px;padding:12px 22px}
+.camera-blind-overlay button:focus-visible{outline:2px solid #a0e9ba;outline-offset:3px}
+.camera-stage-controls{width:100%;max-width:740px;margin:0 auto;padding:9px 0 7px}
+.camera-gps-indicator{display:flex;justify-content:center;align-items:center;
+  min-height:24px;font-size:10px;color:#a6aaa6}
+.camera-fieldwork .camera-gps-pill{border:0;background:transparent;
+  display:flex;align-items:center;gap:6px;padding:3px 8px;
+  color:#a6aaa6;font-size:10px;min-height:24px;white-space:nowrap}
+.camera-fieldwork .camera-gps-pill .camera-gps-dot{
+  width:6px;height:6px;flex:none;border-radius:50%;background:#b18a57
+}
+.camera-fieldwork .camera-gps-pill .camera-gps-dot.ready{background:var(--accent)}
+.camera-fieldwork .camera-gps-pill:has(.camera-gps-dot.ready){color:#c1f6cf}
+.camera-control-trio{display:grid;grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr);
+  gap:12px;align-items:center;min-height:83px}
+.camera-fieldwork .camera-side-action{
+  border:0;background:transparent;display:flex;align-items:center;
+  justify-content:center;flex-direction:column;gap:7px;
+  color:#ccc;min-width:0;padding:6px 2px
+}
+.camera-fieldwork .camera-side-action svg{width:23px;height:23px;color:#aeb1af;flex:none}
+.camera-fieldwork .camera-side-action strong{
+  font-weight:650;font-size:11px;white-space:nowrap;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis
+}
+.camera-control-trio .camera-shutter{
+  position:relative;display:grid;place-items:center;
+  width:72px;height:72px;min-height:72px;justify-self:center;
+  border-radius:50%;border:4px solid #fff;padding:5px;
+  background:#101010;box-shadow:none
+}
+.camera-control-trio .camera-shutter-fill{
+  display:block;width:100%;height:100%;border-radius:50%;background:#fff
+}
+.camera-control-trio .camera-shutter-record .camera-shutter-fill{
+  width:min(53px,100%);height:min(53px,100%);background:#ee454c
+}
+.camera-control-trio .camera-shutter-record.active .camera-shutter-fill{
+  width:26px;height:26px;background:#ee454c;border-radius:5px
+}
+.camera-control-trio .camera-shutter-record:disabled,.camera-control-trio .camera-shutter:disabled{
+  opacity:.5;cursor:not-allowed
+}
+/* Camera 1.2 stage occupies exactly the free space between Shell header,
+   46px mode tabs, 124px controls, and persistent 82px Dock. Only the actual
+   finder follows the approved photo aspect preset (4:3 default);
+   the neutral stage letterbox remains outside the sensor image. */
+.camera-mode-tabs{height:46px;margin-bottom:0;background:#151515;border-bottom:1px solid #303030}
+.camera-fieldwork .camera-mode-tabs button{height:46px;min-height:46px}
+.camera-stage{position:relative;width:100%;height:clamp(260px,
+  calc(100dvh - 64px - 82px - env(safe-area-inset-bottom,0px) - 46px - 124px),
+  760px);
+  min-height:0;padding:8px;overflow:hidden;background:#0a0c0b;
+  display:grid;place-items:center}
+.camera-stage .camera-viewfinder{
+  width:min(100%,580px);max-width:580px;min-height:0;max-height:100%;
+  height:auto;aspect-ratio:4/3;background:#172423;box-shadow:0 0 0 1px #ffffff12
+}
+.camera-stage .camera-viewfinder .video-frame video{object-fit:cover}
+.camera-finder-corner{
+  pointer-events:none;position:absolute;z-index:4;
+  width:18px;height:18px;border-style:solid;border-color:#ffffff7f
+}
+.camera-finder-corner.tl{top:12px;left:12px;border-width:1.5px 0 0 1.5px}
+.camera-finder-corner.tr{top:12px;right:12px;border-width:1.5px 1.5px 0 0}
+.camera-finder-corner.bl{bottom:12px;left:12px;border-width:0 0 1.5px 1.5px}
+.camera-finder-corner.br{bottom:12px;right:12px;border-width:0 1.5px 1.5px}
+/* Camera 1.2 single feedback toast. Absolute overlay never enlarges the stage,
+   blocks the shutter or shifts the global Dock during offline capture. */
+.camera-stage .camera-toast{
+  position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+  z-index:6;max-width:min(94%,460px);width:max-content;margin:0;
+  border:1px solid #38634a;border-radius:8px;padding:9px 13px;
+  background:#17261feE;color:#b9f3c6;font-size:12px;line-height:1.45;
+  text-align:center;overflow-wrap:anywhere;pointer-events:none;
+}
+.camera-stage .camera-toast-error{border-color:#8d4a48;color:#ffb8b5;background:#302020ef}
+/* Owner-approved Camera 1.2 feedback is viewfinder-only and never enters JPEG. */
+.camera-record-badge{
+  position:absolute;top:12px;left:50%;transform:translateX(-50%);
+  z-index:5;display:flex;align-items:center;gap:7px;
+  padding:7px 11px;border-radius:20px;background:#131313cc;
+  color:#fff;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums
+}
+.camera-record-dot{
+  flex:none;width:8px;height:8px;border-radius:50%;background:#ef4e57;
+  animation:camera-record-pulse 1.5s ease-in-out infinite
+}
+@keyframes camera-record-pulse{50%{opacity:.45}}
+.camera-snap-flash{
+  position:absolute;inset:0;z-index:8;background:#fff;opacity:0;
+  pointer-events:none;animation:camera-snap-white .25s ease-out both
+}
+@keyframes camera-snap-white{from{opacity:.7}to{opacity:0}}
+.camera-photo-zoom-indicator{
+  position:absolute;z-index:5;bottom:9px;left:50%;
+  transform:translateX(-50%);color:#eee;font-size:11px;
+  background:#111b;padding:5px 10px;border-radius:30px;
+  pointer-events:none;
+}
+.camera-stage-controls{
+  width:100%;max-width:none;min-height:124px;position:sticky;bottom:0;
+  z-index:10;margin:0;padding:9px 13px 7px;background:#171717;
+  border-top:1px solid #2a2a2a
+}
+.camera-stage-controls .camera-control-trio{
+  grid-template-columns:minmax(0,1fr) 106px minmax(0,1fr);
+  height:84px;min-height:84px;gap:4px
+}
+.camera-stage-controls .camera-gps-indicator{height:24px;min-height:24px}
+.camera-stage-controls .camera-control-trio .camera-shutter{height:72px;width:72px;min-height:72px}
+.camera-stage-controls .camera-control-trio .camera-side-action{font-size:11px}
+@media(max-width:390px){
+  .camera-stage{padding:7px}
+  .camera-stage-controls{padding:8px 8px 7px}
+  .camera-stage-controls .camera-control-trio{height:80px;min-height:80px}
+  .camera-stage-controls .camera-control-trio .camera-shutter{
+    width:66px;height:66px;min-height:66px
+  }
+}
+.camera-details{max-width:740px;margin:32px auto 0}
+/* Two real Camera 1.2 bottom sheets use the SAME, already bound Vue forms.
+   Inactive forms remain in the document for keyboard/legacy routing and
+   encrypted in-progress metadata; never render duplicate editable fields. */
+.camera-sheet-backdrop{position:fixed;inset:0;z-index:2000;background:#000b}
+.camera-details .foundation-card.is-camera-sheet{
+  position:fixed;left:50%;bottom:0;z-index:2001;transform:translateX(-50%);
+  margin:0;width:min(520px,100vw);max-height:min(87dvh,880px);
+  padding:15px 16px max(23px,env(safe-area-inset-bottom,23px));
+  background:#292929;border:0;border-radius:14px 14px 0 0;
+  overflow-y:auto;overscroll-behavior:contain;
+  box-shadow:0 -12px 40px #0009;scroll-margin-top:0;
+}
+.camera-sheet-handle{
+  display:block;width:36px;height:4px;margin:0 auto 13px;
+  border-radius:5px;background:#666
+}
+.camera-sheet-heading{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;margin:0 0 16px;padding:7px 0 12px;border-bottom:1px solid #444}
+.camera-sheet-heading strong{font-size:16px;font-weight:760}
+.camera-details .camera-sheet-close{
+  display:grid;place-items:center;width:36px;height:36px;min-height:36px;
+  border:0;background:transparent;color:#e7e7e7;border-radius:6px;padding:6px
+}
+.camera-details .camera-sheet-close svg{
+  width:20px;height:20px;flex:none;stroke:currentColor
+}
+.camera-details .is-camera-sheet label{margin-top:13px;color:#e6e6e6;font-size:12px}
+.camera-details .is-camera-sheet select,.camera-details .is-camera-sheet input:not([type=checkbox]),
+.camera-details .is-camera-sheet textarea{
+  width:100%;min-width:0;max-width:100%;background:#252525;color:#eee;
+  padding:10px;border:1px solid #555;border-radius:6px;font:inherit
+}
+.camera-sheet-footer{display:flex;justify-content:flex-end;border-top:1px solid #444;
+  padding-top:14px;margin-top:17px}
+.camera-details .camera-sheet-footer button{background:var(--accent);color:#0f2416;
+  border:1px solid var(--accent);border-radius:8px;font-size:12px;font-weight:760;
+  min-width:128px}
+.camera-details .camera-sheet-footer button:disabled{
+  opacity:.45;cursor:not-allowed
+}
+/* Exact owner-approved Camera 1.2 policy obligations, only for verified
+   signed rules; these never replace capture-time policy checks. */
+.camera-details .camera-policy-required{
+  margin:8px 0;color:var(--accent);font-size:12px;font-weight:650;
+}
+/* Camera Fieldwork 1.2 accepted single preset area with the two action
+   buttons INSIDE the section; these are real device-key-sealed profiles. */
+.camera-details .camera-preset-section{
+  display:grid;gap:5px;padding:13px;margin:10px 0 15px;
+  border-radius:9px;background:#353535
+}
+.camera-details .camera-preset-section h3,
+.camera-details .camera-preset-options h3{
+  margin:0 0 3px;font-size:12px;letter-spacing:0;font-weight:760;color:#f2f2f2
+}
+.camera-details .camera-preset-section label{margin:7px 0 3px;font-size:12px}
+.camera-details .camera-preset-section .camera-preset-actions{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;
+  margin-top:10px
+}
+.camera-details .camera-preset-actions button{
+  min-width:0;min-height:42px;padding:8px 6px;
+  border:1px solid #545454;border-radius:7px;background:#424242;
+  color:#ececec;font-size:12px;font-weight:680
+}
+.camera-details .camera-preset-actions button:disabled{opacity:.4;cursor:not-allowed}
+.camera-details .camera-preset-section .muted{
+  font-size:10px;line-height:1.5;margin:4px 0
+}
+.camera-details .camera-preset-options{
+  display:grid;gap:5px;padding:13px;margin:10px 0;
+  border-radius:9px;background:#353535
+}
+.camera-details .camera-preset-options label{margin:8px 0 3px;font-size:12px}
+.camera-details .camera-gps-state{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;
+  gap:10px;padding:4px 0;min-width:0
+}
+.camera-details .camera-gps-state p{
+  margin:0;font-size:12px;color:#ececec;overflow-wrap:anywhere
+}
+.camera-details .camera-gps-state button{
+  min-height:42px;padding:9px 11px;background:#424242;
+  color:#f0f0f0;border:1px solid #555;border-radius:7px;font-size:12px
+}
+.camera-details .camera-gps-state button:disabled{opacity:.4;cursor:not-allowed}
+.camera-details .camera-preset-options .muted{
+  margin:2px 0 5px;font-size:10px;line-height:1.5
+}
+.camera-details .camera-preset-options .camera-preset-actions{
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px
+}
+.camera-details .camera-preset-options [data-testid="camera-permission-status"]{
+  font-size:11px;line-height:1.4;color:#b6eec4;overflow-wrap:anywhere
+}
+.camera-details .camera-preset-options input[type=range]{
+  display:block;width:100%;min-height:30px;margin:5px 0;
+  accent-color:var(--accent)
+}
+@media(max-width:370px){
+  .camera-details .camera-preset-section{padding:10px}
+  .camera-details .camera-preset-options{padding:10px}
+  .camera-details .camera-preset-actions button{font-size:11px}
+}
+@media(max-width:470px){
+  .camera-details .foundation-card.is-camera-sheet{max-height:86dvh;padding-inline:13px}
+}
+
+.camera-details .foundation-card{scroll-margin-top:55px}
+@media(max-width:390px){
+  .camera-viewfinder{min-height:190px}
+  .camera-control-trio{grid-template-columns:minmax(0,1fr) 70px minmax(0,1fr);gap:4px}
+  .camera-control-trio .camera-shutter{width:66px;height:66px;min-height:66px}
+  .camera-blind-overlay{padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))}
+}
+@media(prefers-reduced-motion:reduce){
+  .camera-fieldwork *{transition:none!important;animation:none!important;scroll-behavior:auto!important}
+}
+
+/* Approved Camera 1.2 has precisely three context icons in the shared Header.
+   Keep all of them visible on the smallest supported portrait viewport. */
+@media(max-width:420px){
+  .shell-header:has(.camera-header-actions){padding-inline:8px;gap:6px}
+  .shell-header:has(.camera-header-actions) .brand-copy{
+    max-width:clamp(80px,30vw,120px);min-width:0
+  }
+  .shell-header:has(.camera-header-actions) .brand-copy strong{
+    font-size:12px;overflow:hidden;text-overflow:ellipsis
+  }
+  .shell-header:has(.camera-header-actions) .brand-copy small{font-size:9px}
+  .shell-header .shell-header-actions.camera-header-actions button{
+    width:34px;min-width:34px;height:36px
+  }
+}
+@media(max-width:350px){
+  .shell-header .shell-header-actions.camera-header-actions button{
+    width:31px;min-width:31px
+  }
+  .shell-header:has(.camera-header-actions) .brand-copy{
+    max-width:85px
+  }
+}
+
+/* Browser v3 upload opens the same live E2EE import form as a bottom sheet:
+   no duplicate plaintext file inputs or second upload pipeline. */
+.browser-upload-backdrop{
+  position:fixed;inset:0;z-index:2000;
+  background:#000b
+}
+.browser-upload-sheet.open{
+  position:fixed;left:50%;bottom:0;transform:translateX(-50%);
+  width:min(520px,100vw);max-height:min(87dvh,900px);
+  z-index:2001;overflow-y:auto;overscroll-behavior:contain;
+  background:#292929;border:0;border-radius:14px 14px 0 0;
+  padding:12px 16px max(24px,env(safe-area-inset-bottom,24px));
+  box-shadow:0 -12px 40px #0009
+}
+.browser-upload-heading{display:flex;justify-content:space-between;
+  align-items:center;gap:14px;padding:8px 0 14px;
+  border-bottom:1px solid #454545;margin-bottom:13px}
+.browser-upload-heading strong{font-size:16px;font-weight:760}
+.browser-upload-heading button{min-height:36px;padding:8px 11px;
+  border:0;background:transparent;color:#e7e7e7;font-size:12px}
+.browser-upload-sheet.open input,
+.browser-upload-sheet.open select,
+.browser-upload-sheet.open textarea{max-width:100%}
+.browser-upload-sheet.open :focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+@media(max-width:450px){
+  .browser-upload-sheet.open{padding:10px 12px max(20px,env(safe-area-inset-bottom,20px))}
+}
+
+/* Browser v3 share action reuses the real verified-recipient E2EE flow,
+   but displays it only in the selected file's contextual bottom sheet. */
+.browser-share-backdrop{position:fixed;inset:0;z-index:2020;background:#000b}
+.browser-share-sheet{
+  position:fixed;z-index:2021;left:50%;bottom:0;transform:translateX(-50%);
+  width:min(520px,100vw);max-height:min(87dvh,900px);
+  overflow-y:auto;overscroll-behavior:contain;
+  padding:12px 16px max(24px,env(safe-area-inset-bottom,24px));
+  border-radius:14px 14px 0 0;background:#292929;
+  box-shadow:0 -12px 40px #0009
+}
+.browser-share-heading{display:flex;align-items:center;justify-content:space-between;
+  gap:12px;padding:8px 0 14px;border-bottom:1px solid #454545;margin-bottom:12px}
+.browser-share-heading strong{font-size:16px}
+.browser-share-heading button{min-height:36px;border:0;background:transparent;color:#eee}
+.browser-share-sheet input,.browser-share-sheet select,.browser-share-sheet textarea{max-width:100%}
+.browser-share-sheet :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* Browser v3 accepted New Folder sheet: native encrypted folder workspace,
+   current destination selected by default, root and nested folders allowed. */
+.browser-new-folder-backdrop{
+  position:fixed;inset:0;z-index:2000;background:#000b
+}
+.browser-folders .browser-folder-form.browser-new-folder-sheet,
+.browser-new-folder-sheet{
+  position:fixed;left:50%;bottom:0;transform:translateX(-50%);
+  width:min(520px,100vw);max-height:min(87dvh,880px);
+  z-index:2001;overflow-y:auto;overscroll-behavior:contain;
+  background:#292929;color:#eee;
+  border:0;border-radius:14px 14px 0 0;
+  padding:15px 16px max(24px,env(safe-area-inset-bottom,24px));
+  box-shadow:0 -12px 40px #0009
+}
+.browser-new-folder-heading{display:flex;align-items:center;
+  justify-content:space-between;gap:12px;padding:6px 0 12px;
+  margin:0 0 15px;border-bottom:1px solid #454545}
+.browser-new-folder-heading strong{font-size:16px;font-weight:760}
+.browser-new-folder-heading button{border:0;background:transparent;
+  padding:7px 10px;font-size:12px;min-height:36px}
+.browser-new-folder-sheet label{display:grid;gap:8px;margin:11px 0 16px;
+  font-size:12px;font-weight:660}
+.browser-new-folder-sheet input,.browser-new-folder-sheet select{
+  width:100%;min-width:0;min-height:42px;padding:10px;
+  border:1px solid #555;border-radius:6px;background:#252525;
+  color:#efefef;font-size:12px;font-weight:400
+}
+.browser-new-folder-actions{display:grid;grid-template-columns:1fr 1fr;
+  gap:8px;margin-top:14px}
+.browser-new-folder-actions button{width:100%;min-width:0;min-height:42px;
+  border-radius:7px;padding:10px;font-size:12px;font-weight:700}
+.browser-new-folder-actions button:first-child{background:var(--accent);
+  color:#0e2416;border-color:var(--accent)}
+.browser-new-folder-sheet :focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+@media(max-width:450px){
+  .browser-new-folder-sheet{padding:12px 13px max(20px,env(safe-area-inset-bottom,20px))}
+}
+
+/* Browser v3 Header Settings reuses the single actual archive-preferences
+   controller: toggles maintain signed-server confirmation and fail-closed
+   destructive-action gates. There is no second settings form. */
+.browser-settings-backdrop{position:fixed;inset:0;z-index:2000;background:#000b}
+.browser-archive-preferences.is-browser-settings-sheet{
+  position:fixed;left:50%;bottom:0;transform:translateX(-50%);
+  z-index:2001;width:min(520px,100vw);max-height:min(87dvh,880px);
+  padding:14px 16px max(24px,env(safe-area-inset-bottom,24px));
+  margin:0;overflow-y:auto;overscroll-behavior:contain;
+  border:0;border-radius:14px 14px 0 0;background:#292929;
+  box-shadow:0 -12px 40px #0009
+}
+.browser-settings-heading{display:flex;justify-content:space-between;
+  align-items:center;gap:12px;padding:7px 0 14px;
+  margin-bottom:7px;border-bottom:1px solid #464646}
+.browser-settings-heading strong{font-size:16px;font-weight:760}
+.browser-settings-heading button{border:0;background:transparent;
+  min-height:36px;padding:8px 10px;font-size:12px}
+.browser-settings-footer{display:flex;justify-content:flex-end;
+  border-top:1px solid #464646;margin-top:7px;padding-top:15px}
+.browser-settings-footer button{min-width:136px;min-height:42px;
+  background:var(--accent);color:#102718;border:0;
+  border-radius:7px;font-weight:740}
+.browser-archive-preferences.is-browser-settings-sheet :focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+@media(max-width:450px){
+  .browser-archive-preferences.is-browser-settings-sheet{
+    padding:11px 12px max(20px,env(safe-area-inset-bottom,20px))
+  }
+}
+
+/* Browser v3 Tree view is an actual navigator over authenticated,
+   AES-GCM-sealed folder workspace. It cannot expand server ACL scope. */
+.browser-tree-navigation{display:grid;gap:0;margin:10px 0 16px;
+  border-top:1px solid #343434;border-bottom:1px solid #343434;
+  background:#1b1d1b}
+.browser-tree-navigation .browser-tree-root,
+.browser-tree-navigation .browser-tree-select{
+  min-width:0;display:flex;align-items:center;gap:7px;
+  min-height:39px;padding:8px 11px;border:0;background:none;
+  color:#dedede;text-align:left;font-size:12px;overflow-wrap:anywhere
+}
+.browser-tree-navigation .browser-tree-root{
+  padding-left:16px;font-weight:740;border-bottom:1px solid #343434
+}
+.browser-tree-navigation [aria-current=location]{color:var(--accent);font-weight:740}
+.browser-tree-node{display:flex;align-items:stretch;gap:2px;
+  min-height:39px;border-bottom:1px solid #303530}
+.browser-tree-node:last-of-type{border-bottom:0}
+.browser-tree-node .browser-tree-expand{width:30px;flex:0 0 30px;
+  min-height:39px;padding:0;border:0;background:none;color:#bcc7bf;
+  font-size:21px}
+.browser-tree-node .browser-tree-expand:disabled{opacity:.3}
+.browser-tree-node .browser-tree-select{flex:1 1 0}
+.browser-tree-navigation .muted{margin:5px 15px 11px;font-size:10px;line-height:1.5}
+.browser-tree-navigation button:focus-visible{outline:2px solid var(--accent);
+  outline-offset:-3px}
+
+/* Accepted Browser v3 sections: All / My Photos / Assignments / Archive.
+   This is an already-loaded catalog view, never an ACL grant. */
+.browser-primary-sections{display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));gap:0;
+  margin:10px 0 15px;padding:0;border-bottom:1px solid #393939}
+.browser-primary-sections button{
+  min-width:0;min-height:42px;padding:10px 3px;
+  border:0;border-bottom:2px solid transparent;
+  border-radius:0;background:transparent;
+  color:#9e9e9e;font-size:12px;font-weight:650;white-space:nowrap
+}
+.browser-primary-sections button[aria-pressed=true]{
+  border:0;border-bottom:2px solid var(--accent);
+  color:#f0f0f0;font-weight:760
+}
+.browser-primary-sections:has(button:nth-child(3):last-child){
+  grid-template-columns:repeat(3,minmax(0,1fr))
+}
+.browser-primary-sections button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:-2px
+}
+.browser-section-note{
+  margin:8px 0 15px;font-size:11px;color:#a2b2a8;
+  line-height:1.5;max-width:780px
+}
+@media(max-width:390px){
+  .browser-primary-sections button{font-size:11px;padding-inline:2px}
+}
+
+/* Browser v3 real encrypted folder cards. Only already loaded, authorized
+   file TYPES decorate a cover; don't decode JPEG originals into preview DOM
+   or substitute unknown remote images for private thumbnails. */
+.browser-folder-item .browser-folder-open{display:flex;align-items:center;
+  gap:12px;min-width:0;flex:1 1 190px;padding:0;border:0;background:transparent;
+  text-align:left}
+.browser-folder-cover{position:relative;display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-rows:repeat(2,minmax(0,1fr));gap:2px;
+  flex:0 0 69px;width:69px;height:60px;
+  padding:3px;background:#27302b;border-radius:6px;overflow:hidden}
+.browser-folder-cover-cell{display:grid;place-items:center;min-width:0;
+  color:#d0d9d2;background:#39453d;font-size:20px;line-height:1}
+.browser-folder-cover-cell.is-blank{background:#303733}
+.browser-folder-cover-cell img{
+  width:100%;height:100%;display:block;object-fit:cover;
+  background:#1a241f;pointer-events:none;user-select:none
+}
+.browser-folder-cover.is-empty{place-items:center}
+.browser-folder-cover.is-empty>svg{width:33px;height:33px;color:#c1ccc4}
+.browser-folder-badge{position:absolute;top:4px;right:4px;
+  width:20px;height:18px;display:grid;place-items:center;
+  background:#121713dd;border-radius:3px;color:#eef0ee}
+.browser-folder-badge svg{width:14px;height:14px}
+.browser-folder-copy{display:flex;flex-direction:column;gap:5px;min-width:0;
+  overflow-wrap:anywhere}
+.browser-folder-copy strong{font-size:12px;color:#f1f1f1;font-weight:710}
+.browser-folder-copy small{font-size:10px;line-height:1.35;color:#a7b3aa}
+.browser-folder-item .browser-folder-open:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+@media(max-width:350px){
+  .browser-folder-cover{flex-basis:57px;width:57px;height:54px}
+  .browser-folder-item .browser-folder-open{gap:8px}
+}
+
+/* Browser v3 accepted heading: compact view switch on the right, replacing
+   the technical Camera shortcut (Camera remains in the common Dock). */
+.browser-title{min-width:0;align-items:center;gap:10px;margin-bottom:12px}
+.browser-title>div:first-child{flex:1;min-width:0}
+.browser-title>div:first-child h1{font-size:29px;line-height:1.12;
+  letter-spacing:-.04em;margin:0 0 4px}
+.browser-title>div:first-child .subtitle{margin:0;font-size:11px;
+  line-height:1.4;color:#a6a6a6;overflow-wrap:anywhere}
+.browser-title .browser-view-switch{display:flex;flex:0 0 auto;
+  gap:3px;padding:3px;border:0;border-radius:7px;background:#242424}
+.browser-title .browser-view-switch button{
+  border:0;min-height:33px;min-width:39px;padding:7px 8px;
+  border-radius:5px;background:transparent;color:#a7a7a7;
+  font-size:11px;font-weight:660;white-space:nowrap
+}
+.browser-title .browser-view-switch button[aria-pressed=true]{
+  background:#464646;color:#f3f3f3
+}
+.browser-title .browser-view-switch button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:-2px
+}
+@media(max-width:390px){
+  .browser-title{gap:6px}
+  .browser-title>div:first-child h1{font-size:25px}
+  .browser-title .browser-view-switch button{min-width:33px;
+    padding:6px 5px;font-size:10px}
+}
+@media(max-width:350px){
+  .browser-title>div:first-child h1{font-size:22px}
+  .browser-title .browser-view-switch{gap:1px;padding:2px}
+  .browser-title .browser-view-switch button{min-width:31px;
+    padding:6px 3px;font-size:9px}
+}
+
+/* Browser v3 preference controls. The one original encrypted folder list
+   moves via Vue Teleport, so toggling placement never duplicates form state. */
+.browser-archive-preferences select[data-testid="browser-pref-open-first"]{
+  display:block;width:100%;min-height:40px;
+  padding:8px 11px;margin:7px 0 11px;
+  border:1px solid #525252;border-radius:7px;
+  background:#272727;color:#ededed;font-size:12px
+}
+.browser-folder-list{min-width:0}
+.browser-catalog-after-folders{margin-top:7px}
+.browser-folder-list:empty{display:none}
+
+/* Browser v3 per-file action menus: one original ACL-checked action
+   controller, compact ••• affordance, no duplicate file operations. */
+.browser-item{position:relative;overflow:visible}
+.browser-file-menu-root{position:relative;flex:0 0 auto;margin-left:auto}
+.browser-file-menu-toggle{
+  width:36px;min-width:36px;height:36px;display:grid;place-items:center;
+  padding:0;border:1px solid #444;border-radius:8px;
+  background:#282a29;color:#e3e9e5;font-size:19px;letter-spacing:1px
+}
+.browser-file-menu-toggle[aria-expanded=true]{
+  border-color:var(--accent);background:#333c36;color:#fff
+}
+.browser-file-menu-panel{
+  position:absolute;right:0;top:calc(100% + 4px);
+  z-index:120;width:min(330px,calc(100vw - 34px));
+  max-height:min(70dvh,560px);overflow-y:auto;
+  display:flex;flex-direction:column;align-items:stretch;
+  gap:5px;flex-wrap:nowrap;
+  padding:10px;background:#292b29;
+  border:1px solid #555;border-radius:9px;
+  box-shadow:0 14px 34px #000a
+}
+.browser-file-menu-panel button,
+.browser-file-menu-panel a{
+  min-width:0;width:100%;min-height:37px;
+  display:flex;align-items:center;justify-content:flex-start;
+  padding:8px 11px;border:0;border-radius:6px;
+  background:#343734;color:#f1f1f1;
+  font-size:12px;text-align:left;text-decoration:none
+}
+.browser-file-menu-panel button:disabled{opacity:.38;cursor:not-allowed}
+.browser-file-menu-panel button:not(:disabled):hover,
+.browser-file-menu-panel a:hover{background:#414b44}
+.browser-file-menu-panel .browser-file-move{
+  display:grid;gap:6px;width:100%;margin:0;
+  padding:8px 10px;color:#ccc;font-size:11px
+}
+.browser-file-menu-panel .browser-file-move select{max-width:100%;width:100%}
+.browser-file-menu-root :focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+
+/* Browser v3 folder actions use the same one-menu-at-a-time behavior as
+   files; the existing encrypted folder mutation controllers are reused. */
+.browser-folder-item{position:relative;overflow:visible}
+.browser-folder-menu-root{position:relative;flex:0 0 auto;margin-left:auto}
+.browser-folder-menu-toggle{width:36px;height:36px;min-width:36px;
+  display:grid;place-items:center;padding:0;
+  border:1px solid #454545;border-radius:8px;
+  background:#2b302d;color:#edf2ed;font-size:19px;letter-spacing:1px}
+.browser-folder-menu-toggle[aria-expanded=true]{
+  border-color:var(--accent);background:#333e36
+}
+.browser-folder-menu-panel{position:absolute;right:0;top:calc(100% + 4px);
+  z-index:121;width:min(300px,calc(100vw - 34px));
+  max-height:min(64dvh,470px);overflow-y:auto;
+  padding:11px;background:#292b29;border:1px solid #555;
+  border-radius:9px;box-shadow:0 14px 34px #000a;
+  display:grid;gap:7px;align-items:stretch}
+.browser-folder-menu-panel>button{
+  min-width:0;width:100%;min-height:38px;padding:9px 11px;
+  border:0;border-radius:6px;text-align:left;
+  background:#343934;color:#f1f1f1;font-size:12px
+}
+.browser-folder-menu-panel>button:disabled{opacity:.4;cursor:not-allowed}
+.browser-folder-menu-panel .browser-folder-parent{
+  display:grid;gap:6px;min-width:0;width:100%;
+  padding:8px 10px;font-size:11px;color:#d1d1d1
+}
+.browser-folder-menu-panel .browser-folder-parent select{
+  width:100%;min-width:0;max-width:100%
+}
+.browser-folder-menu-root :focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+
+/* Browser v3 selection is explicit. Only the ORIGINAL signed batch
+   operations live in this dropdown. Zero items is a valid selection state. */
+.browser-batch-toolbar[data-testid="browser-selection-toolbar"]{
+  display:flex;align-items:center;gap:8px;flex-wrap:nowrap;
+  position:relative;margin:12px 0;padding:8px 10px;
+  border-radius:8px;background:#252c27;
+  border:1px solid #39493d;min-height:53px
+}
+.browser-batch-toolbar [data-testid="browser-selection-count"]{
+  flex:1;min-width:0;font-size:12px;white-space:nowrap;font-weight:740
+}
+.browser-batch-toolbar>button,
+.browser-batch-actions-root>button{
+  min-height:36px;padding:7px 12px;background:#343a35;
+  color:#e4e9e4;border:1px solid #4c554e;border-radius:6px;
+  font-size:12px;font-weight:700
+}
+.browser-batch-actions-root{position:relative;flex:0 0 auto}
+.browser-batch-actions-root>button[aria-expanded=true]{
+  border-color:var(--accent);background:#414d43
+}
+.browser-batch-actions-panel{
+  display:flex;flex-direction:column;align-items:stretch;flex-wrap:nowrap;
+  gap:8px;position:absolute;right:0;top:calc(100% + 6px);
+  z-index:129;width:min(340px,calc(100vw - 30px));
+  max-height:min(70dvh,570px);overflow:auto;
+  padding:11px;background:#292b29;border:1px solid #566059;
+  border-radius:9px;box-shadow:0 16px 40px #000b
+}
+.browser-batch-actions-panel button{display:flex;align-items:center;
+  justify-content:flex-start;min-width:0;width:100%;
+  min-height:38px;padding:9px 10px;text-align:left;
+  background:#383d39;color:#eee;font-size:12px;border:0;border-radius:6px
+}
+.browser-batch-actions-panel button:disabled{opacity:.4;cursor:not-allowed}
+.browser-batch-actions-panel label{display:grid;gap:5px;padding:5px 2px;
+  font-size:11px}
+.browser-batch-actions-panel select{width:100%;min-height:39px}
+.browser-batch-actions-root :focus-visible,
+.browser-batch-toolbar>button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px
+}
+@media(max-width:380px){
+  .browser-batch-toolbar[data-testid="browser-selection-toolbar"]{
+    gap:5px;padding:7px
+  }
+  .browser-batch-toolbar>button,
+  .browser-batch-actions-root>button{padding:7px 8px;font-size:11px}
 }

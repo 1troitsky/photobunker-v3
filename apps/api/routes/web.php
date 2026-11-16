@@ -42,7 +42,7 @@ Route::prefix('billing/v1')->middleware('throttle:40,1')->group(function(){
 // Laravel 'web' middleware supplies encrypted sessions and CSRF.
 // Mutating calls additionally check the exact browser Origin in the controllers.
 // No pairing or password reset route: new devices require the Recovery Key.
-Route::prefix('identity/v2')->middleware('throttle:40,1')->group(function(){
+Route::prefix('identity/v2')->middleware('throttle:pb3-identity')->group(function(){
     Route::get('/csrf',[IdentityController::class,'csrf']);
     Route::post('/prepare',[IdentityController::class,'prepare']);
     Route::post('/challenges',[IdentityController::class,'challenge']);

@@ -1,5 +1,28 @@
 # PB3 — единственная таблица прогресса
 
+## Дополнение: Frontend Fieldwork / Draft PR #412 — 16.11.2026
+
+**Ветка:** `integration/pb3-one-frontend-shell-20261115`. **Статус:** код в Draft PR; `main` не изменён. Это не новая оценка процента готовности и **не owner acceptance**. Упомянутый ниже HEAD фиксируется в [PR #412](https://github.com/1troitsky/photobunker-v3/pull/412); из-за продолжающихся коммитов хеш проверять по PR перед проверкой.
+
+| Направление frontend | Код в отдельной Draft-ветке | Проверка / блокер |
+| --- | --- | --- |
+| Unified Fieldwork Shell | Общий Header 64px, Dock 82px, контекстные действия Browser/Camera, брендинг без hardcode | UX parity на реальных устройствах НЕ ПРИНЯТА |
+| Browser v3 | Все/Мои фото/Задания/Архив; Grid/List/Tree, реальные зашифрованные папки, Breadcrumbs, Header actions; bottom sheets New Folder/Upload/Settings; локальные настройки «Открывать первым», «Папки всегда сверху», «Показывать оставшиеся дни»; приватный поиск по текущей/выбранной/всем загруженным папкам без HTTP-запроса с текстом поиска; сортировка по видимому NAME-ID; реальные меню ••• для файлов и пользовательских папок с прежними подписанными/зашифрованными действиями; «Выбрано: N / Отмена / Действия» с прежней защищённой пакетной обработкой; переход для личных Media к действующему E2EE-редактору новой копии; архивный TTL/ACL без ослабления; ограниченные JPEG-превью локальных E2EE-фото в обложках папок и файлах только в памяти | Cloud-only assignment classification и миниатюры облачных файлов без локально подтверждённого доступа нельзя обещать; сортировка по дате изменения требует подтверждённого `modifiedAt`, которого нет в текущем индексе; решение для нового Share по `docs/ux/browser/SHARING-OPEN-QUESTIONS.md` НЕ принято и нельзя автоматически подключать Browser Collection; массовые теги/категории требуют отдельного утверждённого E2EE revision/outbox-контракта — Issue #413 (BLOCKED, не имитировать изменением подписи в UI); pixel-perfect parity не подтверждена |
+| Camera Fieldwork 1.2 | Фото/Видео/Аудио, реальный capture/MediaRecorder и stop timer; Header flip/torch/blind; 3×3, GPS consent/watch, нижние sheets; AES-GCM device presets, фото-обрезка и настройки качества | Safari iOS / Chrome Android: torch, разрешения, codec/duration, screenshot geometry **NOT TESTED** |
+| Regression coverage | Vitest encrypted presets/JPEG/MediaRecorder/GPS/безопасных in-memory миниатюр/локальных настроек сортировки; Playwright Browser Header/sections/folders/import/settings/E2EE thumbnail/перемещения списка папок/действий файлов и папок через меню •••/явного режима массового выбора/перехода в существующий редактор E2EE-копии и Camera viewfinder/overlays/presets | Exact latest HEAD CI **НЕ ПОДТВЕРЖДЁН**. В промежуточном `7c2fee0` Chromium PG18/Garage **118/120 PASS, 2 FAIL**; `c3d4473` frontend 744/745 PASS, 1 FAIL; исправления внесены позднее и требуют полного повторного прогона |
+| Security-gated feature UX | Не объявлять PIN/Panic/Matrix/public safe sharing/paid settlement/backup restore/signed offline PWA готовыми по наличию экранов | Backend/Security release gates + независимые E2E и owner acceptance обязательны |
+
+**Исправление приватного поиска (16.11, PR #412):** `expandPrivateSearch` ранее переключал `searchFolderScope='all'` после получения дополнительных авторизованных индексных страниц. Это нарушало область «Выбранная папка». Теперь расширенный поиск сохраняет исходную область, привязан к `scopeAtStart/folderAtStart` и отменяет устаревшие результаты при смене папки/области. `p2-browser-private-search.spec.ts` дополнен сценарием: на втором устройстве есть облачный файл в корне и пустая выбранная папка; расширение не должно раскрыть этот файл в результате до явного выбора «Все папки». Тест **добавлен, но CI текущего HEAD не подтверждён**.
+
+**Важная регрессия в E2E (16.11):** файл `tests/e2e/p2-browser-editor-personal-metadata-copy.spec.ts` был повреждён строковой заменой (дублированный хвост и незавершённый `RegExp`); восстановлен из чистого `4213f76e` и точечно обновлён для `Browser ••• → Info E2EE copy` в `8c3739c2`. Это устранение дефектного тестового исходника, а не доказательство успешного CI.
+
+**CI-доказательства (прошлые SHA):** `04a805f0` — frontend TypeScript FAILED на неверных test-fixtures `new Blob([1])` (исправлено `Uint8Array.of` в более позднем HEAD); PG18/Garage E2E **120/121 PASS, 1 FAIL** из-за cold-offline `page.goto` в тесте thumbnail (исправлено `context.setOffline(false)`, физическая/offline-boot acceptance не заявлена). `1e991785` — TypeScript FAILED на `string|null` в древнем folder preview walker; новый `folderCoverIndex` использует явно `string|null`. **Последний HEAD требует полного повторного CI.**
+
+**Решение:** продолжать реализацию и независимые проверки; не выполнять merge/релиз, пока не будет точного CI PASS и UX/device acceptance. Непроверенные макеты не превращать в статус «готово».
+
+---
+
+
 **Срез 13.11.2026.** Проценты не используются: реализация, тестирование и приёмка — разные состояния. `main` проверен по удалённому SHA: **`da7327b8c9c440dae3dc864b3245b9f9f4ad14eb`**. Ошибочный merge #290 (`9160cbf1…`) в нём **не достижим**, несмотря на GitHub `merged`.
 
 Одна изолированная ветка `integration/global-acceptance-20261113` сохраняет #290 **`f4bce2e1…`** и его историю, переносит только clock-margin #63 с новыми Safe/ACL ceilings и обновляет 5 уязвимых Symfony patch-версий. #292 / Matrix / альтернативный GPS #262 не добавлены. Отдельного разрешения на merge main нет.

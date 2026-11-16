@@ -1,11 +1,27 @@
 <script setup lang="ts">
 import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
 import {RouterLink} from 'vue-router'
+import {browserShellActions,clearBrowserShellActions}
+  from '../features/browser/application/browser-shell-actions'
+import {makeBrowserFolderThumbnail}
+  from '../features/browser/application/browser-folder-thumbnail'
+import {mayCopyPersonalMediaSource}
+  from '../features/browser/application/personal-media-copy'
+import {
+  readBrowserOpeningSection,saveBrowserOpeningSection,
+  readBrowserFoldersFirst,saveBrowserFoldersFirst,
+} from '../features/browser/application/browser-display-preferences'
+import type {BrowserOpeningSection}
+  from '../features/browser/application/browser-display-preferences'
+import {
+  browserRetentionLabel,readBrowserDaysLeft,saveBrowserDaysLeft,
+} from '../features/browser/application/browser-days-left'
 import {
   captureBrowserReturnContext,takeBrowserReturn,
 } from '../features/browser/application/browser-return-context'
 import SharePanel from '../features/sharing/SharePanel.vue'
 import MediaImportPanel from '../features/media/ui/MediaImportPanel.vue'
+import MediaSharePanel from '../features/media/ui/MediaSharePanel.vue'
 import {activeSession,reauthenticate} from '../features/identity/application/session'
 import {
   flushOutbox,listLocalPhotos,listCloudPhotos,
@@ -72,9 +88,12 @@ const mediaCursor=ref<string|null>(null)
 const filter=ref<CatalogFilter>('all')
 const sort=ref<CatalogSort>('newest')
 const view=ref<CatalogView>('list')
+const treeExpanded=ref<string[]>([])
 const search=ref('')
 // Ephemeral search UI preference, never persisted or sent to the server.
-const searchFolderScope=ref<'current'|'all'>('current')
+type SearchFolderScope='current'|'selected'|'all'
+const searchFolderScope=ref<SearchFolderScope>('current')
+const searchSelectedFolder=ref<string|null>(null)
 // Search terms and decrypted match membership are VOLATILE: never persisted,
 // synced or placed in a server query parameter.
 const privateSearchResult=ref<PrivateSearchResult|null>(null)
@@ -121,12 +140,111 @@ const selectedFolder=ref<string|null>(null)
 let requestedFolderReturn:string|null|undefined
 let scrollReturnKey:string|null=null
 const createFolderOpen=ref(false)
+const createFolderParent=ref('')
+const uploadSheetOpen=ref(false)
+const sharePhotoId=ref<string|null>(null)
+const shareMediaId=ref<string|null>(null)
+const shareFileKey=ref<string|null>(null)
+const browserSettingsOpen=ref(false)
+const showRemainingDays=ref(readBrowserDaysLeft())
+const browserOpenFirst=ref<BrowserOpeningSection>(readBrowserOpeningSection())
+const foldersFirst=ref(readBrowserFoldersFirst())
+function updateBrowserOpenFirst(next:BrowserOpeningSection):void{
+  if(saveBrowserOpeningSection(next))browserOpenFirst.value=next
+}
+function updateBrowserFoldersFirst(value:boolean):void{
+  if(saveBrowserFoldersFirst(value))foldersFirst.value=value
+}
+const retentionClock=ref(Date.now())
+let retentionTimer:ReturnType<typeof setInterval>|null=null
+function updateRemainingDays(enabled:boolean):void{
+  if(saveBrowserDaysLeft(enabled))showRemainingDays.value=enabled
+}
+function retentionLabel(expiresAt:number):string{
+  return browserRetentionLabel(
+    expiresAt,retentionClock.value,showRemainingDays.value,
+  )
+}
 const newFolderName=ref('')
 const editingFolderId=ref<string|null>(null)
 const editFolderName=ref('')
 const selectedKeys=ref<string[]>([])
+const selectionMode=ref(false)
+const bulkActionsOpen=ref(false)
+function cancelSelectionMode():void{
+  selectionMode.value=false
+  selectedKeys.value=[]
+  bulkActionsOpen.value=false
+  closeFileMenu()
+}
+function closeBulkActions():void{
+  bulkActionsOpen.value=false
+  void nextTick(()=>document.querySelector<HTMLButtonElement>(
+    '[data-testid="browser-selection-actions"]')?.focus())
+}
+const fileMenuKey=ref<string|null>(null)
+const folderMenuId=ref<string|null>(null)
+function closeFileMenu():void{
+  fileMenuKey.value=null
+  folderMenuId.value=null
+}
+function fileMenuEscape(key:string):void{
+  closeFileMenu()
+  void nextTick(()=>{
+    const toggle=document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-file-menu-'+key+'"] button.browser-file-menu-toggle',
+    )
+    toggle?.focus()
+  })
+}
+function toggleFolderMenu(id:string):void{
+  if(!folders.value.some(folder=>folder.id===id))return
+  folderMenuId.value=folderMenuId.value===id?null:id
+  fileMenuKey.value=null
+}
+function folderMenuEscape():void{
+  const id=folderMenuId.value
+  closeFileMenu()
+  if(id)void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-folder-menu-'+id+'"] button.browser-folder-menu-toggle',
+    )?.focus()
+  })
+}
+function toggleFileMenu(key:string):void{
+  if(!visible.value.some(item=>item.key===key))return
+  fileMenuKey.value=fileMenuKey.value===key?null:key
+  folderMenuId.value=null
+}
+function onBrowserMenuPointerDown(event:PointerEvent):void{
+  const el=event.target
+  if(fileMenuKey.value||folderMenuId.value){
+    if(!(el instanceof Element)||!el.closest(
+      '.browser-file-menu-root,.browser-folder-menu-root',
+    ))closeFileMenu()
+  }
+  if(bulkActionsOpen.value
+    &&(!(el instanceof Element)||!el.closest('.browser-batch-actions-root')))
+    bulkActionsOpen.value=false
+}
 const bulkDestination=ref('')
 const archiveTab=ref<'all'|'archive'>('all')
+type PrimarySection='all'|'personal'|'assignments'
+const primarySection=ref<PrimarySection>('all')
+function choosePrimarySection(next:PrimarySection|'archive'):void{
+  if(next==='archive'){
+    if(!archivePrefsShown.value.useArchive)return
+    archiveTab.value='archive'
+    primarySection.value='all'
+  }else{
+    archiveTab.value='all'
+    primarySection.value=next
+  }
+  filter.value='all'
+  search.value=''
+  selectedFolder.value=null
+  selectedKeys.value=[]
+}
 const archiveEntries=ref<ArchiveEntry[]>([])
 const archiveCursor=ref<string|null>(null)
 const archiveBusy=ref(false)
@@ -145,6 +263,12 @@ const archivePrefsConflict=ref(false)
 const archivePrefsShown=computed<ArchivePreferenceValues>(()=>
   archivePrefs.value?effectiveArchivePreferenceValues(archivePrefs.value)
     :{useArchive:true,autoDeleteAfter7Days:true})
+watch(()=>archivePrefsShown.value.useArchive,enabled=>{
+  // The accepted Browser v3 hides the Archive tab when the user disables
+  // it. Hiding is ONLY presentation, never authorization to erase or extend
+  // an archived asset's signed TTL.
+  if(!enabled&&archiveTab.value==='archive')archiveTab.value='all'
+})
 const archivePrefsConfirmed=computed(()=>
   !!archivePrefs.value?.confirmed&&!archivePrefs.value?.draft
     &&!archivePrefs.value?.pending)
@@ -238,8 +362,92 @@ const archivedByKey=computed(()=>new Map(
 ))
 const folders=computed(()=>folderChildren(folderWorkspace.value,selectedFolder.value))
 const breadcrumb=computed(()=>folderPath(folderWorkspace.value,selectedFolder.value))
+function upOneFolder():void{
+  if(selectedFolder.value===null)return
+  const path=breadcrumb.value
+  selectedFolder.value=path.length>1?path[path.length-2]!.id:null
+}
 const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
   .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
+/**
+ * Browser v3: the move dropdown must never OFFER moving a folder into
+ * itself or any descendant. The domain's cycle validation remains the
+ * authoritative guard for manipulated events and concurrent edits.
+ */
+function validFolderMoveTargets(id:string){
+  const workspace=folderWorkspace.value
+  return allFolders.value.filter(candidate=>{
+    let cursor:string|null=candidate.id,steps=0
+    while(cursor!==null&&steps++<300){
+      if(cursor===id)return false
+      cursor=workspace.folders[cursor]?.parentId??null
+    }
+    return cursor===null
+  })
+}
+function setSearchFolderScope(next:SearchFolderScope):void{
+  if(next==='selected'&&(!searchSelectedFolder.value
+    ||!folderWorkspace.value.folders[searchSelectedFolder.value])){
+    searchSelectedFolder.value=selectedFolder.value
+      ??allFolders.value[0]?.id??null
+    if(!searchSelectedFolder.value){
+      searchFolderScope.value='current'
+      return
+    }
+  }
+  searchFolderScope.value=next
+}
+watch(allFolders,folders=>{
+  if(searchSelectedFolder.value
+    &&!folders.some(x=>x.id===searchSelectedFolder.value)){
+    searchSelectedFolder.value=null
+    if(searchFolderScope.value==='selected')searchFolderScope.value='current'
+  }
+})
+function folderLoadedRows(folderId:string):CatalogItem[]{
+  return folderCoverIndex.value.get(folderId)?.items??[]
+}
+function folderLoadedCount(folderId:string):number{
+  return folderCoverIndex.value.get(folderId)?.total??0
+}
+function folderCoverSymbol(item:CatalogItem):string{
+  return item.type==='photo'?'▧':item.type==='video'?'▹':'♫'
+}
+function canEditViaPrivateCopy(item:CatalogItem):boolean{
+  if(item.source!=='media'||!item.local||item.expiresAt<=Date.now())
+    return false
+  const row=localMedia.value.find(media=>media.mediaId===item.id)
+  // Only personal local media. A signed assignment capture MUST NOT
+  // be copied as if it were an independently editable owner file.
+  return mayCopyPersonalMediaSource(row)
+}
+const treeNodes=computed(()=>{
+  const workspace=folderWorkspace.value
+  const results:{id:string;name:string;depth:number;children:number}[]=[]
+  const walk=(parentId:string|null,depth:number):void=>{
+    for(const node of folderChildren(workspace,parentId)){
+      const children=folderChildren(workspace,node.id).length
+      results.push({id:node.id,name:node.name,depth,children})
+      if(treeExpanded.value.includes(node.id)&&depth<300)walk(node.id,depth+1)
+    }
+  }
+  walk(null,0)
+  return results
+})
+function toggleTreeFolder(id:string):void{
+  if(!folderWorkspace.value.folders[id])return
+  if(treeExpanded.value.includes(id))
+    treeExpanded.value=treeExpanded.value.filter(x=>x!==id)
+  else treeExpanded.value=[...treeExpanded.value,id]
+}
+function selectTreeFolder(id:string|null):void{
+  if(id!==null&&!folderWorkspace.value.folders[id])return
+  selectedFolder.value=id
+  if(id!==null){
+    const ancestors=folderPath(folderWorkspace.value,id).map(node=>node.id)
+    treeExpanded.value=[...new Set([...treeExpanded.value,...ancestors])]
+  }
+}
 const importFolderOptions=computed(()=>allFolders.value.map(folder=>({
   id:folder.id,
   label:folderPath(folderWorkspace.value,folder.id)
@@ -262,6 +470,117 @@ const items=computed(()=>buildCatalog(
     })),
   ],
 ))
+// Build the 2×2 covers ONCE per authenticated catalog/folder revision.
+// The previous per-folder function scanned every file 4+ times during render.
+// Rows are bounded to four; the count includes known nested descendants only.
+const folderCoverIndex=computed(()=>{
+  const workspace=folderWorkspace.value
+  const result=new Map<string,{items:CatalogItem[];total:number}>()
+  for(const id of Object.keys(workspace.folders)){
+    result.set(id,{items:[],total:0})
+  }
+  for(const item of items.value){
+    const archived=archivedByKey.value.get(item.key)?.state
+    if(archived==='archived'||archived==='deleting')continue
+    let parent:string|null=workspace.placements[item.key]??null
+    let hops=0
+    while(parent!==null&&hops++<300){
+      const summary=result.get(parent)
+      if(!summary)break
+      summary.total++
+      if(summary.items.length<4)summary.items.push(item)
+      parent=workspace.folders[parent]?.parentId??null
+    }
+  }
+  return result
+})
+// Only a handful of LOCAL decrypted image tiles are shown. No full-res
+// background cloud downloads, private persistent caches, or native galleries.
+const folderThumbnailUrls=ref<Record<string,string>>({})
+let folderThumbnailEpoch=0
+let folderThumbnailOwner:typeof activeSession.value=null
+function revokeFolderThumbnails():void{
+  ++folderThumbnailEpoch
+  for(const url of Object.values(folderThumbnailUrls.value))
+    URL.revokeObjectURL(url)
+  folderThumbnailUrls.value={}
+  folderThumbnailOwner=null
+}
+const folderThumbnailCandidateKeys=computed(()=>{
+  const keys:string[]=[]
+  const add=(row:CatalogItem):void=>{
+    if(row.local&&row.type==='photo'&&!keys.includes(row.key))
+      keys.push(row.key)
+  }
+  // At most 8 folder cards × 4 cells, capped to 12 decoded images.
+  for(const folder of folders.value.slice(0,8)){
+    for(const row of folderLoadedRows(folder.id)){
+      add(row)
+      if(keys.length>=12)return keys
+    }
+  }
+  // The same small in-memory preview serves actual list/grid file rows.
+  for(const row of visible.value.slice(0,12)){
+    add(row)
+    if(keys.length>=16)break
+  }
+  return keys
+})
+async function warmFolderThumbnails():Promise<void>{
+  const owner=activeSession.value
+  if(folderThumbnailOwner!==owner){
+    revokeFolderThumbnails()
+    folderThumbnailOwner=owner
+  }
+  const token=++folderThumbnailEpoch
+  const selected=new Set(folderThumbnailCandidateKeys.value)
+  const existing={...folderThumbnailUrls.value}
+  for(const [key,url] of Object.entries(existing)){
+    if(selected.has(key))continue
+    URL.revokeObjectURL(url)
+    delete existing[key]
+  }
+  folderThumbnailUrls.value=existing
+  if(!owner)return
+  // Sequential crypto/decoding bounds peak decoded memory to one image.
+  for(const key of selected){
+    if(token!==folderThumbnailEpoch||owner!==activeSession.value)return
+    if(folderThumbnailUrls.value[key])continue
+    const row=items.value.find(item=>item.key===key&&item.local
+      &&item.type==='photo')
+    if(!row)continue
+    try{
+      const blob=row.source==='photo'
+        ?await readLocalPhoto(row.id)
+        :(await readLocalMedia(row.id)).blob
+      if(token!==folderThumbnailEpoch||owner!==activeSession.value)return
+      const jpeg=await makeBrowserFolderThumbnail(blob)
+      if(token!==folderThumbnailEpoch||owner!==activeSession.value)return
+      const url=URL.createObjectURL(jpeg)
+      if(token!==folderThumbnailEpoch||owner!==activeSession.value){
+        URL.revokeObjectURL(url)
+        return
+      }
+      folderThumbnailUrls.value={...folderThumbnailUrls.value,[key]:url}
+    }catch{
+      // Decryption, MIME, codec and memory failures produce the neutral icon.
+      // Never display raw bytes or treat failed decryption as successful.
+    }
+  }
+}
+// Classification is a VISUAL scope only. The assignment page owns server
+// roster/ACL enforcement. Cloud-only index rows have no signed capture
+// provenance and cannot be falsely categorized as assigned media here.
+const localAssignmentKeys=computed(()=>{
+  const scoped=new Set<string>()
+  for(const photo of localPhotos.value){
+    if(photo.capture)scoped.add('photo:'+photo.photoId)
+  }
+  for(const media of localMedia.value){
+    if(media.capture)scoped.add('media:'+media.mediaId)
+  }
+  return scoped
+})
 const searchScope=computed(()=>{
   const authenticatedRows=filterCatalog(items.value,{
     type:filter.value,query:'',sort:sort.value,
@@ -271,13 +590,31 @@ const searchScope=computed(()=>{
       return archived==='archived'||archived==='deleting'
     return archived!=='archived'&&archived!=='deleting'
   })
+  // "Мои фото" and "Задания" restrict the already-authenticated catalog.
+  // These are NOT authorization scopes and MUST NOT invent cloud-only proof.
+  const scopedRows=archiveTab.value==='archive'||primarySection.value==='all'
+    ?authenticatedRows
+    :primarySection.value==='personal'
+      ?authenticatedRows.filter(item=>item.type==='photo'&&item.local
+        &&!localAssignmentKeys.value.has(item.key))
+      :authenticatedRows.filter(item=>localAssignmentKeys.value.has(item.key))
   // Folders are encrypted virtual client metadata. An all-folder query
   // sees ONLY rows already loaded from authenticated catalog endpoints.
   // Archive already has its own scope, independent of the active folder.
-  if(archiveTab.value==='archive'||!folderReady.value)return authenticatedRows
+  if(archiveTab.value==='archive'||!folderReady.value)return scopedRows
+  const hasQuery=search.value.trim().length>0
+  if(hasQuery&&searchFolderScope.value==='selected'){
+    const target=searchSelectedFolder.value
+    // No selected or still-existing folder means NO matches, not root
+    // or an accidental account-wide search.
+    if(!target||!folderWorkspace.value.folders[target])return []
+    return scopeCatalogFolders(
+      scopedRows,folderWorkspace.value.placements,target,false,
+    )
+  }
   return scopeCatalogFolders(
-    authenticatedRows,folderWorkspace.value.placements,selectedFolder.value,
-    search.value.trim().length>0&&searchFolderScope.value==='all',
+    scopedRows,folderWorkspace.value.placements,selectedFolder.value,
+    hasQuery&&searchFolderScope.value==='all',
   )
 })
 const visible=computed(()=>filterCatalog(searchScope.value,{
@@ -285,6 +622,9 @@ const visible=computed(()=>filterCatalog(searchScope.value,{
   privateMatches:privateSearchResult.value?.query===normalizePrivateSearch(search.value)
     ?privateSearchResult.value.matches:undefined,
 }))
+watch([activeSession,folderThumbnailCandidateKeys],
+  ()=>{void warmFolderThumbnails()},{immediate:true})
+
 function catalogSizeLabel(bytes:number|null):string{
   if(bytes===null||!Number.isSafeInteger(bytes)||bytes<0)
     return 'Размер неизвестен'
@@ -355,9 +695,13 @@ async function expandPrivateSearch():Promise<void>{
     ||query.length<2||query.length>160)return
   const token=++privateExpansionEpoch
   const catGeneration=generation
+  const scopeAtStart=searchFolderScope.value
+  const folderAtStart=searchSelectedFolder.value
   const valid=()=>token===privateExpansionEpoch
     &&identity===activeSession.value&&generation===catGeneration
     &&normalizePrivateSearch(search.value)===query
+    &&searchFolderScope.value===scopeAtStart
+    &&searchSelectedFolder.value===folderAtStart
     &&archiveTab.value==='all'
     &&(typeof navigator==='undefined'||navigator.onLine!==false)
   privateExpansionBusy.value=true
@@ -386,7 +730,8 @@ async function expandPrivateSearch():Promise<void>{
       for(const item of media.items)known.set(item.mediaId,item)
       cloudMedia.value=[...known.values()]
     }
-    searchFolderScope.value='all'
+    // Expanded authenticated index pages may include many folders, but a
+    // wider network fetch must never change the explicit local search scope.
     privateSearchExpanded.value=true
     privateExpansionStatus.value='Получено '+photos.items.length+' фото и '
       +media.items.length+' медиа из авторизованных индексов. '
@@ -788,9 +1133,16 @@ async function changeFolders(change:Parameters<typeof changeFolderWorkspace>[0])
   }
 }
 async function createFolder():Promise<void>{
+  const parent=createFolderParent.value||null
   const ok=await changeFolders({kind:'add',id:crypto.randomUUID(),
-    parentId:selectedFolder.value,name:newFolderName.value,at:Date.now()})
-  if(ok){newFolderName.value='';createFolderOpen.value=false}
+    parentId:parent,name:newFolderName.value,at:Date.now()})
+  if(ok){
+    newFolderName.value=''
+    createFolderOpen.value=false
+    createFolderParent.value=''
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-header-folder"]')?.focus()
+  }
 }
 function openRename(id:string,name:string):void{
   editingFolderId.value=id;editFolderName.value=name
@@ -815,6 +1167,7 @@ async function changeItemFolder(item:CatalogItem,event:Event):Promise<void>{
     folderWorkspace.value.placements[item.key]??''
 }
 function toggleItem(key:string,checked:boolean):void{
+  if(!selectionMode.value||!visible.value.some(row=>row.key===key))return
   if(checked){
     if(selectedKeys.value.includes(key))return
     if(selectedKeys.value.length>=200){
@@ -1048,9 +1401,11 @@ function preserveViewerOrigin(item:CatalogItem,event:MouseEvent):void{
   captureBrowserReturnContext({
     accountId:identity.accountId,deviceId:identity.deviceId,
     fileKey:item.key,folderId:selectedFolder.value,
+    folderNames:breadcrumb.value.map(folder=>folder.name),
     filter:filter.value,sort:sort.value,view:view.value,
     search:search.value,searchFolderScope:searchFolderScope.value,
-    archiveTab:archiveTab.value,
+    searchSelectedFolder:searchSelectedFolder.value,
+    archiveTab:archiveTab.value,primarySection:primarySection.value,
     fileKeys:visible.value.map(row=>row.key),
   })
 }
@@ -1077,9 +1432,19 @@ watch(activeSession,(next,previous)=>{
     scrollReturnKey=null
     editingFolderId.value=null
     createFolderOpen.value=false
+    createFolderParent.value=''
+    uploadSheetOpen.value=false
+    sharePhotoId.value=null
+    shareMediaId.value=null
+    shareFileKey.value=null
+    browserSettingsOpen.value=false
     newFolderName.value=''
     editFolderName.value=''
     selectedKeys.value=[]
+    selectionMode.value=false
+    bulkActionsOpen.value=false
+    closeFileMenu()
+    treeExpanded.value=[]
     bulkDestination.value=''
     folderNotice.value=''
     folderSyncStatus.value=''
@@ -1087,6 +1452,8 @@ watch(activeSession,(next,previous)=>{
     mergeChoices.value={}
     mergeBackups.value=[]
     archiveTab.value='all'
+    primarySection.value='all'
+    if(next)choosePrimarySection(browserOpenFirst.value)
     archiveEntries.value=[]
     archiveCursor.value=null
     archiveNotice.value=''
@@ -1103,6 +1470,7 @@ watch(activeSession,(next,previous)=>{
     archivePrefsConflict.value=false
     search.value=''
     searchFolderScope.value='current'
+    searchSelectedFolder.value=null
     privateSearchResult.value=null
     void refreshArchivePending()
     void loadFolders()
@@ -1118,7 +1486,19 @@ watch(activeSession,(next,previous)=>{
   if(next)void loadArchivePrefState()
   void refresh()
 })
-watch([selectedFolder,filter,search,searchFolderScope,archiveTab],()=>{selectedKeys.value=[]})
+watch([selectedFolder,filter,search,searchFolderScope,archiveTab,primarySection],
+  ()=>{selectedKeys.value=[];bulkActionsOpen.value=false;closeFileMenu()})
+watch(visible,items=>{
+  if(fileMenuKey.value&&!items.some(item=>item.key===fileMenuKey.value))
+    closeFileMenu()
+  if(selectedKeys.value.length){
+    const valid=new Set(items.filter(item=>archiveTab.value==='all'
+      ||archivedByKey.value.get(item.key)?.state==='archived')
+      .map(item=>item.key))
+    const kept=selectedKeys.value.filter(key=>valid.has(key))
+    if(kept.length!==selectedKeys.value.length)selectedKeys.value=kept
+  }
+})
 watch([search,searchScope,activeSession,privateSearchExpanded],schedulePrivateSearch)
 watch([visible,folderReady],async()=>{
   const key=scrollReturnKey
@@ -1129,30 +1509,257 @@ watch([visible,folderReady],async()=>{
     `[data-testid="browser-row-${key}"]`)
   if(item){item.scrollIntoView({block:'center'});scrollReturnKey=null}
 })
-watch([search,archiveTab],()=>{
-  // Broader authenticated index fetches are explicit per typed query.
+watch([search,archiveTab,searchFolderScope,searchSelectedFolder],()=>{
+  // Broader authenticated index fetches are explicit per typed query/scope.
   // Changing the question/tab must invalidate in-flight work immediately.
   ++privateExpansionEpoch
   privateExpansionBusy.value=false
   privateSearchExpanded.value=false
   privateExpansionStatus.value=''
 })
+const browserHeaderOwner={}
+function scrollToElement(selector:string,focus=false):void{
+  const el=document.querySelector<HTMLElement>(selector)
+  el?.scrollIntoView({block:'start',behavior:'auto'})
+  if(focus)el?.focus({preventScroll:true})
+}
+function openCreateFolder():void{
+  if(!activeSession.value||!folderReady.value||!!folderError.value||folderBusy.value)return
+  uploadSheetOpen.value=false
+  browserSettingsOpen.value=false
+  createFolderParent.value=selectedFolder.value??''
+  createFolderOpen.value=true
+  void nextTick(()=>{
+    document.querySelector<HTMLInputElement>(
+      '[data-testid="browser-folder-name"]')?.focus()
+  })
+}
+function closeCreateFolder():void{
+  if(folderBusy.value)return
+  createFolderOpen.value=false
+  createFolderParent.value=''
+  newFolderName.value=''
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-header-folder"]')?.focus()
+  })
+}
+function newFolderSheetKeydown(event:KeyboardEvent):void{
+  if(!createFolderOpen.value)return
+  if(event.key==='Escape'){
+    event.preventDefault();closeCreateFolder();return
+  }
+  if(event.key!=='Tab')return
+  const root=document.querySelector<HTMLElement>(
+    '[data-testid="browser-new-folder-sheet"]')
+  const elements=Array.from(root?.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),input:not(:disabled),select:not(:disabled)'
+  )??[])
+  if(!elements.length)return
+  const first=elements[0]!,last=elements[elements.length-1]!
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
+}
+/** The accepted Browser file menu opens the EXISTING audited E2EE grant
+ * pipeline for the selected local photo, never an unrestricted share link.
+ * Received grants remain accessible through the legacy panel until the
+ * incoming-materials UX has an independently accepted destination. */
+function openPhotoShare(item:CatalogItem):void{
+  if(!activeSession.value||item.source!=='photo'||!item.local)return
+  sharePhotoId.value=item.id
+  shareMediaId.value=null
+  shareFileKey.value=item.key
+  uploadSheetOpen.value=false
+  createFolderOpen.value=false
+  browserSettingsOpen.value=false
+  closeFileMenu()
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-photo-share-close"]')?.focus()
+  })
+}
+function openMediaShare(item:CatalogItem):void{
+  if(!activeSession.value||item.source!=='media'||!item.local)return
+  sharePhotoId.value=null
+  shareMediaId.value=item.id
+  shareFileKey.value=item.key
+  uploadSheetOpen.value=false
+  createFolderOpen.value=false
+  browserSettingsOpen.value=false
+  closeFileMenu()
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-media-share-close"]')?.focus()
+  })
+}
+function closePhotoShare():void{
+  const key=shareFileKey.value
+  sharePhotoId.value=null
+  shareMediaId.value=null
+  shareFileKey.value=null
+  void nextTick(()=>{
+    if(key)document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-row-'+key+'"] [data-testid="browser-file-menu-toggle"]'
+    )?.focus()
+  })
+}
+function fileShareKeydown(event:KeyboardEvent):void{
+  if(!sharePhotoId.value&&!shareMediaId.value)return
+  if(event.key==='Escape'){
+    event.preventDefault();closePhotoShare();return
+  }
+  if(event.key!=='Tab')return
+  const root=document.querySelector<HTMLElement>(
+    '[data-testid="browser-photo-share-sheet"],[data-testid="browser-media-share-sheet"]')
+  const enabled=Array.from(root?.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]'
+  )??[])
+  if(!enabled.length)return
+  const first=enabled[0]!,last=enabled[enabled.length-1]!
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
+}
+function openUploadPanel():void{
+  if(!activeSession.value)return
+  createFolderOpen.value=false
+  browserSettingsOpen.value=false
+  uploadSheetOpen.value=true
+  // This is the ONE original MediaImportPanel instance; opening/closing
+  // merely moves its existing controls visually, with the durable encrypted
+  // outbox and the destination selection staying completely intact.
+  void nextTick(()=>{
+    if(uploadSheetOpen.value)
+      document.querySelector<HTMLButtonElement>(
+        '[data-testid="browser-import-sheet-close"]')?.focus()
+  })
+}
+function closeUploadPanel():void{
+  uploadSheetOpen.value=false
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-header-upload"]')?.focus()
+  })
+}
+function uploadSheetKeydown(event:KeyboardEvent):void{
+  if(!uploadSheetOpen.value)return
+  if(event.key==='Escape'){
+    event.preventDefault();closeUploadPanel();return
+  }
+  if(event.key!=='Tab')return
+  const root=document.querySelector<HTMLElement>('[data-testid="browser-import-sheet"]')
+  const enabled=Array.from(root?.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href]'
+  )??[])
+  if(!enabled.length)return
+  const first=enabled[0]!,last=enabled[enabled.length-1]!
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
+}
+function focusPrivateSearch():void{
+  if(!activeSession.value)return
+  scrollToElement('[data-testid="browser-search"]',true)
+}
+function openBrowserSettings():void{
+  if(!activeSession.value)return
+  createFolderOpen.value=false
+  uploadSheetOpen.value=false
+  browserSettingsOpen.value=true
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-settings-close"]')?.focus()
+  })
+}
+function closeBrowserSettings():void{
+  browserSettingsOpen.value=false
+  void nextTick(()=>{
+    document.querySelector<HTMLButtonElement>(
+      '[data-testid="browser-header-settings"]')?.focus()
+  })
+}
+function browserSettingsKeydown(event:KeyboardEvent):void{
+  if(!browserSettingsOpen.value)return
+  if(event.key==='Escape'){
+    event.preventDefault();closeBrowserSettings();return
+  }
+  if(event.key!=='Tab')return
+  const root=document.querySelector<HTMLElement>(
+    '[data-testid="browser-archive-preferences"]')
+  const enabled=Array.from(root?.querySelectorAll<HTMLElement>(
+    'button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href]'
+  )??[])
+  if(!enabled.length)return
+  const first=enabled[0]!,last=enabled[enabled.length-1]!
+  if(event.shiftKey&&document.activeElement===first){
+    event.preventDefault();last.focus()
+  }else if(!event.shiftKey&&document.activeElement===last){
+    event.preventDefault();first.focus()
+  }
+}
+function toggleBatchSelection():void{
+  if(!activeSession.value||!folderReady.value||!!folderError.value||folderBusy.value)return
+  if(selectionMode.value)cancelSelectionMode()
+  else{
+    selectionMode.value=true
+    selectedKeys.value=[]
+    bulkActionsOpen.value=false
+    closeFileMenu()
+  }
+}
+watch([activeSession,folderReady,folderError,folderBusy,visible,selectedKeys,selectionMode],()=>{
+  browserShellActions.value={
+    owner:browserHeaderOwner,
+    canCreateFolder:!!activeSession.value&&folderReady.value
+      &&!folderError.value&&!folderBusy.value,
+    canSelect:!!activeSession.value&&folderReady.value
+      &&!folderError.value&&!folderBusy.value
+      &&(selectionMode.value||visible.value.length>0),
+    selecting:selectionMode.value,
+    selectedCount:selectedKeys.value.length,
+    createFolder:openCreateFolder,openUpload:openUploadPanel,
+    toggleSelection:toggleBatchSelection,focusSearch:focusPrivateSearch,
+    openSettings:openBrowserSettings,
+  }
+},{immediate:true})
 onMounted(()=>{
+  document.addEventListener('pointerdown',onBrowserMenuPointerDown)
+  retentionClock.value=Date.now()
+  retentionTimer=setInterval(()=>{retentionClock.value=Date.now()},60000)
   const identity=activeSession.value
   const restored=identity?takeBrowserReturn(identity.accountId,identity.deviceId):null
   if(restored){
     filter.value=restored.filter;sort.value=restored.sort;view.value=restored.view
     search.value=restored.search
     searchFolderScope.value=restored.searchFolderScope
+    searchSelectedFolder.value=restored.searchSelectedFolder??null
     archiveTab.value=restored.archiveTab
+    primarySection.value=restored.primarySection??'all'
     requestedFolderReturn=restored.folderId
     scrollReturnKey=restored.fileKey
+  }else if(identity){
+    choosePrimarySection(browserOpenFirst.value)
   }
   schedulePrivateSearch()
   void loadFolders();void loadMergeBackups();void loadArchivePrefState()
   void refreshArchivePending();void refresh()
 })
 onUnmounted(()=>{
+  document.removeEventListener('pointerdown',onBrowserMenuPointerDown)
+  closeFileMenu()
+  sharePhotoId.value=null
+  shareMediaId.value=null
+  shareFileKey.value=null
+  revokeFolderThumbnails()
+  if(retentionTimer!==null){clearInterval(retentionTimer);retentionTimer=null}
+  clearBrowserShellActions(browserHeaderOwner)
   ++generation;++folderEpoch;++folderSyncEpoch;++archivePrefsEpoch
   ++privateSearchEpoch;++privateExpansionEpoch
   if(privateSearchTimer!==null)clearTimeout(privateSearchTimer)
@@ -1162,6 +1769,7 @@ onUnmounted(()=>{
   privateSearchExpanded.value=false
   search.value=''
   searchFolderScope.value='current'
+  searchSelectedFolder.value=null
   scrollReturnKey=null
   requestedFolderReturn=undefined
   archivePrefsBusy.value=false
@@ -1178,18 +1786,63 @@ onUnmounted(()=>{
     <div class="browser-title">
       <div>
         <h1>Browser</h1>
-        <p class="subtitle">Файлы и локальная очередь · без ожидания облака</p>
+        <p class="subtitle">Папок: {{ folders.length }} · Файлов: {{ visible.length }}</p>
       </div>
-      <RouterLink to="/camera">Камера</RouterLink>
+      <div v-if="activeSession" class="browser-view-switch"
+        aria-label="Вид каталога" data-testid="browser-view-switch">
+        <button type="button" :aria-pressed="view==='grid'"
+          data-testid="browser-view-grid" @click="view='grid'">Сетка</button>
+        <button type="button" :aria-pressed="view==='list'"
+          data-testid="browser-view-list" @click="view='list'">Список</button>
+        <button type="button" :aria-pressed="view==='tree'"
+          data-testid="browser-view-tree" @click="view='tree'">Дерево</button>
+      </div>
     </div>
     <div v-if="!activeSession" class="foundation-card">
       <p>Список файлов доступен после входа.</p>
       <RouterLink to="/settings">Открыть доступ</RouterLink>
     </div>
     <template v-else>
+      <nav class="browser-archive-tabs browser-primary-sections"
+        aria-label="Разделы Browser" data-testid="browser-primary-sections">
+        <button type="button" data-testid="browser-tab-active"
+          :aria-pressed="archiveTab==='all'&&primarySection==='all'"
+          @click="choosePrimarySection('all')">Все</button>
+        <button type="button" data-testid="browser-tab-personal"
+          :aria-pressed="archiveTab==='all'&&primarySection==='personal'"
+          @click="choosePrimarySection('personal')">Мои фото</button>
+        <button type="button" data-testid="browser-tab-assignments"
+          :aria-pressed="archiveTab==='all'&&primarySection==='assignments'"
+          @click="choosePrimarySection('assignments')">Задания</button>
+        <button v-if="archivePrefsShown.useArchive" type="button"
+          data-testid="browser-tab-archive"
+          :aria-pressed="archiveTab==='archive'"
+          @click="choosePrimarySection('archive')">Архив</button>
+      </nav>
+      <p v-if="primarySection==='personal'&&archiveTab==='all'"
+        class="browser-section-note" data-testid="browser-personal-catalog-scope">
+        Здесь показаны только доступные на этом устройстве фотографии без
+        подписанного контекста задания. Облачные файлы, назначение которых
+        ещё не проверено, остаются в разделе «Все».
+      </p>
+      <p v-if="primarySection==='assignments'&&archiveTab==='all'"
+        class="browser-section-note" data-testid="browser-assignment-catalog-scope">
+        Показываются только загруженные на этом устройстве материалы с
+        сохранённым подписанным контекстом задания. Проверка участия и доступов
+        выполняется при открытии файлов; облачные материалы без доказательства
+        задания здесь не классифицируются.
+      </p>
       <section class="browser-folders" data-testid="browser-folders">
         <div class="browser-folder-head">
           <div class="browser-breadcrumb" aria-label="Путь папки">
+            <button type="button" class="browser-folder-up" aria-label="На уровень выше"
+              data-testid="browser-folder-up" :disabled="selectedFolder===null"
+              @click="upOneFolder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" aria-hidden="true">
+                <path d="m14 5-7 7 7 7"/>
+              </svg>
+            </button>
             <button type="button" :aria-current="selectedFolder===null?'location':undefined"
               @click="selectedFolder=null">Мои файлы</button>
             <template v-for="part in breadcrumb" :key="part.id">
@@ -1199,8 +1852,7 @@ onUnmounted(()=>{
                 @click="selectedFolder=part.id">{{ part.name }}</button>
             </template>
           </div>
-          <button type="button" :disabled="!folderReady||!!folderError||folderBusy"
-            @click="createFolderOpen=!createFolderOpen">Новая папка</button>
+          <!-- Create Folder is the sole shared Header action per Browser v3. -->
         </div>
         <p class="muted">Названия и состав папок зашифрованы. Изменения сохраняются
           сразу на устройстве, а общий снимок передаётся только после подтверждения сервера.
@@ -1269,39 +1921,38 @@ onUnmounted(()=>{
               @click="restoreFolderBackup(backup.id)">Восстановить локально</button>
           </div>
         </div>
-        <form v-if="createFolderOpen" class="browser-folder-form" @submit.prevent="createFolder">
+        <div v-if="createFolderOpen" class="browser-new-folder-backdrop"
+          data-testid="browser-new-folder-backdrop"
+          @click="closeCreateFolder"></div>
+        <form v-if="createFolderOpen"
+          class="browser-folder-form browser-new-folder-sheet"
+          data-testid="browser-new-folder-sheet"
+          role="dialog" aria-modal="true" aria-label="Новая папка"
+          @keydown="newFolderSheetKeydown" @submit.prevent="createFolder">
+          <header class="browser-new-folder-heading">
+            <strong>Новая папка</strong>
+            <button type="button" data-testid="browser-new-folder-close"
+              :disabled="folderBusy" @click="closeCreateFolder">Закрыть</button>
+          </header>
           <label>Название папки
             <input v-model="newFolderName" maxlength="80" autocomplete="off"
               data-testid="browser-folder-name" required>
           </label>
-          <button type="submit" :disabled="folderBusy">Создать</button>
-          <button type="button" @click="createFolderOpen=false">Отмена</button>
-        </form>
-        <div class="browser-folder-list">
-          <div v-for="folder in folders" :key="folder.id" class="browser-folder-item"
-            :data-testid="'browser-folder-'+folder.id">
-            <button type="button" class="browser-folder-open"
-              @click="selectedFolder=folder.id">
-              <span aria-hidden="true">▣</span> {{ folder.name }}
-            </button>
-            <button type="button" :disabled="folderBusy"
-              :aria-label="'Переименовать '+folder.name"
-              @click="openRename(folder.id,folder.name)">Переименовать</button>
-            <label class="browser-folder-parent">
-              <span>В</span>
-              <select :value="folder.parentId??''" :disabled="folderBusy"
-                :aria-label="'Переместить папку '+folder.name"
-                @change="changeFolderParent(folder.id,$event)">
-                <option value="">Корень</option>
-                <option v-for="candidate in allFolders.filter(x=>x.id!==folder.id)"
-                  :key="candidate.id" :value="candidate.id">{{ candidate.name }}</option>
-              </select>
-            </label>
-            <button type="button" :disabled="folderBusy"
-              :aria-label="'Удалить пустую папку '+folder.name"
-              @click="deleteEmptyFolder(folder.id)">Удалить</button>
+          <label for="browser-new-folder-parent">Расположение
+            <select id="browser-new-folder-parent" v-model="createFolderParent"
+              data-testid="browser-new-folder-parent" :disabled="folderBusy">
+              <option value="">Мои файлы (корень)</option>
+              <option v-for="folder in importFolderOptions"
+                :key="folder.id" :value="folder.id">{{folder.label}}</option>
+            </select>
+          </label>
+          <div class="browser-new-folder-actions">
+            <button type="submit" :disabled="folderBusy">Создать</button>
+            <button type="button" :disabled="folderBusy" @click="closeCreateFolder">
+              Отмена</button>
           </div>
-        </div>
+        </form>
+        <div id="browser-folder-cards-top" data-testid="browser-folder-cards-top"></div>
         <form v-if="editingFolderId" class="browser-folder-form"
           @submit.prevent="renameCurrentFolder">
           <label>Новое название
@@ -1315,7 +1966,48 @@ onUnmounted(()=>{
         <p v-if="folderError" role="alert" class="error-text">{{ folderError }}</p>
         <p v-if="folderNotice" role="status" class="muted">{{ folderNotice }}</p>
       </section>
-      <section class="browser-archive-preferences" data-testid="browser-archive-preferences">
+      <div v-if="browserSettingsOpen" class="browser-settings-backdrop"
+        data-testid="browser-settings-backdrop" @click="closeBrowserSettings"></div>
+      <section v-show="browserSettingsOpen" class="browser-archive-preferences"
+        :class="{'is-browser-settings-sheet':browserSettingsOpen}"
+        data-testid="browser-archive-preferences"
+        :role="browserSettingsOpen?'dialog':undefined"
+        :aria-modal="browserSettingsOpen?'true':undefined"
+        :aria-label="browserSettingsOpen?'Настройки Browser':undefined"
+        @keydown="browserSettingsKeydown">
+        <header v-if="browserSettingsOpen" class="browser-settings-heading">
+          <strong>Настройки Browser</strong>
+          <button type="button" data-testid="browser-settings-close"
+            aria-label="Закрыть настройки Browser" @click="closeBrowserSettings">
+            Закрыть</button>
+        </header>
+        <h2>Отображение</h2>
+        <label for="browser-pref-open-first">Открывать первым
+          <select id="browser-pref-open-first" :value="browserOpenFirst"
+            data-testid="browser-pref-open-first"
+            @change="updateBrowserOpenFirst(($event.target as HTMLSelectElement).value as BrowserOpeningSection)">
+            <option value="all">Все</option>
+            <option value="personal">Мои фото</option>
+            <option value="assignments">Задания</option>
+            <option v-if="archivePrefsShown.useArchive" value="archive">Архив</option>
+          </select>
+        </label>
+        <label>
+          <input type="checkbox" data-testid="browser-pref-folders-first"
+            :checked="foldersFirst"
+            @change="updateBrowserFoldersFirst(($event.target as HTMLInputElement).checked)">
+          Папки всегда сверху
+        </label>
+        <p class="muted">Положение папок меняется только на экране.
+          Файлы и шифрованная структура остаются на прежнем месте.</p>
+        <label>
+          <input type="checkbox" data-testid="browser-pref-days-left"
+            :checked="showRemainingDays"
+            @change="updateRemainingDays(($event.target as HTMLInputElement).checked)">
+          Показывать оставшиеся дни
+        </label>
+        <p class="muted">Меняется только текст срока хранения. Подписанный TTL файла,
+          права доступа и очистка на сервере не изменяются.</p>
         <h2>Настройки архива</h2>
         <label>
           <input type="checkbox" data-testid="browser-pref-use-archive"
@@ -1349,13 +2041,10 @@ onUnmounted(()=>{
             :disabled="archivePrefsBusy||!activeSession.online"
             @click="acceptServerArchivePrefs">Принять настройки сервера</button>
         </div>
+        <div v-if="browserSettingsOpen" class="browser-settings-footer">
+          <button type="button" @click="closeBrowserSettings">Готово</button>
+        </div>
       </section>
-      <nav class="browser-archive-tabs" aria-label="Расположение файлов">
-        <button type="button" data-testid="browser-tab-active"
-          :aria-pressed="archiveTab==='all'" @click="archiveTab='all'">Каталог</button>
-        <button type="button" data-testid="browser-tab-archive"
-          :aria-pressed="archiveTab==='archive'" @click="archiveTab='archive'">Архив</button>
-      </nav>
       <p v-if="archiveTab==='archive'" class="muted">
         Файлы остаются зашифрованными до подтверждённого окончательного
         удаления. Архив не продлевает TTL.
@@ -1409,10 +2098,21 @@ onUnmounted(()=>{
         </label>
         <label v-if="archiveTab==='all'">
           <span class="browser-sr-only">Область поиска по загруженным файлам</span>
-          <select v-model="searchFolderScope"
-            data-testid="browser-search-folder-scope">
+          <select :value="searchFolderScope"
+            data-testid="browser-search-folder-scope"
+            @change="setSearchFolderScope(($event.target as HTMLSelectElement).value as SearchFolderScope)">
             <option value="current">Текущая папка</option>
+            <option value="selected" :disabled="!allFolders.length">Выбранная папка</option>
             <option value="all">Все папки (загруженные файлы)</option>
+          </select>
+        </label>
+        <label v-if="archiveTab==='all'&&searchFolderScope==='selected'"
+          for="browser-search-folder-target">
+          <span class="browser-sr-only">Выберите папку, в которой искать</span>
+          <select id="browser-search-folder-target" v-model="searchSelectedFolder"
+            data-testid="browser-search-folder-target">
+            <option v-for="folder in importFolderOptions" :key="folder.id"
+              :value="folder.id">{{ folder.label }}</option>
           </select>
         </label>
         <button v-if="archiveTab==='all'&&normalizePrivateSearch(search).length>=2"
@@ -1430,17 +2130,13 @@ onUnmounted(()=>{
           <select v-model="sort" data-testid="browser-sort">
             <option value="newest">Новые сначала</option>
             <option value="oldest">Старые сначала</option>
+            <option value="name">По имени (NAME-ID)</option>
             <option value="expiry">Ближайшее удаление</option>
             <option value="size-largest">Размер: большие</option>
             <option value="size-smallest">Размер: маленькие</option>
           </select>
         </label>
-        <div class="browser-view-switch" aria-label="Вид каталога">
-          <button type="button" :aria-pressed="view==='list'"
-            @click="view='list'">Список</button>
-          <button type="button" :aria-pressed="view==='grid'"
-            @click="view='grid'">Сетка</button>
-        </div>
+
         <button type="button" :disabled="busy" @click="refresh">Обновить</button>
       </div>
       <p class="muted" data-testid="browser-summary">
@@ -1485,11 +2181,24 @@ onUnmounted(()=>{
           <span v-else>Все загруженные файлы проверены.</span>
         </template>
       </p>
-      <div class="browser-batch-toolbar" v-if="folderReady&&!folderError">
-        <button type="button" :disabled="folderBusy||!visible.length"
-          @click="selectVisible">Выбрать всё на странице</button>
-        <button type="button" :disabled="!selectedKeys.length"
-          @click="selectedKeys=[]">Снять выделение</button>
+      <div class="browser-batch-toolbar"
+        v-if="selectionMode&&folderReady&&!folderError"
+        data-testid="browser-selection-toolbar">
+        <strong data-testid="browser-selection-count">Выбрано: {{selectedKeys.length}}</strong>
+        <button type="button" data-testid="browser-selection-cancel"
+          @click="cancelSelectionMode">Отмена</button>
+        <div class="browser-batch-actions-root">
+          <button type="button" data-testid="browser-selection-actions"
+            :aria-expanded="bulkActionsOpen" aria-haspopup="dialog"
+            @click="bulkActionsOpen=!bulkActionsOpen">Действия</button>
+          <div v-if="bulkActionsOpen" class="browser-batch-actions-panel"
+            data-testid="browser-selection-menu" role="dialog"
+            aria-label="Массовые действия"
+            @keydown.esc.stop.prevent="closeBulkActions">
+            <button type="button" :disabled="folderBusy||!visible.length"
+              @click="selectVisible">Выбрать всё на странице</button>
+            <button type="button" :disabled="!selectedKeys.length"
+              @click="selectedKeys=[]">Снять выделение</button>
         <label v-if="selectedKeys.length&&archiveTab==='all'">
           Назначение
           <select v-model="bulkDestination" :disabled="folderBusy"
@@ -1518,6 +2227,8 @@ onUnmounted(()=>{
             @click="runArchiveBatch('delete')">Удалить окончательно выбранные
             ({{ selectedKeys.length }})</button>
         </template>
+          </div>
+        </div>
       </div>
       <p v-if="archiveBatchNotice" data-testid="browser-bulk-status"
         role="status">{{ archiveBatchNotice }}</p>
@@ -1525,12 +2236,36 @@ onUnmounted(()=>{
         data-testid="browser-bulk-progress">
         Подтверждено {{ archiveBatchProgress }} операций.
       </p>
+      <section v-if="view==='tree'&&archiveTab==='all'&&folderReady&&!folderError"
+        class="browser-tree-navigation" data-testid="browser-tree-navigation"
+        aria-label="Дерево папок">
+        <button type="button" class="browser-tree-root"
+          data-testid="browser-tree-root" :aria-current="selectedFolder===null?'location':undefined"
+          @click="selectTreeFolder(null)">Мои файлы</button>
+        <div v-for="node in treeNodes" :key="node.id" class="browser-tree-node"
+          :data-testid="'browser-tree-folder-'+node.id"
+          :style="{paddingLeft:(Math.min(node.depth,10)*15+8)+'px'}">
+          <button type="button" class="browser-tree-expand"
+            :disabled="node.children===0" :aria-label="'Раскрыть '+node.name"
+            :aria-expanded="node.children?treeExpanded.includes(node.id):undefined"
+            @click="toggleTreeFolder(node.id)">
+            {{node.children?(treeExpanded.includes(node.id)?'▾':'▸'):'·'}}
+          </button>
+          <button type="button" class="browser-tree-select"
+            :aria-current="selectedFolder===node.id?'location':undefined"
+            @click="selectTreeFolder(node.id)">
+            <span aria-hidden="true">▣</span> {{node.name}}
+          </button>
+        </div>
+        <p class="muted">Дерево содержит только зашифрованные пользовательские папки.
+          Файлы ниже относятся к выбранной папке.</p>
+      </section>
       <div :class="['browser-items',view==='grid'?'browser-grid':'browser-list']"
         data-testid="browser-catalog">
         <div v-for="item in visible" :key="item.key"
           :class="['browser-item', item.source==='photo'?'photo-row':'']"
           :data-testid="'browser-row-'+item.key">
-          <label v-if="folderReady&&!folderError
+          <label v-if="selectionMode&&folderReady&&!folderError
               &&(archiveTab==='all'||archivedByKey.get(item.key)?.state==='archived')"
             class="browser-item-select">
             <input type="checkbox" :checked="selectedKeys.includes(item.key)"
@@ -1538,7 +2273,10 @@ onUnmounted(()=>{
               @change="toggleItem(item.key,($event.target as HTMLInputElement).checked)">
           </label>
           <div class="browser-item-kind" aria-hidden="true">
-            {{ item.type==='photo'?'▧':item.type==='video'?'▷':'♫' }}
+            <img v-if="item.type==='photo'&&folderThumbnailUrls[item.key]"
+              :src="folderThumbnailUrls[item.key]" alt="" decoding="async"
+              data-testid="browser-file-thumb">
+            <template v-else>{{ item.type==='photo'?'▧':item.type==='video'?'▷':'♫' }}</template>
           </div>
           <div class="browser-item-detail">
             <strong>{{ item.id.slice(0,8) }}</strong>
@@ -1549,20 +2287,33 @@ onUnmounted(()=>{
             <small v-if="item.state">
               Очередь: {{ item.state }}
             </small>
-            <small>Хранение до {{ new Date(item.expiresAt).toLocaleDateString('ru-RU') }}</small>
+            <small data-testid="browser-item-retention">{{ retentionLabel(item.expiresAt) }}</small>
             <small>{{ catalogSizeLabel(item.bytes) }}</small>
-            <small v-if="archiveTab==='all'&&search.trim()&&searchFolderScope==='all'"
+            <small v-if="archiveTab==='all'&&search.trim()
+              &&(searchFolderScope==='all'||searchFolderScope==='selected')"
               data-testid="browser-search-result-folder">
               Папка: {{ catalogFolderLabel(item) }}
             </small>
           </div>
-          <div class="browser-item-actions">
+          <div class="browser-file-menu-root" :data-testid="'browser-file-menu-'+item.key">
+            <button type="button" class="browser-file-menu-toggle"
+              data-testid="browser-file-menu-toggle"
+              :aria-label="'Действия с файлом '+item.id"
+              :aria-expanded="fileMenuKey===item.key"
+              aria-haspopup="dialog" @click.stop="toggleFileMenu(item.key)">
+              <span aria-hidden="true">•••</span>
+            </button>
+            <div v-if="fileMenuKey===item.key"
+              class="browser-item-actions browser-file-menu-panel"
+              :aria-label="'Действия с файлом '+item.id"
+              role="dialog" data-testid="browser-file-menu-panel"
+              @keydown.esc.stop.prevent="fileMenuEscape(item.key)">
             <label v-if="archiveTab==='all'&&folderReady&&!folderError"
               class="browser-file-move">
               <span>Папка</span>
               <select :value="folderWorkspace.placements[item.key]??''"
                 :disabled="folderBusy||busy" :aria-label="'Папка файла '+item.id"
-                @change="changeItemFolder(item,$event)">
+                @change="changeItemFolder(item,$event);closeFileMenu()">
                 <option value="">Мои файлы</option>
                 <option v-for="folder in allFolders" :key="folder.id"
                   :value="folder.id">{{ folder.name }}</option>
@@ -1572,35 +2323,127 @@ onUnmounted(()=>{
               type="button"
               :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!archivePrefsConfirmed"
               :aria-label="'Архивировать файл '+item.id"
-              @click="archiveAction(item,'archive')">В архив</button>
+              @click="archiveAction(item,'archive');closeFileMenu()">В архив</button>
             <button v-if="archiveTab==='all'&&item.cloud&&!archivePrefsShown.useArchive"
               type="button"
               :disabled="archiveBusy||busy||!activeSession.online||!archiveWriteEnabled||!archivePrefsConfirmed"
               :aria-label="'Запросить прямое удаление файла '+item.id"
-              @click="archiveAction(item,'delete')">Удалить окончательно</button>
+              @click="archiveAction(item,'delete');closeFileMenu()">Удалить окончательно</button>
             <template v-if="archiveTab==='archive'&&archivedByKey.get(item.key)?.state==='archived'">
               <button type="button" :disabled="archiveBusy||!activeSession.online||!archiveWriteEnabled"
                 :aria-label="'Восстановить файл '+item.id"
-                @click="archiveAction(item,'restore')">Восстановить</button>
+                @click="archiveAction(item,'restore');closeFileMenu()">Восстановить</button>
               <button type="button" :disabled="archiveBusy||!activeSession.online||!archiveWriteEnabled"
                 :aria-label="'Запросить удаление файла '+item.id"
-                @click="archiveAction(item,'delete')">Удалить окончательно</button>
+                @click="archiveAction(item,'delete');closeFileMenu()">Удалить окончательно</button>
             </template>
             <span v-if="archivedByKey.get(item.key)?.state==='deleting'">
               Удаление ожидает подтверждения GC:
               {{ archivedByKey.get(item.key)?.physicalStatus }}</span>
+            <button v-if="item.source==='photo'" type="button"
+              :disabled="!item.local"
+              :aria-label="'Поделиться файлом '+item.id"
+              data-testid="browser-photo-share-action"
+              @click="openPhotoShare(item)">
+              {{item.local?'Поделиться':'Поделиться (требуется локальная копия)'}}
+            </button>
+            <button v-if="item.source==='media'" type="button"
+              :disabled="!item.local"
+              :aria-label="'Поделиться файлом '+item.id"
+              data-testid="browser-media-share-action"
+              @click="openMediaShare(item)">
+              {{item.local?'Поделиться':'Поделиться (требуется локальная копия)'}}
+            </button>
             <RouterLink :to="{name:'browser-viewer',params:{protocol:item.source,id:item.id}}"
               :aria-label="'Полный просмотр файла '+item.id"
-              @click="preserveViewerOrigin(item,$event)">Просмотр</RouterLink>
+              @click="preserveViewerOrigin(item,$event)">Открыть файл</RouterLink>
+            <RouterLink v-if="canEditViaPrivateCopy(item)"
+              :to="{name:'browser-editor',
+                params:{protocol:'media',id:item.id},query:{tab:'info'}}"
+              :aria-label="'Редактировать личные метаданные файла '+item.id+' (новая копия)'"
+              @click="preserveViewerOrigin(item,$event)">
+              Изменить имя, теги и категорию (новая зашифрованная копия)
+            </RouterLink>
             <button v-if="item.local" type="button" :disabled="previewBusy||busy"
               :aria-label="item.source==='photo'?'Открыть':'Открыть файл '+item.id"
-              @click="openItem(item)">Открыть</button>
+              @click="openItem(item);closeFileMenu()">Быстрый просмотр</button>
             <button v-if="item.cloud" type="button" :disabled="previewBusy||busy"
               aria-label="Проверить из облака"
-              @click="openItem(item,true)">Проверить из облака</button>
+              @click="openItem(item,true);closeFileMenu()">Проверить из облака</button>
+            </div>
           </div>
         </div>
       </div>
+      <!-- One live list of folders, teleported ABOVE files when preferred,
+           or displayed BELOW files when disabled. No duplicate edit/ACL UI. -->
+      <Teleport to="#browser-folder-cards-top" :disabled="!foldersFirst">
+        <div class="browser-folder-list">
+          <div v-for="folder in folders" :key="folder.id" class="browser-folder-item"
+            :data-testid="'browser-folder-'+folder.id">
+            <button type="button" class="browser-folder-open"
+              :aria-label="folder.name" @click="selectedFolder=folder.id">
+              <span class="browser-folder-cover"
+                :class="{'is-empty':folderLoadedRows(folder.id).length===0}"
+                aria-hidden="true">
+                <template v-if="folderLoadedRows(folder.id).length">
+                  <span v-for="index in 4" :key="index" class="browser-folder-cover-cell"
+                    :class="{'is-blank':!folderLoadedRows(folder.id)[index-1]}">
+                    <img v-if="folderLoadedRows(folder.id)[index-1]
+                        &&folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
+                      :src="folderThumbnailUrls[folderLoadedRows(folder.id)[index-1]!.key]"
+                      alt="" decoding="async" data-testid="browser-folder-thumb">
+                    <template v-else>{{ folderLoadedRows(folder.id)[index-1]
+                      ?folderCoverSymbol(folderLoadedRows(folder.id)[index-1]!):'' }}</template>
+                  </span>
+                </template>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="1.6"><path d="M3 7h6l2 2h10v11H3z"/>
+                  <path d="M3 7V5h7l2 2"/></svg>
+                <span class="browser-folder-badge">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8"><path d="M3 7h6l2 2h10v11H3z"/></svg>
+                </span>
+              </span>
+              <span class="browser-folder-copy">
+                <strong>{{ folder.name }}</strong>
+                <small>{{ folderLoadedCount(folder.id) }} файлов в загруженном каталоге</small>
+              </span>
+            </button>
+            <div class="browser-folder-menu-root"
+              :data-testid="'browser-folder-menu-'+folder.id">
+              <button type="button" class="browser-folder-menu-toggle"
+                data-testid="browser-folder-menu-toggle"
+                :aria-label="'Действия с папкой '+folder.name"
+                :aria-expanded="folderMenuId===folder.id"
+                aria-haspopup="dialog" @click.stop="toggleFolderMenu(folder.id)">
+                <span aria-hidden="true">•••</span>
+              </button>
+              <div v-if="folderMenuId===folder.id"
+                class="browser-folder-menu-panel" role="dialog"
+                data-testid="browser-folder-menu-panel"
+                :aria-label="'Действия с папкой '+folder.name"
+                @keydown.esc.stop.prevent="folderMenuEscape">
+                <button type="button" :disabled="folderBusy"
+                  :aria-label="'Переименовать '+folder.name"
+                  @click="openRename(folder.id,folder.name);closeFileMenu()">Переименовать</button>
+            <label class="browser-folder-parent">
+              <span>В</span>
+              <select :value="folder.parentId??''" :disabled="folderBusy"
+                :aria-label="'Переместить папку '+folder.name"
+                @change="changeFolderParent(folder.id,$event);closeFileMenu()">
+                <option value="">Корень</option>
+                <option v-for="candidate in validFolderMoveTargets(folder.id)"
+                  :key="candidate.id" :value="candidate.id">{{ candidate.name }}</option>
+              </select>
+            </label>
+                <button type="button" :disabled="folderBusy"
+                  :aria-label="'Удалить пустую папку '+folder.name"
+                  @click="deleteEmptyFolder(folder.id);closeFileMenu()">Удалить</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Teleport>
       <p v-if="!visible.length&&folderReady" class="muted">Нет файлов для выбранного фильтра или папки.</p>
       <button v-if="archiveTab==='archive'&&archiveCursor" type="button"
         :disabled="archiveBusy||busy" @click="loadArchiveMore">
@@ -1636,15 +2479,72 @@ onUnmounted(()=>{
         <p class="muted">Файл расшифрован на этом устройстве. Экспорт в системную галерею не выполнялся.</p>
         <button type="button" @click="revokePreview">Закрыть просмотр</button>
       </div>
-      <section class="browser-operations">
+      <section class="browser-operations" data-testid="browser-import-panel">
         <h2>Импорт и операции</h2>
         <p class="muted">Загрузка, выдача доступа и версии используют действующий защищённый pipeline.</p>
-        <MediaImportPanel
-          :destination-folders="importFolderOptions"
-          :default-folder-id="selectedFolder"
-          @media-imported="placeImportedMedia"
-          @catalog-change="refresh"/>
-        <SharePanel :local-photos="localPhotos" @open-photo="showReceived"/>
+        <div v-if="uploadSheetOpen" class="browser-upload-backdrop"
+          data-testid="browser-import-backdrop" @click="closeUploadPanel"></div>
+        <div v-show="uploadSheetOpen" class="browser-upload-sheet"
+          :class="{open:uploadSheetOpen}"
+          data-testid="browser-import-sheet"
+          :role="uploadSheetOpen?'dialog':undefined"
+          :aria-modal="uploadSheetOpen?'true':undefined"
+          :aria-label="uploadSheetOpen?'Загрузить файлы':undefined"
+          @keydown="uploadSheetKeydown">
+          <header v-if="uploadSheetOpen" class="browser-upload-heading">
+            <strong>Загрузить файлы</strong>
+            <button type="button" data-testid="browser-import-sheet-close"
+              aria-label="Закрыть загрузчик" @click="closeUploadPanel">
+              Закрыть</button>
+          </header>
+          <MediaImportPanel
+            :destination-folders="importFolderOptions"
+            :default-folder-id="selectedFolder"
+            :share-embedded="shareMediaId===null"
+            @media-imported="placeImportedMedia"
+            @catalog-change="refresh"/>
+        </div>
+        <SharePanel v-if="sharePhotoId===null"
+          :local-photos="localPhotos" @open-photo="showReceived"/>
+      </section>
+      <div v-if="sharePhotoId" class="browser-share-backdrop"
+        data-testid="browser-photo-share-backdrop" @click="closePhotoShare"></div>
+      <section v-if="sharePhotoId" class="browser-share-sheet"
+        data-testid="browser-photo-share-sheet" role="dialog"
+        aria-modal="true" aria-label="Поделиться фотографией"
+        @keydown="fileShareKeydown">
+        <header class="browser-share-heading">
+          <strong>Поделиться фотографией</strong>
+          <button type="button" data-testid="browser-photo-share-close"
+            aria-label="Закрыть обмен" @click="closePhotoShare">Закрыть</button>
+        </header>
+        <p class="muted">
+          Передача доступна только после подтверждения облака и сверки ключа получателя.
+        </p>
+        <SharePanel
+          :local-photos="localPhotos.filter(photo=>photo.photoId===sharePhotoId)"
+          :selected-photo-id="sharePhotoId"
+          @open-photo="showReceived"/>
+      </section>
+      <div v-if="shareMediaId" class="browser-share-backdrop"
+        data-testid="browser-media-share-backdrop" @click="closePhotoShare"></div>
+      <section v-if="shareMediaId" class="browser-share-sheet"
+        data-testid="browser-media-share-sheet" role="dialog"
+        aria-modal="true" aria-label="Поделиться файлом"
+        @keydown="fileShareKeydown">
+        <header class="browser-share-heading">
+          <strong>Поделиться файлом</strong>
+          <button type="button" data-testid="browser-media-share-close"
+            aria-label="Закрыть обмен" @click="closePhotoShare">Закрыть</button>
+        </header>
+        <p class="muted" data-testid="browser-media-share-selected">
+          Выбран файл {{ shareMediaId.slice(0,8) }}.
+          Передача возможна после подтверждения облака и независимой сверки ключа.
+          Полный доступ к оригиналу и Safe-копия — разные разрешения.
+        </p>
+        <MediaSharePanel
+          :local-media="localMedia.filter(media=>media.mediaId===shareMediaId)"
+          :selected-media-id="shareMediaId"/>
       </section>
     </template>
     <p v-if="status" role="status" class="status-text">{{ status }}</p>

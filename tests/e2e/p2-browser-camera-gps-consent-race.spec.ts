@@ -1,5 +1,10 @@
 import {expect,test,type Browser,type Page} from '@playwright/test'
 
+async function requestGpsFromApprovedSheet(page:Page):Promise<void>{
+  await page.getByTestId('camera-open-assignment').click()
+  await page.getByRole('button',{name:'Получить GPS'}).click()
+  await page.getByTestId('camera-sheet-close').click()
+}
 type GeoOptions=Readonly<{enableHighAccuracy?:boolean;maximumAge?:number;timeout?:number}>
 type SyntheticPosition={latitude:number;longitude:number;accuracy:number}
 const validFix:SyntheticPosition={latitude:38.487329,longitude:-122.893741,accuracy:4.5}
@@ -59,8 +64,8 @@ for(const required of [false,true]){
       await register(page)
       const assignmentId=required?await makeSignedGpsRequiredAssignment(page):undefined
       await cameraReady(page,assignmentId)
-      await page.getByRole('button',{name:'Получить GPS'}).click()
-      await expect(page.getByText(/GPS получен/)).toBeVisible()
+      await requestGpsFromApprovedSheet(page)
+      await expect(page.getByTestId('camera-gps-indicator')).toContainText('GPS · ±')
       await context.clearPermissions()
       await context.grantPermissions(['camera'])
       await expect.poll(()=>page.evaluate(async()=>
@@ -70,7 +75,10 @@ for(const required of [false,true]){
       await context.setOffline(true)
       await page.getByRole('button',{name:'Сделать снимок'}).click()
       if(required){
-        await expect(page.getByText('assignment.gps_required')).toBeVisible()
+        await expect(page.getByTestId('camera-assignment-panel')).toBeVisible()
+        await expect(page.getByTestId('camera-required-gps'))
+          .toHaveText('GPS обязателен по правилам задания')
+        await page.getByTestId('camera-sheet-close').click()
         expect(await localPhotos(page)).toHaveLength(0)
       }else{
         await expect(page.getByText(/Зашифровано и сохранено локально/)).toBeVisible({timeout:30000})

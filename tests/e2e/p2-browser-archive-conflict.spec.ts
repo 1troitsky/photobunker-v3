@@ -1,4 +1,10 @@
 import {expect,test} from '@playwright/test'
+import type {Locator} from '@playwright/test'
+
+async function ensureFileMenu(row:Locator):Promise<void>{
+  if(await row.getByTestId('browser-file-menu-panel').count()===0)
+    await row.getByTestId('browser-file-menu-toggle').click()
+}
 
 test('P2 Archive: unresolved signed delete/archival command cannot be discarded; obsolete CAS can',async({browser})=>{
   test.setTimeout(160000)
@@ -29,6 +35,7 @@ test('P2 Archive: unresolved signed delete/archival command cannot be discarded;
     }),{timeout:30000}).toBe(1)
     await page.getByRole('button',{name:'Обновить',exact:true}).first().click()
     const row=page.locator('[data-testid^="browser-row-media:"]')
+    await ensureFileMenu(row)
     await expect(row.getByRole('button',{name:/Архивировать файл/})).toBeVisible()
     const id=(await row.getAttribute('data-testid'))!
       .slice('browser-row-media:'.length)
@@ -37,6 +44,7 @@ test('P2 Archive: unresolved signed delete/archival command cannot be discarded;
     // server operation is NOT sufficient reason to drop its encrypted outbox.
     await page.route('**/browser/v1/archive/actions',route=>route.abort('failed'))
     page.once('dialog',dialog=>dialog.accept())
+    await ensureFileMenu(row)
     await row.getByRole('button',{name:/Архивировать файл/}).click()
     await expect(page.getByTestId('browser-archive-pending')).toBeVisible()
     await page.unroute('**/browser/v1/archive/actions')

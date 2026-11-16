@@ -1,39 +1,42 @@
-# PB3 — configurable-brand private media platform
+# PhotoBunker PB3 — Integrated Fieldwork frontend
 
-**Status:** P0 foundation in progress. New independent source tree with a real Laravel/Vue skeleton, **not** a production-ready photo application.
+This branch is the **original PB3 application**, not a new prototype. It integrates existing Vue 3/strict TypeScript UI and Laravel 13 API with PostgreSQL 18, Garage S3, encryption and real browser journeys. It is a **review candidate**; do not confuse a successful build with full product/release acceptance.
 
-**Read:** [Specification](ts.md) · [Agent rules](AGENTS.md) · [P0 checklist](docs/planning/P0-DELIVERY.md) · [P0-02 bootstrap](docs/planning/P0-02-FOUNDATION.md) · [source provenance](docs/architecture/PB2-PROVENANCE.md).
+## Run on a Mac
 
-## Mandatory development stages
-
-P0 preparation, then four stages **P1–P4**: P1 identity/E2EE/media/storage; P2 accepted Fieldwork frontend + Matrix Messenger; P3 Recovery Vault, payments, security, admin and signed PWA; P4 BYO/replica S3 and release readiness. IPFS is excluded.
-
-Only the application *skeleton* is introduced at P0-02. Its screens contain intentionally neutral placeholders; real key-only identity, media, S3 lifecycles, backup, Matrix and billing are not implemented here.
-
-## Technology and reproducible baseline
-
-- **PHP 8.4.27+ <8.5 OR PHP 8.5.12+ <8.6**, Laravel >=13.4 <14; locked framework currently **13.39.0**.
-- PostgreSQL 18; Garage 2.5 S3 (disposable local/CI), no production credentials.
-- Vue 3, Vite 7, strict TypeScript, frozen pnpm workspace.
-- Fieldwork shell 64px Header / 82px Dock; brand obtained from config rather than hardcoded app name.
-- PWA manifest only: **Service Worker intentionally not registered** until signed-build trust is reviewed.
-
-## Local quick start
-
-Use **patched PHP**, Node 22+, pnpm 10.20.0. Refer to [P0-02](docs/planning/P0-02-FOUNDATION.md) for setup of PostgreSQL and Garage.
+Install and launch [OrbStack](https://orbstack.dev/) or Docker Desktop (Docker Compose v2). Clone into a **new directory** so you do not overwrite any current local PB3 work:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm dev
-
-cd apps/api
-composer install --no-interaction
-cp .env.example .env
-php artisan key:generate
-php artisan migrate
-php artisan serve --host=127.0.0.1 --port=8000
+git clone --branch integration/pb3-one-frontend-shell-20261115 --single-branch https://github.com/1troitsky/photobunker-v3.git photobunker-v3-front
+cd photobunker-v3-front
+open local-runner/Start-PhotoBunker.command
 ```
 
-These commands are setup instructions, not a claim they were executed locally. CI verifies against compliant PHP, isolated DB/S3, and frontend build.
+The script builds the actual application, creates separate development credentials and migrates a persistent **local** PostgreSQL database. On readiness it opens **http://127.0.0.1:5173**. To stop without deleting data, run `local-runner/Stop-PhotoBunker.command`. **Never delete Docker volumes or the local-runner/secrets.env file to reset the app**; this can irreversibly destroy encrypted user data. See [local-runner/README.md](local-runner/README.md).
 
-**UX evidence:** original Fieldwork PR #56 at [`daca24a4`](https://github.com/1troitsky/photobunker-new/tree/daca24a4a38c62473859b2b54b4999d50400c491/docs/ux); do not copy mock frontend state into production business code.
+## Actual front-end routes in this branch
+
+| User area | Route |
+| --- | --- |
+| Assignments (incl. editor) | `/assignments` |
+| Encrypted Browser, viewer and editor | `/browser` |
+| Photo / video / audio capture | `/camera` |
+| Contacts and teams | `/contacts` |
+| Account / key-only identity | `/settings` |
+| Dock / Appearance | `/settings/appearance` |
+| Data & Storage | `/settings/storage` |
+| Help / FAQ | `/settings/help` |
+| Encrypted local Notifications inbox | `/notifications` |
+| Notification settings | `/notifications/settings` |
+| Encrypted local Messages **drafts** (not sent messages) | `/messages` |
+| Encrypted device-local profile + edit | `/settings/profile`, `/settings/profile/edit` |
+| Security status / verified session / device list | `/settings/security` |
+| Server tariff catalog + verified account plan | `/settings/payments` |
+
+The default Dock remains five items; Notifications and Messages can be added via Appearance after opting in. No fake message delivery, payment settlement or server acknowledgments.
+
+## Not yet ready for a production release
+
+Public profile publishing and global handles, PIN/Panic/remote wipe, verified cross-device Matrix messaging, live payment settlement, full encrypted Vault restore, independently signed cold-offline PWA, physical iOS/Android hardware validation and final owner acceptance remain outstanding. Some Security/Subscription menu entries are intentionally disabled rather than misleading clickable placeholders. No production deployment or merge into `main` is authorized.
+
+Sources: [Specification](ts.md), [Engineering constraints](AGENTS.md), [consolidation audit](docs/audits/PB3-FRONTEND-ONE-SHELL-20261115.md).

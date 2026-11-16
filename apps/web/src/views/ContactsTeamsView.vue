@@ -1,18 +1,50 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import { confirmPeer, inspectPeer } from '../features/sharing/key-directory'
 import {
   listConfirmedContacts, saveConfirmedContact, removeConfirmedContact,
 } from '../features/people/application/contact-book'
 import type { ConfirmedContact } from '../features/people/application/contact-book'
+import {
+  listLocallyBlockedPeers, locallyBlockPeer, locallyUnblockPeer,
+  excludeLocallyBlockedContacts,
+} from '../features/people/application/contact-blocklist'
+import type { LocallyBlockedPeer } from '../features/people/application/contact-blocklist'
 import { listLocalTeams, queueTeam, refreshTeams } from '../features/people/application/team-book'
 import type { TeamView } from '../features/people/application/team-book'
 import TeamMembershipPanel from './TeamMembershipPanel.vue'
+import {contactsShellActions,clearContactsShellActions}
+  from '../features/people/application/contacts-shell-actions'
 
 const activeTab=ref<'contacts'|'teams'>('contacts')
 const contacts=ref<ConfirmedContact[]>([])
+const blocked=ref<LocallyBlockedPeer[]>([])
+const showBlacklist=ref(false)
+const shellOwner={}
+function updateShellBlacklist():void{
+  if(contactsShellActions.value?.owner===shellOwner)
+    contactsShellActions.value={owner:shellOwner,open:showBlacklist.value,
+      toggle:()=>{showBlacklist.value=!showBlacklist.value}}
+}
+watch(showBlacklist,updateShellBlacklist)
 const teams=ref<TeamView[]>([])
+const selectedTeamId=ref<string|null>(null)
+const showTeamSettings=ref(false)
+const teamMenuId=ref<string|null>(null)
+const selectedTeam=computed(()=>teams.value.find(
+  team=>team.teamId===selectedTeamId.value)??null)
+function openTeamCard(team:TeamView,settings=false):void{
+  selectedTeamId.value=team.teamId
+  showTeamSettings.value=settings&&team.delivery==='synced'
+  teamMenuId.value=null
+  teamForm.value=false
+}
+function closeTeamCard():void{
+  selectedTeamId.value=null
+  showTeamSettings.value=false
+  teamMenuId.value=null
+}
 const teamForm=ref(false)
 const teamName=ref('')
 const teamDescription=ref('')
@@ -21,12 +53,20 @@ const teamLoading=ref(false)
 const teamError=ref('')
 const teamNotice=ref('')
 let teamRun=0
+let loadedTeamIdentity=''
 function sameTeamIdentity(expected:string,token:number):boolean{
   return identity()===expected&&token===teamRun
 }
 async function reloadTeams():Promise<void>{
   const token=++teamRun,owner=identity()
-  teams.value=[];teamError.value=''
+  // Keep the encrypted cached list visible during a same-account refresh.
+  // Identity transitions clear previous-account records synchronously.
+  if(loadedTeamIdentity!==owner){
+    teams.value=[]
+    teamMenuId.value=null
+    loadedTeamIdentity=owner
+  }
+  teamError.value='';teamLoading.value=false
   if(!owner)return
   try{
     const local=await listLocalTeams()
@@ -66,7 +106,7 @@ async function createTeam():Promise<void>{
   }catch(e){
     if(identity()===owner)
       teamError.value=e instanceof Error?e.message:'teams.create_failed'
-  }finally{teamBusy.value=false}
+  }finally{if(identity()===owner)teamBusy.value=false}
 }
 function handleTeamOnline():void{void reloadTeams()}
 
@@ -92,15 +132,26 @@ function identity(){
 function sessionMatches(expected:string,token:number):boolean{
   return token===run&&identity()===expected
 }
+// Every mutation must re-read the encrypted blocklist before publishing a contact list.
+// An unreadable/corrupted blocklist is fail-closed: no hidden peer is flashed.
+async function refreshVisibleContacts():Promise<void>{
+  const owner=identity(),token=run
+  contacts.value=[]
+  const hidden=await listLocallyBlockedPeers()
+  if(!sessionMatches(owner,token))return
+  blocked.value=hidden
+  const rows=await listConfirmedContacts()
+  if(sessionMatches(owner,token))
+    contacts.value=excludeLocallyBlockedContacts(rows,hidden)
+}
 const uuidPattern=/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
 async function reload():Promise<void>{
   const token=++run,owner=identity()
-  contacts.value=[];selected.value=null
+  contacts.value=[];blocked.value=[];selected.value=null
   error.value='';loading.value=true
   if(!owner){loading.value=false;return}
   try{
-    const rows=await listConfirmedContacts()
-    if(sessionMatches(owner,token))contacts.value=rows
+    await refreshVisibleContacts()
   }catch(e){
     if(sessionMatches(owner,token))
       error.value=e instanceof Error?e.message:'contacts.unavailable'
@@ -118,7 +169,7 @@ async function operate(action:()=>Promise<void>):Promise<void>{
   }catch(e){
     if(sessionMatches(owner,token))
       error.value=e instanceof Error?e.message:'contacts.operation_failed'
-  }finally{busy.value=false}
+  }finally{if(sessionMatches(owner,token))busy.value=false}
 }
 function resetSearch():void{
   candidate.value=null;fingerprintAgreed.value=false;alias.value=''
@@ -126,9 +177,16 @@ function resetSearch():void{
 function lookup():void{
   void operate(async()=>{
     const id=query.value.trim().toLowerCase()
+    const owner=identity(),token=run
     if(!uuidPattern.test(id))throw Error('contacts.invalid_account_id')
+    if(blocked.value.some(x=>x.peerAccountId===id))
+      throw Error('contacts.peer_locally_blocked')
     if(!activeSession.value?.online)await reauthenticate()
+    if(!sessionMatches(owner,token)
+      ||query.value.trim().toLowerCase()!==id)return
     const {directory,confirmed}=await inspectPeer(id)
+    if(!sessionMatches(owner,token)
+      ||query.value.trim().toLowerCase()!==id)return
     candidate.value={
       id,fingerprint:directory.safetyFingerprint,confirmed,
     }
@@ -139,7 +197,9 @@ function approve():void{
   void operate(async()=>{
     const person=candidate.value
     if(!person||!fingerprintAgreed.value)throw Error('contacts.fingerprint_required')
+    const owner=identity(),token=run
     await confirmPeer(person.id,person.fingerprint)
+    if(!sessionMatches(owner,token)||candidate.value!==person)return
     candidate.value={...person,confirmed:true}
     message.value='Отпечаток подтверждён на этом устройстве.'
   })
@@ -148,9 +208,13 @@ function add():void{
   void operate(async()=>{
     const person=candidate.value
     if(!person?.confirmed)throw Error('contacts.fingerprint_required')
+    if(blocked.value.some(x=>x.peerAccountId===person.id))
+      throw Error('contacts.peer_locally_blocked')
+    const owner=identity(),token=run
     await saveConfirmedContact(person.id,person.fingerprint,alias.value)
-    const rows=await listConfirmedContacts()
-    contacts.value=rows
+    if(!sessionMatches(owner,token))return
+    await refreshVisibleContacts()
+    if(!sessionMatches(owner,token))return
     resetSearch();query.value=''
     message.value='Контакт сохранён в зашифрованной локальной книге.'
   })
@@ -163,9 +227,12 @@ function saveAlias():void{
   void operate(async()=>{
     const item=contacts.value.find(x=>x.peerAccountId===selected.value)
     if(!item)throw Error('contacts.not_found')
+    const owner=identity(),token=run
     await saveConfirmedContact(item.peerAccountId,item.safetyFingerprint,editAlias.value)
-    contacts.value=await listConfirmedContacts()
-    message.value='Локальное имя обновлено.'
+    if(!sessionMatches(owner,token))return
+    await refreshVisibleContacts()
+    if(sessionMatches(owner,token))
+      message.value='Локальное имя обновлено.'
   })
 }
 function remove():void{
@@ -174,10 +241,42 @@ function remove():void{
     'Удалить контакт только из локальной книги? Уже выданные разрешения и приглашения не отзываются.'
   ))return
   void operate(async()=>{
+    const owner=identity(),token=run
     await removeConfirmedContact(id)
-    contacts.value=await listConfirmedContacts()
+    if(!sessionMatches(owner,token))return
+    await refreshVisibleContacts()
+    if(!sessionMatches(owner,token))return
     selected.value=null
     message.value='Контакт удалён из локальной книги. Старые разрешения не изменены.'
+  })
+}
+function blockContact():void{
+  const id=selected.value
+  if(!id||busy.value||!contacts.value.some(x=>x.peerAccountId===id)
+    ||!window.confirm(
+      'Скрыть контакт на этом устройстве и исключить из списка новых приглашений? '+
+      'Это НЕ отзывает ранее выданные серверные разрешения, приглашения или ключи.'
+    ))return
+  void operate(async()=>{
+    const owner=identity()
+    await locallyBlockPeer(id)
+    if(identity()!==owner)return
+    await reload()
+    if(identity()===owner)
+      message.value='Контакт скрыт локально. Старые серверные разрешения НЕ отозваны.'
+  })
+}
+function unblockContact(id:string):void{
+  if(busy.value||!blocked.value.some(x=>x.peerAccountId===id)
+    ||!window.confirm('Убрать локальную блокировку? Это не выдаст новых прав или ключей.'))
+    return
+  void operate(async()=>{
+    const owner=identity()
+    await locallyUnblockPeer(id)
+    if(identity()!==owner)return
+    await reload()
+    if(identity()===owner)
+      message.value='Локальная блокировка снята. Никакие серверные права не изменены.'
   })
 }
 function matches(person:ConfirmedContact):boolean{
@@ -191,25 +290,50 @@ watch(activeSession,(_now,previous)=>{
     previous.pkg.akek,previous.pkg.revision,
   ].join('|'):''
   if(identity()!==prev){
-    resetSearch();query.value='';selected.value=null;contacts.value=[]
+    resetSearch();query.value='';selected.value=null;editAlias.value=''
+    contacts.value=[];blocked.value=[];showBlacklist.value=false
+    busy.value=false;message.value='';error.value=''
+    teamBusy.value=false;teamLoading.value=false;teamError.value=''
+    teamNotice.value=''
     teams.value=[];teamForm.value=false;teamName.value='';teamDescription.value=''
+    loadedTeamIdentity=''
+    closeTeamCard()
     ++teamRun
     void reload();void reloadTeams()
   }
 })
 onMounted(()=>{
+  contactsShellActions.value={owner:shellOwner,open:showBlacklist.value,
+    toggle:()=>{showBlacklist.value=!showBlacklist.value}}
   void reload();void reloadTeams()
   window.addEventListener('online',handleTeamOnline)
 })
 onUnmounted(()=>{
-  ++run;++teamRun;candidate.value=null;contacts.value=[];teams.value=[]
+  clearContactsShellActions(shellOwner)
+  ++run;++teamRun;candidate.value=null;contacts.value=[];blocked.value=[]
+  showBlacklist.value=false;teams.value=[]
+  loadedTeamIdentity=''
+  closeTeamCard()
   window.removeEventListener('online',handleTeamOnline)
 })
 </script>
 
 <template>
   <section class="foundation-content contacts-page" data-testid="contacts-teams">
-    <div class="contacts-heading"><h1>Контакты и Команды</h1></div>
+    <div class="contacts-heading">
+      <h1>Контакты и Команды</h1>
+    </div>
+    <div v-if="showBlacklist&&activeSession" id="contacts-local-blacklist"
+      class="foundation-card" data-testid="contacts-local-blacklist">
+      <h2>Заблокированные локально ({{ blocked.length }})</h2>
+      <p class="muted">Это только локальный список скрытия. Ранее выданные серверные разрешения, приглашения и E2EE-ключи НЕ отозваны.</p>
+      <p v-if="!blocked.length" class="muted">Локальных блокировок нет.</p>
+      <div v-for="person in blocked" :key="person.peerAccountId"
+        class="contacts-list-row" :data-testid="'blocked-row-'+person.peerAccountId">
+        <code>{{ person.peerAccountId }}</code>
+        <button type="button" :disabled="busy" @click="unblockContact(person.peerAccountId)">Разблокировать локально</button>
+      </div>
+    </div>
     <nav class="contacts-tabs" aria-label="Контакты и команды">
       <button type="button" :class="{selected:activeTab==='teams'}"
         :aria-current="activeTab==='teams'?'page':undefined"
@@ -224,6 +348,42 @@ onUnmounted(()=>{
       <RouterLink to="/settings">Создать или восстановить аккаунт</RouterLink>
     </div>
     <template v-else-if="activeTab==='teams'">
+      <section v-if="selectedTeam" class="foundation-card"
+        data-testid="team-profile">
+        <div class="contacts-list-heading">
+          <button type="button" data-testid="team-profile-back"
+            @click="closeTeamCard">К командам</button>
+          <button type="button" class="contacts-team-settings"
+            data-testid="team-profile-settings" aria-label="Настройки команды"
+            title="Настройки команды" :disabled="selectedTeam.delivery!=='synced'"
+            :aria-expanded="showTeamSettings"
+            @click="showTeamSettings=!showTeamSettings">
+            <span aria-hidden="true">⚙</span>
+          </button>
+        </div>
+        <h2 data-testid="team-profile-name">{{ selectedTeam.name }}</h2>
+        <p class="muted" data-testid="team-profile-description">
+          {{ selectedTeam.description||'Описание не добавлено' }}
+        </p>
+        <p data-testid="team-profile-members">
+          Участники: {{ selectedTeam.memberCount }}
+        </p>
+        <p class="muted" data-testid="team-profile-delivery">
+          {{ selectedTeam.delivery==='synced'
+            ?'Подтверждено сервером'
+            :selectedTeam.delivery==='conflict'
+              ?'Конфликт синхронизации'
+              :'Зашифровано локально; подтверждение сервера ожидается' }}
+        </p>
+        <p v-if="selectedTeam.delivery!=='synced'" class="muted">
+          Состав команды и права управления можно проверить после подтверждения
+          подписанного создания сервером. Локальная копия не даёт серверных прав.
+        </p>
+        <TeamMembershipPanel v-if="showTeamSettings&&selectedTeam.delivery==='synced'"
+          :key="selectedTeam.teamId" :owned-teams="teams" :contacts="contacts"
+          :initial-team-id="selectedTeam.teamId" @refresh="reloadTeams"/>
+      </section>
+      <template v-else>
       <button type="button" class="contacts-full-button"
         @click="teamForm=!teamForm">Создать команду</button>
       <form v-if="teamForm" class="foundation-card" data-testid="team-create-form"
@@ -238,7 +398,7 @@ onUnmounted(()=>{
         <p class="muted">Название и описание шифруются на устройстве. Создание не даёт участникам доступа к файлам или заданиям.</p>
         <div class="action-row">
           <button type="submit" :disabled="teamBusy||!teamName.trim()"
-            data-testid="team-create-submit">Сохранить команду</button>
+            data-testid="team-create-submit">Создать команду</button>
           <button type="button" @click="teamForm=false">Отмена</button>
         </div>
       </form>
@@ -251,17 +411,39 @@ onUnmounted(()=>{
         <p v-if="!teams.length" class="muted">Команд пока нет.</p>
         <div v-for="team in teams" :key="team.teamId"
           class="contacts-list-row" :data-testid="'team-row-'+team.teamId">
-          <span class="contacts-avatar" aria-hidden="true">{{ team.name.slice(0,1).toUpperCase() }}</span>
           <div class="contacts-row-label">
-            <strong>{{ team.name }}</strong>
+            <button type="button" class="contacts-team-open"
+              :data-testid="'team-open-'+team.teamId"
+              @click="openTeamCard(team)">{{ team.name }}</button>
             <p class="muted">{{ team.description }}</p>
             <small>Участники: {{ team.memberCount }} · {{ team.delivery==='synced'?'В облаке':team.delivery==='conflict'?'Конфликт синхронизации':'В очереди' }}</small>
           </div>
+          <div class="contacts-team-menu-wrap">
+            <button type="button" class="contacts-member-more"
+              :data-testid="'team-actions-toggle-'+team.teamId"
+              :aria-label="'Действия команды '+team.name"
+              :aria-expanded="teamMenuId===team.teamId"
+              :aria-controls="'team-actions-menu-'+team.teamId"
+              @click="teamMenuId=teamMenuId===team.teamId?null:team.teamId">•••</button>
+            <div v-if="teamMenuId===team.teamId"
+              :id="'team-actions-menu-'+team.teamId"
+              class="contacts-team-actions-menu" role="group"
+              :aria-label="'Действия команды '+team.name"
+              data-testid="team-actions-menu"
+              @keydown.esc.prevent="teamMenuId=null">
+              <button type="button" data-testid="team-actions-open"
+                @click="openTeamCard(team)">Открыть команду</button>
+              <button v-if="team.delivery==='synced'" type="button"
+                data-testid="team-actions-settings"
+                @click="openTeamCard(team,true)">Настройки</button>
+            </div>
+          </div>
         </div>
-        <p class="muted">Владелец команды подтверждён сервером после синхронизации. Приглашения и изменение ролей появятся с отдельной подписанной моделью полномочий.</p>
+        <p class="muted">Настройки состава доступны для подтверждённых сервером команд. Зашифрованная локальная запись не подтверждает серверные права.</p>
       </div>
       <TeamMembershipPanel :owned-teams="teams" :contacts="contacts"
         @refresh="reloadTeams" />
+      </template>
       <p v-if="teamLoading" role="status">Синхронизация команд…</p>
       <p v-if="teamNotice" role="status" class="status-text">{{ teamNotice }}</p>
       <p v-if="teamError" role="alert" class="error-text">{{ teamError }}</p>
@@ -331,12 +513,20 @@ onUnmounted(()=>{
         <label for="contacts-edit-alias">Локальное имя</label>
         <input id="contacts-edit-alias" v-model="editAlias" maxlength="64">
         <div class="action-row">
+          <RouterLink class="contacts-draft-link"
+            :to="{path:'/messages',query:{peer:selected}}"
+            data-testid="contacts-message-draft-link"
+            title="Только зашифрованный черновик; отправка Matrix ещё недоступна">
+            Написать (черновик)
+          </RouterLink>
           <button type="button" :disabled="busy" @click="saveAlias">Сохранить имя</button>
           <button type="button" :disabled="busy" @click="remove">Удалить контакт</button>
+          <button type="button" :disabled="busy" data-testid="contacts-local-block"
+            @click="blockContact">Скрыть локально (Blacklist)</button>
           <button type="button" @click="selected=null">Закрыть</button>
         </div>
       </div>
-      <p class="muted">Контакты и локальные имена зашифрованы на устройстве. Удаление контакта не отзывает ранее выданные E2EE-ключи или серверные разрешения. Межустройственная синхронизация списка пока не реализована.</p>
+      <p class="muted">Контакты, локальные имена и Blacklist зашифрованы на устройстве. Удаление и локальная блокировка не отзывают E2EE-ключи или серверные разрешения. Межустройственная синхронизация пока не реализована.</p>
     </template>
     <p v-if="message" role="status" class="status-text">{{ message }}</p>
     <p v-if="error" role="alert" class="error-text">{{ error }}</p>

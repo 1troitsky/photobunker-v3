@@ -28,6 +28,7 @@ test('P2 Browser->File Viewer->Browser: restore encrypted folder, filter, privat
     await page.getByTestId('browser-folder-name').fill('Приватная папка')
     await page.getByRole('button',{name:'Создать',exact:true}).click()
     await expect(page.locator('.browser-folder-item')).toHaveCount(1)
+    await row.getByTestId('browser-file-menu-toggle').click()
     await row.getByRole('combobox',{name:'Папка файла '+id})
       .selectOption({label:'Приватная папка'})
     await expect(row).toHaveCount(0)
@@ -40,10 +41,15 @@ test('P2 Browser->File Viewer->Browser: restore encrypted folder, filter, privat
     await page.getByRole('button',{name:'Сетка'}).click()
     await page.getByTestId('browser-search').fill('RETURN-SECRET')
     await expect(row).toHaveCount(1,{timeout:20000})
+    await row.getByTestId('browser-file-menu-toggle').click()
     await row.getByRole('link',{name:'Полный просмотр файла '+id}).click()
     await expect(page).toHaveURL(new RegExp('/browser/file/media/'+id+'$'))
     expect(page.url()).not.toContain('RETURN-SECRET')
     await expect(page.getByTestId('file-viewer-audio')).toBeVisible()
+    // Real Browser v3 breadcrumb, never plaintext in the URL or server query.
+    await expect(page.getByTestId('file-viewer-path'))
+      .toContainText('Browser / Приватная папка / RETURN-SECRET-AUDIO.wav')
+    await expect(page.getByTestId('file-viewer-path')).toHaveCSS('height','45px')
     await expect(page.getByTestId('file-viewer-info'))
       .toContainText('RETURN-SECRET-AUDIO.wav')
 

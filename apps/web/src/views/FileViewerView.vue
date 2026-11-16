@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
-import {onBeforeRouteLeave,RouterLink,useRoute,useRouter} from 'vue-router'
+import {computed,nextTick,onBeforeUnmount,onMounted,onUnmounted,ref,watch} from 'vue'
+import {onBeforeRouteLeave,onBeforeRouteUpdate,RouterLink,useRoute,useRouter} from 'vue-router'
 import {
   armBrowserReturn,discardBrowserReturnContext,
-  peekOriginPager,noteViewerPosition,
+  peekOriginPager,peekOriginBreadcrumb,noteViewerPosition,
 } from '../features/browser/application/browser-return-context'
 import {activeSession} from '../features/identity/application/session'
+import {pauseViewerPlayback} from '../features/browser/application/viewer-playback'
 import {setViewerShellActions}
   from '../features/browser/application/viewer-shell-actions'
 import {
@@ -76,7 +77,9 @@ type Preview={
 const route=useRoute()
 const router=useRouter()
 const editorMode=computed(()=>route.name==='browser-editor')
-const editorTab=ref<'info'|'media'|'review'>('media')
+const editorTab=ref<'info'|'media'|'review'>(
+  editorMode.value&&route.query.tab==='info'?'info':'media',
+)
 const editorBody=ref<HTMLElement|null>(null)
 function selectEditorTab(tab:'info'|'media'|'review'):void{
   editorTab.value=tab
@@ -235,6 +238,11 @@ const stillNotice=ref('')
 const stillSavedId=ref<string|null>(null)
 let stillEpoch=0
 const current=computed(()=>parseViewerTarget(route.params.protocol,route.params.id))
+const originFolderNames=computed(()=>{
+  const session=activeSession.value,target=current.value
+  return session&&target?peekOriginBreadcrumb(
+    session.accountId,session.deviceId,viewerKey(target)):[]
+})
 const photoLocal=ref<StoredPhoto[]>([])
 const photoCloud=ref<CloudPhoto[]>([])
 const mediaLocal=ref<StoredMedia[]>([])
@@ -1234,6 +1242,10 @@ function clearStill():void{
   stillSavedId.value=null
 }
 function clearBlob():void{
+  // The accepted File Viewer keeps media in one fixed stage. Stop BOTH
+  // players synchronously before replacing/revoking their encrypted Blob URL;
+  // clearing the video trim preview alone did not stop ordinary audio.
+  pauseViewerPlayback(videoElement.value,audioElement.value)
   clearLivePhotoPreview()
   panel.value=null
   panelOpener=null
@@ -1961,8 +1973,11 @@ async function saveEditor():Promise<void>{
     await returnFromEditor()
   }
 }
+// A same-account online/offline proof may replace the Session while an
+// animation frame is queued. That stale frame correctly fails closed; the new
+// session must independently schedule its own bounded volatile preview.
 watch([
-  photoElement,livePreviewCanvas,fileUrl,editorMode,editorTab,cropResult,
+  photoElement,livePreviewCanvas,fileUrl,activeSession,editorMode,editorTab,cropResult,
   cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
   photoBrightness,photoContrast,photoSaturation,
   textMarks,shapeMarks,strokeMarks,photoBlackouts,
@@ -2022,7 +2037,7 @@ watch([fileUrl,preview,activeSession,editorMode,editorReady],()=>{
 },{immediate:true})
 watch(editorMode,opened=>{
   panel.value=null
-  editorTab.value='media'
+  editorTab.value=opened&&route.query.tab==='info'?'info':'media'
   if(opened)resetPrivateCopyDraft()
 })
 watch(activeSession,(next,previous)=>{
@@ -2060,14 +2075,31 @@ watch([()=>route.params.protocol,()=>route.params.id],()=>{
 })
 // Browser history Back, the shell dock and the explicit breadcrumb all
 // converge here. Never put a private search term or folder path into a URL.
-onBeforeRouteLeave((to)=>{
-  if(editorMode.value&&privateCopyBusy.value&&!privateCopySavedId.value)
-    return false
-  if(editorMode.value&&editorUnsaved.value){
+function confirmEditorExit():boolean{
+  if(!editorMode.value)return true
+  if(privateCopyBusy.value&&!privateCopySavedId.value)return false
+  if(editorUnsaved.value){
     if(!window.confirm('Отменить несохранённые изменения файла? Исходный файл останется без изменений.'))
       return false
     resetEditorDraft()
   }
+  return true
+}
+// Vue Router REUSES this component for /browser/file/:protocol/:id/edit
+// when the user changes only the file ID. onBeforeRouteLeave is NOT called
+// for that transition, yet openFile() would drop the volatile edit buffer.
+onBeforeRouteUpdate((to,from)=>{
+  if(from.name!=='browser-editor')return true
+  const changed=String(to.params.id)!==String(from.params.id)
+    ||String(to.params.protocol)!==String(from.params.protocol)
+  // An editor-to-viewer transition for the SAME file is still an exit
+  // from the volatile edit buffer. Some router paths reuse FileViewerView
+  // rather than invoking a component leave hook.
+  const exitsEditor=to.name!=='browser-editor'
+  return !(changed||exitsEditor)||confirmEditorExit()
+})
+onBeforeRouteLeave((to)=>{
+  if(!confirmEditorExit())return false
   if(to.path==='/browser'){
     const identity=activeSession.value
     if(identity)armBrowserReturn(identity.accountId,identity.deviceId)
@@ -2075,11 +2107,28 @@ onBeforeRouteLeave((to)=>{
   }else if(to.name!=='browser-viewer'&&to.name!=='browser-editor')
     discardBrowserReturnContext()
 })
-onMounted(()=>window.addEventListener('keydown',onKeyDown))
+function warnBeforeViewerUnload(event:BeforeUnloadEvent):void{
+  // Native reload/tab close cannot await local media encryption or preserve
+  // volatile photo annotations / audio/video trim bounds. Only warn while
+  // an active editor owns unsaved changes or an in-flight metadata copy.
+  if(!editorMode.value
+    ||(!editorUnsaved.value
+      &&!(privateCopyBusy.value&&!privateCopySavedId.value)))return
+  event.preventDefault()
+  event.returnValue=''
+}
+onMounted(()=>{
+  window.addEventListener('keydown',onKeyDown)
+  window.addEventListener('beforeunload',warnBeforeViewerUnload)
+})
+// Refs are still available BEFORE Vue removes the audio/video DOM nodes.
+// onUnmounted alone is too late to reliably stop active native playback.
+onBeforeUnmount(()=>pauseViewerPlayback(videoElement.value,audioElement.value))
 onUnmounted(()=>{
   setViewerShellActions(null)
   compositionObserver?.disconnect()
   window.removeEventListener('keydown',onKeyDown)
+  window.removeEventListener('beforeunload',warnBeforeViewerUnload)
   clearBlob();clearIndex()
 })
 </script>
@@ -2101,7 +2150,9 @@ onUnmounted(()=>{
         <nav class="file-viewer-path browser-breadcrumb"
           data-testid="file-viewer-path" aria-label="Путь Browser">
           <RouterLink to="/browser" class="file-viewer-back" aria-label="В Browser">‹</RouterLink>
-          <span class="file-viewer-path-name">Browser / {{ preview?.name??'Файл' }}</span>
+          <span class="file-viewer-path-name">Browser
+            <template v-for="(folder,i) in originFolderNames" :key="i"> / {{folder}}</template>
+            / {{ preview?.name??'Файл' }}</span>
         </nav>
       <div ref="stage" class="file-viewer-stage"
         data-testid="file-viewer-stage"

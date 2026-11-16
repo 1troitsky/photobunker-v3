@@ -23,7 +23,8 @@ import { appendAuthenticatedCatalogPage }
 type DestinationFolder={id:string;label:string}
 const props=withDefaults(defineProps<{
   destinationFolders?:DestinationFolder[];defaultFolderId?:string|null
-}>(),{destinationFolders:()=>[],defaultFolderId:null})
+  shareEmbedded?:boolean
+}>(),{destinationFolders:()=>[],defaultFolderId:null,shareEmbedded:true})
 const emit=defineEmits<{
   (event:'catalog-change'):void
   (event:'media-imported',data:{mediaIds:string[];folderId:string|null}):void
@@ -280,11 +281,10 @@ onUnmounted(()=>{
 
 <template>
   <section class="foundation-card media-import-p1">
-    <h2>Импорт фото, видео и аудио · P1</h2>
+    <h2>Файлы для загрузки</h2>
     <p class="muted">
-      Выбранный файл шифруется на устройстве блоками по 1 МиБ.
-      Имя и формат находятся внутри зашифрованных метаданных.
-      В облаке сохраняется только шифротекст.
+      Файлы шифруются на устройстве перед отправкой.
+      Имена и другие приватные сведения остаются зашифрованными.
     </p>
     <div class="foundation-card">
       <h3>Приватные метаданные импорта</h3>
@@ -379,7 +379,8 @@ onUnmounted(()=>{
     </div>
     <button v-if="cursor" type="button" :disabled="busy||pagingBusy"
       data-testid="media-import-more" @click="more">Ещё файлы</button>
-    <MediaSharePanel :local-media="local" @open-media="previewReceived"/>
+    <MediaSharePanel v-if="props.shareEmbedded"
+      :local-media="local" @open-media="previewReceived"/>
     <MediaVersionPanel :local-media="local"/>
     <div v-if="selectedUrl&&metadata" class="foundation-card" data-testid="media-decrypted-preview">
       <h3>Расшифровано локально: {{ metadata.fileName }}</h3>

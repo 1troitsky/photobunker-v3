@@ -14,6 +14,10 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await expect(a.getByText('Подтверждённая сессия')).toBeVisible()
     await a.goto('/browser')
     await expect(a.getByTestId('browser-v3')).toBeVisible()
+    // Owner-approved Browser v3 places private upload controls in the
+    // Header-triggered sheet; none are visible beneath the catalog.
+    await a.getByTestId('browser-header-upload').click()
+    await expect(a.getByTestId('browser-import-sheet')).toBeVisible()
     await a.locator('#media-import-category').fill('Полевые отчёты')
     await a.locator('#media-import-description').fill('Секретная заметка для клиента')
     await a.locator('#media-import-tags').fill('evidence, night')
@@ -29,6 +33,8 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     })
     const rows=a.locator('[data-testid^="browser-row-media:"]')
     await expect(rows).toHaveCount(1,{timeout:25000})
+    await a.getByTestId('browser-import-sheet-close').click()
+    await expect(a.getByTestId('browser-import-sheet')).toBeHidden()
     // Assert actual AEAD-decrypted persistence, not only UI search behavior.
     const metadata=await a.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
@@ -66,6 +72,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await a.getByRole('button',{name:'Новая папка'}).click()
     await a.getByTestId('browser-folder-name').fill('Секретный раздел')
     await a.getByRole('button',{name:'Создать',exact:true}).click()
+    await rows.getByTestId('browser-file-menu-toggle').click()
     await rows.getByRole('combobox',{name:'Папка файла '+movedId})
       .selectOption({label:'Секретный раздел'})
     await expect(rows).toHaveCount(0)
@@ -120,11 +127,37 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Проверено 1 из 1',{timeout:30000})
     await expect(remote).toHaveCount(1)
-    // V-33: opt-in extended search fetches authenticated opaque index
-    // pages, not the user's query; actual AES-GCM metadata check stays local.
+    // V-33: explicit expanded search must NEVER silently broaden a
+    // selected-folder search to "All" when wider authorized index pages
+    // arrive. The recovered cloud row is in root; the new empty folder
+    // cannot inherit that row's encrypted virtual placement.
+    await b.getByTestId('browser-header-folder').click()
+    await b.getByTestId('browser-folder-name').fill('Only This Private Folder')
+    await b.getByRole('button',{name:'Создать',exact:true}).click()
+    // A folder's actual encrypted IndexedDB commit is distinct from the
+    // click. Wait for the new folder to be visible and durably discoverable
+    // before selecting its private-search scope; otherwise a racing browser
+    // hydration may leave the scope at 'current' and hide its target picker.
+    await expect(b.getByRole('button',{name:'Only This Private Folder',exact:true}))
+      .toBeVisible({timeout:20000})
+    await expect.poll(()=>b.evaluate(async()=>{
+      const folders=await import('/src/features/browser/application/folder-workspace.ts')
+      return Object.values((await folders.loadFolderWorkspace()).folders)
+        .some(row=>row.name==='Only This Private Folder')
+    }),{timeout:20000}).toBe(true)
+    await b.getByTestId('browser-search-folder-scope').selectOption('selected')
+    await expect(b.getByTestId('browser-search-folder-scope')).toHaveValue('selected')
+    await b.getByTestId('browser-search-folder-target')
+      .selectOption({label:'Only This Private Folder'})
+    await expect(remote).toHaveCount(0)
     await b.getByTestId('browser-private-search-expand').click()
     await expect(b.getByTestId('browser-expanded-search-status'))
       .toContainText('Индексы этих двух типов загружены полностью.',{timeout:30000})
+    await expect(b.getByTestId('browser-search-folder-scope')).toHaveValue('selected')
+    await expect(b.getByTestId('browser-search-folder-target'))
+      .toHaveText('Only This Private Folder')
+    await expect(remote).toHaveCount(0)
+    await b.getByTestId('browser-search-folder-scope').selectOption('all')
     await expect(b.getByTestId('browser-private-search-status'))
       .toContainText('Проверено 1 из 1',{timeout:30000})
     await expect(remote).toHaveCount(1)
@@ -140,7 +173,10 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     // Return one REAL signed/ciphertext-authorized row twice to mimic a
     // stale/malicious index. The local-first UI must retain the previous
     // authentic cloud list and cursor, rather than accepting duplicated IDs.
-    const panel=b.locator('.media-import-p1')
+    await b.getByTestId('browser-header-upload').click()
+    const sheet=b.getByTestId('browser-import-sheet')
+    await expect(sheet).toBeVisible()
+    const panel=sheet.locator('.media-import-p1')
     const verifiedCloud=panel.getByRole('button',{name:'Проверить из облака'})
     await expect(verifiedCloud).toHaveCount(1,{timeout:20000})
     let duplicateDelivered=0
@@ -199,6 +235,8 @@ test('P2 Browser: offline private metadata search and second-device cloud search
 
     expect(requests.join('\n')).not.toContain('секретная')
     expect(requests.join('\n')).not.toContain(secret)
+    await b.getByTestId('browser-import-sheet-close').click()
+    await expect(sheet).toBeHidden()
   }finally{
     await aContext.close();await bContext.close()
   }
