@@ -1827,9 +1827,6 @@ onUnmounted(()=>{
             data-testid="camera-permission-status">{{devicePermissionStatus}}</p>
         </section>
 
-          <div v-if="cameraSheet==='settings'" class="camera-sheet-footer">
-            <button type="button" @click="closeCameraSheet">Готово</button>
-          </div>
         </div>
         <div v-show="cameraSheet==='assignment'" class="foundation-card camera-assignment-card"
           :class="{'is-camera-sheet':cameraSheet==='assignment'}"
