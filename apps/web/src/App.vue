@@ -8,6 +8,7 @@ import {
   activeSession,identityBootstrapReady,identityBootstrapError,pendingPinUnlock,
 } from './features/identity/application/session'
 import PinShell from './features/security/ui/PinShell.vue'
+import WelcomeView from './views/WelcomeView.vue'
 import { readVerifiedGraceStatus } from './features/billing/application/grace-client'
 import { notificationShellActions } from './features/notifications/application/notification-shell-actions'
 import {contactsShellActions} from './features/people/application/contacts-shell-actions'
@@ -85,8 +86,7 @@ const dock = computed(() => displayedDock.value
   <!-- No protected Browser/Camera/Viewer or Header can mount until the
        device has been authenticated and any saved PIN has been entered.
        Even a public route must not render stale private Shell children. -->
-  <div v-if="!identityBootstrapReady" class="pin-bootstrap"
-    role="status" aria-label="Проверка локального доступа">PhotoBunker</div>
+  <WelcomeView v-if="!identityBootstrapReady" bootstrap-only/>
   <PinShell v-else-if="pendingPinUnlock||identityBootstrapError"/>
   <!-- Welcome remains a standalone route once PIN and local bootstrap settle. -->
   <RouterView v-else-if="route.meta?.standalone"/>
