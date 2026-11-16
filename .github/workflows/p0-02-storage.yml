@@ -11,13 +11,13 @@ jobs:
     # Each Playwright shard runs in its OWN disposable PG18/Garage stack.
     # This avoids sharing any identity, S3 or retention state across shards.
     # The aggregate job below retains the original required check name.
-    name: Real PostgreSQL + Garage smoke shard ${{ matrix.shard }}/3
+    name: Real PostgreSQL + Garage smoke shard ${{ matrix.shard }}/6
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
         image: postgres:18
@@ -170,14 +170,17 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8000/api/healthz
           curl -fsS http://127.0.0.1:5173/settings >/dev/null
-          # Playwright's deterministic sharding covers the full discovered
-          # 135-test set across 3 jobs, with no --grep, skips or retries.
-          pnpm exec playwright test --config tests/playwright.config.ts --shard=${{ matrix.shard }}/3
+          # Playwright sharding covers the ENTIRE discovered 135-test suite
+          # across 6 isolated stacks (~22–23 tests each). A 45-test shard
+          # hit the runner's hard 25-minute ceiling without individual logs.
+          # The list reporter records each completed test and exact failing
+          # spec; no filtering, retry, skip, or timeout increase.
+          pnpm exec playwright test --config tests/playwright.config.ts --shard=${{ matrix.shard }}/6 --reporter=list
       - name: Preserve P1 browser failure traces
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: p1-browser-traces-shard-${{ matrix.shard }}-of-3
+          name: p1-browser-traces-shard-${{ matrix.shard }}-of-6
           path: test-results/
           if-no-files-found: ignore
           retention-days: 3
@@ -186,13 +189,13 @@ jobs:
         run: docker rm -f pb3-p0-garage >/dev/null 2>&1 || true
   postgres-garage-gate:
     # Keep the pre-shard required-check name visible to branch protection,
-    # but fail closed if ANY of the three matrix shards failed or was cancelled.
+    # but fail closed if ANY of the six matrix shards failed or was cancelled.
     name: Real PostgreSQL + Garage smoke (disposable)
     needs: [postgres-garage]
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - name: Require all three isolated Playwright and Garage smoke shards
+      - name: Require all six isolated Playwright and Garage smoke shards
         env:
           SHARDS_RESULT: ${{ needs.postgres-garage.result }}
         run: test "$SHARDS_RESULT" = "success"
