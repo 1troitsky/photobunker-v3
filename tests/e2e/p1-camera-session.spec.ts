@@ -162,7 +162,8 @@ test('hydrated camera captures offline against an already verified signed assign
   await expect(page.locator('#camera-assignment')).toHaveValue(assignmentId)
   await context.setOffline(true)
   await page.getByRole('button',{name:'Сделать снимок'}).click()
-  await expect(page.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
+  await expect(page.getByTestId('camera-capture-feedback')).toBeVisible()
+  await expect(page.getByTestId('camera-stage')).toContainText('Зашифровано и сохранено локально')
   const stored=await page.evaluate(async()=>{
     const path='/src/features/photo-sync/application/p1-photo.ts'
     const m=await import(path),[photo]=await m.listLocalPhotos()
