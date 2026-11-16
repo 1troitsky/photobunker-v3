@@ -157,7 +157,8 @@ test('P2 Browser: rejects private/HTTP address locally and never contacts the so
     await page.getByTestId('media-import-https-submit').click()
     const panel=mediaImportViews(page)
     await expect(panel.getByRole('alert'))
-      .toContainText('media.link_private_host',{timeout:15000})
+      .toHaveAttribute('data-error-code','media.link_private_host',{timeout:15000})
+    await expect(panel.getByRole('alert')).toContainText('Не удалось загрузить файл. Проверьте ссылку и доступ к ней.')
     // A concurrent, genuine authenticated catalog refresh must NEVER
     // clear a user-action rejection (the old refresh() did exactly that).
     const catalogGet=page.waitForResponse(response=>
@@ -170,7 +171,7 @@ test('P2 Browser: rejects private/HTTP address locally and never contacts the so
     await catalogResponse.finished()
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>resolve(null))))
     await expect(panel.getByRole('alert'))
-      .toContainText('media.link_private_host',{timeout:15000})
+      .toHaveAttribute('data-error-code','media.link_private_host',{timeout:15000})
     expect(seen).toEqual([])
     const local=await page.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')

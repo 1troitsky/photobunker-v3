@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted,onUnmounted,ref,watch } from 'vue'
+import { computed,onMounted,onUnmounted,ref,watch } from 'vue'
 import { activeSession } from '../../identity/application/session'
 import {sameSessionDevice} from '../../identity/application/session-device'
 import MediaSharePanel from './MediaSharePanel.vue'
@@ -41,6 +41,8 @@ const busy=ref(false)
 const remoteLink=ref('')
 const remoteBusy=ref(false)
 const remoteStage=ref<'idle'|'downloading'|'encrypting'>('idle')
+const visibleImportError=computed(()=>error.value.startsWith('media.link_')
+  ? 'Не удалось загрузить файл. Проверьте ссылку и доступ к ней.' : error.value)
 const remoteDownloaded=ref(0)
 let remoteAbort:AbortController|null=null
 const pagingBusy=ref(false)
@@ -304,10 +306,11 @@ onUnmounted(()=>{
       <p v-if="remoteBusy" class="upload-feedback" role="status" data-testid="media-import-https-progress">{{remoteStage==='encrypting'?'Скачано. Шифрование на устройстве…':'Получено '+Math.round(remoteDownloaded/1024)+' КиБ'}}</p>
     </form>
     <p class="upload-feedback" role="status">{{notice}}</p>
-    <p v-if="error||catalogError" role="alert" class="upload-feedback error">{{error||catalogError}}</p>
+    <p v-if="error" role="alert" class="upload-feedback error" :data-error-code="error">{{visibleImportError}}</p>
     <div class="upload-note"><span>Файлы шифруются на устройстве. До 20 файлов, 256 МиБ за выбор, 128 МиБ на файл.</span><span>По ссылке — HTTPS/CORS, до {{Math.floor(MAX_HTTPS_IMPORT_BYTES/1024/1024)}} МиБ. Внешний сайт видит ваш IP; cookies и Referer не передаются.</span></div>
     <Teleport defer to="#browser-import-settings">
       <section class="media-import-tools" data-testid="browser-import-tools">
+        <p v-if="catalogError" role="alert" class="error-text">{{catalogError}}</p>
     <div class="foundation-card">
       <h3>Приватные метаданные импорта</h3>
       <label for="media-import-category">Категория</label>

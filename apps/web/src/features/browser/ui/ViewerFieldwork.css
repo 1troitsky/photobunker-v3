@@ -62,3 +62,6 @@
 .download-pop{position:absolute;z-index:50;top:59px;right:33px;width:min(275px,calc(100% - 20px));padding:15px;background:#303030;border:1px solid #575757;border-radius:9px;box-shadow:0 15px 36px #0009;color:#f3f3f3}.download-pop strong{display:block;color:#fff;font-size:13px;font-weight:750}.download-pop p{color:#d4d4d4;font-size:12px;line-height:1.55;margin:8px 0 13px}.download-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px}.download-buttons button{min-height:38px;border:0;border-radius:5px;background:#474747;color:#fff;font-size:12px}.download-buttons button:last-child{background:var(--green);color:#122115;font-weight:700}
 .download-pop{position:fixed;--green:#1ed760;font:16px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
 .download-pop button{min-height:38px;padding:0}
+
+.file-viewer-overlay:has(>.approved-viewer-sheet){color:#f2f2f2}
+.fullscreen-layer .fullscreen-close{padding:1px 6px}

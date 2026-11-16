@@ -67,6 +67,10 @@ try{
         metrics.screens[name]={reference:source,app}
         for(const [key,expected] of Object.entries(source)){
           if(!expected||!app[key]){result.failures.push({viewport:size,screen:name,anchor:key,reason:'missing'});continue}
+          if(['camera-settings','browser-new-folder','browser-upload','viewer-info','viewer-download'].includes(name)){
+            for(const property of ['font','color','background','padding','radius','lineHeight'])
+              if(app[key][property]!==expected[property])result.failures.push({viewport:size,screen:name,anchor:key,property,expected:expected[property],actual:app[key][property]})
+          }
           for(const dimension of ['x','y','w','h']){
             const delta=app[key][dimension]-expected[dimension]
             if(delta!==0)result.failures.push({viewport:size,screen:name,anchor:key,dimension,delta})
@@ -127,12 +131,27 @@ try{
         await expect(page.getByTestId('browser-new-folder-sheet')).toHaveCount(0)
       }
       await expect(page.locator('.browser-folder-item')).toHaveCount(2)
-      const catalogAnchors={header:'.app-header,.shell-header',dock:'.app-dock,.shell-dock',heading:'.browser-heading',switch:'.view-switch',tabs:'.browser-sections',path:'.browser-path',firstEntry:'.browser-entry',preview:'.entry-preview',more:'.entry-more',secondEntry:'.browser-entry:nth-child(2)'}
+      const catalogAnchors={header:'.app-header,.shell-header',dock:'.app-dock,.shell-dock',heading:'.browser-heading',switch:'.view-switch',tabs:'.browser-sections',path:'.browser-path',firstEntry:'.browser-entry',preview:'.entry-preview',more:'.entry-more',secondEntry:'.browser-entry:nth-child(2)',brandMark:'.brand-mark',brandName:'.brand-state strong,.brand-copy strong',headerFirst:'.header-actions button:first-child,.browser-header-actions button:first-child',headerLast:'.header-actions button:last-child,.browser-header-actions button:last-child'}
       async function browserData(ref,actual,mode){
-        await ref.locator('[data-view="'+mode+'"]').click()
-        // Equal, real text data prevents sample-only wrapping differences.
-        await ref.locator('.browser-entry').evaluateAll(nodes=>nodes.slice(3).forEach(node=>node.remove()))
         const rows=await actual.locator('.browser-entry').evaluateAll(nodes=>nodes.slice(0,3).map(node=>({title:node.querySelector('.entry-copy strong').textContent,detail:node.querySelector('.entry-copy small').textContent})))
+        // Build the same empty-folder fixture using the ORIGINAL reference UI.
+        // These are in-memory prototype records only; no product data is deleted.
+        for(const id of ['city','studio']){
+          await ref.locator('[data-action="menu"][data-id="'+id+'"]').click()
+          await ref.locator('[data-action="delete"]').click()
+          await ref.locator('[data-action="delete-confirm"]').click()
+        }
+        for(const folder of rows.slice(0,2).reverse()){
+          await ref.locator('[data-action="create"]').click()
+          await ref.locator('#folder-name').fill(folder.title)
+          await ref.locator('[data-action="create-folder"]').click()
+        }
+        await ref.locator('[data-view="'+mode+'"]').click()
+        await ref.locator('.browser-entry').evaluateAll(nodes=>{
+          const folders=nodes.filter(node=>node.querySelector('.entry-folder-badge')).slice(0,2),file=nodes.find(node=>!node.querySelector('.entry-folder-badge'))
+          nodes.forEach(node=>{if(!folders.includes(node)&&node!==file)node.remove()})
+        })
+        await ref.locator('#browser-count').evaluate((node,text)=>node.textContent=text,await actual.locator('.browser-heading-copy small').textContent())
         await ref.locator('.browser-entry').evaluateAll((nodes,rows)=>rows.forEach((row,i)=>{
           nodes[i].querySelector('.entry-copy strong').textContent=row.title
           nodes[i].querySelector('.entry-copy small').textContent=row.detail

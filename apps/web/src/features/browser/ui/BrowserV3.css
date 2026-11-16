@@ -164,3 +164,9 @@
 .browser-v3 .browser-upload-heading strong{font-size:15px;font-weight:750}
 .browser-v3 .browser-upload-heading button{padding:6px;min-height:0;width:auto;background:transparent;border:0;color:#ddd;font:inherit}
 @media(min-width:700px){.browser-v3 .browser-upload-sheet.open{max-width:480px}}
+
+.browser-v3 .browser-new-folder-sheet{color:#f3f3f3}
+.browser-v3 .browser-folder-open{font:inherit}
+.browser-v3 .browser-folder-cover.empty-folder>svg{color:inherit}
+
+.browser-v3 .browser-folders .browser-folder-form.browser-new-folder-sheet{color:#f3f3f3}

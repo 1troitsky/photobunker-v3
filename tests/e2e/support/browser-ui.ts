@@ -16,9 +16,9 @@ export async function closeBrowserSettings(page:Page):Promise<void>{
 }
 export async function browserControl(scope:Page|Locator,name:'Синхронизировать'|'Обновить'):Promise<void>{
   if('page' in scope){
-    const page=scope.page(),tools=await openImportTools(page)
+    const page=scope.page(),uploading=await page.getByTestId('browser-import-sheet').isVisible(),tools=await openImportTools(page)
     await tools.getByRole('button',{name,exact:true}).click()
-    await openImportSheet(page)
+    if(uploading)await openImportSheet(page)
     return
   }
   const page=scope,browser=await page.getByTestId('browser-header-settings').count()>0

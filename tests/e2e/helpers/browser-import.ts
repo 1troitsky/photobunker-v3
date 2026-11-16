@@ -24,7 +24,8 @@ export async function chooseEncryptedFile(input:Locator,files:Parameters<Locator
 }
 
 /** One live importer, with advanced operations in the real Browser settings. */
-export function mediaImportViews(page:Page):Locator{
+export function mediaImportViews(scope:Page|Locator):Locator{
+  const page='page' in scope?scope.page():scope
   return page.locator('.media-import-p1, .media-import-tools')
 }
 export async function openImportPanel(page:Page):Promise<Locator>{

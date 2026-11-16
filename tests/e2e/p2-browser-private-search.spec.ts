@@ -181,6 +181,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await browserHeader(b,'upload')
     const sheet=b.getByTestId('browser-import-sheet')
     await expect(sheet).toBeVisible()
+    await openImportTools(b)
     const panel=mediaImportViews(sheet)
     const verifiedCloud=panel.getByRole('button',{name:'Проверить из облака'})
     await expect(verifiedCloud).toHaveCount(1,{timeout:20000})
@@ -240,7 +241,8 @@ test('P2 Browser: offline private metadata search and second-device cloud search
 
     expect(requests.join('\n')).not.toContain('секретная')
     expect(requests.join('\n')).not.toContain(secret)
-    await b.getByTestId('browser-import-sheet-close').click()
+    await b.getByTestId('browser-settings-close').click()
+    await expect(b.getByTestId('browser-import-tools')).toBeHidden()
     await expect(sheet).toBeHidden()
   }finally{
     await aContext.close();await bContext.close()

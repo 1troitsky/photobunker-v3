@@ -54,3 +54,6 @@
 .camera-fieldwork .camera-sheet-heading button{display:inline-block;vertical-align:baseline}
 .camera-fieldwork .camera-sheet-heading button svg{display:inline;width:20px;height:20px}
 .camera-fieldwork .camera-details .camera-preset-section .camera-preset-actions{margin:0;gap:8px}
+
+.camera-fieldwork .camera-details .camera-preset-actions [data-testid="camera-preset-save"]{background:var(--green);color:#0f2416;border-color:var(--green)}
+.camera-fieldwork .camera-shutter{font:inherit}
