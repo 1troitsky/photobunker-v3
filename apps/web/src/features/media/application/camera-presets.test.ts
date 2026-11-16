@@ -6,7 +6,7 @@ import {b64,unb64} from '../../identity/infrastructure/crypto'
 import type {Session} from '../../identity/application/session'
 import {
   changeCameraPreset,defaultCameraPresetCatalog,
-  loadCameraPresetCatalog,validateCameraPresetCatalog,
+  loadCameraPresetCatalog,validateCameraPresetCatalog,validateCameraPresetSettings,
 } from './camera-presets'
 
 async function device(accountId:string=crypto.randomUUID(),
@@ -20,6 +20,52 @@ async function device(accountId:string=crypto.randomUUID(),
   } as Session
 }
 afterEach(()=>{activeSession.value=null})
+
+describe('Camera 1.2 backwards-compatible native preference settings',()=>{
+  it('upgrades exactly-ten-key legacy catalogs in memory without dropping encrypted user profiles',()=>{
+    const catalog=defaultCameraPresetCatalog()
+    const legacy={...catalog.presets[0]!.settings} as Record<string,unknown>
+    delete legacy.photoZoom
+    delete legacy.torchEnabled
+    delete legacy.gpsTrackingEnabled
+    expect(Object.keys(legacy)).toHaveLength(10)
+    expect(validateCameraPresetSettings(legacy)).toEqual({
+      ...catalog.presets[0]!.settings,
+      photoZoom:1,torchEnabled:false,gpsTrackingEnabled:false,
+    })
+    const old=validateCameraPresetCatalog({
+      version:1,selectedId:'default',presets:[{
+        id:'default',name:'По умолчанию',settings:legacy,
+      }],
+    })
+    expect(old.presets[0]!.settings.photoZoom).toBe(1)
+    for(const malformed of [
+      {...legacy,photoZoom:2}, // partial migration, never accept.
+      {...catalog.presets[0]!.settings,photoZoom:3.1},
+      {...catalog.presets[0]!.settings,photoZoom:1.05},
+      {...catalog.presets[0]!.settings,torchEnabled:'on'},
+      {...catalog.presets[0]!.settings,gpsTrackingEnabled:'yes'},
+    ])expect(()=>validateCameraPresetSettings(malformed)).toThrow('camera.preset_invalid')
+  })
+  it('persists optical zoom, torch and GPS intent only as device AEAD, without granting permissions',async()=>{
+    const s=await device();activeSession.value=s
+    const settings={...defaultCameraPresetCatalog().presets[0]!.settings,
+      photoZoom:2.3,torchEnabled:true,gpsTrackingEnabled:true,
+    }
+    await changeCameraPreset({kind:'save',id:'default',
+      name:'Private camera hardware',settings})
+    expect((await loadCameraPresetCatalog()).presets[0]!.settings).toEqual(settings)
+    const peek=new Dexie('pb3-camera-encrypted-presets-v1')
+    peek.version(1).stores({rows:'&key'})
+    try{
+      const raw=await peek.table('rows').get(s.accountId+'/'+s.deviceId)
+      expect(raw).toBeDefined()
+      for(const secret of ['Private camera hardware','photoZoom','torchEnabled','gpsTrackingEnabled']){
+        expect(JSON.stringify(raw)).not.toContain(secret)
+      }
+    }finally{peek.close()}
+  })
+})
 
 describe('Camera 1.2 device-scoped encrypted Local-First presets',()=>{
   it('persists selected preset and never stores the private name or settings in plaintext',async()=>{
