@@ -40,7 +40,11 @@ test('P2 #206 genuine Chromium microphone denial requires explicit retry, withou
   await expect(page.getByTestId('camera-start-recording')).toBeDisabled()
   expect(await countLocalMedia(page)).toBe(0)
   // A rejected getUserMedia must not cause any automatic retries.
-  await page.getByRole('button',{name:'Включить микрофон'}).click()
+  // Fieldwork 1.2 removed the separate below-viewfinder permission action.
+  // Retry is explicitly available inside the approved Settings bottom sheet.
+  await page.getByTestId('camera-open-settings').click()
+  await page.getByTestId('camera-permission-microphone').click()
+  await page.getByTestId('camera-sheet-close').click()
   await expect(page.getByTestId('camera-start-recording')).toBeEnabled({timeout:20_000})
   await expect(page.getByRole('alert')).toHaveCount(0)
   expect(await countLocalMedia(page)).toBe(0)

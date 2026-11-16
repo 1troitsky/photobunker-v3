@@ -146,7 +146,12 @@ test('P2 #208 signed required-GPS policy rejects denied capture offline, then ac
     await expect(page.getByText(/GPS получен/)).toHaveCount(0)
     await context.setOffline(true)
     await page.getByRole('button',{name:'Сделать снимок'}).click()
-    await expect(page.getByText('assignment.gps_required')).toBeVisible({timeout:30000})
+    // The approved Camera 1.2 shows the owner's signed mandatory GPS rule
+    // in the assignment sheet, not a raw internal error code.
+    await expect(page.getByTestId('camera-assignment-panel')).toBeVisible({timeout:30000})
+    await expect(page.getByTestId('camera-required-gps'))
+      .toHaveText('GPS обязателен по правилам задания')
+    await page.getByTestId('camera-sheet-close').click()
     expect(await localPhotos(page)).toHaveLength(0)
     // Same signed, cached owner policy; permission is granted explicitly.
     await context.grantPermissions(['camera','geolocation'])

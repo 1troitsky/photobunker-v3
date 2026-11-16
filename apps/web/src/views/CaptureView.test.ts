@@ -13,15 +13,33 @@ const mocks = vi.hoisted(() => ({
   draftList:vi.fn(),draftPurge:vi.fn(),draftPrivateReview:vi.fn(),
   draftRecover:vi.fn(),leaseAcquire:vi.fn(),
   requiredGps:false,requiredCategory:false,
+  allowedCategories:[] as string[],
   privateCache: vi.fn(), verifyPolicy: vi.fn(), privateScope: vi.fn(),
   allowedMedia: ['photo'] as string[],
   route: {query: {} as Record<string, string>},
+  presetDestination:'p1' as 'p1'|'p2',
+  presetChange:vi.fn(),
+  presetZoom:1,presetTorch:false,presetGpsTracking:false,
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => mocks.route,
   RouterLink: {template: '<a><slot /></a>'},
 }))
 vi.mock('../features/photo-sync/application/p1-photo', () => ({captureEncrypted: mocks.capture}))
+// Camera tests choose an encrypted, device-local preset internally; the
+// accepted Fieldwork UI must never expose P1/P2 storage implementation IDs.
+vi.mock('../features/media/application/camera-presets',async importOriginal=>{
+  const actual=await importOriginal<typeof import('../features/media/application/camera-presets')>()
+  return {...actual,changeCameraPreset:mocks.presetChange,
+    loadCameraPresetCatalog:vi.fn(async()=>{
+    const catalog=actual.defaultCameraPresetCatalog()
+    catalog.presets[0]!.settings.photoStorage=mocks.presetDestination
+    catalog.presets[0]!.settings.photoZoom=mocks.presetZoom
+    catalog.presets[0]!.settings.torchEnabled=mocks.presetTorch
+    catalog.presets[0]!.settings.gpsTrackingEnabled=mocks.presetGpsTracking
+    return catalog
+  })}
+})
 vi.mock('../features/media/application/media-outbox', () => ({enqueueEncryptedMedia: mocks.mediaEnqueue}))
 vi.mock('../features/media/application/recording-writer-lease',()=>({
   acquireCameraWriterLease:mocks.leaseAcquire,
@@ -47,7 +65,7 @@ vi.mock('../features/assignments/application/assignment-outbox', () => ({
   verifySignedAssignmentPolicy: mocks.verifyPolicy,
   assignmentPrivateCacheScope: mocks.privateScope,
   signedMediaCaptureIntent: mocks.mediaIntent,
-  signedAdvancedRequirements: () => ({allowedCategories:[],requiredTags:[]}),
+  signedAdvancedRequirements: () => ({allowedCategories:mocks.allowedCategories,requiredTags:[]}),
   signedPolicyRequirements: () => ({
     requiredCategory:mocks.requiredCategory,descriptionMinLength:0,requiredGps:mocks.requiredGps,
   }),
@@ -98,6 +116,11 @@ let play = vi.fn<() => Promise<void>>()
 function button(text: string): HTMLButtonElement {
   return [...host.querySelectorAll('button')].find(el => el.textContent?.trim() === text)!
 }
+function selectMode(mode:'photo'|'video'|'audio'):void{
+  const tab=host.querySelector<HTMLButtonElement>(`[data-testid="camera-mode-tab-${mode}"]`)
+  if(!tab)throw Error('Camera mode tab not mounted: '+mode)
+  tab.click()
+}
 async function mount(session = identity()) {
   activeSession.value = session
   host = document.createElement('div'); document.body.append(host)
@@ -133,6 +156,7 @@ beforeEach(() => {
   mocks.route.query = reactive({})
   mocks.requiredGps=false
   mocks.requiredCategory=false
+  mocks.allowedCategories=[]
   mocks.mediaIntent.mockResolvedValue(undefined)
   Object.defineProperty(navigator,'permissions',{configurable:true,value:{
     query:vi.fn(async()=>({state:'granted',onchange:null})),
@@ -141,6 +165,11 @@ beforeEach(() => {
   mocks.server.mockResolvedValue({items: []})
   mocks.binding.mockResolvedValue({assignmentId: 'assignment-a', policyRevision: 1})
   mocks.capture.mockResolvedValue({photoId: 'photo-fixture'})
+  mocks.presetDestination='p1'
+  mocks.presetChange.mockRejectedValue(Error('camera.preset_invalid'))
+  mocks.presetZoom=1
+  mocks.presetTorch=false
+  mocks.presetGpsTracking=false
   mocks.allowedMedia = ['photo']
   mocks.privateCache.mockResolvedValue(null)
   mocks.verifyPolicy.mockResolvedValue(undefined)
@@ -247,11 +276,55 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(host.textContent).toContain('Масштаб: 1.0×')
     expect(host.textContent).toContain('Не удалось применить масштаб камеры.')
     expect(host.querySelector('[data-testid="camera-zoom-indicator"]')).toBeNull()
-    button('Отключить').click()
+    opened.emitEnded() // Native track has already ended; stop() need not fire again.
     await settle()
-    expect(opened.track.stop).toHaveBeenCalledOnce()
+    expect(opened.track.readyState).toBe('ended')
+    expect(host.querySelector('video')!.srcObject).toBeNull()
     expect(host.querySelector('[data-testid="camera-photo-zoom"]')).toBeNull()
     expect(host.querySelector('[data-testid="camera-photo-zoom-unavailable"]')).not.toBeNull()
+  })
+  it('never captures from a stopped native track even before the browser emits ended',async()=>{
+    const opened=media()
+    await mount()
+    requests[0]!.resolve(opened.stream)
+    await settle()
+    opened.track.stop() // Browser may defer the ended event for a revoked track.
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.capture).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+  })
+  it('fails closed after a native idle camera track ends, then retries only after permission action',async()=>{
+    const opened=media()
+    await mount()
+    requests[0]!.resolve(opened.stream)
+    await settle()
+    expect(button('Сделать снимок').disabled).toBe(false)
+    opened.emitEnded()
+    await settle()
+    expect(host.querySelector('video')!.srcObject).toBeNull()
+    expect(button('Сделать снимок').disabled).toBe(true)
+    expect(host.querySelector('[data-testid="camera-capture-error"]')?.textContent)
+      .toContain('camera.stream_ended')
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.capture).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-open-settings"]')!.click()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-permission-camera"]')!.click()
+    await settle()
+    const temporary=media()
+    requests[1]!.resolve(temporary.stream)
+    await settle()
+    const recovered=media()
+    requests[2]!.resolve(recovered.stream)
+    await settle()
+    expect(temporary.track.stop).toHaveBeenCalledTimes(1)
+    expect(recovered.track.stop).not.toHaveBeenCalled()
+    expect(host.querySelector('video')!.srcObject).toBe(recovered.stream)
+    expect(button('Сделать снимок').disabled).toBe(false)
+    expect(host.querySelector('[data-testid="camera-capture-error"]')).toBeNull()
   })
   it('offers photo-settings torch only with a live supported track and updates the Header consistently',async()=>{
     const opened=media()
@@ -361,8 +434,7 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     await mount()
     requests[0]!.resolve(opened.stream)
     await settle()
-    const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    mode.value='video';mode.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('video')
     await settle()
     expect(getUserMedia).toHaveBeenLastCalledWith({
       audio:true,
@@ -395,27 +467,193 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(getUserMedia).toHaveBeenCalledTimes(2)
     expect(getUserMedia).toHaveBeenLastCalledWith({
       audio:false,
-      video:{facingMode:{ideal:'user'},width:{ideal:1280}},
+      video:{facingMode:{ideal:'user'},width:{ideal:1920}},
     })
   })
 })
 
-describe('Camera preset hydration does not change a user-selected capture destination',()=>{
-  it('preserves P2 encrypted MediaFile choice across online same-key session hydration',async()=>{
+describe('Camera preset hydration preserves the selected encrypted media destination internally',()=>{
+  it('keeps P2 MediaFile across same-key hydration without exposing a technical selector',async()=>{
+    mocks.presetDestination='p2'
+    mocks.mediaEnqueue.mockResolvedValue('media-enqueued-after-encryption')
     const session=await mount()
     requests[0]!.resolve(media().stream)
     await settle()
-    const destination=host.querySelector<HTMLSelectElement>('#camera-photo-storage')!
-    destination.value='p2'
-    destination.dispatchEvent(new Event('change',{bubbles:true}))
-    await settle()
-    expect(destination.value).toBe('p2')
     activeSession.value={
       ...session,online:true,
       device:{...session.device},pkg:{...session.pkg},
     }
     await settle()
-    expect(host.querySelector<HTMLSelectElement>('#camera-photo-storage')!.value).toBe('p2')
+    expect(host.querySelector('#camera-photo-storage')).toBeNull()
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+    expect(mocks.capture).not.toHaveBeenCalled()
+  })
+})
+
+describe('Camera 1.2 preset selection owns stable device hydration, not wrapper identity',()=>{
+  it('completes a pending encrypted preset save after same-key Session hydration',async()=>{
+    const saved=deferred<import('../features/media/application/camera-presets').CameraPresetCatalog>()
+    mocks.presetChange.mockReturnValue(saved.promise)
+    const session=await mount()
+    const name=host.querySelector<HTMLInputElement>('[data-testid="camera-preset-name"]')!
+    name.value='Hydrated preset';name.dispatchEvent(new Event('input',{bubbles:true}))
+    await settle()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-preset-save"]')!.click()
+    await settle()
+    expect(mocks.presetChange).toHaveBeenCalledOnce()
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="camera-preset-save"]')!.disabled).toBe(true)
+    activeSession.value={...session,online:true,
+      pkg:{...session.pkg},device:{...session.device}}
+    await settle()
+    const catalog={
+      version:1 as const,selectedId:'default',
+      presets:[{id:'default',name:'Hydrated preset',settings:{
+        photoAspect:'4:3' as const,photoQuality:'high' as const,photoStorage:'p1' as const,
+        videoQuality:'720p' as const,videoAudioEnabled:true,
+        videoMaxSeconds:300,audioMaxSeconds:3000,audioTargetBitrate:128000 as const,
+        gridVisible:false,gpsStatusVisible:true,
+        photoZoom:1,torchEnabled:false,gpsTrackingEnabled:false,
+      }}],
+    }
+    saved.resolve(catalog);await settle()
+    expect(host.querySelector('[data-testid="camera-preset-status"]')?.textContent)
+      .toContain('Пресет зашифрован и сохранён')
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="camera-preset-save"]')!.disabled).toBe(false)
+  })
+  it('does not apply a delayed A→B→A preset result to the new identity epoch',async()=>{
+    const saved=deferred<import('../features/media/application/camera-presets').CameraPresetCatalog>()
+    mocks.presetChange.mockReturnValue(saved.promise)
+    const session=await mount()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-preset-save"]')!.click()
+    await settle()
+    const different={...session,accountId:'account-other',
+      pkg:{...session.pkg,accountId:'account-other'}}
+    activeSession.value=different;await settle()
+    activeSession.value=session;await settle()
+    saved.resolve({
+      version:1,selectedId:'default',presets:[{
+        id:'default',name:'WRONG STALE PRESET',settings:{
+          photoAspect:'4:3',photoQuality:'high',photoStorage:'p1',
+          videoQuality:'720p',videoAudioEnabled:true,
+          videoMaxSeconds:300,audioMaxSeconds:3000,audioTargetBitrate:128000,
+          gridVisible:false,gpsStatusVisible:true,photoZoom:1,
+          torchEnabled:false,gpsTrackingEnabled:false,
+        },
+      }],
+    });await settle()
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-preset-name"]')?.value)
+      .not.toBe('WRONG STALE PRESET')
+    expect(host.querySelector<HTMLButtonElement>('[data-testid="camera-preset-save"]')!.disabled).toBe(false)
+  })
+})
+
+describe('Camera 1.2 native hardware preferences and private GPS consent',()=>{
+  it('applies only actual track-supported zoom/torch from a device-sealed preset and does not prompt GPS',async()=>{
+    mocks.presetZoom=2.3
+    mocks.presetTorch=true
+    mocks.presetGpsTracking=true
+    const getGPS=vi.fn()
+    const originalGeolocation=Object.getOwnPropertyDescriptor(navigator,'geolocation')
+    Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
+      getCurrentPosition:getGPS,watchPosition:vi.fn(),clearWatch:vi.fn(),
+    }})
+    try{
+    await mount()
+    const opened=media()
+    const applied=vi.fn().mockResolvedValue(undefined)
+    Object.assign(opened.track,{
+      getCapabilities:()=>({zoom:{min:1,max:5,step:.1},torch:true}),
+      getSettings:()=>({zoom:1}),
+      applyConstraints:applied,
+    })
+    Object.assign(opened.stream,{getVideoTracks:()=>[opened.track]})
+    requests[0]!.resolve(opened.stream)
+    await settle()
+    expect(applied).toHaveBeenCalledWith({advanced:[{zoom:2.3}]})
+    expect(applied).toHaveBeenCalledWith({advanced:[{torch:true}]})
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-photo-zoom"]')?.value)
+      .toBe('2.3')
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-photo-torch"]')?.checked)
+      .toBe(true)
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-photo-zoom"]')?.max)
+      .toBe('3')
+    expect(getGPS).not.toHaveBeenCalled()
+    expect(host.querySelector('[data-testid="camera-preset-gps-consent"]')?.textContent)
+      .toContain('требуется новое разрешение')
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-gps-tracking"]')?.checked)
+      .toBe(false)
+    }finally{
+      if(originalGeolocation)Object.defineProperty(navigator,'geolocation',originalGeolocation)
+      else Reflect.deleteProperty(navigator,'geolocation')
+    }
+  })
+})
+
+describe('Camera Fieldwork owner-signed categories',()=>{
+  it('uses a bounded dropdown for verified assignment vocabulary and rejects a stale category',async()=>{
+    mocks.allowedCategories=['Фасад','Детали','Документация']
+    mocks.requiredCategory=true
+    mocks.route.query={assignmentId:'assignment-a'}
+    mocks.policies.mockResolvedValue([{
+      assignmentId:'assignment-a',ownerAccountId:'owner-a',policyRevision:2,
+    }])
+    await mount()
+    await settle()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-open-assignment"]')!.click()
+    await settle()
+    const choice=host.querySelector<HTMLSelectElement>('[data-testid="camera-category-select"]')!
+    expect(choice).not.toBeNull()
+    expect([...choice.options].map(o=>o.value))
+      .toEqual(['','Фасад','Детали','Документация'])
+    const finish=host.querySelector<HTMLButtonElement>('[data-testid="camera-assignment-finish"]')!
+    expect(finish.disabled).toBe(true)
+    choice.value='Фасад';choice.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(finish.disabled).toBe(false)
+    // A signed policy revision removing the selected category cannot silently
+    // approve that stale private value, even if the field is still populated.
+    mocks.allowedCategories=['Детали']
+    mocks.policies.mockResolvedValue([{
+      assignmentId:'assignment-a',ownerAccountId:'owner-a',policyRevision:3,
+    }])
+    button('Обновить задания').click()
+    await settle()
+    expect(finish.disabled).toBe(true)
+  })
+})
+
+describe('Camera photo capture validates the signed form before JPEG work',()=>{
+  it('opens the approved assignment sheet instead of persisting an incomplete photo',async()=>{
+    mocks.requiredCategory=true
+    mocks.allowedCategories=['Фасад']
+    mocks.route.query={assignmentId:'assignment-a'}
+    mocks.policies.mockResolvedValue([{
+      assignmentId:'assignment-a',ownerAccountId:'owner-a',policyRevision:2,
+    }])
+    await mount()
+    requests[0]!.resolve(media().stream)
+    await settle()
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.capture).not.toHaveBeenCalled()
+    expect(mocks.mediaEnqueue).not.toHaveBeenCalled()
+    expect(vi.mocked(HTMLCanvasElement.prototype.toBlob)).not.toHaveBeenCalled()
+    expect(host.querySelector('[data-testid="camera-snap-flash"]')).toBeNull()
+    expect(host.querySelector('[data-testid="camera-capture-error"]')?.textContent)
+      .toContain('Категория обязательна')
+    expect(host.querySelector<HTMLElement>('[data-testid="camera-assignment-panel"]')!.style.display)
+      .not.toBe('none')
+    const select=host.querySelector<HTMLSelectElement>('[data-testid="camera-category-select"]')!
+    select.value='Фасад'
+    select.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-assignment-finish"]')!.click()
+    await settle()
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.capture).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -434,6 +672,8 @@ describe('Camera 1.2 real JPEG creation, not CSS-only image options',()=>{
     button('Сделать снимок').click()
     await settle()
     expect(mocks.capture).toHaveBeenCalledTimes(1)
+    expect(host.querySelectorAll('[data-testid="camera-snap-flash"]')).toHaveLength(1)
+    expect(host.querySelector('[data-testid="camera-record-badge"]')).toBeNull()
     expect(vi.mocked(HTMLCanvasElement.prototype.toBlob))
       .toHaveBeenCalledWith(expect.any(Function),'image/jpeg',.7)
     const canvas=vi.mocked(HTMLCanvasElement.prototype.toBlob)
@@ -444,6 +684,14 @@ describe('Camera 1.2 real JPEG creation, not CSS-only image options',()=>{
       .mock.results[0]!.value as CanvasRenderingContext2D
     expect(ctx.drawImage).toHaveBeenCalledWith(expect.any(HTMLVideoElement),
       80,0,480,480,0,0,480,480)
+    // A previously successful shutter animation must never run again when
+    // returning to Photo after switching modes without capturing a new frame.
+    selectMode('audio')
+    await settle()
+    expect(host.querySelector('[data-testid="camera-snap-flash"]')).toBeNull()
+    selectMode('photo')
+    await settle()
+    expect(host.querySelector('[data-testid="camera-snap-flash"]')).toBeNull()
   })
 })
 
@@ -456,7 +704,7 @@ describe('private instructions and hardware lifecycle',()=>{
     mocks.route.query={assignmentId:policy.assignmentId}
     mocks.policies.mockResolvedValue([policy])
   }
-  it.each(['video','audio','stop'] as const)
+  it.each(['video','audio','permission'] as const)
   ('finishes an in-flight verified private decrypt after %s changes camera tracks',async action=>{
     prepare()
     const cached=deferred<typeof privateText>()
@@ -464,11 +712,12 @@ describe('private instructions and hardware lifecycle',()=>{
     await mount()
     expect(mocks.verifyPolicy).toHaveBeenCalledWith(policy,true)
     expect(mocks.privateCache).toHaveBeenCalled()
-    if(action==='stop')button('Отключить').click()
-    else{
-      const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
-      mode.value=action;mode.dispatchEvent(new Event('change',{bubbles:true}))
-    }
+    const current=media();requests[0]!.resolve(current.stream);await settle()
+    if(action==='permission'){
+      host.querySelector<HTMLButtonElement>('[data-testid="camera-permission-camera"]')!.click()
+      await settle()
+      const temporary=media();requests[1]!.resolve(temporary.stream)
+    }else selectMode(action)
     await settle()
     cached.resolve(privateText);await settle()
     expect(host.querySelector('[data-testid="camera-media-instruction"]')?.textContent)
@@ -490,6 +739,41 @@ describe('private instructions and hardware lifecycle',()=>{
     await settle();cached.resolve(privateText);await settle()
     expect(host.querySelector('[data-testid="camera-media-instruction"]')).toBeNull()
     expect(host.textContent).not.toContain('Photo framing')
+  })
+})
+
+describe('Camera 1.2 active video recording indicator',()=>{
+  it('shows the approved viewfinder badge only during a native MediaRecorder video session',async()=>{
+    class NativeRecorder{
+      static isTypeSupported(_mime:string){return true}
+      state:'inactive'|'recording'='inactive'
+      ondataavailable:((event:{data:Blob})=>void)|null=null
+      onstop:(()=>void)|null=null
+      onerror:(()=>void)|null=null
+      constructor(_stream:MediaStream,_options:{mimeType:string}){}
+      start(){this.state='recording'}
+      stop(){this.state='inactive';this.onstop?.()}
+    }
+    vi.stubGlobal('MediaRecorder',NativeRecorder)
+    await mount()
+    requests[0]!.resolve(media().stream)
+    await settle()
+    expect(host.querySelector('[data-testid="camera-record-badge"]')).toBeNull()
+    selectMode('video')
+    await settle()
+    requests[1]!.resolve(media().stream)
+    await settle()
+    button('Начать запись видео').click()
+    await settle()
+    const badge=host.querySelector('[data-testid="camera-record-badge"]')
+    expect(badge).not.toBeNull()
+    expect(badge?.textContent).toContain('00:00')
+    expect(host.querySelector('.camera-recording-timer')).toBeNull()
+    for(const id of ['camera-open-assignment','camera-open-settings','camera-gps-pill']){
+      expect(host.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)?.disabled).toBe(true)
+    }
+    expect(host.querySelector('[data-testid="camera-snap-flash"]')).toBeNull()
+    expect(host.querySelector('[data-testid="camera-audio-view"]')).toBeNull()
   })
 })
 
@@ -516,9 +800,7 @@ describe('P1-14 MediaRecorder cancellation and plaintext safety',()=>{
     vi.stubGlobal('MediaRecorder',RecorderFactory)
     const session=await mount()
     const original=media();requests[0]!.resolve(original.stream);await settle()
-    const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    mode.value='audio'
-    mode.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('audio')
     await settle()
     expect(original.track.stop).toHaveBeenCalledTimes(1)
     expect(requests.length).toBe(2)
@@ -615,24 +897,27 @@ describe('camera session ownership and async permission lifecycle', () => {
     expect(host.querySelector('[role=alert]')!.textContent).toContain('camera denied')
     activeSession.value = {...session, online: true}; await settle()
     expect(getUserMedia).toHaveBeenCalledTimes(1)
-    button('Включить камеру').click(); await settle()
-    const retry = media(); requests[1]!.resolve(retry.stream); await settle()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-open-settings"]')!.click()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-permission-camera"]')!.click()
+    await settle()
+    const preflight=media();requests[1]!.resolve(preflight.stream);await settle()
+    const retry=media();requests[2]!.resolve(retry.stream);await settle()
+    expect(preflight.track.stop).toHaveBeenCalledOnce()
     expect(host.querySelector('video')!.srcObject).toBe(retry.stream)
     expect(host.querySelector('[role=alert]')).toBeNull()
   })
-  it('cancels pending start on Stop and never reopens from hydration or a late result', async () => {
+  it('cancels pending start on navigation and never reopens from hydration or a late result', async () => {
     const session = await mount()
-    button('Отключить').click()
+    app!.unmount();app=undefined
     activeSession.value = {...session, online: true}; await settle()
     const late = media(); requests[0]!.resolve(late.stream); await settle()
     expect(late.track.stop).toHaveBeenCalledTimes(1)
     expect(getUserMedia).toHaveBeenCalledTimes(1)
-    expect(host.querySelector('video')!.srcObject).toBeNull()
+    expect(host.querySelector('video')).toBeNull()
   })
-  it('never opens duplicate streams for repeated start/hydration notifications', async () => {
+  it('never opens duplicate streams for repeated same-key hydration notifications', async () => {
     const session = await mount()
     for (let i = 0; i < 4; i++) {
-      button('Включить камеру').click()
       activeSession.value = {...session, online: i % 2 === 0}
     }
     await settle()
@@ -782,6 +1067,29 @@ describe('Issue #260 GPS consent and capture races',()=>{
     Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
       getCurrentPosition:vi.fn((ok:PositionCallback,fail?:PositionErrorCallback)=>callbacks.push({ok,fail})),
     }})
+  })
+  it('does not start preset GPS on load; one explicit grant activates the saved tracking preference',async()=>{
+    mocks.presetGpsTracking=true
+    const watchPosition=vi.fn().mockReturnValue(42)
+    const clearWatch=vi.fn()
+    Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
+      getCurrentPosition:vi.fn((ok:PositionCallback,fail?:PositionErrorCallback)=>
+        callbacks.push({ok,fail})),
+      watchPosition,clearWatch,
+    }})
+    await ready()
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled()
+    expect(watchPosition).not.toHaveBeenCalled()
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-gps-tracking"]')!.checked).toBe(false)
+    button('Получить GPS').click()
+    await settle()
+    expect(watchPosition).not.toHaveBeenCalled()
+    expect(callbacks).toHaveLength(1)
+    callbacks[0]!.ok(point())
+    await settle()
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-gps-tracking"]')!.checked).toBe(true)
+    expect(watchPosition).toHaveBeenCalledOnce()
+    expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1)
   })
   it('starts one high-precision GPS watcher only after opt-in and clears it with the fix',async()=>{
     let watchOk:PositionCallback|undefined
@@ -946,7 +1254,7 @@ describe('Issue #260 GPS consent and capture races',()=>{
     if(kind==='unmount'){app!.unmount();app=undefined}
     if(kind==='assignment')select('#camera-assignment','assignment-a')
     if(kind==='route')mocks.route.query.assignmentId='assignment-a'
-    if(kind==='mode')select('#camera-mode','audio')
+    if(kind==='mode')selectMode('audio')
     await settle()
     callbacks[0]!.ok(point());oldListener?.();await settle()
     expect(host.textContent).not.toContain('GPS получен')
@@ -1036,7 +1344,7 @@ describe('Issue #260 GPS consent and capture races',()=>{
       stop(){this.state='inactive';this.onstop?.()}
     }
     vi.stubGlobal('MediaRecorder',Recorder)
-    await ready();select('#camera-mode',mode);await settle()
+    await ready();selectMode(mode);await settle()
     requests[1]!.resolve(media().stream);await settle()
     await fix();vi.useFakeTimers()
     button('Начать запись '+(mode==='video'?'видео':'аудио')).click();await settle()
@@ -1050,14 +1358,16 @@ describe('Issue #260 GPS consent and capture races',()=>{
     vi.useRealTimers()
   })
   it('does not publish P2 JPEG when consent is withdrawn during encryption',async()=>{
-    await ready();select('#camera-photo-storage','p2');await settle();await fix()
+    mocks.presetDestination='p2'
+    await ready();await fix()
     mocks.mediaEnqueue.mockImplementation(async(_file,_intent,_fields,assertCurrent)=>{
       status.state='denied';assertCurrent()
       return 'must-not-be-saved'
     })
     button('Сделать снимок').click();await settle()
     expect(host.textContent).toContain('camera.gps_consent_changed')
-    expect(host.textContent).not.toContain('P2 JPEG зашифрован')
+    expect(host.querySelector('[data-testid="camera-capture-feedback"]')).toBeNull()
+    expect(host.textContent).not.toContain('Зашифровано и сохранено локально')
   })
 
   it.each(['photo','audio'] as const)('does not sign using a new account during pending %s permission read',async mode=>{
@@ -1066,7 +1376,7 @@ describe('Issue #260 GPS consent and capture races',()=>{
     mocks.policies.mockResolvedValue([{assignmentId:'assignment-a',policyRevision:2}])
     const session=await ready()
     if(mode==='audio'){
-      select('#camera-mode','audio');await settle()
+      selectMode('audio');await settle()
       requests[1]!.resolve(media().stream);await settle()
     }
     await fix()
@@ -1118,11 +1428,9 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     mocks.mediaEnqueue.mockResolvedValue('media-enqueued-after-encryption')
     await mount()
     requests[0]!.resolve(media().stream);await settle()
-    const input=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    input.value=mode
-    input.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode(mode)
     await settle()
-    expect(button(mode==='audio'?'Включить микрофон':'Включить камеру')).toBeDefined()
+    expect(host.querySelectorAll('[data-testid^="camera-mode-tab-"]')).toHaveLength(3)
     const opened=media()
     requests[1]!.resolve(opened.stream);await settle()
     if(mode==='audio'&&bitrate!==undefined){
@@ -1221,8 +1529,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     vi.stubGlobal('MediaRecorder',BoundedRecorder)
     await mount()
     requests[0]!.resolve(media().stream);await settle()
-    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('audio')
     await settle()
     const opened=media()
     requests[1]!.resolve(opened.stream);await settle()
@@ -1264,8 +1571,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     mocks.leaseAcquire.mockRejectedValueOnce(Error('camera.recording_writer_busy'))
     await mount()
     requests[0]!.resolve(media().stream);await settle()
-    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('audio')
     await settle()
     const opened=media()
     requests[1]!.resolve(opened.stream);await settle()
@@ -1348,8 +1654,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     await mount()
     requests[0]!.resolve(media().stream)
     await settle()
-    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('audio')
     await settle()
     requests[1]!.reject(Object.assign(new Error('browser-specific private text'),{
       name:'NotAllowedError',
@@ -1366,8 +1671,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     await mount()
     requests[0]!.resolve(media().stream)
     await settle()
-    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('audio')
     await settle()
     const opened=media()
     opened.track.stop()

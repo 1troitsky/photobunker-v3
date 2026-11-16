@@ -15,13 +15,30 @@ describe('Camera Fieldwork real photo crop/quality',()=>{
     })
     expect(cameraPhotoFormat(1920,1080,'16:9','medium')).toEqual({
       sx:0,sy:0,sw:1920,sh:1080,
-      width:1280,height:720,jpegQuality:.7,
+      width:960,height:540,jpegQuality:.7,
     })
     const format=cameraPhotoFormat(1920,1080,'3:2','low')
     expect(format.sw/format.sh).toBeCloseTo(1.5)
     expect(format.sx).toBeGreaterThan(0)
-    expect(format.width).toBeLessThanOrEqual(1280)
+    expect(format.width).toBeLessThanOrEqual(640)
     expect(format.jpegQuality).toBe(.5)
+  })
+  it('produces four distinct approved native-JPEG size tiers, never upscaling',()=>{
+    for(const [quality,edge,width,height,jpegQuality] of [
+      ['maximum',1600,1600,1200,.96],
+      ['high',1280,1280,960,.85],
+      ['medium',960,960,720,.70],
+      ['low',640,640,480,.50],
+    ] as const){
+      const frame=cameraPhotoFormat(4000,3000,'4:3',quality)
+      expect(frame.width).toBe(width)
+      expect(frame.height).toBe(height)
+      expect(Math.max(frame.width,frame.height)).toBe(edge)
+      expect(frame.jpegQuality).toBe(jpegQuality)
+    }
+    expect(cameraPhotoFormat(320,240,'4:3','maximum')).toMatchObject({
+      width:320,height:240,
+    })
   })
   it('rejects malformed source dimensions and preset types',()=>{
     for(const dims of [[0,1],[NaN,400],[300,Infinity],[40000,100]]){

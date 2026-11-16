@@ -369,6 +369,22 @@ function upOneFolder():void{
 }
 const allFolders=computed(()=>Object.values(folderWorkspace.value.folders)
   .sort((a,b)=>a.name.localeCompare(b.name,'ru')))
+/**
+ * Browser v3: the move dropdown must never OFFER moving a folder into
+ * itself or any descendant. The domain's cycle validation remains the
+ * authoritative guard for manipulated events and concurrent edits.
+ */
+function validFolderMoveTargets(id:string){
+  const workspace=folderWorkspace.value
+  return allFolders.value.filter(candidate=>{
+    let cursor:string|null=candidate.id,steps=0
+    while(cursor!==null&&steps++<300){
+      if(cursor===id)return false
+      cursor=workspace.folders[cursor]?.parentId??null
+    }
+    return cursor===null
+  })
+}
 function setSearchFolderScope(next:SearchFolderScope):void{
   if(next==='selected'&&(!searchSelectedFolder.value
     ||!folderWorkspace.value.folders[searchSelectedFolder.value])){
@@ -1385,6 +1401,7 @@ function preserveViewerOrigin(item:CatalogItem,event:MouseEvent):void{
   captureBrowserReturnContext({
     accountId:identity.accountId,deviceId:identity.deviceId,
     fileKey:item.key,folderId:selectedFolder.value,
+    folderNames:breadcrumb.value.map(folder=>folder.name),
     filter:filter.value,sort:sort.value,view:view.value,
     search:search.value,searchFolderScope:searchFolderScope.value,
     searchSelectedFolder:searchSelectedFolder.value,
@@ -2415,7 +2432,7 @@ onUnmounted(()=>{
                 :aria-label="'Переместить папку '+folder.name"
                 @change="changeFolderParent(folder.id,$event);closeFileMenu()">
                 <option value="">Корень</option>
-                <option v-for="candidate in allFolders.filter(x=>x.id!==folder.id)"
+                <option v-for="candidate in validFolderMoveTargets(folder.id)"
                   :key="candidate.id" :value="candidate.id">{{ candidate.name }}</option>
               </select>
             </label>

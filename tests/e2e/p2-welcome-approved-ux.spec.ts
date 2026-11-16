@@ -29,3 +29,40 @@ test('Welcome 1.4 routes anonymously, uses original six SVG slides and real key-
   await expect(page.locator('.shell-header')).toHaveCount(1)
   await expect(page.locator('.shell-dock')).toHaveCount(1)
 })
+
+test('Welcome Loader 1.6 exits after genuine local key hydration even when server login stalls',async({page})=>{
+  test.setTimeout(120000)
+  await page.goto('/settings')
+  await page.getByRole('button',{name:'Создать ключ'}).click()
+  await page.getByLabel('Я сохранил ключ восстановления').check()
+  await page.getByRole('button',{name:'Завершить регистрацию'}).click()
+  await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
+  // Hold only the REST login challenge, not the browser or local encrypted
+  // IndexedDB. The same known device must remain available Local-First.
+  let release:()=>void=()=>{}
+  let intercepted=false
+  const gate=new Promise<void>(resolve=>{release=resolve})
+  await page.route('**/identity/v2/challenges',async route=>{
+    const body=route.request().postData()??''
+    if(body.includes('"purpose":"login"')){
+      intercepted=true
+      await gate
+    }
+    await route.continue()
+  })
+  try{
+    await page.goto('/browser')
+    await page.reload({waitUntil:'domcontentloaded'})
+    await expect.poll(async()=>page.evaluate(async()=>{
+      const m=await import('/src/features/identity/application/session.ts')
+      return !!m.activeSession.value&&!m.sessionBootstrapPending.value
+    }),{timeout:30000}).toBe(true)
+    expect(intercepted).toBe(true)
+    const local=await page.evaluate(async()=>{
+      const m=await import('/src/features/identity/application/session.ts')
+      return {offline:!m.activeSession.value?.online,loading:m.sessionBootstrapPending.value}
+    })
+    expect(local).toEqual({offline:true,loading:false})
+    await expect(page.getByTestId('browser-v3')).toBeVisible()
+  }finally{release();await page.unrouteAll({behavior:'ignoreErrors'})}
+})

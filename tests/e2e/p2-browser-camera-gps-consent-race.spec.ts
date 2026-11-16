@@ -75,7 +75,10 @@ for(const required of [false,true]){
       await context.setOffline(true)
       await page.getByRole('button',{name:'Сделать снимок'}).click()
       if(required){
-        await expect(page.getByText('assignment.gps_required')).toBeVisible()
+        await expect(page.getByTestId('camera-assignment-panel')).toBeVisible()
+        await expect(page.getByTestId('camera-required-gps'))
+          .toHaveText('GPS обязателен по правилам задания')
+        await page.getByTestId('camera-sheet-close').click()
         expect(await localPhotos(page)).toHaveLength(0)
       }else{
         await expect(page.getByText(/Зашифровано и сохранено локально/)).toBeVisible({timeout:30000})

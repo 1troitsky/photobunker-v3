@@ -3,7 +3,7 @@ import {computed,nextTick,onBeforeUnmount,onMounted,onUnmounted,ref,watch} from 
 import {onBeforeRouteLeave,onBeforeRouteUpdate,RouterLink,useRoute,useRouter} from 'vue-router'
 import {
   armBrowserReturn,discardBrowserReturnContext,
-  peekOriginPager,noteViewerPosition,
+  peekOriginPager,peekOriginBreadcrumb,noteViewerPosition,
 } from '../features/browser/application/browser-return-context'
 import {activeSession} from '../features/identity/application/session'
 import {pauseViewerPlayback} from '../features/browser/application/viewer-playback'
@@ -238,6 +238,11 @@ const stillNotice=ref('')
 const stillSavedId=ref<string|null>(null)
 let stillEpoch=0
 const current=computed(()=>parseViewerTarget(route.params.protocol,route.params.id))
+const originFolderNames=computed(()=>{
+  const session=activeSession.value,target=current.value
+  return session&&target?peekOriginBreadcrumb(
+    session.accountId,session.deviceId,viewerKey(target)):[]
+})
 const photoLocal=ref<StoredPhoto[]>([])
 const photoCloud=ref<CloudPhoto[]>([])
 const mediaLocal=ref<StoredMedia[]>([])
@@ -2145,7 +2150,9 @@ onUnmounted(()=>{
         <nav class="file-viewer-path browser-breadcrumb"
           data-testid="file-viewer-path" aria-label="Путь Browser">
           <RouterLink to="/browser" class="file-viewer-back" aria-label="В Browser">‹</RouterLink>
-          <span class="file-viewer-path-name">Browser / {{ preview?.name??'Файл' }}</span>
+          <span class="file-viewer-path-name">Browser
+            <template v-for="(folder,i) in originFolderNames" :key="i"> / {{folder}}</template>
+            / {{ preview?.name??'Файл' }}</span>
         </nav>
       <div ref="stage" class="file-viewer-stage"
         data-testid="file-viewer-stage"

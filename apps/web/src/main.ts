@@ -23,7 +23,20 @@ attachOutboxLifecycle()
 attachShareLifecycle()
 attachAssignmentLifecycle()
 attachMediaRetryCoordinator()
-watch(activeSession, s => { if(s?.online) { void refreshRetentionHint(s); void flushOutbox(); void flushRecipientGrants(); void flushAssignmentOutbox(); void ensureOwnExchangeKey().catch(() => { /* explicit UI retry */ }) } })
+watch(activeSession, s => {
+  // Welcome Loader 1.6 ends on a *locally decrypted, authenticated device*
+  // rather than waiting for a remote login challenge to finish. Offline and
+  // slow networks must not trap the user at «Входим в приложение...».
+  // Server-only actions remain protected by s.online below.
+  if(s)sessionBootstrapPending.value=false
+  if(s?.online) {
+    void refreshRetentionHint(s)
+    void flushOutbox()
+    void flushRecipientGrants()
+    void flushAssignmentOutbox()
+    void ensureOwnExchangeKey().catch(() => { /* explicit UI retry */ })
+  }
+},{flush:'sync'})
 void resumeExistingDevice()
   .catch(() => { /* no persisted or valid account yet */ })
   .finally(() => { sessionBootstrapPending.value = false })
