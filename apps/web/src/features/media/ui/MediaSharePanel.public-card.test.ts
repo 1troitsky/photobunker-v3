@@ -7,7 +7,7 @@ import MediaSharePanel from './MediaSharePanel.vue'
 
 const m=vi.hoisted(()=>({
   safe:vi.fn(),preview:vi.fn(),hydrateGrants:vi.fn(),prepare:vi.fn(),
-  inspect:vi.fn(),
+  inspect:vi.fn(),incoming:vi.fn(),
 }))
 vi.mock('./PublicCardConsentReview.vue',()=>({
   default:{
@@ -24,7 +24,7 @@ vi.mock('../application/safe-derivatives',()=>({
 vi.mock('../application/media-grants',()=>({
   attachMediaGrantLifecycle:()=>()=>{},
   flushMediaGrants:vi.fn(),listOutgoingMediaGrants:m.hydrateGrants,
-  listReceivedMediaGrants:vi.fn(),queueMediaRecipientGrant:vi.fn(),
+  listReceivedMediaGrants:m.incoming,queueMediaRecipientGrant:vi.fn(),
   queueMediaSafeRecipientGrant:vi.fn(),readReceivedMediaGrant:vi.fn(),
   revokeMediaGrant:vi.fn(),parseMediaGrantContract:vi.fn(),
 }))
@@ -103,6 +103,7 @@ beforeEach(()=>{
   vi.resetAllMocks()
   m.safe.mockResolvedValue([{...candidate}])
   m.hydrateGrants.mockResolvedValue([])
+  m.incoming.mockResolvedValue([])
   m.prepare.mockResolvedValue(privateReview)
   m.inspect.mockResolvedValue({directory:{safetyFingerprint:'CURRENT'},confirmed:false})
 })
@@ -165,7 +166,7 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
   })
   it('rejects delayed old-account grant hydration after recovery',async()=>{
     let resolveOld!:(value:unknown[])=>void
-    m.hydrateGrants.mockImplementation(()=>new Promise<unknown[]>(
+    m.hydrateGrants.mockImplementationOnce(()=>new Promise<unknown[]>(
       resolve=>{resolveOld=resolve}))
     await mount()
     activeSession.value=session(id('6'))
