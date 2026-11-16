@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { activeSession, reauthenticate } from '../identity/application/session'
 import {
   confirmPeer, ensureOwnExchangeKey, inspectPeer,
@@ -34,29 +34,51 @@ const keyStatus=ref('')
 const status=ref('')
 const error=ref('')
 const busy=ref(false)
-
+let identityEpoch=0,hydrationEpoch=0
+function sameIdentity(
+  a:typeof activeSession.value,b:typeof activeSession.value,
+):boolean{
+  return !!a&&!!b&&a.accountId===b.accountId
+    &&a.deviceId===b.deviceId
+    &&a.pkg.accountSpki===b.pkg.accountSpki
+    &&a.pkg.revision===b.pkg.revision
+}
+function stillCurrent(
+  session:typeof activeSession.value,epoch:number,
+):boolean{
+  return epoch===identityEpoch&&sameIdentity(session,activeSession.value)
+}
 async function action(task:()=>Promise<void>):Promise<void> {
   if(busy.value)return
+  const session=activeSession.value,epoch=identityEpoch
   busy.value=true
   error.value=''
-  try { await task() }
-  catch(e){error.value=e instanceof Error?e.message:'share.operation_failed'}
-  finally{busy.value=false}
+  try{await task()}
+  catch(e){
+    if(stillCurrent(session,epoch))
+      error.value=e instanceof Error?e.message:'share.operation_failed'
+  }finally{
+    if(stillCurrent(session,epoch))busy.value=false
+  }
 }
-
-async function initialize():Promise<void> {
-  if(!activeSession.value?.online)return
+async function initialize():Promise<void>{
+  const session=activeSession.value,epoch=++hydrationEpoch
+  if(!session?.online)return
   try{
     await ensureOwnExchangeKey()
-    keyStatus.value='Ключ обмена подготовлен'
-    // After a reload, an online/outbox watcher may already be delivering a
-    // previously queued grant. Observe the *settled* pass before rendering
-    // its state, otherwise the screen keeps showing "queued" after HTTP ACK.
+    if(epoch!==hydrationEpoch||!sameIdentity(session,activeSession.value))return
+    // A complete, settled pass must belong to the currently mounted identity.
+    // Never commit an earlier account's outgoing/incoming grant list.
     await flushRecipientGrants()
-    outgoing.value=await listOutgoingGrants()
-    received.value=await listReceivedGrants()
+    const freshOutgoing=await listOutgoingGrants()
+    const freshReceived=await listReceivedGrants()
+    if(epoch!==hydrationEpoch||!sameIdentity(session,activeSession.value))return
+    outgoing.value=freshOutgoing
+    received.value=freshReceived
+    keyStatus.value='Ключ обмена подготовлен'
   }catch(e){
-    keyStatus.value=e instanceof Error?e.message:'share.key_unavailable'
+    if(epoch===hydrationEpoch&&sameIdentity(session,activeSession.value))
+      keyStatus.value=e instanceof Error?e.message:'share.key_unavailable'
   }
 }
 
@@ -65,7 +87,9 @@ function inspectRecipient():void {
     const id=recipientId.value.trim().toLowerCase()
     if(!/^[a-f0-9-]{36}$/.test(id))throw new Error('share.invalid_recipient')
     if(!activeSession.value?.online)await reauthenticate()
+    const session=activeSession.value,epoch=identityEpoch
     const {directory,confirmed}=await inspectPeer(id)
+    if(!stillCurrent(session,epoch))return
     pendingPeer.value={id,fingerprint:directory.safetyFingerprint,confirmed}
     acknowledgedPeer.value=false
   })
@@ -74,7 +98,9 @@ function approveRecipient():void {
   void action(async()=>{
     const candidate=pendingPeer.value
     if(!candidate||!acknowledgedPeer.value)throw new Error('share.fingerprint_not_confirmed')
+    const session=activeSession.value,epoch=identityEpoch
     await confirmPeer(candidate.id,candidate.fingerprint)
+    if(!stillCurrent(session,epoch))return
     pendingPeer.value={...candidate,confirmed:true}
     status.value='Получатель подтверждён на этом устройстве'
   })
@@ -84,27 +110,38 @@ function send(photoId:string):void {
     if(!pendingPeer.value?.confirmed)throw new Error('share.peer_not_confirmed')
     if(props.selectedPhotoId&&props.selectedPhotoId!==photoId)
       throw new Error('share.context_mismatch')
+    const session=activeSession.value,epoch=identityEpoch
     const grantId=await queueRecipientGrant(photoId,pendingPeer.value.id)
-    outgoing.value=await listOutgoingGrants()
+    if(!stillCurrent(session,epoch))return
+    const pending=await listOutgoingGrants()
+    if(!stillCurrent(session,epoch))return
+    outgoing.value=pending
     status.value='Конверт сохранён в локальной очереди: '+grantId.slice(0,8)
     await flushRecipientGrants()
-    outgoing.value=await listOutgoingGrants()
+    const settled=await listOutgoingGrants()
+    if(stillCurrent(session,epoch))outgoing.value=settled
   })
 }
 function refreshGrants():void {
   void action(async()=>{
     if(!activeSession.value?.online)await reauthenticate()
+    const session=activeSession.value,epoch=identityEpoch
     await ensureOwnExchangeKey()
     await flushRecipientGrants()
-    outgoing.value=await listOutgoingGrants()
-    received.value=await listReceivedGrants()
+    const freshOutgoing=await listOutgoingGrants()
+    const freshReceived=await listReceivedGrants()
+    if(!stillCurrent(session,epoch))return
+    outgoing.value=freshOutgoing
+    received.value=freshReceived
     status.value='Список полученных разрешений обновлён'
   })
 }
 function checkOwner(ownerId:string):void {
   void action(async()=>{
     if(!activeSession.value?.online)await reauthenticate()
+    const session=activeSession.value,epoch=identityEpoch
     const {directory,confirmed}=await inspectPeer(ownerId)
+    if(!stillCurrent(session,epoch))return
     incomingPeer.value={id:ownerId,fingerprint:directory.safetyFingerprint,confirmed}
     acknowledgedOwner.value=false
   })
@@ -113,7 +150,9 @@ function approveOwner():void {
   void action(async()=>{
     const candidate=incomingPeer.value
     if(!candidate||!acknowledgedOwner.value)throw new Error('share.fingerprint_not_confirmed')
+    const session=activeSession.value,epoch=identityEpoch
     await confirmPeer(candidate.id,candidate.fingerprint)
+    if(!stillCurrent(session,epoch))return
     incomingPeer.value={...candidate,confirmed:true}
     status.value='Отправитель подтверждён'
   })
@@ -123,19 +162,43 @@ function openReceived(grantId:string,ownerId:string):void {
     if(incomingPeer.value?.id!==ownerId||!incomingPeer.value.confirmed){
       throw new Error('share.verify_owner_before_read')
     }
-    emit('openPhoto',await readReceivedPhoto(grantId))
+    const session=activeSession.value,epoch=identityEpoch
+    const blob=await readReceivedPhoto(grantId)
+    if(!stillCurrent(session,epoch))return
+    emit('openPhoto',blob)
     status.value='Полученная фотография расшифрована на устройстве'
   })
 }
 function revoke(grantId:string):void {
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     await revokeOutgoingGrant(grantId)
-    outgoing.value=await listOutgoingGrants()
+    const fresh=await listOutgoingGrants()
+    if(!stillCurrent(session,epoch))return
+    outgoing.value=fresh
     status.value='Дальнейшее серверное чтение отозвано'
   })
 }
-watch(activeSession,()=>{pendingPeer.value=null;incomingPeer.value=null;void initialize()})
+watch(activeSession,(next,previous)=>{
+  ++hydrationEpoch
+  if(!sameIdentity(next,previous)){
+    ++identityEpoch
+    recipientId.value=''
+    pendingPeer.value=null
+    incomingPeer.value=null
+    acknowledgedPeer.value=false
+    acknowledgedOwner.value=false
+    received.value=[]
+    outgoing.value=[]
+    keyStatus.value=''
+    status.value=''
+    error.value=''
+    busy.value=false
+  }
+  void initialize()
+})
 onMounted(()=>{void initialize()})
+onUnmounted(()=>{++identityEpoch;++hydrationEpoch})
 </script>
 
 <template>
