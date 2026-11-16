@@ -1705,7 +1705,7 @@ onUnmounted(()=>{
             <option value="3:2">3:2</option>
             <option value="16:9">16:9</option>
           </select>
-          <label for="camera-photo-quality">Качество JPEG</label>
+          <label for="camera-photo-quality">Качество фото</label>
           <select id="camera-photo-quality" v-model="photoQuality" :disabled="busy||recording"
             data-testid="camera-photo-quality">
             <option value="maximum">Максимальное</option>
@@ -1724,6 +1724,11 @@ onUnmounted(()=>{
           <p v-else class="muted" data-testid="camera-photo-zoom-unavailable">
             Масштаб доступен только при поддержке подключённой камеры.
           </p>
+        <label class="camera-appearance-setting">
+          <input type="checkbox" v-model="gridVisible" data-testid="camera-grid-setting">
+          Сетка кадрирования 3х3
+          <small>Не показывается на готовых кадрах.</small>
+        </label>
           <label class="camera-appearance-setting">
             <input type="checkbox" data-testid="camera-photo-torch"
               :checked="torchOn"
@@ -1735,7 +1740,7 @@ onUnmounted(()=>{
         </section>
         <section class="camera-preset-options" aria-label="Видео">
           <h3>Видео</h3>
-          <label for="camera-video-quality">Целевое разрешение</label>
+          <label for="camera-video-quality">Качество видео</label>
           <select id="camera-video-quality" v-model="videoQuality"
             :disabled="busy||recording||starting" data-testid="camera-video-quality">
             <option value="480p">480p</option>
@@ -1759,43 +1764,23 @@ onUnmounted(()=>{
         </section>
         <section class="camera-preset-options" aria-label="Аудио">
           <h3>Аудио</h3>
-          <label for="camera-audio-duration">
-            Максимальная длительность аудио: {{audioMaxSeconds}} сек.
-          </label>
-          <input id="camera-audio-duration" v-model.number="audioMaxSeconds"
-            type="range" min="5" max="3000" step="5" :disabled="busy||recording"
-            data-testid="camera-audio-duration">
-        <div class="camera-preset-options">
-          <label for="camera-audio-bitrate">Целевой битрейт аудио</label>
+          <label for="camera-audio-bitrate">Качество аудио</label>
           <select id="camera-audio-bitrate" v-model.number="audioTargetBitrate"
             :disabled="recording||busy" data-testid="camera-audio-bitrate">
             <option v-for="rate in AUDIO_TARGET_BITRATES" :key="rate" :value="rate">
               {{ rate/1000 }} кбит/с
             </option>
           </select>
-          <p class="muted">Это настройка кодировщика. Фактические качество и формат зависят от браузера.</p>
-        </div>
+          <label for="camera-audio-duration">
+            Максимальная длительность аудио: {{audioMaxSeconds}} сек.
+          </label>
+          <input id="camera-audio-duration" v-model.number="audioMaxSeconds"
+            type="range" min="5" max="3000" step="5" :disabled="busy||recording"
+            data-testid="camera-audio-duration">
+          <p class="muted">Аудио записывается без видеопотока. Фактический битрейт зависит от браузера и кодека.</p>
         </section>
-        <label class="camera-appearance-setting">
-          <input type="checkbox" v-model="gridVisible" data-testid="camera-grid-setting">
-          Сетка кадрирования 3×3
-          <small>Не показывается на готовых кадрах.</small>
-        </label>
-        <section class="camera-preset-options" data-testid="camera-permissions">
-          <h3>Разрешения устройства</h3>
-          <div class="camera-preset-actions">
-            <button type="button" data-testid="camera-permission-camera"
-              :disabled="permissionBusy||busy||recording||starting"
-              @click="requestDevicePermission('camera')">Разрешить камеру</button>
-            <button type="button" data-testid="camera-permission-microphone"
-              :disabled="permissionBusy||busy||recording||starting"
-              @click="requestDevicePermission('microphone')">Разрешить микрофон</button>
-          </div>
-          <p class="muted">Камера нужна для фото и видео; микрофон — для аудио и видео со звуком.
-            Браузер запросит разрешение отдельно.</p>
-          <p v-if="devicePermissionStatus" role="status"
-            data-testid="camera-permission-status">{{devicePermissionStatus}}</p>
-        </section>
+        <section class="camera-preset-options" data-testid="camera-geolocation-section">
+          <h3>Геолокация</h3>
         <label class="camera-appearance-setting">
           <input type="checkbox" data-testid="camera-gps-tracking"
             :checked="gpsTracking||!!requiredFields?.requiredGps"
@@ -1812,7 +1797,7 @@ onUnmounted(()=>{
         </p>
         <label class="camera-appearance-setting">
           <input type="checkbox" v-model="gpsStatusVisible" data-testid="camera-gps-visibility">
-          Показывать GPS над кнопкой съёмки
+          Показывать GPS над кнопкой «Снять»
           <small>Только видимость индикатора; не изменяет GPS-согласие и требования задания.</small>
         </label>
         <div class="camera-preset-options" data-testid="camera-gps-settings-status">
@@ -1820,6 +1805,22 @@ onUnmounted(()=>{
           <button type="button" :disabled="gpsLoading||busy||recording"
             @click="obtainGPS">{{gpsLoading?'Определяем…':'Определить координаты'}}</button>
         </div>
+        </section>
+        <section class="camera-preset-options" data-testid="camera-permissions">
+          <h3>Разрешения устройства</h3>
+          <div class="camera-preset-actions">
+            <button type="button" data-testid="camera-permission-camera"
+              :disabled="permissionBusy||busy||recording||starting"
+              @click="requestDevicePermission('camera')">Разрешить камеру</button>
+            <button type="button" data-testid="camera-permission-microphone"
+              :disabled="permissionBusy||busy||recording||starting"
+              @click="requestDevicePermission('microphone')">Разрешить микрофон</button>
+          </div>
+          <p class="muted">Камера нужна для фото и видео; микрофон — для аудио и видео со звуком.
+            Браузер запросит разрешение отдельно.</p>
+          <p v-if="devicePermissionStatus" role="status"
+            data-testid="camera-permission-status">{{devicePermissionStatus}}</p>
+        </section>
 
           <div v-if="cameraSheet==='settings'" class="camera-sheet-footer">
             <button type="button" @click="closeCameraSheet">Готово</button>
@@ -1840,7 +1841,7 @@ onUnmounted(()=>{
               @click="closeCameraSheet">Закрыть</button>
           </header>
           <h2 v-else>Задание и данные съёмки</h2>
-        <label for="camera-assignment">Задание для съёмки</label>
+        <label for="camera-assignment">Выбрать задание</label>
         <select id="camera-assignment" v-model="selectedAssignment" :disabled="busy||recording">
           <option value="">Личная запись (без задания)</option>
           <option v-for="policy in policies" :key="policy.assignmentId"
@@ -1907,7 +1908,7 @@ onUnmounted(()=>{
         <input v-else id="camera-category" v-model="category" type="text" maxlength="64"
           :required="!!requiredFields?.requiredCategory"
           autocomplete="off" placeholder="Например, репортаж">
-        <label for="camera-description">Описание</label>
+        <label for="camera-description">Описание съёмки</label>
         <textarea id="camera-description" v-model="description" maxlength="4000"
           rows="3" placeholder="Приватное описание (необязательно)"/>
         <label for="camera-tags">Теги (через запятую)</label>
