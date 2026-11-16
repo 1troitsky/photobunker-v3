@@ -15,5 +15,8 @@
     "PASS": 244,
     "FAIL": 41,
     "NO_CHECKS": 1
-  }
+  },
+  "post_snapshot_issues": 1,
+  "final_issues": 130,
+  "post_snapshot_branch": "ec3670a1970e9be55c815aed6920b760c8c3ad30"
 }

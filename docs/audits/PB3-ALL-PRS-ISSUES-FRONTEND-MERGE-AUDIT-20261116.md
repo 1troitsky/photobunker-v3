@@ -4,7 +4,7 @@
 
 ## 1. Поручение владельца и выполненное закрытие
 
-Проверены все **285 PR**, **129 Issues**, **289 исходных удалённых веток**, **1308 conversation comments** и **0 inline review comments**. Полная пагинация и исходные ответы API сохранены до закрытия.
+Проверены все **285 PR**, **129 исходных Issues и 1 новая Issue после snapshot (итого 130)**, **289 исходных удалённых веток**, **1308 conversation comments** и **0 inline review comments**. Полная пагинация и исходные ответы API сохранены до закрытия.
 
 Владелец прямо уточнил: **«Закрыть всё, остатки перечислить в аудите»** и **«пока не делай merge»**. В соответствии с этим закрыты все PR и Issues; это консолидация учёта. **Закрыто ≠ реализовано, принято или включено в main.** Незавершённые Issues закрыты с `state_reason=not_planned` для переноса учёта сюда; это **не отменяет обязательные требования `ts.md`**. Новые Issues/PR для замены закрытых не создавались.
 
@@ -102,6 +102,10 @@ Failing scenarios: Assignments AV, Lost ACK и corrupt ciphertext, ACL revoke, m
 
 Обязательный незавершённый scope остаётся в реестре: Matrix E2EE; Notifications delivery/push; PIN/Panic/DMS/remote wipe; immutable Vault backup/restore; real payment settlement; Safe Public Card publication; MFA/Admin/analytics; BYO/replica/failover/GC; trusted signed PWA/cold offline/bootstrap/rollback; physical devices/performance/release acceptance. **Closure не удаляет эти требования из PB3.** Точные номера и критерии: [Issues audit](evidence/PB3-ALL-20261116/issues-audit.md).
 
+### 7.1. Новая Issue после исходного закрытия
+
+В 08:04:30 UTC другим участником создана **#415 — Camera/Photo Fieldwork 1.2**. Она также сохранена и закрыта; полный scope и новая ветка `ec3670a1970e9be55c815aed6920b760c8c3ad30` включены в [дополнение](evidence/PB3-ALL-20261116/post-snapshot-issues.md). Приёмка этой ветки — **NOT TESTED**, остаток — **TRANSFERRED_UNRESOLVED**. Исходные 129 Issues остаются в неизменной подробной матрице; с дополнением охвачены все **130** на финальный момент **2026-11-16T08:08:29.999091+00:00**. В этот момент открытых PR/Issues — **0/0**, исходные 289 branch HEAD неизменны.
+
 ## 8. Предложенный порядок будущей интеграции
 
 Это план подготовки проверяемой сборки, **не разрешение и не команда на merge**:
@@ -121,6 +125,6 @@ Failing scenarios: Assignments AV, Lost ACK и corrupt ciphertext, ACL revoke, m
 
 Обезличенные реестры и component audits находятся в `evidence/PB3-ALL-20261116/`. Полные исходные body/comment тексты не являются активными инструкциями; unsafe/OPEN требования из них не выполнялись автоматически. Секреты локального runtime, Recovery Keys, media plaintext и private credentials в аудит не включены.
 
-Контрольная проверка артефактов: `python3 scripts/audits/verify-all-prs-issues-20261116.py`. Она проверяет полноту285/129/289, состояния после закрытия, main SHA, canonical source proof,135-test outcome, реестры и файловые hashes без LLM/сети. Результат — `audit-verification.json` в evidence.
+Контрольная проверка артефактов: `python3 scripts/audits/verify-all-prs-issues-20261116.py`. Она проверяет полноту285 PR /129 исходных +1 дополнительной Issue /289 исходных веток, состояния после закрытия, main SHA, canonical source proof,135-test outcome, реестры и файловые hashes без LLM/сети. Результат — `audit-verification.json` в evidence.
 
 **Итог:** источники и требования сохранены, GitHub учёт закрыт по явному решению владельца. Полная готовность приложения и разрешение на merge из этого не следуют. **MAIN НЕ СЛИТ. MERGE BLOCKED** перечисленными выше acceptance/security/functional остатками.
