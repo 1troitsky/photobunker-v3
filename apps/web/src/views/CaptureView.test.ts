@@ -156,6 +156,60 @@ afterEach(async () => {
 })
 
 describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',()=>{
+  it('offers real zoom only for a live track with reported capabilities',async()=>{
+    const opened=media()
+    const apply=vi.fn().mockResolvedValue(undefined)
+    const track=Object.assign(opened.track,{
+      getCapabilities:()=>({zoom:{min:1,max:4,step:0.5}}),
+      getSettings:()=>({zoom:1.5}),
+      applyConstraints:apply,
+    })
+    const hardware=markRaw({
+      getTracks:()=>[track],getVideoTracks:()=>[track],
+    }) as unknown as MediaStream
+    await mount()
+    expect(host.querySelector('[data-testid="camera-photo-zoom"]')).toBeNull()
+    requests[0]!.resolve(hardware)
+    await settle()
+    const slider=host.querySelector<HTMLInputElement>('[data-testid="camera-photo-zoom"]')!
+    expect(slider).not.toBeNull()
+    expect(slider.value).toBe('1.5')
+    expect(slider.min).toBe('1')
+    expect(slider.max).toBe('4')
+    slider.value='2.5'
+    slider.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(apply).toHaveBeenCalledWith({advanced:[{zoom:2.5}]})
+    expect(host.textContent).toContain('Масштаб: 2.5×')
+    expect(getUserMedia).toHaveBeenCalledTimes(1)
+    expect(opened.track.stop).not.toHaveBeenCalled()
+  })
+  it('rejects failed zoom without displaying a fake success and hides stale hardware',async()=>{
+    const opened=media()
+    const apply=vi.fn().mockRejectedValue(new Error('hardware refused'))
+    const track=Object.assign(opened.track,{
+      getCapabilities:()=>({zoom:{min:1,max:3,step:0.5}}),
+      getSettings:()=>({zoom:1}),
+      applyConstraints:apply,
+    })
+    await mount()
+    requests[0]!.resolve(markRaw({
+      getTracks:()=>[track],getVideoTracks:()=>[track],
+    }) as unknown as MediaStream)
+    await settle()
+    const slider=host.querySelector<HTMLInputElement>('[data-testid="camera-photo-zoom"]')!
+    slider.value='2'
+    slider.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(slider.value).toBe('1')
+    expect(host.textContent).toContain('Масштаб: 1.0×')
+    expect(host.textContent).toContain('Не удалось применить масштаб камеры.')
+    button('Отключить').click()
+    await settle()
+    expect(opened.track.stop).toHaveBeenCalledOnce()
+    expect(host.querySelector('[data-testid="camera-photo-zoom"]')).toBeNull()
+    expect(host.querySelector('[data-testid="camera-photo-zoom-unavailable"]')).not.toBeNull()
+  })
   it('keeps the same live MediaStream while entering and exiting the full-screen blind cover',async()=>{
     const opened=media()
     await mount()
