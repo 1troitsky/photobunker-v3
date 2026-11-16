@@ -1008,6 +1008,29 @@ describe('Issue #260 GPS consent and capture races',()=>{
       getCurrentPosition:vi.fn((ok:PositionCallback,fail?:PositionErrorCallback)=>callbacks.push({ok,fail})),
     }})
   })
+  it('does not start preset GPS on load; one explicit grant activates the saved tracking preference',async()=>{
+    mocks.presetGpsTracking=true
+    const watchPosition=vi.fn().mockReturnValue(42)
+    const clearWatch=vi.fn()
+    Object.defineProperty(navigator,'geolocation',{configurable:true,value:{
+      getCurrentPosition:vi.fn((ok:PositionCallback,fail?:PositionErrorCallback)=>
+        callbacks.push({ok,fail})),
+      watchPosition,clearWatch,
+    }})
+    await ready()
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled()
+    expect(watchPosition).not.toHaveBeenCalled()
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-gps-tracking"]')!.checked).toBe(false)
+    button('Получить GPS').click()
+    await settle()
+    expect(watchPosition).not.toHaveBeenCalled()
+    expect(callbacks).toHaveLength(1)
+    callbacks[0]!.ok(point())
+    await settle()
+    expect(host.querySelector<HTMLInputElement>('[data-testid="camera-gps-tracking"]')!.checked).toBe(true)
+    expect(watchPosition).toHaveBeenCalledOnce()
+    expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1)
+  })
   it('starts one high-precision GPS watcher only after opt-in and clears it with the fix',async()=>{
     let watchOk:PositionCallback|undefined
     const clearWatch=vi.fn()
