@@ -3,6 +3,15 @@ import {afterEach,describe,expect,it,vi} from 'vitest'
 import {saveRecoveryKeyWithSystemDialog} from './recovery-key-save'
 
 const key='SENSITIVE_TEST_RECOVERY_KEY'
+function readBlob(blob:Blob):Promise<string>{
+  // jsdom intentionally does not implement every browser Blob method.
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader()
+    reader.onload=()=>resolve(String(reader.result))
+    reader.onerror=()=>reject(reader.error)
+    reader.readAsText(blob)
+  })
+}
 afterEach(()=>{
   Reflect.deleteProperty(window,'showSaveFilePicker')
   Reflect.deleteProperty(navigator,'canShare')
@@ -26,7 +35,7 @@ describe('owner-confirmed OS Recovery Key export',()=>{
     }))
     expect(write).toHaveBeenCalledTimes(1)
     const content=write.mock.calls[0]![0] as Blob
-    expect(await content.text()).toBe(key+'\n')
+    expect(await readBlob(content)).toBe(key+'\n')
     expect(close).toHaveBeenCalledOnce()
   })
   it('does not report success when the user cancels the chooser',async()=>{
@@ -53,7 +62,7 @@ describe('owner-confirmed OS Recovery Key export',()=>{
     const data=share.mock.calls[0]![0] as {files:File[];title:string}
     expect(data.title).toBe('Recovery Key')
     expect(data.files).toHaveLength(1)
-    expect(await data.files[0]!.text()).toBe(key+'\n')
+    expect(await readBlob(data.files[0]!)).toBe(key+'\n')
   })
   it('does not create an anchor download when neither supported OS dialog exists',async()=>{
     const click=vi.spyOn(HTMLAnchorElement.prototype,'click')
