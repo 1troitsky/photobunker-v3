@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { notificationShellActions, clearNotificationShellActions } from '../features/notifications/application/notification-shell-actions'
 import { activeSession } from '../features/identity/application/session'
