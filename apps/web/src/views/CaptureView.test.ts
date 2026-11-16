@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   draftList:vi.fn(),draftPurge:vi.fn(),draftPrivateReview:vi.fn(),
   draftRecover:vi.fn(),leaseAcquire:vi.fn(),
   requiredGps:false,requiredCategory:false,
+  allowedCategories:[] as string[],
   privateCache: vi.fn(), verifyPolicy: vi.fn(), privateScope: vi.fn(),
   allowedMedia: ['photo'] as string[],
   route: {query: {} as Record<string, string>},
@@ -58,7 +59,7 @@ vi.mock('../features/assignments/application/assignment-outbox', () => ({
   verifySignedAssignmentPolicy: mocks.verifyPolicy,
   assignmentPrivateCacheScope: mocks.privateScope,
   signedMediaCaptureIntent: mocks.mediaIntent,
-  signedAdvancedRequirements: () => ({allowedCategories:[],requiredTags:[]}),
+  signedAdvancedRequirements: () => ({allowedCategories:mocks.allowedCategories,requiredTags:[]}),
   signedPolicyRequirements: () => ({
     requiredCategory:mocks.requiredCategory,descriptionMinLength:0,requiredGps:mocks.requiredGps,
   }),
@@ -149,6 +150,7 @@ beforeEach(() => {
   mocks.route.query = reactive({})
   mocks.requiredGps=false
   mocks.requiredCategory=false
+  mocks.allowedCategories=[]
   mocks.mediaIntent.mockResolvedValue(undefined)
   Object.defineProperty(navigator,'permissions',{configurable:true,value:{
     query:vi.fn(async()=>({state:'granted',onchange:null})),
@@ -477,6 +479,36 @@ describe('Camera preset hydration preserves the selected encrypted media destina
     await settle()
     expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
     expect(mocks.capture).not.toHaveBeenCalled()
+  })
+})
+
+describe('Camera Fieldwork owner-signed categories',()=>{
+  it('uses a bounded dropdown for verified assignment vocabulary and rejects a stale category',async()=>{
+    mocks.allowedCategories=['Фасад','Детали','Документация']
+    mocks.requiredCategory=true
+    mocks.route.query={assignmentId:'assignment-a'}
+    mocks.policies.mockResolvedValue([{
+      assignmentId:'assignment-a',ownerAccountId:'owner-a',policyRevision:2,
+    }])
+    await mount()
+    await settle()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-open-assignment"]')!.click()
+    await settle()
+    const choice=host.querySelector<HTMLSelectElement>('[data-testid="camera-category-select"]')!
+    expect(choice).not.toBeNull()
+    expect([...choice.options].map(o=>o.value))
+      .toEqual(['','Фасад','Детали','Документация'])
+    const finish=host.querySelector<HTMLButtonElement>('[data-testid="camera-assignment-finish"]')!
+    expect(finish.disabled).toBe(true)
+    choice.value='Фасад';choice.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(finish.disabled).toBe(false)
+    // A signed policy revision removing the selected category cannot silently
+    // approve that stale private value, even if the field is still populated.
+    mocks.allowedCategories=['Детали']
+    activeSession.value={...activeSession.value!,online:true}
+    await settle()
+    expect(finish.disabled).toBe(true)
   })
 })
 
