@@ -1,4 +1,5 @@
 import Dexie,{type Table} from 'dexie'
+import {watch} from 'vue'
 import {activeSession,requireSession} from '../../identity/application/session'
 import type {Session} from '../../identity/application/session'
 import {b64,unb64} from '../../identity/infrastructure/crypto'
@@ -130,15 +131,38 @@ export function validateCameraPresetCatalog(raw:unknown):CameraPresetCatalog{
   return {version:1,selectedId:obj.selectedId,presets}
 }
 function scoped(s:Session):string{return s.accountId+'/'+s.deviceId}
-function assertSame(s:Session):void{
-  if(activeSession.value!==s)throw Error('identity.account_changed')
+/** Online/offline hydration can replace Session wrappers while preserving
+ * the EXACT same cryptographic device keys. Conversely A→B→A is an
+ * identity change even when returning to the very same old Session object.
+ */
+function cryptoIdentity(s:Session|null){
+  if(!s)return null
+  const d=s.device,p=s.pkg
+  return [s.accountId,s.deviceId,d?.accountId,d?.deviceId,
+    d?.deviceSpki,d?.deviceKey,d?.encryptionKey,p?.v,p?.accountId,
+    p?.accountSpki,p?.accountPkcs8,p?.akek,
+    p?.signingKeyId,p?.wrappingKeyId,p?.revision] as const
+}
+function sameCrypto(a:Session|null,b:Session|null):boolean{
+  const x=cryptoIdentity(a),y=cryptoIdentity(b)
+  return !!x&&!!y&&x.length===y.length&&x.every((value,i)=>value===y[i])
+}
+let cryptoDeviceEpoch=0
+let observedCryptoDevice:Session|null=null
+watch(activeSession,next=>{
+  if(!sameCrypto(observedCryptoDevice,next))cryptoDeviceEpoch++
+  observedCryptoDevice=next
+},{flush:'sync',immediate:true})
+function assertSame(s:Session,epoch:number):void{
+  if(epoch!==cryptoDeviceEpoch||!sameCrypto(s,activeSession.value))
+    throw Error('identity.account_changed')
 }
 function aad(s:Session,revision:number):Uint8Array<ArrayBuffer>{
   return encoder.encode(JSON.stringify({domain:'pb3/camera/device-presets/v1',
     accountId:s.accountId,deviceId:s.deviceId,revision}))
 }
-async function decrypt(s:Session,row:SealedCameraPreset|undefined):Promise<CameraPresetCatalog>{
-  assertSame(s)
+async function decrypt(s:Session,row:SealedCameraPreset|undefined,epoch:number):Promise<CameraPresetCatalog>{
+  assertSame(s,epoch)
   if(!row)return defaultCameraPresetCatalog()
   if(row.version!==1||row.key!==scoped(s)||!validBound(row.revision,1,100000000)
     ||row.iv.length>64||row.ciphertext.length>9000)
@@ -149,28 +173,29 @@ async function decrypt(s:Session,row:SealedCameraPreset|undefined):Promise<Camer
     name:'AES-GCM',iv,additionalData:aad(s,row.revision),tagLength:128,
   },s.device.encryptionKey,cipher))
   try{
-    assertSame(s)
+    assertSame(s,epoch)
     return validateCameraPresetCatalog(JSON.parse(decoder.decode(plain)) as unknown)
   }finally{plain.fill(0)}
 }
-async function encrypt(s:Session,catalog:CameraPresetCatalog,revision:number):
+async function encrypt(s:Session,catalog:CameraPresetCatalog,revision:number,epoch:number):
 Promise<SealedCameraPreset>{
   const verified=validateCameraPresetCatalog(catalog)
   const plain=encoder.encode(JSON.stringify(verified))
   if(plain.length>5800)throw Error('camera.preset_invalid')
   const iv=crypto.getRandomValues(new Uint8Array(12))
   try{
-    assertSame(s)
+    assertSame(s,epoch)
     const cipher=await crypto.subtle.encrypt({
       name:'AES-GCM',iv,additionalData:aad(s,revision),tagLength:128,
     },s.device.encryptionKey,plain)
-    assertSame(s)
+    assertSame(s,epoch)
     return {key:scoped(s),version:1,revision,iv:b64(iv),ciphertext:b64(cipher)}
   }finally{plain.fill(0)}
 }
 export async function loadCameraPresetCatalog():Promise<CameraPresetCatalog>{
-  const s=requireSession(),row=await db.rows.get(scoped(s))
-  return decrypt(s,row)
+  const s=requireSession(),epoch=cryptoDeviceEpoch
+  const row=await db.rows.get(scoped(s))
+  return decrypt(s,row,epoch)
 }
 type Change={kind:'save';id:string;name:string;settings:CameraPresetSettings}
   |{kind:'add';name:string;settings:CameraPresetSettings}
@@ -195,22 +220,22 @@ function apply(c:CameraPresetCatalog,change:Change):CameraPresetCatalog{
   if(!c.presets.some(p=>p.id===change.id))throw Error('camera.preset_missing')
   return {...c,presets:c.presets.map(p=>p.id===change.id?{id:p.id,name,settings}:p)}
 }
-async function commit(s:Session,change:Change):Promise<CameraPresetCatalog>{
+async function commit(s:Session,change:Change,epoch:number):Promise<CameraPresetCatalog>{
   for(let attempt=0;attempt<4;attempt++){
-    assertSame(s)
+    assertSame(s,epoch)
     const previous=await db.rows.get(scoped(s))
-    const catalog=await decrypt(s,previous)
+    const catalog=await decrypt(s,previous,epoch)
     const next=apply(catalog,change)
-    const sealed=await encrypt(s,next,(previous?.revision??0)+1)
+    const sealed=await encrypt(s,next,(previous?.revision??0)+1,epoch)
     try{
       await db.transaction('rw',db.rows,async()=>{
         const latest=await db.rows.get(scoped(s))
         if((latest?.revision??0)!==(previous?.revision??0))
           throw Error('camera.preset_write_race')
-        assertSame(s)
+        assertSame(s,epoch)
         await db.rows.put(sealed)
       })
-      assertSame(s)
+      assertSame(s,epoch)
       return next
     }catch(e){
       if(e instanceof Error&&e.message==='camera.preset_write_race'&&attempt<3)
@@ -221,8 +246,8 @@ async function commit(s:Session,change:Change):Promise<CameraPresetCatalog>{
   throw Error('camera.preset_write_race')
 }
 export async function changeCameraPreset(change:Change):Promise<CameraPresetCatalog>{
-  const s=requireSession()
+  const s=requireSession(),epoch=cryptoDeviceEpoch
   if(typeof navigator!=='undefined'&&navigator.locks?.request)
-    return navigator.locks.request('pb3/camera/presets/'+scoped(s),()=>commit(s,change))
-  return commit(s,change)
+    return navigator.locks.request('pb3/camera/presets/'+scoped(s),()=>commit(s,change,epoch))
+  return commit(s,change,epoch)
 }
