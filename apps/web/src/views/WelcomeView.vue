@@ -5,6 +5,7 @@ import { activeSession, beginRegistration, finishRegistration, restoreAccount, s
 import { resolveStartRoute } from '../ui/fieldwork/appearance-preferences'
 import { markInvalidRecoveryKey } from '../features/identity/application/authorization-failure'
 import { brand } from '../config/brand'
+import {getPending} from '../features/identity/infrastructure/storage'
 import { saveRecoveryKeyWithSystemDialog } from '../ui/fieldwork/recovery-key-save'
 const route=useRoute(),router=useRouter()
 type Feature={title:string;desc:string;caption:string;accent:string;art:string}
@@ -30,6 +31,9 @@ const features:readonly Feature[]=[
 ]
 const slide=ref(0),busy=ref(false),generated=ref(''),acknowledged=ref(false)
 const keyExportBusy=ref(false)
+const pendingRegistration=ref(false),pendingChecking=ref(false)
+const savedPendingKey=ref('')
+let pendingCheckToken=0
 const recovery=ref(''),error=ref(''),notice=ref('')
 const isCreate=computed(()=>route.path==='/welcome/create')
 const isRecover=computed(()=>route.path==='/welcome/recover')
@@ -91,7 +95,28 @@ function onCarouselFocusOut(e:FocusEvent):void{
 function onCarouselMouseEnter():void{hoverPause.value=true;resetAutoplay()}
 function onCarouselMouseLeave():void{hoverPause.value=false;resetAutoplay()}
 function onCarouselFocusIn():void{focusPause.value=true;resetAutoplay()}
-watch(()=>route.path,()=>{error.value='';notice.value='';resetAutoplay()})
+async function checkPendingRegistration():Promise<void>{
+  const token=++pendingCheckToken
+  pendingChecking.value=true
+  try{
+    const row=await getPending()
+    if(token===pendingCheckToken)pendingRegistration.value=!!row
+  }catch{
+    if(token===pendingCheckToken)
+      error.value='Не удалось проверить незавершённую регистрацию на устройстве.'
+  }finally{
+    if(token===pendingCheckToken)pendingChecking.value=false
+  }
+}
+function guardHardExit(event:BeforeUnloadEvent):void{
+  if(!generated.value||activeSession.value)return
+  event.preventDefault()
+  event.returnValue=''
+}
+watch(()=>route.path,()=>{
+  error.value='';notice.value='';resetAutoplay()
+  if(isCreate.value&&!generated.value)void checkPendingRegistration()
+})
 watch(activeSession,session=>{
   if(session)void router.replace(resolveStartRoute())
 },{immediate:true})
@@ -100,23 +125,36 @@ onMounted(()=>{
     ?window.matchMedia('(prefers-reduced-motion: reduce)'):null
   motion?.addEventListener?.('change',resetAutoplay)
   document.addEventListener('visibilitychange',resetAutoplay)
+  window.addEventListener('beforeunload',guardHardExit)
+  if(isCreate.value)void checkPendingRegistration()
   resetAutoplay()
 })
 onUnmounted(()=>{
   stopAutoplay()
   document.removeEventListener('visibilitychange',resetAutoplay)
+  window.removeEventListener('beforeunload',guardHardExit)
+  ++pendingCheckToken
+  savedPendingKey.value=''
+  recovery.value=''
+  generated.value=''
   motion?.removeEventListener?.('change',resetAutoplay)
   motion=null
 })
 onBeforeRouteLeave(()=>{
- if(generated.value&&!acknowledged.value&&!activeSession.value)
-   return window.confirm('Recovery Key ещё не подтверждён как сохранённый. Покинуть регистрацию?')
+ if(generated.value&&!activeSession.value)
+   return window.confirm(
+     'Регистрация не завершена. Recovery Key исчезнет с этого экрана. '+
+     'Если вы сохранили его отдельно, сможете продолжить позже. Выйти?'
+   )
  return true
 })
 async function generate():Promise<void>{
- if(busy.value||generated.value)return
+ if(busy.value||generated.value||pendingChecking.value||pendingRegistration.value)return
  busy.value=true;error.value='';notice.value=''
- try{generated.value=await beginRegistration()}
+ try{
+   generated.value=await beginRegistration()
+   pendingRegistration.value=true
+ }
  catch(e){error.value=e instanceof Error?e.message:'Не удалось создать ключ'}
  finally{busy.value=false}
 }
@@ -148,10 +186,26 @@ async function saveKey():Promise<void>{
    if(key===generated.value)error.value='Не удалось открыть системное сохранение. Скопируйте Recovery Key.'
  }finally{keyExportBusy.value=false}
 }
+async function resumePendingRegistration():Promise<void>{
+ if(busy.value||!pendingRegistration.value||!savedPendingKey.value.trim())return
+ busy.value=true;error.value='';notice.value=''
+ try{
+   await finishRegistration(savedPendingKey.value.trim())
+   savedPendingKey.value=''
+   pendingRegistration.value=false
+   await router.replace(resolveStartRoute())
+ }catch(e){
+   error.value=e instanceof Error?e.message:'Не удалось завершить регистрацию'
+ }finally{busy.value=false}
+}
 async function createAccount():Promise<void>{
  if(busy.value||!generated.value||!acknowledged.value)return
  busy.value=true;error.value='';notice.value=''
- try{await finishRegistration(generated.value);generated.value='';await router.replace(resolveStartRoute())}
+ try{
+   await finishRegistration(generated.value)
+   generated.value='';pendingRegistration.value=false
+   await router.replace(resolveStartRoute())
+ }
  catch(e){error.value=e instanceof Error?e.message:'Не удалось завершить создание аккаунта'}
  finally{busy.value=false}
 }
@@ -241,7 +295,22 @@ async function loadFile(e:Event):Promise<void>{
       <div v-else class="auth-panel">
         <template v-if="!generated">
           <p>Без телефона, email или пароля. Только Recovery Key.</p>
-          <button class="action primary" type="button" @click="generate">Создать Recovery Key</button>
+          <button class="action primary" type="button" @click="generate"
+            :disabled="pendingChecking||pendingRegistration">Создать Recovery Key</button>
+          <p v-if="pendingChecking" role="status">Проверяем незавершённую регистрацию…</p>
+          <div v-if="pendingRegistration" data-testid="welcome-pending-registration">
+            <p>На этом устройстве уже начата регистрация. Введите ранее сохранённый Recovery Key, чтобы завершить её.</p>
+            <label>Сохранённый Recovery Key
+              <textarea v-model="savedPendingKey" spellcheck="false"
+                autocorrect="off" autocomplete="off"
+                data-testid="welcome-pending-key"></textarea>
+            </label>
+            <button class="action primary" type="button"
+              data-testid="welcome-resume-registration"
+              :disabled="!savedPendingKey.trim()" @click="resumePendingRegistration">
+              Завершить незавершённую регистрацию
+            </button>
+          </div>
         </template>
         <template v-else>
           <label>Recovery Key<textarea :value="generated" readonly spellcheck="false" data-testid="welcome-generated-key"></textarea></label>
