@@ -1808,7 +1808,7 @@ onUnmounted(()=>{
           Показывать GPS над кнопкой «Снять»
           <small>Только видимость индикатора; не изменяет GPS-согласие и требования задания.</small>
         </label>
-        <div class="camera-preset-options" data-testid="camera-gps-settings-status">
+        <div class="camera-gps-state" data-testid="camera-gps-settings-status">
           <p role="status">{{gps?'GPS · ±'+Math.round(gps.accuracyMeters)+' м':'GPS не получен'}}</p>
           <button type="button" :disabled="gpsLoading||busy||recording"
             @click="obtainGPS">{{gpsLoading?'Определяем…':'Определить координаты'}}</button>
