@@ -612,6 +612,99 @@ async function unlockPinnedDeviceInternal(candidate:string):Promise<PinAttempt> 
   return {status:'app-unlocked'}
 }
 
+/**
+ * Enable a first app PIN on an existing, fully authenticated legacy device.
+ * The caller must supply the REAL Recovery Key; a checkbox or the current
+ * device's unlocked package alone is never sufficient to seal away the only
+ * copy of account access.
+ *
+ * UI is blocked before migration; a persisted PIN-sealed device is never
+ * automatically unlocked. An emergency PIN is deliberately NOT enrolled by
+ * this flow until signed destructive handling and acknowledgement exist.
+ */
+let pinEnrollmentInProgress=false
+export async function enrollAppPinWithRecovery(
+  recoveryKey:string,appPin:string,
+):Promise<void>{
+  if(pinEnrollmentInProgress)throw new Error('pin.enrollment_busy')
+  if(!/^[0-9]{4,8}$/.test(appPin))throw new Error('pin.invalid_format')
+  const session=requireSession()
+  if(!session.online||typeof navigator!=='undefined'&&navigator.onLine===false)
+    throw new Error('pin.online_recovery_proof_required')
+  if(isSealedCandidate(session.device))throw new Error('pin.already_configured')
+  pinEnrollmentInProgress=true
+  try{
+    // Do not accept a recovery-key checksum as proof of ownership: decrypt
+    // the server's genuine recovery envelope, verify its account signing
+    // key and require exact PackageV2 equality with this live session.
+    const kit=await parsePB2(recoveryKey)
+    const row=await jsonApi<{
+      accountId:string;accountSpki:string;revision:number;envelope:unknown
+    }>('/identity/v2/recovery/'+encodeURIComponent(kit.locator))
+    if(activeSession.value!==session || row.accountId!==session.accountId)
+      throw new Error('pin.account_changed')
+    const recovered=await openRecovery(row.envelope,kit,row.accountId)
+    if(recovered.accountSpki!==row.accountSpki ||
+       recovered.revision!==row.revision ||
+       canonical(recovered as unknown as Record<string,unknown>)!==
+         canonical(session.pkg as unknown as Record<string,unknown>))
+      throw new Error('pin.recovery_key_mismatch')
+    if(activeSession.value!==session)throw new Error('pin.account_changed')
+    // Remove private route trees BEFORE any asynchronous migration. The
+    // synchronous activeSession watcher releases this tab's shared Web Lock.
+    identityBootstrapReady.value=false
+    activeSession.value=null
+    let sealed=false
+    try{
+      const {migrateLegacyLocalDeviceToPin} = await import(
+        '../../security/application/pin-device-migration'
+      )
+      await migrateLegacyLocalDeviceToPin({
+        scope:{accountId:session.accountId,deviceId:session.deviceId},
+        verifiedPackage:session.pkg,appPin,emergencyPin:null,
+      })
+      sealed=true
+      const stored=await getDevice(session.accountId,session.deviceId)
+      if(!stored)throw new Error('pin.sealed_device_unavailable')
+      pendingPinUnlock.value=pendingPinContext(stored)
+      identityBootstrapError.value=null
+    }catch(error){
+      // Never reactivate a legacy envelope if the migration may have
+      // committed. Recovery Key remains the fallback after an unclear
+      // storage result; no silent device-only PIN bypass.
+      const latest=await getDevice(session.accountId,session.deviceId)
+        .catch(()=>undefined)
+      if(latest&&isSealedCandidate(latest)){
+        try{
+          pendingPinUnlock.value=pendingPinContext(latest)
+          identityBootstrapError.value=null
+        }catch{identityBootstrapError.value='identity.invalid_sealed_device'}
+      }else if(!sealed&&latest&&!isSealedCandidate(latest)&&
+        latest.deviceSpki===session.device.deviceSpki &&
+        canonical(latest.envelope as unknown as Record<string,unknown>)===
+        canonical(session.device.envelope as unknown as Record<string,unknown>) &&
+        !(await isSignedOut(session.accountId,session.deviceId).catch(()=>true))){
+        // Another tab's exclusive seal cannot have succeeded; use the
+        // identical, rechecked legacy device. A competing exclusive lock
+        // is refused by the existing Web Locks admission mechanism.
+        await ensureDeviceLease(session.device)
+        const check=await getDevice(session.accountId,session.deviceId)
+        if(check&&!isSealedCandidate(check)&&
+          canonical(check.envelope as unknown as Record<string,unknown>)===
+          canonical(session.device.envelope as unknown as Record<string,unknown>) &&
+          !(await isSignedOut(session.accountId,session.deviceId)))
+          activeSession.value=session
+        else releaseDeviceLease()
+      }
+      throw error
+    }finally{
+      identityBootstrapReady.value=true
+    }
+  }finally{
+    pinEnrollmentInProgress=false
+  }
+}
+
 export async function reauthenticate():Promise<Session> {
   // Do not race a second login/proof against the automatic session bootstrap:
   // either proof can rotate the cookie/CSRF state while an S3 PUT is in flight.
