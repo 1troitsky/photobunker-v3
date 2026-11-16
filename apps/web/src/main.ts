@@ -16,8 +16,21 @@ document.title = brand.name
 initializeVisualAppearance()
 // The loader is visible only during real initial identity bootstrap.
 sessionBootstrapPending.value = true
+// Anonymous Public Card and Install routes have no need to open the saved
+// account's encrypted device envelope. Only a transition into a private
+// route starts Identity bootstrap. Never trigger it for an external reader.
+let identityBootstrapStarted=false
+function beginPrivateIdentityBootstrap():void{
+  if(identityBootstrapStarted)return
+  identityBootstrapStarted=true
+  void resumeExistingDevice()
+    .catch(() => { /* invalid local state is denied by the PIN gate */ })
+    .finally(() => { sessionBootstrapPending.value=false })
+}
+router.afterEach(to=>{
+  if(to.meta.publicStandalone!==true)beginPrivateIdentityBootstrap()
+})
 // P0 deliberately does NOT register a Service Worker pending signed-release design.
-// Navigation and this shell are available without waiting for any network identity call.
 createApp(App).use(router).mount('#app')
 attachOutboxLifecycle()
 attachShareLifecycle()
@@ -37,6 +50,4 @@ watch(activeSession, s => {
     void ensureOwnExchangeKey().catch(() => { /* explicit UI retry */ })
   }
 },{flush:'sync'})
-void resumeExistingDevice()
-  .catch(() => { /* no persisted or valid account yet */ })
-  .finally(() => { sessionBootstrapPending.value = false })
+
