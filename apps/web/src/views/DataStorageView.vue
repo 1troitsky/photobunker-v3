@@ -80,7 +80,7 @@ const estimatedCloudAfterQueue = computed(()=>{
   const bytes=usage.recordedCipherBytes+queue.pendingCipherBytes
   const files=usage.activeLogicalMediaFiles+queue.pendingCount
   if(!Number.isSafeInteger(bytes)||!Number.isSafeInteger(files))return null
-  return {bytes:formatBytes(bytes),files}
+  return {bytes:formatCloudBytes(bytes,usage.byteUnitPolicy),files}
 })
 const localPhase = ref<Phase>('locked')
 const serverPhase = ref<Phase>('locked')
@@ -99,6 +99,20 @@ function formatBytes(value: number): string {
   if (value < 1024 * 1024) return (value / 1024).toFixed(1) + ' КиБ'
   if (value < 1024 ** 3) return (value / 1024 ** 2).toFixed(1) + ' МиБ'
   return (value / 1024 ** 3).toFixed(2) + ' ГиБ'
+}
+
+// Local ciphertext uses IEC byte units; authenticated billing usage explicitly
+// declares its decimal GB/TB contract. Never silently compare a GiB-rendered
+// amount with a decimal-Gigabyte tariff label.
+function formatCloudBytes(value:number,policy:string):string{
+  if(policy!=='DECIMAL_GB_TB_V1')return formatBytes(value)
+  if(value<1000)return value+' Б'
+  const magnitude=value>=1e12?1e12:value>=1e9?1e9:value>=1e6?1e6:1000
+  const unit=magnitude===1e12?'ТБ':magnitude===1e9?'ГБ'
+    :magnitude===1e6?'МБ':'КБ'
+  return new Intl.NumberFormat('ru-RU',{
+    maximumFractionDigits:3,
+  }).format(value/magnitude)+' '+unit
 }
 
 function refresh(): void {
@@ -381,7 +395,7 @@ onUnmounted(() => {
           <div class="quota-block" data-testid="storage-cloud-quota">
             <div class="quota-metric">
               <strong>Зашифрованное облако</strong>
-              <span>{{formatBytes(server.recordedCipherBytes)}} / {{formatBytes(server.enforcedByteCeiling)}} · {{cloudPercent}}%</span>
+              <span>{{formatCloudBytes(server.recordedCipherBytes,server.byteUnitPolicy)}} / {{formatCloudBytes(server.enforcedByteCeiling,server.byteUnitPolicy)}} · {{cloudPercent}}%</span>
             </div>
             <progress class="bar" :value="cloudPercent??0" max="100"
               aria-label="Использованный объём зашифрованного облака"></progress>
@@ -415,7 +429,7 @@ onUnmounted(() => {
           </div>
           <div>
             <span>Учтённые зашифрованные байты</span>
-            <strong data-testid="storage-recorded-cipher-bytes">{{ formatBytes(server.recordedCipherBytes) }}</strong>
+            <strong data-testid="storage-recorded-cipher-bytes">{{ formatCloudBytes(server.recordedCipherBytes,server.byteUnitPolicy) }}</strong>
           </div>
           <div>
             <span>Учтённые активные файлы</span>
@@ -423,7 +437,7 @@ onUnmounted(() => {
           </div>
           <div>
             <span>Действующий серверный предел размера</span>
-            <strong>{{ formatBytes(server.enforcedByteCeiling) }}</strong>
+            <strong>{{ formatCloudBytes(server.enforcedByteCeiling,server.byteUnitPolicy) }}</strong>
           </div>
           <p class="muted">Проверено: {{ server.asOfUtc }} (UTC). Учёт неатомарный;
             это не физический размер S3 и не разрешение на загрузку.</p>
