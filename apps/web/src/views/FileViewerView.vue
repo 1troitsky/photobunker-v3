@@ -1963,8 +1963,11 @@ async function saveEditor():Promise<void>{
     await returnFromEditor()
   }
 }
+// A same-account online/offline proof may replace the Session while an
+// animation frame is queued. That stale frame correctly fails closed; the new
+// session must independently schedule its own bounded volatile preview.
 watch([
-  photoElement,livePreviewCanvas,fileUrl,editorMode,editorTab,cropResult,
+  photoElement,livePreviewCanvas,fileUrl,activeSession,editorMode,editorTab,cropResult,
   cropLeft,cropTop,cropWidth,cropHeight,cropTurns,
   photoBrightness,photoContrast,photoSaturation,
   textMarks,shapeMarks,strokeMarks,photoBlackouts,
