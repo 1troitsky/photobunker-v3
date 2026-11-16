@@ -62,7 +62,9 @@ test('late permission survives real online hydration with one live stream',async
   await release(page,0)
   await playing(page)
   expect(await stats(page)).toEqual({calls:1,maxLive:1,live:1,ended:0})
-  await page.getByRole('button',{name:'Отключить',exact:true}).click()
+  // The approved screen has no duplicate Stop action below the shutter;
+  // navigating away always releases the camera without touching encrypted data.
+  await page.goto('/browser')
   expect(await stats(page)).toEqual({calls:1,maxLive:1,live:0,ended:1})
 })
 
@@ -128,7 +130,12 @@ test('denied permission is recoverable by a single explicit retry',async({page})
   await page.goto('/camera');await confirmed(page)
   await expect(page.getByRole('alert')).toContainText('Camera denied fixture')
   await expect(page.getByRole('button',{name:'Сделать снимок'})).toBeDisabled()
-  await page.getByRole('button',{name:'Включить камеру'}).click()
+  // Recover using the two real permission buttons within Camera Settings.
+  // No extra Start/Stop row may appear under the approved capture controls.
+  await expect(page.locator('.camera-device-actions')).toHaveCount(0)
+  await page.getByTestId('camera-open-settings').click()
+  await page.getByTestId('camera-permission-camera').click()
+  await page.getByTestId('camera-sheet-close').click()
   await playing(page)
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
