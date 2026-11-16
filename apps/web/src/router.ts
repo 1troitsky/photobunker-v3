@@ -37,11 +37,11 @@ export const router = createRouter({
       meta: {title:'Ошибка доступа',standalone:true} },
     // Public install instructions are not proof of signed offline installability.
     { path: '/install', component: InstallGuideView,
-      meta: {title:'Установка '+brand.name,standalone:true} },
+      meta: {title:'Установка '+brand.name,standalone:true,publicStandalone:true} },
     // Until a separately audited server publication grant exists, EVERY
     // unknown external card is denied without revealing media or metadata.
     { path: '/p/:token', component: PublicCardView,
-      meta: {title:'Публичная карточка недоступна',standalone:true} },
+      meta: {title:'Публичная карточка недоступна',standalone:true,publicStandalone:true} },
     { path: '/assignments', component: AssignmentsView, meta: { title: 'Задания' } },
     { path: '/assignments/:assignmentId/edit', component: AssignmentEditorView,
       meta: { title: 'Редактор задания' } },
