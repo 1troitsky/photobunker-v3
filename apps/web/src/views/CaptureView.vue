@@ -1280,12 +1280,17 @@ function closeCamera():void {
 async function capture():Promise<void> {
   const v=video.value
   const identity=streamIdentity,generation=cameraGeneration
+  const liveTracks=()=>{
+    const tracks=stream.value?.getTracks()
+    return !!tracks?.length&&tracks.every(track=>track.readyState==='live')
+  }
   const contextGeneration=captureContextGeneration
   if(busy.value||starting.value||cameraZoomBusy.value||torchBusy.value||!v||!stream.value||!ownsCamera(identity,generation)
-    ||v.videoWidth<1||v.videoHeight<1)return
+    ||!liveTracks()||v.videoWidth<1||v.videoHeight<1)return
   const assertOwner=()=>{
     if(!cameraWanted||!ownsCamera(identity,generation)
-      ||contextGeneration!==captureContextGeneration)throw new Error('camera.identity_changed')
+      ||!liveTracks()||contextGeneration!==captureContextGeneration)
+      throw new Error('camera.identity_changed')
   }
   const assignmentAtCapture=selectedAssignment.value
   const storageAtCapture=photoStorage.value
