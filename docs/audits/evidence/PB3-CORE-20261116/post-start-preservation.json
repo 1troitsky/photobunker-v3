@@ -1,0 +1,415 @@
+{
+  "utc": "2026-11-16T13:55:28.269924+00:00",
+  "productMergeCommit": "1c8cd1967e625bf84ba86e7f8d46cfbd1d042bcc",
+  "appsTree": "60d899438a4d2f98c9519749e454b2873973092d",
+  "project": "pb3-working-20261115",
+  "startCommand": "PB3_BUILD_IMAGES=0 PB3_OPEN_BROWSER=0 bash local-runner/Start-PhotoBunker.command",
+  "startExitCode": 0,
+  "http": [
+    {
+      "path": "/",
+      "status": 200
+    },
+    {
+      "path": "/api/readyz",
+      "status": 200
+    },
+    {
+      "path": "/manifest.webmanifest",
+      "status": 200
+    },
+    {
+      "path": "/src/features/identity/application/session.ts",
+      "status": 404
+    },
+    {
+      "path": "/sw.js",
+      "status": 404
+    }
+  ],
+  "containers": [
+    {
+      "name": "/pb3-working-20261115-api-1",
+      "imageId": "sha256:9860d784572171c443c2ebffea60ed14e911480a4c6938849b9162695edd16b1",
+      "state": "running",
+      "storageVolumes": [
+        "pb3-working-20261115_api-storage"
+      ]
+    },
+    {
+      "name": "/pb3-working-20261115-web-1",
+      "imageId": "sha256:b56e2778768c041b178328b1b662cbb3f94ecfb8cc6e74a43798ba1bb0327d01",
+      "state": "running",
+      "storageVolumes": []
+    }
+  ],
+  "databasePreservation": {
+    "command": "compare all pre/post pg_dump COPY rows and column definitions",
+    "exitCode": 0,
+    "tables": [
+      {
+        "table": "account_exchange_keys",
+        "oldRows": 51,
+        "preservedRows": 51,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_creation_meter_v1",
+        "oldRows": 9,
+        "preservedRows": 9,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_invites_v1",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_media_submissions_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_member_removals_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_policy_events_v1",
+        "oldRows": 5,
+        "preservedRows": 5,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_preview_ceiling_events_v1",
+        "oldRows": 3,
+        "preservedRows": 3,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_preview_ceilings_v1",
+        "oldRows": 2,
+        "preservedRows": 2,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_private_events_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_records_v1",
+        "oldRows": 9,
+        "preservedRows": 9,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_retention_events_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_retention_tombstones_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_schedule_events_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_state_events_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "assignment_submissions_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "backup_start_operations_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "billing_entitlement_heads_v1",
+        "oldRows": 65,
+        "preservedRows": 65,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "billing_entitlement_snapshots_v1",
+        "oldRows": 65,
+        "preservedRows": 65,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "browser_archive_entries_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "browser_archive_events_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "browser_archive_preference_events_v1",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "browser_archive_preferences_v1",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "browser_folder_events_v1",
+        "oldRows": 5,
+        "preservedRows": 5,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "browser_folder_snapshots_v1",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "checkout_quotes_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "failed_jobs",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "identity_accounts",
+        "oldRows": 87,
+        "preservedRows": 87,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "identity_challenges",
+        "oldRows": 221,
+        "preservedRows": 221,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "identity_devices",
+        "oldRows": 95,
+        "preservedRows": 95,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "identity_pairings",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "jobs",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "media_chunk_locations_v1",
+        "oldRows": 124,
+        "preservedRows": 124,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "media_chunks_v1",
+        "oldRows": 124,
+        "preservedRows": 124,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "media_file_preview_policies_v1",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "media_file_preview_policy_events_v1",
+        "oldRows": 2,
+        "preservedRows": 2,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "media_files_v1",
+        "oldRows": 29,
+        "preservedRows": 29,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "media_recipient_grants_v1",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "media_revision_links_v1",
+        "oldRows": 2,
+        "preservedRows": 2,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "media_tombstones_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "migrations",
+        "oldRows": 40,
+        "preservedRows": 40,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "notification_account_delivery_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "notification_device_ack_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "notification_event_ledger_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "notification_event_streams_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "notification_push_subscriptions_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "photo_access_grants",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "photo_objects",
+        "oldRows": 8,
+        "preservedRows": 8,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "photo_records",
+        "oldRows": 4,
+        "preservedRows": 4,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "photo_tombstones",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "safe_assignment_editorial_links_v1",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "storage_locations",
+        "oldRows": 8,
+        "preservedRows": 8,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "storage_provider_health",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "storage_retry_tickets",
+        "oldRows": 131,
+        "preservedRows": 131,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "team_epoch_grants_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "team_invites_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "team_invites_v2",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "team_key_epochs_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "team_members_v1",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "team_membership_events_v1",
+        "oldRows": 0,
+        "preservedRows": 0,
+        "columnsUnchanged": true
+      },
+      {
+        "table": "team_records_v1",
+        "oldRows": 1,
+        "preservedRows": 1,
+        "columnsUnchanged": true
+      }
+    ],
+    "allOldRowsPreserved": true,
+    "oldRows": 1100
+  },
+  "privateDumpsIncluded": false
+}

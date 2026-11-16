@@ -1,6 +1,6 @@
 # PB3 — основные сценарии, интеграция 16.11.2026
 
-**Исходный main:** `8ed66c438d090efd218efa80b027f0b2f854db4b`. **Продуктовый кандидат:** `fbb95b1c5da8ddefeae9ea7f0c2039bed1729657`. **Единственная интеграция:** [PR #421](https://github.com/1troitsky/photobunker-v3/pull/421), включая #416–420 и защитные изменения donor `783b6a77`. Владелец разрешил обычный merge и обновление локального main. Локальная приёмка завершена: **151/151 Chromium + 10/10 compiled-image journeys, exit 0**, без skips/flaky/retries. Merge #421 выполняется после фиксации evidence; его SHA доступен по ссылке PR и в package delivery manifest.
+**Исходный main:** `8ed66c438d090efd218efa80b027f0b2f854db4b`. **Продуктовый кандидат:** `fbb95b1c5da8ddefeae9ea7f0c2039bed1729657`. **Единственная интеграция:** [PR #421](https://github.com/1troitsky/photobunker-v3/pull/421), включая #416–420 и защитные изменения donor `783b6a77`. Владелец разрешил обычный merge и обновление локального main. Локальная приёмка завершена: **151/151 Chromium + 10/10 compiled-image journeys, exit 0**, без skips/flaky/retries. **#421 слит обычным merge `1c8cd1967e625bf84ba86e7f8d46cfbd1d042bcc`; локальный main обновлён, Docker запущен на http://127.0.0.1:5173.** Все #416–420 включены, открытых PR 0. 1100 прежних строк в 60 таблицах сохранены.
 
 | Направление | Реальное состояние | Граница |
 |---|---|---|

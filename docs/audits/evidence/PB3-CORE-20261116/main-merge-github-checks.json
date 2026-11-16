@@ -1,0 +1,72 @@
+{
+  "commit": "1c8cd1967e625bf84ba86e7f8d46cfbd1d042bcc",
+  "checks": [
+    {
+      "name": "laravel (8.4)",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699902/job/133341973550"
+    },
+    {
+      "name": "laravel (8.5)",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699902/job/133341973226"
+    },
+    {
+      "name": "Real PostgreSQL + Garage smoke shard 2/6",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699934/job/133341973152"
+    },
+    {
+      "name": "PHP 8.5 security/config",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699903/job/133341973101"
+    },
+    {
+      "name": "Real PostgreSQL + Garage smoke shard 6/6",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699934/job/133341973001"
+    },
+    {
+      "name": "Real PostgreSQL + Garage smoke shard 5/6",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699934/job/133341972992"
+    },
+    {
+      "name": "frontend",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699902/job/133341972973"
+    },
+    {
+      "name": "Real PostgreSQL + Garage smoke shard 3/6",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699934/job/133341972946"
+    },
+    {
+      "name": "Real PostgreSQL + Garage smoke shard 1/6",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699934/job/133341972910"
+    },
+    {
+      "name": "Real PostgreSQL + Garage smoke shard 4/6",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699934/job/133341972737"
+    },
+    {
+      "name": "PHP 8.4 security/config",
+      "status": "queued",
+      "conclusion": null,
+      "url": "https://github.com/1troitsky/photobunker-v3/actions/runs/43879699903/job/133341972706"
+    }
+  ],
+  "ciPassClaimed": false
+}

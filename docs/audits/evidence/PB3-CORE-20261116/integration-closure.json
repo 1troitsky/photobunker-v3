@@ -1,0 +1,38 @@
+{
+  "productMergeCommit": "1c8cd1967e625bf84ba86e7f8d46cfbd1d042bcc",
+  "method": "one normal merge, no squash/force/branch deletion",
+  "sourcePRs": [
+    {
+      "headRefOid": "bdda63cd36adac42895c65c860c7e303e2cc5e3f",
+      "number": 416,
+      "state": "CLOSED",
+      "ancestorCheckExitCode": 0
+    },
+    {
+      "headRefOid": "4335463ca63d406fa4e253a54da0973136b9fbd7",
+      "number": 417,
+      "state": "CLOSED",
+      "ancestorCheckExitCode": 0
+    },
+    {
+      "headRefOid": "d1a8e9153ee254a88d8a38b009b5978adf6163b6",
+      "number": 418,
+      "state": "CLOSED",
+      "ancestorCheckExitCode": 0
+    },
+    {
+      "headRefOid": "d3f90376fc8481220e809f883a67d425b7ac3b98",
+      "number": 419,
+      "state": "CLOSED",
+      "ancestorCheckExitCode": 0
+    },
+    {
+      "headRefOid": "f7679c2bae116aed408d3f862523f7761a3dc103",
+      "number": 420,
+      "state": "CLOSED",
+      "ancestorCheckExitCode": 0
+    }
+  ],
+  "openPRs": [],
+  "sourceStateMeaning": "source PRs closed as incorporated; all original HEAD commits are ancestors of main, not five additional merges"
+}

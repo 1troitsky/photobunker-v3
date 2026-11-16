@@ -1,6 +1,6 @@
 # PB3 — интеграция основных пользовательских сценариев, 16.11.2026
 
-Статус: **локальная приёмка PASS; кандидат подготовлен к разрешённому merge #421**. Владелец прямо разрешил интеграцию в удалённый и локальный main. Проверяемый продукт: `fbb95b1c5da8ddefeae9ea7f0c2039bed1729657`, дерево `apps/`: `60d899438a4d2f98c9519749e454b2873973092d`. Исходный main: `8ed66c438d090efd218efa80b027f0b2f854db4b`. Один итоговый [PR #421](https://github.com/1troitsky/photobunker-v3/pull/421).
+Статус: **MERGED через #421, локальный main обновлён, Docker запущен**. Обычный merge-коммит: `1c8cd1967e625bf84ba86e7f8d46cfbd1d042bcc`. Последующий commit содержит только результаты передачи/evidence; дерево продукта остаётся тем же. Владелец прямо разрешил интеграцию в удалённый и локальный main. Проверяемый продукт: `fbb95b1c5da8ddefeae9ea7f0c2039bed1729657`, дерево `apps/`: `60d899438a4d2f98c9519749e454b2873973092d`. Исходный main: `8ed66c438d090efd218efa80b027f0b2f854db4b`. Один итоговый [PR #421](https://github.com/1troitsky/photobunker-v3/pull/421).
 
 ## Что объединено
 
@@ -87,3 +87,11 @@
 Существующая локальная установка использует проект `pb3-working-20261115`. При переносе в основную рабочую копию сохраняются этот project name, прежние secrets/garage config и все named volumes. До обновления сохранены приватный pg_dump и 820 ID в 25 таблицах. Новая миграция только добавляет `public_cards_v1`; старые миграции не переписываются. Результат проверки сохранности данных и нового main будет указан в итоговой передаче и package delivery manifest.
 
 Готовый пакет этой машины: `.local-delivery/packages/PB3-Core-20261116/`. Образы `PB3-Core-linux-arm64-images.tar.gz`, SHA256 `ce667cd4a9e378b94e43d37be959beb9f228dc3bdf9d7d8ad73de9cc24709316`, успешно проверены через настоящий `docker load` (exit 0). SHA исходного ZIP, итоговый merge SHA и post-start сохранность локальных данных фиксируются в `delivery-manifest.json` рядом с пакетом: эти данные появляются после создания данного commit и не могут содержать его собственный SHA внутри себя.
+
+## Результат интеграции и запуска
+
+#421 слит обычным merge с родителями `8ed66c438d090efd218efa80b027f0b2f854db4b` и `a5aec39e9d4f617da2f49620469919e9c7f65e9e`. Локальная основная папка fast-forward обновлена; прежние пользовательские изменения/неотслеживаемые документы сохранены. #416–420 закрыты как уже включённые через #421, их HEAD доказанно являются предками main. Открытых PR 0; ветки не удалены. [Closure proof](evidence/PB3-CORE-20261116/integration-closure.json).
+
+В основной папке запущены именно принятые API/Nginx image IDs, адрес **http://127.0.0.1:5173**. HTML/manifest/readyz возвращают 200; /src и /sw.js — 404. Старые PostgreSQL/Garage/API storage volumes и credentials сохранены. Сравнение всех COPY rows/columns до и после: **1100/1100 прежних строк в 60 таблицах сохранены полностью**, включая ciphertext/object references. Приватные dumps остаются вне Git и пакета. [Post-start preservation](evidence/PB3-CORE-20261116/post-start-preservation.json).
+
+Автоматически созданные GitHub checks нового merge проверены отдельно: [фактические состояния](evidence/PB3-CORE-20261116/main-merge-github-checks.json). QUEUED не является PASS. Локальные 151+10 E2E, 1013 Vitest, оба PHPUnit и build/type gates выше являются выполненными проверками, не заменой статусов GitHub. Owner visual/hardware acceptance остаётся отдельной.
