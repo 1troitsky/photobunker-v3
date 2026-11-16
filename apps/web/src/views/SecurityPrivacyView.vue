@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { activeSession, logout, reauthenticate } from '../features/identity/application/session'
+import { activeSession, logout } from '../features/identity/application/session'
 import { jsonApi } from '../features/identity/infrastructure/api'
 
 const route = useRoute()
@@ -9,6 +9,9 @@ type TrustedDevice={id:string;created_at:string;revoked_at:string|null}
 const busy=ref(false),status=ref(''),error=ref('')
 const devices=ref<TrustedDevice[]>([])
 const deviceLoading=ref(false),deviceError=ref('')
+// Identity may retain an authenticated token while the browser loses network.
+// Disable server-verification actions on offline, and never infer a new ACK.
+const networkOnline=ref(typeof navigator==='undefined'||navigator.onLine!==false)
 let request=0
 const fields=['pin','relock','emergency','devices','key','inactivity'] as const
 async function focusRequested():Promise<void>{
@@ -35,23 +38,25 @@ onUnmounted(()=>{
 function handleOffline():void{
   // Browser connectivity may change without a new activeSession object.
   // Invalidate the pending request before it can commit or clear a later state.
+  networkOnline.value=false
   ++request
   devices.value=[]
   deviceLoading.value=false
   deviceError.value=''
 }
 function handleOnline():void{
-  if(activeSession.value?.online)void loadDevices()
+  networkOnline.value=typeof navigator==='undefined'||navigator.onLine!==false
+  if(networkOnline.value&&activeSession.value?.online)void loadDevices()
 }
 watch(activeSession,()=>{devices.value=[];error.value='';status.value='';void loadDevices()},{immediate:true})
-async function loadDevices():Promise<void>{
+async function loadDevices():Promise<boolean>{
   const session=activeSession.value,token=++request
   devices.value=[];deviceError.value=''
   // A superseded online request must not leave a permanent spinner when
   // switching accounts, signing out or going offline during its response.
   deviceLoading.value=false
-  if(!session?.online
-    ||typeof navigator!=='undefined'&&navigator.onLine===false)return
+  if(!session?.online||!networkOnline.value
+    ||typeof navigator!=='undefined'&&navigator.onLine===false)return false
   deviceLoading.value=true
   try{
     const payload=await jsonApi<unknown>('/identity/v2/devices')
@@ -65,17 +70,32 @@ async function loadDevices():Promise<void>{
         throw Error('identity.devices_invalid')
       return v
     })
-    if(request===token&&activeSession.value?.accountId===session.accountId
-      &&activeSession.value?.deviceId===session.deviceId)devices.value=rows
+    if(request===token&&activeSession.value===session&&networkOnline.value){
+      devices.value=rows
+      return true
+    }
   }catch(e){if(request===token)deviceError.value=e instanceof Error?e.message:'Ошибка списка устройств'}
   finally{if(request===token)deviceLoading.value=false}
+  return false
 }
 async function verifySession():Promise<void>{
-  if(busy.value||!activeSession.value)return
+  const session=activeSession.value
+  if(busy.value||!session)return
   busy.value=true;status.value='';error.value=''
-  try{await reauthenticate();status.value='Сессия подтверждена сервером';await loadDevices()}
-  catch(e){error.value=e instanceof Error?e.message:'Ошибка проверки сессии'}
-  finally{busy.value=false}
+  try{
+    // reauthenticate() returns immediately for an already-online session.
+    // A no-op is NOT a fresh server confirmation. Require an actual,
+    // schema-validated authenticated response for THIS exact session.
+    const confirmed=await loadDevices()
+    if(activeSession.value!==session)return
+    if(confirmed)
+      status.value='Сервер подтвердил доступ к устройствам текущего аккаунта.'
+    else
+      error.value='Сервер не подтвердил текущую сессию. Проверьте связь и повторите запрос.'
+  }catch{
+    if(activeSession.value===session)
+      error.value='Не удалось проверить сессию на сервере.'
+  }finally{busy.value=false}
 }
 async function signOut():Promise<void>{
   if(busy.value||!activeSession.value)return
@@ -164,8 +184,8 @@ async function copyDeviceId(id:string):Promise<void>{
             Список устройств не подтверждён. Не показываем вымышленные данные.
           </p>
           <div class="security-actions-row">
-            <button type="button" class="small-button" :disabled="deviceLoading||!activeSession.online" @click="loadDevices">Обновить устройства</button>
-            <button type="button" class="small-button" :disabled="busy||!activeSession.online" @click="verifySession">Проверить сессию</button>
+            <button type="button" class="small-button" :disabled="deviceLoading||!activeSession.online||!networkOnline" @click="loadDevices">Обновить устройства</button>
+            <button type="button" class="small-button" :disabled="busy||!activeSession.online||!networkOnline" @click="verifySession">Проверить сессию</button>
           </div>
         </div>
         <p class="privacy-footer">Отключение устройства должно закрывать его будущие сеансы; без сети нельзя гарантировать мгновенное удаление данных.</p>

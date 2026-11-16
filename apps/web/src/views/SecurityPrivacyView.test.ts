@@ -50,6 +50,85 @@ function mount():void{
   app.mount(host)
 }
 describe('Security & Privacy 1.3 owner-scoped device list',()=>{
+  it('confirms the account only after a fresh authenticated and validated server response',async()=>{
+    mock.api.mockResolvedValue({devices:[]})
+    activeSession.value=session(A,true)
+    mount();await settle()
+    expect(mock.api).toHaveBeenCalledTimes(1)
+    const verify=Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(x=>x.textContent?.trim()==='Проверить сессию')!
+    verify.click();await settle()
+    expect(mock.api).toHaveBeenCalledTimes(2)
+    expect(mock.api).toHaveBeenLastCalledWith('/identity/v2/devices')
+    expect(host.textContent).toContain('Сервер подтвердил доступ к устройствам текущего аккаунта.')
+    // Previously reauthenticate() was an online no-op but the UI
+    // incorrectly called it independent server verification.
+    expect(mock.reauth).not.toHaveBeenCalled()
+  })
+  it('does not show server-verified success after an unauthorized or unreachable device request',async()=>{
+    mock.api.mockResolvedValueOnce({devices:[]})
+    mock.api.mockRejectedValueOnce(Error('HTTP 401'))
+    activeSession.value=session(A,true)
+    mount();await settle()
+    const verify=Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(x=>x.textContent?.trim()==='Проверить сессию')!
+    verify.click();await settle()
+    expect(mock.api).toHaveBeenCalledTimes(2)
+    expect(host.textContent).toContain('Сервер не подтвердил текущую сессию')
+    expect(host.textContent).not.toContain('Сервер подтвердил доступ')
+  })
+  it('rejects malformed server device responses rather than faking a session ACK',async()=>{
+    mock.api.mockResolvedValueOnce({devices:[]})
+    mock.api.mockResolvedValueOnce({devices:'not-an-array'})
+    activeSession.value=session(A,true)
+    mount();await settle()
+    const verify=Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(x=>x.textContent?.trim()==='Проверить сессию')!
+    verify.click();await settle()
+    expect(host.textContent).toContain('Сервер не подтвердил текущую сессию')
+    expect(host.textContent).not.toContain('Сервер подтвердил доступ')
+  })
+  it('does not validate a new owner from an old owner pending authenticated request',async()=>{
+    mock.api.mockResolvedValueOnce({devices:[]})
+    const previous=deferred<{devices:unknown[]}>()
+    mock.api.mockReturnValueOnce(previous.promise)
+    activeSession.value=session(A,true)
+    mount();await settle()
+    const verify=Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(x=>x.textContent?.trim()==='Проверить сессию')!
+    verify.click();await settle()
+    activeSession.value=session(B,false)
+    await settle()
+    previous.resolve({devices:[{
+      id:'33333333-3333-4333-8333-333333333333',
+      created_at:'2026-11-16',revoked_at:null,
+    }]})
+    await settle()
+    expect(host.textContent).not.toContain('Сервер подтвердил доступ')
+    expect(host.querySelectorAll('[data-testid="account-device"]')).toHaveLength(0)
+  })
+  it('disables online-only session confirmation as soon as the browser is offline',async()=>{
+    mock.api.mockResolvedValue({devices:[]})
+    activeSession.value=session(A,true)
+    mount();await settle()
+    const verify=Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(x=>x.textContent?.trim()==='Проверить сессию')!
+    const reload=Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(x=>x.textContent?.trim()==='Обновить устройства')!
+    expect(verify.disabled).toBe(false)
+    window.dispatchEvent(new Event('offline'))
+    await settle()
+    expect(verify.disabled).toBe(true)
+    expect(reload.disabled).toBe(true)
+    verify.click()
+    await settle()
+    expect(mock.api).toHaveBeenCalledTimes(1)
+    window.dispatchEvent(new Event('online'))
+    await settle()
+    expect(verify.disabled).toBe(false)
+    expect(mock.api).toHaveBeenCalledTimes(2)
+  })
+
   it('invalidates an in-flight request on a real browser offline event without a session ref change',async()=>{
     const request=deferred<{devices:unknown[]}>()
     mock.api.mockReturnValueOnce(request.promise)
