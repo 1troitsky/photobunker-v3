@@ -100,6 +100,8 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await expect(sheet).toHaveAttribute('role','dialog')
   await expect(sheet).toHaveAttribute('aria-modal','true')
   await expect(sheet).toHaveCSS('position','fixed')
+  await expect(sheet.getByRole('heading',{name:'Файлы для загрузки'})).toBeVisible()
+  await expect(sheet).not.toContainText('· P1')
   await expect(page.getByTestId('browser-import-sheet-close')).toBeFocused()
   await expect(page.getByTestId('browser-import-backdrop')).toBeVisible()
   await page.getByTestId('browser-import-sheet-close').press('Escape')
