@@ -48,6 +48,12 @@ describe('PB3 encrypted Local-First notifications',()=>{
     expect(notificationIsVisible('new-file',preferences)).toBe(true)
     expect(notificationIsVisible('file-expiry',preferences)).toBe(false)
     expect(notificationIsVisible('security',preferences)).toBe(true)
+    const split={...preferences,newFiles:false,reviews:false,backups:false,subscription:false}
+    expect(notificationIsVisible('new-file',split)).toBe(false)
+    expect(notificationIsVisible('media-review',split)).toBe(false)
+    expect(notificationIsVisible('backup',split)).toBe(false)
+    expect(notificationIsVisible('subscription',split)).toBe(false)
+    expect(notificationIsVisible('security',split)).toBe(true)
 
     const raw=new Dexie('pb3-encrypted-notifications-v1')
     raw.version(2).stores({rows:'&key,ownerScope',preferences:'&key'})
@@ -98,6 +104,41 @@ describe('PB3 encrypted Local-First notifications',()=>{
       ...defaultNotificationPreferences,
       invitations:false,expiry:false,badges:false,
     })
+  })
+  it('migrates encrypted v2 broad system preferences to each independent category',async()=>{
+    const alice=await session()
+    const key=hex(await digest(new TextEncoder().encode(
+      'pb3.notification-index.v1\n'+alice.accountId,
+    )))
+    const v2={
+      version:2,invitations:true,deadlines:false,expiry:true,
+      system:false,badges:false,quietEnabled:true,
+      quietStart:23*60,quietEnd:7*60,
+    }
+    const iv=random(12)
+    const aes=await crypto.subtle.importKey(
+      'raw',unb64(alice.pkg.akek,32),{name:'AES-GCM'},false,['encrypt'],
+    )
+    const ciphertext=await crypto.subtle.encrypt({
+      name:'AES-GCM',iv,
+      additionalData:new TextEncoder().encode(
+        'pb3.notification-preferences.v1\\n'+key,
+      ),tagLength:128,
+    },aes,new TextEncoder().encode(JSON.stringify(v2)))
+    const raw=new Dexie('pb3-encrypted-notifications-v1')
+    raw.version(2).stores({rows:'&key,ownerScope',preferences:'&key'})
+    await raw.table('preferences').put({key,iv:b64(iv),ciphertext:b64(ciphertext)})
+    raw.close()
+    const migrated=await readNotificationPreferences()
+    expect(migrated).toEqual({
+      ...defaultNotificationPreferences,
+      deadlines:false,badges:false,newFiles:false,reviews:false,
+      backups:false,subscription:false,
+      quietEnabled:true,quietStart:1380,quietEnd:420,
+    })
+    expect(notificationIsVisible('security',migrated)).toBe(true)
+    await saveNotificationPreferences(migrated)
+    expect(await readNotificationPreferences()).toEqual(migrated)
   })
   it('quiet hours cover midnight and boundaries without suppressing security indicators',async()=>{
     const settings={...defaultNotificationPreferences,
