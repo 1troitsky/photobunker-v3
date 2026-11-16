@@ -25,6 +25,9 @@ watch(activeSession,()=>{devices.value=[];error.value='';status.value='';void lo
 async function loadDevices():Promise<void>{
   const session=activeSession.value,token=++request
   devices.value=[];deviceError.value=''
+  // A superseded online request must not leave a permanent spinner when
+  // switching accounts, signing out or going offline during its response.
+  deviceLoading.value=false
   if(!session?.online)return
   deviceLoading.value=true
   try{
