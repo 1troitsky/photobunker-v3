@@ -17,7 +17,9 @@ test('Security & Privacy 1.3 uses approved sections and exact Settings Search an
   await expect(page.getByRole('heading', {name:'PIN входа'})).toBeVisible()
   await expect(page.getByRole('heading', {name:'PIN экстренного удаления данных'})).toBeVisible()
   await expect(page.getByRole('heading', {name:'Dead Man’s Switch'})).toBeVisible()
-  await expect(page.getByRole('button',{name:'Создать'}).first()).toBeDisabled()
+  await expect(page.getByTestId('security-pin-create')).toBeEnabled()
+  await expect(page.locator('#section-emergency').getByRole('button',{name:'Создать'}))
+    .toBeDisabled()
   await expect(page.locator('#inactivity-select')).toBeDisabled()
   await expect(page.getByRole('button',{name:'Сменить ключ'})).toBeDisabled()
 
