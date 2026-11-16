@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
+import {brand} from '../../../config/brand'
 import {
   identityBootstrapError,pendingPinUnlock,restoreAccount,unlockPinnedDevice,
 } from '../../identity/application/session'
@@ -101,9 +102,9 @@ onUnmounted(()=>{
 </script>
 
 <template>
-  <main class="pin-screen" aria-label="Блокировка PhotoBunker">
+  <main class="pin-screen" :aria-label="'Блокировка '+brand.name">
     <section class="pin-container">
-      <div class="pin-brand" aria-label="PhotoBunker">
+      <div class="pin-brand" :aria-label="brand.name">
         <div class="brand-logo" aria-hidden="true">
           <svg viewBox="0 0 40 40" fill="none" stroke="currentColor"
             stroke-width="2.4" stroke-linejoin="round">
@@ -113,7 +114,7 @@ onUnmounted(()=>{
             <path d="M20 26v3"/>
           </svg>
         </div>
-        <strong class="brand-title">PhotoBunker</strong>
+        <strong class="brand-title">{{brand.name}}</strong>
       </div>
       <div v-if="mode==='pin' && !identityBootstrapError" class="pin-instructions">
         <h1>Введите PIN</h1>
