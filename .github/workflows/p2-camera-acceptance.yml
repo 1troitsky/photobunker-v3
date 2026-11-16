@@ -1,0 +1,171 @@
+name: P2 Camera 1.2 real PostgreSQL 18 + Garage + Chromium
+on:
+  pull_request:
+    branches: [main, 'p0/**', 'p1/**', 'p2/**', 'integration/**']
+    paths:
+      - 'apps/web/src/views/CaptureView.vue'
+      - 'apps/web/src/views/CaptureView.test.ts'
+      - 'apps/web/src/styles.css'
+      - 'apps/web/src/features/media/domain/camera-photo-format*'
+      - 'tests/e2e/*camera*.spec.ts'
+      - 'tests/playwright.config.ts'
+      - '.github/workflows/p2-camera-acceptance.yml'
+permissions:
+  contents: read
+jobs:
+  postgres-garage:
+    # Dedicated Camera acceptance in a disposable, authentic PG18/Garage
+    # stack. This does not replace or weaken the full six-shard P0 gate.
+    name: Camera native Chromium + real PG18/Garage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: pb3_ci_p0
+          POSTGRES_USER: pb3_ci
+          POSTGRES_PASSWORD: pb3_ci_disposable
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pb3_ci -d pb3_ci_p0"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      APP_ENV: testing
+      APP_DEBUG: 'false'
+      APP_URL: http://127.0.0.1:8099
+      APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: pb3_ci_p0
+      DB_USERNAME: pb3_ci
+      DB_PASSWORD: pb3_ci_disposable
+      SESSION_DRIVER: array
+      SESSION_SECURE_COOKIE: 'false'
+      CACHE_STORE: array
+      S3_ENDPOINT: http://127.0.0.1:3900
+      S3_REGION: garage
+      S3_BUCKET: pb3-ci-p0
+      PB3_ISOLATED_STORAGE_SMOKE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, dom, xml, openssl, pdo_pgsql, fileinfo, curl, zip
+          coverage: none
+      - name: Check patched PHP and start single-node Garage
+        shell: bash
+        run: |
+          set -euo pipefail
+          php scripts/check-runtime.php
+          mkdir -p "$RUNNER_TEMP/garage/meta" "$RUNNER_TEMP/garage/data"
+          secret="$(openssl rand -hex 32)"
+          cat > "$RUNNER_TEMP/garage/garage.toml" <<EOF
+          metadata_dir = "/var/lib/garage/meta"
+          data_dir = "/var/lib/garage/data"
+          db_engine = "sqlite"
+          replication_factor = 1
+          rpc_bind_addr = "127.0.0.1:3901"
+          rpc_public_addr = "127.0.0.1:3901"
+          rpc_secret = "$secret"
+          [s3_api]
+          s3_region = "garage"
+          api_bind_addr = "127.0.0.1:3900"
+          EOF
+          docker run -d --name pb3-p0-garage --network host \
+            -v "$RUNNER_TEMP/garage/garage.toml:/etc/garage.toml:ro" \
+            -v "$RUNNER_TEMP/garage/meta:/var/lib/garage/meta" \
+            -v "$RUNNER_TEMP/garage/data:/var/lib/garage/data" dxflrs/garage:v2.5.0
+          for attempt in $(seq 1 30); do
+            if docker exec pb3-p0-garage /garage status >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          node="$(docker exec pb3-p0-garage /garage node id -q | tr -d '\r\n')"
+          node="${node%%@*}"
+          test -n "$node"
+          docker exec pb3-p0-garage /garage layout assign -z ci -c 1G "$node"
+          docker exec pb3-p0-garage /garage layout apply --version 1
+          docker exec pb3-p0-garage /garage bucket create pb3-ci-p0
+          docker exec pb3-p0-garage /garage key create pb3-ci-key > "$RUNNER_TEMP/garage/key.txt"
+          key="$(sed -n 's/^[[:space:]]*Key ID:[[:space:]]*//p' "$RUNNER_TEMP/garage/key.txt" | head -1)"
+          password="$(sed -n 's/^[[:space:]]*Secret key:[[:space:]]*//p' "$RUNNER_TEMP/garage/key.txt" | head -1)"
+          test -n "$key" && test -n "$password"
+          echo "::add-mask::$key"
+          echo "::add-mask::$password"
+          docker exec pb3-p0-garage /garage bucket allow --read --write --owner pb3-ci-p0 --key pb3-ci-key
+          {
+            echo "S3_ACCESS_KEY=$key"
+            echo "S3_SECRET_KEY=$password"
+          } >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/garage/key.txt"
+      - name: Install Laravel and migrate ONLY disposable database
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --no-progress --prefer-dist
+          php artisan migrate --force
+          php artisan route:list
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - name: Install frozen Vue and Chromium test dependencies
+        run: |
+          pnpm install --frozen-lockfile
+          # GitHub Ubuntu runners already supply Chromium's runtime libs.
+          # --with-deps invokes apt for optional fonts and can fail on
+          # transient Ubuntu mirror DNS outages BEFORE any E2E executes.
+          # The next step launches real Chromium and must still PASS.
+          pnpm exec playwright install chromium
+      - name: Real Camera native permissions, encrypted photo journey and approved 1.2 UX
+        shell: bash
+        env:
+          # Disposable PostgreSQL/Garage ONLY. Real deployments default OFF.
+          PB3_ENABLE_BROWSER_ARCHIVE: 'true'
+          APP_URL: http://127.0.0.1:5173
+          SESSION_DRIVER: file
+          SESSION_SECURE_COOKIE: 'false'
+        run: |
+          set -euo pipefail
+          (cd apps/api && php artisan serve --host=127.0.0.1 --port=8000 > "$RUNNER_TEMP/p1-laravel.log" 2>&1) &
+          backend=$!
+          pnpm dev > "$RUNNER_TEMP/p1-vite.log" 2>&1 &
+          frontend=$!
+          trap 'kill "$backend" "$frontend" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:8000/api/healthz >/dev/null &&
+               curl -fsS http://127.0.0.1:5173/settings >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/api/healthz
+          curl -fsS http://127.0.0.1:5173/settings >/dev/null
+          # No mocks for Laravel/PostgreSQL/Garage. Chromium uses its native
+          # fake media DEVICE only for reproducible nonphysical QA. Real
+          # iOS/Android hardware acceptance is explicitly owner-deferred.
+          # Run EXACT Camera specs, including the historically undiscovered
+          # owner-approved UX tests. No retry/skip or timeout inflation.
+          pnpm exec playwright test --config tests/playwright.config.ts \
+            tests/e2e/p1-camera-session.spec.ts \
+            tests/e2e/p1-media-camera-autoretry-390.spec.ts \
+            tests/e2e/p2-browser-camera-gps-consent-race.spec.ts \
+            tests/e2e/p2-browser-camera-gps-permission.spec.ts \
+            tests/e2e/p2-browser-camera-microphone-interruption-206.spec.ts \
+            tests/e2e/p2-browser-camera-audio-cloud-wav-206.spec.ts \
+            tests/e2e/p2-camera-fieldwork-ux.spec.ts \
+            tests/e2e/p2-camera-presets-ux.spec.ts --reporter=list
+      - name: Preserve Camera browser failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2-camera-acceptance-traces
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Stop disposable Garage
+        if: always()
+        run: docker rm -f pb3-p0-garage >/dev/null 2>&1 || true
