@@ -657,6 +657,8 @@ const canConfirmCameraAssignment=computed(()=>{
   if(!selectedAssignment.value)return true
   const fields=requiredFields.value
   return !(fields?.requiredCategory&&!category.value.trim())
+    &&!(requiredAdvanced.value?.allowedCategories.length
+      &&!requiredAdvanced.value.allowedCategories.includes(category.value))
     &&description.value.trim().length>=(fields?.descriptionMinLength??0)
     &&!(fields?.requiredGps&&!gps.value)
 })
@@ -1854,7 +1856,14 @@ onUnmounted(()=>{
 
         <h2>Приватная информация {{ captureMode==='photo'?'снимка':captureMode==='video'?'видео':'аудио' }}</h2>
         <label for="camera-category">Категория</label>
-        <input id="camera-category" v-model="category" type="text" maxlength="64"
+        <select v-if="requiredAdvanced?.allowedCategories.length" id="camera-category"
+          v-model="category" data-testid="camera-category-select"
+          :required="!!requiredFields?.requiredCategory">
+          <option value="">Без категории</option>
+          <option v-for="name in requiredAdvanced.allowedCategories" :key="name"
+            :value="name">{{name}}</option>
+        </select>
+        <input v-else id="camera-category" v-model="category" type="text" maxlength="64"
           :required="!!requiredFields?.requiredCategory"
           autocomplete="off" placeholder="Например, репортаж">
         <label for="camera-description">Описание</label>
