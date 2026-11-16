@@ -21,6 +21,74 @@ afterEach(()=>{
   host.remove()
   sessionBootstrapPending.value=false
   activeSession.value=null
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
+function mountWelcome():void{
+  app=createApp(WelcomeView)
+  app.component('RouterLink',{props:['to'],template:'<a><slot /></a>'})
+  app.mount(host)
+}
+function currentSlide():number{
+  return Array.from(host.querySelectorAll('.carousel-dot'))
+    .findIndex(dot=>dot.classList.contains('active'))
+}
+function touch(type:string,x:number):Event{
+  const e=new Event(type,{bubbles:true})
+  Object.defineProperty(e,'changedTouches',{value:[{clientX:x}]})
+  return e
+}
+describe('Welcome 1.4 carousel: real user timings and motion preferences',()=>{
+  it('restarts the complete 5.5s countdown after selecting a dot',async()=>{
+    vi.useFakeTimers()
+    mountWelcome();await settle()
+    expect(currentSlide()).toBe(0)
+    vi.advanceTimersByTime(5000);await settle()
+    const dots=host.querySelectorAll<HTMLButtonElement>('.carousel-dot')
+    dots[3]!.click();await settle()
+    expect(currentSlide()).toBe(3)
+    vi.advanceTimersByTime(5499);await settle()
+    expect(currentSlide()).toBe(3)
+    vi.advanceTimersByTime(1);await settle()
+    expect(currentSlide()).toBe(4)
+  })
+  it('resets on swipe and suspends auto-advance during hover',async()=>{
+    vi.useFakeTimers()
+    mountWelcome();await settle()
+    const carousel=host.querySelector<HTMLElement>('.carousel')!
+    vi.advanceTimersByTime(5000)
+    carousel.dispatchEvent(touch('touchstart',280))
+    carousel.dispatchEvent(touch('touchend',100))
+    await settle()
+    expect(currentSlide()).toBe(1)
+    vi.advanceTimersByTime(5499);await settle()
+    expect(currentSlide()).toBe(1)
+    carousel.dispatchEvent(new Event('mouseenter'))
+    vi.advanceTimersByTime(10000);await settle()
+    expect(currentSlide()).toBe(1)
+    carousel.dispatchEvent(new Event('mouseleave'))
+    vi.advanceTimersByTime(5500);await settle()
+    expect(currentSlide()).toBe(2)
+  })
+  it('does not autoplay with reduced motion, and resumes only after preference change',async()=>{
+    vi.useFakeTimers()
+    const listeners=new Set<()=>void>()
+    const preference={
+      matches:true,
+      addEventListener:(_type:string,fn:()=>void)=>{listeners.add(fn)},
+      removeEventListener:(_type:string,fn:()=>void)=>{listeners.delete(fn)},
+    }
+    vi.stubGlobal('matchMedia',vi.fn(()=>preference))
+    mountWelcome();await settle()
+    vi.advanceTimersByTime(16500);await settle()
+    expect(currentSlide()).toBe(0)
+    preference.matches=false
+    for(const notify of listeners)notify()
+    vi.advanceTimersByTime(5499);await settle()
+    expect(currentSlide()).toBe(0)
+    vi.advanceTimersByTime(1);await settle()
+    expect(currentSlide()).toBe(1)
+  })
 })
 describe('owner-approved Welcome Loader 1.6',()=>{
   it('replaces BOTH auth links in one stable slot and keeps all six slides',async()=>{

@@ -27,34 +27,82 @@ const features:readonly Feature[]=[
   desc:'Отдельный экстренный PIN предназначен для немедленной блокировки доступа и запуска очистки. Удаление из облака зависит от связи.',
   caption:'Emergency PIN',art:'emergency',accent:'#f19d8d'},
 ]
-const slide=ref(0),paused=ref(false),busy=ref(false),generated=ref(''),acknowledged=ref(false)
+const slide=ref(0),busy=ref(false),generated=ref(''),acknowledged=ref(false)
 const recovery=ref(''),error=ref(''),notice=ref('')
 const isCreate=computed(()=>route.path==='/welcome/create')
 const isRecover=computed(()=>route.path==='/welcome/recover')
 const isHome=computed(()=>!isCreate.value&&!isRecover.value)
 const current=computed(()=>features[slide.value]!)
-let interval:ReturnType<typeof setInterval>|null=null
+// One 5.5 s timer, reset after every manual interaction. A running interval
+// can otherwise advance a slide immediately after the user selects it.
+let timer:ReturnType<typeof setTimeout>|null=null
+let motion:MediaQueryList|null=null
+let hoverPause=false,focusPause=false,touchPause=false
 let touchX:number|null=null
-function choose(i:number):void{slide.value=(i+features.length)%features.length}
-function onTouchStart(e:TouchEvent):void{touchX=e.changedTouches[0]?.clientX??null;paused.value=true}
+function stopAutoplay():void{
+  if(timer!==null)clearTimeout(timer)
+  timer=null
+}
+function canAutoplay():boolean{
+  return isHome.value&&!hoverPause&&!focusPause&&!touchPause
+    &&!document.hidden&&!motion?.matches
+}
+function resetAutoplay():void{
+  stopAutoplay()
+  if(!canAutoplay())return
+  timer=setTimeout(()=>{
+    timer=null
+    if(!canAutoplay())return
+    slide.value=(slide.value+1)%features.length
+    resetAutoplay()
+  },5500)
+}
+function choose(i:number):void{
+  slide.value=(i+features.length)%features.length
+  resetAutoplay()
+}
+function onTouchStart(e:TouchEvent):void{
+  touchX=e.changedTouches[0]?.clientX??null
+  touchPause=true
+  resetAutoplay()
+}
 function onTouchEnd(e:TouchEvent):void{
   const end=e.changedTouches[0]?.clientX??null
   if(touchX!==null&&end!==null&&Math.abs(end-touchX)>40)
-    choose(slide.value+(end<touchX?1:-1))
-  touchX=null;paused.value=false
+    slide.value=(slide.value+(end<touchX?1:-1)+features.length)%features.length
+  touchX=null
+  touchPause=false
+  resetAutoplay()
 }
-watch(()=>route.path,()=>{error.value='';notice.value=''})
+function onTouchCancel():void{
+  touchX=null
+  touchPause=false
+  resetAutoplay()
+}
+function onCarouselFocusOut(e:FocusEvent):void{
+  const root=e.currentTarget
+  if(root instanceof HTMLElement
+    &&e.relatedTarget instanceof Node&&root.contains(e.relatedTarget))return
+  focusPause=false
+  resetAutoplay()
+}
+watch(()=>route.path,()=>{error.value='';notice.value='';resetAutoplay()})
 watch(activeSession,session=>{
   if(session)void router.replace(resolveStartRoute())
 },{immediate:true})
 onMounted(()=>{
- interval=setInterval(()=>{
-   if(!isHome.value||paused.value||document.hidden
-      ||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return
-   choose(slide.value+1)
- },5500)
+  motion=typeof window.matchMedia==='function'
+    ?window.matchMedia('(prefers-reduced-motion: reduce)'):null
+  motion?.addEventListener?.('change',resetAutoplay)
+  document.addEventListener('visibilitychange',resetAutoplay)
+  resetAutoplay()
 })
-onUnmounted(()=>{if(interval!==null)clearInterval(interval)})
+onUnmounted(()=>{
+  stopAutoplay()
+  document.removeEventListener('visibilitychange',resetAutoplay)
+  motion?.removeEventListener?.('change',resetAutoplay)
+  motion=null
+})
 onBeforeRouteLeave(()=>{
  if(generated.value&&!acknowledged.value&&!activeSession.value)
    return window.confirm('Recovery Key ещё не подтверждён как сохранённый. Покинуть регистрацию?')
@@ -131,8 +179,11 @@ async function loadFile(e:Event):Promise<void>{
       </div>
       <section class="carousel" :aria-label="'Почему '+brand.name" aria-roledescription="carousel"
         :style="{'--slide-accent':current.accent}"
-        @mouseenter="paused=true" @mouseleave="paused=false" @focusin="paused=true" @focusout="paused=false"
-        @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
+        @mouseenter="hoverPause=true;resetAutoplay()"
+        @mouseleave="hoverPause=false;resetAutoplay()"
+        @focusin="focusPause=true;resetAutoplay()" @focusout="onCarouselFocusOut"
+        @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd"
+        @touchcancel.passive="onTouchCancel">
         <div class="carousel-body" aria-live="off">
           <div class="carousel-art">
             <svg viewBox="0 0 180 135" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
