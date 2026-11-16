@@ -4,7 +4,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { displayedDock, dockDefinitions } from './ui/fieldwork/dock-preferences'
 import type { DockDefinition } from './ui/fieldwork/dock-preferences'
 import { brand } from './config/brand'
-import { activeSession } from './features/identity/application/session'
+import {
+  activeSession,identityBootstrapReady,identityBootstrapError,pendingPinUnlock,
+} from './features/identity/application/session'
+import PinShell from './features/security/ui/PinShell.vue'
 import { readVerifiedGraceStatus } from './features/billing/application/grace-client'
 import { notificationShellActions } from './features/notifications/application/notification-shell-actions'
 import {contactsShellActions} from './features/people/application/contacts-shell-actions'
@@ -79,8 +82,14 @@ const dock = computed(() => displayedDock.value
 </script>
 
 <template>
-  <!-- Welcome 1.4 is the explicit single accepted exception to the shared Shell. -->
-  <RouterView v-if="route.meta.standalone" />
+  <!-- No protected Browser/Camera/Viewer or Header can mount until the
+       device has been authenticated and any saved PIN has been entered.
+       Even a public route must not render stale private Shell children. -->
+  <div v-if="!identityBootstrapReady" class="pin-bootstrap"
+    role="status" aria-label="Проверка локального доступа">PhotoBunker</div>
+  <PinShell v-else-if="pendingPinUnlock||identityBootstrapError"/>
+  <!-- Welcome remains a standalone route once PIN and local bootstrap settle. -->
+  <RouterView v-else-if="route.meta?.standalone"/>
   <div v-else class="shell">
     <header class="shell-header">
       <span class="brand-mark" aria-hidden="true">{{ brand.mark }}</span>
@@ -303,3 +312,8 @@ const dock = computed(() => displayedDock.value
     </nav>
   </div>
 </template>
+
+<style scoped>
+.pin-bootstrap{min-height:100dvh;display:grid;place-items:center;
+  background:#121212;color:#aeb7af;font-size:14px;font-weight:650}
+</style>
