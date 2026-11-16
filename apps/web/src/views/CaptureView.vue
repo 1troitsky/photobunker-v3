@@ -660,12 +660,15 @@ const canConfirmCameraAssignment=computed(()=>{
     &&description.value.trim().length>=(fields?.descriptionMinLength??0)
     &&!(fields?.requiredGps&&!gps.value)
 })
-function openCameraSheet(which:'assignment'|'settings'):void{
+function openCameraSheet(which:'assignment'|'settings',focusGps=false):void{
   if(!activeSession.value)return
   cameraSheet.value=which
   void nextTick().then(()=>{
-    if(cameraSheet.value===which)
-      document.querySelector<HTMLButtonElement>('.camera-sheet-close')?.focus()
+    if(cameraSheet.value!==which)return
+    if(focusGps&&which==='settings')
+      document.querySelector<HTMLElement>('[data-testid="camera-gps-settings-status"]')
+        ?.scrollIntoView?.({block:'nearest'})
+    document.querySelector<HTMLButtonElement>('.camera-sheet-close')?.focus()
   })
 }
 function trapCameraSheetFocus(event:KeyboardEvent,which:'assignment'|'settings'):void{
@@ -1550,11 +1553,17 @@ onUnmounted(()=>{
       <p v-if="error" role="alert" class="camera-toast camera-toast-error" data-testid="camera-capture-error">{{error}}</p>
       </div>
       <div class="camera-stage-controls" data-testid="camera-stage-controls" v-show="!blindMode">
-        <div v-if="gpsStatusVisible||requiredFields?.requiredGps"
+        <div v-if="gpsStatusVisible"
           class="camera-gps-indicator" data-testid="camera-gps-indicator">
-          <span>{{gps?'GPS · ±'+Math.round(gps.accuracyMeters)+' м':'GPS не получен'}}</span>
-          <button v-if="!gps" type="button" :disabled="gpsLoading||busy"
-            @click="obtainGPS">{{gpsLoading?'Определяем…':'Определить GPS'}}</button>
+          <button type="button" class="camera-gps-pill"
+            data-testid="camera-gps-pill" aria-label="Открыть настройки GPS"
+            @click="openCameraSheet('settings',true)">
+            <span class="camera-gps-dot" :class="{ready:!!gps}" aria-hidden="true"></span>
+            <span>{{gps?'GPS ±'+Math.round(gps.accuracyMeters)+' м'
+              :gpsLoading?'GPS: поиск…'
+              :gpsError?'GPS недоступен'
+              :(!gpsTracking&&!requiredFields?.requiredGps)?'GPS выключен':'GPS: ожидание'}}</span>
+          </button>
         </div>
         <div class="camera-control-trio">
           <button type="button" class="camera-side-action" data-testid="camera-open-assignment"
@@ -1568,6 +1577,7 @@ onUnmounted(()=>{
           <button v-if="captureMode==='photo'" type="button" class="camera-shutter"
             aria-label="Сделать снимок"
             :disabled="!stream||starting||busy||cameraZoomBusy||torchBusy||gpsLoading||!canCaptureType" @click="capture">
+              <span class="camera-shutter-fill" aria-hidden="true"></span>
               <span class="camera-screen-title">Сделать снимок</span>
             </button>
           <button v-else-if="!recording" type="button"
@@ -1575,11 +1585,13 @@ onUnmounted(()=>{
             data-testid="camera-start-recording" aria-label="Начать запись"
             :disabled="!stream||starting||busy||cameraZoomBusy||torchBusy||gpsLoading||!canCaptureType"
             @click="beginRecording">
+              <span class="camera-shutter-fill" aria-hidden="true"></span>
               <span class="camera-screen-title">Начать запись {{captureMode==='video'?'видео':'аудио'}}</span>
             </button>
           <button v-else type="button" class="camera-shutter camera-shutter-record active"
             data-testid="camera-stop-recording" aria-label="Остановить запись"
             @click="endRecording">
+              <span class="camera-shutter-fill" aria-hidden="true"></span>
               <span class="camera-screen-title">Остановить запись</span>
             </button>
           <button type="button" class="camera-side-action" data-testid="camera-open-settings"
