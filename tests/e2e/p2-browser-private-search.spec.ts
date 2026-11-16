@@ -134,7 +134,19 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await b.getByTestId('browser-header-folder').click()
     await b.getByTestId('browser-folder-name').fill('Only This Private Folder')
     await b.getByRole('button',{name:'Создать',exact:true}).click()
+    // A folder's actual encrypted IndexedDB commit is distinct from the
+    // click. Wait for the new folder to be visible and durably discoverable
+    // before selecting its private-search scope; otherwise a racing browser
+    // hydration may leave the scope at 'current' and hide its target picker.
+    await expect(b.getByRole('button',{name:'Only This Private Folder',exact:true}))
+      .toBeVisible({timeout:20000})
+    await expect.poll(()=>b.evaluate(async()=>{
+      const folders=await import('/src/features/browser/application/folder-workspace.ts')
+      return Object.values((await folders.loadFolderWorkspace()).folders)
+        .some(row=>row.name==='Only This Private Folder')
+    }),{timeout:20000}).toBe(true)
     await b.getByTestId('browser-search-folder-scope').selectOption('selected')
+    await expect(b.getByTestId('browser-search-folder-scope')).toHaveValue('selected')
     await b.getByTestId('browser-search-folder-target')
       .selectOption({label:'Only This Private Folder'})
     await expect(remote).toHaveCount(0)
