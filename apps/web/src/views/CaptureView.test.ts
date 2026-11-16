@@ -797,6 +797,8 @@ describe('Issue #260 GPS consent and capture races',()=>{
     expect(host.querySelector('[data-testid="camera-required-category"]')?.textContent)
       .toBe('Категория обязательна по правилам задания')
     expect(host.querySelector<HTMLInputElement>('#camera-category')!.required).toBe(true)
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-open-assignment"]')!.click()
+    await settle()
     const done=host.querySelector<HTMLButtonElement>('[data-testid="camera-assignment-finish"]')!
     expect(done.disabled).toBe(true)
     const category=host.querySelector<HTMLInputElement>('#camera-category')!
