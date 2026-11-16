@@ -224,6 +224,14 @@ describe('Notifications 1.5 encrypted inbox UI',()=>{
     expect(mocks.push).toHaveBeenCalledWith('/browser/file/media/'+TARGET)
     expect(mocks.push).not.toHaveBeenCalledWith(expect.stringContaining('test-key'))
   })
+  it('does not misreport a missing notification endpoint as a server outage',async()=>{
+    activeSession.value=identity(true)
+    mocks.sync.mockRejectedValueOnce(new Error('api.http_404'))
+    await mount()
+    expect(host.textContent).toContain('Не удалось обновить уведомления')
+    expect(host.textContent).not.toContain('Сервер недоступен')
+    expect(el('notifications-list').textContent).toContain('Новые материалы')
+  })
   it('keeps a stale encrypted notification but never navigates after server revocation',async()=>{
     activeSession.value=identity(true)
     mocks.resolve.mockRejectedValueOnce(new Error('api.http_404'))

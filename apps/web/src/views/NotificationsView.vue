@@ -127,7 +127,7 @@ async function refresh(token=run,owner=scope()):Promise<void>{
     }catch{
       // Old encrypted offline records remain visible; a transport error is
       // not evidence that anything was marked read or lost.
-      if(current(owner,token))error.value='Сервер недоступен. Показаны сохранённые уведомления.'
+      if(current(owner,token))error.value='Не удалось обновить уведомления. Показаны сохранённые уведомления.'
     }finally{syncing.value=false}
   })()
   refreshTask=task
