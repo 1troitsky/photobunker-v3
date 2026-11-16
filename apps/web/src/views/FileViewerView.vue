@@ -2098,7 +2098,20 @@ onBeforeRouteLeave((to)=>{
   }else if(to.name!=='browser-viewer'&&to.name!=='browser-editor')
     discardBrowserReturnContext()
 })
-onMounted(()=>window.addEventListener('keydown',onKeyDown))
+function warnBeforeViewerUnload(event:BeforeUnloadEvent):void{
+  // Native reload/tab close cannot await local media encryption or preserve
+  // volatile photo annotations / audio/video trim bounds. Only warn while
+  // an active editor owns unsaved changes or an in-flight metadata copy.
+  if(!editorMode.value
+    ||(!editorUnsaved.value
+      &&!(privateCopyBusy.value&&!privateCopySavedId.value)))return
+  event.preventDefault()
+  event.returnValue=''
+}
+onMounted(()=>{
+  window.addEventListener('keydown',onKeyDown)
+  window.addEventListener('beforeunload',warnBeforeViewerUnload)
+})
 // Refs are still available BEFORE Vue removes the audio/video DOM nodes.
 // onUnmounted alone is too late to reliably stop active native playback.
 onBeforeUnmount(()=>pauseViewerPlayback(videoElement.value,audioElement.value))
@@ -2106,6 +2119,7 @@ onUnmounted(()=>{
   setViewerShellActions(null)
   compositionObserver?.disconnect()
   window.removeEventListener('keydown',onKeyDown)
+  window.removeEventListener('beforeunload',warnBeforeViewerUnload)
   clearBlob();clearIndex()
 })
 </script>

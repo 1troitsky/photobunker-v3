@@ -71,6 +71,15 @@ test('P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/
       .toContainText('0.2–1.8 с')
     await expect(page.getByTestId('editor-shell-save')).toBeDisabled()
 
+    const hardExitBlocked=()=>page.evaluate(()=>{
+      const event=new Event('beforeunload',{cancelable:true})
+      window.dispatchEvent(event)
+      return event.defaultPrevented
+    })
+    // Unsaved video clip/EDL bounds are VOLATILE. Hard reload must offer
+    // the browser's native unsaved-changes warning, unlike clean Viewer.
+    expect(await hardExitBlocked()).toBe(true)
+
     page.once('dialog',dialog=>dialog.dismiss())
     await page.getByTestId('editor-shell-cancel').click()
     await expect(page).toHaveURL(/\/edit$/)
@@ -78,6 +87,7 @@ test('P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/
     await expect(page.getByTestId('file-editor-video-applied')).toHaveCount(0)
     await expect(page.getByTestId('file-editor-video-selected'))
       .toContainText('Выбрано: 2.0 с')
+    expect(await hardExitBlocked()).toBe(false)
     const before=await page.evaluate(async id=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       const files=await m.listLocalMedia()
@@ -87,7 +97,18 @@ test('P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/
     },sourceId)
     expect(before).toMatchObject({count:1,kind:'video'})
     await page.getByTestId('editor-shell-cancel').click()
-    await expect(page).toHaveURL(new RegExp('/browser/file/media/'+sourceId+'$'))
+    await expect(page).toHaveURL(new RegExp('/browser/file/media/'+sourceId+'await page.evaluate(async()=>{
+      const m=await import('/src/features/media/application/media-outbox.ts')
+      const files=await m.listLocalMedia()
+      return {count:files.length,bytes:files[0]?.plainBytes}
+    })
+    expect(after).toEqual({count:1,bytes:before.bytes})
+    await page.goBack()
+    await expect(page).toHaveURL(/\/browser$/)
+  }finally{await context.close()}
+})
+))
+    expect(await hardExitBlocked()).toBe(false)
     const after=await page.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')
       const files=await m.listLocalMedia()
