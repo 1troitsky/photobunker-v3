@@ -69,7 +69,16 @@ const dock = computed(() => displayedDock.value
       <span class="brand-mark" aria-hidden="true">{{ brand.mark }}</span>
       <div class="brand-copy">
         <strong>{{ brand.name }}</strong>
-        <small><span class="status-dot" :class="{'session-online':activeSession?.online}" aria-hidden="true"></span>{{activeSession?(activeSession.online?'Сессия подтверждена':'Локальный режим'):'Без аккаунта'}}</small>
+        <!-- The accepted Shell status opens the currently implemented,
+             owner-key-encrypted local event inbox. This is NOT a complete
+             server-operation journal or a promise of push delivery. -->
+        <RouterLink to="/notifications" class="shell-status-link"
+          data-testid="shell-status-link" aria-label="Открыть локальные уведомления"
+          title="Локальный журнал уведомлений; серверная доставка не подтверждена">
+          <small><span class="status-dot"
+            :class="{'session-online':activeSession?.online}"
+            aria-hidden="true"></span>{{activeSession?(activeSession.online?'Сессия подтверждена':'Локальный режим'):'Без аккаунта'}}</small>
+        </RouterLink>
       </div>
       <RouterLink v-if="verifiedPlan&&route.path!=='/notifications'&&route.path!=='/browser'&&route.path!=='/camera'&&route.name!=='browser-viewer'&&route.name!=='browser-editor'"
         to="/settings/payments" class="shell-plan-pill" data-testid="verified-plan-link">

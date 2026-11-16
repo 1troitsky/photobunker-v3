@@ -110,7 +110,14 @@ test('P2 #216: real encrypted offline notification details restore focus to even
       return id
     })
     await context.setOffline(true)
-    await page.getByTestId('settings-nav-notifications').click()
+    // The fixed 64px Header status must navigate to the REAL encrypted
+    // local inbox via Vue Router even when the device is offline. It must
+    // not claim Matrix/server notification delivery or duplicate Shell UI.
+    const status=page.getByTestId('shell-status-link')
+    await expect(status).toHaveAttribute('href','/notifications')
+    await expect(status).toHaveAccessibleName('Открыть локальные уведомления')
+    await status.click()
+    await expect(page).toHaveURL(/\/notifications$/)
     const card=page.getByTestId('notification-'+id)
     const summary=card.locator('button.notification-summary')
     await expect(card).toBeVisible()
