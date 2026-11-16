@@ -28,7 +28,11 @@ import type {
 import {pinnedPeer} from '../features/sharing/key-directory'
 import {listLocallyBlockedPeers} from '../features/people/application/contact-blocklist'
 
-const props=defineProps<{ ownedTeams:TeamView[]; contacts:ConfirmedContact[] }>()
+const props=withDefaults(defineProps<{
+  ownedTeams:TeamView[]
+  contacts:ConfirmedContact[]
+  initialTeamId?:string|null
+}>(),{initialTeamId:null})
 const emit=defineEmits<{ refresh:[] }>()
 const selectedTeam=ref('')
 const selectedContact=ref('')
@@ -314,7 +318,19 @@ async function acceptInvite(item:TeamInvitation|EpochTeamInvite):Promise<void>{
   }finally{busy.value=false}
 }
 function online():void{void reload();void reloadRoster()}
-watch(activeSession,()=>{++generation;selectedTeam.value='';roster.value=[];void reload()})
+function applyTeamContext():void{
+  const id=props.initialTeamId
+  if(!id||selectedTeam.value===id)return
+  // Never imply that a queued/local Team is an authorized remote roster.
+  if(!props.ownedTeams.some(team=>team.teamId===id
+    &&team.delivery==='synced'))return
+  selectedTeam.value=id
+  void reloadRoster()
+}
+watch(()=>[props.initialTeamId,
+  props.ownedTeams.map(team=>team.teamId+':'+team.delivery).join('|')],
+  applyTeamContext,{immediate:true})
+watch(activeSession,()=>{++generation;selectedTeam.value='';roster.value=[];void reload();applyTeamContext()})
 onMounted(()=>{void reload();window.addEventListener('online',online)})
 onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
 </script>
@@ -326,8 +342,8 @@ onUnmounted(()=>{++generation;window.removeEventListener('online',online)})
       <button type="button" :disabled="loading||busy" @click="reload">Обновить</button>
     </div>
     <template v-if="ownedTeams.length">
-      <label for="team-member-selector">Моя команда</label>
-      <select id="team-member-selector" v-model="selectedTeam"
+      <label v-if="!props.initialTeamId" for="team-member-selector">Моя команда</label>
+      <select v-if="!props.initialTeamId" id="team-member-selector" v-model="selectedTeam"
         data-testid="team-member-selector" @change="reloadRoster">
         <option value="">Выберите команду</option>
         <option v-for="team in ownedTeams" :key="team.teamId"

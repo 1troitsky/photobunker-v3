@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import { confirmPeer, inspectPeer } from '../features/sharing/key-directory'
 import {
@@ -29,6 +29,19 @@ function updateShellBlacklist():void{
 }
 watch(showBlacklist,updateShellBlacklist)
 const teams=ref<TeamView[]>([])
+const selectedTeamId=ref<string|null>(null)
+const showTeamSettings=ref(false)
+const selectedTeam=computed(()=>teams.value.find(
+  team=>team.teamId===selectedTeamId.value)??null)
+function openTeamCard(team:TeamView):void{
+  selectedTeamId.value=team.teamId
+  showTeamSettings.value=false
+  teamForm.value=false
+}
+function closeTeamCard():void{
+  selectedTeamId.value=null
+  showTeamSettings.value=false
+}
 const teamForm=ref(false)
 const teamName=ref('')
 const teamDescription=ref('')
@@ -253,6 +266,7 @@ watch(activeSession,(_now,previous)=>{
     resetSearch();query.value='';selected.value=null;contacts.value=[]
     blocked.value=[];showBlacklist.value=false
     teams.value=[];teamForm.value=false;teamName.value='';teamDescription.value=''
+    closeTeamCard()
     ++teamRun
     void reload();void reloadTeams()
   }
@@ -267,6 +281,7 @@ onUnmounted(()=>{
   clearContactsShellActions(shellOwner)
   ++run;++teamRun;candidate.value=null;contacts.value=[];blocked.value=[]
   showBlacklist.value=false;teams.value=[]
+  closeTeamCard()
   window.removeEventListener('online',handleTeamOnline)
 })
 </script>
@@ -301,6 +316,41 @@ onUnmounted(()=>{
       <RouterLink to="/settings">Создать или восстановить аккаунт</RouterLink>
     </div>
     <template v-else-if="activeTab==='teams'">
+      <section v-if="selectedTeam" class="foundation-card"
+        data-testid="team-profile">
+        <div class="contacts-list-heading">
+          <button type="button" data-testid="team-profile-back"
+            @click="closeTeamCard">К командам</button>
+          <button type="button" data-testid="team-profile-settings"
+            :disabled="selectedTeam.delivery!=='synced'"
+            :aria-expanded="showTeamSettings"
+            @click="showTeamSettings=!showTeamSettings">
+            Настройки команды
+          </button>
+        </div>
+        <h2 data-testid="team-profile-name">{{ selectedTeam.name }}</h2>
+        <p class="muted" data-testid="team-profile-description">
+          {{ selectedTeam.description||'Описание не добавлено' }}
+        </p>
+        <p data-testid="team-profile-members">
+          Участники: {{ selectedTeam.memberCount }}
+        </p>
+        <p class="muted" data-testid="team-profile-delivery">
+          {{ selectedTeam.delivery==='synced'
+            ?'Подтверждено сервером'
+            :selectedTeam.delivery==='conflict'
+              ?'Конфликт синхронизации'
+              :'Зашифровано локально; подтверждение сервера ожидается' }}
+        </p>
+        <p v-if="selectedTeam.delivery!=='synced'" class="muted">
+          Состав команды и права управления можно проверить после подтверждения
+          подписанного создания сервером. Локальная копия не даёт серверных прав.
+        </p>
+        <TeamMembershipPanel v-if="showTeamSettings&&selectedTeam.delivery==='synced'"
+          :key="selectedTeam.teamId" :owned-teams="teams" :contacts="contacts"
+          :initial-team-id="selectedTeam.teamId" @refresh="reloadTeams"/>
+      </section>
+      <template v-else>
       <button type="button" class="contacts-full-button"
         @click="teamForm=!teamForm">Создать команду</button>
       <form v-if="teamForm" class="foundation-card" data-testid="team-create-form"
@@ -330,7 +380,9 @@ onUnmounted(()=>{
           class="contacts-list-row" :data-testid="'team-row-'+team.teamId">
           <span class="contacts-avatar" aria-hidden="true">{{ team.name.slice(0,1).toUpperCase() }}</span>
           <div class="contacts-row-label">
-            <strong>{{ team.name }}</strong>
+            <button type="button" class="contacts-team-open"
+              :data-testid="'team-open-'+team.teamId"
+              @click="openTeamCard(team)">{{ team.name }}</button>
             <p class="muted">{{ team.description }}</p>
             <small>Участники: {{ team.memberCount }} · {{ team.delivery==='synced'?'В облаке':team.delivery==='conflict'?'Конфликт синхронизации':'В очереди' }}</small>
           </div>
@@ -339,6 +391,7 @@ onUnmounted(()=>{
       </div>
       <TeamMembershipPanel :owned-teams="teams" :contacts="contacts"
         @refresh="reloadTeams" />
+      </template>
       <p v-if="teamLoading" role="status">Синхронизация команд…</p>
       <p v-if="teamNotice" role="status" class="status-text">{{ teamNotice }}</p>
       <p v-if="teamError" role="alert" class="error-text">{{ teamError }}</p>
