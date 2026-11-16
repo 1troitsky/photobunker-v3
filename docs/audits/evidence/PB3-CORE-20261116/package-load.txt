@@ -1,0 +1,6 @@
+Command: docker load -i PB3-Core-linux-arm64-images.tar.gz
+Exit code: 0
+Loaded image: pb3-core-api:20261116
+Loaded image: pb3-core-web:20261116
+Loaded image: postgres:18
+Loaded image: dxflrs/garage:v2.5.0

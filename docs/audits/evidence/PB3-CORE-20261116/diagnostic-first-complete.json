@@ -1,0 +1,108 @@
+{
+  "source": "b85516fc4c55ee08a0cbc8dea2a967fef0837afc",
+  "passed": 131,
+  "failed": 20,
+  "tests": 151,
+  "diagnostics": [
+    {
+      "number": 1,
+      "scenario": "tests/e2e/p1-pin-cross-tab-220.spec.ts:11:1 › P3-220: live tab blocks PIN seal; cooperative closure allows guarded PIN + reload ",
+      "diagnostic": "Error: page.evaluate: Error: test.second_tab_resume_missing\nat eval (eval at evaluate (:290:30), <anonymous>:7:59)\nat async <anonymous>:316:30\nat eval (eval at evaluate (:290:30), <anonymous>:7:59)\nat async <anonymous>:316:30\nat <repo>/tests/e2e/p1-pin-cross-tab-220.spec.ts:75:18"
+    },
+    {
+      "number": 2,
+      "scenario": "tests/e2e/p2-browser-contacts-blacklist-339.spec.ts:3:1 › P2 #339: two real trusted peers, encrypted local block, refilter after alias and Team picker ",
+      "diagnostic": "Test timeout of 220000ms exceeded.\nError: browserContext.close: Target page, context or browser has been closed\n> 129 |     await ctxA.close();await ctxB.close();await ctxC.close()\nat <repo>/tests/e2e/p2-browser-contacts-blacklist-339.spec.ts:129:5"
+    },
+    {
+      "number": 3,
+      "scenario": "tests/e2e/p2-browser-display-preferences-ux.spec.ts:3:1 › Browser v3: opening section and folder-first display are real and device-persistent ",
+      "diagnostic": "Error: expect(locator).toHaveCount(expected) failed\nLocator:  locator('.browser-folder-item')\nExpected: 1\nReceived: 0\n> 17 |   await expect(page.locator('.browser-folder-item')).toHaveCount(1)\nat <repo>/tests/e2e/p2-browser-display-preferences-ux.spec.ts:17:54"
+    },
+    {
+      "number": 4,
+      "scenario": "tests/e2e/p2-browser-folder-cloud-sync.spec.ts:3:1 › P2 Browser: two recovered devices exchange signed E2EE folders, replay Lost ACK and refuse divergent offline edits ",
+      "diagnostic": "Error: expect(locator).toBeVisible() failed\nLocator: locator('.browser-folder-open').filter({ hasText: 'PRIVATE-E2EE-A' })\nExpected: visible\nError: element(s) not found\n> 23 |       .toBeVisible()\nat <repo>/tests/e2e/p2-browser-folder-cloud-sync.spec.ts:23:8"
+    },
+    {
+      "number": 5,
+      "scenario": "tests/e2e/p2-browser-folder-thumbnails-ux.spec.ts:3:1 › Browser v3: real offline E2EE folder thumbnail has no persistent plaintext cache ",
+      "diagnostic": "Error: expect(locator).toBeVisible() failed\nLocator: getByRole('button', { name: 'Encrypted covers', exact: true })\nExpected: visible\nError: element(s) not found\n> 17 |     .toBeVisible()\nat <repo>/tests/e2e/p2-browser-folder-thumbnails-ux.spec.ts:17:6"
+    },
+    {
+      "number": 6,
+      "scenario": "tests/e2e/p2-browser-folders.spec.ts:10:1 › P2 Browser: encrypted device-local nested folders survive reload and never move media ciphertext ",
+      "diagnostic": "Error: expect(locator).toHaveCount(expected) failed\nLocator:  locator('.browser-folder-item')\nExpected: 1\nReceived: 0\n> 37 |     await expect(page.locator('.browser-folder-item')).toHaveCount(1)\nat <repo>/tests/e2e/p2-browser-folders.spec.ts:37:56"
+    },
+    {
+      "number": 7,
+      "scenario": "tests/e2e/p2-browser-folders.spec.ts:149:1 › P2 Browser: corrupt encrypted folder snapshot fails closed without overwriting ciphertext ",
+      "diagnostic": "Error: expect(locator).toHaveCount(expected) failed\nLocator:  locator('.browser-folder-item')\nExpected: 1\nReceived: 0\n> 173 |     await expect(page.locator('.browser-folder-item')).toHaveCount(1)\nat <repo>/tests/e2e/p2-browser-folders.spec.ts:173:56"
+    },
+    {
+      "number": 8,
+      "scenario": "tests/e2e/p1-teams-invitations.spec.ts:3:1 › P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read ",
+      "diagnostic": "Test timeout of 390000ms exceeded.\nError: browserContext.close: Target page, context or browser has been closed\n> 431 |     await ctxA.close();await ctxB.close()\nat <repo>/tests/e2e/p1-teams-invitations.spec.ts:431:5"
+    },
+    {
+      "number": 9,
+      "scenario": "tests/e2e/p2-browser-header-actions-ux.spec.ts:3:1 › Browser v3: five owner-approved Header actions control the real encrypted catalog ",
+      "diagnostic": "Error: expect(locator).toBeVisible() failed\nLocator: getByRole('button', { name: 'UX Header Folder', exact: true })\nExpected: visible\nError: element(s) not found\n> 42 |   await expect(page.getByRole('button',{name:'UX Header Folder',exact:true})).toBeVisible()\nat <repo>/tests/e2e/p2-browser-header-actions-ux.spec.ts:42:79"
+    },
+    {
+      "number": 10,
+      "scenario": "tests/e2e/p2-browser-https-link-import.spec.ts:3:1 › P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder -> Garage -> recovered device, no source URL in API ",
+      "diagnostic": "Error: expect(locator).toBeVisible() failed\nLocator:  getByTestId('browser-import-sheet')\nExpected: visible\nReceived: hidden\n> 28 |     await expect(a.getByTestId('browser-import-sheet')).toBeVisible()\nat <repo>/tests/e2e/p2-browser-https-link-import.spec.ts:28:57"
+    },
+    {
+      "number": 11,
+      "scenario": "tests/e2e/p2-browser-item-menus-ux.spec.ts:4:1 › Browser v3: file and encrypted-folder three-dot actions use original local operations ",
+      "diagnostic": "Error: expect(locator).toBeVisible() failed\nLocator: getByRole('button', { name: 'Private Actions', exact: true })\nExpected: visible\nError: element(s) not found\n> 17 |     .toBeVisible()\nat <repo>/tests/e2e/p2-browser-item-menus-ux.spec.ts:17:6"
+    },
+    {
+      "number": 12,
+      "scenario": "tests/e2e/p2-browser-multi-import.spec.ts:3:1 › P2 Browser: offline multi-select and drag-drop AES-GCM import into selected folder persists after reload and cloud sync ",
+      "diagnostic": "Error: expect(locator).toBeVisible() failed\nLocator: getByRole('button', { name: 'Project Evidence', exact: true })\nExpected: visible\nError: element(s) not found\n> 19 |     await expect(folder).toBeVisible()\nat <repo>/tests/e2e/p2-browser-multi-import.spec.ts:19:26"
+    },
+    {
+      "number": 13,
+      "scenario": "tests/e2e/p2-browser-photo-share-context-ux.spec.ts:3:1 › Browser v3: per-photo share opens existing key-verified E2EE flow, not an unrestricted link ",
+      "diagnostic": "Error: expect(locator).toBeFocused() failed\nLocator: getByTestId('browser-row-photo:<id>').getByTestId('browser-file-menu-toggle')\nExpected: focused\nError: element(s) not found\n> 45 |   await expect(toggle).toBeFocused()\nat <repo>/tests/e2e/p2-browser-photo-share-context-ux.spec.ts:45:24"
+    },
+    {
+      "number": 14,
+      "scenario": "tests/e2e/p2-browser-private-search.spec.ts:3:1 › P2 Browser: offline private metadata search and second-device cloud search without plaintext disclosure ",
+      "diagnostic": "Error: expect(locator).toBeVisible() failed\nLocator: getByRole('button', { name: 'Only This Private Folder', exact: true })\nExpected: visible\nError: element(s) not found\n140 |     // hydration may leave the scope at 'current' and hide its target picker.\n> 142 |       .toBeVisible({timeout:20000})\nat <repo>/tests/e2e/p2-browser-private-search.spec.ts:142:8"
+    },
+    {
+      "number": 15,
+      "scenario": "tests/e2e/p2-browser-viewer-origin-scoped-pager.spec.ts:4:1 › P2 File Viewer: navigate exactly the Browser folder/filter order and return to last viewed encrypted file ",
+      "diagnostic": "Error: expect(locator).toHaveCount(expected) failed\nLocator:  locator('.browser-folder-item')\nExpected: 1\nReceived: 0\n> 76 |     await expect(page.locator('.browser-folder-item')).toHaveCount(1)\nat <repo>/tests/e2e/p2-browser-viewer-origin-scoped-pager.spec.ts:76:56"
+    },
+    {
+      "number": 16,
+      "scenario": "tests/e2e/p2-browser-viewer-return-context.spec.ts:30:1 › P2 Browser->File Viewer->Browser: restore encrypted folder, filter, private search and list anchor ",
+      "diagnostic": "Error: expect(locator).toHaveCount(expected) failed\nLocator:  locator('.browser-folder-item')\nExpected: 1\nReceived: 0\n> 72 |     await expect(page.locator('.browser-folder-item')).toHaveCount(1)\nat <repo>/tests/e2e/p2-browser-viewer-return-context.spec.ts:72:56"
+    },
+    {
+      "number": 17,
+      "scenario": "tests/e2e/p2-camera-fieldwork-ux.spec.ts:3:1 › Fieldwork Camera 1.2: one Shell, three context actions, real modes and non-destructive blind overlay ",
+      "diagnostic": "Error: expect(locator).toBeFocused() failed\nLocator:  getByTestId('camera-blind-shutter')\nExpected: focused\nReceived: inactive\n> 96 |   await expect(page.getByTestId('camera-blind-shutter')).toBeFocused()\nat <repo>/tests/e2e/p2-camera-fieldwork-ux.spec.ts:96:58"
+    },
+    {
+      "number": 18,
+      "scenario": "tests/e2e/p2-settings-data-storage-chat-ad.spec.ts:3:1 › P2 Data & Storage: real encrypted offline queue, server usage and logout privacy ",
+      "diagnostic": "Error: expect(received).toBe(expected) // Object.is equality\nExpected: 401\nReceived: 200\n> 139 |     expect(deniedBackup.status()).toBe(401)\nat <repo>/tests/e2e/p2-settings-data-storage-chat-ad.spec.ts:139:35"
+    },
+    {
+      "number": 19,
+      "scenario": "tests/e2e/p2-settings-recovery-key-export-chat-ag.spec.ts:4:1 › P2 #400: Recovery Key download requires deliberate click and preserves registration ",
+      "diagnostic": "Error: expect(locator).toBeVisible() failed\nLocator: getByTestId('recovery-key-save')\nExpected: visible\nError: element(s) not found\n> 19 |     await expect(page.getByTestId('recovery-key-save')).toBeVisible()\nat <repo>/tests/e2e/p2-settings-recovery-key-export-chat-ag.spec.ts:19:57"
+    },
+    {
+      "number": 20,
+      "scenario": "tests/e2e/p2-settings-recovery-key-export-chat-ag.spec.ts:46:1 › P2 #400: native picker writes only after user action without network or local storage ",
+      "diagnostic": "Test timeout of 90000ms exceeded.\nError: browserContext.close: Test ended.\n> 85 |   } finally { await context.close() }\nat <repo>/tests/e2e/p2-settings-recovery-key-export-chat-ag.spec.ts:85:15"
+    }
+  ]
+}

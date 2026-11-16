@@ -1,0 +1,42 @@
+
+> pb3-platform@0.0.0 build <repo>
+> pnpm --filter @pb3/web build
+
+
+> @pb3/web@0.0.0 build <repo>/apps/web
+> vue-tsc -b && vite build
+
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 254 modules transformed.
+rendering chunks...
+[plugin vite:reporter] 
+(!) <repo>/apps/web/src/features/security/application/pin-verifier.ts is dynamically imported by <repo>/apps/web/src/views/SecurityPrivacyView.vue?vue&type=script&setup=true&lang.ts but also statically imported by <repo>/apps/web/src/features/identity/application/session.ts, <repo>/apps/web/src/features/security/application/pin-device-migration.ts, <repo>/apps/web/src/features/security/application/pin-device-settings.ts, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) <repo>/apps/web/src/features/identity/infrastructure/crypto.ts is dynamically imported by <repo>/apps/web/src/features/media/application/public-card-publisher.ts but also statically imported by <repo>/apps/web/src/features/assignments/application/assignment-outbox.ts, <repo>/apps/web/src/features/assignments/application/assignment-preview-ceiling.ts, <repo>/apps/web/src/features/assignments/application/media-submission-preflight.ts, <repo>/apps/web/src/features/assignments/application/submission-preflight.ts, <repo>/apps/web/src/features/assignments/application/verify-media-submission.ts, <repo>/apps/web/src/features/assignments/application/verify-photo-submission.ts, <repo>/apps/web/src/features/assignments/application/verify-removal-notice.ts, <repo>/apps/web/src/features/assignments/infrastructure/assignment-crypto.ts, <repo>/apps/web/src/features/browser/application/archive-outbox.ts, <repo>/apps/web/src/features/browser/application/archive-preferences.ts, <repo>/apps/web/src/features/browser/application/browser-archive.ts, <repo>/apps/web/src/features/browser/application/folder-sync-crypto.ts, <repo>/apps/web/src/features/browser/application/folder-workspace.ts, <repo>/apps/web/src/features/identity/application/session.ts, <repo>/apps/web/src/features/identity/infrastructure/storage.ts, <repo>/apps/web/src/features/media/application/camera-presets.ts, <repo>/apps/web/src/features/media/application/media-file-preview-policy.ts, <repo>/apps/web/src/features/media/application/media-grants.ts, <repo>/apps/web/src/features/media/application/media-outbox.ts, <repo>/apps/web/src/features/media/application/media-revisions.ts, <repo>/apps/web/src/features/media/application/public-card-consent-outbox.ts, <repo>/apps/web/src/features/media/application/public-card-contributor-source.ts, <repo>/apps/web/src/features/media/application/public-card-publisher.ts, <repo>/apps/web/src/features/media/application/recording-encrypted-journal.ts, <repo>/apps/web/src/features/media/application/safe-assignment-editorial.ts, <repo>/apps/web/src/features/media/domain/media-crypto.ts, <repo>/apps/web/src/features/media/ui/PublicCardConsentReview.vue?vue&type=script&setup=true&lang.ts, <repo>/apps/web/src/features/messages/application/message-drafts.ts, <repo>/apps/web/src/features/notifications/application/local-inbox.ts, <repo>/apps/web/src/features/people/application/contact-blocklist.ts, <repo>/apps/web/src/features/people/application/contact-book.ts, <repo>/apps/web/src/features/people/application/team-book.ts, <repo>/apps/web/src/features/people/application/team-epoch-invitations.ts, <repo>/apps/web/src/features/people/application/team-epochs.ts, <repo>/apps/web/src/features/people/application/team-invitations.ts, <repo>/apps/web/src/features/photo-sync/application/p1-photo.ts, <repo>/apps/web/src/features/profile/application/local-profile.ts, <repo>/apps/web/src/features/security/application/pin-device-migration.ts, <repo>/apps/web/src/features/security/application/pin-device-settings.ts, <repo>/apps/web/src/features/security/application/pin-sealed-package.ts, <repo>/apps/web/src/features/sharing/grant-flow.ts, <repo>/apps/web/src/features/sharing/key-directory.ts, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter] 
+(!) <repo>/apps/web/src/features/people/application/team-epochs.ts is dynamically imported by <repo>/apps/web/src/features/people/application/team-invitations.ts but also statically imported by <repo>/apps/web/src/features/people/application/team-epoch-invitations.ts, <repo>/apps/web/src/views/TeamMembershipPanel.vue?vue&type=script&setup=true&lang.ts, dynamic import will not move module into another chunk.
+
+computing gzip size...
+dist/manifest.webmanifest                         0.31 kB
+dist/index.html                                   0.67 kB │ gzip:   0.37 kB
+dist/assets/index-C5m0BKs0.css                  221.90 kB │ gzip:  38.14 kB
+dist/assets/pin-device-admission-CvGmK31d.js      1.45 kB │ gzip:   0.59 kB
+dist/assets/pin-device-settings-B0eRVRVA.js       2.18 kB │ gzip:   1.06 kB
+dist/assets/pin-device-migration-C1AXzSHk.js     10.21 kB │ gzip:   3.33 kB
+dist/assets/index-ChrRTstz.js                 1,312.24 kB │ gzip: 365.66 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.68s
+
+PWA v1.1.0
+mode      generateSW
+precache  8 entries (1512.34 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-2fbc6a65.js

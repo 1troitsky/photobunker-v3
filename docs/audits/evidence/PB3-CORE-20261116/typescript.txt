@@ -1,0 +1,8 @@
+
+> pb3-platform@0.0.0 typecheck <repo>
+> pnpm --filter @pb3/web typecheck
+
+
+> @pb3/web@0.0.0 typecheck <repo>/apps/web
+> vue-tsc -b --pretty false
+

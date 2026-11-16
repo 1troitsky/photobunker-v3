@@ -1,0 +1,61 @@
+{
+  "snapshotUtc": "2026-11-16T13:10:56.821075+00:00",
+  "main": "8ed66c438d090efd218efa80b027f0b2f854db4b",
+  "openPRs": [
+    {
+      "baseRefName": "main",
+      "headRefName": "integration/core-release-20261116",
+      "headRefOid": "4cd29fdd6e09efa09b86fa1cd2532778ed7d1a6d",
+      "isDraft": true,
+      "number": 421,
+      "title": "Integrate core photo journeys, recoverable PIN and encrypted Public Card",
+      "headIncluded": true
+    },
+    {
+      "baseRefName": "integration/pb3-eight-core-20261116",
+      "headRefName": "feat/public-card-anonymous-routing-20261116",
+      "headRefOid": "f7679c2bae116aed408d3f862523f7761a3dc103",
+      "isDraft": true,
+      "number": 420,
+      "title": "Public Card 1.1: anonymous card/install routes bypass PIN without exposing private shell",
+      "headIncluded": true
+    },
+    {
+      "baseRefName": "integration/pb3-one-frontend-shell-20261115",
+      "headRefName": "integration/pb3-eight-core-20261116",
+      "headRefOid": "d3f90376fc8481220e809f883a67d425b7ac3b98",
+      "isDraft": true,
+      "number": 419,
+      "title": "PB3 pre-main integration: Camera, Browser, Viewer, Welcome, Loader, PIN — unified frontend",
+      "headIncluded": true
+    },
+    {
+      "baseRefName": "integration/pb3-one-frontend-shell-20261115",
+      "headRefName": "feat/pin-owner-security-integration-20261116",
+      "headRefOid": "d1a8e9153ee254a88d8a38b009b5978adf6163b6",
+      "isDraft": true,
+      "number": 418,
+      "title": "PB3 PIN Shell 1.1: интеграция проверяемого PIN-gate без опасной активации удаления",
+      "headIncluded": true
+    },
+    {
+      "baseRefName": "integration/pb3-one-frontend-shell-20261115",
+      "headRefName": "feat/browser-viewer-welcome-core-20261116",
+      "headRefOid": "4335463ca63d406fa4e253a54da0973136b9fbd7",
+      "isDraft": true,
+      "number": 417,
+      "title": "PB3 Browser v3 + Viewer 1.0 + Welcome Loading 1.6 — реальные UX-переходы",
+      "headIncluded": true
+    },
+    {
+      "baseRefName": "integration/pb3-one-frontend-shell-20261115",
+      "headRefName": "fix/camera-photo-fieldwork-12-20261116",
+      "headRefOid": "bdda63cd36adac42895c65c860c7e303e2cc5e3f",
+      "isDraft": true,
+      "number": 416,
+      "title": "Camera 1.2: exact approved controls and real permission retry for photo capture",
+      "headIncluded": true
+    }
+  ],
+  "openIssues": []
+}

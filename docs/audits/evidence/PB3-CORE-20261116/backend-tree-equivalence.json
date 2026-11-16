@@ -1,0 +1,7 @@
+{
+  "testedApiCommit": "cb6f63a40a202684fa8928e72807e1c748ec4603",
+  "deliveryProductCommit": "fbb95b1c5da8ddefeae9ea7f0c2039bed1729657",
+  "command": "git diff --exit-code cb6f63a4 HEAD -- apps/api",
+  "exitCode": 0,
+  "apiTree": "5542aea51a33ef67c6589e80d5ace6e28cd5a4f6"
+}

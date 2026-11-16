@@ -1,0 +1,31 @@
+PHPUnit 12.5.42 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.4.27
+Configuration: /workspace/phpunit.xml
+
+FF                                                                  2 / 2 (100%)
+
+Time: 00:00.429, Memory: 54.50 MB
+
+There were 2 failures:
+
+1) Tests\Feature\PublicCardTest::test_account_admission_change_during_storage_read_denies_public_response
+Expected response status code [404] but received 200.
+Failed asserting that 200 is identical to 404.
+
+/workspace/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:46
+/workspace/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:183
+/workspace/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:151
+/workspace/tests/Feature/PublicCardTest.php:144
+
+2) Tests\Feature\PublicCardTest::test_device_revocation_during_upload_readback_cannot_activate_publication
+Expected response status code [401] but received 200.
+Failed asserting that 200 is identical to 401.
+
+/workspace/vendor/laravel/framework/src/Illuminate/Testing/TestResponseAssert.php:46
+/workspace/vendor/laravel/framework/src/Illuminate/Testing/TestResponse.php:183
+/workspace/vendor/laravel/framework/src/Illuminate/Testing/Concerns/AssertsStatusCodes.php:121
+/workspace/tests/Feature/PublicCardTest.php:151
+
+FAILURES!
+Tests: 2, Assertions: 9, Failures: 2.

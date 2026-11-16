@@ -1,0 +1,42 @@
+[
+  {
+    "command": [
+      "docker",
+      "build",
+      "-f",
+      "local-runner/Dockerfile.api",
+      "-t",
+      "pb3-core-api:20261116",
+      "."
+    ],
+    "exitCode": 0,
+    "durationSeconds": 4.06
+  },
+  {
+    "command": [
+      "docker",
+      "build",
+      "-f",
+      "local-runner/Dockerfile.web.production",
+      "--build-arg",
+      "VITE_APP_NAME=PhotoBunker",
+      "--build-arg",
+      "VITE_APP_SHORT_NAME=PhotoBunker",
+      "--build-arg",
+      "VITE_APP_SLUG=photobunker",
+      "--build-arg",
+      "VITE_APP_MARK=app",
+      "--build-arg",
+      "VITE_APP_PUBLIC_URL=http://127.0.0.1:5173",
+      "--build-arg",
+      "VITE_APP_THEME_COLOR=#1ed760",
+      "--build-arg",
+      "VITE_APP_ICON_URL=/icons/app.svg",
+      "-t",
+      "pb3-core-web:20261116",
+      "."
+    ],
+    "exitCode": 0,
+    "durationSeconds": 17.73
+  }
+]

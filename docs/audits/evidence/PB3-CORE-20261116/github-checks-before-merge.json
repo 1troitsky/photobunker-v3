@@ -1,0 +1,146 @@
+{
+  "command": "gh pr checks 421 --json name,state,link",
+  "checks": [
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252274/job/133333401943",
+      "name": "PHP 8.4 security/config",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252647/job/133333403545",
+      "name": "Real PostgreSQL + Garage smoke shard 1/6",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252388/job/133333402185",
+      "name": "laravel (8.4)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252462/job/133333410490",
+      "name": "Camera native Chromium + real PG18/Garage",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252514/job/133333403126",
+      "name": "Full Laravel PHPUnit + audit (PHP 8.4)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252390/job/133333403276",
+      "name": "Frontend TypeScript/build/full Vitest regression",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252631/job/133333402823",
+      "name": "Audited patched PHP 8.4 checkout contracts",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252235/job/133333402522",
+      "name": "check-lane",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252299/job/133333403179",
+      "name": "real-stack (photo)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252274/job/133333402760",
+      "name": "PHP 8.5 security/config",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252647/job/133333403416",
+      "name": "Real PostgreSQL + Garage smoke shard 2/6",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252388/job/133333402708",
+      "name": "laravel (8.5)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252514/job/133333403005",
+      "name": "Full Laravel PHPUnit + audit (PHP 8.5)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252631/job/133333402860",
+      "name": "Audited patched PHP 8.5 checkout contracts",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252299/job/133333403517",
+      "name": "real-stack (media)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252647/job/133333402939",
+      "name": "Real PostgreSQL + Garage smoke shard 3/6",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252299/job/133333402647",
+      "name": "real-stack (mixed-assignment)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252647/job/133333403488",
+      "name": "Real PostgreSQL + Garage smoke shard 4/6",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252647/job/133333403469",
+      "name": "Real PostgreSQL + Garage smoke shard 5/6",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252647/job/133333403495",
+      "name": "Real PostgreSQL + Garage smoke shard 6/6",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252388/job/133333402900",
+      "name": "frontend",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252514/job/133333402460",
+      "name": "Real PostgreSQL 18 grace lifecycle (disposable)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252390/job/133333403555",
+      "name": "Full Laravel PHPUnit + Composer audit (PHP 8.4)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252631/job/133333402408",
+      "name": "Real PostgreSQL 18 checkout idempotency (not simulated settlement)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252299/job/133333403182",
+      "name": "Compiled frontend user journeys (no Vite source modules)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252390/job/133333402903",
+      "name": "Full Laravel PHPUnit + Composer audit (PHP 8.5)",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252514/job/133333402957",
+      "name": "Frontend TypeScript/build/Vitest regression",
+      "state": "QUEUED"
+    },
+    {
+      "link": "https://github.com/1troitsky/photobunker-v3/actions/runs/43877252390/job/133333403621",
+      "name": "Real PostgreSQL 18 owner-only backup limits (disposable)",
+      "state": "QUEUED"
+    }
+  ],
+  "passClaimed": false
+}

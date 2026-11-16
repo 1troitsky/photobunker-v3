@@ -1,0 +1,63 @@
+[
+  {
+    "command": [
+      "pnpm",
+      "test:web"
+    ],
+    "exitCode": 0,
+    "durationSeconds": 22.82,
+    "log": "/tmp/pb3-core-shipping-vitest.log"
+  },
+  {
+    "command": [
+      "pnpm",
+      "typecheck"
+    ],
+    "exitCode": 0,
+    "durationSeconds": 6.22,
+    "log": "/tmp/pb3-core-shipping-typecheck.log"
+  },
+  {
+    "command": [
+      "pnpm",
+      "build"
+    ],
+    "exitCode": 0,
+    "durationSeconds": 10.05,
+    "log": "/tmp/pb3-core-shipping-build.log"
+  },
+  {
+    "command": [
+      "docker",
+      "run",
+      "--rm",
+      "-v",
+      "<repo>/apps/api:/workspace",
+      "-w",
+      "/workspace",
+      "pb3-local-acceptance-php:8.4.27",
+      "php",
+      "vendor/bin/phpunit"
+    ],
+    "exitCode": 0,
+    "durationSeconds": 6.61,
+    "log": "/tmp/pb3-core-frozen-php84.log"
+  },
+  {
+    "command": [
+      "docker",
+      "run",
+      "--rm",
+      "-v",
+      "<repo>/apps/api:/workspace",
+      "-w",
+      "/workspace",
+      "pb3-team-audit-php:8.5.12",
+      "php",
+      "vendor/bin/phpunit"
+    ],
+    "exitCode": 0,
+    "durationSeconds": 6.56,
+    "log": "/tmp/pb3-core-frozen-php85.log"
+  }
+]
