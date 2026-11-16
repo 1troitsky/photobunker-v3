@@ -65,6 +65,42 @@ export const settingsSearchEntries: readonly SettingsSearchEntry[] = [
     to: '/notifications',
   },
   {
+    id: 'notification-invitations', label: 'Приглашения', group: 'Настройки уведомлений',
+    description: 'Уведомления о приглашениях в задания и команды',
+    keywords: ['приглашения', 'invitation', 'invites', 'teams', 'задания', 'notifications'],
+    to: '/notifications/settings?field=invitations',
+  },
+  {
+    id: 'notification-deadlines', label: 'Сроки заданий', group: 'Настройки уведомлений',
+    description: 'Локальные напоминания о сроках заданий',
+    keywords: ['срок', 'дедлайн', 'deadline', 'reminder', 'notifications'],
+    to: '/notifications/settings?field=deadlines',
+  },
+  {
+    id: 'notification-expiry', label: 'Удаление файлов', group: 'Настройки уведомлений',
+    description: 'Отображение уведомлений об истечении хранения',
+    keywords: ['удаление', 'файл', 'expiry', 'retention', 'notifications'],
+    to: '/notifications/settings?field=expiry',
+  },
+  {
+    id: 'notification-badges', label: 'Индикаторы уведомлений', group: 'Настройки уведомлений',
+    description: 'Значки непрочитанных уведомлений в приложении',
+    keywords: ['значок', 'индикатор', 'badge', 'unread', 'notifications'],
+    to: '/notifications/settings?field=badges',
+  },
+  {
+    id: 'notification-quiet', label: 'Тихие часы', group: 'Настройки уведомлений',
+    description: 'Время скрытия обычных индикаторов',
+    keywords: ['тихие часы', 'тихий', 'quiet hours', 'quiet', 'silent', 'notifications'],
+    to: '/notifications/settings?field=quiet',
+  },
+  {
+    id: 'notification-delivery', label: 'Проверка доставки уведомлений', group: 'Настройки уведомлений',
+    description: 'Проверка доступности внутренних событий и системных разрешений',
+    keywords: ['доставка', 'delivery', 'push', 'permission', 'разрешение', 'notifications'],
+    to: '/notifications/settings?field=delivery',
+  },
+  {
     id: 'profile', label: 'Настройки профиля', group: 'Профиль и люди',
     description: 'Зашифрованное имя, описание и локальные предпочтения',
     keywords: ['профил', 'profile', 'аватар', 'privacy', 'username'],

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { activeSession } from '../features/identity/application/session'
 import {
   defaultNotificationPreferences, readNotificationPreferences,
@@ -8,6 +8,30 @@ import {
 } from '../features/notifications/application/local-inbox'
 
 const router=useRouter()
+const route=useRoute()
+const root=ref<HTMLElement|null>(null)
+const notificationFieldIds:Readonly<Record<string,string>>={
+  invitations:'notification-setting-invitations',
+  deadlines:'notification-setting-deadlines',
+  expiry:'notification-setting-expiry',
+  badges:'notification-setting-badges',
+  quiet:'notification-setting-quiet-enabled',
+  delivery:'notification-check-delivery',
+}
+async function focusRequestedNotificationField():Promise<void>{
+  if(loading.value||!activeSession.value)return
+  const field=route.query.field
+  if(typeof field!=='string')return
+  const testId=notificationFieldIds[field]
+  if(!testId)return
+  await nextTick()
+  const target=root.value?.querySelector<HTMLElement>(
+    '[data-testid="'+testId+'"]')
+  if(!target)return
+  // The shared Shell owns scrolling; never create a second scrolling viewport.
+  target.scrollIntoView?.({block:'center'})
+  target.focus({preventScroll:true})
+}
 const draft=ref<NotificationPreferences>({...defaultNotificationPreferences})
 const saved=ref<NotificationPreferences>({...defaultNotificationPreferences})
 const loading=ref(true)
@@ -122,11 +146,13 @@ function cancel():void{
 // Revalidate on identity/key change, but keep unsaved changes when the
 // same device simply finishes an online proof or loses connectivity.
 watch(owner,()=>{void initialize()})
+watch([()=>route.query.field,loading],()=>{void focusRequestedNotificationField()})
 onMounted(()=>{void initialize()})
 </script>
 
 <template>
-  <section class="foundation-content notification-settings" data-testid="notification-settings-page">
+  <section ref="root" class="foundation-content notification-settings"
+    data-testid="notification-settings-page">
     <header class="settings-heading">
       <h1>Настройки уведомлений</h1>
       <p>Какие уведомления показывать в списке на этом устройстве.</p>

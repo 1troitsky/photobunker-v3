@@ -4,11 +4,14 @@ import { createApp,nextTick,type App } from 'vue'
 import { activeSession,type Session } from '../features/identity/application/session'
 const mock=vi.hoisted(()=>({
   load:vi.fn(),save:vi.fn(),push:vi.fn(),
+  route:{query:{field:undefined as string|undefined}},
   defaults:{version:2 as const,invitations:true,deadlines:true,
     expiry:true,system:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480},
 }))
 const defaults=mock.defaults
-vi.mock('vue-router',()=>({useRouter:()=>({push:mock.push})}))
+vi.mock('vue-router',()=>({
+  useRouter:()=>({push:mock.push}),useRoute:()=>mock.route,
+}))
 vi.mock('../features/notifications/application/local-inbox',()=>({
   defaultNotificationPreferences:mock.defaults,
   readNotificationPreferences:mock.load,
@@ -36,6 +39,7 @@ beforeEach(()=>{
   mock.load.mockReset().mockResolvedValue({...defaults})
   mock.save.mockReset().mockResolvedValue(undefined)
   mock.push.mockReset().mockResolvedValue(undefined)
+  mock.route.query.field=undefined
   activeSession.value=session()
 })
 afterEach(()=>{
@@ -43,6 +47,18 @@ afterEach(()=>{
   vi.unstubAllGlobals()
 })
 describe('Encrypted device-local notification display settings',()=>{
+  it.each([
+    ['quiet','notification-setting-quiet-enabled'],
+    ['invitations','notification-setting-invitations'],
+    ['delivery','notification-check-delivery'],
+  ])('focuses the exact searchable notification setting %s after encrypted loading',
+    async(field,testId)=>{
+      mock.route.query.field=field
+      await mount()
+      expect(document.activeElement).toBe(el(testId))
+      // Deep-link navigation does not silently change encrypted device preferences.
+      expect(mock.save).not.toHaveBeenCalled()
+    })
   it('saves local categories, never exposes push or security opt out',async()=>{
     await mount()
     expect(el('notification-setting-push').disabled).toBe(true)
