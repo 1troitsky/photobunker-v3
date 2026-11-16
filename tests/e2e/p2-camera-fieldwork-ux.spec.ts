@@ -128,6 +128,9 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
     expect(await header.evaluate(el=>el.scrollWidth>el.clientWidth),
       'Camera header overflow at '+width).toBe(false)
     await expect(page.getByTestId('camera-shell-actions').locator('button')).toHaveCount(3)
+    await expect(page.getByTestId('camera-mode-tabs')).toHaveCSS('margin-bottom','0px')
+    await expect(page.getByTestId('camera-fieldwork')).toHaveCSS('padding-left','0px')
+    await expect(page.getByTestId('camera-fieldwork')).toHaveCSS('padding-right','0px')
     await expect(page.locator('.camera-viewfinder video')).toHaveCount(1)
   }
 })
