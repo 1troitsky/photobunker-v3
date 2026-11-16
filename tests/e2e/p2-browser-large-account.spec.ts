@@ -182,6 +182,10 @@ test('P2 Browser: 10k index cannot grant access; real E2EE deep link page 2 is s
     await a.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(a.getByText('Подтверждённая сессия')).toBeVisible()
     await a.goto('/browser')
+    // Browser v3 has a single Header-triggered upload sheet. Its embedded
+    // encrypted MediaImportPanel is correctly hidden until explicitly opened.
+    await a.getByTestId('browser-header-upload').click()
+    await expect(a.getByTestId('browser-import-sheet')).toBeVisible()
     const picker=a.getByTestId('media-import-file')
     await expect(picker).toBeEnabled({timeout:30000})
     await picker.setInputFiles({

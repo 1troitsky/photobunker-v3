@@ -22,6 +22,10 @@ test('P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder ->
     await a.getByRole('button',{name:'Новая папка'}).click()
     await a.getByTestId('browser-folder-name').fill('HTTPS Evidence')
     await a.getByRole('button',{name:'Создать',exact:true}).click()
+    // Browser v3 has a single Header-triggered upload sheet. Its embedded
+    // encrypted MediaImportPanel is correctly hidden until explicitly opened.
+    await a.getByTestId('browser-header-upload').click()
+    await expect(a.getByTestId('browser-import-sheet')).toBeVisible()
     await a.locator('#media-import-category').fill('Private HTTPS')
     await a.locator('#media-import-description').fill('Client-side-only CORS source')
     await a.getByTestId('media-import-destination')
@@ -127,6 +131,10 @@ test('P2 Browser: rejects private/HTTP address locally and never contacts the so
     await expect(page.getByText('Подтверждённая сессия')).toBeVisible()
     await page.goto('/browser')
     await expect(page.getByTestId('browser-v3')).toBeVisible()
+    // Browser v3 has a single Header-triggered upload sheet. Its embedded
+    // encrypted MediaImportPanel is correctly hidden until explicitly opened.
+    await page.getByTestId('browser-header-upload').click()
+    await expect(page.getByTestId('browser-import-sheet')).toBeVisible()
     const seen:string[]=[]
     page.on('request',request=>{
       const origin=new URL(request.url()).origin

@@ -56,6 +56,10 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
       return s.requireSession().accountId
     })
     await recipient.goto('/browser')
+    // Browser v3 has a single Header-triggered upload sheet. Its embedded
+    // encrypted MediaImportPanel is correctly hidden until explicitly opened.
+    await recipient.getByTestId('browser-header-upload').click()
+    await expect(recipient.getByTestId('browser-import-sheet')).toBeVisible()
     await recipient.evaluate(async()=>{
       const auth=await import('/src/features/identity/application/session.ts')
       await auth.reauthenticate()
@@ -134,6 +138,10 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     },edited.safeId),{timeout:30000}).toBe('synced')
 
     await owner.goto('/browser')
+    // Browser v3 has a single Header-triggered upload sheet. Its embedded
+    // encrypted MediaImportPanel is correctly hidden until explicitly opened.
+    await owner.getByTestId('browser-header-upload').click()
+    await expect(owner.getByTestId('browser-import-sheet')).toBeVisible()
     const share=owner.getByTestId('media-share-panel')
     await expect(share).toBeVisible()
     // A future Public Card policy can be drafted and signed, but MUST
@@ -253,6 +261,10 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
       'Подписанный черновик потолка задания сохранён. Публичный доступ выключен.',
     )).toBeVisible({timeout:30000})
     await owner.goto('/browser')
+    // Browser v3 has a single Header-triggered upload sheet. Its embedded
+    // encrypted MediaImportPanel is correctly hidden until explicitly opened.
+    await owner.getByTestId('browser-header-upload').click()
+    await expect(owner.getByTestId('browser-import-sheet')).toBeVisible()
     const associatedPanel=owner.getByTestId('media-share-panel')
     await expect(associatedPanel.getByTestId('media-safe-candidate'))
       .toHaveCount(1)

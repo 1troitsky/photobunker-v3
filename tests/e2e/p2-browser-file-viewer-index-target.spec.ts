@@ -17,6 +17,10 @@ test('P2 File Viewer: authenticated deep-link target on opaque index page 2, rej
     await A.getByRole('button',{name:'Завершить регистрацию'}).click()
     await expect(A.getByText('Подтверждённая сессия')).toBeVisible()
     await A.goto('/browser')
+    // Browser v3 has a single Header-triggered upload sheet. Its embedded
+    // encrypted MediaImportPanel is correctly hidden until explicitly opened.
+    await A.getByTestId('browser-header-upload').click()
+    await expect(A.getByTestId('browser-import-sheet')).toBeVisible()
     await A.getByTestId('media-import-file').setInputFiles({
       name:'VIEWER-PAGE-2-E2EE.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x5c),
