@@ -109,6 +109,10 @@ describe('P3 #220 first PIN enrollment with real Recovery Key and atomic device 
   it('requires the authentic server recovery envelope before removing the legacy package',async()=>{
     const f=await account()
     await resumeExistingDevice()
+    // The proof endpoint is offline by default in this test harness. First
+    // PIN enrollment requires a separately authenticated ONLINE Session.
+    if(!activeSession.value)throw Error('test.missing_legacy_session')
+    activeSession.value={...activeSession.value,online:true}
     expect(activeSession.value?.accountId).toBe(f.scope.accountId)
     const key=(await createPB2()).encoded
     await expect(enrollAppPinWithRecovery(key,'4826'))
@@ -123,6 +127,10 @@ describe('P3 #220 first PIN enrollment with real Recovery Key and atomic device 
     const kit=await createPB2()
     const envelope=await sealRecovery(f.pkg,kit)
     await resumeExistingDevice()
+    // The proof endpoint is offline by default in this test harness. First
+    // PIN enrollment requires a separately authenticated ONLINE Session.
+    if(!activeSession.value)throw Error('test.missing_legacy_session')
+    activeSession.value={...activeSession.value,online:true}
     expect(activeSession.value?.accountId).toBe(f.scope.accountId)
     mocks.jsonApi.mockImplementation(async(path:string)=>{
       if(path==='/identity/v2/recovery/'+kit.locator)return {
