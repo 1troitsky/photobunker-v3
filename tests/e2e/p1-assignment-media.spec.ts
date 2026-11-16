@@ -879,6 +879,8 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     await B.context().setOffline(true)
     await expect(B.getByTestId('camera-media-instruction'))
       .toContainText('PRIVATE AUDIO NOTES 1')
+    // The modal must be explicitly dismissed before navigating via Dock.
+    await B.getByTestId('camera-sheet-close').click()
     const cached=await B.evaluate(async id=>{
       const a=await import('/src/features/assignments/application/assignment-outbox.ts')
       const row=(await a.listCachedAssignmentSnapshots())
