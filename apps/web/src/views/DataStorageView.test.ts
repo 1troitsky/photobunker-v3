@@ -115,6 +115,32 @@ describe('Data & Storage 1.2 verified file quota',()=>{
     await mount()
     expect(host.querySelector('[data-testid="storage-after-upload-estimate"]')).toBeNull()
   })
+  it('does not show an unsafe overflow estimate as a verified byte total',async()=>{
+    mock.server.mockResolvedValue({
+      planId:'go',recordedCipherBytes:Number.MAX_SAFE_INTEGER,
+      activeLogicalMediaFiles:125,enforcedByteCeiling:Number.MAX_SAFE_INTEGER,
+      asOfUtc:'2026-11-16T00:00:00Z',
+    })
+    mock.queue.mockResolvedValue({
+      summary:{pendingCount:1,conflictedCount:0,expiredPendingCount:0,
+        pendingCipherBytes:100,syncedLocalCount:0},
+      entries:[],
+    })
+    await mount()
+    expect(host.querySelector('[data-testid="storage-after-upload-estimate"]')).toBeNull()
+    expect(host.querySelector('[data-testid="storage-server-ready"]')).not.toBeNull()
+  })
+  it('does not infer a post-upload cloud total when server usage is unavailable',async()=>{
+    mock.server.mockRejectedValue(new Error('offline API'))
+    mock.queue.mockResolvedValue({
+      summary:{pendingCount:1,conflictedCount:0,expiredPendingCount:0,
+        pendingCipherBytes:128,syncedLocalCount:0},
+      entries:[],
+    })
+    await mount()
+    expect(host.querySelector('[data-testid="storage-local-ready"]')).not.toBeNull()
+    expect(host.querySelector('[data-testid="storage-after-upload-estimate"]')).toBeNull()
+  })
   it('shows the real limited-plan file count and percentage',async()=>{
     mock.catalog.mockResolvedValue([{
       planId:'go',limits:{maxMediaFiles:250},
