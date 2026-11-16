@@ -51,7 +51,13 @@ test('P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grant
     console.log('PB3_AV_E2E stage=enrollment_done')
     // The contributor starts with two genuinely encrypted, server-synced
     // private MediaFiles. No team role grants access to either DEK.
-    const uploader=B.locator('.media-import-p1')
+    // Browser v3 intentionally hides MediaImportPanel in the Header upload
+    // sheet. Enter through the owner-approved visible control, instead of
+    // trying to click a hidden upload button until Playwright times out.
+    await B.getByTestId('browser-header-upload').click()
+    await expect(B.getByTestId('browser-import-sheet')).toBeVisible()
+    const uploader=B.getByTestId('browser-import-sheet')
+      .locator('.media-import-p1')
     for(const [mime,name,fill] of [
       ['audio/wav','A-B-SIGNED-ASSIGNMENT-209.wav',0x42],
       ['video/webm','A-B-SIGNED-ASSIGNMENT-209.webm',0x58],
