@@ -1506,7 +1506,8 @@ onUnmounted(()=>{
       </nav>
       <div class="camera-stage" data-testid="camera-stage">
       <div class="camera-viewfinder" data-testid="camera-viewfinder"
-        :style="{aspectRatio:photoAspect.replace(':',' / ')}">
+        :class="{'is-audio':captureMode==='audio'}"
+        :style="{aspectRatio:captureMode==='audio'?'auto':photoAspect.replace(':',' / ')}">
         <!-- Keep the video node and active stream mounted beneath blind mode. -->
         <div class="video-frame" v-show="captureMode!=='audio'">
           <video ref="video" playsinline muted autoplay aria-label="Предпросмотр камеры"/>
@@ -1528,14 +1529,19 @@ onUnmounted(()=>{
           <span></span><span></span><span></span><span></span>
         </div>
         <div v-if="captureMode==='audio'" class="camera-audio-view"
-          data-testid="camera-audio-view" aria-label="Диктофон">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="1.6" aria-hidden="true">
-            <rect x="9" y="2" width="6" height="13" rx="3"/>
-            <path d="M5 11a7 7 0 0 0 14 0M12 18v4m-5 0h10"/>
-          </svg>
-          <strong>Аудиозапись</strong>
-          <span>Только микрофон, без видеопотока</span>
+          :class="{recording}" data-testid="camera-audio-view" aria-label="Диктофон">
+          <span class="camera-audio-emblem" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.6" aria-hidden="true">
+              <rect x="9" y="2" width="6" height="13" rx="3"/>
+              <path d="M5 11a7 7 0 0 0 14 0M12 18v4m-5 0h10"/>
+            </svg>
+          </span>
+          <div class="camera-audio-bars" aria-hidden="true">
+            <i v-for="n in 9" :key="n"></i>
+          </div>
+          <strong>Диктофон</strong>
+          <small>Только аудио, без видеозаписи</small>
           <time v-if="recording" data-testid="camera-audio-time">
             {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
           </time>
