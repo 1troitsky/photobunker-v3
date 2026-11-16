@@ -1077,6 +1077,11 @@ async function obtainGPS():Promise<void>{
       clearGPS();gpsError.value='camera.gps_permission_required';return
     }
     gps.value=fix
+    // Selecting a GPS-enabled encrypted preset is NOT a permission grant.
+    // After this separate, explicit hardware consent and live fix, activate
+    // the saved tracking preference; never start on preset load alone.
+    if(desiredGpsTracking.value&&permission?.state==='granted')
+      gpsTracking.value=true
     startGPSWatcher(identity,generation,attempt)
   }catch(e){
     if(owns()){
