@@ -33,6 +33,10 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
       '/notifications/settings?field=invitations',
       '/notifications/settings?field=deadlines',
       '/notifications/settings?field=expiry',
+      '/notifications/settings?field=newFiles',
+      '/notifications/settings?field=reviews',
+      '/notifications/settings?field=backups',
+      '/notifications/settings?field=subscription',
       '/notifications/settings?field=badges',
       '/notifications/settings?field=quiet',
       '/notifications/settings?field=delivery',
@@ -47,7 +51,7 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
     )
     expect(new Set(settingsSearchEntries.map(entry => entry.id)).size)
       .toBe(settingsSearchEntries.length)
-    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(24)
+    expect(settingsSearchEntries.filter(entry => entry.to !== null)).toHaveLength(28)
   })
   it('routes RU/EN notification searches to exact working controls', () => {
     for(const [word,id,field] of [
@@ -55,6 +59,10 @@ describe('Fieldwork Settings search: exact implemented field links only', () => 
       ['quiet hours','notification-quiet','quiet'],
       ['delivery','notification-delivery','delivery'],
       ['приглашения','notification-invitations','invitations'],
+      ['новые файлы','notification-new-files','newFiles'],
+      ['review','notification-reviews','reviews'],
+      ['backup','notification-backups','backups'],
+      ['subscription','notification-subscription','subscription'],
     ] as const){
       expect(searchSettings(word).find(item=>item.id===id)?.to)
         .toBe('/notifications/settings?field='+field)
