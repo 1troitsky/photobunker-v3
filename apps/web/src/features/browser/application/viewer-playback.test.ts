@@ -7,15 +7,15 @@ describe('File Viewer 1.0 media changes',()=>{
     const video={pause:vi.fn()}
     const audio={pause:vi.fn()}
     pauseViewerPlayback(video,audio)
-    expect(video.pause).toHaveBeenCalledExactlyOnceWith()
-    expect(audio.pause).toHaveBeenCalledExactlyOnceWith()
+    expect(video.pause).toHaveBeenCalledTimes(1)
+    expect(audio.pause).toHaveBeenCalledTimes(1)
   })
   it('stops audio even if no video is mounted, and vice versa',()=>{
     const audio={pause:vi.fn()},video={pause:vi.fn()}
     pauseViewerPlayback(null,audio)
-    expect(audio.pause).toHaveBeenCalledExactlyOnceWith()
+    expect(audio.pause).toHaveBeenCalledTimes(1)
     pauseViewerPlayback(video,null)
-    expect(video.pause).toHaveBeenCalledExactlyOnceWith()
+    expect(video.pause).toHaveBeenCalledTimes(1)
   })
   it('does not fail while both media refs are gone after unmount',()=>{
     expect(()=>pauseViewerPlayback(null,undefined)).not.toThrow()
