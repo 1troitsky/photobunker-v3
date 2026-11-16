@@ -1479,6 +1479,14 @@ onUnmounted(()=>{
         <div class="video-frame" v-show="captureMode!=='audio'">
           <video ref="video" playsinline muted autoplay aria-label="Предпросмотр камеры"/>
         </div>
+        <!-- Camera 1.2 fixed corner guides belong only to visual media;
+             they do not alter or appear in the encrypted JPEG itself. -->
+        <template v-if="captureMode!=='audio'">
+          <i class="camera-finder-corner tl" aria-hidden="true"></i>
+          <i class="camera-finder-corner tr" aria-hidden="true"></i>
+          <i class="camera-finder-corner bl" aria-hidden="true"></i>
+          <i class="camera-finder-corner br" aria-hidden="true"></i>
+        </template>
         <span v-if="captureMode==='photo'&&cameraZoomRange&&cameraZoom>1.01"
           class="camera-photo-zoom-indicator" data-testid="camera-zoom-indicator">
           {{cameraZoom.toFixed(1)}}×
