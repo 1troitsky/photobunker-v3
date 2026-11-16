@@ -1296,6 +1296,11 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 .camera-details .camera-sheet-footer button:disabled{
   opacity:.45;cursor:not-allowed
 }
+/* Exact owner-approved Camera 1.2 policy obligations, only for verified
+   signed rules; these never replace capture-time policy checks. */
+.camera-details .camera-policy-required{
+  margin:8px 0;color:var(--accent);font-size:12px;font-weight:650;
+}
 /* Camera Fieldwork 1.2 accepted single preset area with the two action
    buttons INSIDE the section; these are real device-key-sealed profiles. */
 .camera-details .camera-preset-section{

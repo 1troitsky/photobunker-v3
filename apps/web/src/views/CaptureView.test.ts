@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   draftRead:vi.fn(),draftDelete:vi.fn(),draftInterrupt:vi.fn(),
   draftList:vi.fn(),draftPurge:vi.fn(),draftPrivateReview:vi.fn(),
   draftRecover:vi.fn(),leaseAcquire:vi.fn(),
-  requiredGps:false,
+  requiredGps:false,requiredCategory:false,
   privateCache: vi.fn(), verifyPolicy: vi.fn(), privateScope: vi.fn(),
   allowedMedia: ['photo'] as string[],
   route: {query: {} as Record<string, string>},
@@ -49,10 +49,10 @@ vi.mock('../features/assignments/application/assignment-outbox', () => ({
   signedMediaCaptureIntent: mocks.mediaIntent,
   signedAdvancedRequirements: () => ({allowedCategories:[],requiredTags:[]}),
   signedPolicyRequirements: () => ({
-    requiredCategory:false,descriptionMinLength:0,requiredGps:mocks.requiredGps,
+    requiredCategory:mocks.requiredCategory,descriptionMinLength:0,requiredGps:mocks.requiredGps,
   }),
   signedMediaRequirements: () => ({
-    requiredCategory:false,descriptionMinLength:0,requiredGps:mocks.requiredGps,
+    requiredCategory:mocks.requiredCategory,descriptionMinLength:0,requiredGps:mocks.requiredGps,
   }),
 }))
 
@@ -132,6 +132,7 @@ beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(callback => callback(new Blob(['synthetic jpeg'], {type: 'image/jpeg'})))
   mocks.route.query = reactive({})
   mocks.requiredGps=false
+  mocks.requiredCategory=false
   mocks.mediaIntent.mockResolvedValue(undefined)
   Object.defineProperty(navigator,'permissions',{configurable:true,value:{
     query:vi.fn(async()=>({state:'granted',onchange:null})),
@@ -777,6 +778,33 @@ describe('Issue #260 GPS consent and capture races',()=>{
     await settle()
     expect(host.textContent).not.toContain('GPS получен')
     expect(navigator.geolocation.getCurrentPosition).toHaveBeenCalledTimes(1)
+  })
+  it('shows exact required fields only for a selected signed assignment and prevents incomplete confirmation',async()=>{
+    mocks.requiredGps=true
+    mocks.requiredCategory=true
+    mocks.policies.mockResolvedValue([
+      {assignmentId:'assignment-a',policyRevision:2},
+    ])
+    await ready()
+    expect(host.querySelector('[data-testid="camera-required-gps"]')).toBeNull()
+    expect(host.querySelector('[data-testid="camera-required-category"]')).toBeNull()
+    const assignment=host.querySelector<HTMLSelectElement>('#camera-assignment')!
+    assignment.value='assignment-a'
+    assignment.dispatchEvent(new Event('change',{bubbles:true}))
+    await settle()
+    expect(host.querySelector('[data-testid="camera-required-gps"]')?.textContent)
+      .toBe('GPS обязателен по правилам задания')
+    expect(host.querySelector('[data-testid="camera-required-category"]')?.textContent)
+      .toBe('Категория обязательна по правилам задания')
+    expect(host.querySelector<HTMLInputElement>('#camera-category')!.required).toBe(true)
+    const done=host.querySelector<HTMLButtonElement>('[data-testid="camera-assignment-finish"]')!
+    expect(done.disabled).toBe(true)
+    const category=host.querySelector<HTMLInputElement>('#camera-category')!
+    category.value='Report'
+    category.dispatchEvent(new Event('input',{bubbles:true}))
+    await settle()
+    expect(done.disabled).toBe(true) // genuine, consented GPS is still missing
+    expect(navigator.geolocation.getCurrentPosition).not.toHaveBeenCalled()
   })
   it('locks the GPS tracking switch when the independently signed policy requires GPS',async()=>{
     mocks.requiredGps=true

@@ -1759,6 +1759,10 @@ onUnmounted(()=>{
           описание минимум {{ requiredFields.descriptionMinLength }} символов,
           GPS {{ requiredFields.requiredGps?'обязателен':'необязателен' }}.
         </p>
+        <p v-if="requiredFields?.requiredGps" class="camera-policy-required"
+          data-testid="camera-required-gps">GPS обязателен по правилам задания</p>
+        <p v-if="requiredFields?.requiredCategory" class="camera-policy-required"
+          data-testid="camera-required-category">Категория обязательна по правилам задания</p>
         <p v-if="requiredAdvanced" class="muted" data-testid="camera-advanced-rules">
           Категории (публичный список правил): {{ requiredAdvanced.allowedCategories.join(', ')||'любые' }};
           обязательные теги: {{ requiredAdvanced.requiredTags.join(', ')||'нет' }}.
@@ -1767,6 +1771,7 @@ onUnmounted(()=>{
         <h2>Приватная информация {{ captureMode==='photo'?'снимка':captureMode==='video'?'видео':'аудио' }}</h2>
         <label for="camera-category">Категория</label>
         <input id="camera-category" v-model="category" type="text" maxlength="64"
+          :required="!!requiredFields?.requiredCategory"
           autocomplete="off" placeholder="Например, репортаж">
         <label for="camera-description">Описание</label>
         <textarea id="camera-description" v-model="description" maxlength="4000"
