@@ -1329,7 +1329,7 @@ async function capture():Promise<void> {
         {type:'image/jpeg',lastModified:capturedAt})
       const mediaId=await enqueueEncryptedMedia(file,intent,privateFields,assertCurrent)
       assertOwner()
-      message.value='P2 JPEG зашифрован в Media Library: '+mediaId.slice(0,8)
+      message.value='Зашифровано и сохранено локально: '+mediaId.slice(0,8)
     }else{
       const photo=await captureEncrypted(jpeg,binding,privateFields,assertCurrent)
       assertOwner()
@@ -1500,6 +1500,10 @@ onUnmounted(()=>{
         </div>
         </Teleport>
       </div>
+      <!-- The approved Camera toast is part of the preview stage, never
+           another row below the 124px capture controls / fixed Dock. -->
+      <p v-if="message" role="status" class="camera-toast" data-testid="camera-capture-feedback">{{message}}</p>
+      <p v-if="error" role="alert" class="camera-toast camera-toast-error" data-testid="camera-capture-error">{{error}}</p>
       </div>
       <div class="camera-stage-controls" data-testid="camera-stage-controls" v-show="!blindMode">
         <div v-if="gpsStatusVisible||requiredFields?.requiredGps"
@@ -1815,7 +1819,6 @@ onUnmounted(()=>{
       <p v-if="recording" role="status" class="status-text" data-testid="camera-recording-status">
         Идёт запись с {{ recordingStartedAt?new Date(recordingStartedAt).toLocaleTimeString():'' }}. От 5 до {{ recordingMaxSeconds }} секунд, не более 128 MiB.
       </p>
-      <p class="muted">В системную медиатеку запись не сохраняется. Полученные фрагменты последовательно шифруются в локальном хранилище. Ещё не зашифрованные части остаются только в оперативной памяти; закрытие страницы может привести к потере последних фрагментов.</p>
       <section v-if="localDrafts.length" class="foundation-card"
         data-testid="camera-encrypted-draft-recovery">
         <h2>Сохранённые зашифрованные фрагменты</h2>
@@ -1854,7 +1857,5 @@ onUnmounted(()=>{
       <p v-if="localDraftError" role="alert" class="error-text"
         data-testid="camera-draft-error">{{ localDraftError }}</p>
     </template>
-    <p v-if="message" role="status" class="status-text">{{ message }}</p>
-    <p v-if="error" role="alert" class="error-text">{{ error }}</p>
   </section>
 </template>
