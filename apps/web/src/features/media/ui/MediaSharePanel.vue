@@ -243,14 +243,19 @@ function openPreviewDraft(candidate:SafeDerivativeCandidate):void{
 }
 function savePreviewDraft():void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     const candidate=previewCandidate.value
     if(!candidate)throw Error('file_preview.no_candidate')
     const rev=await queueFilePreviewDraft(
       candidate.sourceMediaId,candidate.safeMediaId,previewFields.value)
+    if(!currentIdentity(session,epoch))return
     await flushFilePreviewDrafts()
+    if(!currentIdentity(session,epoch))return
+    const nextStatus=await filePreviewDraftStatus(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
     previewRevision.value=rev
-    previewStatus.value=await filePreviewDraftStatus(candidate.safeMediaId)
-    status.value=previewStatus.value==='sent'
+    previewStatus.value=nextStatus
+    status.value=nextStatus==='sent'
       ?'Подписанный черновик сохранён. Публикация выключена.'
       :'Подписанный черновик в локальной очереди. Публикация выключена.'
   })
@@ -263,45 +268,61 @@ function togglePreviewField(field:PreviewField,event:Event):void{
 }
 function openEditorial(candidate:SafeDerivativeCandidate):void{
   void action(async()=>{
-    if(!activeSession.value?.online)await reauthenticate()
+    const session=activeSession.value,epoch=identityEpoch
+    if(!session?.online)await reauthenticate()
+    if(!currentIdentity(session,epoch))return
     editorialCandidate.value=candidate
     editorialBinding.value=null
     editorialAssignments.value=[]
     editorialSelection.value=''
+    const verified:AssignmentListing[]=[]
     let cursor:string|undefined
     do{
       const page=await listServerAssignments(cursor)
+      if(!currentIdentity(session,epoch))return
       for(const row of page.items){
-        if(row.ownerAccountId!==activeSession.value?.accountId)continue
+        if(row.ownerAccountId!==session!.accountId)continue
         await verifySignedAssignmentPolicy(row,false)
-        editorialAssignments.value.push(row)
+        if(!currentIdentity(session,epoch))return
+        verified.push(row)
       }
       cursor=page.nextCursor??undefined
-    }while(cursor&&editorialAssignments.value.length<60)
-    editorialState.value=await editorialLinkState(candidate.safeMediaId)
-    editorialBinding.value=await readEditorialLink(candidate.safeMediaId)
-    if(editorialBinding.value)
-      editorialSelection.value=editorialBinding.value.assignmentId
-    status.value=editorialBinding.value
+    }while(cursor&&verified.length<60)
+    const nextState=await editorialLinkState(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    const nextBinding=await readEditorialLink(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    editorialAssignments.value=verified
+    editorialState.value=nextState
+    editorialBinding.value=nextBinding
+    if(nextBinding)editorialSelection.value=nextBinding.assignmentId
+    status.value=nextBinding
       ?'Редакционная привязка подписана и подтверждена сервером. Публичный доступ выключен.'
       :'Выберите своё задание для явной редакционной привязки. Это не отчёт исполнителя и не публикация.'
   })
 }
 function refreshEditorial():void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     const candidate=editorialCandidate.value
     if(!candidate)throw Error('safe_editorial.missing_candidate')
-    if(!activeSession.value?.online)await reauthenticate()
+    if(!session?.online)await reauthenticate()
+    if(!currentIdentity(session,epoch))return
     await flushEditorialLinks()
-    editorialState.value=await editorialLinkState(candidate.safeMediaId)
-    if(editorialState.value==='conflict')
-      throw Error('safe_editorial.conflict_requires_reconciliation')
-    if(editorialState.value!=='sent'){
+    if(!currentIdentity(session,epoch))return
+    const nextState=await editorialLinkState(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    if(nextState==='conflict')throw Error('safe_editorial.conflict_requires_reconciliation')
+    if(nextState!=='sent'){
+      editorialState.value=nextState
       status.value='Подписанная операция остаётся в очереди до подтверждения сервера.'
       return
     }
-    try{editorialBinding.value=await readEditorialLink(candidate.safeMediaId)}
-    catch(e){
+    let nextBinding:EditorialBinding|null
+    try{
+      nextBinding=await readEditorialLink(candidate.safeMediaId)
+    }catch(e){
+      if(!currentIdentity(session,epoch))return
       if(e instanceof Error&&e.message==='api.http_410'){
         editorialBinding.value=null
         editorialState.value='detached'
@@ -310,13 +331,17 @@ function refreshEditorial():void{
       }
       throw e
     }
-    status.value=editorialBinding.value
+    if(!currentIdentity(session,epoch))return
+    editorialState.value=nextState
+    editorialBinding.value=nextBinding
+    status.value=nextBinding
       ?'Подпись редакционной привязки проверена, все публичные права выключены.'
       :'Подписанной редакционной привязки ещё нет.'
   })
 }
 function bindEditorial():void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     const candidate=editorialCandidate.value
     const assignment=editorialAssignments.value.find(
       a=>a.assignmentId===editorialSelection.value)
@@ -325,32 +350,41 @@ function bindEditorial():void{
     if(!window.confirm('Связать вашу собственную закрытую копию с ВАШИМ заданием? Это только редакционная привязка, не доказательство выполнения другим участником и не публичная ссылка.'))
       return
     await queueEditorialLink(candidate,assignment)
+    if(!currentIdentity(session,epoch))return
     await flushEditorialLinks()
-    editorialState.value=await editorialLinkState(candidate.safeMediaId)
-    if(editorialState.value==='conflict')
-      throw Error('safe_editorial.server_rejected_binding')
-    if(editorialState.value!=='sent'){
+    if(!currentIdentity(session,epoch))return
+    const nextState=await editorialLinkState(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    if(nextState==='conflict')throw Error('safe_editorial.server_rejected_binding')
+    if(nextState!=='sent'){
+      editorialState.value=nextState
       status.value='Привязка подписана локально и ожидает подтверждения сервера. Публичный доступ выключен.'
       return
     }
-    editorialBinding.value=await readEditorialLink(candidate.safeMediaId)
-    if(!editorialBinding.value)
-      throw Error('safe_editorial.missing_server_receipt')
+    const nextBinding=await readEditorialLink(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    if(!nextBinding)throw Error('safe_editorial.missing_server_receipt')
+    editorialState.value=nextState
+    editorialBinding.value=nextBinding
     status.value='Подписанная редакционная привязка подтверждена. Публичные поля все закрыты.'
   })
 }
 function detachEditorial():void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     const prior=editorialBinding.value
     if(!prior)return
     if(!window.confirm('Отвязать закрытую копию от задания? Подписанная история сохраняется; повторная привязка этой копии пока запрещена. Сам файл и E2EE-разрешения не удаляются.'))
       return
     await queueEditorialDetach(prior)
+    if(!currentIdentity(session,epoch))return
     await flushEditorialLinks()
-    editorialState.value=await editorialLinkState(prior.safeMediaId)
-    if(editorialState.value==='conflict')
-      throw Error('safe_editorial.server_rejected_detach')
-    if(editorialState.value!=='sent'){
+    if(!currentIdentity(session,epoch))return
+    const nextState=await editorialLinkState(prior.safeMediaId)
+    if(!currentIdentity(session,epoch))return
+    if(nextState==='conflict')throw Error('safe_editorial.server_rejected_detach')
+    editorialState.value=nextState
+    if(nextState!=='sent'){
       status.value='Подписанный отзыв ожидает сервера. Прежняя привязка может оставаться действующей.'
       return
     }

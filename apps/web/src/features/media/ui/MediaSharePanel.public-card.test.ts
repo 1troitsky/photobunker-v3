@@ -9,6 +9,7 @@ import MediaSharePanel from './MediaSharePanel.vue'
 const m=vi.hoisted(()=>({
   safe:vi.fn(),preview:vi.fn(),hydrateGrants:vi.fn(),prepare:vi.fn(),
   inspect:vi.fn(),incoming:vi.fn(),queue:vi.fn(),
+  loadPreview:vi.fn(),assignments:vi.fn(),
 }))
 vi.mock('./PublicCardConsentReview.vue',()=>({
   default:{
@@ -38,7 +39,7 @@ vi.mock('../application/media-file-preview-policy',()=>({
     description:false,capturedAt:false,updatedAt:false,tags:false,
     authorTeam:false,gps:false,metadata:false,
   }),
-  loadFilePreviewDraft:vi.fn(),queueFilePreviewDraft:vi.fn(),
+  loadFilePreviewDraft:m.loadPreview,queueFilePreviewDraft:vi.fn(),
   flushFilePreviewDrafts:vi.fn(),filePreviewDraftStatus:vi.fn(),
   PREVIEW_FIELD_KEYS:[
     'description','capturedAt','updatedAt','tags',
@@ -51,7 +52,7 @@ vi.mock('../application/safe-assignment-editorial',()=>({
   editorialLinkState:vi.fn(),
 }))
 vi.mock('../../assignments/application/assignment-outbox',()=>({
-  listServerAssignments:vi.fn(),verifySignedAssignmentPolicy:vi.fn(),
+  listServerAssignments:m.assignments,verifySignedAssignmentPolicy:vi.fn(),
 }))
 const id=(x:string)=>x.repeat(8)+'-'+x.repeat(4)+'-4'+x.repeat(3)
   +'-8'+x.repeat(3)+'-'+x.repeat(12)
@@ -108,6 +109,8 @@ beforeEach(()=>{
   m.prepare.mockResolvedValue(privateReview)
   m.inspect.mockResolvedValue({directory:{safetyFingerprint:'CURRENT'},confirmed:false})
   m.queue.mockResolvedValue('grant-confirmed')
+  m.loadPreview.mockResolvedValue({contract:null,state:'none'})
+  m.assignments.mockResolvedValue({items:[],nextCursor:null})
 })
 afterEach(()=>{
   app?.unmount();app=undefined
@@ -236,6 +239,41 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
     expect(host.textContent).not.toContain('grant-old')
     expect(host.textContent).not.toContain('Разрешение сохранено')
     expect(host.textContent).not.toContain('CURRENT')
+  })
+  it('does not expose a delayed private Preview Card after switching accounts',async()=>{
+    let resolvePreview!:(value:{state:string;contract:null})=>void
+    m.loadPreview.mockImplementationOnce(()=>new Promise(
+      resolve=>{resolvePreview=resolve}))
+    await mount()
+    const open=host.querySelector<HTMLButtonElement>(
+      '[data-testid="media-open-preview-draft"]')!
+    open.click();await settle()
+    expect(m.loadPreview).toHaveBeenCalledOnce()
+    activeSession.value=session(id('6'))
+    await settle()
+    resolvePreview({state:'sent',contract:null})
+    await settle()
+    expect(host.querySelector('[data-testid="media-file-preview-settings"]')).toBeNull()
+    expect(host.textContent).not.toContain('Подписанный черновик сохранён')
+  })
+  it('does not reveal old-account signed assignment choices after a delayed lookup',async()=>{
+    await mount()
+    activeSession.value={...session(),online:true}
+    await settle()
+    let resolveAssignments!:(value:{items:unknown[];nextCursor:null})=>void
+    m.assignments.mockImplementationOnce(()=>new Promise(
+      resolve=>{resolveAssignments=resolve}))
+    const open=host.querySelector<HTMLButtonElement>(
+      '[data-testid="media-open-editorial-binding"]')!
+    open.click();await settle()
+    expect(m.assignments).toHaveBeenCalledOnce()
+    activeSession.value=session(id('6'))
+    await settle()
+    resolveAssignments({items:[{assignmentId:id('2'),ownerAccountId:id('1')}],
+      nextCursor:null})
+    await settle()
+    expect(host.querySelector('[data-testid="media-editorial-assignment"]')).toBeNull()
+    expect(host.textContent).not.toContain('Выберите своё задание')
   })
   it('reports fail-closed signed-binding error without showing any image',async()=>{
     m.prepare.mockRejectedValue(Error('public_card.source_submission_signature_invalid'))
