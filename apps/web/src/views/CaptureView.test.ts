@@ -16,12 +16,23 @@ const mocks = vi.hoisted(() => ({
   privateCache: vi.fn(), verifyPolicy: vi.fn(), privateScope: vi.fn(),
   allowedMedia: ['photo'] as string[],
   route: {query: {} as Record<string, string>},
+  presetDestination:'p1' as 'p1'|'p2',
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => mocks.route,
   RouterLink: {template: '<a><slot /></a>'},
 }))
 vi.mock('../features/photo-sync/application/p1-photo', () => ({captureEncrypted: mocks.capture}))
+// Camera tests choose an encrypted, device-local preset internally; the
+// accepted Fieldwork UI must never expose P1/P2 storage implementation IDs.
+vi.mock('../features/media/application/camera-presets',async importOriginal=>{
+  const actual=await importOriginal<typeof import('../features/media/application/camera-presets')>()
+  return {...actual,loadCameraPresetCatalog:vi.fn(async()=>{
+    const catalog=actual.defaultCameraPresetCatalog()
+    catalog.presets[0]!.settings.photoStorage=mocks.presetDestination
+    return catalog
+  })}
+})
 vi.mock('../features/media/application/media-outbox', () => ({enqueueEncryptedMedia: mocks.mediaEnqueue}))
 vi.mock('../features/media/application/recording-writer-lease',()=>({
   acquireCameraWriterLease:mocks.leaseAcquire,
@@ -98,6 +109,11 @@ let play = vi.fn<() => Promise<void>>()
 function button(text: string): HTMLButtonElement {
   return [...host.querySelectorAll('button')].find(el => el.textContent?.trim() === text)!
 }
+function selectMode(mode:'photo'|'video'|'audio'):void{
+  const tab=host.querySelector<HTMLButtonElement>(`[data-testid="camera-mode-tab-${mode}"]`)
+  if(!tab)throw Error('Camera mode tab not mounted: '+mode)
+  tab.click()
+}
 async function mount(session = identity()) {
   activeSession.value = session
   host = document.createElement('div'); document.body.append(host)
@@ -141,6 +157,7 @@ beforeEach(() => {
   mocks.server.mockResolvedValue({items: []})
   mocks.binding.mockResolvedValue({assignmentId: 'assignment-a', policyRevision: 1})
   mocks.capture.mockResolvedValue({photoId: 'photo-fixture'})
+  mocks.presetDestination='p1'
   mocks.allowedMedia = ['photo']
   mocks.privateCache.mockResolvedValue(null)
   mocks.verifyPolicy.mockResolvedValue(undefined)
@@ -247,7 +264,7 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(host.textContent).toContain('Масштаб: 1.0×')
     expect(host.textContent).toContain('Не удалось применить масштаб камеры.')
     expect(host.querySelector('[data-testid="camera-zoom-indicator"]')).toBeNull()
-    button('Отключить').click()
+    opened.emitEnded()
     await settle()
     expect(opened.track.stop).toHaveBeenCalledOnce()
     expect(host.querySelector('[data-testid="camera-photo-zoom"]')).toBeNull()
@@ -361,8 +378,7 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     await mount()
     requests[0]!.resolve(opened.stream)
     await settle()
-    const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    mode.value='video';mode.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('video')
     await settle()
     expect(getUserMedia).toHaveBeenLastCalledWith({
       audio:true,
@@ -400,22 +416,23 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
   })
 })
 
-describe('Camera preset hydration does not change a user-selected capture destination',()=>{
-  it('preserves P2 encrypted MediaFile choice across online same-key session hydration',async()=>{
+describe('Camera preset hydration preserves the selected encrypted media destination internally',()=>{
+  it('keeps P2 MediaFile across same-key hydration without exposing a technical selector',async()=>{
+    mocks.presetDestination='p2'
+    mocks.mediaEnqueue.mockResolvedValue('media-enqueued-after-encryption')
     const session=await mount()
     requests[0]!.resolve(media().stream)
     await settle()
-    const destination=host.querySelector<HTMLSelectElement>('#camera-photo-storage')!
-    destination.value='p2'
-    destination.dispatchEvent(new Event('change',{bubbles:true}))
-    await settle()
-    expect(destination.value).toBe('p2')
     activeSession.value={
       ...session,online:true,
       device:{...session.device},pkg:{...session.pkg},
     }
     await settle()
-    expect(host.querySelector<HTMLSelectElement>('#camera-photo-storage')!.value).toBe('p2')
+    expect(host.querySelector('#camera-photo-storage')).toBeNull()
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.mediaEnqueue).toHaveBeenCalledTimes(1)
+    expect(mocks.capture).not.toHaveBeenCalled()
   })
 })
 
@@ -456,7 +473,7 @@ describe('private instructions and hardware lifecycle',()=>{
     mocks.route.query={assignmentId:policy.assignmentId}
     mocks.policies.mockResolvedValue([policy])
   }
-  it.each(['video','audio','stop'] as const)
+  it.each(['video','audio','permission'] as const)
   ('finishes an in-flight verified private decrypt after %s changes camera tracks',async action=>{
     prepare()
     const cached=deferred<typeof privateText>()
@@ -464,11 +481,12 @@ describe('private instructions and hardware lifecycle',()=>{
     await mount()
     expect(mocks.verifyPolicy).toHaveBeenCalledWith(policy,true)
     expect(mocks.privateCache).toHaveBeenCalled()
-    if(action==='stop')button('Отключить').click()
-    else{
-      const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
-      mode.value=action;mode.dispatchEvent(new Event('change',{bubbles:true}))
-    }
+    const current=media();requests[0]!.resolve(current.stream);await settle()
+    if(action==='permission'){
+      host.querySelector<HTMLButtonElement>('[data-testid="camera-permission-camera"]')!.click()
+      await settle()
+      const temporary=media();requests[1]!.resolve(temporary.stream)
+    }else selectMode(action)
     await settle()
     cached.resolve(privateText);await settle()
     expect(host.querySelector('[data-testid="camera-media-instruction"]')?.textContent)
@@ -516,9 +534,7 @@ describe('P1-14 MediaRecorder cancellation and plaintext safety',()=>{
     vi.stubGlobal('MediaRecorder',RecorderFactory)
     const session=await mount()
     const original=media();requests[0]!.resolve(original.stream);await settle()
-    const mode=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    mode.value='audio'
-    mode.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('audio')
     await settle()
     expect(original.track.stop).toHaveBeenCalledTimes(1)
     expect(requests.length).toBe(2)
@@ -615,24 +631,27 @@ describe('camera session ownership and async permission lifecycle', () => {
     expect(host.querySelector('[role=alert]')!.textContent).toContain('camera denied')
     activeSession.value = {...session, online: true}; await settle()
     expect(getUserMedia).toHaveBeenCalledTimes(1)
-    button('Включить камеру').click(); await settle()
-    const retry = media(); requests[1]!.resolve(retry.stream); await settle()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-open-settings"]')!.click()
+    host.querySelector<HTMLButtonElement>('[data-testid="camera-permission-camera"]')!.click()
+    await settle()
+    const preflight=media();requests[1]!.resolve(preflight.stream);await settle()
+    const retry=media();requests[2]!.resolve(retry.stream);await settle()
+    expect(preflight.track.stop).toHaveBeenCalledOnce()
     expect(host.querySelector('video')!.srcObject).toBe(retry.stream)
     expect(host.querySelector('[role=alert]')).toBeNull()
   })
-  it('cancels pending start on Stop and never reopens from hydration or a late result', async () => {
+  it('cancels pending start on navigation and never reopens from hydration or a late result', async () => {
     const session = await mount()
-    button('Отключить').click()
+    app!.unmount();app=undefined
     activeSession.value = {...session, online: true}; await settle()
     const late = media(); requests[0]!.resolve(late.stream); await settle()
     expect(late.track.stop).toHaveBeenCalledTimes(1)
     expect(getUserMedia).toHaveBeenCalledTimes(1)
-    expect(host.querySelector('video')!.srcObject).toBeNull()
+    expect(host.querySelector('video')).toBeNull()
   })
-  it('never opens duplicate streams for repeated start/hydration notifications', async () => {
+  it('never opens duplicate streams for repeated same-key hydration notifications', async () => {
     const session = await mount()
     for (let i = 0; i < 4; i++) {
-      button('Включить камеру').click()
       activeSession.value = {...session, online: i % 2 === 0}
     }
     await settle()
@@ -946,7 +965,7 @@ describe('Issue #260 GPS consent and capture races',()=>{
     if(kind==='unmount'){app!.unmount();app=undefined}
     if(kind==='assignment')select('#camera-assignment','assignment-a')
     if(kind==='route')mocks.route.query.assignmentId='assignment-a'
-    if(kind==='mode')select('#camera-mode','audio')
+    if(kind==='mode')selectMode('audio')
     await settle()
     callbacks[0]!.ok(point());oldListener?.();await settle()
     expect(host.textContent).not.toContain('GPS получен')
@@ -1036,7 +1055,7 @@ describe('Issue #260 GPS consent and capture races',()=>{
       stop(){this.state='inactive';this.onstop?.()}
     }
     vi.stubGlobal('MediaRecorder',Recorder)
-    await ready();select('#camera-mode',mode);await settle()
+    await ready();selectMode(mode);await settle()
     requests[1]!.resolve(media().stream);await settle()
     await fix();vi.useFakeTimers()
     button('Начать запись '+(mode==='video'?'видео':'аудио')).click();await settle()
@@ -1050,7 +1069,8 @@ describe('Issue #260 GPS consent and capture races',()=>{
     vi.useRealTimers()
   })
   it('does not publish P2 JPEG when consent is withdrawn during encryption',async()=>{
-    await ready();select('#camera-photo-storage','p2');await settle();await fix()
+    mocks.presetDestination='p2'
+    await ready();await fix()
     mocks.mediaEnqueue.mockImplementation(async(_file,_intent,_fields,assertCurrent)=>{
       status.state='denied';assertCurrent()
       return 'must-not-be-saved'
@@ -1066,7 +1086,7 @@ describe('Issue #260 GPS consent and capture races',()=>{
     mocks.policies.mockResolvedValue([{assignmentId:'assignment-a',policyRevision:2}])
     const session=await ready()
     if(mode==='audio'){
-      select('#camera-mode','audio');await settle()
+      selectMode('audio');await settle()
       requests[1]!.resolve(media().stream);await settle()
     }
     await fix()
@@ -1118,11 +1138,9 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     mocks.mediaEnqueue.mockResolvedValue('media-enqueued-after-encryption')
     await mount()
     requests[0]!.resolve(media().stream);await settle()
-    const input=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    input.value=mode
-    input.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode(mode)
     await settle()
-    expect(button(mode==='audio'?'Включить микрофон':'Включить камеру')).toBeDefined()
+    expect(host.querySelectorAll('[data-testid^="camera-mode-tab-"]')).toHaveLength(3)
     const opened=media()
     requests[1]!.resolve(opened.stream);await settle()
     if(mode==='audio'&&bitrate!==undefined){
@@ -1221,8 +1239,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     vi.stubGlobal('MediaRecorder',BoundedRecorder)
     await mount()
     requests[0]!.resolve(media().stream);await settle()
-    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('audio')
     await settle()
     const opened=media()
     requests[1]!.resolve(opened.stream);await settle()
@@ -1264,8 +1281,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     mocks.leaseAcquire.mockRejectedValueOnce(Error('camera.recording_writer_busy'))
     await mount()
     requests[0]!.resolve(media().stream);await settle()
-    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('audio')
     await settle()
     const opened=media()
     requests[1]!.resolve(opened.stream);await settle()
@@ -1348,8 +1364,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     await mount()
     requests[0]!.resolve(media().stream)
     await settle()
-    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('audio')
     await settle()
     requests[1]!.reject(Object.assign(new Error('browser-specific private text'),{
       name:'NotAllowedError',
@@ -1366,8 +1381,7 @@ describe('P2 #206 audio/video duration and encrypted outbox gate', () => {
     await mount()
     requests[0]!.resolve(media().stream)
     await settle()
-    const select=host.querySelector<HTMLSelectElement>('#camera-mode')!
-    select.value='audio';select.dispatchEvent(new Event('change',{bubbles:true}))
+    selectMode('audio')
     await settle()
     const opened=media()
     opened.track.stop()
