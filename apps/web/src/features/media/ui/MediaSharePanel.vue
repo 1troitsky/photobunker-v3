@@ -173,10 +173,17 @@ function send(mediaId:string):void{
     if(safeCandidates.value.some(row=>row.sourceMediaId===mediaId)
       &&!window.confirm('Выбран ПОЛНЫЙ исходный файл, а не закрытая копия. Получатель сможет расшифровать его без масок. Для адресной Safe-передачи используйте специальную кнопку ниже. Всё равно передать оригинал?'))
       return
+    const session=activeSession.value,epoch=identityEpoch
     const grantId=await queueMediaRecipientGrant(mediaId,peer.id)
-    outgoing.value=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    const pending=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    outgoing.value=pending
     await flushMediaGrants()
-    outgoing.value=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    const settled=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    outgoing.value=settled
     status.value='Разрешение сохранено: '+grantId.slice(0,8)
   })
 }
@@ -190,11 +197,18 @@ function sendSafe(candidate:SafeDerivativeCandidate):void{
       throw Error('media_grant.context_mismatch')
     if(!window.confirm('Разрешить адресату читать ТОЛЬКО отдельную закрытую JPEG-копию? Оригинал останется под собственными независимыми разрешениями. Убедитесь, что чувствительные области закрыты. Это не публичная ссылка.'))
       return
+    const session=activeSession.value,epoch=identityEpoch
     const grantId=await queueMediaSafeRecipientGrant(
       candidate.sourceMediaId,candidate.safeMediaId,peer.id)
-    outgoing.value=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    const pending=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    outgoing.value=pending
     await flushMediaGrants()
-    outgoing.value=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    const settled=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    outgoing.value=settled
     status.value='Адресный Safe-грант записан: '+grantId.slice(0,8)
   })
 }
@@ -216,7 +230,9 @@ function openContributorReview(candidate:SafeDerivativeCandidate):void{
 }
 function openPreviewDraft(candidate:SafeDerivativeCandidate):void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     const data=await loadFilePreviewDraft(candidate.safeMediaId)
+    if(!currentIdentity(session,epoch))return
     previewCandidate.value=candidate
     previewFields.value=data.contract
       ?{...data.contract.fields}:emptyPreviewFields()
@@ -386,8 +402,12 @@ function openReceived(grant:ReceivedMediaGrant):void{
 }
 function revoke(grantId:string):void{
   void action(async()=>{
+    const session=activeSession.value,epoch=identityEpoch
     await revokeMediaGrant(grantId)
-    outgoing.value=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    const next=await listOutgoingMediaGrants()
+    if(!currentIdentity(session,epoch))return
+    outgoing.value=next
     status.value='Серверный доступ отозван'
   })
 }

@@ -7,7 +7,7 @@ import MediaSharePanel from './MediaSharePanel.vue'
 
 const m=vi.hoisted(()=>({
   safe:vi.fn(),preview:vi.fn(),hydrateGrants:vi.fn(),prepare:vi.fn(),
-  inspect:vi.fn(),incoming:vi.fn(),
+  inspect:vi.fn(),incoming:vi.fn(),queue:vi.fn(),
 }))
 vi.mock('./PublicCardConsentReview.vue',()=>({
   default:{
@@ -24,7 +24,7 @@ vi.mock('../application/safe-derivatives',()=>({
 vi.mock('../application/media-grants',()=>({
   attachMediaGrantLifecycle:()=>()=>{},
   flushMediaGrants:vi.fn(),listOutgoingMediaGrants:m.hydrateGrants,
-  listReceivedMediaGrants:m.incoming,queueMediaRecipientGrant:vi.fn(),
+  listReceivedMediaGrants:m.incoming,queueMediaRecipientGrant:m.queue,
   queueMediaSafeRecipientGrant:vi.fn(),readReceivedMediaGrant:vi.fn(),
   revokeMediaGrant:vi.fn(),parseMediaGrantContract:vi.fn(),
 }))
@@ -106,6 +106,7 @@ beforeEach(()=>{
   m.incoming.mockResolvedValue([])
   m.prepare.mockResolvedValue(privateReview)
   m.inspect.mockResolvedValue({directory:{safetyFingerprint:'CURRENT'},confirmed:false})
+  m.queue.mockResolvedValue('grant-confirmed')
 })
 afterEach(()=>{
   app?.unmount();app=undefined
@@ -199,6 +200,36 @@ describe('#211 actual PB3 media panel private contributor review entry',()=>{
     await settle()
     expect(host.textContent).not.toContain('OLD-SECRET-FINGERPRINT')
     expect(input.value).toBe('')
+  })
+  it('does not restore outgoing grants or display a success after switching during send',async()=>{
+    activeSession.value={...session(),online:true}
+    m.safe.mockResolvedValue([])
+    m.inspect.mockResolvedValue({directory:{safetyFingerprint:'CURRENT'},confirmed:true})
+    let resolveGrant!:(value:string)=>void
+    m.queue.mockImplementation(()=>new Promise<string>(
+      resolve=>{resolveGrant=resolve}))
+    host=document.createElement('div');document.body.append(host)
+    app=createApp({render:()=>h(MediaSharePanel,{localMedia:[{
+      key:'only-media',mediaId:id('4'),mediaType:'audio',state:'synced',
+    }]})})
+    app.mount(host);await settle()
+    const peer=host.querySelector<HTMLInputElement>('#media-share-peer-id')!
+    peer.value=id('3');peer.dispatchEvent(new Event('input',{bubbles:true}))
+    await settle()
+    const check=Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(node=>node.textContent?.includes('Проверить получателя медиа'))!
+    check.click();await settle()
+    const send=Array.from(host.querySelectorAll<HTMLButtonElement>('button'))
+      .find(node=>node.textContent?.includes('Передать медиа'))!
+    expect(send).toBeDefined()
+    send.click();await settle()
+    expect(m.queue).toHaveBeenCalledOnce()
+    activeSession.value=session(id('6'));await settle()
+    resolveGrant('grant-old-account')
+    await settle()
+    expect(host.textContent).not.toContain('grant-old')
+    expect(host.textContent).not.toContain('Разрешение сохранено')
+    expect(host.textContent).not.toContain('CURRENT')
   })
   it('reports fail-closed signed-binding error without showing any image',async()=>{
     m.prepare.mockRejectedValue(Error('public_card.source_submission_signature_invalid'))
