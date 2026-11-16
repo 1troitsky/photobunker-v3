@@ -46,7 +46,10 @@ test('Security devices: offline transition clears a pending server spinner and r
   await page.route('**/identity/v2/devices',async route=>{
     seenRequest=true
     await new Promise<void>(resolve=>{
+      let fulfilled=false
       unblock=async()=>{
+        if(fulfilled)return
+        fulfilled=true
         await route.fulfill({
           status:200,contentType:'application/json',
           body:JSON.stringify({devices:[{
