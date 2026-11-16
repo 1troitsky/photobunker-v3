@@ -14,6 +14,10 @@ const notificationFieldIds:Readonly<Record<string,string>>={
   invitations:'notification-setting-invitations',
   deadlines:'notification-setting-deadlines',
   expiry:'notification-setting-expiry',
+  newFiles:'notification-setting-newFiles',
+  reviews:'notification-setting-reviews',
+  backups:'notification-setting-backups',
+  subscription:'notification-setting-subscription',
   badges:'notification-setting-badges',
   quiet:'notification-setting-quiet-enabled',
   delivery:'notification-check-delivery',
@@ -45,8 +49,11 @@ let version=0
 const choices=[
   {id:'invitations' as const,title:'Приглашения',hint:'Задания и команды'},
   {id:'deadlines' as const,title:'Сроки заданий',hint:'Напоминания о завершении'},
+  {id:'newFiles' as const,title:'Новые файлы',hint:'Новые материалы в доступных заданиях'},
+  {id:'reviews' as const,title:'Проверка материалов',hint:'Материалы, ожидающие проверки'},
   {id:'expiry' as const,title:'Удаление файлов',hint:'Срок хранения и очистка'},
-  {id:'system' as const,title:'Системные события',hint:'Файлы, резервные копии и подписка'},
+  {id:'backups' as const,title:'Резервные копии',hint:'Состояние резервного копирования'},
+  {id:'subscription' as const,title:'Подписка',hint:'Изменения подписки'},
   {id:'badges' as const,title:'Индикаторы',hint:'Показывать отметки непрочитанных'},
 ]
 /**
@@ -102,7 +109,7 @@ async function initialize():Promise<void>{
       error.value='Не удалось прочитать зашифрованные настройки уведомлений.'
   }finally{if(version===token)loading.value=false}
 }
-type CategoryFlag='invitations'|'deadlines'|'expiry'|'system'|'badges'|'quietEnabled'
+type CategoryFlag='invitations'|'deadlines'|'expiry'|'newFiles'|'reviews'|'backups'|'subscription'|'badges'|'quietEnabled'
 function update(key:CategoryFlag,value:boolean):void{
   draft.value={...draft.value,[key]:value}
   error.value='';status.value=''
@@ -169,6 +176,10 @@ onMounted(()=>{void initialize()})
             :data-testid="'notification-setting-'+choice.id"
             :disabled="saving" @change="update(choice.id,($event.target as HTMLInputElement).checked)">
         </label>
+        <div class="setting-option fixed">
+          <span><strong>Изменения заданий</strong><small>Уведомления появятся после подключения подтверждённых событий изменений</small></span>
+          <span>Пока недоступно</span>
+        </div>
         <label class="setting-option">
           <span><strong>Тихие часы</strong><small>Скрывать обычные индикаторы на этом устройстве, не скрывая уведомления</small></span>
           <input type="checkbox" :checked="draft.quietEnabled"
