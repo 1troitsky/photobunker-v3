@@ -1692,7 +1692,7 @@ onUnmounted(()=>{
             data-testid="camera-gps-pill" aria-label="Открыть настройки GPS"
             :disabled="recording||busy" @click="openCameraSheet('settings',true)">
             <span class="camera-gps-dot" :class="{ready:!!gps}" aria-hidden="true"></span>
-            <span>{{gps?'GPS ±'+Math.round(gps.accuracyMeters)+' м'
+            <span>{{gps?'GPS · ±'+Math.round(gps.accuracyMeters)+' м'
               :gpsLoading?'GPS: поиск…'
               :gpsError?'GPS недоступен'
               :(!gpsTracking&&!requiredFields?.requiredGps)?'GPS выключен':'GPS: ожидание'}}</span>
