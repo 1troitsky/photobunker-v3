@@ -5,8 +5,9 @@ import { activeSession,type Session } from '../features/identity/application/ses
 const mock=vi.hoisted(()=>({
   load:vi.fn(),save:vi.fn(),push:vi.fn(),
   route:{query:{field:undefined as string|undefined}},
-  defaults:{version:2 as const,invitations:true,deadlines:true,
-    expiry:true,system:true,badges:true,quietEnabled:false,quietStart:1320,quietEnd:480},
+  defaults:{version:3 as const,invitations:true,deadlines:true,
+    expiry:true,newFiles:true,reviews:true,backups:true,subscription:true,
+    badges:true,quietEnabled:false,quietStart:1320,quietEnd:480},
 }))
 const defaults=mock.defaults
 vi.mock('vue-router',()=>({
@@ -50,6 +51,10 @@ describe('Encrypted device-local notification display settings',()=>{
   it.each([
     ['quiet','notification-setting-quiet-enabled'],
     ['invitations','notification-setting-invitations'],
+    ['newFiles','notification-setting-newFiles'],
+    ['reviews','notification-setting-reviews'],
+    ['backups','notification-setting-backups'],
+    ['subscription','notification-setting-subscription'],
     ['delivery','notification-check-delivery'],
   ])('focuses the exact searchable notification setting %s after encrypted loading',
     async(field,testId)=>{
@@ -73,6 +78,23 @@ describe('Encrypted device-local notification display settings',()=>{
     await settle()
     expect(mock.save).toHaveBeenCalledWith({...defaults,invitations:false})
     expect(host.textContent).toContain('Сохранено в зашифрованном')
+  })
+  it('saves independent notification categories without disabling security events',async()=>{
+    await mount()
+    expect(host.textContent).toContain('Изменения заданий')
+    expect(host.textContent).toContain('Пока недоступно')
+    for(const id of ['newFiles','reviews','backups','subscription']){
+      const control=el('notification-setting-'+id)
+      control.checked=false
+      control.dispatchEvent(new Event('change',{bubbles:true}))
+      await settle()
+    }
+    el('notification-settings-save').click()
+    await settle()
+    expect(mock.save).toHaveBeenCalledWith({
+      ...defaults,newFiles:false,reviews:false,backups:false,subscription:false,
+    })
+    expect(host.textContent).toContain('Всегда включены')
   })
   it('persists overnight quiet hours without hiding security controls',async()=>{
     await mount()
