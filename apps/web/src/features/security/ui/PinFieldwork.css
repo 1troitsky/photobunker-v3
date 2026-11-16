@@ -62,3 +62,6 @@ button:focus-visible{outline:2px solid #a9eeba;outline-offset:3px}
 .pin-screen{font-size:16px}
 .pin-recovery-toggle{font-size:inherit;opacity:1}
 .pin-recovery-toggle:hover span{color:#1ed760}
+
+/* Keep the approved 570px PIN content minimum reachable in landscape. */
+@media(max-height:569px){.pin-screen{align-items:flex-start;overflow-y:auto}.pin-container{height:auto;min-height:570px;flex-shrink:0}}

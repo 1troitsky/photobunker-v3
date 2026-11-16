@@ -24,3 +24,7 @@
 .viewer .photo-trigger{padding:10px;min-height:0;height:100%;width:100%}
 .viewer .photo-trigger img{display:block;width:100%;height:100%;object-fit:contain}
 .viewer .video-maximize{min-height:0;min-width:0;padding:0}
+
+/* The approved Viewer frame has a 580px minimum. On a shorter real viewport,
+   retain that content size inside the existing scrollable main, with fixed Shell. */
+@media(max-height:579px){.file-viewer-fixed.viewer{min-height:434px}}

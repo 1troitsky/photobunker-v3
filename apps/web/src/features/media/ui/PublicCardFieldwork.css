@@ -9,3 +9,6 @@
 
 .install-link{text-decoration:none}
 .public-page svg{display:block}
+
+/* Production replacement for the approved preview .site scroll container. */
+.public-page{height:100dvh;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-color:#444 transparent;position:relative}

@@ -30,7 +30,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve))
 const refs='http://127.0.0.1:'+server.address().port+'/docs/ux/'
 const browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']})
-const result={schema:1,scope:'Seven approved core screens; Chromium laboratory; real encrypted durable storage',reference:'docs/ux (unchanged files)',fixtureNormalization:'Public reference text and image aspect ratio only; no reference stylesheet changed',viewports:[],failures:[]}
+const result={schema:1,browser:browser.version(),deviceScaleFactor:1,reducedMotion:'reduce',scope:'Seven approved core screens; Chromium laboratory; real encrypted durable storage',reference:'docs/ux (unchanged files)',fixtureNormalization:'Public reference text and image aspect ratio only; no reference stylesheet changed',viewports:[],failures:[]}
 let phase='initialization'
 const frame=`.preview-bar,.preview-note{display:none!important}.preview-stage{padding:0!important;margin:0!important;display:block!important}body>.stage{padding:0!important;display:block!important}.device{width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;min-height:0!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important}.device .app{height:100%!important;border-radius:0!important}html,body{padding:0!important;margin:0!important}`
 async function measure(page,selectors){
