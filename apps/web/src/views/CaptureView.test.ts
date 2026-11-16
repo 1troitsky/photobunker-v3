@@ -276,6 +276,27 @@ describe('Fieldwork 1.2 camera controls preserve authenticated media ownership',
     expect(getUserMedia).toHaveBeenCalledTimes(1)
     expect(track.stop).not.toHaveBeenCalled()
   })
+  it('cannot take a photo while a torch transition is still pending',async()=>{
+    const opened=media(),pending=deferred<void>()
+    const apply=vi.fn().mockImplementation(()=>pending.promise)
+    const track=Object.assign(opened.track,{
+      getCapabilities:()=>({torch:true}),applyConstraints:apply,
+    })
+    await mount()
+    requests[0]!.resolve(markRaw({getTracks:()=>[track],getVideoTracks:()=>[track]}) as unknown as MediaStream)
+    await settle()
+    expect(button('Сделать снимок').disabled).toBe(false)
+    cameraShellActions.value?.toggleTorch()
+    await settle()
+    expect(apply).toHaveBeenCalledWith({advanced:[{torch:true}]})
+    expect(button('Сделать снимок').disabled).toBe(true)
+    button('Сделать снимок').click()
+    await settle()
+    expect(mocks.capture).not.toHaveBeenCalled()
+    pending.resolve();await settle()
+    expect(button('Сделать снимок').disabled).toBe(false)
+    expect(cameraShellActions.value?.torchOn).toBe(true)
+  })
   it('reverts a rejected hardware torch toggle rather than claiming success',async()=>{
     const opened=media()
     const apply=vi.fn().mockRejectedValue(new Error('torch rejected'))

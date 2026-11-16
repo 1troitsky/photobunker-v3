@@ -991,7 +991,7 @@ async function beginRecording():Promise<void>{
   const mode=captureMode.value
   const identity=streamIdentity,generation=cameraGeneration
   const contextGeneration=captureContextGeneration
-  if(mode==='photo'||recording.value||busy.value||!canCaptureType.value
+  if(mode==='photo'||recording.value||busy.value||torchBusy.value||!canCaptureType.value
     ||!stream.value||!ownsCamera(identity,generation))return
   const assertOwner=()=>{
     if(!ownsCamera(identity,generation)||contextGeneration!==captureContextGeneration
@@ -1232,7 +1232,7 @@ async function capture():Promise<void> {
   const v=video.value
   const identity=streamIdentity,generation=cameraGeneration
   const contextGeneration=captureContextGeneration
-  if(busy.value||starting.value||cameraZoomBusy.value||!v||!stream.value||!ownsCamera(identity,generation)
+  if(busy.value||starting.value||cameraZoomBusy.value||torchBusy.value||!v||!stream.value||!ownsCamera(identity,generation)
     ||v.videoWidth<1||v.videoHeight<1)return
   const assertOwner=()=>{
     if(!cameraWanted||!ownsCamera(identity,generation)
@@ -1467,11 +1467,11 @@ onUnmounted(()=>{
           </time>
           <button v-if="captureMode==='photo'" type="button" class="camera-blind-shutter"
             data-testid="camera-blind-shutter" aria-label="Сделать снимок"
-            :disabled="!stream||starting||busy||cameraZoomBusy||gpsLoading||!canCaptureType"
+            :disabled="!stream||starting||busy||cameraZoomBusy||torchBusy||gpsLoading||!canCaptureType"
             @click="capture">Снять</button>
           <button v-else-if="!recording" type="button" class="camera-blind-shutter video"
             data-testid="camera-blind-shutter"
-            :disabled="!stream||starting||busy||cameraZoomBusy||gpsLoading||!canCaptureType"
+            :disabled="!stream||starting||busy||cameraZoomBusy||torchBusy||gpsLoading||!canCaptureType"
             @click="beginRecording">Начать запись</button>
           <button v-else type="button" class="camera-blind-shutter recording"
             data-testid="camera-blind-shutter" @click="endRecording">Остановить запись</button>
@@ -1493,13 +1493,13 @@ onUnmounted(()=>{
             @click="openCameraSheet('assignment')">Задание</button>
           <button v-if="captureMode==='photo'" type="button" class="camera-shutter"
             aria-label="Сделать снимок"
-            :disabled="!stream||starting||busy||cameraZoomBusy||gpsLoading||!canCaptureType" @click="capture">
+            :disabled="!stream||starting||busy||cameraZoomBusy||torchBusy||gpsLoading||!canCaptureType" @click="capture">
               <span class="camera-screen-title">Сделать снимок</span>
             </button>
           <button v-else-if="!recording" type="button"
             class="camera-shutter camera-shutter-record"
             data-testid="camera-start-recording" aria-label="Начать запись"
-            :disabled="!stream||starting||busy||cameraZoomBusy||gpsLoading||!canCaptureType"
+            :disabled="!stream||starting||busy||cameraZoomBusy||torchBusy||gpsLoading||!canCaptureType"
             @click="beginRecording">
               <span class="camera-screen-title">Начать запись {{captureMode==='video'?'видео':'аудио'}}</span>
             </button>
