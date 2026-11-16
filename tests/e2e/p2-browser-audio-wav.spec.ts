@@ -97,6 +97,23 @@ test('P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser wit
     })
     expect(discardPrompts).toBe(1)
     expect(page.url()).toBe(editorUrl)
+    // A direct link to Viewer for the SAME media ID must not discard
+    // unsaved edits. Vue Router may reuse the editor's component.
+    page.once('dialog',async dialog=>{
+      expect(dialog.type()).toBe('confirm')
+      discardPrompts++
+      await dialog.dismiss()
+    })
+    await page.evaluate(async()=>{
+      const {router}=await import('/src/router.ts')
+      const current=router.currentRoute.value
+      await router.replace({
+        name:'browser-viewer',
+        params:{protocol:current.params.protocol,id:current.params.id},
+      })
+    })
+    expect(discardPrompts).toBe(2)
+    expect(page.url()).toBe(editorUrl)
     await expect(page.getByTestId('file-viewer-audio-editor'))
       .toContainText('Начало · 0.2 с')
     await expect(page.getByTestId('file-viewer-audio-editor'))

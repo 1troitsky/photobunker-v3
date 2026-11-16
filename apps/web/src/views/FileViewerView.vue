@@ -2087,7 +2087,11 @@ onBeforeRouteUpdate((to,from)=>{
   if(from.name!=='browser-editor')return true
   const changed=String(to.params.id)!==String(from.params.id)
     ||String(to.params.protocol)!==String(from.params.protocol)
-  return !changed||confirmEditorExit()
+  // An editor-to-viewer transition for the SAME file is still an exit
+  // from the volatile edit buffer. Some router paths reuse FileViewerView
+  // rather than invoking a component leave hook.
+  const exitsEditor=to.name!=='browser-editor'
+  return !(changed||exitsEditor)||confirmEditorExit()
 })
 onBeforeRouteLeave((to)=>{
   if(!confirmEditorExit())return false
