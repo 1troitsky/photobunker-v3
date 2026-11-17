@@ -22,3 +22,7 @@
 ### Core UX parity — 2026-11-17
 
 Утверждённые HTML/CSS семи core экранов перенесены в продукт; 33 пары на трёх размерах, 912/912 координат, 9 статических пар без отличающихся пикселей. 1020 Vitest, TypeScript/build, 151 Chromium E2E и 10 compiled Chromium PASS. Native Safari/hardware NOT TESTED. Полный статус интеграции и границы: [отчёт](docs/audits/PB3-CORE-UX-PARITY-20261116.md).
+
+### Core UX states — 2026-11-17
+
+Кандидат `cb22686149031523b981523905abe00073e874f1`: дополнительные Welcome auth, Camera blind/audio/settings/assignment, Browser upload/search/settings/rename/delete-empty, Viewer info/download/publish sheets перенесены из принятых HTML. Исправлено скрытие собственных audio/video в Personal. 81 пара screenshots, 2220/2220 координат, 180 style properties; 30 статических пар без отличающихся пикселей. **151/151 Chromium + 10/10 compiled, 1020 Vitest, TypeScript/build, 37 Node, 117 canonical sources — PASS, exit 0.** API/ts.md/исходники UX неизменны. Native Safari/physical devices NOT TESTED; Emergency destruction/signed cold-offline shell остаются заблокированными. [Подробный отчёт и evidence](docs/audits/PB3-CORE-UX-STATES-20261117.md). Статус main/доставки фиксируется после интеграции отдельно.

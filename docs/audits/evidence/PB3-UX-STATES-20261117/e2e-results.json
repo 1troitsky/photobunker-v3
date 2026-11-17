@@ -1,0 +1,1527 @@
+{
+  "productCommit": "cb22686149031523b981523905abe00073e874f1",
+  "status": "PASS",
+  "exitCode": 0,
+  "stats": {
+    "startTime": "2026-11-17T00:51:58.390Z",
+    "duration": 444559.886,
+    "expected": 151,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "workers": 1,
+  "retries": 0,
+  "tests": [
+    {
+      "title": "P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor grants and server-authoritative assignment receipts",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 42843
+        }
+      ]
+    },
+    {
+      "title": "P1 #283 unauthenticated billing is denied, enrolled PWA reads own Free retention cap",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1183
+        }
+      ]
+    },
+    {
+      "title": "late permission survives real online hydration with one live stream",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1403
+        }
+      ]
+    },
+    {
+      "title": "equivalent Session replacement keeps the existing stream",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1148
+        }
+      ]
+    },
+    {
+      "title": "real account switch during permission stops the stale result before opening another",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1236
+        }
+      ]
+    },
+    {
+      "title": "leaving before permission resolves releases every late track without reopening",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1043
+        }
+      ]
+    },
+    {
+      "title": "denied permission is recoverable by a single explicit retry",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1210
+        }
+      ]
+    },
+    {
+      "title": "hydrated camera captures offline against an already verified signed assignment policy",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2203
+        }
+      ]
+    },
+    {
+      "title": "P1-26: confirmed contact → explicit owner-signed assignment invitation, no implicit access",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 6765
+        }
+      ]
+    },
+    {
+      "title": "P1-25: verified peer → encrypted Contacts & Teams → offline persistence → local removal",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3602
+        }
+      ]
+    },
+    {
+      "title": "P1-25 lost finalize ACK: real commit, offline E2EE outbox, idempotent replay, stranger denied",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3097
+        }
+      ]
+    },
+    {
+      "title": "P1-25 corrupt AES-GCM ciphertext on PUT and GET: no false ACK, then clean retry",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2390
+        }
+      ]
+    },
+    {
+      "title": "P1 ACL matrix: A→B verified grant only, C denied, source namespace denied, revoke blocks B and recovered B2",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 6049
+        }
+      ]
+    },
+    {
+      "title": "P1 #402: logout survives aborted IndexedDB transaction and immediate hard reload",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1567
+        }
+      ]
+    },
+    {
+      "title": "P1 #402: committed local logout remains fenced across tabs and reload despite network outage",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1273
+        }
+      ]
+    },
+    {
+      "title": "P1 #402: denied synchronous Web Storage still closes volatile session and commits IDB signout",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1054
+        }
+      ]
+    },
+    {
+      "title": "P1-09: Free monthly quota accepts three signed creates, rejects fourth without deleting local ciphertext",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1485
+        }
+      ]
+    },
+    {
+      "title": "two browser identities: key-only account, encrypted camera photo, Garage recovery",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3983
+        }
+      ]
+    },
+    {
+      "title": "P1-03: signed recipient key, manual fingerprint, E2EE grant and revoke",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 5803
+        }
+      ]
+    },
+    {
+      "title": "P1-04: A creates encrypted assignment, B accepts and submits a photo grant, A decrypts",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 4617
+        }
+      ]
+    },
+    {
+      "title": "P1-04: real assignment UI creates, invites, accepts and delivers encrypted photo",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 11363
+        }
+      ]
+    },
+    {
+      "title": "P1 #390 Camera keeps retrying a verified lost chunk ACK without opening Browser",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 6971
+        }
+      ]
+    },
+    {
+      "title": "P1 #200 >64MiB ciphertext survives offline, lost ACK, reload and independent E2EE readback",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 14278
+        }
+      ]
+    },
+    {
+      "title": "P1-12: immutable owner-signed media versions survive Garage+Recovery Key without modifying original or inheriting grants",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3057
+        }
+      ]
+    },
+    {
+      "title": "P1/P2 integration: Camera encrypted audio queue → Storage visibility → automatic server replay",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 7346
+        }
+      ]
+    },
+    {
+      "title": "P1-10: offline E2EE video/audio import → 1 MiB Garage chunks → independent recovered owner decrypt",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 4734
+        }
+      ]
+    },
+    {
+      "title": "P1-11: two independently verified accounts exchange 1-key E2EE audio grant, recipient decrypts and owner revokes without deleting original",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 4253
+        }
+      ]
+    },
+    {
+      "title": "P3-220: live tab blocks PIN seal; cooperative closure allows guarded PIN + reload",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2242
+        }
+      ]
+    },
+    {
+      "title": "P1 #287 synthetic go to Free retains original E2EE and new Free13 writes",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2750
+        }
+      ]
+    },
+    {
+      "title": "P1 #287 synthetic pro to Free retains original E2EE and new Free13 writes",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2059
+        }
+      ]
+    },
+    {
+      "title": "P1 #285 synthetic verified go signed 29d Photo+Media E2EE to real Garage",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1805
+        }
+      ]
+    },
+    {
+      "title": "P1 #285 synthetic verified pro signed 89d Photo+Media E2EE to real Garage",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1504
+        }
+      ]
+    },
+    {
+      "title": "P1 #378 genuine encrypted offline media stays private in persistent browser stores and logout revokes decoded blob",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1603
+        }
+      ]
+    },
+    {
+      "title": "P1 #199: Recovery Key A→B trusted device, real ciphertext, reload and offline access boundary",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3370
+        }
+      ]
+    },
+    {
+      "title": "P1 #199: wrong Recovery Key, invalid signed login proof and other account denied",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1964
+        }
+      ]
+    },
+    {
+      "title": "P1-28: independently confirmed A→B Teams invite → recipient consent → E2EE team read",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 16728
+        }
+      ]
+    },
+    {
+      "title": "P1-27: owner-signed encrypted Team → durable local queue → server ACL → offline local read",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2231
+        }
+      ]
+    },
+    {
+      "title": "Authorization Error 1.0 only appears after a proven invalid Recovery Key, never URL claims",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 569
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: owner-confirmed sequential batch archive and restore use real signed per-file ledger",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2197
+        }
+      ]
+    },
+    {
+      "title": "P2 Archive: unresolved signed delete/archival command cannot be discarded; obsolete CAS can",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1806
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: Local-First signed archive settings, independent-device recovery, no auto-TTL extension and direct delete",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3561
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: signed owner media archive, restore, then permanent tombstone without fabricated GC ACK",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2594
+        }
+      ]
+    },
+    {
+      "title": "P2 #209: mixed photo/video/audio creation is durable offline, two owner signatures, two live server ACKs",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2874
+        }
+      ]
+    },
+    {
+      "title": "P2 assignment: signed owner-only field ceiling, queued offline revision and NO public grant",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3056
+        }
+      ]
+    },
+    {
+      "title": "P2 Viewer: real decoded audio → WAV segment → offline E2EE Browser with separate OS export",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1850
+        }
+      ]
+    },
+    {
+      "title": "P2 pre-main: mixed creation v6 → signed A/B invitation → AV E2EE grants → server progress",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 5906
+        }
+      ]
+    },
+    {
+      "title": "P2 #206 real microphone → A encrypted Garage → recovered B cloud WAV trim → new encrypted Garage file",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 12113
+        }
+      ]
+    },
+    {
+      "title": "Issue #260 revoke between fix and shutter without re-request; required=false",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1330
+        }
+      ]
+    },
+    {
+      "title": "Issue #260 revoke between fix and shutter without re-request; required=true",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1915
+        }
+      ]
+    },
+    {
+      "title": "P2 #208 explicit high-accuracy GPS request, private AES-GCM capture and no plaintext network leak",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1062
+        }
+      ]
+    },
+    {
+      "title": "P2 #208 signed required-GPS policy rejects denied capture offline, then accepts genuine consent",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2236
+        }
+      ]
+    },
+    {
+      "title": "P2 #208 3-minute-old GPS provider fix fails closed even with earlier consent",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1179
+        }
+      ]
+    },
+    {
+      "title": "P2 #208 revoking geolocation must invalidate old fix before another capture",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1173
+        }
+      ]
+    },
+    {
+      "title": "P2 #206 genuine Chromium microphone denial requires explicit retry, without private UA error leakage",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1018
+        }
+      ]
+    },
+    {
+      "title": "P2 #206 native MediaStreamTrack ended aborts an otherwise long enough real audio capture",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 7307
+        }
+      ]
+    },
+    {
+      "title": "P2 #206 true native audio timeslices are ciphertext before Stop and GC after signed E2EE save",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 9791
+        }
+      ]
+    },
+    {
+      "title": "P2 #206 separate live tab cannot steal recording, closed writer permits explicit encrypted-only adoption",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3666
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser v3: real anonymous login → offline encrypted media → catalog filters and decrypted viewer",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1821
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: sort two genuinely encrypted offline files by confirmed byte size",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1112
+        }
+      ]
+    },
+    {
+      "title": "P2 #339: two real trusted peers, encrypted local block, refilter after alias and Team picker",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 5603
+        }
+      ]
+    },
+    {
+      "title": "P2 contributor: signed imported Photo MediaFile receipt requires scoped E2EE, owner decrypt and revoke",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 6585
+        }
+      ]
+    },
+    {
+      "title": "Browser v3: opening section and folder-first display are real and device-persistent",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1732
+        }
+      ]
+    },
+    {
+      "title": "P2 V-47: private Info edits create only a separate AES-GCM personal copy without GPS/ACL inheritance",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1968
+        }
+      ]
+    },
+    {
+      "title": "P2 V-45 Editor: Browser → Viewer → Photo Editor, draft gate, E2EE save → same Viewer → Browser",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2176
+        }
+      ]
+    },
+    {
+      "title": "P2 File Viewer: authenticated deep-link target on opaque index page 2, reject replay and preserve ciphertext",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2671
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: two recovered devices exchange signed E2EE folders, replay Lost ACK and refuse divergent offline edits",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 4123
+        }
+      ]
+    },
+    {
+      "title": "Browser v3: real offline E2EE folder thumbnail has no persistent plaintext cache",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1900
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: encrypted device-local nested folders survive reload and never move media ciphertext",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3073
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: corrupt encrypted folder snapshot fails closed without overwriting ciphertext",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1260
+        }
+      ]
+    },
+    {
+      "title": "Browser v3: five owner-approved Header actions control the real encrypted catalog",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2450
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder -> Garage -> recovered device, no source URL in API",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2414
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: rejects private/HTTP address locally and never contacts the source",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1258
+        }
+      ]
+    },
+    {
+      "title": "Browser v3: file and encrypted-folder three-dot actions use original local operations",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1712
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser 10k+ metadata: AES-GCM fixtures, 201 cursor pages, bounded search, stable sort",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 392
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: 10k index cannot grant access; real E2EE deep link page 2 is server-authorized",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2270
+        }
+      ]
+    },
+    {
+      "title": "Integration #63: +2min client clock, real signed media grant/replay/readback/revoke",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2155
+        }
+      ]
+    },
+    {
+      "title": "Browser v3: video/audio share uses a scoped E2EE panel without issuing grants",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1235
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: offline multi-select and drag-drop AES-GCM import into selected folder persists after reload and cloud sync",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2615
+        }
+      ]
+    },
+    {
+      "title": "P2 V-48: authenticated JPEG ratio presets and +90° rotate are real raster pixels, then E2EE save",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1872
+        }
+      ]
+    },
+    {
+      "title": "P2 Viewer: before/after shows original without exporting or changing edited E2EE derivative",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1888
+        }
+      ]
+    },
+    {
+      "title": "P2 Viewer: opaque blackout overwrites JPEG pixels only in a new encrypted personal derivative",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2090
+        }
+      ]
+    },
+    {
+      "title": "P2 Viewer: real JPEG crop/rotate → preview only → independent encrypted Browser copy",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2388
+        }
+      ]
+    },
+    {
+      "title": "P2 V-50: five real shape tools stay on one mobile row, fill and stroke flatten into encrypted JPEG",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2597
+        }
+      ]
+    },
+    {
+      "title": "P2 V55: >4096px / >16.8MP encrypted JPEG preserves native pixels; low-memory fails closed",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2569
+        }
+      ]
+    },
+    {
+      "title": "P2 V-49: tap a photo to type text inline, synchronize list/undo/redo, save genuine encrypted JPEG",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2591
+        }
+      ]
+    },
+    {
+      "title": "P2 Viewer: shape stroke and fill flatten into separate E2EE JPEG without leaking mark data",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2180
+        }
+      ]
+    },
+    {
+      "title": "Browser v3: per-photo share opens existing key-verified E2EE flow, not an unrestricted link",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1100
+        }
+      ]
+    },
+    {
+      "title": "P2 Viewer: real brush/pencil/eraser + Undo/Redo -> isolated E2EE JPEG pixels",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3074
+        }
+      ]
+    },
+    {
+      "title": "P2 Viewer: editable movable photo text is flattened only into new E2EE JPEG",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1892
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser: offline private metadata search and second-device cloud search without plaintext disclosure",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 7421
+        }
+      ]
+    },
+    {
+      "title": "Public Card 1.1 stays anonymous while private device is PIN locked",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 466
+        }
+      ]
+    },
+    {
+      "title": "Public Card: real camera → safe encrypted Garage publication → anonymous read → reload → revoke",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 19205
+        }
+      ]
+    },
+    {
+      "title": "real Chromium strips source JPEG APP1 EXIF while preserving safe pixels",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 289
+        }
+      ]
+    },
+    {
+      "title": "P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and revokes read",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 6819
+        }
+      ]
+    },
+    {
+      "title": "P2 #215: real decoded video → NEW encoded clip → encrypted local MediaFile; no OS gallery",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2679
+        }
+      ]
+    },
+    {
+      "title": "P2 #376: real video trim → offline E2EE clip → Garage → recovered-device decoder; outsider denied",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 5283
+        }
+      ]
+    },
+    {
+      "title": "P2 #215 UI: Video Editor trim → genuine E2EE clip offline; original and source permissions unchanged",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3376
+        }
+      ]
+    },
+    {
+      "title": "P2 Viewer: decoded video frame → volatile JPEG → offline E2EE Browser file and confirmed device download",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2822
+        }
+      ]
+    },
+    {
+      "title": "P2 V-46: real encrypted 2-second VP8 → Video Editor range preview/apply/undo without MP4 export",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3633
+        }
+      ]
+    },
+    {
+      "title": "P2 V-41: File Viewer fixed mobile/desktop geometry, media switching and accessible sheets",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2407
+        }
+      ]
+    },
+    {
+      "title": "P2 File Viewer: navigate exactly the Browser folder/filter order and return to last viewed encrypted file",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2232
+        }
+      ]
+    },
+    {
+      "title": "P2 Browser->File Viewer->Browser: restore encrypted folder, filter, private search and list anchor",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2596
+        }
+      ]
+    },
+    {
+      "title": "P2 File Viewer: actual encrypted media, same-origin export, keyboard navigation and logout wipe",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1440
+        }
+      ]
+    },
+    {
+      "title": "Fieldwork Camera 1.2: one Shell, three context actions, real modes and non-destructive blind overlay",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1978
+        }
+      ]
+    },
+    {
+      "title": "Camera Fieldwork 1.2: encrypted device preset with real photo, video and audio options survives reload",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1480
+        }
+      ]
+    },
+    {
+      "title": "Contacts & Teams 1.1: real encrypted team opens its own card without assuming server rights",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1053
+        }
+      ]
+    },
+    {
+      "title": "P2-01: verified contact → real encrypted message draft → fullscreen overlay → offline restore",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 4310
+        }
+      ]
+    },
+    {
+      "title": "P2-01: optional Messages Dock route uses current Shell and never promises Matrix delivery",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 297
+        }
+      ]
+    },
+    {
+      "title": "P2+P3: one Key-Only account keeps verified Free status across Contacts and Notifications",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1279
+        }
+      ]
+    },
+    {
+      "title": "P2: Security / Billing / Profile routes live inside one Fieldwork Shell without fake success",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 813
+        }
+      ]
+    },
+    {
+      "title": "UX Appearance 1.3: Dock draft, cancel, save, device reload and protected Settings",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1465
+        }
+      ]
+    },
+    {
+      "title": "UX Appearance 1.3: atomic Dock and Start Page, Cancel, reload, exact search and deep links",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1915
+        }
+      ]
+    },
+    {
+      "title": "Fieldwork Appearance 1.3: all visual options preview, cancel and persist atomically",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1064
+        }
+      ]
+    },
+    {
+      "title": "Checkout 1.0: real catalog price, edit order and no fake DePay success",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 648
+        }
+      ]
+    },
+    {
+      "title": "Checkout 1.0: unsupported URL prices and fake status cannot activate payment",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 277
+        }
+      ]
+    },
+    {
+      "title": "P2 Data & Storage: real encrypted offline queue, server usage and logout privacy",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2052
+        }
+      ]
+    },
+    {
+      "title": "P2 #214 mobile 320px: three/four/five real Dock routes, offline save, reload and Cancel",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1793
+        }
+      ]
+    },
+    {
+      "title": "P2 #214 keyboard drag, mandatory Profile and rollback of draft order",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 959
+        }
+      ]
+    },
+    {
+      "title": "P2 #214 mobile RU/EN Dock search focus, retap one-level and hidden-section navigation",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1317
+        }
+      ]
+    },
+    {
+      "title": "UX Dock retap: Settings goes back one in-section screen and root never stacks",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1141
+        }
+      ]
+    },
+    {
+      "title": "UX Dock retap: editor -> viewer -> browser without external history back",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 344
+        }
+      ]
+    },
+    {
+      "title": "P2 Help: signed-out RU/EN FAQ and legal drafts are honest and navigable",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 514
+        }
+      ]
+    },
+    {
+      "title": "P2 Help: real account opens offline FAQ and support draft never submits secrets",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1080
+        }
+      ]
+    },
+    {
+      "title": "UX: settings hub provides real Contacts route without breaking Key-Only Identity",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 937
+        }
+      ]
+    },
+    {
+      "title": "Public Card 1.1: installation instructions stand alone, never claim an installed PWA",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 375
+        }
+      ]
+    },
+    {
+      "title": "Accepted Help links to the installation guide without duplicating the Shell",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 280
+        }
+      ]
+    },
+    {
+      "title": "P2 #216: real account, encrypted Notifications UI, offline route/settings and no unauthenticated leak",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1840
+        }
+      ]
+    },
+    {
+      "title": "P2 #216: real encrypted offline notification details restore focus to event or filter",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1025
+        }
+      ]
+    },
+    {
+      "title": "Payments & Tariffs Fieldwork 1.1 uses live plan catalog and never fabricates paid orders",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 597
+        }
+      ]
+    },
+    {
+      "title": "Settings can finish interrupted key-only registration using the original saved Recovery Key",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1010
+        }
+      ]
+    },
+    {
+      "title": "Welcome resumes interrupted registration with saved Recovery Key and without generating a second key",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 934
+        }
+      ]
+    },
+    {
+      "title": "PIN: genuine enrollment → change length → reload rejects old PIN → authenticated delay → disable",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 4586
+        }
+      ]
+    },
+    {
+      "title": "PIN Shell 1.1: authentic Recovery Key seals legacy device; no private UI before normal PIN",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2053
+        }
+      ]
+    },
+    {
+      "title": "P2 profile: real Key-Only identity, AES-GCM local profile, reload and no plaintext IndexedDB",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1401
+        }
+      ]
+    },
+    {
+      "title": "Public Card 1.1: unknown and expired links fail closed without leaking metadata",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 405
+        }
+      ]
+    },
+    {
+      "title": "P2 #400: explicit system share requires a click and preserves registration",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 906
+        }
+      ]
+    },
+    {
+      "title": "P2 #400: native picker writes only after user action without network or local storage",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 510
+        }
+      ]
+    },
+    {
+      "title": "UX Settings search: Header, RU/EN synonym, exact Dock and Language fields and Back",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1255
+        }
+      ]
+    },
+    {
+      "title": "Security & Privacy 1.3 uses approved sections and exact Settings Search anchors",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1314
+        }
+      ]
+    },
+    {
+      "title": "Security devices: offline transition clears a pending server spinner and rejects stale device rows",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1111
+        }
+      ]
+    },
+    {
+      "title": "Security devices: real Chromium offline / online switches clear and reload authenticated rows",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1140
+        }
+      ]
+    },
+    {
+      "title": "Accepted Fieldwork routes: one real account, one Shell, no missing pages",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 2691
+        }
+      ]
+    },
+    {
+      "title": "Mobile Fieldwork Shell has one header and dock across primary sections",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 656
+        }
+      ]
+    },
+    {
+      "title": "Owner-approved header icons never grow into framed cards or overflow the 64px Shell",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1028
+        }
+      ]
+    },
+    {
+      "title": "Welcome 1.4 routes anonymously, uses original six SVG slides and real key-only account",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 640
+        }
+      ]
+    },
+    {
+      "title": "Welcome Loader 1.6 exits after genuine local key hydration even when server login stalls",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 1318
+        }
+      ]
+    },
+    {
+      "title": "Welcome Recovery Key uses explicit native chooser and never auto-downloads plaintext",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 477
+        }
+      ]
+    },
+    {
+      "title": "Settings registration uses same OS-chosen destination and never auto-ACKs the Recovery Key",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 508
+        }
+      ]
+    },
+    {
+      "title": "Welcome cancelled native Save does not acknowledge Recovery Key or silently download",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 400
+        }
+      ]
+    },
+    {
+      "title": "Settings unsupported browser offers manual copy without false Save acknowledgement",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 409
+        }
+      ]
+    },
+    {
+      "title": "Welcome opens a single native chooser despite repeated Save attempts",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 419
+        }
+      ]
+    }
+  ]
+}

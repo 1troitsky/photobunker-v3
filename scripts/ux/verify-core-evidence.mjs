@@ -16,6 +16,15 @@ assert.equal(geometry.status,'PASS');assert.equal(geometry.viewports.length,3)
 assert.equal(geometry.failures.length,0)
 for(const viewport of geometry.viewports)for(const screen of Object.values(viewport.screens))
   for(const [name,ref] of Object.entries(screen.reference))for(const key of ['x','y','w','h'])assert.equal(screen.app[name][key],ref[key])
+for(const viewport of geometry.viewports){
+  for(const [name,contract] of Object.entries(viewport.contracts??{})){
+    const properties=name==='cameraAssignment'?['font','background','padding','radius','lineHeight']:['font','color','background','padding','radius','lineHeight']
+    for(const [anchor,ref] of Object.entries(contract.reference)){
+      assert(ref&&contract.app[anchor],`${name}/${anchor} missing`)
+      for(const property of properties)assert.equal(contract.app[anchor][property],ref[property],`${name}/${anchor}/${property}`)
+    }
+  }
+}
 const pixels=await json('pixel-comparison.json')
 assert.equal(pixels.length,30)
 for(const pair of pixels){assert.equal(pair.status,'PASS');assert.equal(pair.different_pixels,0)}

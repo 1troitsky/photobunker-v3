@@ -1,0 +1,115 @@
+{
+  "productCommit": "cb22686149031523b981523905abe00073e874f1",
+  "status": "PASS",
+  "exitCode": 0,
+  "stats": {
+    "startTime": "2026-11-17T00:53:40.381Z",
+    "duration": 28590.846,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "tests": [
+    {
+      "title": "Public Card: real camera → safe encrypted Garage publication → anonymous read → reload → revoke",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 18705
+        }
+      ]
+    },
+    {
+      "title": "PIN: genuine enrollment → change length → reload rejects old PIN → authenticated delay → disable",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 4072
+        }
+      ]
+    },
+    {
+      "title": "Welcome Recovery Key uses explicit native chooser and never auto-downloads plaintext",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 369
+        }
+      ]
+    },
+    {
+      "title": "Settings registration uses same OS-chosen destination and never auto-ACKs the Recovery Key",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 371
+        }
+      ]
+    },
+    {
+      "title": "Welcome cancelled native Save does not acknowledge Recovery Key or silently download",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 253
+        }
+      ]
+    },
+    {
+      "title": "Settings unsupported browser offers manual copy without false Save acknowledgement",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 259
+        }
+      ]
+    },
+    {
+      "title": "Welcome opens a single native chooser despite repeated Save attempts",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 265
+        }
+      ]
+    },
+    {
+      "title": "compiled app: Welcome → offline photo → durable reload → Garage → Viewer",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 3175
+        }
+      ]
+    },
+    {
+      "title": "compiled delivery denies source modules and unsigned workers",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 34
+        }
+      ]
+    },
+    {
+      "title": "compiled Welcome fits accepted mobile/tablet bounds without Shell or secret export",
+      "status": "expected",
+      "attempts": [
+        {
+          "status": "passed",
+          "durationMs": 413
+        }
+      ]
+    }
+  ]
+}

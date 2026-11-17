@@ -1,0 +1,242 @@
+[
+  {
+    "viewport": "1280x800",
+    "screen": "welcome",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "welcome-slide-1",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "welcome-slide-2",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "welcome-slide-3",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "welcome-slide-4",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "welcome-slide-5",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "welcome-loading",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "pin",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "camera-blind",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 1024000,
+    "bounds": null
+  },
+  {
+    "viewport": "1280x800",
+    "screen": "camera-audio-stage",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 583380,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "welcome",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "welcome-slide-1",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "welcome-slide-2",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "welcome-slide-3",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "welcome-slide-4",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "welcome-slide-5",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "welcome-loading",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "pin",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "camera-blind",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 304500,
+    "bounds": null
+  },
+  {
+    "viewport": "375x812",
+    "screen": "camera-audio-stage",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 175085,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "welcome",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "welcome-slide-1",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "welcome-slide-2",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "welcome-slide-3",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "welcome-slide-4",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "welcome-slide-5",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "welcome-loading",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "pin",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "camera-blind",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 329160,
+    "bounds": null
+  },
+  {
+    "viewport": "390x844",
+    "screen": "camera-audio-stage",
+    "status": "PASS",
+    "different_pixels": 0,
+    "total_pixels": 194392,
+    "bounds": null
+  }
+]

@@ -1,0 +1,31 @@
+{
+  "productCommit": "cb22686149031523b981523905abe00073e874f1",
+  "appsTree": "1fb151d47bf38beb1033e0cfd42f382c0f486cb1",
+  "apiTree": "5542aea51a33ef67c6589e80d5ace6e28cd5a4f6",
+  "compiledWebImage": "sha256:970a9a952080ac5e3657e91003de2bdcfb868ee072605efce96b708677f26388",
+  "phpRuntime": "8.4.27",
+  "qaServices": [
+    {
+      "service": "postgres-1",
+      "image": "postgres:18",
+      "imageId": "sha256:b9f6b8ff03b62f3cfd9d9ba3fe56226a9991c79d3fb46fd46536263bf02be553",
+      "running": true
+    },
+    {
+      "service": "garage-1",
+      "image": "dxflrs/garage:v2.5.0",
+      "imageId": "sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5",
+      "running": true
+    },
+    {
+      "service": "api-1",
+      "image": "pb3-core-api:20261116",
+      "imageId": "sha256:9860d784572171c443c2ebffea60ed14e911480a4c6938849b9162695edd16b1",
+      "running": true
+    }
+  ],
+  "sourceEndpoint": "Blocked by compiled Nginx; production E2E assertion",
+  "unsignedSW": "Not enabled; compiled /sw.js returns 404",
+  "nativeSafari": "NOT TESTED",
+  "physicalDevices": "NOT TESTED"
+}
