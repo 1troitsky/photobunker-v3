@@ -9,7 +9,7 @@ try{
   const page=await browser.newPage()
   for(const viewport of await readdir(root)){
     if(!/^\d+x\d+$/.test(viewport))continue
-    for(const screen of ['welcome','welcome-slide-1','welcome-slide-2','welcome-slide-3','welcome-slide-4','welcome-slide-5','welcome-loading','pin']){
+    for(const screen of ['welcome','welcome-slide-1','welcome-slide-2','welcome-slide-3','welcome-slide-4','welcome-slide-5','welcome-loading','pin','camera-blind','camera-audio-stage']){
       const a=await readFile(path.join(root,viewport,screen+'-reference.png'))
       const b=await readFile(path.join(root,viewport,screen+'-app.png'))
       const comparison=await page.evaluate(async([a,b])=>{

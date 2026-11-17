@@ -57,3 +57,34 @@
 
 .camera-fieldwork .camera-details .camera-preset-actions [data-testid="camera-preset-save"]{background:var(--green);color:#0f2416;border-color:var(--green)}
 .camera-fieldwork .camera-shutter{font:inherit}
+
+.camera-fieldwork .camera-assignment-card .camera-source-body{display:grid;gap:10px}
+.camera-fieldwork .camera-assignment-card .camera-source-field{margin:0;display:grid;gap:7px}
+.camera-fieldwork .camera-assignment-card .camera-source-field input,.camera-fieldwork .camera-assignment-card .camera-source-field select,.camera-fieldwork .camera-assignment-card .camera-source-field textarea{margin:0;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.camera-fieldwork .camera-assignment-card .camera-source-field textarea{line-height:1.45}
+.camera-fieldwork .camera-assignment-card .camera-source-body .muted{font-size:11px;line-height:1.5;margin:2px 0;color:#acacac}
+.camera-fieldwork .camera-assignment-card .camera-policy-required.tag{font-size:10px;color:#badbc3;background:#30503a;border:0;border-radius:5px;padding:3px 6px;margin:0}
+.camera-fieldwork .camera-assignment-card .camera-sheet-footer{padding:0;margin:0;border:0;display:block}
+.camera-fieldwork .camera-assignment-card .camera-source-btn{width:100%}
+.camera-blind-overlay{font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.camera-blind-overlay .camera-blind-emblem svg{stroke-linecap:round;stroke-linejoin:round}
+.camera-blind-controls{margin-top:28px;display:flex;flex-direction:column;align-items:center;gap:15px}
+.camera-blind-controls .camera-blind-shutter{margin:0;background:#0e0e0e}
+.camera-blind-controls .camera-blind-shutter:before{content:none}
+.camera-blind-shutter span{width:100%;height:100%;background:white;border-radius:50%}
+.camera-blind-shutter.video span{background:#f34d58}
+.camera-blind-shutter.recording span{width:28px;height:28px;border-radius:5px;background:#f34d58}
+.camera-blind-controls .camera-blind-note{margin:0;color:#a5a5a5;font-size:11px}
+.camera-blind-overlay .camera-blind-return{min-height:0;color:#f5f5f5}
+.camera-blind-overlay time{font:700 13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+
+.camera-audio-view time{font:750 22px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.06em;color:#83ed9a;font-variant-numeric:tabular-nums}
+@keyframes camera-audio-bounce{from{transform:scaleY(.5)}to{transform:scaleY(1.2)}}
+.camera-blind-overlay{padding:max(28px,env(safe-area-inset-top)) 28px max(28px,env(safe-area-inset-bottom));--green:var(--accent,#1ed760)}
+.camera-blind-overlay button{font-family:inherit}
+.camera-blind-overlay button:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+@media(max-height:520px){.camera-blind-overlay{justify-content:flex-start}.camera-blind-emblem,.camera-blind-controls{flex-shrink:0}}
+.camera-fieldwork .camera-sheet-heading strong{font-weight:700}
+.camera-fieldwork .camera-assignment-card .instruction{margin:0}
+.camera-fieldwork .camera-private-instructions.instruction .muted{font-size:12px;line-height:1.5;color:#ddd;margin:0}
+.camera-fieldwork .camera-assignment-card .camera-sheet-footer .camera-source-btn{font:680 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;min-height:42px;min-width:0;height:auto;padding:10px;border:1px solid var(--green);border-radius:7px;background:var(--green);color:#0f2416}

@@ -24,7 +24,7 @@ export async function browserControl(scope:Page|Locator,name:'Синхрониз
   const page=scope,browser=await page.getByTestId('browser-header-settings').count()>0
   if(browser){
     await openBrowserSettings(page)
-    await page.getByTestId('browser-archive-preferences').locator(':scope > .action-row').getByRole('button',{name,exact:true}).click()
+    await page.getByTestId('browser-archive-preferences').locator(':scope > .approved-settings-content > .action-row').getByRole('button',{name,exact:true}).click()
     await closeBrowserSettings(page)
   }else await page.getByRole('button',{name,exact:true}).click()
 }

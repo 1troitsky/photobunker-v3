@@ -138,7 +138,7 @@ const dock = computed(() => displayedDock.value
           title="Синхронизированная E2EE-коллекция Избранное ещё не реализована">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="1.8" aria-hidden="true">
-            <path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 7-6.2-3.3-6.2 3.3 1.2-7-5-4.9 6.9-1z"/>
+            <path d="m12 3 2.8 5.7 6.3.9-4.6 4.5 1.1 6.3-5.6-3-5.6 3 1.1-6.3L3 9.6l6.2-.9z"/>
           </svg>
         </button>
         <button type="button" disabled aria-label="Копировать"
@@ -146,7 +146,7 @@ const dock = computed(() => displayedDock.value
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="1.8" aria-hidden="true">
             <rect x="8" y="8" width="12" height="12" rx="2"/>
-            <path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>
+            <path d="M16 5V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h1"/>
           </svg>
         </button>
         <button type="button" aria-label="Скачать"
@@ -155,14 +155,14 @@ const dock = computed(() => displayedDock.value
           @click="viewerShellActions?.download()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="1.8" aria-hidden="true">
-            <path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>
+            <path d="M12 3v13m-5-5 5 5 5-5M4 18v3h16v-3"/>
           </svg>
         </button>
         <button type="button" disabled aria-label="Удалить"
           title="Удаление требует принятой серверной политики архива, TTL и прав">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="1.8" aria-hidden="true">
-            <path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 10v8M14 10v8"/>
+            <path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/>
           </svg>
         </button>
       </div>
@@ -215,7 +215,7 @@ const dock = computed(() => displayedDock.value
           :disabled="!activeSession||!browserShellActions"
           @click="browserShellActions?.openUpload()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-            aria-hidden="true"><path d="M12 17V3m-5 5 5-5 5 5M4 17v4h16v-4"/></svg>
+            aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v4h16v-4"/></svg>
         </button>
         <button type="button" data-testid="browser-header-select"
           :aria-label="browserShellActions?.selecting?'Отменить выбор':'Выбрать'"
@@ -224,15 +224,15 @@ const dock = computed(() => displayedDock.value
           :disabled="!browserShellActions?.canSelect"
           @click="browserShellActions?.toggleSelection()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-            aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/>
-            <path d="m7 12 3.5 3.5L17 8.5"/></svg>
+            aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/>
+            <path d="m8 12 3 3 5-6"/></svg>
         </button>
         <button type="button" data-testid="browser-header-search"
           aria-label="Поиск" title="Приватный поиск"
           :disabled="!activeSession||!browserShellActions"
           @click="browserShellActions?.focusSearch()">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-            aria-hidden="true"><circle cx="10.8" cy="10.8" r="7.2"/><path d="m16 16 5 5"/></svg>
+            aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
         </button>
         <button type="button" data-testid="browser-header-settings"
           aria-label="Настройки Browser" title="Настройки Browser"

@@ -94,7 +94,7 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   await expect(page.getByTestId('camera-blind-shutter')).toBeVisible()
   await expect(blind.getByRole('heading',{name:'Слепой режим'})).toHaveCSS('font-size','24px')
   await expect(blind.getByText('Что-бы другие не видели, что вы делаете 👻')).toBeVisible()
-  await expect(blind.getByText('Если клавиши громкости недоступны — нажмите кнопку')).toBeVisible()
+  await expect(blind.getByText('Нажмите для начала или завершения аудиозаписи')).toBeVisible()
   await expect(blind.locator('.camera-blind-emblem')).toHaveCSS('width','72px')
   await expect(page.locator('.camera-viewfinder video')).toHaveCount(1)
   await expect(page.locator('.camera-stage-controls')).not.toBeVisible()
@@ -133,9 +133,11 @@ test('Fieldwork Camera 1.2: one Shell, three context actions, real modes and non
   // Settings uses the approved X-only close, NOT an invented Done action.
   // Shift+Tab wraps to the last actual permission action in the sheet.
   await expect(config.getByRole('button',{name:'Готово'})).toHaveCount(0)
+  const lastSettingsAction=config.getByRole('button',{name:'Обновить задания',exact:true})
+  await expect(lastSettingsAction).toBeEnabled()
   await page.getByTestId('camera-sheet-close').press('Shift+Tab')
-  await expect(page.getByTestId('camera-permission-microphone')).toBeFocused()
-  await page.getByTestId('camera-permission-microphone').press('Tab')
+  await expect(lastSettingsAction).toBeFocused()
+  await lastSettingsAction.press('Tab')
   await expect(page.getByTestId('camera-sheet-close')).toBeFocused()
   await page.getByTestId('camera-sheet-close').click()
   await expect(page.getByTestId('camera-sheet-backdrop')).toHaveCount(0)

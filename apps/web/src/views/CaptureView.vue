@@ -1635,9 +1635,8 @@ onUnmounted(()=>{
           :class="{recording}" data-testid="camera-audio-view" aria-label="Диктофон">
           <span class="camera-audio-emblem" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="1.6" aria-hidden="true">
-              <rect x="9" y="2" width="6" height="13" rx="3"/>
-              <path d="M5 11a7 7 0 0 0 14 0M12 18v4m-5 0h10"/>
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/>
             </svg>
           </span>
           <div class="camera-audio-bars" aria-hidden="true">
@@ -1656,8 +1655,7 @@ onUnmounted(()=>{
           <span class="camera-blind-emblem" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="1.15" aria-hidden="true">
-              <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/>
-              <circle cx="12" cy="12" r="3"/><path d="m3 3 18 18"/>
+<path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7"></path><path d="M7.3 5.4A11.9 11.9 0 0 1 12 4.4c4.5 0 8 3 10 7.6a16.8 16.8 0 0 1-3 4.3M16.5 18a12 12 0 0 1-4.5 1.6C7.5 19.6 4 16.6 2 12a15.9 15.9 0 0 1 3-4.2"></path>
             </svg>
           </span>
           <h2>Слепой режим</h2>
@@ -1665,17 +1663,19 @@ onUnmounted(()=>{
           <time v-if="recording" data-testid="camera-blind-time">
             {{Math.floor(recordingElapsed/60).toString().padStart(2,'0')}}:{{(recordingElapsed%60).toString().padStart(2,'0')}}
           </time>
+          <div class="camera-blind-controls">
           <button v-if="captureMode==='photo'" type="button" class="camera-blind-shutter"
             data-testid="camera-blind-shutter" aria-label="Сделать снимок"
             :disabled="!stream||starting||busy||cameraZoomBusy||torchBusy||gpsLoading||!canCaptureType"
-            @click="capture">Снять</button>
+            @click="capture"><span></span></button>
           <button v-else-if="!recording" type="button" class="camera-blind-shutter video"
             data-testid="camera-blind-shutter"
             :disabled="!stream||starting||busy||cameraZoomBusy||torchBusy||gpsLoading||!canCaptureType"
-            @click="beginRecording">Начать запись</button>
+            aria-label="Начать запись" @click="beginRecording"><span></span></button>
           <button v-else type="button" class="camera-blind-shutter recording"
-            data-testid="camera-blind-shutter" @click="endRecording">Остановить запись</button>
-          <p class="camera-blind-note">Если клавиши громкости недоступны — нажмите кнопку</p>
+            data-testid="camera-blind-shutter" aria-label="Остановить запись" @click="endRecording"><span></span></button>
+          <p class="camera-blind-note">{{captureMode==='photo'?'Если клавиши громкости недоступны — нажмите кнопку':captureMode==='audio'?'Нажмите для начала или завершения аудиозаписи':'Нажмите для начала или завершения видеозаписи'}}</p>
+          </div>
           <button type="button" class="camera-blind-return"
             @click="toggleBlindMode">Вернуться назад</button>
         </div>
@@ -1889,6 +1889,13 @@ onUnmounted(()=>{
           <p v-if="devicePermissionStatus" role="status"
             data-testid="camera-permission-status">{{devicePermissionStatus}}</p>
         </section>
+        <section class="camera-preset-options"><h3>Политики заданий</h3>
+        <button type="button" :disabled="policyLoading||busy" @click="refreshPolicies">
+          {{ policyLoading?'Проверка…':'Обновить задания' }}
+        </button>
+        <p class="muted">Доступны только проверенные подписанные политики. При съёмке без сети используется последний подтверждённый снимок политики; сервер повторно проверит права при загрузке.</p>
+        <p v-if="policyNotice" class="muted" role="status">{{ policyNotice }}</p>
+        </section>
 
           </div>
         </div>
@@ -1913,23 +1920,18 @@ onUnmounted(()=>{
             </button>
           </header>
           <h2 v-else>Задание и данные съёмки</h2>
-        <label for="camera-assignment">Выбрать задание</label>
+<div class="camera-source-body"><section class="camera-source-section"><span class="section-title">Задание</span>
+        <label class="camera-source-field" for="camera-assignment">Выбрать задание
         <select id="camera-assignment" v-model="selectedAssignment" :disabled="busy||recording">
           <option value="">Личная запись (без задания)</option>
           <option v-for="policy in policies" :key="policy.assignmentId"
             :value="policy.assignmentId">
             Задание {{ policy.assignmentId.slice(0,8) }} · политика {{ policy.policyRevision }}
           </option>
-        </select>
-        <button type="button" :disabled="policyLoading||busy" @click="refreshPolicies">
-          {{ policyLoading?'Проверка…':'Обновить задания' }}
-        </button>
-        <p class="muted">Доступны только проверенные подписанные политики. При съёмке без сети используется последний подтверждённый снимок политики; сервер повторно проверит права при загрузке.</p>
-        <p v-if="policyNotice" class="muted" role="status">{{ policyNotice }}</p>
-        <div v-if="selectedAssignment" class="camera-private-instructions"
+        </select></label>
+        <div v-if="selectedAssignment" class="camera-private-instructions instruction"
           data-testid="camera-private-instructions">
           <template v-if="privateInstructionState==='ready'&&visiblePrivateInstructions">
-            <h3>Зашифрованные инструкции задания</h3>
             <p v-if="visiblePrivateInstructions.instructions" class="muted">
               Общие: {{ visiblePrivateInstructions.instructions }}
             </p>
@@ -1948,6 +1950,7 @@ onUnmounted(()=>{
             Откройте карточку задания, чтобы проверить и расшифровать их.
           </p>
         </div>
+        <p v-if="!selectedAssignment" class="instruction">Личная съёмка без требований задания.</p>
         <p v-if="captureMode!=='photo'" class="muted">
           Видео и аудио доступны только если владелец подписал разрешение
           соответствующего типа. Подтверждение записи связывается с
@@ -1959,17 +1962,18 @@ onUnmounted(()=>{
           описание минимум {{ requiredFields.descriptionMinLength }} символов,
           GPS {{ requiredFields.requiredGps?'обязателен':'необязателен' }}.
         </p>
-        <p v-if="requiredFields?.requiredGps" class="camera-policy-required"
+        <p v-if="requiredFields?.requiredGps" class="camera-policy-required tag"
           data-testid="camera-required-gps">GPS обязателен по правилам задания</p>
-        <p v-if="requiredFields?.requiredCategory" class="camera-policy-required"
+        <p v-if="requiredFields?.requiredCategory" class="camera-policy-required tag"
           data-testid="camera-required-category">Категория обязательна по правилам задания</p>
         <p v-if="requiredAdvanced" class="muted" data-testid="camera-advanced-rules">
           Категории (публичный список правил): {{ requiredAdvanced.allowedCategories.join(', ')||'любые' }};
           обязательные теги: {{ requiredAdvanced.requiredTags.join(', ')||'нет' }}.
         </p>
 
-        <h2>Приватная информация {{ captureMode==='photo'?'снимка':captureMode==='video'?'видео':'аудио' }}</h2>
-        <label for="camera-category">Категория</label>
+        </section>
+        <section class="camera-source-section" data-testid="camera-capture-fields"><span class="section-title">Данные следующих снимков</span>
+        <label class="camera-source-field" for="camera-category">Категория
         <select v-if="requiredAdvanced?.allowedCategories.length" id="camera-category"
           v-model="category" data-testid="camera-category-select"
           :required="!!requiredFields?.requiredCategory">
@@ -1979,13 +1983,15 @@ onUnmounted(()=>{
         </select>
         <input v-else id="camera-category" v-model="category" type="text" maxlength="64"
           :required="!!requiredFields?.requiredCategory"
-          autocomplete="off" placeholder="Например, репортаж">
-        <label for="camera-description">Описание съёмки</label>
+          autocomplete="off" placeholder="Например, репортаж"></label>
+        <label class="camera-source-field" for="camera-description">Описание съёмки
         <textarea id="camera-description" v-model="description" maxlength="4000"
-          rows="3" placeholder="Приватное описание (необязательно)"/>
-        <label for="camera-tags">Теги (через запятую)</label>
+          rows="3" placeholder="Приватное описание (необязательно)"/></label>
+        <label class="camera-source-field" for="camera-tags">Теги (через запятую)
         <input id="camera-tags" v-model="privateTags" type="text" autocomplete="off"
-          data-testid="camera-tags" placeholder="например, репортаж, событие" maxlength="600">
+          data-testid="camera-tags" placeholder="например, репортаж, событие" maxlength="600"></label>
+        </section>
+        <section class="camera-source-section"><span class="section-title">Геолокация</span>
         <div class="action-row">
           <button type="button" :disabled="gpsLoading||busy" @click="obtainGPS">
             {{ gpsLoading?'Определение GPS…':'Получить GPS' }}
@@ -2000,11 +2006,13 @@ onUnmounted(()=>{
         <p v-if="gpsError" role="alert" class="error-text">{{ gpsError }}</p>
         <p class="muted">GPS запрашивается только по нажатию. Категория, описание и координаты шифруются на устройстве и не попадают на сервер открытым текстом.</p>
 
+        </section>
           <div v-if="cameraSheet==='assignment'" class="camera-sheet-footer">
             <button type="button" :disabled="!canConfirmCameraAssignment"
               data-testid="camera-assignment-finish"
-              @click="finishCameraAssignment">Готово</button>
+              class="camera-source-btn primary" @click="finishCameraAssignment">Готово</button>
           </div>
+        </div>
         </div>
       </div>
       <p v-if="recording" role="status" class="status-text" data-testid="camera-recording-status">

@@ -55,7 +55,9 @@ test('Browser v3: opening section and folder-first display are real and device-p
   await page.reload()
   await expect(page.getByTestId('browser-tab-personal'))
     .toHaveAttribute('aria-selected','true')
-  await expect(file).toHaveCount(0)
+  // Personal media includes all three supported types, not only JPEG.
+  await expect(file).toHaveCount(1)
+  await expect(file).toHaveAttribute('data-plain-bytes','8192')
   await expect(top.locator('.browser-folder-item')).toHaveCount(0)
   await browserHeader(page,'settings')
   await expect(page.getByTestId('browser-pref-open-first')).toHaveValue('personal')

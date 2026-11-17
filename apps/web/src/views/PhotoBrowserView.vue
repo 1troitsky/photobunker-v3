@@ -188,6 +188,26 @@ function closeBulkActions():void{
 }
 const fileMenuKey=ref<string|null>(null)
 const folderMenuId=ref<string|null>(null)
+const pendingEmptyDelete=ref<string|null>(null)
+let emptyDeleteIntent:{id:string;session:NonNullable<typeof activeSession.value>}|null=null
+function cancelEmptyDelete():void{
+  if(folderBusy.value)return
+  const id=pendingEmptyDelete.value
+  pendingEmptyDelete.value=null;emptyDeleteIntent=null
+  void nextTick(()=>{
+    const target=document.querySelector<HTMLButtonElement>('[data-testid="browser-folder-menu-'+id+'"] [data-testid="browser-folder-menu-toggle"]')
+      ??document.querySelector<HTMLButtonElement>('[data-testid="browser-header-folder"]')
+    target?.focus()
+  })
+}
+async function confirmEmptyDelete():Promise<void>{
+  const intent=emptyDeleteIntent
+  if(!intent||!sameSessionDevice(intent.session,activeSession.value)){cancelEmptyDelete();return}
+  const ok=await changeFolders({kind:'remove-empty',id:intent.id})
+  if(emptyDeleteIntent!==intent)return
+  if(ok&&selectedFolder.value===intent.id)selectedFolder.value=null
+  cancelEmptyDelete()
+}
 function itemMenuTab(event:KeyboardEvent):void{
   const root=event.currentTarget as HTMLElement
   const elements=[...root.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],select:not(:disabled),input:not(:disabled)')].filter(el=>el.getClientRects().length)
@@ -611,7 +631,7 @@ const searchScope=computed(()=>{
   const scopedRows=archiveTab.value==='archive'||primarySection.value==='all'
     ?authenticatedRows
     :primarySection.value==='personal'
-      ?authenticatedRows.filter(item=>item.type==='photo'&&item.local
+      ?authenticatedRows.filter(item=>item.local
         &&!localAssignmentKeys.value.has(item.key))
       :authenticatedRows.filter(item=>localAssignmentKeys.value.has(item.key))
   // Folders are encrypted virtual client metadata. An all-folder query
@@ -1153,6 +1173,13 @@ async function createFolder():Promise<void>{
 }
 function openRename(id:string,name:string):void{
   editingFolderId.value=id;editFolderName.value=name
+  void nextTick(()=>document.querySelector<HTMLInputElement>('[data-testid="browser-rename-folder"]')?.focus())
+}
+function cancelRename():void{
+  if(folderBusy.value)return
+  const id=editingFolderId.value
+  editingFolderId.value=null;editFolderName.value=''
+  void nextTick(()=>document.querySelector<HTMLButtonElement>('[data-testid="browser-folder-menu-'+id+'"] [data-testid="browser-folder-menu-toggle"]')?.focus())
 }
 async function renameCurrentFolder():Promise<void>{
   if(!editingFolderId.value)return
@@ -1221,9 +1248,10 @@ async function moveSelected():Promise<void>{
   if(ok)selectedKeys.value=[]
 }
 async function deleteEmptyFolder(id:string):Promise<void>{
-  if(!window.confirm('Удалить пустую пользовательскую папку? Файлы и облако затронуты не будут.'))return
-  const ok=await changeFolders({kind:'remove-empty',id})
-  if(ok&&selectedFolder.value===id)selectedFolder.value=null
+  const session=activeSession.value
+  if(!session||folderBusy.value)return
+  emptyDeleteIntent={id,session};pendingEmptyDelete.value=id;folderNotice.value=''
+  void nextTick(()=>document.querySelector<HTMLButtonElement>('[data-testid="browser-delete-folder-close"]')?.focus())
 }
 function revokePreview():void{
   ++previewGeneration
@@ -1445,6 +1473,7 @@ watch(activeSession,(next,previous)=>{
     requestedFolderReturn=undefined
     scrollReturnKey=null
     editingFolderId.value=null
+    pendingEmptyDelete.value=null;emptyDeleteIntent=null
     createFolderOpen.value=false
     createFolderParent.value=''
     uploadSheetOpen.value=false
@@ -1867,19 +1896,6 @@ onUnmounted(()=>{
           :aria-selected="archiveTab==='archive'"
           @click="choosePrimarySection('archive')">Архив</button>
       </nav>
-      <p v-if="searchOpen&&primarySection==='personal'&&archiveTab==='all'"
-        class="browser-section-note" data-testid="browser-personal-catalog-scope">
-        Здесь показаны только доступные на этом устройстве фотографии без
-        подписанного контекста задания. Облачные файлы, назначение которых
-        ещё не проверено, остаются в разделе «Все».
-      </p>
-      <p v-if="searchOpen&&primarySection==='assignments'&&archiveTab==='all'"
-        class="browser-section-note" data-testid="browser-assignment-catalog-scope">
-        Показываются только загруженные на этом устройстве материалы с
-        сохранённым подписанным контекстом задания. Проверка участия и доступов
-        выполняется при открытии файлов; облачные материалы без доказательства
-        задания здесь не классифицируются.
-      </p>
       <section class="browser-folders" data-testid="browser-folder-controls">
         <div class="browser-folder-head">
           <div class="browser-breadcrumb browser-path" aria-label="Путь папки">
@@ -1993,18 +2009,25 @@ onUnmounted(()=>{
           <button class="primary-action" type="submit" :disabled="folderBusy">Создать папку</button>
           </div>
         </form>
-        <form v-if="editingFolderId" class="browser-folder-form"
-          @submit.prevent="renameCurrentFolder">
-          <label>Новое название
-            <input v-model="editFolderName" maxlength="80" required
-              data-testid="browser-rename-folder">
+        <div v-if="editingFolderId" class="browser-new-folder-backdrop" @click="cancelRename"></div>
+        <form v-if="editingFolderId" class="browser-folder-form browser-new-folder-sheet" role="dialog" aria-modal="true" aria-label="Переименовать"
+          @keydown.esc.stop.prevent="cancelRename" @keydown.tab="itemMenuTab" @submit.prevent="renameCurrentFolder">
+          <header class="browser-new-folder-heading"><strong>Переименовать</strong><button type="button" aria-label="Закрыть переименование" :disabled="folderBusy" @click="cancelRename">✕</button></header>
+          <div class="approved-folder-content"><label>Название
+            <input v-model="editFolderName" maxlength="80" required data-testid="browser-rename-folder">
           </label>
-          <button type="submit" :disabled="folderBusy">Сохранить</button>
-          <button type="button" @click="editingFolderId=null">Отмена</button>
+          <button class="primary-action" type="submit" :disabled="folderBusy">Сохранить</button>
+          <p v-if="folderNotice" role="status">{{folderNotice}}</p></div>
         </form>
+        <div v-if="pendingEmptyDelete" class="browser-new-folder-backdrop" @click="cancelEmptyDelete"></div>
+        <section v-if="pendingEmptyDelete" class="browser-folder-form browser-new-folder-sheet" role="dialog" aria-modal="true" aria-label="Удалить папку" data-testid="browser-delete-folder" @keydown.esc.stop.prevent="cancelEmptyDelete" @keydown.tab="itemMenuTab">
+          <header class="browser-new-folder-heading"><strong>Удалить папку</strong><button type="button" :disabled="folderBusy" data-testid="browser-delete-folder-close" aria-label="Отмена удаления" @click="cancelEmptyDelete">✕</button></header>
+          <div class="approved-folder-content"><div class="browser-dialog-info">Удалить пустую пользовательскую папку? Фотографии и другие файлы не удаляются.</div>
+          <button class="danger-action" type="button" :disabled="folderBusy" data-testid="browser-delete-folder-confirm" @click="confirmEmptyDelete">Удалить</button></div>
+        </section>
         <p v-if="!folderReady" role="status" class="muted">Загружаются зашифрованные папки…</p>
         <p v-if="folderError" role="alert" class="error-text">{{ folderError }}</p>
-        <p v-if="folderNotice" role="status" :class="folderNotice.startsWith('Локальные изменения сохранены.')?'browser-announcement':'muted'">{{ folderNotice }}</p>
+        <p v-if="folderNotice&&!editingFolderId" role="status" :class="folderNotice.startsWith('Локальные изменения сохранены.')?'browser-announcement':'muted'">{{ folderNotice }}</p>
       </section>
       <div v-if="browserSettingsOpen" class="browser-settings-backdrop"
         data-testid="browser-settings-backdrop" @click="closeBrowserSettings"></div>
@@ -2018,10 +2041,9 @@ onUnmounted(()=>{
         <header v-if="browserSettingsOpen" class="browser-settings-heading">
           <strong>Настройки Browser</strong>
           <button type="button" data-testid="browser-settings-close"
-            aria-label="Закрыть настройки Browser" @click="closeBrowserSettings">
-            Закрыть</button>
+            aria-label="Закрыть настройки Browser" @click="closeBrowserSettings">✕</button>
         </header>
-        <h2>Отображение</h2>
+        <div class="approved-settings-content">
         <label for="browser-pref-open-first">Открывать первым
           <select id="browser-pref-open-first" :value="browserOpenFirst"
             data-testid="browser-pref-open-first"
@@ -2033,23 +2055,7 @@ onUnmounted(()=>{
           </select>
         </label>
         <label>
-          <input type="checkbox" data-testid="browser-pref-folders-first"
-            :checked="foldersFirst"
-            @change="updateBrowserFoldersFirst(($event.target as HTMLInputElement).checked)">
-          Папки всегда сверху
-        </label>
-        <p class="muted">Положение папок меняется только на экране.
-          Файлы и шифрованная структура остаются на прежнем месте.</p>
-        <label>
-          <input type="checkbox" data-testid="browser-pref-days-left"
-            :checked="showRemainingDays"
-            @change="updateRemainingDays(($event.target as HTMLInputElement).checked)">
-          Показывать оставшиеся дни
-        </label>
-        <p class="muted">Меняется только текст срока хранения. Подписанный TTL файла,
-          права доступа и очистка на сервере не изменяются.</p>
-        <label>
-          <span class="browser-sr-only">Сортировка</span>
+          <span>Сортировка</span>
           <select v-model="sort" data-testid="browser-sort">
             <option value="newest">Новые сначала</option>
             <option value="oldest">Старые сначала</option>
@@ -2059,21 +2065,26 @@ onUnmounted(()=>{
             <option value="size-smallest">Размер: маленькие</option>
           </select>
         </label>
-        <h2>Настройки архива</h2>
-        <label>
-          <input type="checkbox" data-testid="browser-pref-use-archive"
+        <label class="browser-settings-row"><span><strong>Папки всегда сверху</strong><small>Независимо от сортировки</small></span><input class="browser-setting-toggle" type="checkbox" data-testid="browser-pref-folders-first"
+            :checked="foldersFirst"
+            @change="updateBrowserFoldersFirst(($event.target as HTMLInputElement).checked)"></label>
+        <p class="muted">Положение папок меняется только на экране.
+          Файлы и шифрованная структура остаются на прежнем месте.</p>
+        <label class="browser-settings-row"><span><strong>Показывать оставшиеся дни</strong><small>Вместо даты удаления</small></span><input class="browser-setting-toggle" type="checkbox" data-testid="browser-pref-days-left"
+            :checked="showRemainingDays"
+            @change="updateRemainingDays(($event.target as HTMLInputElement).checked)"></label>
+        <p class="muted">Меняется только текст срока хранения. Подписанный TTL файла,
+          права доступа и очистка на сервере не изменяются.</p>
+
+
+        <label class="browser-settings-row"><span><strong>Использовать архив</strong><small>После подтверждения сервером</small></span><input class="browser-setting-toggle" type="checkbox" data-testid="browser-pref-use-archive"
             :checked="archivePrefsShown.useArchive"
             :disabled="archivePrefsBusy||!!archivePrefs?.pending"
-            @change="setArchivePref('useArchive',($event.target as HTMLInputElement).checked)">
-          Использовать архив
-        </label>
-        <label>
-          <input type="checkbox" data-testid="browser-pref-auto-delete"
+            @change="setArchivePref('useArchive',($event.target as HTMLInputElement).checked)"></label>
+        <label class="browser-settings-row"><span><strong>Автоудаление из архива через 7 дней</strong><small>После перемещения в архив</small></span><input class="browser-setting-toggle" type="checkbox" data-testid="browser-pref-auto-delete"
             :checked="archivePrefsShown.autoDeleteAfter7Days"
             :disabled="archivePrefsBusy||!!archivePrefs?.pending"
-            @change="setArchivePref('autoDeleteAfter7Days',($event.target as HTMLInputElement).checked)">
-          Автоудаление из архива через 7 дней
-        </label>
+            @change="setArchivePref('autoDeleteAfter7Days',($event.target as HTMLInputElement).checked)"></label>
         <p class="muted">По умолчанию обе опции включены. Отключение архива
           не удаляет уже архивированные файлы. При отключённом архиве
           удаление активного файла будет прямым и необратимым после подтверждения.</p>
@@ -2106,11 +2117,32 @@ onUnmounted(()=>{
         <button type="button" :disabled="busy" @click="sync">Синхронизировать</button>
         <button type="button" :disabled="busy" @click="refresh">Обновить</button>
       </div>
+      <p class="muted">Поиск по ID мгновенный. Имена, описания, категории и теги
+        ищутся только после расшифровки на этом устройстве. Поисковый запрос и
+        незашифрованные метаданные не передаются серверу и не сохраняются в индексе.
+        Все папки — только загруженные записи. Расширенная проверка запускается
+        отдельно, ограничена 500 фото + 500 медиа из авторизованных индексов,
+        не обещает поиск по всему аккаунту и не сохраняет приватный индекс.
+        При сортировке по размеру файлы с неизвестным размером идут последними.</p>
+      <p v-if="browserSettingsOpen&&primarySection==='personal'&&archiveTab==='all'"
+        class="browser-section-note" data-testid="browser-personal-catalog-scope">
+        Здесь показаны только доступные на этом устройстве файлы без
+        подписанного контекста задания. Облачные файлы, назначение которых
+        ещё не проверено, остаются в разделе «Все».
+      </p>
+      <p v-if="browserSettingsOpen&&primarySection==='assignments'&&archiveTab==='all'"
+        class="browser-section-note" data-testid="browser-assignment-catalog-scope">
+        Показываются только загруженные на этом устройстве материалы с
+        сохранённым подписанным контекстом задания. Проверка участия и доступов
+        выполняется при открытии файлов; облачные материалы без доказательства
+        задания здесь не классифицируются.
+      </p>
         <div id="browser-import-settings"></div>
         <SharePanel v-if="sharePhotoId===null" v-show="browserSettingsOpen"
           :local-photos="localPhotos" @open-photo="showReceived"/>
         <div v-if="browserSettingsOpen" class="browser-settings-footer">
-          <button type="button" @click="closeBrowserSettings">Готово</button>
+          <button class="primary-action" type="button" @click="closeBrowserSettings">Применить</button>
+        </div>
         </div>
       </section>
       <p v-if="archiveTab==='archive'" class="muted">
@@ -2150,7 +2182,6 @@ onUnmounted(()=>{
         {{ archiveNotice }}</p>
 
       <div class="browser-search" v-show="searchOpen" data-testid="browser-search-panel">
-      <div class="browser-toolbar">
         <label class="search-line">
           <span class="browser-sr-only">Приватный поиск по ID, имени, описанию, категории или тегам</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m16 16 5 5"/></svg>
@@ -2159,8 +2190,9 @@ onUnmounted(()=>{
             placeholder="Название или ID файла"
             data-testid="browser-search">
         </label>
-        <label v-if="archiveTab==='all'">
-          <span class="browser-sr-only">Область поиска по загруженным файлам</span>
+      <div class="search-controls">
+        <label v-if="archiveTab==='all'" class="search-scope-label">
+          <span>Искать в папке</span>
           <select :value="searchFolderScope"
             data-testid="browser-search-folder-scope"
             @change="setSearchFolderScope(($event.target as HTMLSelectElement).value as SearchFolderScope)">
@@ -2188,11 +2220,7 @@ onUnmounted(()=>{
             :privateSearchExpanded?'Расширенная проверка включена'
             :'Проверить больше файлов (до 1000)' }}
         </button>
-
-
-
-      </div>
-            <nav class="browser-filters type-filters" aria-label="Тип файла">
+        <nav class="browser-filters type-filters" aria-label="Тип файла">
         <button v-for="tab in (['all','photo','video','audio'] as const)" :key="tab"
           type="button" :aria-pressed="filter===tab"
           :class="{selected:filter===tab}" :data-testid="'browser-filter-'+tab"
@@ -2200,17 +2228,11 @@ onUnmounted(()=>{
           {{ tab==='all'?'Все файлы':tab==='photo'?'Фото':tab==='video'?'Видео':'Аудио' }}
         </button>
       </nav>
-      <p class="muted" data-testid="browser-summary">
+      </div>
+      <p v-if="search.trim()" class="muted" data-testid="browser-summary">
         {{ visible.length }} файлов в загруженном каталоге
         · {{ pendingCount }} локальных не подтверждены облаком
       </p>
-      <p v-if="search.trim()" class="muted">Поиск по ID мгновенный. Имена, описания, категории и теги
-        ищутся только после расшифровки на этом устройстве. Поисковый запрос и
-        незашифрованные метаданные не передаются серверу и не сохраняются в индексе.
-        Все папки — только загруженные записи. Расширенная проверка запускается
-        отдельно, ограничена 500 фото + 500 медиа из авторизованных индексов,
-        не обещает поиск по всему аккаунту и не сохраняет приватный индекс.
-        При сортировке по размеру файлы с неизвестным размером идут последними.</p>
       <p v-if="privateExpansionStatus||privateExpansionBusy" class="muted"
         data-testid="browser-expanded-search-status" role="status">
         {{ privateExpansionBusy
@@ -2344,7 +2366,7 @@ onUnmounted(()=>{
               :aria-label="'Действия с файлом '+item.id"
               role="dialog" data-testid="browser-file-menu-panel"
               @keydown.esc.stop.prevent="fileMenuEscape(item.key)" @keydown.tab="itemMenuTab">
-              <header class="dialog-heading"><strong>Файл {{item.id.slice(0,8)}}</strong><button type="button" aria-label="Закрыть меню файла" @click="fileMenuEscape(item.key)">×</button></header>
+              <header class="dialog-heading"><strong>{{item.id.slice(0,8)}}</strong><button type="button" aria-label="Закрыть меню файла" @click="fileMenuEscape(item.key)">✕</button></header>
             <label v-if="archiveTab==='all'&&folderReady&&!folderError"
               class="browser-file-move">
               <span>Папка</span>
@@ -2466,7 +2488,7 @@ onUnmounted(()=>{
                 data-testid="browser-folder-menu-panel"
                 :aria-label="'Действия с папкой '+folder.name"
                 @keydown.esc.stop.prevent="folderMenuEscape" @keydown.tab="itemMenuTab">
-                <header class="dialog-heading"><strong>{{folder.name}}</strong><button type="button" aria-label="Закрыть меню папки" @click="folderMenuEscape">×</button></header>
+                <header class="dialog-heading"><strong>{{folder.name}}</strong><button type="button" aria-label="Закрыть меню папки" @click="folderMenuEscape">✕</button></header>
                 <button type="button" :disabled="folderBusy"
                   :aria-label="'Переименовать '+folder.name"
                   @click="openRename(folder.id,folder.name);closeFileMenu()">Переименовать</button>

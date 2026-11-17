@@ -17,7 +17,7 @@ assert.equal(geometry.failures.length,0)
 for(const viewport of geometry.viewports)for(const screen of Object.values(viewport.screens))
   for(const [name,ref] of Object.entries(screen.reference))for(const key of ['x','y','w','h'])assert.equal(screen.app[name][key],ref[key])
 const pixels=await json('pixel-comparison.json')
-assert.equal(pixels.length,24)
+assert.equal(pixels.length,30)
 for(const pair of pixels){assert.equal(pair.status,'PASS');assert.equal(pair.different_pixels,0)}
 for(const [file,count] of [['e2e-results.json',151],['production-e2e.json',10]]){
   const e=await json(file)
