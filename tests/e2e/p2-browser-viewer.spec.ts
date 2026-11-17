@@ -61,11 +61,24 @@ test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navig
     page.on('download',d=>downloads.push(d.suggestedFilename()))
     await expect(page.getByTestId('file-viewer-audio')).toBeVisible()
     expect(downloads).toEqual([])
-    page.once('dialog',dialog=>dialog.accept())
-    const downloaded=page.waitForEvent('download')
     await page.getByRole('button',{name:'Скачать',exact:true}).click()
+    await expect(page.getByTestId('viewer-download-popover')).toBeVisible()
+    await page.getByTestId('viewer-download-cancel').click()
+    expect(downloads).toEqual([])
+    await page.getByRole('button',{name:'Скачать',exact:true}).click()
+    const downloaded=page.waitForEvent('download')
+    await page.getByTestId('viewer-download-confirm').click()
     expect((await downloaded).suggestedFilename()).toBe('PRIVATE-AUDIO-WITH-NAME.wav')
 
+    // Unconfirmed plaintext export consent must not survive logout.
+    await page.getByRole('button',{name:'Скачать',exact:true}).click()
+    await expect(page.getByTestId('viewer-download-cancel')).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(page.getByTestId('viewer-download-confirm')).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('viewer-download-popover')).toHaveCount(0)
+    await expect(page.getByRole('button',{name:'Скачать',exact:true})).toBeFocused()
+    await page.getByRole('button',{name:'Скачать',exact:true}).click()
     // A signed-out browser must immediately discard plaintext media.
     await page.evaluate(async()=>{
       const {logout}=await import('/src/features/identity/application/session.ts')
@@ -77,5 +90,7 @@ test('P2 File Viewer: actual encrypted media, same-origin export, keyboard navig
       .getByRole('button',{name:'Скачать'})).toBeDisabled()
     await expect(page.getByTestId('file-viewer-audio')).toHaveCount(0)
     await expect(page.getByTestId('file-viewer-info')).toHaveCount(0)
+    await expect(page.getByTestId('viewer-download-popover')).toHaveCount(0)
+    expect(downloads).toHaveLength(1)
   }finally{await context.close()}
 })

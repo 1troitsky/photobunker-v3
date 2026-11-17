@@ -142,3 +142,67 @@
 .browser-announcement{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
 
 .browser-v3 .browser-folder-cover.empty-folder{grid-template-columns:1fr;grid-template-rows:1fr;gap:0;padding:0}
+
+/* New-folder dialog from Browser v3. */
+.browser-v3 .browser-new-folder-sheet{width:100%;max-height:86dvh;padding:18px 17px 24px;background:#292929;border:0;border-radius:12px 12px 0 0;box-shadow:none;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal;display:block}
+.browser-v3 .browser-new-folder-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 15px;padding:0;border:0}
+.browser-v3 .browser-new-folder-heading strong{font-size:15px;font-weight:750}
+.browser-v3 .browser-new-folder-heading button{padding:6px;width:auto;height:auto;min-height:0;border:0;background:transparent;color:#ddd;font:inherit}
+.browser-v3 .approved-folder-content{display:grid;gap:10px}
+.browser-v3 .approved-folder-content label{display:grid;gap:5px;margin:0;color:#bbb;font-size:12px;font-weight:400}
+.browser-v3 .approved-folder-content input,.browser-v3 .approved-folder-content select{width:100%;margin:0;background:#1c1c1c;color:#fff;border:1px solid #555;border-radius:6px;padding:10px;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.browser-v3 .approved-folder-content .primary-action{padding:12px;border:0;border-radius:6px;background:var(--green);color:#152119;font-size:13px;font-weight:750;text-align:center;min-height:0}
+@media(min-width:700px){.browser-v3 .browser-new-folder-sheet{max-width:480px;margin-inline:auto}}
+
+.browser-v3 .browser-folders .browser-folder-form.browser-new-folder-sheet{position:fixed;left:50%;bottom:0;transform:translateX(-50%);width:100%;margin:0;max-width:none;max-height:86dvh;display:block;padding:18px 17px 24px;border:0;border-radius:12px 12px 0 0;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.browser-v3 .browser-new-folder-sheet .approved-folder-content input,.browser-v3 .browser-new-folder-sheet .approved-folder-content select{min-height:0;height:auto}
+@media(min-width:700px){.browser-v3 .browser-folders .browser-folder-form.browser-new-folder-sheet{max-width:480px}}
+.browser-v3 .browser-new-folder-sheet .approved-folder-content input{max-width:none}
+
+.browser-v3 .browser-upload-sheet.open{width:100%;max-width:none;max-height:86dvh;padding:18px 17px 24px;border:0;border-radius:12px 12px 0 0;box-shadow:none;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.browser-v3 .browser-upload-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0;margin:0 0 15px;border:0}
+.browser-v3 .browser-upload-heading strong{font-size:15px;font-weight:750}
+.browser-v3 .browser-upload-heading button{padding:6px;min-height:0;width:auto;background:transparent;border:0;color:#ddd;font:inherit}
+@media(min-width:700px){.browser-v3 .browser-upload-sheet.open{max-width:480px}}
+
+.browser-v3 .browser-new-folder-sheet{color:#f3f3f3}
+.browser-v3 .browser-folder-open{font:inherit}
+.browser-v3 .browser-folder-cover.empty-folder>svg{color:inherit}
+
+.browser-v3 .browser-folders .browser-folder-form.browser-new-folder-sheet{color:#f3f3f3}
+
+/* Settings use the approved Browser dialog and toggle rows. */
+.browser-v3 .browser-archive-preferences.is-browser-settings-sheet{display:block;padding:18px 17px 24px;max-height:86dvh;width:100%;max-width:none;background:#292929;color:#f3f3f3;border:0;border-radius:12px 12px 0 0;box-shadow:none;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.browser-v3 .browser-settings-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 15px;padding:0;border:0}
+.browser-v3 .browser-settings-heading strong{font-size:15px;font-weight:750}
+.browser-v3 .browser-settings-heading button{padding:6px;width:auto;min-height:0;border:0;background:transparent;color:#ddd;font:inherit}
+.browser-v3 .approved-settings-content{display:grid;gap:10px}
+.browser-v3 .approved-settings-content>label{display:grid;gap:5px;align-items:normal;color:#bbb;font-size:12px;margin:0}
+.browser-v3 .approved-settings-content>label select{width:100%;background:#1c1c1c;color:#fff;border:1px solid #555;border-radius:6px;padding:10px;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.browser-v3 .approved-settings-content>.browser-settings-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-top:1px solid #414141}
+.browser-v3 .browser-settings-row>span{display:grid;gap:3px}
+.browser-v3 .browser-settings-row small{color:#a5a5a5;font-size:10px}
+.browser-v3 .browser-settings-row input.browser-setting-toggle{appearance:none;height:23px;width:40px;flex:0 0 40px;border:0;border-radius:16px;background:#555;position:relative;cursor:pointer;margin:0}
+.browser-setting-toggle:after{content:"";position:absolute;top:3px;left:3px;width:17px;height:17px;background:#eee;border-radius:50%;transition:transform .16s}
+.browser-v3 .browser-settings-row input.browser-setting-toggle:checked{background:var(--green)}
+.browser-setting-toggle:checked:after{transform:translateX(17px);background:#162418}
+.browser-v3 .browser-settings-footer{margin:0;padding:0;border:0}
+.browser-v3 .browser-settings-footer .primary-action{width:100%;padding:12px;border:0;border-radius:6px;background:var(--green);color:#152119;font-size:13px;font-weight:750;text-align:center}
+@media(min-width:700px){.browser-v3 .browser-archive-preferences.is-browser-settings-sheet{max-width:480px}}
+@media(prefers-reduced-motion:reduce){.browser-setting-toggle:after{transition:none}}
+
+.browser-v3 .browser-dialog-info{padding:13px;background:#383838;border-radius:7px;color:#d1d1d1;font-size:12px;line-height:1.6}
+.browser-v3 .approved-folder-content .danger-action{padding:12px;border:0;border-radius:6px;background:#393939;color:#efaaaa;font-size:13px;text-align:left}
+
+.browser-v3 .approved-folder-content .danger-action{min-height:0}
+.browser-v3 .browser-search .search-line{margin:0}
+.browser-v3 .browser-search .search-scope-label{display:grid;gap:6px;color:#bbb;font-size:11px;font-weight:600}
+.browser-v3 .browser-search .search-scope-label select{height:41px;padding:0 10px;background:#282828;border:1px solid #464646;border-radius:6px;font:600 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#eee}
+
+.browser-v3 .browser-search .browser-filters.type-filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:0;border:0}
+.browser-v3 .browser-search .type-filters button{min-width:0;min-height:35px;border:1px solid #444;border-radius:6px;background:#292929;color:#aaa;padding:5px 2px;font-size:10px;white-space:nowrap;flex:none}
+.browser-v3 .browser-search .type-filters button.selected{background:#264a32;color:#d9ffe0;border-color:#31834b}
+
+.browser-v3 .browser-search .search-line svg,.browser-header-actions svg{stroke-width:1.7}
+
+.browser-v3 .browser-settings-row input.browser-setting-toggle{font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#fff;padding:10px}

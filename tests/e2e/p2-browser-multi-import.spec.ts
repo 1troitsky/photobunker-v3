@@ -1,3 +1,5 @@
+import {openImportSheet} from './helpers/browser-import'
+import {mediaImportViews,openImportTools} from './helpers/browser-import'
 import {browserHeader} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
@@ -15,24 +17,27 @@ test('P2 Browser: offline multi-select and drag-drop AES-GCM import into selecte
     await expect(page.getByTestId('browser-v3')).toBeVisible()
     await page.getByRole('button',{name:'Новая папка'}).click()
     await page.getByTestId('browser-folder-name').fill('Project Evidence')
-    await page.getByRole('button',{name:'Создать',exact:true}).click()
+    await page.getByRole('button',{name:'Создать папку',exact:true}).click()
     const folder=page.getByRole('button',{name:'Project Evidence',exact:true})
     await expect(folder).toBeVisible()
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
     await browserHeader(page,'upload')
     await expect(page.getByTestId('browser-import-sheet')).toBeVisible()
+    await openImportTools(page)
     await page.locator('#media-import-category').fill('PRIVATE-CATEGORY')
     await page.locator('#media-import-description').fill('PRIVATE-BATCH-CASE')
     await page.locator('#media-import-tags').fill('confidential, field')
     await context.setOffline(true)
     const dest=page.getByTestId('media-import-destination')
+    await openImportSheet(dest.page())
     await dest.selectOption({label:'Project Evidence'})
+    await openImportSheet(page.getByTestId('media-import-file').page())
     await page.getByTestId('media-import-file').setInputFiles([
       {name:'BATCH-ONE.wav',mimeType:'audio/wav',buffer:Buffer.alloc(8192,0x51)},
       {name:'BATCH-TWO.webm',mimeType:'video/webm',buffer:Buffer.alloc(12288,0x42)},
     ])
-    const importPanel=page.locator('.media-import-p1')
+    const importPanel=mediaImportViews(page)
     await expect(importPanel.getByText(/Зашифровано на устройстве 2 из 2 файлов/))
       .toBeVisible({timeout:30000})
     // Folder placement is a distinct AES-GCM IndexedDB transaction after

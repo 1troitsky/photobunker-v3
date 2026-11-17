@@ -1973,3 +1973,21 @@ a:focus-visible { outline: 2px solid #abf0c4; outline-offset: -3px; }
 @media(max-width:460px){.shell-header:has(.browser-header-actions){padding-inline:9px;gap:5px}.shell-header .shell-header-actions.browser-header-actions button{width:29px;min-width:29px}}
 @media(max-width:365px){.shell-header:has(.browser-header-actions){gap:4px}.shell-header:has(.browser-header-actions) .brand-copy strong{font-size:12px}.shell-header:has(.browser-header-actions) .brand-mark{width:31px;height:31px;flex-basis:31px}}
 @media(max-width:360px){.shell-header .shell-header-actions.browser-header-actions button{width:27px;min-width:27px}}
+
+/* Core routes use the normative shared Shell, without legacy compact overrides. */
+.shell-dock{font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+@media(max-width:460px){.shell-header:has(.viewer-header-actions),.shell-header:has(.camera-header-actions){padding-inline:9px;gap:5px}.shell-header:has(.camera-header-actions) .brand-copy{max-width:none}.shell-header:has(.camera-header-actions) .brand-copy strong{font-size:14px}.shell-header:has(.camera-header-actions) .brand-copy small{font-size:10px}}
+
+/* Verbatim context-action geometry from the approved core references. */
+.shell-header .shell-header-actions.browser-header-actions button{width:32px;min-width:32px;flex:0 0 32px;height:40px}
+.shell-header .shell-header-actions.browser-header-actions button svg{width:20px;height:20px}
+.shell-header .shell-header-actions.viewer-header-actions button{width:35px;min-width:0;height:40px}
+.shell-header .shell-header-actions.camera-header-actions{gap:3px}
+.shell-header .shell-header-actions.camera-header-actions button{width:35px;min-width:35px;height:37px}
+.shell-header .shell-header-actions.camera-header-actions button svg{width:21px;height:21px}
+@media(max-width:460px){.shell-header .shell-header-actions.viewer-header-actions button{width:29px}.shell-header .shell-header-actions.viewer-header-actions button svg{width:19px;height:19px}}
+@media(max-width:375px){.shell-header .shell-header-actions.viewer-header-actions button{width:27px}}
+@media(max-width:365px){.shell-header:has(.browser-header-actions){gap:5px}.shell-header:has(.browser-header-actions) .brand-copy strong{font-size:14px}.shell-header:has(.browser-header-actions) .brand-mark{width:34px;height:34px;flex-basis:34px}}
+
+@media(max-width:460px){.shell-header .shell-header-actions.browser-header-actions button{width:29px;min-width:29px;flex-basis:29px}}
+@media(max-width:360px){.shell-header .shell-header-actions.browser-header-actions button{width:27px;min-width:27px;flex-basis:27px}}

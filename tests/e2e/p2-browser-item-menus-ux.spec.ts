@@ -13,7 +13,7 @@ test('Browser v3: file and encrypted-folder three-dot actions use original local
   await page.goto('/browser')
   await browserHeader(page,'folder')
   await page.getByTestId('browser-folder-name').fill('Private Actions')
-  await page.getByRole('button',{name:'Создать',exact:true}).click()
+  await page.getByRole('button',{name:'Создать папку',exact:true}).click()
   await expect(page.getByRole('button',{name:'Private Actions',exact:true}))
     .toBeVisible()
 

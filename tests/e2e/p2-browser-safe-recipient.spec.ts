@@ -1,3 +1,4 @@
+import {openMediaExchange} from './helpers/browser-import'
 import {browserControl,browserHeader} from './support/browser-ui'
 import {expect,test} from '@playwright/test'
 
@@ -143,7 +144,7 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
     await browserHeader(owner,'upload')
     await expect(owner.getByTestId('browser-import-sheet')).toBeVisible()
-    const share=owner.getByTestId('media-share-panel')
+    const share=await openMediaExchange(owner)
     await expect(share).toBeVisible()
     // A future Public Card policy can be drafted and signed, but MUST
     // neither grant B any read permission nor create a public token.
@@ -266,7 +267,7 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
     await browserHeader(owner,'upload')
     await expect(owner.getByTestId('browser-import-sheet')).toBeVisible()
-    const associatedPanel=owner.getByTestId('media-share-panel')
+    const associatedPanel=await openMediaExchange(owner)
     await expect(associatedPanel.getByTestId('media-safe-candidate'))
       .toHaveCount(1)
     await associatedPanel.getByTestId('media-open-editorial-binding').click()
@@ -388,7 +389,7 @@ test('P2 safe-only: source-bound signed E2EE grant decrypts ONLY masked JPEG and
       manifest:404,originalChunk:404,detail:200,
       mediaId:edited.safeId,leakedSecret:false,
     })
-    const recv=recipient.getByTestId('media-share-panel')
+    const recv=await openMediaExchange(recipient)
     await recv.getByRole('button',{name:'Обновить медиа-разрешения'}).click()
     await expect(recv.getByText('Адресная закрытая JPEG-копия; оригинал не передан'))
       .toBeVisible()

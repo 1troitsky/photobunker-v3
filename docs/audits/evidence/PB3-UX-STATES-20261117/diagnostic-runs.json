@@ -1,0 +1,27 @@
+{
+  "status": "DIAGNOSTIC_FAILURES_RETAINED",
+  "failures": [
+    {
+      "name": "Node release integrity",
+      "command": "node --test scripts/release-integrity/integrity.test.mjs",
+      "exitCode": 1,
+      "status": "FAIL",
+      "category": "ENVIRONMENT",
+      "reason": "Default temporary directory has a symlinked ancestor on macOS; security assertion retained; same tests passed with TMPDIR=/private/tmp"
+    },
+    {
+      "category": "UX",
+      "command": "PB3_UX_BASE_URL=http://127.0.0.1:16173 PB3_UX_EVIDENCE_DIR=../core-states-final-dev node scripts/ux/capture-core-parity.mjs",
+      "exitCode": 1,
+      "reason": "Search technical explanation shifted content +78px; toggle browser defaults differed from reference",
+      "final": "Corrected; exact final compiled proof PASS"
+    },
+    {
+      "category": "UX",
+      "command": "PB3_UX_BASE_URL=http://127.0.0.1:16173 PB3_UX_EVIDENCE_DIR=../core-states-verified-dev node scripts/ux/capture-core-parity.mjs",
+      "exitCode": 1,
+      "reason": "One remaining toggle font inherited 12px instead of reference 13px; local cycle stopped, corrected before frozen build",
+      "final": "Final compiled proof PASS"
+    }
+  ]
+}

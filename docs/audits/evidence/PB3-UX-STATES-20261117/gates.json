@@ -1,0 +1,87 @@
+{
+  "productCommit": "cb22686149031523b981523905abe00073e874f1",
+  "appsTree": "1fb151d47bf38beb1033e0cfd42f382c0f486cb1",
+  "gates": [
+    {
+      "name": "TypeScript",
+      "command": "pnpm typecheck",
+      "exitCode": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "Vitest",
+      "command": "pnpm test:web",
+      "exitCode": 0,
+      "status": "PASS",
+      "tests": 1020,
+      "files": 140
+    },
+    {
+      "name": "Build",
+      "command": "pnpm build",
+      "exitCode": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "Canonical UX",
+      "command": "node docs/ux-integration/verify-source.mjs",
+      "exitCode": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "Node integrity/UX",
+      "command": "TMPDIR=/private/tmp node --test docs/ux-integration/check-pr-lane.test.mjs scripts/release-integrity/integrity.test.mjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": 37
+    },
+    {
+      "name": "Compiled Chromium",
+      "command": "pnpm exec playwright test -c ../ux-parity-acceptance-20261116/playwright.production.config.ts",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": 10
+    },
+    {
+      "name": "Visual geometry",
+      "command": "PB3_UX_BASE_URL=http://127.0.0.1:16175 PB3_UX_VIEWPORTS=375x812,390x844,1280x800 PB3_UX_EVIDENCE_DIR=docs/audits/evidence/PB3-UX-STATES-20261117 node scripts/ux/capture-core-parity.mjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "screenPairs": 81,
+      "anchors": 555,
+      "coordinates": 2220,
+      "styleContractProperties": 180
+    },
+    {
+      "name": "Static pixels",
+      "command": "node scripts/ux/compare-static-pixels.mjs docs/audits/evidence/PB3-UX-STATES-20261117",
+      "status": "PASS",
+      "exitCode": 0,
+      "pairs": 30,
+      "differentPixels": 0
+    },
+    {
+      "name": "Docker build",
+      "command": "docker build -f local-runner/Dockerfile.web.production --build-arg VITE_APP_NAME=PhotoBunker --build-arg VITE_APP_SHORT_NAME=PhotoBunker --build-arg VITE_APP_SLUG=photobunker --build-arg VITE_APP_MARK=pb --build-arg VITE_APP_PUBLIC_URL=http://127.0.0.1:5173 --build-arg VITE_APP_THEME_COLOR=\\#1ed760 --build-arg VITE_APP_ICON_URL=/icons/app.svg -t pb3-ux-web:20261117 .",
+      "status": "PASS",
+      "exitCode": 0,
+      "image": "sha256:970a9a952080ac5e3657e91003de2bdcfb868ee072605efce96b708677f26388"
+    },
+    {
+      "name": "Full Chromium",
+      "command": "PATH=\"$PWD/../ux-parity-acceptance-20261116/bin:$PATH\" pnpm exec playwright test -c ../ux-parity-acceptance-20261116/playwright.config.ts",
+      "status": "PASS",
+      "exitCode": 0,
+      "tests": 151,
+      "workers": 1,
+      "retries": 0,
+      "skipped": 0,
+      "flaky": 0
+    }
+  ],
+  "nativeSafari": {
+    "status": "NOT TESTED",
+    "reason": "Automatic approval review rejected safaridriver launch; owner permission pending"
+  },
+  "physicalDevices": "NOT TESTED"
+}

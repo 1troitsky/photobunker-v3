@@ -1,3 +1,5 @@
+import {openImportSheet} from './helpers/browser-import'
+import {mediaImportViews,openImportTools,sendImportedMedia} from './helpers/browser-import'
 import {browserControl,browserHeader} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
@@ -22,13 +24,15 @@ test('P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder ->
     await expect(a.getByTestId('browser-v3')).toBeVisible()
     await a.getByRole('button',{name:'Новая папка'}).click()
     await a.getByTestId('browser-folder-name').fill('HTTPS Evidence')
-    await a.getByRole('button',{name:'Создать',exact:true}).click()
+    await a.getByRole('button',{name:'Создать папку',exact:true}).click()
     // Browser v3 has a single Header-triggered upload sheet. Its embedded
     // encrypted MediaImportPanel is correctly hidden until explicitly opened.
     await browserHeader(a,'upload')
     await expect(a.getByTestId('browser-import-sheet')).toBeVisible()
+    await openImportTools(a)
     await a.locator('#media-import-category').fill('Private HTTPS')
     await a.locator('#media-import-description').fill('Client-side-only CORS source')
+    await openImportSheet(a.getByTestId('media-import-destination').page())
     await a.getByTestId('media-import-destination')
       .selectOption({label:'HTTPS Evidence'})
 
@@ -44,11 +48,12 @@ test('P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder ->
           'content-length':String(bytes.length)},
         body:bytes})
     })
+    await openImportSheet(a.getByTestId('media-import-https-url').page())
     await a.getByTestId('media-import-https-url').fill(source)
     // No fetch on typing or rerender; explicit click is required.
     expect(sourceHits).toBe(0)
     await a.getByTestId('media-import-https-submit').click()
-    const panel=a.locator('.media-import-p1')
+    const panel=mediaImportViews(a)
     await expect(panel.getByText(/Файл зашифрован и сохранён на устройстве/))
       .toBeVisible({timeout:30000})
     expect(sourceHits).toBe(1)
@@ -93,7 +98,7 @@ test('P2 Browser: explicit CORS HTTPS fetch -> local AES-GCM -> chosen folder ->
     expect(local.serialized).not.toContain('assets.example.org')
     expect(apiRequests.join('\n')).not.toContain(token)
     expect(apiRequests.join('\n')).not.toContain('assets.example.org')
-    await panel.getByRole('button',{name:'Отправить медиа'}).click()
+    await sendImportedMedia(panel.page())
     await expect.poll(()=>a.evaluate(async()=>{
       const media=await import('/src/features/media/application/media-outbox.ts')
       return (await media.listLocalMedia())[0]?.state
@@ -144,14 +149,16 @@ test('P2 Browser: rejects private/HTTP address locally and never contacts the so
       if(origin==='https://127.0.0.1'||origin==='https://host.local')
         seen.push(request.url())
     })
+    await openImportSheet(page.getByTestId('media-import-https-url').page())
     await page.getByTestId('media-import-https-url')
       .fill('https://127.0.0.1/private.wav')
     await expect(page.getByTestId('media-import-https-submit'))
       .toBeEnabled({timeout:15000})
     await page.getByTestId('media-import-https-submit').click()
-    const panel=page.locator('.media-import-p1')
+    const panel=mediaImportViews(page)
     await expect(panel.getByRole('alert'))
-      .toContainText('media.link_private_host',{timeout:15000})
+      .toHaveAttribute('data-error-code','media.link_private_host',{timeout:15000})
+    await expect(panel.getByRole('alert')).toContainText('Не удалось загрузить файл. Проверьте ссылку и доступ к ней.')
     // A concurrent, genuine authenticated catalog refresh must NEVER
     // clear a user-action rejection (the old refresh() did exactly that).
     const catalogGet=page.waitForResponse(response=>
@@ -164,7 +171,7 @@ test('P2 Browser: rejects private/HTTP address locally and never contacts the so
     await catalogResponse.finished()
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>resolve(null))))
     await expect(panel.getByRole('alert'))
-      .toContainText('media.link_private_host',{timeout:15000})
+      .toHaveAttribute('data-error-code','media.link_private_host',{timeout:15000})
     expect(seen).toEqual([])
     const local=await page.evaluate(async()=>{
       const m=await import('/src/features/media/application/media-outbox.ts')

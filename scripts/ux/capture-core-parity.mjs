@@ -50,6 +50,7 @@ try{
       const dir=path.join(out,`${size.width}x${size.height}`)
       await mkdir(dir,{recursive:true})
       async function openReference(url){
+        await reference.goto('about:blank')
         await reference.goto(refs+url)
         if(size.width>=700)await reference.locator('[data-device="desktop"]').first().click()
       }
@@ -60,12 +61,20 @@ try{
         await reference.addStyleTag({content:frame})
         await reference.evaluate(()=>{window.scrollTo(0,0);document.querySelector('.site')?.scrollTo(0,0)})
         await page.mouse.move(0,0);await reference.mouse.move(0,0)
-        await reference.screenshot({path:path.join(dir,name+'-reference.png')})
-        await actual.screenshot({path:path.join(dir,name+'-app.png'),mask:name.startsWith('public-card')?[actual.locator('.share-url')]:[]})
+        await reference.screenshot({path:path.join(dir,name+'-reference.png'),mask:name.startsWith('welcome-auth')?[reference.locator('textarea')]:[]})
+        await actual.screenshot({path:path.join(dir,name+'-app.png'),mask:name.startsWith('public-card')?[actual.locator('.share-url')]:name.startsWith('welcome-auth')?[actual.locator('textarea')]:[]})
+        if(name==='camera-audio'){
+          await reference.locator('.audio-stage').screenshot({path:path.join(dir,'camera-audio-stage-reference.png')})
+          await actual.locator('.camera-audio-view').screenshot({path:path.join(dir,'camera-audio-stage-app.png')})
+        }
         const source=await measure(reference,selectors),app=await measure(actual,selectors)
         metrics.screens[name]={reference:source,app}
         for(const [key,expected] of Object.entries(source)){
           if(!expected||!app[key]){result.failures.push({viewport:size,screen:name,anchor:key,reason:'missing'});continue}
+          if(['camera-settings','browser-new-folder','browser-upload','viewer-info','viewer-download'].includes(name)){
+            for(const property of ['font','color','background','padding','radius','lineHeight'])
+              if(app[key][property]!==expected[property])result.failures.push({viewport:size,screen:name,anchor:key,property,expected:expected[property],actual:app[key][property]})
+          }
           for(const dimension of ['x','y','w','h']){
             const delta=app[key][dimension]-expected[dimension]
             if(delta!==0)result.failures.push({viewport:size,screen:name,anchor:key,dimension,delta})
@@ -75,15 +84,55 @@ try{
       await page.goto(base+'/welcome')
       await expect(page.getByTestId('welcome-screen')).toBeVisible()
       await pair('welcome','welcome/',{logo:'.welcome-logo',name:'.welcome-brand-name',actions:'.welcome-links',carousel:'.carousel',art:'.carousel-art',title:'.carousel-copy h2',dots:'.carousel-dots'})
-      await page.goto(base+'/settings')
-      await page.getByRole('button',{name:'Создать ключ'}).click()
-      const recovery=await page.locator('#generated-key').inputValue()
-      await page.getByLabel('Я сохранил ключ восстановления').check()
-      await page.getByRole('button',{name:'Завершить регистрацию'}).click()
-      await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
+      for(let slide=1;slide<6;slide++){
+        await page.getByRole('button',{name:'Показать слайд '+(slide+1),exact:true}).click()
+        await pair('welcome-slide-'+slide,'welcome/',{logo:'.welcome-logo',name:'.welcome-brand-name',actions:'.welcome-links',carousel:'.carousel',art:'.carousel-art',title:'.carousel-copy h2',dots:'.carousel-dots'},page,ref=>ref.locator('[data-slide="'+slide+'"]').click())
+      }
+      await page.getByRole('button',{name:'Показать слайд 1',exact:true}).click()
+      await page.goto(base+'/welcome/recover')
+      await pair('welcome-auth-recover','welcome/#recover',{heading:'.auth-header',back:'.auth-back',panel:'.auth-panel',key:'.auth-panel textarea',action:'.auth-panel .action.primary'})
+      await page.goto(base+'/welcome/create')
+      await expect(page.getByRole('button',{name:'Создать Recovery Key',exact:true})).toBeEnabled()
+      await pair('welcome-auth-create','welcome/#auth',{heading:'.auth-header',back:'.auth-back',panel:'.auth-panel',action:'.auth-panel .action.primary'})
+      await page.getByRole('button',{name:'Создать Recovery Key',exact:true}).click()
+      await expect(page.getByTestId('welcome-generated-key')).toBeVisible()
+      const recovery=await page.getByTestId('welcome-generated-key').inputValue()
+      await pair('welcome-auth-generated','welcome/#auth',{heading:'.auth-header',back:'.auth-back',panel:'.auth-panel',key:'.auth-panel textarea',actions:'.actions-inline',ack:'.auth-check',action:'.auth-panel .action.primary'},page,ref=>ref.locator('[data-action="generate"]').click())
+      await page.getByRole('checkbox').check()
+      await page.getByTestId('welcome-finish').click()
+      await expect(page.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible({timeout:90000})
       await page.getByRole('link',{name:'Камера',exact:true}).click()
       await page.waitForFunction(()=>document.querySelector('video')?.videoWidth>0)
       await pair('camera','camera/',{header:'.header,.app-header,.shell-header',dock:'.dock,.app-dock,.shell-dock',finder:'.finder,.camera-viewfinder',tabs:'.mode-tabs,.camera-mode-tabs',stage:'.stage,.camera-stage',controls:'.bottom-controls,.camera-stage-controls',shutter:'.shutter,.camera-shutter'})
+      await page.getByTestId('camera-header-blind').click()
+      await pair('camera-blind','camera/',{cover:'.privacy-cover,.camera-blind-overlay',emblem:'.eye-icon,.camera-blind-emblem',title:'.privacy-cover h2,.camera-blind-overlay h2',shutter:'.blind-shutter,.camera-blind-shutter',note:'.blind-note,.camera-blind-note',back:'.blind-back,.camera-blind-return'},page,ref=>ref.locator('[data-action="privacy"]').click())
+      await page.getByRole('button',{name:'Вернуться назад',exact:true}).click()
+      await page.getByRole('button',{name:'Аудио',exact:true}).click()
+      await expect(page.getByTestId('camera-audio-view')).toBeVisible()
+      await pair('camera-audio','camera/',{stage:'.audio-stage,.camera-audio-view',emblem:'.audio-emblem,.camera-audio-emblem',bars:'.audio-bars,.camera-audio-bars',title:'.audio-stage strong,.camera-audio-view strong',caption:'.audio-stage small,.camera-audio-view small'},page,ref=>ref.locator('[data-media="audio"]').click())
+      await page.getByRole('button',{name:'Фото',exact:true}).click()
+      await page.waitForFunction(()=>document.querySelector('video')?.videoWidth>0)
+      await page.getByTestId('camera-open-assignment').click()
+      await openReference('camera/')
+      await reference.locator('[data-open="assignment"]').click()
+      await reference.locator('#task-select').selectOption('none')
+      await reference.addStyleTag({content:frame})
+      const rules={sheet:'.sheet,.camera-assignment-card.is-camera-sheet',heading:'.sheet-heading strong,.camera-assignment-card .camera-sheet-heading strong',section:'.sheet-section,.camera-assignment-card .camera-source-section',assignment:'#task-select,#camera-assignment',description:'#description,#camera-description',confirm:'[data-action="save-assignment"],[data-testid="camera-assignment-finish"]'}
+      const sourceRules=await measure(reference,rules),appRules=await measure(page,rules)
+      metrics.contracts={cameraAssignment:{scope:'Original field/section styles; actual signed-policy fields affect content geometry',reference:sourceRules,app:appRules}}
+      for(const key of Object.keys(rules))for(const property of ['font','background','padding','radius','lineHeight']){
+        if(sourceRules[key]?.[property]!==appRules[key]?.[property])result.failures.push({viewport:size,screen:'camera-assignment',anchor:key,property,expected:sourceRules[key]?.[property],actual:appRules[key]?.[property]})
+      }
+      await reference.screenshot({path:path.join(dir,'camera-assignment-reference.png')})
+      await page.screenshot({path:path.join(dir,'camera-assignment-app.png')})
+      await page.getByTestId('camera-sheet-close').click()
+      await page.getByTestId('camera-open-settings').click()
+      await pair('camera-settings','camera/',{sheet:'.sheet,.camera-config-card.is-camera-sheet',handle:'.sheet-handle,.camera-sheet-handle',heading:'.sheet-heading,.camera-sheet-heading',presets:'.sheet-pill-row',name:'#setting-name,#camera-preset-name',save:'[data-action="save-preset"],[data-testid="camera-preset-save"]'},page,async(ref,actual)=>{
+        await ref.locator('[data-open="settings"]').click()
+        const fixture=await actual.evaluate(()=>({names:[...document.querySelectorAll('.preset-pill')].map(x=>x.textContent),name:document.querySelector('#camera-preset-name').value,note:document.querySelector('[data-testid="camera-presets"] .muted:last-child').textContent}))
+        await ref.evaluate(f=>{document.querySelectorAll('.preset-pill').forEach((x,i)=>{if(f.names[i])x.textContent=f.names[i]});document.querySelector('#setting-name').value=f.name;document.querySelector('#preset-notice').textContent=f.note},fixture)
+      })
+      await page.getByTestId('camera-sheet-close').click()
       await page.getByRole('button',{name:'Сделать снимок'}).click()
       await expect(page.getByText(/Зашифровано и сохранено локально/)).toBeVisible()
       await page.getByRole('link',{name:'Browser',exact:true}).click()
@@ -93,19 +142,58 @@ try{
       await page.getByTestId('browser-settings-close').click()
       await expect(page.locator('.photo-row')).toHaveAttribute('data-sync-state','synced',{timeout:30000})
       await page.getByTestId('browser-tab-personal').click()
+      await page.getByTestId('browser-header-upload').click()
+      await pair('browser-upload','browser/',{sheet:'.dialog-sheet,.browser-upload-sheet.open',heading:'.dialog-heading,.browser-upload-heading',destination:'#upload-destination,#media-import-destination',dropzone:'.upload-dropzone',divider:'.upload-divider',url:'#upload-url,#media-import-https-url',action:'.primary-action',note:'.upload-note'},page,async(ref,actual)=>{
+        await ref.locator('[data-action="upload"]').click()
+        const notes=await actual.locator('.upload-note span').allTextContents()
+        await ref.locator('.upload-note span').evaluateAll((nodes,texts)=>nodes.forEach((node,i)=>node.textContent=texts[i]??''),notes)
+      })
+      await page.getByTestId('browser-import-sheet-close').click()
+      await page.getByTestId('browser-header-search').click()
+      await pair('browser-search','browser/',{search:'.browser-search',line:'.search-line',scope:'.search-scope-label',select:'.search-scope-label select',filters:'.type-filters',first:'.type-filters button:first-child'},page,ref=>ref.locator('[data-action="search"]').click())
+      await page.getByTestId('browser-header-search').click()
+      await page.getByTestId('browser-header-settings').click()
+      await openReference('browser/')
+      await reference.locator('[data-action="settings"]').click()
+      await reference.addStyleTag({content:frame})
+      const settingRules={sheet:'.dialog-sheet,.is-browser-settings-sheet',heading:'.dialog-heading strong,.browser-settings-heading strong',first:'#first-section,#browser-pref-open-first',row:'.settings-row,.browser-settings-row',toggle:'.setting-toggle,.browser-setting-toggle'}
+      const settingSource=await measure(reference,settingRules),settingApp=await measure(page,settingRules)
+      metrics.contracts.browserSettings={scope:'Approved component styles; production includes real encryption/sync/archive security controls beyond the prototype',reference:settingSource,app:settingApp}
+      for(const key of Object.keys(settingRules))for(const property of ['font','color','background','padding','radius','lineHeight']){
+        if(settingSource[key]?.[property]!==settingApp[key]?.[property])result.failures.push({viewport:size,screen:'browser-settings',anchor:key,property,expected:settingSource[key]?.[property],actual:settingApp[key]?.[property]})
+      }
+      await reference.screenshot({path:path.join(dir,'browser-settings-reference.png')})
+      await page.screenshot({path:path.join(dir,'browser-settings-app.png')})
+      await page.getByTestId('browser-settings-close').click()
       for(const title of ['Городские прогулки','Студия']){
         await page.getByTestId('browser-header-folder').click()
+        if(title==='Городские прогулки')await pair('browser-new-folder','browser/',{sheet:'.dialog-sheet,.browser-new-folder-sheet',heading:'.dialog-heading,.browser-new-folder-heading',name:'#folder-name,[data-testid="browser-folder-name"]',parent:'#folder-parent,[data-testid="browser-new-folder-parent"]',action:'.primary-action'},page,ref=>ref.locator('[data-action="create"]').click())
         await page.getByTestId('browser-folder-name').fill(title)
-        await page.getByRole('button',{name:'Создать',exact:true}).click()
+        await page.getByRole('button',{name:'Создать папку',exact:true}).click()
         await expect(page.getByTestId('browser-new-folder-sheet')).toHaveCount(0)
       }
       await expect(page.locator('.browser-folder-item')).toHaveCount(2)
-      const catalogAnchors={header:'.app-header,.shell-header',dock:'.app-dock,.shell-dock',heading:'.browser-heading',switch:'.view-switch',tabs:'.browser-sections',path:'.browser-path',firstEntry:'.browser-entry',preview:'.entry-preview',more:'.entry-more',secondEntry:'.browser-entry:nth-child(2)'}
+      const catalogAnchors={header:'.app-header,.shell-header',dock:'.app-dock,.shell-dock',heading:'.browser-heading',switch:'.view-switch',tabs:'.browser-sections',path:'.browser-path',firstEntry:'.browser-entry',preview:'.entry-preview',more:'.entry-more',secondEntry:'.browser-entry:nth-child(2)',brandMark:'.brand-mark',brandName:'.brand-state strong,.brand-copy strong',headerFirst:'.header-actions button:first-child,.browser-header-actions button:first-child',headerLast:'.header-actions button:last-child,.browser-header-actions button:last-child'}
       async function browserData(ref,actual,mode){
-        await ref.locator('[data-view="'+mode+'"]').click()
-        // Equal, real text data prevents sample-only wrapping differences.
-        await ref.locator('.browser-entry').evaluateAll(nodes=>nodes.slice(3).forEach(node=>node.remove()))
         const rows=await actual.locator('.browser-entry').evaluateAll(nodes=>nodes.slice(0,3).map(node=>({title:node.querySelector('.entry-copy strong').textContent,detail:node.querySelector('.entry-copy small').textContent})))
+        // Build the same empty-folder fixture using the ORIGINAL reference UI.
+        // These are in-memory prototype records only; no product data is deleted.
+        for(const id of ['city','studio']){
+          await ref.locator('[data-action="menu"][data-id="'+id+'"]').click()
+          await ref.locator('[data-action="delete"]').click()
+          await ref.locator('[data-action="delete-confirm"]').click()
+        }
+        for(const folder of rows.slice(0,2).reverse()){
+          await ref.locator('[data-action="create"]').click()
+          await ref.locator('#folder-name').fill(folder.title)
+          await ref.locator('[data-action="create-folder"]').click()
+        }
+        await ref.locator('[data-view="'+mode+'"]').click()
+        await ref.locator('.browser-entry').evaluateAll(nodes=>{
+          const folders=nodes.filter(node=>node.querySelector('.entry-folder-badge')).slice(0,2),file=nodes.find(node=>!node.querySelector('.entry-folder-badge'))
+          nodes.forEach(node=>{if(!folders.includes(node)&&node!==file)node.remove()})
+        })
+        await ref.locator('#browser-count').evaluate((node,text)=>node.textContent=text,await actual.locator('.browser-heading-copy small').textContent())
         await ref.locator('.browser-entry').evaluateAll((nodes,rows)=>rows.forEach((row,i)=>{
           nodes[i].querySelector('.entry-copy strong').textContent=row.title
           nodes[i].querySelector('.entry-copy small').textContent=row.detail
@@ -123,6 +211,20 @@ try{
       await expect(page.getByTestId('file-viewer-image')).toBeVisible()
       await expect(page.getByText('Обновляется список доступных файлов…',{exact:true})).toBeHidden()
       await pair('viewer','browser/viewer/',{header:'.app-header,.shell-header',dock:'.app-dock,.shell-dock',photo:'.photo-trigger',path:'.browser-path',stage:'.image-stage',summary:'.photo-summary',actions:'.action-tiles',pager:'.pager'})
+      await page.getByRole('button',{name:'Скачать',exact:true}).click()
+      await pair('viewer-download','browser/viewer/',{popover:'.download-pop',heading:'.download-pop strong',warning:'.download-pop p',actions:'.download-buttons'},page,async(ref,actual)=>{
+        await ref.locator('[data-action="download"]').click()
+        await ref.locator('.download-pop p').evaluate((node,text)=>node.textContent=text,await actual.locator('.download-pop p').textContent())
+      })
+      await page.getByTestId('viewer-download-cancel').click()
+      await page.getByTestId('viewer-action-info').click()
+      await expect(page.getByTestId('file-viewer-info')).toBeVisible()
+      await pair('viewer-info','browser/viewer/',{layer:'.viewer-sheet-layer,.file-viewer-overlay',sheet:'.viewer-sheet,.approved-viewer-sheet',handle:'.sheet-handle',heading:'.sheet-heading,.file-viewer-sheet-heading',description:'.description-card',rows:'.sheet-content dl,.file-viewer-information dl'},page,async(ref,actual)=>{
+        await ref.locator('[data-action="info"]').click()
+        const fixture=await actual.getByTestId('file-viewer-info').evaluate(node=>({description:node.querySelector('.description-card p').textContent,rows:[...node.querySelectorAll('dl>div')].map(row=>[row.querySelector('dt').textContent,row.querySelector('dd').textContent])}))
+        await ref.evaluate(f=>{document.querySelector('.description-card p').textContent=f.description;document.querySelector('.sheet-content dl').replaceChildren(...f.rows.map(([label,value])=>{const row=document.createElement('div'),dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=label;dd.textContent=value;row.append(dt,dd);return row}))},fixture)
+      })
+      await page.getByTestId('viewer-panel-close').click()
       await page.locator('.photo-trigger').click()
       await expect(page.getByTestId('photo-fullscreen')).toBeVisible()
       await pair('viewer-fullscreen','browser/viewer/',{layer:'.fullscreen-layer',close:'.fullscreen-close',media:'.fullscreen-media',pager:'.fullscreen-pager'},page,ref=>ref.locator('.photo-trigger').click())

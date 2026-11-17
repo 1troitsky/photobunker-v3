@@ -74,7 +74,7 @@ test('P2 File Viewer: navigate exactly the Browser folder/filter order and retur
     expect(rows).toHaveLength(4)
     await page.getByRole('button',{name:'Новая папка'}).click()
     await page.getByTestId('browser-folder-name').fill('Только выбранные')
-    await page.getByRole('button',{name:'Создать',exact:true}).click()
+    await page.getByRole('button',{name:'Создать папку',exact:true}).click()
     await expect(page.locator('.browser-folder-item')).toHaveCount(1)
     for(const row of rows.filter(x=>x.name!=='OUTSIDE.wav')){
       // The encrypted folder placement is intentionally behind each

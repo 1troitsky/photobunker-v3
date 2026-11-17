@@ -1,3 +1,4 @@
+import {mediaImportViews} from './helpers/browser-import'
 import {browserHeader} from './support/browser-ui'
 import {expect,test} from '@playwright/test'
 
@@ -193,7 +194,7 @@ test('P2 Browser: 10k index cannot grant access; real E2EE deep link page 2 is s
     await picker.setInputFiles({
       name:secretName,mimeType:'audio/wav',buffer:Buffer.alloc(8192,0x5a),
     })
-    await expect(a.locator('.media-import-p1')
+    await expect(mediaImportViews(a)
       .getByText('Файл зашифрован и сохранён на устройстве.'))
       .toBeVisible({timeout:30000})
     await a.evaluate(async()=>{

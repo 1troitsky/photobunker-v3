@@ -1,4 +1,5 @@
-import {expect,type Page} from '@playwright/test'
+import {openImportTools,openImportSheet} from '../helpers/browser-import'
+import {expect,type Locator,type Page} from '@playwright/test'
 
 // Exercise the approved Header controls before accessing their actual sheets.
 // No force clicks, hidden aliases, DOM mutation, or simulated network success.
@@ -13,11 +14,19 @@ export async function closeBrowserSettings(page:Page):Promise<void>{
   if(await page.getByTestId('browser-archive-preferences').isVisible())
     await page.getByTestId('browser-settings-close').click()
 }
-export async function browserControl(page:Page,name:'Синхронизировать'|'Обновить'):Promise<void>{
-  const browser=await page.getByTestId('browser-header-settings').count()>0
-  if(browser)await openBrowserSettings(page)
-  await page.getByRole('button',{name,exact:true}).click()
-  if(browser)await closeBrowserSettings(page)
+export async function browserControl(scope:Page|Locator,name:'Синхронизировать'|'Обновить'):Promise<void>{
+  if('page' in scope){
+    const page=scope.page(),uploading=await page.getByTestId('browser-import-sheet').isVisible(),tools=await openImportTools(page)
+    await tools.getByRole('button',{name,exact:true}).click()
+    if(uploading)await openImportSheet(page)
+    return
+  }
+  const page=scope,browser=await page.getByTestId('browser-header-settings').count()>0
+  if(browser){
+    await openBrowserSettings(page)
+    await page.getByTestId('browser-archive-preferences').locator(':scope > .approved-settings-content > .action-row').getByRole('button',{name,exact:true}).click()
+    await closeBrowserSettings(page)
+  }else await page.getByRole('button',{name,exact:true}).click()
 }
 export async function searchBrowser(page:Page,value:string):Promise<void>{
   if(!await page.getByTestId('browser-search').isVisible())

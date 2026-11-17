@@ -1,3 +1,4 @@
+import {mediaImportViews,sendImportedMedia} from './helpers/browser-import'
 import {exchangeReady} from './support/browser-ui'
 import {browserControl} from './support/browser-ui'
 import {openImportSheet} from './helpers/browser-import'
@@ -48,7 +49,7 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
     const ownerId=await enroll(A)
     const contributorId=await enroll(B)
     // Contributor already has fully signed and synced encrypted media.
-    const mediaPanel=B.locator('.media-import-p1')
+    const mediaPanel=mediaImportViews(B)
     for(const [kind,mime,name,byte]of [
       ['audio','audio/wav','ASSIGNMENT-PRIVATE-AUDIO.wav',0x31],
       ['video','video/webm','ASSIGNMENT-PRIVATE-VIDEO.webm',0x52],
@@ -58,10 +59,11 @@ test('P1-13: owner-signed video/audio policy, fingerprint-confirmed contributor 
       // instead of pretending a user could select while the form is busy.
       await expect(mediaPanel.getByTestId('media-import-file'))
         .toBeEnabled({timeout:30000})
-      await mediaPanel.getByTestId('media-import-file').setInputFiles({
+      await openImportSheet(mediaPanel.getByTestId('media-import-file').page())
+await mediaPanel.getByTestId('media-import-file').setInputFiles({
         name,mimeType:mime,buffer:Buffer.alloc(2048,byte),
       })
-      await mediaPanel.getByRole('button',{name:'Отправить медиа'}).click()
+      await sendImportedMedia(mediaPanel.page())
       // Explicitly drain the durable encrypted outbox. Clicking Sync while
       // the upload started by chooseFile is still running is safe/idempotent.
       await B.evaluate(async()=>{

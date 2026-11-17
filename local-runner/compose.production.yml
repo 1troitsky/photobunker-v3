@@ -1,6 +1,6 @@
 services:
   web:
-    image: ${PB3_WEB_IMAGE:-pb3-ux-web:20261116}
+    image: ${PB3_WEB_IMAGE:-pb3-ux-web:20261117}
     build:
       dockerfile: local-runner/Dockerfile.web.production
       args:

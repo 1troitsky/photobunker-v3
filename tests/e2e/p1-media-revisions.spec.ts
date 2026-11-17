@@ -1,3 +1,4 @@
+import {mediaImportViews,sendImportedMedia} from './helpers/browser-import'
 import {openImportSheet} from './helpers/browser-import'
 import {test,expect} from '@playwright/test'
 
@@ -16,7 +17,7 @@ test('P1-12: immutable owner-signed media versions survive Garage+Recovery Key w
     await expect(A.locator('[data-testid="shell-status-link"][data-session-state="online"]')).toBeVisible()
     await A.goto('/browser')
     await openImportSheet(A)
-    const media=A.locator('.media-import-p1')
+    const media=mediaImportViews(A)
     const snapshots=[
       {name:'PRIVATE-ORIGINAL-VOICE.wav',byte:0x31},
       {name:'PRIVATE-EDITED-VOICE-V2.wav',byte:0x45},
@@ -29,11 +30,12 @@ test('P1-12: immutable owner-signed media versions survive Garage+Recovery Key w
       // instead of pretending a user could select while the form is busy.
       await expect(media.getByTestId('media-import-file'))
         .toBeEnabled({timeout:30000})
-      await media.getByTestId('media-import-file').setInputFiles({
+      await openImportSheet(media.getByTestId('media-import-file').page())
+await media.getByTestId('media-import-file').setInputFiles({
         name:file.name,mimeType:'audio/wav',
         buffer:Buffer.alloc(1025,file.byte),
       })
-      await media.getByRole('button',{name:'Отправить медиа'}).click()
+      await sendImportedMedia(media.page())
       // Real network flush, not a fixed sleep; preserves durable retry
       // behavior on slower disposable Garage+Postgres CI runners.
       await A.evaluate(async()=>{

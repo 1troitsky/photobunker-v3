@@ -296,7 +296,7 @@ async function loadFile(e:Event):Promise<void>{
 
     <div v-else class="auth-view" data-testid="welcome-auth">
       <header class="auth-header">
-        <RouterLink class="auth-back" to="/welcome" aria-label="Назад">‹</RouterLink>
+        <RouterLink class="auth-back" to="/welcome" aria-label="Назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></RouterLink>
         <div><h1>{{isRecover?'Восстановить аккаунт':'Создать аккаунт'}}</h1>
           <p>{{isRecover?'Введите Recovery Key или выберите сохранённый файл.':'Создайте ключ для входа и восстановления доступа.'}}</p>
         </div>
@@ -304,14 +304,14 @@ async function loadFile(e:Event):Promise<void>{
       <div v-if="busy" class="auth-loading" role="status" data-testid="welcome-loading">
         <span class="welcome-loading-spinner welcome-spinner" aria-hidden="true"></span>Входим в приложение...
       </div>
-      <div v-else-if="isRecover" class="auth-panel">
+      <div v-else class="auth-panel">
+        <template v-if="isRecover">
         <label>Recovery Key<textarea v-model="recovery" spellcheck="false" autocomplete="off" autocorrect="off" placeholder="Recovery Key" data-testid="welcome-recovery-key"></textarea></label>
         <label>Выбрать файл с ключом<input type="file" accept=".txt,text/plain" @change="loadFile"></label>
         <button class="action primary" type="button" :disabled="!recovery.trim()" data-testid="welcome-restore" @click="restore">Продолжить</button>
-      </div>
-      <div v-else class="auth-panel">
+        </template>
+        <template v-else>
         <template v-if="!generated">
-          <p>Без телефона, email или пароля. Только Recovery Key.</p>
           <button class="action primary" type="button" @click="generate"
             :disabled="pendingChecking||pendingRegistration">Создать Recovery Key</button>
           <p v-if="pendingChecking" role="status">Проверяем незавершённую регистрацию…</p>
@@ -333,17 +333,18 @@ async function loadFile(e:Event):Promise<void>{
           <label>Recovery Key<textarea :value="generated" readonly spellcheck="false" data-testid="welcome-generated-key"></textarea></label>
           <p>Храните ключ отдельно от устройства и не передавайте третьим лицам!</p>
           <div class="actions-inline">
-            <button class="action" type="button" @click="copyKey">Скопировать</button>
+            <button class="action" type="button" @click="copyKey"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg> Скопировать</button>
             <button class="action" type="button" data-testid="welcome-save-key"
-              :disabled="keyExportBusy||busy" @click="saveKey">Сохранить на устройство</button>
+              :disabled="keyExportBusy||busy" @click="saveKey"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></svg> Сохранить на устройство</button>
           </div>
           <label class="auth-check"><input v-model="acknowledged" type="checkbox">Я сохранил Recovery Key отдельно от устройства.</label>
           <button class="action primary" type="button" data-testid="welcome-finish"
             :disabled="!acknowledged" @click="createAccount">Продолжить</button>
         </template>
+        </template>
+        <div class="auth-feedback" role="status">{{notice}}</div>
+        <p v-if="error" class="auth-feedback error" role="alert">{{error}}</p>
       </div>
-      <p v-if="notice" class="auth-feedback" role="status">{{notice}}</p>
-      <p v-if="error" class="auth-feedback error" role="alert">{{error}}</p>
     </div>
   </div></main>
 </div>

@@ -1,3 +1,5 @@
+import {openImportSheet} from './helpers/browser-import'
+import {mediaImportViews,openImportTools} from './helpers/browser-import'
 import {browserControl,browserHeader,searchBrowser} from './support/browser-ui'
 import {expect,test} from '@playwright/test'
 
@@ -19,6 +21,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     // Header-triggered sheet; none are visible beneath the catalog.
     await browserHeader(a,'upload')
     await expect(a.getByTestId('browser-import-sheet')).toBeVisible()
+    await openImportTools(a)
     await a.locator('#media-import-category').fill('Полевые отчёты')
     await a.locator('#media-import-description').fill('Секретная заметка для клиента')
     await a.locator('#media-import-tags').fill('evidence, night')
@@ -28,6 +31,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await expect(a.locator('#media-import-description'))
       .toHaveValue('Секретная заметка для клиента')
     await expect(a.locator('#media-import-tags')).toHaveValue('evidence, night')
+    await openImportSheet(a.getByTestId('media-import-file').page())
     await a.getByTestId('media-import-file').setInputFiles({
       name:secret+'.wav',mimeType:'audio/wav',
       buffer:Buffer.alloc(8192,0x42),
@@ -72,7 +76,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     })
     await a.getByRole('button',{name:'Новая папка'}).click()
     await a.getByTestId('browser-folder-name').fill('Секретный раздел')
-    await a.getByRole('button',{name:'Создать',exact:true}).click()
+    await a.getByRole('button',{name:'Создать папку',exact:true}).click()
     await rows.getByTestId('browser-file-menu-toggle').click()
     await rows.getByRole('combobox',{name:'Папка файла '+movedId})
       .selectOption({label:'Секретный раздел'})
@@ -134,7 +138,7 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     // cannot inherit that row's encrypted virtual placement.
     await browserHeader(b,'folder')
     await b.getByTestId('browser-folder-name').fill('Only This Private Folder')
-    await b.getByRole('button',{name:'Создать',exact:true}).click()
+    await b.getByRole('button',{name:'Создать папку',exact:true}).click()
     // A folder's actual encrypted IndexedDB commit is distinct from the
     // click. Wait for the new folder to be visible and durably discoverable
     // before selecting its private-search scope; otherwise a racing browser
@@ -177,7 +181,8 @@ test('P2 Browser: offline private metadata search and second-device cloud search
     await browserHeader(b,'upload')
     const sheet=b.getByTestId('browser-import-sheet')
     await expect(sheet).toBeVisible()
-    const panel=sheet.locator('.media-import-p1')
+    await openImportTools(b)
+    const panel=mediaImportViews(sheet)
     const verifiedCloud=panel.getByRole('button',{name:'Проверить из облака'})
     await expect(verifiedCloud).toHaveCount(1,{timeout:20000})
     let duplicateDelivered=0
@@ -236,7 +241,8 @@ test('P2 Browser: offline private metadata search and second-device cloud search
 
     expect(requests.join('\n')).not.toContain('секретная')
     expect(requests.join('\n')).not.toContain(secret)
-    await b.getByTestId('browser-import-sheet-close').click()
+    await b.getByTestId('browser-settings-close').click()
+    await expect(b.getByTestId('browser-import-tools')).toBeHidden()
     await expect(sheet).toBeHidden()
   }finally{
     await aContext.close();await bContext.close()

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted,onUnmounted,ref,watch } from 'vue'
+import { computed,onMounted,onUnmounted,ref,watch } from 'vue'
 import { activeSession } from '../../identity/application/session'
 import {sameSessionDevice} from '../../identity/application/session-device'
 import MediaSharePanel from './MediaSharePanel.vue'
@@ -41,6 +41,8 @@ const busy=ref(false)
 const remoteLink=ref('')
 const remoteBusy=ref(false)
 const remoteStage=ref<'idle'|'downloading'|'encrypting'>('idle')
+const visibleImportError=computed(()=>error.value.startsWith('media.link_')
+  ? 'Не удалось загрузить файл. Проверьте ссылку и доступ к ней.' : error.value)
 const remoteDownloaded=ref(0)
 let remoteAbort:AbortController|null=null
 const pagingBusy=ref(false)
@@ -281,12 +283,34 @@ onUnmounted(()=>{
 </script>
 
 <template>
-  <section class="foundation-card media-import-p1">
-    <h2>Файлы для загрузки</h2>
-    <p class="muted">
-      Файлы шифруются на устройстве перед отправкой.
-      Имена и другие приватные сведения остаются зашифрованными.
-    </p>
+  <section class="media-import-p1">
+    <label class="upload-destination">Папка назначения
+      <select id="media-import-destination" v-model="targetFolder" data-testid="media-import-destination" :disabled="busy||remoteBusy">
+        <option value="">Мои файлы (корень)</option><option v-for="folder in props.destinationFolders" :key="folder.id" :value="folder.id">{{folder.label}}</option>
+      </select>
+    </label>
+    <label class="upload-dropzone" data-testid="media-import-dropzone" @dragover.prevent @drop.prevent="dropFiles">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 16v4h16v-4"/></svg>
+      <strong>Выбрать файлы с устройства</strong><small>Фото, видео, аудио · можно перетащить сюда</small>
+      <input data-testid="media-import-file" type="file" multiple
+        accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,audio/mp4,audio/mpeg,audio/webm,audio/wav,audio/x-wav,audio/aac,audio/ogg"
+        :disabled="busy||remoteBusy" @change="chooseFile">
+    </label>
+    <div class="upload-divider">или</div>
+    <form class="import-url-form" data-testid="media-import-https-form" @submit.prevent="importHttpsLink">
+      <label class="url-row">Загрузить по ссылке
+        <input id="media-import-https-url" v-model="remoteLink" data-testid="media-import-https-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" maxlength="4096" placeholder="https://example.com/file.mp4" :disabled="busy||remoteBusy">
+      </label>
+      <button class="primary-action" type="submit" data-testid="media-import-https-submit" :disabled="busy||remoteBusy||!remoteLink||!activeSession?.online">Загрузить по ссылке</button>
+      <button v-if="remoteStage==='downloading'" type="button" data-testid="media-import-https-cancel" @click="cancelHttpsImport">Отменить скачивание</button>
+      <p v-if="remoteBusy" class="upload-feedback" role="status" data-testid="media-import-https-progress">{{remoteStage==='encrypting'?'Скачано. Шифрование на устройстве…':'Получено '+Math.round(remoteDownloaded/1024)+' КиБ'}}</p>
+    </form>
+    <p class="upload-feedback" role="status">{{notice}}</p>
+    <p v-if="error" role="alert" class="upload-feedback error" :data-error-code="error">{{visibleImportError}}</p>
+    <div class="upload-note"><span>Файлы шифруются на устройстве. До 20 файлов, 256 МиБ за выбор, 128 МиБ на файл.</span><span>По ссылке — HTTPS/CORS, до {{Math.floor(MAX_HTTPS_IMPORT_BYTES/1024/1024)}} МиБ. Внешний сайт видит ваш IP; cookies и Referer не передаются.</span></div>
+    <Teleport defer to="#browser-import-settings">
+      <section class="media-import-tools" data-testid="browser-import-tools">
+        <p v-if="catalogError" role="alert" class="error-text">{{catalogError}}</p>
     <div class="foundation-card">
       <h3>Приватные метаданные импорта</h3>
       <label for="media-import-category">Категория</label>
@@ -303,62 +327,7 @@ onUnmounted(()=>{
       <p v-if="gpsError" role="alert" class="error-text">{{ gpsError }}</p>
       <p class="muted">Значения шифруются вместе с файлом. После импорта нельзя выдать ключ заданию, если его свежие подписанные требования к метаданным не выполнены.</p>
     </div>
-    <div class="foundation-card media-batch-drop" data-testid="media-import-dropzone"
-      @dragover.prevent @drop.prevent="dropFiles">
-      <label for="media-import-destination">Папка назначения</label>
-      <select id="media-import-destination" v-model="targetFolder"
-        data-testid="media-import-destination" :disabled="busy||remoteBusy">
-        <option value="">Мои файлы (корень)</option>
-        <option v-for="folder in props.destinationFolders" :key="folder.id"
-          :value="folder.id">{{ folder.label }}</option>
-      </select>
-      <p class="muted">Перетащите файлы сюда или выберите несколько с устройства.
-        Папка и её название шифруются отдельно от самих файлов.</p>
-      <div class="action-row">
-        <label class="media-file-choice">
-          Выбрать файлы
-          <input data-testid="media-import-file" type="file" multiple
-            accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,audio/mp4,audio/mpeg,audio/webm,audio/wav,audio/x-wav,audio/aac,audio/ogg"
-            :disabled="busy||remoteBusy" @change="chooseFile">
-        </label>
-        <button type="button" :disabled="busy||remoteBusy" @click="sync">Отправить медиа</button>
-        <button type="button" :disabled="busy||remoteBusy" @click="refresh">Обновить</button>
-      </div>
-      <p class="muted">За один выбор: до 20 файлов, суммарно до 256 МиБ,
-        максимум 128 МиБ на файл. Успешные файлы сохраняются отдельно,
-        даже если следующий файл повреждён.</p>
-    </div>
-    <form class="foundation-card" data-testid="media-import-https-form"
-      @submit.prevent="importHttpsLink">
-      <h3>Импорт по прямой HTTPS-ссылке</h3>
-      <label for="media-import-https-url">Прямая ссылка на фото, видео или аудиофайл</label>
-      <input id="media-import-https-url" v-model="remoteLink"
-        data-testid="media-import-https-url" type="url"
-        inputmode="url" autocomplete="off" spellcheck="false"
-        maxlength="4096" placeholder="https://files.example.org/audio.wav"
-        :disabled="busy||remoteBusy">
-      <p class="muted">Ссылка открывается только вашим браузером.
-        Внешний сайт видит ваш IP-адрес и факт запроса. Передача cookies,
-        Referer, переходы на другие адреса и загрузка через наш сервер запрещены.
-        Сайт должен разрешать CORS. До 32 МиБ за ссылку;
-        скачанный файл затем шифруется локально и сохраняется в выбранной папке.</p>
-      <div class="action-row">
-        <button type="submit" data-testid="media-import-https-submit"
-          :disabled="busy||remoteBusy||!remoteLink||!activeSession?.online">
-          Скачать и зашифровать
-        </button>
-        <button v-if="remoteStage==='downloading'" type="button"
-          data-testid="media-import-https-cancel"
-          @click="cancelHttpsImport">Отменить скачивание</button>
-      </div>
-      <p v-if="remoteBusy" role="status" data-testid="media-import-https-progress">
-        {{ remoteStage==='encrypting'?'Скачано. Шифрование на устройстве…'
-          :'Получено '+Math.round(remoteDownloaded/1024)+' КиБ из '
-            +Math.floor(MAX_HTTPS_IMPORT_BYTES/1024)+' КиБ доступного лимита.' }}
-      </p>
-    </form>
-    <p class="muted">Предел одного файла на этом этапе: 128 МиБ. Офлайн-файлы остаются в зашифрованной очереди при сбое сети или исчерпании квоты Free.</p>
-    <h3>Зашифровано на этом устройстве</h3>
+<div class="action-row"><button type="button" :disabled="busy||remoteBusy" @click="sync">Отправить медиа</button><button type="button" :disabled="busy||remoteBusy" @click="refresh">Обновить</button></div>    <h3>Зашифровано на этом устройстве</h3>
     <p v-if="!local.length" class="muted">Нет импортированных файлов.</p>
     <div v-for="row in local" :key="row.key" class="photo-row">
       <div>
@@ -395,14 +364,28 @@ onUnmounted(()=>{
       <p class="muted">Имя, формат и приватные поля расшифрованы из AES-GCM метаданных, не из серверного каталога.</p>
       <button type="button" @click="clearPreview">Закрыть</button>
     </div>
-    <p v-if="notice" role="status">{{ notice }}</p>
-    <p v-if="error||catalogError" role="alert" class="error-text">{{ error||catalogError }}</p>
+
+      </section>
+    </Teleport>
   </section>
 </template>
 
 <style scoped>
-.media-file-choice{display:inline-flex;flex-direction:column;gap:4px;cursor:pointer}
-.media-file-choice input{max-width:220px}
-.media-import-p1 video{max-width:100%}
-.media-import-p1 audio{max-width:100%}
+.upload-dropzone{position:relative;display:grid;place-items:center;gap:6px;text-align:center;min-height:123px;padding:18px 10px;border:1px dashed #617565;border-radius:7px;background:#29332d;color:#ebf5ed;cursor:pointer}.upload-dropzone svg{height:27px;width:27px;color:var(--green)}.upload-dropzone strong{font-size:13px}.upload-dropzone small{font-size:11px;color:#aac5af}.upload-dropzone input{position:absolute;inset:0;opacity:0;cursor:pointer}.upload-dropzone.dragging{border-color:var(--green);background:#2a4234}.upload-divider{text-align:center;color:#969696;font-size:11px}.upload-feedback{min-height:0;color:#bce2c1;font-size:11px;line-height:1.5}.upload-feedback.error{color:#efa7a7}.upload-note{display:grid;gap:4px;font-size:11px;line-height:1.55;color:#aaa}.upload-current{display:flex;gap:6px;align-items:center;font-size:11px;color:#aaa}.upload-current strong{color:#eee;font-weight:630}.url-row{display:grid;gap:7px}
+.media-import-p1{display:grid;gap:10px;margin:0;padding:0;border:0;background:transparent;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.import-url-form{display:grid;gap:10px;margin:0;padding:0;border:0;background:none}
+.media-import-p1 input,.media-import-p1 select{width:100%;background:#1c1c1c;color:#fff;border:1px solid #555;border-radius:6px;padding:10px;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.media-import-p1 button{padding:12px;border:0;border-radius:6px;background:#393939;color:#eee;text-align:left;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal;min-height:0}
+.media-import-p1 button.primary-action{background:#1ed760;color:#152119;text-align:center;font-weight:750}
+.media-import-p1 .upload-feedback{margin:0}
+.media-import-p1 .upload-dropzone input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.media-import-p1 .upload-dropzone svg{stroke:currentColor;fill:none;stroke-width:1.8}
+.media-import-tools video,.media-import-tools audio{max-width:100%}
+</style>
+<style scoped>
+/* Same cascade as Browser v3's .dialog-content labels and destination field. */
+.media-import-p1 label{display:grid;gap:5px;color:#bbb;font-size:12px}
+.media-import-p1 .upload-destination{font-weight:600}
+.media-import-p1 .upload-destination select{height:41px;padding:0 10px;border:1px solid #464646;background:#282828;color:#eee;font:600 12px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.media-import-p1 .upload-feedback{margin:1em 0}
 </style>

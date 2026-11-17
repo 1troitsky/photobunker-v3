@@ -1,3 +1,4 @@
+import {openImportSheet} from './helpers/browser-import'
 import {browserHeader} from './support/browser-ui'
 import {test,expect} from '@playwright/test'
 
@@ -39,7 +40,7 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await expect(page.getByTestId('browser-folder-name')).toBeVisible()
   await expect(page.getByTestId('browser-folder-name')).toBeFocused()
   await page.getByTestId('browser-folder-name').fill('UX Header Folder')
-  await page.getByRole('button',{name:'Создать',exact:true}).click()
+  await page.getByRole('button',{name:'Создать папку',exact:true}).click()
   await expect(page.getByRole('button',{name:'UX Header Folder',exact:true})).toBeVisible()
   await expect(page.locator('.browser-folder-cover.is-empty')).toBeVisible()
   await expect(page.locator('.browser-folder-badge')).toBeVisible()
@@ -58,7 +59,7 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await browserHeader(page,'folder')
   await expect(page.getByTestId('browser-new-folder-parent')).toHaveValue(rootFolderId)
   await page.getByTestId('browser-folder-name').fill('Nested UX')
-  await page.getByRole('button',{name:'Создать',exact:true}).click()
+  await page.getByRole('button',{name:'Создать папку',exact:true}).click()
   await expect(page.getByRole('button',{name:'Nested UX',exact:true})).toBeVisible()
   await page.getByTestId('browser-folder-up').click()
   await expect(page.getByTestId('browser-folder-up')).toBeDisabled()
@@ -101,7 +102,7 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await expect(sheet).toHaveAttribute('role','dialog')
   await expect(sheet).toHaveAttribute('aria-modal','true')
   await expect(sheet).toHaveCSS('position','fixed')
-  await expect(sheet.getByRole('heading',{name:'Файлы для загрузки'})).toBeVisible()
+  await expect(sheet.locator('.browser-upload-heading strong')).toBeVisible()
   await expect(sheet).not.toContainText('· P1')
   await expect(page.getByTestId('browser-import-sheet-close')).toBeFocused()
   await expect(page.getByTestId('browser-import-backdrop')).toBeVisible()
@@ -114,7 +115,8 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   // Import remains in the real encrypted Local-First outbox. Header selection
   // never creates/approves permissions or bypasses folder membership.
   await context.setOffline(true)
-  await page.getByTestId('media-import-file').setInputFiles({
+  await openImportSheet(page.getByTestId('media-import-file').page())
+    await page.getByTestId('media-import-file').setInputFiles({
     name:'HEADER-UX-OFFLINE.wav',mimeType:'audio/wav',
     buffer:Buffer.alloc(8192,0x61),
   })
@@ -124,7 +126,8 @@ test('Browser v3: five owner-approved Header actions control the real encrypted 
   await expect(page.getByTestId('browser-import-backdrop')).toHaveCount(0)
   await page.getByTestId('browser-tab-personal').click()
   await expect(page.getByTestId('browser-tab-personal')).toHaveAttribute('aria-selected','true')
-  await expect(rows).toHaveCount(0)
+  await expect(rows).toHaveCount(1)
+  await expect(rows.first()).toHaveAttribute('data-plain-bytes','8192')
   await page.getByTestId('browser-tab-assignments').click()
   await expect(page.getByTestId('browser-tab-assignments')).toHaveAttribute('aria-selected','true')
   await expect(rows).toHaveCount(0)

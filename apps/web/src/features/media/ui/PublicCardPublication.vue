@@ -64,24 +64,49 @@ watch(activeSession,(next,old)=>{if(next?.accountId!==old?.accountId||next?.devi
 onUnmounted(()=>{reset();if(opener?.isConnected)opener.focus()})
 </script>
 <template>
+  <div class="publication-backdrop" @click.self="emit('close')">
   <section ref="dialog" class="publication" role="dialog" aria-modal="true" aria-labelledby="publish-title" data-testid="public-card-publication" @keydown="trapFocus" @keydown.esc="emit('close')">
-    <header><h2 id="publish-title">Публичная карточка</h2><button type="button" aria-label="Закрыть публикацию" @click="emit('close')">×</button></header>
-    <p>Ссылка откроется без регистрации. Проверьте JPEG: видимые лица, текст и координаты внутри изображения не удаляются автоматически. EXIF, GPS и другие приватные поля не публикуются. Публикация доступна только для ваших личных фото.</p>
+    <div class="publication-handle" aria-hidden="true"></div>
+    <header><h2 id="publish-title">Публичная карточка</h2><button type="button" aria-label="Закрыть публикацию" @click="emit('close')">✕</button></header>
+    <div class="publication-content">
+    <p class="publication-note">Ссылка откроется без регистрации. Проверьте JPEG: видимые лица, текст и координаты внутри изображения не удаляются автоматически. EXIF, GPS и другие приватные поля не публикуются. Публикация доступна только для ваших личных фото.</p>
     <img v-if="image" :src="image" alt="Безопасная JPEG-копия для публикации" @load="loaded=true" @error="loaded=false;reviewed=false">
     <label>Название карточки <input v-model="publicName" maxlength="160" :disabled="busy" :placeholder="props.name"></label>
     <label>Публичное описание <textarea v-model="description" maxlength="2000" :disabled="busy"/></label>
     <label>Срок ссылки <select v-model.number="hours" :disabled="busy"><option :value="1">1 час</option><option :value="24">24 часа</option></select></label>
     <label><input v-model="allowDownload" type="checkbox" :disabled="busy">Разрешить скачивание безопасной копии</label>
     <label><input v-model="reviewed" type="checkbox" :disabled="!loaded||busy" data-testid="public-card-publish-review">Я просмотрел(а) именно эту копию и разрешаю её внешний просмотр по ссылке</label>
-    <button type="button" :disabled="!reviewed||!loaded||busy" data-testid="public-card-publish" @click="publish">Опубликовать безопасную копию</button>
+    <button type="button" :disabled="!reviewed||!loaded||busy" class="primary-action" data-testid="public-card-publish" @click="publish">Опубликовать безопасную копию</button>
     <p v-if="busy" role="status">Проверяем и сохраняем…</p><p v-if="error" role="alert">{{error}}</p><p v-if="notice" role="status">{{notice}}</p>
     <label v-if="link">Ссылка <input :value="link" readonly data-testid="public-card-published-url" @focus="($event.target as HTMLInputElement).select()"></label>
     <ul><li v-for="row in rows" :key="row.id">{{row.id.slice(0,8)}} · {{row.state}}
       <button v-if="row.state!=='revoked'" type="button" :disabled="busy" @click="retry(row.id)">{{row.state==='queued'?'Повторить отправку':'Показать ссылку'}}</button>
       <button v-if="row.state!=='revoked'" type="button" :disabled="busy" :data-testid="'public-card-revoke-'+row.id" @click="revoke(row.id)">Отозвать ссылку</button>
     </li></ul>
+    </div>
   </section>
+  </div>
 </template>
 <style scoped>
-.publication{position:fixed;inset:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));margin:auto;z-index:100;max-width:640px;max-height:90dvh;overflow:auto;display:flex;flex-direction:column;gap:14px;padding:20px;background:var(--surface,#202020);border:1px solid var(--line,#444);border-radius:12px}.publication header{display:flex;align-items:center;justify-content:space-between}.publication h2{font-size:20px;margin:0}.publication p{font-size:13px;line-height:1.6}.publication img{max-height:35dvh;object-fit:contain;width:100%}.publication label{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.publication input:not([type=checkbox]),.publication textarea{width:100%;min-height:44px}.publication button,.publication select{min-height:44px}.publication input[type=checkbox]{width:22px;height:22px}.publication ul{list-style:none;padding:0}.publication li{margin:12px 0;display:flex;flex-wrap:wrap;gap:8px}
+/* Approved Viewer bottom-sheet chrome. Publication consent remains real. */
+.publication-backdrop{position:fixed;inset:0;z-index:100;background:#000b;display:flex;align-items:flex-end}
+.publication{position:relative;width:100%;max-height:86dvh;overflow-y:auto;padding:9px 17px 25px;border:0;border-radius:13px 13px 0 0;background:#292929;color:#f2f2f2;font:16px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:normal}
+.publication-handle{width:35px;height:4px;margin:0 auto 14px;border-radius:6px;background:#696969}
+.publication header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:15px}
+.publication h2{color:#fff;font-size:16px;font-weight:750;margin:0}
+.publication header button{font:inherit;min-height:0;padding:6px;border:0;background:transparent;color:#eee}
+.publication-content{display:grid;gap:10px}
+.publication p{margin:0;font-size:12px;line-height:1.6}
+.publication .publication-note{padding:13px;border-radius:7px;background:#383838;color:#e5e5e5}
+.publication img{max-height:35dvh;object-fit:contain;width:100%;background:#111;border-radius:7px}
+.publication label{display:grid;gap:6px;color:#ccc;font-size:12px}
+.publication input:not([type=checkbox]),.publication textarea,.publication select{width:100%;min-width:0;padding:11px;background:#1d1d1d;border:1px solid #575757;border-radius:6px;color:#f3f3f3;font:13px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.publication textarea{min-height:85px;resize:vertical}
+.publication label:has(input[type=checkbox]){display:flex;align-items:flex-start;gap:12px}
+.publication input[type=checkbox]{width:18px;height:18px;flex:0 0 18px;accent-color:#1ed760}
+.publication-content button{padding:12px;border:0;border-radius:6px;text-align:left;background:#3b3b3b;color:#f1f1f1;font-size:12px}
+.publication-content button.primary-action{background:#1ed760;color:#122115;text-align:center;font-weight:750}
+.publication ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.publication li{font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+@media(min-width:700px){.publication{max-width:520px;margin:0 auto}}
 </style>

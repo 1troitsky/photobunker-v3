@@ -9,6 +9,9 @@ import {activeSession} from '../features/identity/application/session'
 import {sameSessionDevice} from '../features/identity/application/session-device'
 import PublicCardPublication from '../features/media/ui/PublicCardPublication.vue'
 const publicationOpen=ref(false)
+const downloadOpen=ref(false)
+let downloadIntent:{url:string;session:NonNullable<typeof activeSession.value>}|null=null
+function cancelDownload():void{downloadOpen.value=false;downloadIntent=null;void nextTick(()=>document.querySelector<HTMLButtonElement>('.shell-header button[aria-label="Скачать"]')?.focus())}
 const photoFullscreen=ref(false)
 const photoFullscreenDialog=ref<HTMLElement|null>(null)
 function closePhotoFullscreen():void{
@@ -1267,6 +1270,7 @@ function clearStill():void{
   stillSavedId.value=null
 }
 function clearBlob():void{
+  downloadOpen.value=false;downloadIntent=null
   publicationOpen.value=false
   // The accepted File Viewer keeps media in one fixed stage. Stop BOTH
   // players synchronously before replacing/revoking their encrypted Blob URL;
@@ -1857,9 +1861,23 @@ function downloadStill():void{
 }
 function download():void{
   if(!fileBlob.value||!fileUrl.value||!preview.value||!activeSession.value)return
-  if(!window.confirm('Скачать расшифрованный файл на устройство? Он станет доступен за пределами защищённого хранилища PB3.'))return
+  downloadIntent={url:fileUrl.value,session:activeSession.value}
+  downloadOpen.value=true
+  void nextTick(()=>document.querySelector<HTMLButtonElement>('[data-testid="viewer-download-cancel"]')?.focus())
+}
+function downloadTab(event:KeyboardEvent):void{
+  const root=(event.currentTarget as HTMLElement),buttons=[...root.querySelectorAll<HTMLButtonElement>('button')]
+  if(buttons.length!==2)return
+  event.preventDefault()
+  ;(document.activeElement===buttons[0]?buttons[1]:buttons[0])?.focus()
+}
+function confirmDownload():void{
+  const intent=downloadIntent
+  cancelDownload()
+  if(!intent||!sameSessionDevice(intent.session,activeSession.value)
+    ||intent.url!==fileUrl.value||!fileBlob.value||!preview.value)return
   const anchor=document.createElement('a')
-  anchor.href=fileUrl.value
+  anchor.href=intent.url
   anchor.download=safeDownloadName(preview.value.name,'file')
   anchor.rel='noopener'
   document.body.appendChild(anchor)
@@ -2181,6 +2199,12 @@ onUnmounted(()=>{
       Некорректный адрес файла.
     </div>
     <template v-else>
+      <div v-if="downloadOpen" class="download-pop" role="dialog" aria-modal="true" aria-label="Скачать файл?"
+        data-testid="viewer-download-popover" @keydown.esc.stop.prevent="cancelDownload" @keydown.tab="downloadTab">
+        <strong>Скачать файл?</strong>
+        <p>Скачать расшифрованный файл на устройство? Копия будет доступна вне защищённого приложения.</p>
+        <div class="download-buttons"><button type="button" data-testid="viewer-download-cancel" @click="cancelDownload">Отмена</button><button type="button" data-testid="viewer-download-confirm" @click="confirmDownload">Скачать</button></div>
+      </div>
       <div class="file-viewer-fixed viewer" data-testid="file-viewer-fixed">
         <nav class="file-viewer-path browser-path"
           data-testid="file-viewer-path" aria-label="Путь Browser">
@@ -2239,15 +2263,16 @@ onUnmounted(()=>{
       </div>
       <div v-show="panel!==null||editorMode" class="file-viewer-overlay"
         data-testid="file-viewer-sheet-layer" @click.self="closePanel">
-        <section class="file-viewer-sheet"
+        <section class="file-viewer-sheet" :class="{'approved-viewer-sheet':!editorMode}"
           :role="editorMode?undefined:'dialog'"
           :aria-modal="editorMode?undefined:'true'"
           :aria-label="editorMode?undefined:panel==='editor'?'Редактирование файла':'Информация о файле'"
           @keydown="onSheetKeydown">
+          <div v-if="!editorMode" class="sheet-handle" aria-hidden="true"></div>
           <header v-if="!editorMode" class="file-viewer-sheet-heading">
-            <h2>{{ panel==='editor'?'Редактирование':'Информация' }}</h2>
+            <strong>{{ panel==='editor'?'Редактирование':'Информация о файле' }}</strong>
             <button ref="sheetClose" type="button" data-testid="viewer-panel-close"
-              @click="closePanel">Закрыть</button>
+              aria-label="Закрыть" @click="closePanel">✕</button>
           </header>
           <div v-else class="file-editor-route-heading">
             <nav class="file-editor-route-path" aria-label="Путь редактора">
@@ -3086,40 +3111,19 @@ onUnmounted(()=>{
           data-testid="private-copy-error">{{ privateCopyError }}</p>
       </section>
       <div v-if="preview" class="file-viewer-information" data-testid="file-viewer-info">
-        <div class="file-viewer-info-heading">
-          <div>
-            <h2>{{ preview.name }}</h2>
-            <p class="muted">
-              {{ preview.type==='photo'?'Фото':preview.type==='video'?'Видео':'Аудио' }}
-              · {{ preview.origin==='local'?'Расшифровано локально':'Получено из облака и расшифровано локально' }}
-            </p>
-          </div>
-          <button type="button" @click="download">Скачать</button>
-        </div>
-        <p v-if="preview.description">{{ preview.description }}</p>
+        <div class="description-card"><strong>Полное описание</strong><p>{{preview.description||'Описание отсутствует'}}</p></div>
         <dl>
-          <template v-if="preview.capturedAt">
-            <dt>Дата</dt><dd>{{ new Date(preview.capturedAt).toLocaleString('ru-RU') }}</dd>
-          </template>
-          <dt>Тип</dt><dd>{{ preview.mime }}</dd>
-          <dt>ID</dt><dd><code>{{ current.id }}</code></dd>
-          <template v-if="preview.category">
-            <dt>Категория</dt><dd>{{ preview.category }}</dd>
-          </template>
-          <template v-if="preview.tags.length">
-            <dt>Теги</dt><dd>{{ preview.tags.join(', ') }}</dd>
-          </template>
-          <template v-if="preview.gps">
-            <dt>GPS</dt>
-            <dd>{{ preview.gps.latitude }}, {{ preview.gps.longitude }}
-              · ±{{ Math.round(preview.gps.accuracyMeters) }} м</dd>
-          </template>
-          <template v-if="preview.expiresAt">
-            <dt>Хранение до</dt><dd>{{ new Date(preview.expiresAt).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}) }}</dd>
-          </template>
+          <div><dt>NAME-ID</dt><dd>{{current.id}}</dd></div>
+          <div><dt>Название</dt><dd>{{preview.name}}</dd></div>
+          <div><dt>Тип</dt><dd>{{preview.type==='photo'?'Фото':preview.type==='video'?'Видео':'Аудио'}}</dd></div>
+          <div><dt>Формат</dt><dd>{{preview.mime}}</dd></div>
+          <div v-if="preview.capturedAt"><dt>Создано</dt><dd>{{new Date(preview.capturedAt).toLocaleString('ru-RU')}}</dd></div>
+          <div v-if="preview.expiresAt"><dt>Удаление</dt><dd>{{new Date(preview.expiresAt).toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'})}}</dd></div>
+          <div v-if="preview.category"><dt>Категория</dt><dd>{{preview.category}}</dd></div>
+          <div v-if="preview.tags.length"><dt>Теги</dt><dd>{{preview.tags.join(', ')}}</dd></div>
+          <div v-if="preview.gps"><dt>GPS</dt><dd>{{preview.gps.latitude}}, {{preview.gps.longitude}} · ±{{Math.round(preview.gps.accuracyMeters)}} м</dd></div>
+          <div><dt>Источник</dt><dd>{{preview.origin==='local'?'Расшифровано локально':'Получено из облака и расшифровано локально'}}</dd></div>
         </dl>
-        <p class="muted">Приватные данные расшифрованы на устройстве.
-          Скачивание — только после явного подтверждения.</p>
       </div>
             </div>
             <section v-if="editorMode" v-show="editorTab==='review'"
