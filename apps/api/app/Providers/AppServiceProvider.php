@@ -21,7 +21,7 @@ final class AppServiceProvider extends ServiceProvider
     {
         // Preserve each existing budget while isolating signed-in accounts
         // behind one NAT. Anonymous callers retain the original IP budget.
-        foreach (['billing' => 40, 'sharing' => 40, 'photos' => 120] as $scope => $maximum) {
+        foreach (['billing' => 40, 'sharing' => 40, 'photos' => 120, 'notifications' => 40] as $scope => $maximum) {
             RateLimiter::for('pb3-'.$scope, static function(Request $request) use ($scope, $maximum): Limit {
                 $account = $request->session()->get('identity_account');
                 $authenticated = is_string($account)
@@ -61,17 +61,20 @@ final class AppServiceProvider extends ServiceProvider
                 $authenticated?'media-account:'.$account
                     :'media-ip:'.($request->ip()??'unknown'));
         });
-        RateLimiter::for('pb3-assignments', static function(Request $request):Limit {
+        // Team navigation must not consume the assignment workflow's budget.
+        foreach(['assignments','teams'] as $scope){
+        RateLimiter::for('pb3-'.$scope, static function(Request $request)use($scope):Limit {
             $account=$request->session()->get('identity_account');
             $authenticated=is_string($account)
                 &&preg_match('/^[a-f0-9-]{36}$/D',$account)===1;
             $configKey=$authenticated
-                ?'operational_limits.assignments.requests_per_minute_per_account'
-                :'operational_limits.assignments.unauthenticated_requests_per_minute_per_ip';
+                ?'operational_limits.'.$scope.'.requests_per_minute_per_account'
+                :'operational_limits.'.$scope.'.unauthenticated_requests_per_minute_per_ip';
             $max=config($configKey);
             if(!is_int($max)||$max<1)throw new \RuntimeException('assignments.operational_limit_unconfigured');
             return Limit::perMinute($max)->by(
-                $authenticated?'account:'.$account:'ip:'.($request->ip()??'unknown'));
+                $authenticated?$scope.'-account:'.$account:$scope.'-ip:'.($request->ip()??'unknown'));
         });
+        }
     }
 }

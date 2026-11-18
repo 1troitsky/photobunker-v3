@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
-import {RouterLink} from 'vue-router'
+import {RouterLink,useRoute,useRouter} from 'vue-router'
 import {browserShellActions,clearBrowserShellActions}
   from '../features/browser/application/browser-shell-actions'
 import {makeBrowserFolderThumbnail}
@@ -80,6 +80,17 @@ import type {
 import type {ArchivePending} from '../features/browser/application/archive-outbox'
 import type {ArchiveEntry,ArchiveAction} from '../features/browser/application/browser-archive'
 
+const route=useRoute(),router=useRouter()
+// A display filter over already authorized files, never a file access grant.
+function readAssignmentScope(value:unknown):string|null{
+  if(value===undefined)return null
+  return typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value)?value:''
+}
+const assignmentScope=ref(readAssignmentScope(route.query.assignmentId))
+watch(()=>route.query.assignmentId,value=>{
+  assignmentScope.value=readAssignmentScope(value)
+  if(assignmentScope.value!==null)primarySection.value='assignments'
+})
 const localPhotos=ref<StoredPhoto[]>([])
 const cloudPhotos=ref<CloudPhoto[]>([])
 const localMedia=ref<StoredMedia[]>([])
@@ -265,6 +276,11 @@ const archiveTab=ref<'all'|'archive'>('all')
 type PrimarySection='all'|'personal'|'assignments'
 const primarySection=ref<PrimarySection>('all')
 function choosePrimarySection(next:PrimarySection|'archive'):void{
+  if(assignmentScope.value!==null){
+    assignmentScope.value=null
+    const query={...route.query};delete query.assignmentId
+    void router.replace({path:'/browser',query})
+  }
   if(next==='archive'){
     if(!archivePrefsShown.value.useArchive)return
     archiveTab.value='archive'
@@ -610,10 +626,16 @@ async function warmFolderThumbnails():Promise<void>{
 const localAssignmentKeys=computed(()=>{
   const scoped=new Set<string>()
   for(const photo of localPhotos.value){
-    if(photo.capture)scoped.add('photo:'+photo.photoId)
+    if(photo.capture&&(assignmentScope.value===null||photo.capture.assignmentId===assignmentScope.value))scoped.add('photo:'+photo.photoId)
   }
   for(const media of localMedia.value){
-    if(media.capture)scoped.add('media:'+media.mediaId)
+    if(!media.capture)continue
+    if(assignmentScope.value===null){scoped.add('media:'+media.mediaId);continue}
+    try{
+      // Display classification only; the file reader still verifies its proof.
+      const capture=JSON.parse(media.capture.contract) as {assignmentId?:unknown}
+      if(capture.assignmentId===assignmentScope.value)scoped.add('media:'+media.mediaId)
+    }catch{ /* Malformed capture data cannot broaden a scoped list. */ }
   }
   return scoped
 })
@@ -628,7 +650,9 @@ const searchScope=computed(()=>{
   })
   // "Мои фото" and "Задания" restrict the already-authenticated catalog.
   // These are NOT authorization scopes and MUST NOT invent cloud-only proof.
-  const scopedRows=archiveTab.value==='archive'||primarySection.value==='all'
+  const scopedRows=assignmentScope.value!==null
+    ?authenticatedRows.filter(item=>localAssignmentKeys.value.has(item.key))
+    :archiveTab.value==='archive'||primarySection.value==='all'
     ?authenticatedRows
     :primarySection.value==='personal'
       ?authenticatedRows.filter(item=>item.local
@@ -1444,6 +1468,7 @@ function preserveViewerOrigin(item:CatalogItem,event:MouseEvent):void{
     search:search.value,searchFolderScope:searchFolderScope.value,
     searchSelectedFolder:searchSelectedFolder.value,
     archiveTab:archiveTab.value,primarySection:primarySection.value,
+    ...(assignmentScope.value!==null?{assignmentId:assignmentScope.value}:{}),
     fileKeys:visible.value.map(row=>row.key),
   })
 }
@@ -1808,8 +1833,14 @@ onMounted(()=>{
     searchSelectedFolder.value=restored.searchSelectedFolder??null
     archiveTab.value=restored.archiveTab
     primarySection.value=restored.primarySection??'all'
+    if(restored.assignmentId!==undefined){
+      assignmentScope.value=readAssignmentScope(restored.assignmentId)
+      void router.replace({path:'/browser',query:{...route.query,assignmentId:restored.assignmentId}})
+    }
     requestedFolderReturn=restored.folderId
     scrollReturnKey=restored.fileKey
+  }else if(assignmentScope.value!==null){
+    primarySection.value='assignments'
   }else if(identity){
     choosePrimarySection(browserOpenFirst.value)
   }
@@ -1860,6 +1891,7 @@ onUnmounted(()=>{
     <div class="browser-title browser-heading">
       <div class="browser-heading-copy">
         <h1>Browser</h1>
+        <RouterLink v-if="assignmentScope!==null" to="/assignments" class="text-link" data-testid="browser-assignment-scope">{{assignmentScope?'Задание #'+assignmentScope.slice(0,8):'Некорректный контекст задания'}} · К заданиям</RouterLink>
         <small>{{ visible.length }} {{ visible.some(item=>item.type!=='photo')?'файлов':'фото' }} · {{ folders.length }} папок</small>
       </div>
       <div v-if="activeSession" class="browser-view-switch view-switch"

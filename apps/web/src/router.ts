@@ -5,6 +5,7 @@ import {brand} from './config/brand'
 import WelcomeView from './views/WelcomeView.vue'
 import AuthorizationErrorView from './views/AuthorizationErrorView.vue'
 import AssignmentsView from './views/AssignmentsView.vue'
+import AssignmentCreateView from './views/AssignmentCreateView.vue'
 import AssignmentEditorView from './views/AssignmentEditorView.vue'
 import AccountView from './views/AccountView.vue'
 import AppearanceView from './views/AppearanceView.vue'
@@ -38,11 +39,11 @@ export const router = createRouter({
     // Public install instructions are not proof of signed offline installability.
     { path: '/install', component: InstallGuideView,
       meta: {title:'Установка '+brand.name,standalone:true,publicStandalone:true} },
-    // Until a separately audited server publication grant exists, EVERY
-    // unknown external card is denied without revealing media or metadata.
+    // Anonymous encrypted safe-photo publication; every read checks expiry/revoke.
     { path: '/p/:token', component: PublicCardView,
-      meta: {title:'Публичная карточка недоступна',standalone:true,publicStandalone:true} },
+      meta: {title:'Публичная карточка',standalone:true,publicStandalone:true} },
     { path: '/assignments', component: AssignmentsView, meta: { title: 'Задания' } },
+    { path: '/assignments/new', component: AssignmentCreateView, meta: { title: 'Новое задание' } },
     { path: '/assignments/:assignmentId/edit', component: AssignmentEditorView,
       meta: { title: 'Редактор задания' } },
     { path: '/browser', component: PhotoBrowserView, meta: { title: 'Browser' } },

@@ -27,6 +27,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/api/healthz', static fn()=>response()->json(['status'=>'ok']));
+// Authenticated metadata feed; encrypted local persistence precedes device ACK.
+Route::prefix('notifications/v1')->middleware('throttle:pb3-notifications')->group(function(){
+    Route::get('/events',[\App\Http\Controllers\NotificationEventsController::class,'index']);
+    Route::get('/events/{eventId}/target',[\App\Http\Controllers\NotificationEventsController::class,'target'])->whereUuid('eventId');
+    Route::post('/ack',[\App\Http\Controllers\NotificationEventsController::class,'acknowledge']);
+});
 // Distinct safe, encrypted personal-photo publication, not original media grants.
 Route::prefix('public-cards/v1')->middleware('throttle:pb3-media')->group(function(){
     Route::post('/reserve',[\App\Http\Controllers\PublicCardController::class,'reserve']);
@@ -188,7 +194,7 @@ Route::prefix('assignments/v1')->middleware('throttle:pb3-assignments')->group(f
 });
 
 // P1-27: account-signed, encrypted team create/owner list. No implicit DEK grants.
-Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+Route::prefix('teams/v1')->middleware('throttle:pb3-teams')->group(function(){
     Route::get('/',[TeamV1Controller::class,'index']);
     Route::post('/',[TeamV1Controller::class,'create']);
     Route::get('/{teamId}',[TeamV1Controller::class,'show'])->whereUuid('teamId');
@@ -196,7 +202,7 @@ Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(functio
 
 // P1-28: team DEK invitation and independent recipient-signed consent.
 // New members have zero implied assignment/file rights.
-Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+Route::prefix('teams/v1')->middleware('throttle:pb3-teams')->group(function(){
     Route::get('/invites/received',[TeamInvitationController::class,'inbox']);
     Route::post('/{teamId}/invites',[TeamInvitationController::class,'invite'])
         ->whereUuid('teamId');
@@ -210,14 +216,14 @@ Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(functio
 });
 
 // P1-29A: serialized signed membership changes and fail-closed key-epoch quarantine.
-Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+Route::prefix('teams/v1')->middleware('throttle:pb3-teams')->group(function(){
     Route::get('/{teamId}/membership-status',[TeamMembershipController::class,'status'])->whereUuid('teamId');
     Route::get('/{teamId}/membership-history',[TeamMembershipController::class,'history'])->whereUuid('teamId');
     Route::post('/{teamId}/membership',[TeamMembershipController::class,'mutate'])->whereUuid('teamId');
 });
 
 // P1-29B: owner-authenticated, signed and atomically roster-bound Team key epochs.
-Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(function(){
+Route::prefix('teams/v1')->middleware('throttle:pb3-teams')->group(function(){
     Route::get('/{teamId}/epoch/owner',[TeamKeyEpochController::class,'owner'])
         ->whereUuid('teamId');
     Route::get('/{teamId}/epoch/member',[TeamKeyEpochController::class,'recipient'])
@@ -229,7 +235,7 @@ Route::prefix('teams/v1')->middleware('throttle:pb3-assignments')->group(functio
 });
 
 // P1-29C: epoch-bound E2EE Team invitation and independent recipient consent.
-Route::prefix('teams/v2')->middleware('throttle:pb3-assignments')->group(function(){
+Route::prefix('teams/v2')->middleware('throttle:pb3-teams')->group(function(){
     Route::get('/invites/received',[TeamEpochInvitationController::class,'inbox']);
     Route::post('/{teamId}/invites',[TeamEpochInvitationController::class,'create'])
         ->whereUuid('teamId');

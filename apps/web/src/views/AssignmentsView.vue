@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { assignmentMonthlyPlanLabel } from '../features/assignments/application/monthly-usage'
-import {optionalMixedGoal} from '../features/assignments/domain/mixed-creation'
 import type {MixedCreationIntent,MixedCreationStage} from '../features/assignments/domain/mixed-creation'
-import { RouterLink } from 'vue-router'
+import { RouterLink,useRoute,useRouter } from 'vue-router'
 import { activeSession, reauthenticate } from '../features/identity/application/session'
 import {
-  queueAssignmentCreation, listLocalAssignmentDrafts, listPendingMixedCreations,
+  listLocalAssignmentDrafts, listPendingMixedCreations,
   listServerAssignmentUsage,
   listAllServerAssignments, listCachedAssignmentSnapshots, listAssignmentInvites,
   listAssignmentRemovalNotices, listLocallyRevokedAssignmentIds,
@@ -71,6 +70,7 @@ type VisibleAssignment={
 type SafetyCheck={accountId:string;fingerprint:string;confirmed:boolean}
 type Submission=AssignmentPhotoSubmission
 
+const route=useRoute(),router=useRouter()
 const assignments=ref<VisibleAssignment[]>([])
 const invites=ref<ReceivedAssignmentInvite[]>([])
 const removalNotices=ref<CheckedAssignmentRemovalNotice[]>([])
@@ -89,13 +89,12 @@ const verifiedPhotoReceipts=ref<Record<string,boolean>>({})
 const photoNextCursor=ref<string|null>(null)
 const loadingMorePhotos=ref(false)
 const selectedId=ref('')
-const title=ref('')
-const instructions=ref('')
-const goal=ref<string|number>('')
-const createVideo=ref(false)
-const createAudio=ref(false)
-const createVideoGoal=ref<string|number>('')
-const createAudioGoal=ref<string|number>('')
+watch(()=>[route.query.created,assignments.value] as const,([created])=>{
+  if(typeof created==='string'&&assignments.value.some(row=>row.id===created)){
+    choose(created)
+    void router.replace({path:'/assignments'})
+  }
+})
 const pendingMixed=ref<Record<string,{stage:MixedCreationStage;intent:MixedCreationIntent;error?:string}>>({})
 const editedGoal=ref<string|number>('')
 const editedVideoGoal=ref<string|number>('')
@@ -132,7 +131,6 @@ const showingOfflineSnapshot=ref(false)
 const error=ref('')
 const notice=ref('')
 const search=ref('')
-const showCreate=ref(false)
 const previewUrl=ref('')
 const previewMime=ref('image/jpeg')
 const previewPrivate=ref<{category?:string;description?:string;tags?:string[];gps?:GPSFix}|null>(null)
@@ -503,41 +501,6 @@ async function synchronize():Promise<void>{
     await flushAssignmentOutbox()
     await refresh()
     notice.value='Локальное и серверное состояние обновлено'
-  })
-}
-async function create():Promise<void>{
-  await operate(async()=>{
-    const trimmed=title.value.trim()
-    if(!trimmed)throw Error('Введите название задания')
-    const parsed=String(goal.value).trim()?Number(goal.value):null
-    const allowedMedia:Array<'photo'|'video'|'audio'>=['photo']
-    if(createVideo.value)allowedMedia.push('video')
-    if(createAudio.value)allowedMedia.push('audio')
-    const mixedCreation:MixedCreationIntent|undefined=allowedMedia.length>1
-      ?{allowedMedia,
-        videoGoal:createVideo.value?optionalMixedGoal(createVideoGoal.value):null,
-        audioGoal:createAudio.value?optionalMixedGoal(createAudioGoal.value):null}
-      :undefined
-    const id=await queueAssignmentCreation({
-      title:trimmed,instructions:instructions.value,photoGoal:parsed,
-      ...(mixedCreation?{mixedCreation}:{}),
-    })
-    showCreate.value=false;title.value='';instructions.value='';goal.value=''
-    createVideo.value=false;createAudio.value=false
-    createVideoGoal.value='';createAudioGoal.value=''
-    // Local-first render cannot block on network. Durable signed outbox
-    // will perform root ACK -> v6 owner policy -> independent server ACK.
-    // Coalesce with any in-flight initial/online hydration. Calling hydrate()
-    // directly races an earlier refresh which can publish stale rows AFTER
-    // the newly persisted offline mixed-media intent is rendered.
-    await refresh()
-    selectedId.value=id
-    notice.value=mixedCreation
-      ?'Смешанное задание сохранено локально. Видео и аудио появятся только после двух подтверждений сервера. Синхронизация выполняется отдельно.'
-      :'Задание зашифровано и принято локально. Синхронизация — в очереди.'
-    if(mixedCreation&&activeSession.value?.online&&navigator.onLine)
-      void flushAssignmentOutbox().then(()=>refresh()).catch(()=>{})
-
   })
 }
 function populateOwnerPolicyForm(chosen:VisibleAssignment|undefined):void{
@@ -990,37 +953,10 @@ onUnmounted(cleanPreview)
     <template v-else>
       <div class="assignment-toolbar">
         <button type="button" :disabled="busy||syncing" @click="synchronize">Синхронизировать</button>
-        <button type="button" :disabled="busy" @click="showCreate=!showCreate">
-          {{ showCreate?'Закрыть':'Создать задание' }}
-        </button>
+        <button type="button" :disabled="busy" @click="router.push('/assignments/new')">Создать задание</button>
       </div>
 
-      <form v-if="showCreate" class="foundation-card" @submit.prevent="create">
-        <h2>Создать задание · фото, видео и аудио</h2>
-        <p class="muted">Сначала подписывается базовое задание. После ответа сервера отдельная подписанная политика разрешит видео и аудио. До её подтверждения действует только фото. Полный редактор: Основное / Файлы / Участники / Правила.</p>
-        <label for="assignment-title">Название</label>
-        <input id="assignment-title" v-model="title" maxlength="120" autocomplete="off" required>
-        <label for="assignment-instructions">Инструкции</label>
-        <textarea id="assignment-instructions" v-model="instructions" rows="4" maxlength="4000"/>
-        <label for="assignment-goal">Нужно фотографий (необязательная цель)</label>
-        <input id="assignment-goal" v-model="goal" type="number" min="1" max="9999" step="1" placeholder="Например, 30">
-        <label class="checkline" for="assignment-create-video">
-          <input id="assignment-create-video" v-model="createVideo" type="checkbox">
-          Добавить видео в подписанные правила
-        </label>
-        <label v-if="createVideo" for="assignment-create-video-goal">Цель по видео (1–999, необязательно)</label>
-        <input v-if="createVideo" id="assignment-create-video-goal" v-model="createVideoGoal"
-          type="number" min="1" max="999" step="1" placeholder="Без цели">
-        <label class="checkline" for="assignment-create-audio">
-          <input id="assignment-create-audio" v-model="createAudio" type="checkbox">
-          Добавить аудио в подписанные правила
-        </label>
-        <label v-if="createAudio" for="assignment-create-audio-goal">Цель по аудио (1–999, необязательно)</label>
-        <input v-if="createAudio" id="assignment-create-audio-goal" v-model="createAudioGoal"
-          type="number" min="1" max="999" step="1" placeholder="Без цели">
-        <p class="muted">Название и инструкции шифруются до сохранения. Цель нужна только для прогресса, не ограничивает число файлов. Офлайн-черновик сохраняется независимо от квоты; сервер проверяет право создания по текущему тарифу при синхронизации.</p>
-        <button type="submit" :disabled="busy">Создать зашифрованное задание</button>
-      </form>
+
 
       <div class="assignment-toolbar assignment-list-tools">
         <div class="assignment-tabs">
@@ -1043,7 +979,7 @@ onUnmounted(cleanPreview)
       <div v-if="!visible.length" class="foundation-card">
         <p>Нет доступных заданий. Локальные зашифрованные черновики появляются здесь без ожидания сервера.</p>
       </div>
-      <div class="assignments-cards">
+      <div class="assignments-cards task-list">
         <article v-for="assignment in visible" :key="assignment.id"
           class="assignment-card task-card" :data-testid="'assignment-card-'+assignment.id">
           <p v-if="pendingMixed[assignment.id]" class="muted" role="status"
@@ -1054,23 +990,24 @@ onUnmounted(cleanPreview)
                 ?'Смешанное задание в очереди: базовая подпись ещё не подтверждена сервером.'
                 :'Видео/аудио ещё не подтверждены подписанной политикой сервера. Нажмите «Синхронизировать».' }}
           </p>
-          <div class="assignment-card-top">
-            <span class="assignment-icon" aria-hidden="true">▤</span>
-            <div class="assignment-card-name">
-              <strong>{{ assignment.data?.title||'Зашифрованное задание' }}</strong>
-              <small>{{ assignment.id.slice(0,8) }} · {{ assignment.isOwner?'Владелец':'Исполнитель' }}</small>
-            </div>
-            <span class="assignment-state">{{ assignment.localState==='conflict'?'Не принято сервером':assignment.localState==='retry'?'Повтор отправки':assignment.localState==='queued'?'В очереди':assignment.state==='active'?'Активно':assignment.state==='finished'?'Завершено':assignment.state }}</span>
+          <!-- Card markup from docs/ux/assignments/v5/app.js::taskCard. -->
+          <div class="task-card-top">
+            <span class="task-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 7h2M14 7h2M9 11h2M14 11h2M9 15h2M14 15h2M10 21v-4h4v4"/></svg></span>
+            <button type="button" class="task-title" @click="choose(assignment.id)">
+              <strong>{{assignment.data?.title||'Зашифрованное задание'}}</strong>
+              <span class="task-subline"><span class="task-state" :class="{done:assignment.state==='finished'}">{{assignment.localState==='conflict'?'Не принято сервером':assignment.localState==='retry'?'Повтор отправки':assignment.localState==='queued'?'В очереди':assignment.state==='active'?'Активно':assignment.state==='finished'?'Завершено':assignment.state}}</span><span>{{assignment.isOwner?'Владелец':'Исполнитель'}} · #{{assignment.id.slice(0,8)}}</span></span>
+            </button>
+            <button type="button" class="task-more" :aria-label="'Действия: '+(assignment.data?.title||assignment.id)" @click="choose(assignment.id)">•••</button>
           </div>
-          <p v-if="assignment.data?.instructions" class="assignment-description">{{ assignment.data.instructions }}</p>
-          <div class="assignment-time-row" data-testid="assignment-time-row">
-            <span>Начало: {{new Date(assignment.startsAt).toLocaleString('ru-RU')}}</span>
-            <span v-if="effectiveEnd(assignment)">Завершение: {{new Date(effectiveEnd(assignment)!).toLocaleString('ru-RU')}}</span>
-            <span v-else>Без срока</span>
+          <p class="task-description">{{assignment.data?.instructions}}</p>
+          <div class="task-dates" data-testid="assignment-time-row">
+            <div><small>Начало</small><strong>{{new Date(assignment.startsAt).toLocaleDateString('ru-RU')}}</strong></div>
+            <div><small>Завершение</small><strong>{{effectiveEnd(assignment)?new Date(effectiveEnd(assignment)!).toLocaleDateString('ru-RU'):'Без срока'}}</strong></div>
+            <div><small>Длительность</small><strong>{{effectiveEnd(assignment)?Math.max(1,Math.ceil((effectiveEnd(assignment)!-assignment.startsAt)/86400000))+' дн.':'Без срока'}}</strong></div>
           </div>
-          <div class="assignment-auto-removal">
-            <span v-if="assignment.filesAccessUntil">Файлы до: {{new Date(assignment.filesAccessUntil).toLocaleString('ru-RU')}}</span>
-            <span v-if="assignment.assignmentAccessUntil">Задание до: {{new Date(assignment.assignmentAccessUntil).toLocaleString('ru-RU')}}</span>
+          <div v-if="assignment.filesAccessUntil||assignment.assignmentAccessUntil" class="task-expiry">
+            <span v-if="assignment.filesAccessUntil" class="expiry-chip">Файлы: {{new Date(assignment.filesAccessUntil).toLocaleDateString('ru-RU')}}</span>
+            <span v-if="assignment.assignmentAccessUntil" class="expiry-chip danger">Задание: {{new Date(assignment.assignmentAccessUntil).toLocaleDateString('ru-RU')}}</span>
           </div>
           <div class="assignment-card-bottom">
             <div class="assignment-card-progress" data-testid="assignment-media-summary">
@@ -1093,14 +1030,15 @@ onUnmounted(cleanPreview)
                 Локально ожидают отправки: {{pendingReceiptCount(assignment.id)}}
               </small>
             </div>
-            <div class="assignment-card-actions">
+            <div class="assignment-card-actions task-actions">
               <RouterLink v-if="canOpenCamera(assignment)"
                 :to="{path:'/camera',query:{assignmentId:assignment.id}}"
                 :data-testid="'assignment-capture-'+assignment.id"
-                class="assignment-capture-action">
+                class="assignment-capture-action primary">
                 {{assignment.allowedMedia.length===1&&assignment.allowedMedia[0]==='audio'?'Записать':'Снимать'}}
               </RouterLink>
               <button type="button" :disabled="busy" @click="choose(assignment.id)">Открыть</button>
+              <RouterLink :to="{path:'/browser',query:{assignmentId:assignment.id}}" :data-testid="'assignment-browser-'+assignment.id">Browser</RouterLink>
             </div>
           </div>
         </article>
@@ -1427,7 +1365,8 @@ onUnmounted(cleanPreview)
 
       <p v-if="notice" role="status" class="status-text">{{ notice }}</p>
       <p v-if="error" role="alert" class="error-text">{{ error }}</p>
-      <p class="muted assignment-contract-note">Это P1-интеграция. Полный принятый UX Fieldwork 5.0 и редактор 2.2 не считаются внедрёнными. Готовность сервера определяется подтверждёнными операциями, а не локальными состояниями.</p>
     </template>
   </section>
 </template>
+
+<style scoped src="../features/assignments/ui/AssignmentListFieldwork.css"></style>

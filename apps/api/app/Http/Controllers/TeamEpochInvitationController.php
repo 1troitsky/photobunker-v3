@@ -5,6 +5,10 @@ namespace App\Http\Controllers;
 
 use App\Assignments\AssignmentContract as C;
 use App\Identity\Protocol as P;
+use App\Events\DatabaseEventInboxLedger;
+use App\Events\EventAdmission;
+use App\Events\EventConsumer;
+use Illuminate\Support\Str;
 use App\Photo\PhotoSync;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -73,6 +77,11 @@ final class TeamEpochInvitationController extends Controller
             &&$c['expiresAt']<=PhotoSync::nowMs()+7*86400000,422);
         $this->envelope($c);
         return DB::transaction(function()use($actor,$teamId,$input,$c,$hash){
+            // Recipient account -> team order protects the event publisher
+            // and serializes same-recipient delivery without after-commit loss.
+            $recipientLock=DB::table('identity_accounts')
+                ->where('id',$c['recipientAccountId'])->lockForUpdate()->first();
+            abort_unless($recipientLock && $recipientLock->status==='ready',404);
             $team=DB::table('team_records_v1')->where('id',$teamId)
                 ->lockForUpdate()->first();
             abort_unless($team&&$team->owner_account_id===$actor->id,404);
@@ -126,6 +135,19 @@ final class TeamEpochInvitationController extends Controller
                 'expires_at'=>$c['expiresAt'],
                 'created_at'=>now(),'updated_at'=>now(),
             ]);
+            $notice=[
+                'schemaVersion'=>1,
+                'eventId'=>(string) Str::uuid(),
+                'eventType'=>'TeamEpochInvitationCreated',
+                'accountId'=>(string)$recipient->id,
+                'subjectType'=>'team_invite_v2',
+                'subjectId'=>$c['inviteId'],
+                'occurredAtMs'=>PhotoSync::nowMs(),
+                'revision'=>1,
+            ];
+            abort_unless((new EventConsumer(new DatabaseEventInboxLedger()))
+                ->ingest($notice,(string)$recipient->id)===EventAdmission::Accepted,
+                503,'team.invite_event_unavailable');
             return $this->sync->json([
                 'inviteId'=>$c['inviteId'],'keyEpoch'=>$c['keyEpoch'],
                 'state'=>'pending','unchanged'=>false,

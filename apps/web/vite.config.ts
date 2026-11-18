@@ -52,6 +52,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '127.0.0.1', port: 5173,
       proxy: {
+        '/notifications/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         '/public-cards/v1': { target:'http://127.0.0.1:8000', changeOrigin:false },
         // Backend exposes the verified own-account entitlement under this
         // path. Without this proxy the PWA silently got Vite 404 and kept

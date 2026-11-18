@@ -950,6 +950,10 @@ final class AssignmentV1Test extends TestCase
         $this->as('owner');
         for($n=0;$n<3;$n++)$this->getJson('/assignments/v1/usage')->assertOk();
         $this->getJson('/assignments/v1/usage')->assertStatus(429);
+        // A completed assignment journey must not block unrelated team setup.
+        config()->set('operational_limits.teams.requests_per_minute_per_account',3);
+        for($n=0;$n<3;$n++)$this->getJson('/teams/v1')->assertOk();
+        $this->getJson('/teams/v1')->assertStatus(429);
 
         // Two legitimate accounts behind the same IP must have independent
         // technical quotas. No owner id may be accepted from request data.
