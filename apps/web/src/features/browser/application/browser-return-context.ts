@@ -23,6 +23,8 @@ export type BrowserReturnContext={
   searchSelectedFolder?:string|null
   archiveTab:'all'|'archive'
   primarySection?:'all'|'personal'|'assignments'
+  // Opaque assignment ID used only to restore the already-authorized visual filter.
+  assignmentId?:string
   // Order of already-visible, authorized opaque catalog keys, not decrypted data.
   fileKeys:string[]
 }

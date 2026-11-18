@@ -104,7 +104,7 @@ const dock = computed(() => displayedDock.value
              server-operation journal or a promise of push delivery. -->
         <RouterLink to="/notifications" class="shell-status-link"
           data-testid="shell-status-link" :data-session-state="activeSession?(sessionDisplayedOnline?'online':'offline'):'none'" aria-label="Открыть локальные уведомления"
-          title="Локальный журнал уведомлений; серверная доставка не подтверждена">
+          title="Уведомления аккаунта">
           <small><span class="status-dot"
             :class="{'session-online':sessionDisplayedOnline}"
             aria-hidden="true"></span>{{activeSession?(sessionDisplayedOnline?'В работе':'Нет сети'):'Без аккаунта'}}</small>

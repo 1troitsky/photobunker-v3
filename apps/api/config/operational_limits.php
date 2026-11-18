@@ -24,6 +24,11 @@ return [
         'requests_per_minute_per_account' => 40,
         'unauthenticated_requests_per_minute_per_ip' => 40,
     ],
+    // Preserve the prior 40/min budget, independently of assignment traffic.
+    'teams' => [
+        'requests_per_minute_per_account' => 40,
+        'unauthenticated_requests_per_minute_per_ip' => 40,
+    ],
     'upload' => [
         'max_concurrent_per_account' => null, // OPEN: load tests determine bound
         'max_chunk_bytes' => null,            // OPEN: tune for mobile/large files

@@ -442,6 +442,7 @@ test('P1-04: real assignment UI creates, invites, accepts and delivers encrypted
     await A.getByRole('button',{name:'Создать задание'}).click()
     await A.locator('#assignment-title').fill('Thirty camera images')
     await A.locator('#assignment-instructions').fill('Send encrypted photos')
+    await A.getByRole('button',{name:'Файлы',exact:true}).click()
     await A.locator('#assignment-goal').fill('30')
     await A.getByRole('button',{name:'Создать зашифрованное задание'}).click()
     await expect(A.locator('.assignment-card-name').getByText('Thirty camera images')).toBeVisible()

@@ -8,6 +8,10 @@ use App\Assignments\AssignmentSchedule as S;
 use App\Assignments\AssignmentRetention as R;
 use App\Assignments\MonthlyCreationQuota;
 use App\Identity\Protocol as P;
+use App\Events\DatabaseEventInboxLedger;
+use App\Events\EventAdmission;
+use App\Events\EventConsumer;
+use Illuminate\Support\Str;
 use App\Photo\PhotoSync;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -915,6 +919,11 @@ final class AssignmentV1Controller extends Controller
         C::invite($c,$actor->id,$assignmentId);
         $hash=hash('sha256',$r->json('contract'));
         return DB::transaction(function()use($c,$actor,$assignmentId,$r,$hash){
+            // Recipient account first: serialize their event stream before
+            // taking assignment lock; no publication after commit.
+            $recipientLock=DB::table('identity_accounts')
+                ->where('id',$c['recipientAccountId'])->lockForUpdate()->first();
+            abort_unless($recipientLock && $recipientLock->status==='ready',404);
             $a=DB::table('assignment_records_v1')
                 ->where('id',$assignmentId)->lockForUpdate()->first();
             abort_unless($a&&$a->owner_account_id===$actor->id,404);
@@ -945,6 +954,19 @@ final class AssignmentV1Controller extends Controller
                 'owner_signature'=>$r->json('signature'),
                 'expires_at'=>$c['expiresAt'],'created_at'=>now(),'updated_at'=>now(),
             ]);
+            $notice=[
+                'schemaVersion'=>1,
+                'eventId'=>(string) Str::uuid(),
+                'eventType'=>'AssignmentInvitationCreated',
+                'accountId'=>(string)$recipient->id,
+                'subjectType'=>'assignment_invite',
+                'subjectId'=>$c['inviteId'],
+                'occurredAtMs'=>PhotoSync::nowMs(),
+                'revision'=>1,
+            ];
+            abort_unless((new EventConsumer(new DatabaseEventInboxLedger()))
+                ->ingest($notice,(string)$recipient->id)===EventAdmission::Accepted,
+                503,'assignment.invite_event_unavailable');
             return $this->sync->json(['inviteId'=>$c['inviteId'],
               'state'=>'pending','unchanged'=>false],201);
         },3);

@@ -11,6 +11,7 @@ import { activeSession, resumeExistingDevice, sessionBootstrapPending } from './
 import { attachOutboxLifecycle, flushOutbox } from './features/photo-sync/application/p1-photo'
 import { refreshRetentionHint } from './features/media/application/retention-hint'
 import { attachMediaRetryCoordinator } from './features/media/application/media-retry-coordinator'
+import { attachNotificationSyncLifecycle, requestNotificationSync } from './features/notifications/application/server-event-sync'
 
 document.title = brand.name
 initializeVisualAppearance()
@@ -36,6 +37,7 @@ attachOutboxLifecycle()
 attachShareLifecycle()
 attachAssignmentLifecycle()
 attachMediaRetryCoordinator()
+attachNotificationSyncLifecycle()
 watch(activeSession, s => {
   // Welcome Loader 1.6 ends on a *locally decrypted, authenticated device*
   // rather than waiting for a remote login challenge to finish. Offline and
@@ -43,6 +45,7 @@ watch(activeSession, s => {
   // Server-only actions remain protected by s.online below.
   if(s)sessionBootstrapPending.value=false
   if(s?.online) {
+    void requestNotificationSync()
     void refreshRetentionHint(s)
     void flushOutbox()
     void flushRecipientGrants()

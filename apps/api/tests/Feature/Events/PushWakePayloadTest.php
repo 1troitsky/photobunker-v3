@@ -46,15 +46,12 @@ final class PushWakePayloadTest extends TestCase
     /**
      * Source #296 also changed the shared EventEnvelope allowlist. This
      * isolated integration MUST NOT silently widen that contract: future
-     * invitation/retention producer types stay fail-closed until separately
-     * claimed, audited and accepted with their real server authentication.
+     * Retention events stay fail-closed until their producer is integrated.
+     * Invitation producers now commit through their authenticated controllers.
      */
     public function test_unintegrated_future_producer_event_types_remain_rejected(): void
     {
         $notYetAuthorized = [
-            ['AssignmentInvitationCreated','assignment_invite'],
-            ['TeamEpochInvitationCreated','team_invite_v2'],
-            ['TeamInitialInvitationCreated','team_invite_v1'],
             ['MediaRetentionExpired','media_retention'],
         ];
 

@@ -94,6 +94,7 @@ await uploader.getByTestId('media-import-file').setInputFiles({
     await A.getByRole('button',{name:'Создать задание'}).click()
     await A.locator('#assignment-title').fill('P2 integrated signed AV handoff')
     await A.locator('#assignment-instructions').fill('Private encrypted owner briefing')
+    await A.getByRole('button',{name:'Файлы',exact:true}).click()
     await A.locator('#assignment-create-video').check()
     await A.locator('#assignment-create-video-goal').fill('2')
     await A.locator('#assignment-create-audio').check()

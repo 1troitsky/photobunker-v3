@@ -824,6 +824,7 @@ async function persist(op:AssignmentOperation):Promise<void>{
 
 export async function queueAssignmentCreation(input:{
   title:string;instructions:string;photoGoal:number|null;endsAt?:number|null
+  photoInstructions?:string;videoInstructions?:string;audioInstructions?:string
   mixedCreation?:MixedCreationIntent
 }):Promise<string>{
   const s=requireSession()
@@ -839,9 +840,11 @@ export async function queueAssignmentCreation(input:{
     ||input.photoGoal<1||input.photoGoal>9999))throw Error('assignment.invalid_goal')
   const id=crypto.randomUUID(),operationId=crypto.randomUUID()
   const startsAt=Date.now(),endsAt=input.endsAt??null
-  const data:PrivateAssignment={
-    version:1,title:input.title.trim(),instructions:input.instructions,
-  }
+  const data:PrivateAssignment=input.photoInstructions===undefined
+    ?{version:1,title:input.title.trim(),instructions:input.instructions}
+    :{version:2,title:input.title.trim(),instructions:input.instructions,
+      photoInstructions:input.photoInstructions,videoInstructions:input.videoInstructions??'',
+      audioInstructions:input.audioInstructions??''}
   const privateEnvelope=await sealAssignment(s.pkg,id,data)
   const payload={
     version:1,assignmentId:id,operationId,ownerAccountId:s.accountId,

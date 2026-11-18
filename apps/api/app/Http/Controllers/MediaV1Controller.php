@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Identity\Protocol as P;
+use App\Events\DatabaseEventInboxLedger;
+use App\Events\EventAdmission;
+use App\Events\EventConsumer;
 use App\Billing\QuotaAdmission;
 use App\Billing\RetentionAdmission;
 use App\Media\MediaContract as C;
@@ -219,6 +222,10 @@ final class MediaV1Controller extends Controller
             abort_unless($this->storage->verifyMediaChunk(
                 $c->id,(int)$c->bytes,$c->sha256),503);
         return DB::transaction(function()use($mediaId,$account,$chunks){
+            // Maintain account -> media lock order (as in reserve) so event
+            // ledger admission shares the SAME transaction without deadlock.
+            DB::table('identity_accounts')->where('id',$account->id)
+                ->lockForUpdate()->first();
             $m=DB::table('media_files_v1')
                 ->where('id',$mediaId)->lockForUpdate()->first();
             abort_unless($m&&$m->account_id===$account->id,404);
@@ -253,6 +260,23 @@ final class MediaV1Controller extends Controller
             DB::table('media_chunk_locations_v1')
                 ->whereIn('chunk_id',$current->pluck('id')->all())
                 ->update(['state'=>'active','updated_at'=>now()]);
+            // Durable event is committed atomically with media activation.
+            // Never publish after commit: a worker crash would lose the notice.
+            // No payload or ciphertext leaves the trusted event allowlist.
+            $event=[
+                'schemaVersion'=>1,
+                'eventId'=>(string) Str::uuid(),
+                'eventType'=>'MediaCommitted',
+                'accountId'=>(string)$account->id,
+                'subjectType'=>'media',
+                'subjectId'=>$mediaId,
+                'occurredAtMs'=>PhotoSync::nowMs(),
+                'revision'=>1,
+            ];
+            $admission=(new EventConsumer(new DatabaseEventInboxLedger()))
+                ->ingest($event,(string)$account->id);
+            abort_unless($admission===EventAdmission::Accepted,503,
+                'media.notification_event_unavailable');
             return $this->identity->json(['receipt'=>$receipt]);
         },3);
     }
